@@ -2,6 +2,7 @@
 
 pub mod client;
 pub mod server;
+pub mod transport;
 
 use vibe_protocol::{Envelope, ProtocolValidationError, decode_frame, encode_frame};
 
