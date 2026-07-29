@@ -8,8 +8,17 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+futures-util.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
 vibe-core = { path = "../vibe-core" }
 vibe-protocol = { path = "../vibe-protocol" }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
