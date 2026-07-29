@@ -340,7 +340,10 @@ fn run_once(
             outcome.stdout = result["stdout"].as_str().unwrap_or_default().to_owned();
             outcome.stderr = result["stderr"].as_str().unwrap_or_default().to_owned();
         }
-        ScenarioKind::Protocol | ScenarioKind::Initialize | ScenarioKind::Volatile => {
+        ScenarioKind::Protocol
+        | ScenarioKind::Initialize
+        | ScenarioKind::Volatile
+        | ScenarioKind::Contract => {
             outcome.json_frames.push(result);
         }
         ScenarioKind::Persistence => outcome.persisted_state = Some(result),
@@ -366,7 +369,6 @@ fn prepare_environment(
             "sync",
             "--frozen",
             "--no-config",
-            "--no-install-project",
             "--python",
             python_version,
         ])

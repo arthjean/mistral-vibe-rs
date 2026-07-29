@@ -1,0 +1,105 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "protocol-invalid-result-and-error",
+  "matrixRow": "protocol.app-server",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "accepted": false,
+        "errors": [
+          {
+            "location": [
+              "Notification",
+              "method"
+            ],
+            "type": "missing"
+          },
+          {
+            "location": [
+              "Notification",
+              "params"
+            ],
+            "type": "missing"
+          },
+          {
+            "location": [
+              "Notification",
+              "id"
+            ],
+            "type": "extra_forbidden"
+          },
+          {
+            "location": [
+              "Notification",
+              "result"
+            ],
+            "type": "extra_forbidden"
+          },
+          {
+            "location": [
+              "Notification",
+              "error"
+            ],
+            "type": "extra_forbidden"
+          },
+          {
+            "location": [
+              "ServerRequest",
+              "method"
+            ],
+            "type": "missing"
+          },
+          {
+            "location": [
+              "ServerRequest",
+              "params"
+            ],
+            "type": "missing"
+          },
+          {
+            "location": [
+              "ServerRequest",
+              "result"
+            ],
+            "type": "extra_forbidden"
+          },
+          {
+            "location": [
+              "ServerRequest",
+              "error"
+            ],
+            "type": "extra_forbidden"
+          },
+          {
+            "location": [
+              "JsonRpcSuccessResponse",
+              "error"
+            ],
+            "type": "extra_forbidden"
+          },
+          {
+            "location": [
+              "JsonRpcErrorResponse",
+              "result"
+            ],
+            "type": "extra_forbidden"
+          }
+        ]
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

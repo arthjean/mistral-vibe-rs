@@ -6,12 +6,14 @@ use std::fs;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use vibe_app_server::transport::benchmark_fake_provider_chunk_latency;
 use vibe_compat::baseline;
 use vibe_compat::differential::{
     build_report, compare_directories, report_is_release_ready, write_reports,
 };
 use vibe_compat::matrix;
 use vibe_compat::oracle::{record_all, validate_corpus, validate_scenarios};
+use vibe_compat::rust_recorder::record_rust_all;
 use vibe_compat::workspace;
 
 #[derive(Parser)]
@@ -47,6 +49,12 @@ enum Command {
         #[arg(long, default_value = "compat/corpus/upstream-2.23.1")]
         output: PathBuf,
     },
+    RecordRust {
+        #[arg(long, default_value = "compat/corpus/rust-release-1")]
+        output: PathBuf,
+        #[arg(long, default_value_t = 1)]
+        release: u32,
+    },
     Compare {
         #[arg(long)]
         expected: PathBuf,
@@ -58,6 +66,15 @@ enum Command {
         report_markdown: PathBuf,
         #[arg(long, default_value_t = 0)]
         release: u32,
+    },
+    BenchmarkStreaming {
+        #[arg(long, default_value_t = 100_000)]
+        chunks: usize,
+        #[arg(
+            long,
+            default_value = "compat/reports/release-1-streaming-latency.json"
+        )]
+        output: PathBuf,
     },
     SchemaDigest,
 }
@@ -121,6 +138,33 @@ fn main() -> Result<(), Box<dyn Error>> {
             )?;
             println!("recorded {} fixtures", paths.len());
         }
+        Command::RecordRust { output, release } => {
+            let baseline = baseline::load()?;
+            let checkout = baseline::checkout_path(&root, &baseline);
+            let matrix = matrix::validate(&checkout)?;
+            let rows = matrix.rows.iter().map(|row| row.id.as_str()).collect();
+            let scenarios = validate_scenarios(&rows)?;
+            let required_rows = matrix
+                .rows
+                .iter()
+                .filter(|row| row.required_release <= release)
+                .map(|row| row.id.as_str())
+                .collect::<BTreeSet<_>>();
+            let selected = scenarios
+                .scenarios
+                .iter()
+                .filter(|scenario| required_rows.contains(scenario.matrix_row.as_str()))
+                .cloned()
+                .collect::<Vec<_>>();
+            let paths = record_rust_all(
+                &root,
+                &root.join(output),
+                &baseline.version,
+                baseline.fixture_schema_version,
+                &selected,
+            )?;
+            println!("recorded {} Rust fixtures", paths.len());
+        }
         Command::Compare {
             expected,
             actual,
@@ -133,6 +177,18 @@ fn main() -> Result<(), Box<dyn Error>> {
             let matrix = matrix::validate(&checkout)?;
             let rows = matrix.rows.iter().map(|row| row.id.as_str()).collect();
             let scenarios = validate_scenarios(&rows)?;
+            let required_rows = matrix
+                .rows
+                .iter()
+                .filter(|row| row.required_release <= release)
+                .map(|row| row.id.as_str())
+                .collect::<BTreeSet<_>>();
+            let selected = scenarios
+                .scenarios
+                .iter()
+                .filter(|scenario| required_rows.contains(scenario.matrix_row.as_str()))
+                .cloned()
+                .collect::<Vec<_>>();
             let intentional = matrix
                 .rows
                 .iter()
@@ -142,7 +198,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let verdicts = compare_directories(
                 &root.join(expected),
                 &root.join(actual),
-                &scenarios.scenarios,
+                &selected,
                 &intentional,
             )?;
             let report = build_report(&matrix, release, verdicts);
@@ -153,6 +209,23 @@ fn main() -> Result<(), Box<dyn Error>> {
             )?;
             if !report_is_release_ready(&report) {
                 return Err("compatibility report is not release-ready".into());
+            }
+        }
+        Command::BenchmarkStreaming { chunks, output } => {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            let report = runtime.block_on(benchmark_fake_provider_chunk_latency(chunks))?;
+            let output = root.join(output);
+            if let Some(parent) = output.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let mut encoded = serde_json::to_vec_pretty(&report)?;
+            encoded.push(b'\n');
+            fs::write(&output, encoded)?;
+            println!("{}", serde_json::to_string(&report)?);
+            if !report.release_gate_passed {
+                return Err("streaming latency release gate failed".into());
             }
         }
         Command::SchemaDigest => println!("{}", vibe_protocol::protocol_schema_digest()),

@@ -153,6 +153,12 @@ pub fn write_reports(
     json_path: &Path,
     markdown_path: &Path,
 ) -> Result<(), DifferentialError> {
+    if let Some(parent) = json_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    if let Some(parent) = markdown_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     fs::write(json_path, serde_json::to_vec_pretty(report)?)?;
     fs::write(markdown_path, render_markdown(report))?;
     Ok(())
@@ -160,7 +166,7 @@ pub fn write_reports(
 
 pub fn render_markdown(report: &CompatibilityReport) -> String {
     let mut output = format!(
-        "# Compatibility report\n\nBaseline: `{}`  \nRust build: `{}`  \nRelease: `{}`\n\n",
+        "# Compatibility report\n\n- Baseline: `{}`\n- Rust build: `{}`\n- Release: `{}`\n\n",
         report.upstream_baseline, report.rust_build, report.release
     );
     output.push_str("| Matrix row | Scenario | Verdict | First difference |\n");

@@ -203,11 +203,17 @@ source_paths = ["vibe/cli/entrypoint.py"]
 test_paths = ["tests/cli"]
 symbols = ["parse_arguments"]
 fixture_class = "process"
-rust_status = "planned"
-divergence_status = "none"
+rust_status = "implemented"
+divergence_status = "intentional"
 dependencies = ["protocol.app-server"]
 required_release = 1
 items = ["vibe", "vibe-acp", "--prompt", "--output", "--resume", "--continue"]
+[rows.divergence]
+rationale = "Clap and argparse render equivalent help and parse failures with different non-semantic typography and wording."
+scope = "Help layout and invalid-argv diagnostics only; accepted flags, intent, version output, stdout payloads, and exit classes remain compatible."
+upstream_fixture = "compat/corpus/upstream-2.23.1/process-help.json"
+rust_fixture = "compat/corpus/rust-release-1/process-help.json"
+documentation = "compat/divergences/cli-formatting.md"
 
 [[rows]]
 id = "surface.wire-variants"
@@ -217,11 +223,124 @@ source_paths = ["vibe/app_server/events.py", "vibe/app_server/models.py"]
 test_paths = ["tests/app_server/test_events.py", "tests/app_server/test_projection.py"]
 symbols = ["Event", "PublicHistoryEntry"]
 fixture_class = "protocol"
-rust_status = "planned"
+rust_status = "implemented"
 divergence_status = "none"
 dependencies = ["protocol.app-server"]
 required_release = 1
 items = ["request", "response", "error", "notification", "public-event"]
+
+[[rows]]
+id = "surface.app-server-lifecycle"
+owner = "US-010"
+priority = "P0"
+source_paths = [
+  "vibe/app_server/server.py",
+  "vibe/app_server/_connection_protocol.py",
+  "vibe/app_server/transport.py",
+]
+test_paths = [
+  "tests/app_server/test_transport.py",
+  "tests/app_server/test_harness_contracts.py",
+]
+symbols = ["AppServer", "memory_transport_pair", "StdioJsonRpcTransport"]
+fixture_class = "protocol"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["protocol.app-server", "surface.wire-variants"]
+required_release = 1
+items = ["memory", "stdio", "initialize", "initialized", "shutdown", "exit"]
+
+[[rows]]
+id = "surface.turn-lifecycle"
+owner = "US-011"
+priority = "P0"
+source_paths = ["vibe/app_server/_turns.py", "vibe/app_server/session.py"]
+test_paths = ["tests/app_server/test_session.py", "tests/app_server/test_projection.py"]
+symbols = ["TurnController", "AppServerSession"]
+fixture_class = "protocol"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.app-server-lifecycle"]
+required_release = 1
+items = [
+  "turn/start",
+  "turn/steer",
+  "turn/interrupt",
+  "session/context/inject",
+  "callback/respond",
+]
+
+[[rows]]
+id = "surface.provider-mistral"
+owner = "US-012"
+priority = "P0"
+source_paths = ["vibe/core/llm/backend/mistral.py"]
+test_paths = ["tests/backend/test_backend.py"]
+symbols = ["MistralBackend"]
+fixture_class = "provider"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["config.bootstrap", "surface.wire-variants"]
+required_release = 1
+items = ["streaming", "non-streaming", "images", "tools", "thinking", "usage"]
+
+[[rows]]
+id = "surface.provider-dialects"
+owner = "US-013"
+priority = "P0"
+source_paths = [
+  "vibe/core/llm/backend/generic.py",
+  "vibe/core/llm/backend/reasoning_adapter.py",
+  "vibe/core/llm/backend/openai_responses.py",
+  "vibe/core/llm/backend/anthropic.py",
+  "vibe/core/llm/backend/vertex.py",
+]
+test_paths = [
+  "tests/backend/test_reasoning_adapter.py",
+  "tests/backend/test_openai_responses_adapter.py",
+  "tests/backend/test_anthropic_adapter.py",
+  "tests/backend/test_vertex_anthropic_adapter.py",
+]
+symbols = ["OpenAIAdapter", "ReasoningAdapter", "OpenAIResponsesAdapter", "AnthropicAdapter"]
+fixture_class = "provider"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.provider-mistral"]
+required_release = 1
+items = ["openai", "reasoning", "openai-responses", "anthropic", "vertex-anthropic"]
+
+[[rows]]
+id = "surface.engine-loop"
+owner = "US-015"
+priority = "P0"
+source_paths = ["vibe/core/agent_loop/_loop.py"]
+test_paths = ["tests/agent_loop/e2e/test_e2e_agent_loop.py"]
+symbols = ["AgentLoop"]
+fixture_class = "engine"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = [
+  "surface.turn-lifecycle",
+  "surface.provider-mistral",
+  "surface.provider-dialects",
+  "surface.persistence-formats",
+]
+required_release = 1
+items = ["cycles", "limits", "compaction", "cancellation", "persistence"]
+
+[[rows]]
+id = "surface.acp-minimal"
+owner = "US-016"
+priority = "P0"
+source_paths = ["vibe/acp/agent.py"]
+test_paths = ["tests/acp"]
+symbols = ["VibeAcpAgent"]
+fixture_class = "protocol"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.app-server-lifecycle", "surface.engine-loop"]
+required_release = 1
+items = ["initialize", "session/new", "session/prompt", "session/update", "session/close"]
 
 [[rows]]
 id = "surface.config-fields"
@@ -245,7 +364,7 @@ source_paths = ["vibe/core/session/session_logger.py", "vibe/core/session/sessio
 test_paths = ["tests/session"]
 symbols = ["SessionLogger", "SessionLoader"]
 fixture_class = "persistence"
-rust_status = "planned"
+rust_status = "implemented"
 divergence_status = "none"
 dependencies = ["harness.hermetic-primitives"]
 required_release = 1
@@ -295,7 +414,7 @@ items = ["startup", "prompt", "stream", "approval", "restore"]
 
 [[rows]]
 id = "surface.acp"
-owner = "US-016"
+owner = "US-039"
 priority = "P0"
 source_paths = ["vibe/acp/agent.py", "vibe/acp/session.py"]
 test_paths = ["tests/acp"]
@@ -304,8 +423,19 @@ fixture_class = "protocol"
 rust_status = "planned"
 divergence_status = "none"
 dependencies = ["protocol.app-server"]
-required_release = 1
-items = ["initialize", "session", "prompt", "filesystem", "terminal"]
+required_release = 4
+items = [
+  "authenticate",
+  "load",
+  "list",
+  "fork",
+  "modes",
+  "config-options",
+  "commands",
+  "history",
+  "filesystem",
+  "terminal",
+]
 
 [[rows]]
 id = "surface.telemetry"

@@ -1,6 +1,48 @@
 schema_version = 1
 
 [[scenarios]]
+id = "contract-foundation-workspace"
+matrix_row = "foundation.workspace"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"foundation_workspace"}'
+
+[[scenarios]]
+id = "contract-foundation-baseline"
+matrix_row = "foundation.baseline"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"foundation_baseline"}'
+
+[[scenarios]]
+id = "contract-hermetic-primitives"
+matrix_row = "harness.hermetic-primitives"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"harness_primitives"}'
+
+[[scenarios]]
+id = "contract-corpus-recording"
+matrix_row = "corpus.recording"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"corpus_recording"}'
+
+[[scenarios]]
+id = "contract-differential-reports"
+matrix_row = "differential.reports"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"differential_reports"}'
+
+[[scenarios]]
+id = "contract-config-bootstrap"
+matrix_row = "config.bootstrap"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"config_bootstrap"}'
+
+[[scenarios]]
 id = "process-version-long"
 matrix_row = "surface.cli-flags"
 kind = "process"
@@ -34,6 +76,55 @@ matrix_row = "surface.cli-flags"
 kind = "process"
 comparison = "byte"
 args = ["--resume", "abc", "--continue"]
+
+[[scenarios]]
+id = "contract-event-families"
+matrix_row = "surface.wire-variants"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"event_families"}'
+
+[[scenarios]]
+id = "contract-appserver-transport"
+matrix_row = "surface.app-server-lifecycle"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"appserver_transport"}'
+
+[[scenarios]]
+id = "contract-turn-lifecycle"
+matrix_row = "surface.turn-lifecycle"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"turn_lifecycle"}'
+
+[[scenarios]]
+id = "contract-provider-mistral"
+matrix_row = "surface.provider-mistral"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"provider_mistral"}'
+
+[[scenarios]]
+id = "contract-provider-dialects"
+matrix_row = "surface.provider-dialects"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"provider_dialects"}'
+
+[[scenarios]]
+id = "contract-engine-loop"
+matrix_row = "surface.engine-loop"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"engine_loop"}'
+
+[[scenarios]]
+id = "contract-acp-minimal"
+matrix_row = "surface.acp-minimal"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"acp_minimal"}'
 
 [[scenarios]]
 id = "protocol-success-string-id"

@@ -1,20 +1,23 @@
 {
   "fixtureSchemaVersion": 1,
-  "scenarioId": "process-version-long",
-  "matrixRow": "surface.cli-flags",
+  "scenarioId": "contract-config-bootstrap",
+  "matrixRow": "config.bootstrap",
   "upstreamBaseline": "2.23.1",
-  "comparison": "byte",
+  "comparison": "semantic",
   "stabilityRuns": 2,
   "volatility": [],
   "outcome": {
-    "argv": [
-      "--version"
-    ],
+    "argv": [],
     "stdin": "",
-    "stdout": "python -m vibe.cli.entrypoint 2.23.1\n",
+    "stdout": "",
     "stderr": "",
-    "exitStatus": 0,
-    "jsonFrames": [],
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "contract": "config_bootstrap",
+        "valid": true
+      }
+    ],
     "publicEvents": [],
     "filesystemDelta": [],
     "persistedState": null,

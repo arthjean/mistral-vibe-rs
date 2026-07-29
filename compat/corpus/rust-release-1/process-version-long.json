@@ -11,7 +11,7 @@
       "--version"
     ],
     "stdin": "",
-    "stdout": "python -m vibe.cli.entrypoint 2.23.1\n",
+    "stdout": "vibe 2.23.1\n",
     "stderr": "",
     "exitStatus": 0,
     "jsonFrames": [],

@@ -1,0 +1,33 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-appserver-transport",
+  "matrixRow": "surface.app-server-lifecycle",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "contract": "appserver_transport",
+        "methods": [
+          "initialize",
+          "initialized",
+          "shutdown",
+          "exit"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

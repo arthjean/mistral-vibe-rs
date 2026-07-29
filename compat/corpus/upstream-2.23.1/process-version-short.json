@@ -11,9 +11,9 @@
       "-v"
     ],
     "stdin": "",
-    "stdout": "",
-    "stderr": "/oracle-venv/bin/python: can't open file '/oracle-venv/bin/vibe': [Errno 2] No such file or directory\n",
-    "exitStatus": 2,
+    "stdout": "python -m vibe.cli.entrypoint 2.23.1\n",
+    "stderr": "",
+    "exitStatus": 0,
     "jsonFrames": [],
     "publicEvents": [],
     "filesystemDelta": [],

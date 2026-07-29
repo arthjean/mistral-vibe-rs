@@ -1,6 +1,6 @@
 {
   "fixtureSchemaVersion": 1,
-  "scenarioId": "process-version-long",
+  "scenarioId": "process-invalid-max-turns",
   "matrixRow": "surface.cli-flags",
   "upstreamBaseline": "2.23.1",
   "comparison": "byte",
@@ -8,12 +8,13 @@
   "volatility": [],
   "outcome": {
     "argv": [
-      "--version"
+      "--max-turns",
+      "invalid"
     ],
     "stdin": "",
-    "stdout": "python -m vibe.cli.entrypoint 2.23.1\n",
-    "stderr": "",
-    "exitStatus": 0,
+    "stdout": "",
+    "stderr": "error: invalid value 'invalid' for '--max-turns <MAX_TURNS>': invalid digit found in string\n\nFor more information, try '--help'.\n",
+    "exitStatus": 2,
     "jsonFrames": [],
     "publicEvents": [],
     "filesystemDelta": [],

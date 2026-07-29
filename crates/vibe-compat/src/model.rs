@@ -87,6 +87,7 @@ pub enum ScenarioKind {
     Persistence,
     Pty,
     Volatile,
+    Contract,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]

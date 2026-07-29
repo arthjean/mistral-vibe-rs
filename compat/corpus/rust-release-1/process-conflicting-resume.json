@@ -1,6 +1,6 @@
 {
   "fixtureSchemaVersion": 1,
-  "scenarioId": "process-version-long",
+  "scenarioId": "process-conflicting-resume",
   "matrixRow": "surface.cli-flags",
   "upstreamBaseline": "2.23.1",
   "comparison": "byte",
@@ -8,12 +8,14 @@
   "volatility": [],
   "outcome": {
     "argv": [
-      "--version"
+      "--resume",
+      "abc",
+      "--continue"
     ],
     "stdin": "",
-    "stdout": "python -m vibe.cli.entrypoint 2.23.1\n",
-    "stderr": "",
-    "exitStatus": 0,
+    "stdout": "",
+    "stderr": "error: the argument '--resume [<RESUME>]' cannot be used with '--continue'\n\nUsage: vibe --resume [<RESUME>] [INITIAL_PROMPT]\n\nFor more information, try '--help'.\n",
+    "exitStatus": 2,
     "jsonFrames": [],
     "publicEvents": [],
     "filesystemDelta": [],

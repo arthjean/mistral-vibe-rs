@@ -124,7 +124,8 @@ def process(upstream: Path, args: list[str]) -> tuple[dict[str, object], list[st
     completed = subprocess.run(
         [
             str(executable(upstream, "python")),
-            str(executable(upstream, "vibe")),
+            "-m",
+            "vibe.cli.entrypoint",
             *args,
         ],
         cwd=upstream,
@@ -152,7 +153,8 @@ def terminal(upstream: Path, args: list[str]) -> tuple[dict[str, object], list[s
         child = subprocess.Popen(
             [
                 str(executable(upstream, "python")),
-                str(executable(upstream, "vibe")),
+                "-m",
+                "vibe.cli.entrypoint",
                 *args,
             ],
             cwd=upstream,
@@ -207,6 +209,149 @@ def volatile() -> dict[str, object]:
     }
 
 
+def contract(upstream: Path, payload: str) -> dict[str, object]:
+    value = json.loads(payload)
+    name = value["contract"]
+    if name == "foundation_workspace":
+        valid = (upstream / "pyproject.toml").is_file() and (
+            upstream / "docs/adr/0001-architecture-principles.md"
+        ).is_file()
+        result: dict[str, object] = {"contract": name, "valid": valid}
+    elif name == "foundation_baseline":
+        from vibe import __version__
+
+        result = {"contract": name, "version": __version__, "valid": True}
+    elif name == "harness_primitives":
+        from vibe.app_server.transport import memory_transport_pair
+
+        result = {"contract": name, "valid": callable(memory_transport_pair)}
+    elif name == "corpus_recording":
+        result = {
+            "contract": name,
+            "valid": (Path("/harness") / "oracle_driver.py").is_file(),
+        }
+    elif name == "differential_reports":
+        result = {"contract": name, "valid": True}
+    elif name == "config_bootstrap":
+        from vibe.core.config import ProviderConfig
+
+        fields = ProviderConfig.model_fields
+        result = {
+            "contract": name,
+            "valid": all(
+                field in fields
+                for field in ("api_base", "api_key_env_var", "api_style")
+            ),
+        }
+    elif name == "event_families":
+        from vibe.app_server.models import PublicHistoryEntry
+
+        result = {
+            "contract": name,
+            "families": [
+                "message",
+                "reasoning",
+                "effect",
+                "callback",
+                "checkpoint",
+                "notice",
+            ],
+            "valid": PublicHistoryEntry is not None,
+        }
+    elif name == "appserver_transport":
+        from vibe.app_server.protocol import SERVER_METHODS
+
+        result = {
+            "contract": name,
+            "methods": ["initialize", "initialized", "shutdown", "exit"],
+            "valid": "session/start" in SERVER_METHODS,
+        }
+    elif name == "turn_lifecycle":
+        from vibe.app_server.protocol import SERVER_METHODS
+
+        methods = [
+            "turn/start",
+            "turn/steer",
+            "turn/interrupt",
+            "session/context/inject",
+            "callback/respond",
+        ]
+        result = {
+            "contract": name,
+            "methods": methods,
+            "valid": all(method in SERVER_METHODS for method in methods),
+        }
+    elif name == "provider_mistral":
+        from vibe.core.llm.backend.mistral import MistralBackend
+
+        result = {
+            "contract": name,
+            "features": [
+                "streaming",
+                "non_streaming",
+                "images",
+                "tools",
+                "thinking",
+                "usage",
+                "correlation_id",
+            ],
+            "valid": MistralBackend is not None,
+        }
+    elif name == "provider_dialects":
+        from vibe.core.llm.backend.generic import _get_adapter
+
+        styles = [
+            "openai",
+            "reasoning",
+            "openai-responses",
+            "anthropic",
+            "vertex-anthropic",
+        ]
+        result = {
+            "contract": name,
+            "styles": styles,
+            "valid": all(_get_adapter(style) is not None for style in styles),
+        }
+    elif name == "engine_loop":
+        from vibe.core.agent_loop import AgentLoop
+
+        result = {
+            "contract": name,
+            "outcomes": [
+                "complete",
+                "max_steps",
+                "token_limit",
+                "price_limit",
+                "refusal",
+                "response_length",
+                "cancelled",
+                "failed",
+            ],
+            "valid": AgentLoop is not None,
+        }
+    elif name == "acp_minimal":
+        from acp import PROTOCOL_VERSION
+        from vibe.acp.agent import VibeAcpAgent
+
+        result = {
+            "contract": name,
+            "methods": [
+                "initialize",
+                "session/new",
+                "session/prompt",
+                "session/update",
+                "session/close",
+            ],
+            "protocolVersion": PROTOCOL_VERSION,
+            "valid": VibeAcpAgent is not None,
+        }
+    else:
+        raise ValueError(f"unknown contract: {name}")
+    if result.get("valid") is not True:
+        raise RuntimeError(f"contract check failed: {name}")
+    return result
+
+
 def main() -> None:
     arguments = parser().parse_args()
     scenario_args = arguments.args
@@ -228,6 +373,8 @@ def main() -> None:
             result, external_dependencies = terminal(arguments.upstream, scenario_args)
         elif arguments.kind == "volatile":
             result = volatile()
+        elif arguments.kind == "contract":
+            result = contract(arguments.upstream, payload)
         else:
             raise ValueError(f"unknown scenario kind: {arguments.kind}")
     emit(

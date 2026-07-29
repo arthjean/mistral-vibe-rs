@@ -1,0 +1,34 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-turn-lifecycle",
+  "matrixRow": "surface.turn-lifecycle",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "contract": "turn_lifecycle",
+        "methods": [
+          "turn/start",
+          "turn/steer",
+          "turn/interrupt",
+          "session/context/inject",
+          "callback/respond"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

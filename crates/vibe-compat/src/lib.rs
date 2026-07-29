@@ -6,6 +6,7 @@ pub mod differential;
 pub mod matrix;
 pub mod model;
 pub mod oracle;
+pub mod rust_recorder;
 pub mod workspace;
 
 pub const BASELINE_TOML: &str = include_str!("../../../compat/baseline.toml");

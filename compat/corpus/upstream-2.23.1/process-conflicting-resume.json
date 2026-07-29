@@ -14,7 +14,7 @@
     ],
     "stdin": "",
     "stdout": "",
-    "stderr": "/oracle-venv/bin/python: can't open file '/oracle-venv/bin/vibe': [Errno 2] No such file or directory\n",
+    "stderr": "usage: python -m vibe.cli.entrypoint [-h] [-v] [-p [TEXT]] [--max-turns N]\n                                     [--max-price DOLLARS] [--max-tokens N]\n                                     [--enabled-tools TOOL]\n                                     [--disabled-tools TOOL]\n                                     [--output {text,json,streaming}]\n                                     [--agent NAME] [--auto-approve] [--setup]\n                                     [--check-upgrade] [--workdir DIR]\n                                     [--worktree NAME] [--add-dir DIR]\n                                     [--trust] [-c | --resume [SESSION_ID]]\n                                     [PROMPT]\npython -m vibe.cli.entrypoint: error: argument -c/--continue: not allowed with argument --resume\n",
     "exitStatus": 2,
     "jsonFrames": [],
     "publicEvents": [],

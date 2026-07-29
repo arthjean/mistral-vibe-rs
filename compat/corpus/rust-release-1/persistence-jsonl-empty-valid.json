@@ -1,23 +1,24 @@
 {
   "fixtureSchemaVersion": 1,
-  "scenarioId": "process-version-long",
-  "matrixRow": "surface.cli-flags",
+  "scenarioId": "persistence-jsonl-empty-valid",
+  "matrixRow": "surface.persistence-formats",
   "upstreamBaseline": "2.23.1",
-  "comparison": "byte",
+  "comparison": "semantic",
   "stabilityRuns": 2,
   "volatility": [],
   "outcome": {
-    "argv": [
-      "--version"
-    ],
+    "argv": [],
     "stdin": "",
-    "stdout": "python -m vibe.cli.entrypoint 2.23.1\n",
+    "stdout": "",
     "stderr": "",
-    "exitStatus": 0,
+    "exitStatus": null,
     "jsonFrames": [],
     "publicEvents": [],
     "filesystemDelta": [],
-    "persistedState": null,
+    "persistedState": {
+      "loadable": true,
+      "parsed": []
+    },
     "terminalTranscript": null,
     "failure": null
   }
