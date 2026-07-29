@@ -1,5 +1,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod client;
 pub mod server;
 
 use vibe_protocol::{Envelope, ProtocolValidationError, decode_frame, encode_frame};
