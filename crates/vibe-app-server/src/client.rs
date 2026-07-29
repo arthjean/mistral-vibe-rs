@@ -467,7 +467,7 @@ impl InProcessClient {
         Ok(())
     }
 
-    pub fn close_session(
+    pub async fn close_session(
         &mut self,
         session_id: &str,
     ) -> Result<Option<(String, String)>, ClientError> {
@@ -484,18 +484,31 @@ impl InProcessClient {
             ));
         }
         response_result(single_outbound(batch.outbound)?, &request_id)?;
-        match batch.deferred.as_slice() {
-            [] => Ok(None),
-            [
+        let mut interrupt = None;
+        for work in batch.deferred {
+            match work {
                 DeferredWork::InterruptTurn {
                     session_id,
                     turn_id,
-                },
-            ] => Ok(Some((session_id.clone(), turn_id.clone()))),
-            _ => Err(ClientError::InvalidResponse(
-                "session close returned unexpected deferred work".to_owned(),
-            )),
+                } if interrupt.is_none() => {
+                    interrupt = Some((session_id, turn_id));
+                }
+                DeferredWork::CloseResources {
+                    session_id,
+                    generation,
+                } => {
+                    self.server
+                        .close_resource_session(&session_id, generation)
+                        .await?;
+                }
+                _ => {
+                    return Err(ClientError::InvalidResponse(
+                        "session close returned unexpected deferred work".to_owned(),
+                    ));
+                }
+            }
         }
+        Ok(interrupt)
     }
 
     pub fn shutdown(&mut self) -> Result<(), ClientError> {
@@ -630,8 +643,8 @@ where
         Ok(())
     }
 
-    pub fn close_session(&mut self, session_id: &str) -> Result<(), ClientError> {
-        if let Some((session_id, turn_id)) = self.client.close_session(session_id)? {
+    pub async fn close_session(&mut self, session_id: &str) -> Result<(), ClientError> {
+        if let Some((session_id, turn_id)) = self.client.close_session(session_id).await? {
             self.driver.interrupt(&session_id, &turn_id)?;
         }
         Ok(())
@@ -1303,7 +1316,10 @@ mod tests {
             update_count += 1;
         }
         assert_eq!(update_count, 2);
-        service.close_session(&session_id).expect("session closes");
+        service
+            .close_session(&session_id)
+            .await
+            .expect("session closes");
         service.shutdown().expect("connection shuts down");
     }
 

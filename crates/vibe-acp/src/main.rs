@@ -183,19 +183,14 @@ where
                     )),
                 }
             }
-            "session/close" => request
-                .params
-                .get("sessionId")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    vibe_acp::AcpError::Client(
-                        vibe_app_server::client::ClientError::InvalidResponse(
-                            "session/close requires sessionId".to_owned(),
-                        ),
-                    )
-                })
-                .and_then(|session_id| agent.close_session(session_id))
-                .map(|()| json!({})),
+            "session/close" => match request.params.get("sessionId").and_then(Value::as_str) {
+                Some(session_id) => agent.close_session(session_id).await.map(|()| json!({})),
+                None => Err(vibe_acp::AcpError::Client(
+                    vibe_app_server::client::ClientError::InvalidResponse(
+                        "session/close requires sessionId".to_owned(),
+                    ),
+                )),
+            },
             "shutdown" => agent.disconnect().map(|()| json!({})),
             _ => Err(vibe_acp::AcpError::Client(
                 vibe_app_server::client::ClientError::InvalidResponse(format!(

@@ -141,9 +141,9 @@ where
         })
     }
 
-    pub fn close_session(&mut self, session_id: &str) -> Result<(), AcpError> {
+    pub async fn close_session(&mut self, session_id: &str) -> Result<(), AcpError> {
         self.require_initialized()?;
-        self.service.close_session(session_id)?;
+        self.service.close_session(session_id).await?;
         Ok(())
     }
 
@@ -333,6 +333,7 @@ mod tests {
         );
         agent
             .close_session(&session.session_id)
+            .await
             .expect("ACP session closes");
         agent.disconnect().expect("ACP disconnects");
     }

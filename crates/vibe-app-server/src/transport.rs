@@ -210,7 +210,8 @@ where
                 let batch = connection.dispatch(&bytes);
                 for outbound in batch.outbound {
                     if let Err(error) = transport.send(&outbound).await {
-                        fail_deferred(&server, &batch.deferred, "transport response write failed");
+                        fail_deferred(&server, &batch.deferred, "transport response write failed")
+                            .await;
                         failure = Some(error);
                         break 'serve;
                     }
@@ -422,6 +423,38 @@ where
                                 break 'serve;
                             }
                         }
+                        DeferredWork::ResourceRequest {
+                            request_id,
+                            session_id,
+                            method,
+                            params,
+                        } => {
+                            let response = server
+                                .execute_resource_request(
+                                    request_id,
+                                    session_id,
+                                    method,
+                                    params,
+                                )
+                                .await;
+                            for outbound in response.outbound {
+                                if let Err(error) = transport.send(&outbound).await {
+                                    failure = Some(error);
+                                    break 'serve;
+                                }
+                            }
+                        }
+                        DeferredWork::CloseResources {
+                            session_id,
+                            generation,
+                        } => {
+                            if let Err(error) =
+                                server.close_resource_session(&session_id, generation).await
+                            {
+                                failure = Some(TransportError::Server(error));
+                                break 'serve;
+                            }
+                        }
                     }
                 }
                 if close_after_work {
@@ -430,6 +463,7 @@ where
             }
         }
     }
+    let detached_sessions = connection.attached_session_ids();
     connection.close();
     for (session_id, turn_id) in active {
         let _ = driver.interrupt(&session_id, &turn_id);
@@ -441,6 +475,17 @@ where
     .is_ok();
     if !drained {
         tasks.shutdown().await;
+    }
+    for session_id in detached_sessions {
+        let orphaned_generation = server
+            .orphaned_resource_generation(&session_id)
+            .unwrap_or(None);
+        if let Some(generation) = orphaned_generation
+            && let Err(error) = server.close_resource_session(&session_id, generation).await
+            && failure.is_none()
+        {
+            failure = Some(TransportError::Server(error));
+        }
     }
     let close_result = transport.close().await;
     match failure {
@@ -1029,15 +1074,27 @@ fn percentile(sorted: &[u64], percentage: usize) -> u64 {
     sorted.get(rank).copied().unwrap_or_default()
 }
 
-fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &str) {
+async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &str) {
     for work in deferred {
-        if let DeferredWork::RunTurn {
-            session_id,
-            turn_id,
-            ..
-        } = work
-        {
-            let _ = server.fail_turn(session_id, turn_id, message);
+        match work {
+            DeferredWork::RunTurn {
+                session_id,
+                turn_id,
+                ..
+            } => {
+                let _ = server.fail_turn(session_id, turn_id, message);
+            }
+            DeferredWork::CloseResources {
+                session_id,
+                generation,
+            } => {
+                let _ = server.close_resource_session(session_id, *generation).await;
+            }
+            DeferredWork::InterruptTurn { .. }
+            | DeferredWork::SteerTurn { .. }
+            | DeferredWork::InjectContext { .. }
+            | DeferredWork::ResolveCallback { .. }
+            | DeferredWork::ResourceRequest { .. } => {}
         }
     }
 }
@@ -1063,13 +1120,49 @@ pub enum TransportError {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     use tokio::io::{BufReader, duplex};
     use vibe_protocol::{JsonRpcVersion, Notification};
 
     use super::*;
     use crate::client::EchoTurnDriver;
+    use crate::resources::{
+        ResourceBackend, ResourceBackendRequest, ResourceDispatch, ResourceError, ResourceFuture,
+        ResourceSession,
+    };
     use crate::server::AppServer;
+
+    #[derive(Default)]
+    struct CleanupResourceBackend {
+        opened: AtomicBool,
+        closed: AtomicBool,
+    }
+
+    impl ResourceBackend for CleanupResourceBackend {
+        fn open_session(&self, _session: ResourceSession) -> Result<(), ResourceError> {
+            self.opened.store(true, Ordering::Release);
+            Ok(())
+        }
+
+        fn dispatch<'a>(
+            &'a self,
+            request: ResourceBackendRequest,
+        ) -> ResourceFuture<'a, ResourceDispatch> {
+            Box::pin(async move { Err(ResourceError::MethodNotFound(request.method)) })
+        }
+
+        fn close_session<'a>(
+            &'a self,
+            _session_id: &'a str,
+            _generation: u64,
+        ) -> ResourceFuture<'a, ()> {
+            Box::pin(async move {
+                self.closed.store(true, Ordering::Release);
+                Ok(())
+            })
+        }
+    }
 
     #[tokio::test]
     async fn memory_transport_crosses_a_json_boundary() {
@@ -1359,5 +1452,43 @@ mod tests {
             .await
             .expect("server task joins")
             .expect("server exits cleanly");
+    }
+
+    #[tokio::test]
+    async fn stdio_transport_loss_closes_orphaned_resource_sessions() {
+        let backend = Arc::new(CleanupResourceBackend::default());
+        let (client, server_io) = duplex(4096);
+        let (client_read, mut client_write) = tokio::io::split(client);
+        let (server_read, server_write) = tokio::io::split(server_io);
+        let server_task = tokio::spawn(serve_stdio(
+            AppServer::with_resource_backend(backend.clone()),
+            StdioTransport::new(BufReader::new(server_read), server_write),
+            Arc::new(EchoTurnDriver::new("answer")),
+        ));
+        let mut responses = BufReader::new(client_read).lines();
+        for request in [
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1","entrypoint":"programmatic","terminalEmulator":"unknown"},"capabilities":{}}}"#,
+            r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#,
+            r#"{"jsonrpc":"2.0","id":2,"method":"session/start","params":{"sessionId":"session-1","workingDirectory":"/workspace"}}"#,
+        ] {
+            client_write
+                .write_all(request.as_bytes())
+                .await
+                .expect("request bytes");
+            client_write
+                .write_all(b"\n")
+                .await
+                .expect("request newline");
+        }
+        assert!(responses.next_line().await.expect("initialize").is_some());
+        assert!(responses.next_line().await.expect("session").is_some());
+        assert!(backend.opened.load(Ordering::Acquire));
+        drop(client_write);
+        drop(responses);
+        server_task
+            .await
+            .expect("server task")
+            .expect("transport closes");
+        assert!(backend.closed.load(Ordering::Acquire));
     }
 }

@@ -2,6 +2,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::resources::{
+    BACKEND_RESOURCE_METHODS, CoreResourceBackend, RESOURCE_METHODS, ResourceBackend,
+    ResourceBackendRequest, ResourceDispatch, ResourceError, ResourceService, ResourceSession,
+};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -10,6 +14,12 @@ use vibe_core::events::{
     PublicEntryGenerationStatus, PublicEntryMetadata, PublicError, PublicHistoryEntry,
     PublicMessageRole, PublicMessageSource, PublicTurn, PublicTurnStatus,
 };
+use vibe_core::policy::{
+    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore,
+    TrustDecision, TrustRootKind,
+};
+use vibe_core::tools::{ToolExecutionOutput, ToolInvocation, ToolRegistry};
+use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 use vibe_protocol::{
     CallbackKind, ClientCapabilities, Envelope, ErrorResponse, InitializeParams,
     InitializeResponse, JsonRpcVersion, Notification, ProtocolError, ProtocolErrorCode,
@@ -21,16 +31,54 @@ const INITIALIZE_METHOD: &str = "initialize";
 const INITIALIZED_NOTIFICATION: &str = "initialized";
 const SHUTDOWN_METHOD: &str = "shutdown";
 const EXIT_NOTIFICATION: &str = "exit";
-const IMPLEMENTED_METHODS: [&str; 8] = [
+const IMPLEMENTED_METHODS: &[&str] = &[
+    "account/read",
     "callback/respond",
+    "connectors/auth/read",
+    "connectors/read",
+    "connectors/refresh",
+    "diagnostics/list",
+    "diagnostics/logs/read",
+    "feedback/record",
+    "feedback/shouldShow",
+    "mcp/add",
+    "mcp/login",
+    "mcp/logout",
+    "mcp/read",
+    "mcp/refresh",
+    "mcp/toggle",
+    "narration/summarize",
+    "review/approve",
+    "review/baseline",
+    "review/hunks",
+    "review/revert",
+    "review/state",
+    "review/turnDiff",
+    "runtime/read",
     "session/close",
     "session/context/inject",
     "session/read",
+    "session/ready/read",
+    "session/ready/wait",
     "session/start",
+    "shell/interrupt",
+    "shell/run",
+    "stats/read",
+    "tools/list",
     "turn/interrupt",
     "turn/start",
     "turn/steer",
+    "workspace/trust/decision",
+    "workspace/trust/status",
 ];
+
+struct DenyApproval;
+
+impl ApprovalAgent for DenyApproval {
+    fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
+        Box::pin(async { Ok(ApprovalDecision::Deny) })
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionState {
@@ -74,6 +122,16 @@ pub enum DeferredWork {
         accepted: bool,
         value: Option<String>,
     },
+    ResourceRequest {
+        request_id: RequestId,
+        session_id: String,
+        method: String,
+        params: BTreeMap<String, Value>,
+    },
+    CloseResources {
+        session_id: String,
+        generation: u64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,9 +151,11 @@ impl DispatchBatch {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AppServer {
     sessions: Arc<Mutex<BTreeMap<String, SessionRuntime>>>,
+    resources: Arc<Mutex<ResourceService>>,
+    resource_backend: Option<Arc<dyn ResourceBackend>>,
     next_session: Arc<AtomicU64>,
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
@@ -106,6 +166,8 @@ impl Default for AppServer {
     fn default() -> Self {
         Self {
             sessions: Arc::new(Mutex::new(BTreeMap::new())),
+            resources: Arc::new(Mutex::new(ResourceService::default())),
+            resource_backend: Some(Arc::new(CoreResourceBackend::default())),
             next_session: Arc::new(AtomicU64::new(1)),
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
@@ -115,6 +177,14 @@ impl Default for AppServer {
 }
 
 impl AppServer {
+    #[must_use]
+    pub fn with_resource_backend(backend: Arc<dyn ResourceBackend>) -> Self {
+        Self {
+            resource_backend: Some(backend),
+            ..Self::default()
+        }
+    }
+
     #[must_use]
     pub fn connect(&self, transport: TransportKind) -> ServerConnection {
         ServerConnection {
@@ -507,6 +577,70 @@ impl AppServer {
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))
     }
 
+    pub async fn invoke_tool(
+        &self,
+        session_id: &str,
+        name: &str,
+        invocation: ToolInvocation,
+    ) -> Result<ToolExecutionOutput, ServerError> {
+        let tools = {
+            let sessions = self.lock_sessions()?;
+            session_by_id_or_alias(&sessions, session_id)
+                .map(|session| session.tools.clone())
+                .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
+        };
+        tools
+            .invoke(name, invocation)
+            .await
+            .map_err(|error| ServerError::Tool(error.to_string()))
+    }
+
+    pub async fn execute_resource_request(
+        &self,
+        request_id: RequestId,
+        session_id: String,
+        method: String,
+        params: BTreeMap<String, Value>,
+    ) -> DispatchBatch {
+        let Some(backend) = &self.resource_backend else {
+            return error_batch(
+                request_id,
+                ProtocolErrorCode::Conflict,
+                "Operational resource backend is not attached",
+            );
+        };
+        let request = ResourceBackendRequest {
+            session_id,
+            method,
+            params,
+        };
+        resource_result_batch(request_id, backend.dispatch(request).await)
+    }
+
+    pub async fn close_resource_session(
+        &self,
+        session_id: &str,
+        generation: u64,
+    ) -> Result<(), ServerError> {
+        match &self.resource_backend {
+            Some(backend) => backend
+                .close_session(session_id, generation)
+                .await
+                .map_err(|error| ServerError::Resource(error.to_string())),
+            None => Ok(()),
+        }
+    }
+
+    pub(crate) fn orphaned_resource_generation(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<u64>, ServerError> {
+        let sessions = self.lock_sessions()?;
+        Ok(session_by_id_or_alias(&sessions, session_id)
+            .filter(|session| session.attachments == 0)
+            .map(|session| session.resource_generation))
+    }
+
     fn lock_sessions(
         &self,
     ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, SessionRuntime>>, ServerError> {
@@ -653,6 +787,23 @@ impl ServerConnection {
         let session = session_mut_by_id_or_alias(&mut sessions, session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         if attached_key(session, &self.attached_sessions).is_none() {
+            if session.attachments == 0
+                && let Some(backend) = &self.server.resource_backend
+            {
+                let generation = session.resource_generation.checked_add(1).ok_or_else(|| {
+                    ServerError::Resource("resource session generation was exhausted".to_owned())
+                })?;
+                backend
+                    .open_session(ResourceSession {
+                        session_id: session.id.clone(),
+                        generation,
+                        working_directory: session.working_directory.clone(),
+                        policy: session.policy.clone(),
+                        tools: session.tools.clone(),
+                    })
+                    .map_err(|error| ServerError::Resource(error.to_string()))?;
+                session.resource_generation = generation;
+            }
             session.attachments = session.attachments.saturating_add(1);
             self.attached_sessions.insert(session.id.clone());
         }
@@ -681,6 +832,10 @@ impl ServerConnection {
         self.attached_sessions.clear();
         self.pending_server_requests.clear();
         self.state = ConnectionState::Closed;
+    }
+
+    pub(crate) fn attached_session_ids(&self) -> Vec<String> {
+        self.attached_sessions.iter().cloned().collect()
     }
 
     fn handle_request(&mut self, request: ServerRequest) -> DispatchBatch {
@@ -713,6 +868,7 @@ impl ServerConnection {
             "turn/interrupt" => self.turn_interrupt(request),
             "session/context/inject" => self.context_inject(request),
             "callback/respond" => self.callback_respond(request),
+            method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
             _ => error_batch(
                 request.id,
                 ProtocolErrorCode::MethodNotFound,
@@ -736,7 +892,7 @@ impl ServerConnection {
                 }
             }
             EXIT_NOTIFICATION if self.state == ConnectionState::ShuttingDown => {
-                self.close();
+                self.state = ConnectionState::Closed;
                 DispatchBatch {
                     outbound: Vec::new(),
                     deferred: Vec::new(),
@@ -829,6 +985,40 @@ impl ServerConnection {
             generated_session_id(self.server.next_session.fetch_add(1, Ordering::Relaxed))
         });
         let created_at = now_millis();
+        let working_directory = params
+            .working_directory
+            .clone()
+            .unwrap_or_else(|| ".".to_owned());
+        let permission_store = PermissionStore::default();
+        let tools = ToolRegistry::default();
+        if let Ok(workspace) = Workspace::open(&working_directory) {
+            if params.trusted
+                && let Err(error) = permission_store.try_set_trust(
+                    &working_directory,
+                    TrustDecision::SessionTrusted,
+                    TrustRootKind::Workspace,
+                )
+            {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::InvalidParams,
+                    &error.to_string(),
+                );
+            }
+            let workspace = Arc::new(workspace);
+            let review = Arc::new(ReviewManager::new(workspace.clone()));
+            if let Err(error) = WorkspaceTools::new(workspace, review).register(
+                &tools,
+                permission_store.clone(),
+                Arc::new(DenyApproval),
+            ) {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::InternalError,
+                    &error.to_string(),
+                );
+            }
+        }
         let mut sessions = match self.server.lock_sessions() {
             Ok(sessions) => sessions,
             Err(error) => return internal_error_batch(request.id, &error),
@@ -844,7 +1034,7 @@ impl ServerConnection {
             session_id.clone(),
             SessionRuntime {
                 id: session_id.clone(),
-                working_directory: params.working_directory.unwrap_or_else(|| ".".to_owned()),
+                working_directory,
                 intent: SessionIntent {
                     add_directories: params.add_directories,
                     trusted: params.trusted,
@@ -869,13 +1059,46 @@ impl ServerConnection {
                 steering: Vec::new(),
                 snapshot: None,
                 attachments: 1,
+                resource_generation: 1,
                 aliases: BTreeSet::new(),
                 created_at,
                 updated_at: created_at,
                 latest_turn: None,
                 event_watermark: 0,
+                policy: permission_store.clone(),
+                tools: tools.clone(),
             },
         );
+        let resource_result = self
+            .server
+            .resources
+            .lock()
+            .map_err(|_| ResourceError::Unavailable("resource state lock is poisoned".to_owned()))
+            .and_then(|mut resources| {
+                resources.open_session(&session_id, permission_store.clone(), tools.clone())
+            });
+        if let Err(error) = resource_result {
+            sessions.remove(&session_id);
+            return resource_error_batch(request.id, error);
+        }
+        if let Some(backend) = &self.server.resource_backend
+            && let Err(error) = backend.open_session(ResourceSession {
+                session_id: session_id.clone(),
+                generation: 1,
+                working_directory: sessions
+                    .get(&session_id)
+                    .map(|session| session.working_directory.clone())
+                    .unwrap_or_default(),
+                policy: permission_store,
+                tools,
+            })
+        {
+            if let Ok(mut resources) = self.server.resources.lock() {
+                resources.close_session(&session_id);
+            }
+            sessions.remove(&session_id);
+            return resource_error_batch(request.id, error);
+        }
         self.attached_sessions.insert(session_id.clone());
         let state = sessions
             .get(&session_id)
@@ -939,18 +1162,31 @@ impl ServerConnection {
             self.attached_sessions.remove(&key);
             session.attachments = session.attachments.saturating_sub(1);
         }
+        let session_id = params.session_id.clone();
+        let resource_generation = session.resource_generation;
+        drop(sessions);
+        if let Ok(mut resources) = self.server.resources.lock() {
+            resources.close_session(&session_id);
+        }
         self.state = ConnectionState::Closed;
+        let mut deferred = active_turn
+            .map(|turn_id| DeferredWork::InterruptTurn {
+                session_id: session_id.clone(),
+                turn_id,
+            })
+            .into_iter()
+            .collect::<Vec<_>>();
+        if self.server.resource_backend.is_some() {
+            deferred.push(DeferredWork::CloseResources {
+                session_id: session_id.clone(),
+                generation: resource_generation,
+            });
+        }
         DispatchBatch {
             outbound: success_bytes(request.id, BTreeMap::new())
                 .into_iter()
                 .collect(),
-            deferred: active_turn
-                .map(|turn_id| DeferredWork::InterruptTurn {
-                    session_id: params.session_id,
-                    turn_id,
-                })
-                .into_iter()
-                .collect(),
+            deferred,
             close_after_flush: true,
         }
     }
@@ -1256,6 +1492,124 @@ impl ServerConnection {
         }
     }
 
+    fn resource_request(&mut self, mut request: ServerRequest) -> DispatchBatch {
+        let session_value = request.params.get("sessionId");
+        let session_id = session_value
+            .and_then(Value::as_str)
+            .filter(|session_id| !session_id.is_empty())
+            .map(str::to_owned);
+        let requires_session = true;
+        if (requires_session && session_id.is_none())
+            || (session_value.is_some() && session_id.is_none())
+        {
+            return error_batch(
+                request.id,
+                ProtocolErrorCode::InvalidParams,
+                "sessionId must be a non-empty string",
+            );
+        }
+        if let Some(session_id) = &session_id
+            && let Some(batch) = self.attachment_error(request.id.clone(), session_id)
+        {
+            return batch;
+        }
+        if matches!(
+            request.method.as_str(),
+            "workspace/trust/decision" | "workspace/trust/status"
+        ) {
+            let Some(session_id) = &session_id else {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::InvalidParams,
+                    "sessionId must be a non-empty string",
+                );
+            };
+            let working_directory = self.server.lock_sessions().ok().and_then(|sessions| {
+                session_by_id_or_alias(&sessions, session_id)
+                    .map(|session| session.working_directory.clone())
+            });
+            let Some(working_directory) = working_directory else {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::NotFound,
+                    "Session was not found",
+                );
+            };
+            let requested = request
+                .params
+                .entry("cwd".to_owned())
+                .or_insert_with(|| json!(working_directory));
+            let Some(requested) = requested.as_str() else {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::InvalidParams,
+                    "cwd must be a string",
+                );
+            };
+            if !same_filesystem_path(requested, &working_directory) {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::Forbidden,
+                    "Workspace trust can only change the attached session root",
+                );
+            }
+        }
+        let session_active = session_id.as_deref().is_some_and(|session_id| {
+            self.server
+                .lock_sessions()
+                .ok()
+                .and_then(|sessions| {
+                    session_by_id_or_alias(&sessions, session_id)
+                        .map(|session| session.active_turn.is_some())
+                })
+                .unwrap_or(false)
+        });
+        if BACKEND_RESOURCE_METHODS.contains(&request.method.as_str())
+            && self.server.resource_backend.is_some()
+        {
+            let validation = match self.server.resources.lock() {
+                Ok(resources) => resources.validate_backend_request(
+                    &request.method,
+                    &request.params,
+                    session_active,
+                ),
+                Err(_) => {
+                    return error_batch(
+                        request.id,
+                        ProtocolErrorCode::InternalError,
+                        "Resource state lock is poisoned",
+                    );
+                }
+            };
+            if let Err(error) = validation {
+                return resource_error_batch(request.id, error);
+            }
+            return DispatchBatch {
+                outbound: Vec::new(),
+                deferred: vec![DeferredWork::ResourceRequest {
+                    request_id: request.id,
+                    session_id: session_id.unwrap_or_default(),
+                    method: request.method,
+                    params: request.params,
+                }],
+                close_after_flush: false,
+            };
+        }
+        let result = match self.server.resources.lock() {
+            Ok(mut resources) => {
+                resources.dispatch(&request.method, &request.params, session_active)
+            }
+            Err(_) => {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::InternalError,
+                    "Resource state lock is poisoned",
+                );
+            }
+        };
+        resource_result_batch(request.id, result)
+    }
+
     fn mutate_active_turn(
         &mut self,
         request_id: RequestId,
@@ -1308,6 +1662,13 @@ impl ServerConnection {
     }
 }
 
+fn same_filesystem_path(left: &str, right: &str) -> bool {
+    match (std::fs::canonicalize(left), std::fs::canonicalize(right)) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => left == right,
+    }
+}
+
 impl Drop for ServerConnection {
     fn drop(&mut self) {
         self.close();
@@ -1325,7 +1686,7 @@ pub enum SessionStatus {
     Closed,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct SessionRuntime {
     id: String,
     working_directory: String,
@@ -1339,11 +1700,14 @@ struct SessionRuntime {
     steering: Vec<String>,
     snapshot: Option<ProjectionSnapshot>,
     attachments: u32,
+    resource_generation: u64,
     aliases: BTreeSet<String>,
     created_at: u64,
     updated_at: u64,
     latest_turn: Option<PublicTurn>,
     event_watermark: u64,
+    policy: PermissionStore,
+    tools: ToolRegistry,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1651,6 +2015,10 @@ pub enum ServerError {
     InvalidCallbackRequest,
     #[error("server state lock is poisoned")]
     StatePoisoned,
+    #[error("tool execution failed: {0}")]
+    Tool(String),
+    #[error("resource cleanup failed: {0}")]
+    Resource(String),
     #[error(transparent)]
     Json(serde_json::Error),
     #[error(transparent)]
@@ -1776,6 +2144,45 @@ fn error_batch(id: RequestId, code: ProtocolErrorCode, message: &str) -> Dispatc
     }
 }
 
+fn resource_result_batch(
+    id: RequestId,
+    result: Result<ResourceDispatch, ResourceError>,
+) -> DispatchBatch {
+    match result {
+        Ok(dispatch) => {
+            let mut outbound = success_bytes(id, dispatch.result)
+                .into_iter()
+                .collect::<Vec<_>>();
+            if let Some(notification) = dispatch.notification
+                && let Ok(bytes) = encode_notification(&notification.method, notification.params)
+            {
+                outbound.push(bytes);
+            }
+            DispatchBatch {
+                outbound,
+                deferred: Vec::new(),
+                close_after_flush: false,
+            }
+        }
+        Err(error) => resource_error_batch(id, error),
+    }
+}
+
+fn resource_error_batch(id: RequestId, error: ResourceError) -> DispatchBatch {
+    match error {
+        ResourceError::MethodNotFound(message) => {
+            error_batch(id, ProtocolErrorCode::MethodNotFound, &message)
+        }
+        ResourceError::InvalidParams(message) => {
+            error_batch(id, ProtocolErrorCode::InvalidParams, &message)
+        }
+        ResourceError::NotFound(message) => error_batch(id, ProtocolErrorCode::NotFound, &message),
+        ResourceError::Conflict(message) | ResourceError::Unavailable(message) => {
+            error_batch(id, ProtocolErrorCode::Conflict, &message)
+        }
+    }
+}
+
 fn internal_error_batch(id: RequestId, error: &ServerError) -> DispatchBatch {
     error_batch(id, ProtocolErrorCode::InternalError, &error.to_string())
 }
@@ -1806,6 +2213,78 @@ fn now_millis() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Default)]
+    struct RecordingResourceBackend {
+        opened_with_tools: Mutex<Option<usize>>,
+        mcp_added: Mutex<bool>,
+        closed: Mutex<Vec<String>>,
+    }
+
+    impl ResourceBackend for RecordingResourceBackend {
+        fn open_session(&self, session: ResourceSession) -> Result<(), ResourceError> {
+            let count = session
+                .tools
+                .list()
+                .map_err(|error| ResourceError::Unavailable(error.to_string()))?
+                .len();
+            *self
+                .opened_with_tools
+                .lock()
+                .map_err(|_| ResourceError::Unavailable("test backend lock".to_owned()))? =
+                Some(count);
+            Ok(())
+        }
+
+        fn dispatch<'a>(
+            &'a self,
+            request: ResourceBackendRequest,
+        ) -> crate::resources::ResourceFuture<'a, ResourceDispatch> {
+            Box::pin(async move {
+                match request.method.as_str() {
+                    "mcp/add" => {
+                        *self.mcp_added.lock().map_err(|_| {
+                            ResourceError::Unavailable("test backend lock".to_owned())
+                        })? = true;
+                        Ok(ResourceDispatch {
+                            result: result_map([("mcp", json!({"sources": ["example"]}))]),
+                            notification: Some(crate::resources::ResourceNotification {
+                                method: "mcp/updated".to_owned(),
+                                params: result_map([("mcp", json!({"sources": ["example"]}))]),
+                            }),
+                        })
+                    }
+                    "mcp/read" => {
+                        let added = *self.mcp_added.lock().map_err(|_| {
+                            ResourceError::Unavailable("test backend lock".to_owned())
+                        })?;
+                        Ok(ResourceDispatch {
+                            result: result_map([(
+                                "mcp",
+                                json!({"sources": if added { vec!["example"] } else { vec![] }}),
+                            )]),
+                            notification: None,
+                        })
+                    }
+                    method => Err(ResourceError::MethodNotFound(method.to_owned())),
+                }
+            })
+        }
+
+        fn close_session<'a>(
+            &'a self,
+            session_id: &'a str,
+            _generation: u64,
+        ) -> crate::resources::ResourceFuture<'a, ()> {
+            Box::pin(async move {
+                self.closed
+                    .lock()
+                    .map_err(|_| ResourceError::Unavailable("test backend lock".to_owned()))?
+                    .push(session_id.to_owned());
+                Ok(())
+            })
+        }
+    }
 
     fn request(id: i64, method: &str, params: Value) -> Vec<u8> {
         serde_json::to_vec(&json!({
@@ -2137,6 +2616,15 @@ mod tests {
                 .attachments,
             0
         );
+        let mut reattached = server.connect(TransportKind::InProcess);
+        initialize(&mut reattached);
+        reattached
+            .attach_session("session-1")
+            .expect("reattachment succeeds");
+        let sessions = server.lock_sessions().expect("session state");
+        let session = sessions.get("session-1").expect("reattached session");
+        assert_eq!(session.attachments, 1);
+        assert_eq!(session.resource_generation, 2);
     }
 
     #[test]
@@ -2165,6 +2653,313 @@ mod tests {
         ));
     }
 
+    #[tokio::test]
+    async fn operational_resources_are_typed_and_unavailable_backends_fail_actionably() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+
+        let tools =
+            connection.dispatch(&request(3, "tools/list", json!({"sessionId": "session-1"})));
+        assert!(matches!(
+            decode_frame(&tools.outbound[0]).expect("tools response"),
+            Envelope::Success(SuccessResponse { result, .. })
+                if result["tools"].as_array().is_some_and(Vec::is_empty)
+        ));
+
+        let add = connection.dispatch(&request(
+            4,
+            "mcp/add",
+            json!({
+                "sessionId": "session-1",
+                "url": "https://mcp.example",
+                "name": "example"
+            }),
+        ));
+        let deferred = add.deferred.first();
+        assert!(matches!(
+            deferred,
+            Some(DeferredWork::ResourceRequest { .. })
+        ));
+        let Some(DeferredWork::ResourceRequest {
+            request_id,
+            session_id,
+            method,
+            params,
+        }) = deferred
+        else {
+            return;
+        };
+        let add = server
+            .execute_resource_request(
+                request_id.clone(),
+                session_id.clone(),
+                method.clone(),
+                params.clone(),
+            )
+            .await;
+        assert!(matches!(
+            decode_frame(&add.outbound[0]).expect("MCP response"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::Conflict,
+                    message,
+                    ..
+                },
+                ..
+            }) if message.contains("MCP transport backend is not configured")
+        ));
+    }
+
+    #[tokio::test]
+    async fn attached_resource_backend_uses_session_tools_and_returns_canonical_state() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let backend = Arc::new(RecordingResourceBackend::default());
+        let server = AppServer::with_resource_backend(backend.clone());
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        let started = connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({
+                "sessionId": "session-1",
+                "workingDirectory": workspace.path()
+            }),
+        ));
+        assert_eq!(started.outbound.len(), 1);
+        assert!(
+            backend
+                .opened_with_tools
+                .lock()
+                .expect("backend state")
+                .is_some_and(|count| count > 0)
+        );
+
+        let add = connection.dispatch(&request(
+            3,
+            "mcp/add",
+            json!({
+                "sessionId": "session-1",
+                "url": "https://mcp.example",
+                "name": "example"
+            }),
+        ));
+        assert!(add.outbound.is_empty());
+        let deferred = add.deferred.first();
+        assert!(matches!(
+            deferred,
+            Some(DeferredWork::ResourceRequest { .. })
+        ));
+        let Some(DeferredWork::ResourceRequest {
+            request_id,
+            session_id,
+            method,
+            params,
+        }) = deferred
+        else {
+            return;
+        };
+        let added = server
+            .execute_resource_request(
+                request_id.clone(),
+                session_id.clone(),
+                method.clone(),
+                params.clone(),
+            )
+            .await;
+        assert_eq!(added.outbound.len(), 2);
+        assert!(matches!(
+            decode_frame(&added.outbound[0]).expect("response"),
+            Envelope::Success(SuccessResponse {
+                id: RequestId::Integer(3),
+                ..
+            })
+        ));
+        assert!(matches!(
+            decode_frame(&added.outbound[1]).expect("notification"),
+            Envelope::Notification(Notification { method, .. }) if method == "mcp/updated"
+        ));
+
+        let read = connection.dispatch(&request(4, "mcp/read", json!({"sessionId": "session-1"})));
+        let deferred = read.deferred.first();
+        assert!(matches!(
+            deferred,
+            Some(DeferredWork::ResourceRequest { .. })
+        ));
+        let Some(DeferredWork::ResourceRequest {
+            request_id,
+            session_id,
+            method,
+            params,
+        }) = deferred
+        else {
+            return;
+        };
+        let read = server
+            .execute_resource_request(
+                request_id.clone(),
+                session_id.clone(),
+                method.clone(),
+                params.clone(),
+            )
+            .await;
+        assert!(matches!(
+            decode_frame(&read.outbound[0]).expect("canonical state"),
+            Envelope::Success(SuccessResponse { result, .. })
+                if result["mcp"]["sources"] == json!(["example"])
+        ));
+
+        let close = connection.dispatch(&request(
+            5,
+            "session/close",
+            json!({"sessionId": "session-1"}),
+        ));
+        let deferred = close.deferred.last();
+        assert!(matches!(
+            deferred,
+            Some(DeferredWork::CloseResources { .. })
+        ));
+        let Some(DeferredWork::CloseResources {
+            session_id,
+            generation,
+        }) = deferred
+        else {
+            return;
+        };
+        server
+            .close_resource_session(session_id, *generation)
+            .await
+            .expect("resource cleanup");
+        assert_eq!(
+            *backend.closed.lock().expect("closed state"),
+            vec!["session-1".to_owned()]
+        );
+    }
+
+    #[tokio::test]
+    async fn workspace_trust_controls_the_session_tool_registry() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::fs::write(workspace.path().join("visible.txt"), "safe\n").expect("fixture");
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        let started = connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({
+                "sessionId": "session-1",
+                "workingDirectory": workspace.path()
+            }),
+        ));
+        assert_eq!(started.outbound.len(), 1);
+
+        let invocation = || ToolInvocation {
+            call_id: "read-1".to_owned(),
+            arguments: json!({"path": "visible.txt"}),
+        };
+        assert!(
+            server
+                .invoke_tool("session-1", "read", invocation())
+                .await
+                .is_err()
+        );
+
+        let trusted = connection.dispatch(&request(
+            3,
+            "workspace/trust/decision",
+            json!({
+                "sessionId": "session-1",
+                "cwd": workspace.path(),
+                "decision": "trust_cwd"
+            }),
+        ));
+        assert_eq!(trusted.outbound.len(), 2);
+        assert_eq!(
+            server
+                .invoke_tool("session-1", "read", invocation())
+                .await
+                .expect("trusted read")
+                .model_text,
+            "1|safe"
+        );
+
+        connection.dispatch(&request(
+            4,
+            "workspace/trust/decision",
+            json!({
+                "sessionId": "session-1",
+                "cwd": workspace.path(),
+                "decision": "decline"
+            }),
+        ));
+        assert!(
+            server
+                .invoke_tool("session-1", "read", invocation())
+                .await
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn resource_requests_validate_session_ownership_and_idle_review_mutations() {
+        let server = AppServer::default();
+        let mut owner = server.connect(TransportKind::InProcess);
+        initialize(&mut owner);
+        start_session(&mut owner);
+
+        let malformed = owner.dispatch(&request(3, "tools/list", json!({"sessionId": 7})));
+        assert!(matches!(
+            decode_frame(&malformed.outbound[0]).expect("invalid params"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::InvalidParams,
+                    ..
+                },
+                ..
+            })
+        ));
+
+        owner.dispatch(&request(
+            4,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "busy"}]}),
+        ));
+        let review = owner.dispatch(&request(
+            5,
+            "review/revert",
+            json!({"sessionId": "session-1", "target": {"kind": "all"}}),
+        ));
+        assert!(matches!(
+            decode_frame(&review.outbound[0]).expect("review conflict"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::Conflict,
+                    ..
+                },
+                ..
+            })
+        ));
+
+        let mut intruder = server.connect(TransportKind::InProcess);
+        initialize(&mut intruder);
+        let forbidden = intruder.dispatch(&request(
+            6,
+            "runtime/read",
+            json!({"sessionId": "session-1"}),
+        ));
+        assert!(matches!(
+            decode_frame(&forbidden.outbound[0]).expect("forbidden resource"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::Forbidden,
+                    ..
+                },
+                ..
+            })
+        ));
+    }
+
     #[test]
     fn closing_an_active_session_retains_ownership_until_terminal_cleanup() {
         let server = AppServer::default();
@@ -2183,10 +2978,16 @@ mod tests {
         ));
         assert_eq!(
             close.deferred,
-            vec![DeferredWork::InterruptTurn {
-                session_id: "session-1".to_owned(),
-                turn_id: "turn-1".to_owned(),
-            }]
+            vec![
+                DeferredWork::InterruptTurn {
+                    session_id: "session-1".to_owned(),
+                    turn_id: "turn-1".to_owned(),
+                },
+                DeferredWork::CloseResources {
+                    session_id: "session-1".to_owned(),
+                    generation: 1,
+                },
+            ]
         );
 
         let mut reducer = vibe_core::events::ProjectionReducer::new("session-1");

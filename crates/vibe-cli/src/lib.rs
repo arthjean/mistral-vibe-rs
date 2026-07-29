@@ -255,7 +255,7 @@ where
         }
         Err(error) => Err(error),
     };
-    let close_result = service.close_session(&close_session_id);
+    let close_result = service.close_session(&close_session_id).await;
     let shutdown_result = service.shutdown();
     execution?;
     close_result?;
