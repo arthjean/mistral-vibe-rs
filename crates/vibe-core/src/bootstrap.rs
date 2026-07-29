@@ -58,7 +58,7 @@ pub struct BootstrapSnapshot {
 
 pub struct BootstrapRuntime {
     snapshot: Arc<BootstrapSnapshot>,
-    credential: SecretString,
+    pub(crate) credential: SecretString,
 }
 
 impl BootstrapRuntime {
