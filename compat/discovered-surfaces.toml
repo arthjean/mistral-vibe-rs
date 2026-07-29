@@ -1,0 +1,22 @@
+schema_version = 1
+required_rows = [
+  "foundation.workspace",
+  "foundation.baseline",
+  "protocol.app-server",
+  "harness.hermetic-primitives",
+  "oracle.canonicalization",
+  "corpus.recording",
+  "differential.reports",
+  "config.bootstrap",
+  "surface.cli-flags",
+  "surface.wire-variants",
+  "surface.config-fields",
+  "surface.persistence-formats",
+  "surface.tools",
+  "surface.extensions",
+  "surface.tui-workflows",
+  "surface.acp",
+  "surface.telemetry",
+  "surface.distribution",
+  "surface.native-targets",
+]

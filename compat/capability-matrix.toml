@@ -1,0 +1,356 @@
+schema_version = 1
+baseline_version = "2.23.1"
+
+[[rows]]
+id = "foundation.workspace"
+owner = "US-001"
+priority = "P0"
+source_paths = ["pyproject.toml", "docs/adr/0001-architecture-principles.md"]
+test_paths = ["tests/conftest.py"]
+symbols = ["project", "Architecture principles"]
+fixture_class = "policy"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = []
+required_release = 0
+
+[[rows]]
+id = "foundation.baseline"
+owner = "US-002"
+priority = "P0"
+source_paths = ["pyproject.toml", "uv.lock"]
+test_paths = ["tests/conftest.py"]
+symbols = ["project.version", "requires-python"]
+fixture_class = "manifest"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["foundation.workspace"]
+required_release = 0
+
+[[rows]]
+id = "protocol.app-server"
+owner = "US-003"
+priority = "P0"
+source_paths = [
+  "vibe/app_server/protocol.py",
+  "vibe/app_server/_connection_protocol.py",
+  "vibe/app_server/_model.py",
+]
+test_paths = [
+  "tests/app_server/test_protocol.py",
+  "tests/app_server/test_transport.py",
+  "tests/app_server/test_events.py",
+  "tests/app_server/test_harness_contracts.py",
+]
+symbols = ["SERVER_METHODS", "ProtocolModel", "validate_json_rpc_envelope"]
+fixture_class = "protocol"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["foundation.baseline"]
+required_release = 0
+items = [
+  "account/read",
+  "agents/install",
+  "agents/list",
+  "agents/uninstall",
+  "callback/respond",
+  "config/batchWrite",
+  "config/proxy/read",
+  "config/proxy/write",
+  "config/read",
+  "config/reload",
+  "config/schema",
+  "config/thinking/write",
+  "connectors/auth/read",
+  "connectors/read",
+  "connectors/refresh",
+  "diagnostics/list",
+  "diagnostics/logs/read",
+  "feedback/record",
+  "feedback/shouldShow",
+  "history/list",
+  "loops/clear",
+  "loops/create",
+  "loops/delete",
+  "loops/list",
+  "mcp/add",
+  "mcp/login",
+  "mcp/logout",
+  "mcp/read",
+  "mcp/refresh",
+  "mcp/toggle",
+  "narration/summarize",
+  "review/approve",
+  "review/baseline",
+  "review/hunks",
+  "review/revert",
+  "review/state",
+  "review/turnDiff",
+  "runtime/read",
+  "session/agent/update",
+  "session/close",
+  "session/compact/start",
+  "session/continue",
+  "session/context/inject",
+  "session/delete",
+  "session/fork",
+  "session/history/clear",
+  "session/list",
+  "session/log/read",
+  "session/read",
+  "session/ready/read",
+  "session/ready/wait",
+  "session/resume",
+  "session/rewind",
+  "session/rewind/read",
+  "session/settings/update",
+  "session/start",
+  "session/title/update",
+  "shell/interrupt",
+  "shell/run",
+  "skills/list",
+  "stats/read",
+  "telemetry/record",
+  "tools/list",
+  "turn/interrupt",
+  "turn/start",
+  "turn/steer",
+  "vibeCode/projects/cancel",
+  "vibeCode/projects/create",
+  "vibeCode/projects/loadMore",
+  "vibeCode/projects/open",
+  "vibeCode/projects/recover",
+  "vibeCode/projects/select",
+  "vibeCode/projects/unlink",
+  "vibeCode/teleport/cancel",
+  "vibeCode/teleport/push/respond",
+  "vibeCode/teleport/start",
+  "workspace/prompt/prepare",
+  "workspace/trust/decision",
+  "workspace/trust/status",
+]
+
+[[rows]]
+id = "harness.hermetic-primitives"
+owner = "US-004"
+priority = "P0"
+source_paths = ["tests/conftest.py", "tests/stubs"]
+test_paths = ["tests/app_server/test_transport.py"]
+symbols = ["build_test_agent_loop", "memory_transport_pair"]
+fixture_class = "harness"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["foundation.workspace"]
+required_release = 0
+
+[[rows]]
+id = "oracle.canonicalization"
+owner = "US-005"
+priority = "P0"
+source_paths = ["vibe/cli/entrypoint.py", "vibe/app_server/protocol.py"]
+test_paths = ["tests/app_server/test_protocol.py", "tests/session"]
+symbols = ["parse_arguments", "validate_json_rpc_envelope", "SessionLoader"]
+fixture_class = "oracle"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["foundation.baseline", "harness.hermetic-primitives"]
+required_release = 0
+
+[[rows]]
+id = "corpus.recording"
+owner = "US-006"
+priority = "P0"
+source_paths = ["vibe/cli/entrypoint.py", "vibe/core/session/session_loader.py"]
+test_paths = ["tests/cli", "tests/session", "tests/app_server/test_transport.py"]
+symbols = ["parse_arguments", "SessionLoader", "StdioJsonRpcTransport"]
+fixture_class = "corpus"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["oracle.canonicalization"]
+required_release = 0
+
+[[rows]]
+id = "differential.reports"
+owner = "US-007"
+priority = "P0"
+source_paths = ["docs/adr/0002-core-engine-and-delivery-surfaces.md"]
+test_paths = ["tests/app_server/test_protocol.py"]
+symbols = ["Core engine and delivery surfaces"]
+fixture_class = "differential"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["protocol.app-server", "corpus.recording"]
+required_release = 0
+
+[[rows]]
+id = "config.bootstrap"
+owner = "US-008"
+priority = "P0"
+source_paths = ["vibe/core/config/vibe_schema.py", "vibe/core/config/orchestrator.py"]
+test_paths = ["tests/core/config", "tests/app_server/test_harness_contracts.py"]
+symbols = ["VibeConfigSchema", "ConfigOrchestrator"]
+fixture_class = "config"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["foundation.baseline", "harness.hermetic-primitives"]
+required_release = 0
+
+[[rows]]
+id = "surface.cli-flags"
+owner = "US-016"
+priority = "P0"
+source_paths = ["vibe/cli/entrypoint.py"]
+test_paths = ["tests/cli"]
+symbols = ["parse_arguments"]
+fixture_class = "process"
+rust_status = "planned"
+divergence_status = "none"
+dependencies = ["protocol.app-server"]
+required_release = 1
+items = ["vibe", "vibe-acp", "--prompt", "--output", "--resume", "--continue"]
+
+[[rows]]
+id = "surface.wire-variants"
+owner = "US-009"
+priority = "P0"
+source_paths = ["vibe/app_server/events.py", "vibe/app_server/models.py"]
+test_paths = ["tests/app_server/test_events.py", "tests/app_server/test_projection.py"]
+symbols = ["Event", "PublicHistoryEntry"]
+fixture_class = "protocol"
+rust_status = "planned"
+divergence_status = "none"
+dependencies = ["protocol.app-server"]
+required_release = 1
+items = ["request", "response", "error", "notification", "public-event"]
+
+[[rows]]
+id = "surface.config-fields"
+owner = "US-025"
+priority = "P0"
+source_paths = ["vibe/core/config/vibe_schema.py", "vibe/core/config/layers"]
+test_paths = ["tests/core/config"]
+symbols = ["VibeConfigSchema"]
+fixture_class = "config"
+rust_status = "planned"
+divergence_status = "none"
+dependencies = ["config.bootstrap"]
+required_release = 3
+items = ["defaults", "user", "project", "environment", "session"]
+
+[[rows]]
+id = "surface.persistence-formats"
+owner = "US-014"
+priority = "P0"
+source_paths = ["vibe/core/session/session_logger.py", "vibe/core/session/session_loader.py"]
+test_paths = ["tests/session"]
+symbols = ["SessionLogger", "SessionLoader"]
+fixture_class = "persistence"
+rust_status = "planned"
+divergence_status = "none"
+dependencies = ["harness.hermetic-primitives"]
+required_release = 1
+items = ["meta.json", "messages.jsonl", ".last_session"]
+
+[[rows]]
+id = "surface.tools"
+owner = "US-017"
+priority = "P0"
+source_paths = ["vibe/core/tools/base.py", "vibe/core/tools/builtins"]
+test_paths = ["tests/tools"]
+symbols = ["BaseTool"]
+fixture_class = "tool"
+rust_status = "planned"
+divergence_status = "none"
+dependencies = ["surface.wire-variants"]
+required_release = 2
+items = ["builtins", "permissions", "terminal", "mcp", "connectors"]
+
+[[rows]]
+id = "surface.extensions"
+owner = "US-031"
+priority = "P1"
+source_paths = ["vibe/core/agents", "vibe/core/skills", "vibe/core/hooks"]
+test_paths = ["tests/skills", "tests/core/hooks"]
+symbols = ["agents", "skills", "hooks"]
+fixture_class = "extension"
+rust_status = "planned"
+divergence_status = "none"
+dependencies = ["surface.config-fields"]
+required_release = 3
+items = ["agents", "skills", "hooks", "python-tools"]
+
+[[rows]]
+id = "surface.tui-workflows"
+owner = "US-033"
+priority = "P0"
+source_paths = ["vibe/cli/textual_ui"]
+test_paths = ["tests/snapshots", "tests/cli"]
+symbols = ["VibeApp"]
+fixture_class = "pty"
+rust_status = "planned"
+divergence_status = "none"
+dependencies = ["surface.wire-variants"]
+required_release = 4
+items = ["startup", "prompt", "stream", "approval", "restore"]
+
+[[rows]]
+id = "surface.acp"
+owner = "US-016"
+priority = "P0"
+source_paths = ["vibe/acp/agent.py", "vibe/acp/session.py"]
+test_paths = ["tests/acp"]
+symbols = ["VibeAgent", "VibeSession"]
+fixture_class = "protocol"
+rust_status = "planned"
+divergence_status = "none"
+dependencies = ["protocol.app-server"]
+required_release = 1
+items = ["initialize", "session", "prompt", "filesystem", "terminal"]
+
+[[rows]]
+id = "surface.telemetry"
+owner = "US-041"
+priority = "P1"
+source_paths = ["vibe/core/telemetry/send.py", "vibe/core/telemetry/types.py"]
+test_paths = ["tests/core/telemetry/test_telemetry_send.py"]
+symbols = ["TelemetryClient"]
+fixture_class = "telemetry"
+rust_status = "planned"
+divergence_status = "none"
+dependencies = ["config.bootstrap"]
+required_release = 5
+items = ["events", "opt-out", "redaction", "proxy"]
+
+[[rows]]
+id = "surface.distribution"
+owner = "US-045"
+priority = "P0"
+source_paths = ["action.yml", "scripts/install.sh", ".github/workflows/release.yml"]
+test_paths = ["scripts/ci"]
+symbols = ["vibe", "vibe-acp"]
+fixture_class = "artifact"
+rust_status = "planned"
+divergence_status = "none"
+dependencies = ["surface.native-targets"]
+required_release = 5
+items = ["archives", "installer", "github-action", "checksums"]
+
+[[rows]]
+id = "surface.native-targets"
+owner = "US-044"
+priority = "P0"
+source_paths = [".github/workflows/ci.yml", ".github/workflows/build-and-upload.yml"]
+test_paths = ["scripts/ci"]
+symbols = ["build", "test"]
+fixture_class = "platform"
+rust_status = "planned"
+divergence_status = "none"
+dependencies = ["foundation.workspace"]
+required_release = 5
+items = [
+  "linux-x86_64",
+  "linux-aarch64",
+  "macos-x86_64",
+  "macos-aarch64",
+  "windows-x86_64",
+]

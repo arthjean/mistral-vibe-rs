@@ -1,0 +1,20 @@
+[package]
+name = "vibe-acp"
+description = "Agent Client Protocol adapter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "vibe-acp"
+path = "src/main.rs"
+
+[dependencies]
+vibe-app-server = { path = "../vibe-app-server" }
+vibe-core = { path = "../vibe-core" }
+vibe-protocol = { path = "../vibe-protocol" }
+
+[lints]
+workspace = true

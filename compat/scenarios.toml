@@ -1,0 +1,154 @@
+schema_version = 1
+
+[[scenarios]]
+id = "process-version-long"
+matrix_row = "surface.cli-flags"
+kind = "process"
+comparison = "byte"
+args = ["--version"]
+
+[[scenarios]]
+id = "process-version-short"
+matrix_row = "surface.cli-flags"
+kind = "process"
+comparison = "byte"
+args = ["-v"]
+
+[[scenarios]]
+id = "process-help"
+matrix_row = "surface.cli-flags"
+kind = "process"
+comparison = "byte"
+args = ["--help"]
+
+[[scenarios]]
+id = "process-invalid-max-turns"
+matrix_row = "surface.cli-flags"
+kind = "process"
+comparison = "byte"
+args = ["--max-turns", "invalid"]
+
+[[scenarios]]
+id = "process-conflicting-resume"
+matrix_row = "surface.cli-flags"
+kind = "process"
+comparison = "byte"
+args = ["--resume", "abc", "--continue"]
+
+[[scenarios]]
+id = "protocol-success-string-id"
+matrix_row = "protocol.app-server"
+kind = "protocol"
+comparison = "schema"
+payload = '{"jsonrpc":"2.0","id":"client-1","result":{"accepted":true}}'
+
+[[scenarios]]
+id = "protocol-success-integer-id"
+matrix_row = "protocol.app-server"
+kind = "protocol"
+comparison = "schema"
+payload = '{"jsonrpc":"2.0","id":7,"result":{}}'
+
+[[scenarios]]
+id = "protocol-error"
+matrix_row = "protocol.app-server"
+kind = "protocol"
+comparison = "schema"
+payload = '{"jsonrpc":"2.0","id":"client-1","error":{"code":"conflict","message":"busy"}}'
+
+[[scenarios]]
+id = "protocol-notification"
+matrix_row = "protocol.app-server"
+kind = "protocol"
+comparison = "schema"
+payload = '{"jsonrpc":"2.0","method":"initialized","params":{}}'
+
+[[scenarios]]
+id = "protocol-request"
+matrix_row = "protocol.app-server"
+kind = "protocol"
+comparison = "schema"
+payload = '{"jsonrpc":"2.0","id":"client-1","method":"session/read","params":{"sessionId":"s1"}}'
+
+[[scenarios]]
+id = "protocol-invalid-missing-payload"
+matrix_row = "protocol.app-server"
+kind = "protocol"
+comparison = "semantic"
+payload = '{"jsonrpc":"2.0","id":"client-1"}'
+
+[[scenarios]]
+id = "protocol-invalid-result-and-error"
+matrix_row = "protocol.app-server"
+kind = "protocol"
+comparison = "semantic"
+payload = '{"jsonrpc":"2.0","id":"client-1","result":{},"error":{"code":"internal_error","message":"failed"}}'
+
+[[scenarios]]
+id = "protocol-invalid-boolean-id"
+matrix_row = "protocol.app-server"
+kind = "protocol"
+comparison = "semantic"
+payload = '{"jsonrpc":"2.0","id":true,"result":{}}'
+
+[[scenarios]]
+id = "protocol-invalid-non-object-result"
+matrix_row = "protocol.app-server"
+kind = "protocol"
+comparison = "semantic"
+payload = '{"jsonrpc":"2.0","id":"client-1","result":[]}'
+
+[[scenarios]]
+id = "protocol-initialize-camel-case"
+matrix_row = "protocol.app-server"
+kind = "initialize"
+comparison = "schema"
+payload = '{"clientInfo":{"name":"test","version":"1"},"capabilities":{"callbackKinds":["approval"]}}'
+
+[[scenarios]]
+id = "persistence-jsonl-valid"
+matrix_row = "surface.persistence-formats"
+kind = "persistence"
+comparison = "semantic"
+payload = '{"operation":"parse","text":"{\"role\":\"user\"}\n"}'
+
+[[scenarios]]
+id = "persistence-jsonl-empty-valid"
+matrix_row = "surface.persistence-formats"
+kind = "persistence"
+comparison = "semantic"
+payload = '{"operation":"loadable","text":"","metadata":{"total_messages":0}}'
+
+[[scenarios]]
+id = "persistence-jsonl-empty-invalid"
+matrix_row = "surface.persistence-formats"
+kind = "persistence"
+comparison = "semantic"
+payload = '{"operation":"loadable","text":"","metadata":{}}'
+
+[[scenarios]]
+id = "pty-version"
+matrix_row = "surface.tui-workflows"
+kind = "pty"
+comparison = "pty"
+args = ["--version"]
+
+[[scenarios]]
+id = "pty-help"
+matrix_row = "surface.tui-workflows"
+kind = "pty"
+comparison = "pty"
+args = ["--help"]
+
+[[scenarios]]
+id = "canonical-volatile-fields"
+matrix_row = "oracle.canonicalization"
+kind = "volatile"
+comparison = "semantic"
+volatile = [
+  { pointer = "/jsonFrames/0/timestamp", placeholder = "<TIMESTAMP>" },
+  { pointer = "/jsonFrames/0/uuid", placeholder = "<UUID>" },
+  { pointer = "/jsonFrames/0/path", placeholder = "<PATH>" },
+  { pointer = "/jsonFrames/0/port", placeholder = "<PORT>" },
+  { pointer = "/jsonFrames/0/providerToken", placeholder = "<PROVIDER_TOKEN>" },
+]

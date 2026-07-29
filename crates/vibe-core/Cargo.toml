@@ -1,0 +1,22 @@
+[package]
+name = "vibe-core"
+description = "Provider-neutral core contracts and deterministic test primitives"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+secrecy.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
