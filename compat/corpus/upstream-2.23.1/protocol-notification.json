@@ -1,0 +1,32 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "protocol-notification",
+  "matrixRow": "protocol.app-server",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "schema",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "accepted": true,
+        "value": {
+          "jsonrpc": "2.0",
+          "method": "initialized",
+          "params": {}
+        },
+        "variant": "Notification"
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

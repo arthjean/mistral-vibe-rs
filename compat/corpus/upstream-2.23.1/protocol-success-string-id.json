@@ -1,0 +1,34 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "protocol-success-string-id",
+  "matrixRow": "protocol.app-server",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "schema",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "accepted": true,
+        "value": {
+          "id": "client-1",
+          "jsonrpc": "2.0",
+          "result": {
+            "accepted": true
+          }
+        },
+        "variant": "JsonRpcSuccessResponse"
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}
