@@ -4,7 +4,8 @@
 
 > **Version 0.0.1**
 >
-> Mistral Vibe RS is at the project-definition stage. There is no usable CLI yet.
+> Mistral Vibe RS is at the compatibility-foundation stage. There is no usable
+> agent CLI yet.
 
 ## Mission
 
@@ -64,6 +65,24 @@ The initial development track is:
 5. publish the first release only when its supported surface is honest and testable.
 
 Product differentiation begins after the parity baseline is complete.
+
+## Compatibility foundation
+
+The Rust workspace separates protocol, core, app-server, CLI, ACP, and
+compatibility-harness ownership. `compat/capability-matrix.toml` inventories
+the pinned 2.23.1 surface, while the checked-in corpus records deterministic,
+redacted black-box outcomes from the clean checkout identified by
+`compat/baseline.toml`.
+
+```console
+cargo run -p vibe-compat -- provision --source ../mistral-vibe --sync
+cargo run -p vibe-compat -- record
+cargo run -p vibe-compat -- validate --corpus compat/corpus/upstream-2.23.1
+```
+
+The mutable sibling checkout is navigation-only. Provisioning creates an
+ignored detached checkout under `target/compat`; only that checkout may be
+executed as the upstream oracle. See `PROVENANCE.md` and `compat/README.md`.
 
 ## Relationship to Mistral Vibe
 
