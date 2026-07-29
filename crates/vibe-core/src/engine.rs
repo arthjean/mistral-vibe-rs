@@ -3,9 +3,11 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
-use futures_util::StreamExt;
+use futures_util::{FutureExt, StreamExt, stream::FuturesUnordered};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::Notify;
 
@@ -18,12 +20,15 @@ use crate::provider::{
     ProviderTransport, TransportError, Usage, aggregate_provider_chunks,
 };
 use crate::storage::{SessionMetadata, SessionStore, StorageError};
+use crate::tools::ToolExecutionOutput;
 
 pub type ProviderFuture<'a> =
     Pin<Box<dyn Future<Output = Result<AssistantMessage, ProviderError>> + Send + 'a>>;
 pub type ProviderStreamFuture<'a> =
     Pin<Box<dyn Future<Output = Result<ProviderStream, ProviderError>> + Send + 'a>>;
-pub type ToolFuture<'a> = Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>>;
+pub type ToolFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<ToolExecutionOutput, String>> + Send + 'a>>;
+pub type ToolStreamSink = Arc<dyn Fn(String) -> Result<(), String> + Send + Sync>;
 pub type CompactionFuture<'a> =
     Pin<Box<dyn Future<Output = Result<CompactionResult, String>> + Send + 'a>>;
 pub type PersistenceFuture<'a> = Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'a>>;
@@ -115,6 +120,15 @@ where
 
 pub trait ToolExecutor: Send + Sync {
     fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a>;
+
+    fn execute_stream<'a>(
+        &'a self,
+        name: &'a str,
+        arguments: &'a str,
+        _output: ToolStreamSink,
+    ) -> ToolFuture<'a> {
+        self.execute(name, arguments)
+    }
 }
 
 pub trait Compactor: Send + Sync {
@@ -837,8 +851,8 @@ where
             if completion.tool_calls.is_empty() {
                 break TurnStopReason::Complete;
             }
-            let mut cancellation_seen = false;
-            for call in completion.tool_calls {
+            let tool_calls = completion.tool_calls;
+            for call in &tool_calls {
                 emit(
                     self.observer.as_ref(),
                     &mut reducer,
@@ -850,38 +864,142 @@ where
                         arguments: call.arguments.clone(),
                     },
                 )?;
-                let result = if cancellation_seen {
-                    None
-                } else {
-                    tokio::select! {
-                        result = self.tools.execute(&call.name, &call.arguments) => Some(result),
-                        () = cancellation.cancelled() => None,
+            }
+            let mut pending = FuturesUnordered::new();
+            let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(256);
+            for (index, call) in tool_calls.iter().enumerate() {
+                let started = Instant::now();
+                let sender = stream_tx.clone();
+                let output: ToolStreamSink = Arc::new(move |chunk| {
+                    sender
+                        .try_send((index, chunk))
+                        .map_err(|error| format!("tool output backpressure: {error}"))
+                });
+                pending.push(
+                    async move {
+                        (
+                            index,
+                            started,
+                            self.tools
+                                .execute_stream(&call.name, &call.arguments, output)
+                                .await,
+                        )
                     }
-                };
-                let (content, is_error, cancelled) = match result {
-                    Some(Ok(content)) => (content, false, false),
-                    Some(Err(message)) => (message, true, false),
-                    None => ("Tool execution interrupted".to_owned(), true, true),
-                };
+                    .boxed(),
+                );
+            }
+            drop(stream_tx);
+            let mut ordered_results = vec![None; tool_calls.len()];
+            let mut cancellation_seen = false;
+            while !pending.is_empty() {
+                tokio::select! {
+                    streamed = stream_rx.recv() => {
+                        if let Some((index, chunk)) = streamed {
+                            emit(
+                                self.observer.as_ref(),
+                                &mut reducer,
+                                &mut events,
+                                &mut next_event_id,
+                                EngineEvent::ToolStream {
+                                    call_id: tool_calls[index].id.clone(),
+                                    chunk,
+                                },
+                            )?;
+                        }
+                    }
+                    next = pending.next() => {
+                        let Some((index, started, result)) = next else {
+                            break;
+                        };
+                        while let Ok((stream_index, chunk)) = stream_rx.try_recv() {
+                            emit(
+                                self.observer.as_ref(),
+                                &mut reducer,
+                                &mut events,
+                                &mut next_event_id,
+                                EngineEvent::ToolStream {
+                                    call_id: tool_calls[stream_index].id.clone(),
+                                    chunk,
+                                },
+                            )?;
+                        }
+                        let duration_ms = u64::try_from(started.elapsed().as_millis())
+                            .unwrap_or(u64::MAX);
+                        let (output, is_error) = match result {
+                            Ok(output) => (output, false),
+                            Err(message) => (
+                                ToolExecutionOutput::text(bounded_tool_error(&message)),
+                                true,
+                            ),
+                        };
+                        emit(
+                            self.observer.as_ref(),
+                            &mut reducer,
+                            &mut events,
+                            &mut next_event_id,
+                            EngineEvent::ToolResult {
+                                call_id: tool_calls[index].id.clone(),
+                                content: output.model_text.clone(),
+                                typed_result: output.typed_result,
+                                display: output.display,
+                                duration_ms,
+                                is_error,
+                                cancelled: false,
+                            },
+                        )?;
+                        ordered_results[index] = Some((output.model_text, is_error));
+                    }
+                    () = cancellation.cancelled(), if !cancellation_seen => {
+                        cancellation_seen = true;
+                        break;
+                    }
+                }
+            }
+            drop(pending);
+            while let Ok((stream_index, chunk)) = stream_rx.try_recv() {
                 emit(
                     self.observer.as_ref(),
                     &mut reducer,
                     &mut events,
                     &mut next_event_id,
-                    EngineEvent::ToolResult {
-                        call_id: call.id.clone(),
-                        content: content.clone(),
-                        is_error,
+                    EngineEvent::ToolStream {
+                        call_id: tool_calls[stream_index].id.clone(),
+                        chunk,
                     },
                 )?;
+            }
+            if cancellation_seen {
+                for (index, result) in ordered_results.iter_mut().enumerate() {
+                    if result.is_some() {
+                        continue;
+                    }
+                    let content = "Tool execution interrupted".to_owned();
+                    emit(
+                        self.observer.as_ref(),
+                        &mut reducer,
+                        &mut events,
+                        &mut next_event_id,
+                        EngineEvent::ToolResult {
+                            call_id: tool_calls[index].id.clone(),
+                            content: content.clone(),
+                            typed_result: Value::Null,
+                            display: Value::Null,
+                            duration_ms: 0,
+                            is_error: true,
+                            cancelled: true,
+                        },
+                    )?;
+                    *result = Some((content, true));
+                }
+            }
+            for (call, result) in tool_calls.into_iter().zip(ordered_results) {
+                let (content, is_error) =
+                    result.unwrap_or_else(|| ("Tool execution interrupted".to_owned(), true));
                 messages.push(ModelMessage::Tool {
                     call_id: call.id,
                     content,
                     is_error,
                 });
-                if cancelled {
-                    cancellation_seen = true;
-                }
             }
             persist_owned(&self.sink, &messages, reducer.state()).await?;
             checkpoints = checkpoints.saturating_add(1);
@@ -1039,6 +1157,18 @@ fn stop_message(reason: &TurnStopReason) -> &'static str {
     }
 }
 
+fn bounded_tool_error(message: &str) -> String {
+    const MAX_TOOL_ERROR_BYTES: usize = 16_384;
+    if message.len() <= MAX_TOOL_ERROR_BYTES {
+        return message.to_owned();
+    }
+    let mut end = MAX_TOOL_ERROR_BYTES;
+    while !message.is_char_boundary(end) {
+        end = end.saturating_sub(1);
+    }
+    format!("{}…", &message[..end])
+}
+
 #[derive(Debug, Error)]
 pub enum EngineError {
     #[error(transparent)]
@@ -1065,6 +1195,7 @@ mod tests {
     use super::*;
     use crate::events::ModelToolCall;
     use crate::provider::{ProviderChunk, RequestLimits};
+    use serde_json::json;
 
     #[derive(Default)]
     struct ScriptedProvider {
@@ -1099,7 +1230,7 @@ mod tests {
 
     impl ToolExecutor for FakeTools {
         fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a> {
-            Box::pin(async move { Ok(format!("{name}:{arguments}")) })
+            Box::pin(async move { Ok(ToolExecutionOutput::text(format!("{name}:{arguments}"))) })
         }
     }
 
@@ -1112,8 +1243,72 @@ mod tests {
         fn execute<'a>(&'a self, _name: &'a str, _arguments: &'a str) -> ToolFuture<'a> {
             Box::pin(async move {
                 self.started.notify_one();
-                std::future::pending::<Result<String, String>>().await
+                std::future::pending::<Result<ToolExecutionOutput, String>>().await
             })
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct ControlledTools {
+        started_count: Arc<AtomicUsize>,
+        all_started: Arc<Notify>,
+        release_first: Arc<Notify>,
+        release_second: Arc<Notify>,
+    }
+
+    impl ToolExecutor for ControlledTools {
+        fn execute<'a>(&'a self, name: &'a str, _arguments: &'a str) -> ToolFuture<'a> {
+            Box::pin(async move {
+                if self.started_count.fetch_add(1, AtomicOrdering::SeqCst) == 1 {
+                    self.all_started.notify_one();
+                }
+                match name {
+                    "first" => self.release_first.notified().await,
+                    "second" => self.release_second.notified().await,
+                    _ => return Err("unexpected tool".to_owned()),
+                }
+                Ok(ToolExecutionOutput {
+                    typed_result: json!({"tool": name}),
+                    model_text: format!("{name}-result"),
+                    display: json!({"summary": name}),
+                    chunks: Vec::new(),
+                })
+            })
+        }
+
+        fn execute_stream<'a>(
+            &'a self,
+            name: &'a str,
+            arguments: &'a str,
+            output: ToolStreamSink,
+        ) -> ToolFuture<'a> {
+            Box::pin(async move {
+                output(format!("{name}-chunk"))?;
+                self.execute(name, arguments).await
+            })
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingObserver {
+        events: Mutex<Vec<EngineEvent>>,
+        result_seen: Notify,
+        stream_seen: Notify,
+    }
+
+    impl EventObserver for RecordingObserver {
+        fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
+            if matches!(event.event, EngineEvent::ToolResult { .. }) {
+                self.result_seen.notify_one();
+            }
+            if matches!(event.event, EngineEvent::ToolStream { .. }) {
+                self.stream_seen.notify_one();
+            }
+            self.events
+                .lock()
+                .map_err(|_| "recording observer lock poisoned".to_owned())?
+                .push(event.event.clone());
+            Ok(())
         }
     }
 
@@ -1281,6 +1476,99 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn parallel_tool_events_follow_arrival_but_transcript_follows_declaration() {
+        let provider = ScriptedProvider::new([
+            Ok(completion(
+                "",
+                vec![
+                    ModelToolCall {
+                        id: "call-1".to_owned(),
+                        name: "first".to_owned(),
+                        arguments: "{}".to_owned(),
+                    },
+                    ModelToolCall {
+                        id: "call-2".to_owned(),
+                        name: "second".to_owned(),
+                        arguments: "{}".to_owned(),
+                    },
+                ],
+            )),
+            Ok(completion("done", Vec::new())),
+        ]);
+        let tools = ControlledTools::default();
+        let controls = tools.clone();
+        let observer = Arc::new(RecordingObserver::default());
+        let recorded = observer.clone();
+        let task = tokio::spawn(async move {
+            ConversationEngine::new(provider)
+                .with_tools(tools)
+                .with_observer(observer)
+                .run_turn(
+                    "session-1",
+                    provider_input(),
+                    "hello",
+                    CancellationToken::default(),
+                )
+                .await
+        });
+
+        controls.all_started.notified().await;
+        recorded.stream_seen.notified().await;
+        assert!(
+            recorded
+                .events
+                .lock()
+                .expect("observer lock")
+                .iter()
+                .all(|event| !matches!(event, EngineEvent::ToolResult { .. }))
+        );
+        controls.release_second.notify_one();
+        recorded.result_seen.notified().await;
+        let first_completed_call = recorded
+            .events
+            .lock()
+            .expect("observer lock")
+            .iter()
+            .find_map(|event| match event {
+                EngineEvent::ToolResult { call_id, .. } => Some(call_id.clone()),
+                _ => None,
+            });
+        assert_eq!(first_completed_call.as_deref(), Some("call-2"));
+        controls.release_first.notify_one();
+
+        let outcome = task.await.expect("engine joins").expect("turn completes");
+        let tool_messages = outcome
+            .messages
+            .iter()
+            .filter_map(|message| match message {
+                ModelMessage::Tool {
+                    call_id, content, ..
+                } => Some((call_id.as_str(), content.as_str())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            tool_messages,
+            vec![("call-1", "first-result"), ("call-2", "second-result")]
+        );
+        let events = recorded.events.lock().expect("observer lock");
+        let second_stream = events.iter().position(|event| {
+            matches!(
+                event,
+                EngineEvent::ToolStream { call_id, chunk }
+                    if call_id == "call-2" && chunk == "second-chunk"
+            )
+        });
+        let second_result = events.iter().position(|event| {
+            matches!(
+                event,
+                EngineEvent::ToolResult { call_id, .. } if call_id == "call-2"
+            )
+        });
+        assert!(second_stream < second_result);
     }
 
     #[tokio::test]

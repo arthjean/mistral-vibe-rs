@@ -46,7 +46,15 @@ pub enum EngineEvent {
     ToolResult {
         call_id: String,
         content: String,
+        #[serde(default)]
+        typed_result: Value,
+        #[serde(default)]
+        display: Value,
+        #[serde(default)]
+        duration_ms: u64,
         is_error: bool,
+        #[serde(default)]
+        cancelled: bool,
     },
     CallbackRequested {
         callback_id: String,
@@ -703,7 +711,11 @@ fn reduce_event(
         EngineEvent::ToolResult {
             call_id,
             content,
+            typed_result,
+            display,
+            duration_ms,
             is_error,
+            cancelled,
         } => {
             require_active(state, "tool_result")?;
             let entry = state
@@ -724,23 +736,34 @@ fn reduce_event(
                 ..
             } = entry
             {
-                *current_state = if *is_error {
+                *current_state = if *cancelled {
+                    PublicEffectState::Cancelled {
+                        reason: content.clone(),
+                        output_text: content.clone(),
+                        duration_ms: *duration_ms,
+                        display: (!display.is_null()).then(|| display.clone()),
+                    }
+                } else if *is_error {
                     PublicEffectState::Failed {
                         error: PublicError {
                             message: content.clone(),
                             code: Some("tool_failed".to_owned()),
-                            details: Value::Null,
+                            details: typed_result.clone(),
                         },
                         output_text: content.clone(),
-                        duration_ms: 0,
-                        display: Value::Null,
+                        duration_ms: *duration_ms,
+                        display: display.clone(),
                     }
                 } else {
                     PublicEffectState::Completed {
-                        output: json!(content),
+                        output: if typed_result.is_null() {
+                            json!(content)
+                        } else {
+                            typed_result.clone()
+                        },
                         output_text: content.clone(),
-                        duration_ms: 0,
-                        display: Value::Null,
+                        duration_ms: *duration_ms,
+                        display: display.clone(),
                     }
                 };
                 metadata.updated_at = emitted_at;
