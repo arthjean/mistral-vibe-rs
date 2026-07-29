@@ -17,10 +17,10 @@
     {
       "id": "EP-002",
       "title": "Release 1 - Headless Engine and Provider Parity",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 8,
-      "stories_done": 0
+      "stories_done": 8
     },
     {
       "id": "EP-003",
@@ -156,97 +156,97 @@
       "id": "US-009",
       "title": "Model typed events, transcripts, and public projections",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-003", "US-004"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-29",
+      "reviewed_at": "2026-07-29"
     },
     {
       "id": "US-010",
       "title": "Implement app-server transports and lifecycle",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-003", "US-009"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-29",
+      "reviewed_at": "2026-07-29"
     },
     {
       "id": "US-011",
       "title": "Implement root-session, turn, context, and callback lifecycle",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-010"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-29",
+      "reviewed_at": "2026-07-29"
     },
     {
       "id": "US-012",
       "title": "Implement the Mistral provider backend",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-008", "US-009"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-29",
+      "reviewed_at": "2026-07-29"
     },
     {
       "id": "US-013",
       "title": "Implement generic provider wire dialects",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-008", "US-009"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-29",
+      "reviewed_at": "2026-07-29"
     },
     {
       "id": "US-014",
       "title": "Establish durable session storage and resume",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-009", "US-010"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-29",
+      "reviewed_at": "2026-07-29"
     },
     {
       "id": "US-015",
       "title": "Implement the conversation loop, limits, compaction, and cancellation",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-011", "US-012", "US-013", "US-014"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-29",
+      "reviewed_at": "2026-07-29"
     },
     {
       "id": "US-016",
       "title": "Expose programmatic CLI and minimal ACP smoke paths",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-010", "US-015"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-29",
+      "reviewed_at": "2026-07-29"
     },
     {
       "id": "US-017",
