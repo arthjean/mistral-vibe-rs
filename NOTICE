@@ -1,0 +1,10 @@
+Mistral Vibe RS
+Copyright 2026 Arthur Jean
+
+This is an independent, from-scratch Rust implementation. Mistral Vibe,
+Copyright Mistral AI, is used only as the Apache-2.0-licensed behavioral
+reference identified in compat/baseline.toml. No upstream implementation
+source is copied, translated, vendored, linked, or shipped in this work.
+
+Mistral and Mistral Vibe are trademarks of their respective owners. This
+project is not endorsed by or affiliated with Mistral AI.
