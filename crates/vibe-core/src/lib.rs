@@ -5,3 +5,4 @@ pub mod events;
 pub mod fakes;
 pub mod platform;
 pub mod provider;
+pub mod storage;
