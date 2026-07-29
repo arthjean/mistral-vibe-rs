@@ -1,0 +1,25 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "persistence-jsonl-empty-invalid",
+  "matrixRow": "surface.persistence-formats",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": {
+      "loadable": false,
+      "parsed": []
+    },
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

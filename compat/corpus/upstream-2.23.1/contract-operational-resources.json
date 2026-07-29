@@ -1,0 +1,54 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-operational-resources",
+  "matrixRow": "surface.operational-resources",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "schema",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "accountTyped": true,
+          "backendFailureActionable": true,
+          "mutationOrdered": true,
+          "readyCanonical": true,
+          "sensitiveLogsRedacted": true,
+          "toolListTyped": true
+        },
+        "contract": "operational_resources",
+        "methods": [
+          "account/read",
+          "connectors/read",
+          "diagnostics/list",
+          "diagnostics/logs/read",
+          "feedback/record",
+          "feedback/shouldShow",
+          "narration/summarize",
+          "runtime/read",
+          "session/ready/read",
+          "stats/read",
+          "tools/list"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [
+      {
+        "path": "home/.vibe/trusted_folders.toml",
+        "operation": "created",
+        "sha256": "c1be9b448d9da5ef13e31061dbc36be756fd48c474c885eba5d209a07f272980"
+      }
+    ],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

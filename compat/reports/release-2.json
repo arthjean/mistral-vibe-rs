@@ -1,0 +1,495 @@
+{
+  "schemaVersion": 1,
+  "upstreamBaseline": "mistral-vibe@2.23.1",
+  "rustBuild": "mistral-vibe-rs@2.23.1",
+  "release": 2,
+  "summary": {
+    "blocked": 0,
+    "fail": 0,
+    "intentional-divergence": 7,
+    "pass": 33
+  },
+  "verdicts": [
+    {
+      "matrixRow": "config.bootstrap",
+      "scenarioId": "contract-config-bootstrap",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-config-bootstrap.json",
+        "./compat/corpus/rust-release-2/contract-config-bootstrap.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "corpus.recording",
+      "scenarioId": "contract-corpus-recording",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-corpus-recording.json",
+        "./compat/corpus/rust-release-2/contract-corpus-recording.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "differential.reports",
+      "scenarioId": "contract-differential-reports",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-differential-reports.json",
+        "./compat/corpus/rust-release-2/contract-differential-reports.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "foundation.baseline",
+      "scenarioId": "contract-foundation-baseline",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-foundation-baseline.json",
+        "./compat/corpus/rust-release-2/contract-foundation-baseline.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "foundation.workspace",
+      "scenarioId": "contract-foundation-workspace",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-foundation-workspace.json",
+        "./compat/corpus/rust-release-2/contract-foundation-workspace.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "harness.hermetic-primitives",
+      "scenarioId": "contract-hermetic-primitives",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-hermetic-primitives.json",
+        "./compat/corpus/rust-release-2/contract-hermetic-primitives.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "oracle.canonicalization",
+      "scenarioId": "canonical-volatile-fields",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/canonical-volatile-fields.json",
+        "./compat/corpus/rust-release-2/canonical-volatile-fields.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "protocol.app-server",
+      "scenarioId": "protocol-error",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/protocol-error.json",
+        "./compat/corpus/rust-release-2/protocol-error.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "protocol.app-server",
+      "scenarioId": "protocol-initialize-camel-case",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/protocol-initialize-camel-case.json",
+        "./compat/corpus/rust-release-2/protocol-initialize-camel-case.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "protocol.app-server",
+      "scenarioId": "protocol-invalid-boolean-id",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/protocol-invalid-boolean-id.json",
+        "./compat/corpus/rust-release-2/protocol-invalid-boolean-id.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "protocol.app-server",
+      "scenarioId": "protocol-invalid-missing-payload",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/protocol-invalid-missing-payload.json",
+        "./compat/corpus/rust-release-2/protocol-invalid-missing-payload.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "protocol.app-server",
+      "scenarioId": "protocol-invalid-non-object-result",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/protocol-invalid-non-object-result.json",
+        "./compat/corpus/rust-release-2/protocol-invalid-non-object-result.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "protocol.app-server",
+      "scenarioId": "protocol-invalid-result-and-error",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/protocol-invalid-result-and-error.json",
+        "./compat/corpus/rust-release-2/protocol-invalid-result-and-error.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "protocol.app-server",
+      "scenarioId": "protocol-notification",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/protocol-notification.json",
+        "./compat/corpus/rust-release-2/protocol-notification.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "protocol.app-server",
+      "scenarioId": "protocol-request",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/protocol-request.json",
+        "./compat/corpus/rust-release-2/protocol-request.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "protocol.app-server",
+      "scenarioId": "protocol-success-integer-id",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/protocol-success-integer-id.json",
+        "./compat/corpus/rust-release-2/protocol-success-integer-id.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "protocol.app-server",
+      "scenarioId": "protocol-success-string-id",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/protocol-success-string-id.json",
+        "./compat/corpus/rust-release-2/protocol-success-string-id.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.acp-minimal",
+      "scenarioId": "contract-acp-minimal",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-acp-minimal.json",
+        "./compat/corpus/rust-release-2/contract-acp-minimal.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.app-server-lifecycle",
+      "scenarioId": "contract-appserver-transport",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-appserver-transport.json",
+        "./compat/corpus/rust-release-2/contract-appserver-transport.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.cli-flags",
+      "scenarioId": "process-conflicting-resume",
+      "status": "intentional-divergence",
+      "firstDifference": "stderr differs",
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/process-conflicting-resume.json",
+        "./compat/corpus/rust-release-2/process-conflicting-resume.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.cli-flags",
+      "scenarioId": "process-help",
+      "status": "intentional-divergence",
+      "firstDifference": "stdout differs",
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/process-help.json",
+        "./compat/corpus/rust-release-2/process-help.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.cli-flags",
+      "scenarioId": "process-invalid-max-turns",
+      "status": "intentional-divergence",
+      "firstDifference": "stderr differs",
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/process-invalid-max-turns.json",
+        "./compat/corpus/rust-release-2/process-invalid-max-turns.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.cli-flags",
+      "scenarioId": "process-version-long",
+      "status": "intentional-divergence",
+      "firstDifference": "stdout differs",
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/process-version-long.json",
+        "./compat/corpus/rust-release-2/process-version-long.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.cli-flags",
+      "scenarioId": "process-version-short",
+      "status": "intentional-divergence",
+      "firstDifference": "stdout differs",
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/process-version-short.json",
+        "./compat/corpus/rust-release-2/process-version-short.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.engine-loop",
+      "scenarioId": "contract-engine-loop",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-engine-loop.json",
+        "./compat/corpus/rust-release-2/contract-engine-loop.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.managed-processes",
+      "scenarioId": "contract-managed-processes",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-managed-processes.json",
+        "./compat/corpus/rust-release-2/contract-managed-processes.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.mcp",
+      "scenarioId": "contract-mcp-lifecycle",
+      "status": "intentional-divergence",
+      "firstDifference": "first semantic difference at /0/checks/liveRevocation",
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-mcp-lifecycle.json",
+        "./compat/corpus/rust-release-2/contract-mcp-lifecycle.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.operational-resources",
+      "scenarioId": "contract-operational-resources",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-operational-resources.json",
+        "./compat/corpus/rust-release-2/contract-operational-resources.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.persistence-formats",
+      "scenarioId": "persistence-jsonl-empty-invalid",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/persistence-jsonl-empty-invalid.json",
+        "./compat/corpus/rust-release-2/persistence-jsonl-empty-invalid.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.persistence-formats",
+      "scenarioId": "persistence-jsonl-empty-valid",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/persistence-jsonl-empty-valid.json",
+        "./compat/corpus/rust-release-2/persistence-jsonl-empty-valid.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.persistence-formats",
+      "scenarioId": "persistence-jsonl-valid",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/persistence-jsonl-valid.json",
+        "./compat/corpus/rust-release-2/persistence-jsonl-valid.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.provider-dialects",
+      "scenarioId": "contract-provider-dialects",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-provider-dialects.json",
+        "./compat/corpus/rust-release-2/contract-provider-dialects.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.provider-mistral",
+      "scenarioId": "contract-provider-mistral",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-provider-mistral.json",
+        "./compat/corpus/rust-release-2/contract-provider-mistral.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.review-tools",
+      "scenarioId": "contract-review-tools",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-review-tools.json",
+        "./compat/corpus/rust-release-2/contract-review-tools.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.shell-policy",
+      "scenarioId": "contract-shell-policy",
+      "status": "intentional-divergence",
+      "firstDifference": "first semantic difference at /0/checks/destructive",
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-shell-policy.json",
+        "./compat/corpus/rust-release-2/contract-shell-policy.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.tool-policy",
+      "scenarioId": "contract-tool-policy",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-tool-policy.json",
+        "./compat/corpus/rust-release-2/contract-tool-policy.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.tools",
+      "scenarioId": "contract-tool-abi",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-tool-abi.json",
+        "./compat/corpus/rust-release-2/contract-tool-abi.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.turn-lifecycle",
+      "scenarioId": "contract-turn-lifecycle",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-turn-lifecycle.json",
+        "./compat/corpus/rust-release-2/contract-turn-lifecycle.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.wire-variants",
+      "scenarioId": "contract-event-families",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-event-families.json",
+        "./compat/corpus/rust-release-2/contract-event-families.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    },
+    {
+      "matrixRow": "surface.workspace-tools",
+      "scenarioId": "contract-workspace-tools",
+      "status": "pass",
+      "firstDifference": null,
+      "artifacts": [
+        "./compat/corpus/upstream-2.23.1/contract-workspace-tools.json",
+        "./compat/corpus/rust-release-2/contract-workspace-tools.json"
+      ],
+      "upstreamBaseline": "2.23.1",
+      "rustBuild": "mistral-vibe-rs@2.23.1"
+    }
+  ],
+  "missingEvidence": []
+}

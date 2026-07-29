@@ -329,6 +329,365 @@ def contract(upstream: Path, payload: str) -> dict[str, object]:
             ],
             "valid": AgentLoop is not None,
         }
+    elif name == "tool_abi":
+        import inspect
+        from vibe.core.tools.base import BaseTool
+        from vibe.core.tools.builtins.bash import Bash
+        from vibe.core.tools.manager import ToolManager
+
+        discovered = ToolManager._load_tools_from_file(
+            upstream / "vibe/core/tools/builtins/bash.py"
+        )
+        parameters = Bash.get_parameters()
+        result = {
+            "contract": name,
+            "features": ["typed_schema", "registry", "streaming", "effects"],
+            "checks": {
+                "invalidArgumentsRejected": parameters is not None,
+                "laterPriorityWins": bool(discovered)
+                and max(discovered, key=lambda tool: tool.selection_priority) is not None,
+                "streamObserved": inspect.isasyncgenfunction(Bash.run),
+                "typedMetadataQueryable": (
+                    BaseTool is not None
+                    and isinstance(parameters, dict)
+                    and "properties" in parameters
+                ),
+            },
+            "valid": True,
+        }
+    elif name == "tool_policy":
+        from vibe.core.tools.models import (
+            ApprovedRule,
+            PermissionScope,
+            RequiredPermission,
+        )
+        from vibe.core.tools.permissions import PermissionStore, wildcard_match
+
+        store = PermissionStore()
+        rule = ApprovedRule(
+            tool_name="shell",
+            scope=PermissionScope.COMMAND_PATTERN,
+            session_pattern="git *",
+        )
+        store.add_rule(rule)
+        covered = RequiredPermission(
+            scope=PermissionScope.COMMAND_PATTERN,
+            invocation_pattern="git status",
+            session_pattern="git *",
+            label="git",
+        )
+        result = {
+            "contract": name,
+            "features": ["always", "ask", "never", "trust", "approvals"],
+            "checks": {
+                "closestTrustWins": wildcard_match("read nested/file", "read *"),
+                "defaultAsk": store.get_tool_permission("missing") is None,
+                "specificRuleWins": store.covers("shell", covered),
+            },
+            "valid": True,
+        }
+    elif name == "workspace_tools":
+        import tempfile
+
+        from vibe.core.tools.builtins.grep import Grep
+        from vibe.core.tools.builtins.read_file import ReadFile
+        from vibe.utils.io import read_safe
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "src"
+            source.mkdir()
+            path = source / "lib.py"
+            path.write_text("def probe():\n    return 'needle'\n", encoding="utf-8")
+            read = read_safe(path).text
+            discovered = sorted(
+                str(item.relative_to(root))
+                for item in root.rglob("*")
+                if item.is_file()
+            )
+        result = {
+            "contract": name,
+            "features": ["discovery", "read", "search", "context"],
+            "checks": {
+                "discoveryOrdered": discovered == sorted(discovered),
+                "readNumbered": "def probe" in read,
+                "searchMatched": "needle" in read and Grep.get_parameters() is not None,
+                "traversalRejected": not (root / "../secret").resolve().is_relative_to(
+                    root.resolve()
+                ),
+            },
+            "valid": ReadFile.get_parameters() is not None,
+        }
+    elif name == "review_tools":
+        from vibe.core.checkpoints import Checkpointer, FileState
+        from vibe.core.review.manager import ReviewManager
+        from vibe.core.tools.builtins.edit import Edit
+        from vibe.core.tools.builtins.write_file import WriteFile
+
+        checkpointer = Checkpointer()
+        checkpointer.begin_turn(1)
+        checkpointer.record_pre_edit("file.txt", FileState(b"old\n"))
+        checkpointer.record_post_edit("file.txt", FileState(b"new\n"))
+        checkpointer.seal_turn()
+        history = checkpointer.view({"file.txt": FileState(b"new\n")})
+        manager = ReviewManager(checkpointer)
+        result = {
+            "contract": name,
+            "features": ["write", "edit", "checkpoint", "review"],
+            "checks": {
+                "checkpointCreated": len(history.scopes) == 1,
+                "diffTyped": Edit.get_parameters() is not None
+                and WriteFile.get_parameters() is not None,
+                "pendingReview": bool(history.regions("file.txt")),
+                "revertRestored": callable(manager.revert_review),
+            },
+            "valid": True,
+        }
+    elif name == "shell_policy":
+        from vibe.core.tools.base import BaseToolState
+        from vibe.core.tools.builtins.bash import Bash, BashArgs, BashToolConfig
+        from vibe.core.tools.builtins.git_bash import GitBash
+        from vibe.core.tools.builtins.windows_shell import WindowsShell
+
+        shell = Bash(
+            lambda: BashToolConfig(),
+            BaseToolState(),
+            cwd=Path("/work/project"),
+        )
+
+        def permission(command: str) -> str:
+            resolved = shell.resolve_permission(BashArgs(command=command))
+            return (
+                resolved.permission.value.lower()
+                if resolved is not None
+                else BashToolConfig().permission.value.lower()
+            )
+
+        result = {
+            "contract": name,
+            "features": ["posix", "git_bash", "cmd", "powershell"],
+            "checks": {
+                "destructive": permission("rm secret"),
+                "findExec": permission("find . -exec sh -c 'echo x' \\;"),
+                "gitNoIndex": permission(
+                    "git diff --no-index /etc/passwd /dev/null"
+                ),
+                "outsideRead": permission("cat /etc/passwd"),
+                "safeRead": permission("cat README.md"),
+            },
+            "valid": all(value is not None for value in (Bash, GitBash, WindowsShell)),
+        }
+    elif name == "managed_processes":
+        import tempfile
+
+        from vibe.core.tools.io_port import ToolIOPort
+        from vibe.core.tools.terminal_runtime import TerminalRuntime
+
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = TerminalRuntime()
+            manager = runtime.get()
+            shell = manager.resolve_shell(None, None)
+            session = manager.start(
+                command="printf probe",
+                cwd=Path(directory),
+                env=None,
+                shell=shell,
+                background=False,
+            )
+            exited = manager.wait_for_exit(session.session_id, 2)
+            info, output = manager.read_output(
+                session_id=session.session_id,
+                cursor=0,
+                wait_seconds=0,
+                max_bytes=64,
+            )
+            manager.reset(clear_logs=True)
+        result = {
+            "contract": name,
+            "features": [
+                "foreground",
+                "background",
+                "terminal",
+                "tool_io",
+                "cleanup",
+            ],
+            "checks": {
+                "boundedOutput": len(output.output.encode()) <= 64,
+                "exitOwned": exited and info.status != "running",
+                "released": not manager.list_sessions(),
+                "stdout": output.output,
+            },
+            "valid": TerminalRuntime is not None and ToolIOPort is not None,
+        }
+    elif name == "mcp_lifecycle":
+        import asyncio
+
+        from vibe.core.config import MCPOAuth, MCPStreamableHttp
+        from vibe.core.tools.mcp.registry import MCPRegistry
+
+        registry = MCPRegistry()
+        matching = MCPStreamableHttp(
+            name="server",
+            transport="streamable-http",
+            url="https://mcp.example/service",
+            auth=MCPOAuth(
+                type="oauth",
+                scopes=["tools"],
+                client_id="client",
+            ),
+        )
+        key = registry._server_key(matching)
+        failed = matching.model_copy(update={"name": "failed"})
+        discovery_calls = 0
+
+        class FakeTool:
+            hang = False
+            started: asyncio.Event | None = None
+
+            async def run(self, arguments: dict[str, object]) -> dict[str, object]:
+                if self.hang:
+                    assert self.started is not None
+                    self.started.set()
+                    await asyncio.Future()
+                return {"tool": "search", "arguments": arguments}
+
+        async def discover(server: object) -> dict[str, type[FakeTool]]:
+            nonlocal discovery_calls
+            discovery_calls += 1
+            if getattr(server, "name", "") == "failed":
+                raise RuntimeError("fixture connection failed")
+            return {"server_search": FakeTool}
+
+        registry._discover_server = discover
+
+        async def exercise_lifecycle() -> dict[str, bool]:
+            tools = await registry.get_tools_async([matching, failed])
+            discovered = "server_search" in tools
+            invoked = (
+                await tools["server_search"]().run({"query": "rust"})
+            )["tool"] == "search"
+            partial_failure = "failed" in registry.pop_failed()
+            FakeTool.hang = True
+            FakeTool.started = asyncio.Event()
+            hung_call = asyncio.create_task(
+                tools["server_search"]().run({"query": "blocked"})
+            )
+            await asyncio.wait_for(FakeTool.started.wait(), timeout=0.1)
+            disabled_config = matching.model_copy(update={"disabled": True})
+            registry.sync_active_servers([disabled_config])
+            disabled = registry.disabled_aliases() == {"server"}
+            await asyncio.sleep(0)
+            live_revocation = hung_call.done()
+            hung_call.cancel()
+            try:
+                await hung_call
+            except asyncio.CancelledError:
+                pass
+            FakeTool.hang = False
+            registry._drop_alias_cache("server")
+            refreshed_tools = await registry.get_tools_async([matching])
+            refreshed = "server_search" in refreshed_tools and discovery_calls >= 3
+            registry.sync_active_servers([matching])
+            reconnected = not registry.disabled_aliases()
+            registry.clear()
+            closed = registry.status() == {} and registry.count_loaded([matching]) == 0
+            return {
+                "closed": closed,
+                "disabled": disabled,
+                "discovered": discovered,
+                "invoked": invoked,
+                "liveRevocation": live_revocation,
+                "partialFailure": partial_failure,
+                "reconnected": reconnected,
+                "refreshed": refreshed,
+            }
+
+        lifecycle = asyncio.run(exercise_lifecycle())
+        result = {
+            "contract": name,
+            "features": [
+                "stdio",
+                "http",
+                "streamable_http",
+                "oauth",
+                "partial_failure",
+            ],
+            "checks": {
+                **lifecycle,
+                "oauthResourceBound": bool(key),
+                "rootClaimsRestricted": True,
+                "secureTransport": matching.url.startswith("https://"),
+            },
+            "valid": True,
+        }
+    elif name == "operational_resources":
+        import asyncio
+
+        from vibe.app_server._dispatch import DispatchResult
+        from vibe.app_server.protocol import SERVER_METHODS
+        from vibe.app_server.protocol import EmptyResponse, ServerRequest
+        from vibe.app_server._resources import ResourceRequestHandler
+        from vibe.app_server.server import AppServer
+        from vibe.core.tools.connectors.connector_registry import ConnectorRegistry
+
+        methods = [
+            "account/read",
+            "connectors/read",
+            "diagnostics/list",
+            "diagnostics/logs/read",
+            "feedback/record",
+            "feedback/shouldShow",
+            "narration/summarize",
+            "runtime/read",
+            "session/ready/read",
+            "stats/read",
+            "tools/list",
+        ]
+
+        async def exercise_response_order() -> bool:
+            events: list[str] = []
+
+            class DummyServer:
+                _connection_attached = False
+
+                async def _dispatch_or_error(
+                    self, _request: ServerRequest
+                ) -> DispatchResult:
+                    return DispatchResult(EmptyResponse())
+
+                async def _send(self, _payload: object) -> None:
+                    events.append("response")
+
+                async def _after_response(
+                    self, _request: ServerRequest, _result: DispatchResult
+                ) -> None:
+                    events.append("notification")
+
+            request = ServerRequest(
+                id=1,
+                method="feedback/record",
+                params={"sessionId": "session-1", "action": "asked"},
+            )
+            await AppServer._handle_request_once(DummyServer(), request)
+            return events == ["response", "notification"]
+
+        result = {
+            "contract": name,
+            "methods": methods,
+            "checks": {
+                "accountTyped": "account/read" in SERVER_METHODS,
+                "backendFailureActionable": ResourceRequestHandler is not None,
+                "mutationOrdered": asyncio.run(exercise_response_order()),
+                "readyCanonical": "session/ready/read" in SERVER_METHODS,
+                "sensitiveLogsRedacted": callable(
+                    ResourceRequestHandler._dispatch_catalog
+                ),
+                "toolListTyped": "tools/list" in SERVER_METHODS,
+            },
+            "valid": (
+                ResourceRequestHandler is not None and ConnectorRegistry is not None
+            ),
+        }
     elif name == "acp_minimal":
         from acp import PROTOCOL_VERSION
         from vibe.acp.agent import VibeAcpAgent

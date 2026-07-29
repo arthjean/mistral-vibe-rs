@@ -120,6 +120,62 @@ comparison = "schema"
 payload = '{"contract":"engine_loop"}'
 
 [[scenarios]]
+id = "contract-tool-abi"
+matrix_row = "surface.tools"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"tool_abi"}'
+
+[[scenarios]]
+id = "contract-tool-policy"
+matrix_row = "surface.tool-policy"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"tool_policy"}'
+
+[[scenarios]]
+id = "contract-workspace-tools"
+matrix_row = "surface.workspace-tools"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"workspace_tools"}'
+
+[[scenarios]]
+id = "contract-review-tools"
+matrix_row = "surface.review-tools"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"review_tools"}'
+
+[[scenarios]]
+id = "contract-shell-policy"
+matrix_row = "surface.shell-policy"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"shell_policy"}'
+
+[[scenarios]]
+id = "contract-managed-processes"
+matrix_row = "surface.managed-processes"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"managed_processes"}'
+
+[[scenarios]]
+id = "contract-mcp-lifecycle"
+matrix_row = "surface.mcp"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"mcp_lifecycle"}'
+
+[[scenarios]]
+id = "contract-operational-resources"
+matrix_row = "surface.operational-resources"
+kind = "contract"
+comparison = "schema"
+payload = '{"contract":"operational_resources"}'
+
+[[scenarios]]
 id = "contract-acp-minimal"
 matrix_row = "surface.acp-minimal"
 kind = "contract"

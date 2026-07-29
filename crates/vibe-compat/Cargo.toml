@@ -22,6 +22,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 toml.workspace = true
+url.workspace = true
 vibe-acp = { path = "../vibe-acp" }
 vibe-app-server = { path = "../vibe-app-server" }
 vibe-core = { path = "../vibe-core" }

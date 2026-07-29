@@ -374,15 +374,148 @@ items = ["meta.json", "messages.jsonl", ".last_session"]
 id = "surface.tools"
 owner = "US-017"
 priority = "P0"
-source_paths = ["vibe/core/tools/base.py", "vibe/core/tools/builtins"]
-test_paths = ["tests/tools"]
-symbols = ["BaseTool"]
+source_paths = ["vibe/core/tools/base.py", "vibe/core/tools/manager.py", "vibe/core/tools/models.py"]
+test_paths = ["tests/tools/test_invoke_context.py", "tests/app_server/test_tool_projection.py"]
+symbols = ["BaseTool", "ToolManager", "ToolEffect"]
 fixture_class = "tool"
-rust_status = "planned"
+rust_status = "implemented"
 divergence_status = "none"
 dependencies = ["surface.wire-variants"]
 required_release = 2
-items = ["builtins", "permissions", "terminal", "mcp", "connectors"]
+items = ["typed-schema", "registry", "streaming", "effects"]
+
+[[rows]]
+id = "surface.tool-policy"
+owner = "US-018"
+priority = "P0"
+source_paths = ["vibe/core/tools/permissions.py"]
+test_paths = ["tests/tools/test_granular_permissions.py"]
+symbols = ["PermissionStore"]
+fixture_class = "policy"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.tools", "config.bootstrap"]
+required_release = 2
+items = ["always", "ask", "never", "trust", "approvals"]
+
+[[rows]]
+id = "surface.workspace-tools"
+owner = "US-019"
+priority = "P0"
+source_paths = [
+  "vibe/core/tools/builtins/read_file.py",
+  "vibe/core/tools/builtins/grep.py",
+]
+test_paths = ["tests/tools/test_grep.py"]
+symbols = ["ReadFile", "Grep"]
+fixture_class = "filesystem"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.tools", "surface.tool-policy"]
+required_release = 2
+items = ["discovery", "read", "search", "context"]
+
+[[rows]]
+id = "surface.review-tools"
+owner = "US-020"
+priority = "P0"
+source_paths = [
+  "vibe/core/tools/builtins/edit.py",
+  "vibe/core/tools/builtins/write_file.py",
+  "vibe/core/review/manager.py",
+]
+test_paths = ["tests/app_server/test_review.py"]
+symbols = ["Edit", "WriteFile", "ReviewManager"]
+fixture_class = "filesystem"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.workspace-tools", "surface.tool-policy"]
+required_release = 2
+items = ["write", "edit", "checkpoint", "review"]
+
+[[rows]]
+id = "surface.shell-policy"
+owner = "US-021"
+priority = "P0"
+source_paths = [
+  "vibe/core/tools/builtins/bash.py",
+  "vibe/core/tools/builtins/git_bash.py",
+  "vibe/core/tools/builtins/windows_shell.py",
+]
+test_paths = ["tests/tools/test_bash.py", "tests/tools/test_windows_shell.py"]
+symbols = ["Bash", "GitBash", "WindowsShell"]
+fixture_class = "policy"
+rust_status = "implemented"
+divergence_status = "intentional"
+dependencies = ["surface.tool-policy", "harness.hermetic-primitives"]
+required_release = 2
+items = ["posix", "git-bash", "cmd", "powershell"]
+[rows.divergence]
+rationale = "The upstream read allowlist permits commands whose options can execute helpers or read arbitrary paths. Rust fails these forms closed."
+scope = "Only unsafe option forms such as git diff --no-index, git configuration overrides, ripgrep --pre, and destructive commands are stricter. Ordinary workspace-local readers remain compatible."
+upstream_fixture = "compat/corpus/upstream-2.23.1/contract-shell-policy.json"
+rust_fixture = "compat/corpus/rust-release-2/contract-shell-policy.json"
+documentation = "compat/divergences/shell-policy-hardening.md"
+
+[[rows]]
+id = "surface.managed-processes"
+owner = "US-022"
+priority = "P0"
+source_paths = [
+  "vibe/core/tools/terminal_runtime.py",
+  "vibe/core/tools/io_port.py",
+  "vibe/core/tools/builtins/managed_shell",
+]
+test_paths = ["tests/tools/test_io_port.py", "tests/app_server/test_shell.py"]
+symbols = ["TerminalRuntime", "ToolIOPort"]
+fixture_class = "process"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.tools", "surface.shell-policy", "surface.app-server-lifecycle"]
+required_release = 2
+items = ["foreground", "background", "terminal", "tool-io", "cleanup"]
+
+[[rows]]
+id = "surface.mcp"
+owner = "US-023"
+priority = "P0"
+source_paths = [
+  "vibe/core/tools/mcp/registry.py",
+  "vibe/core/tools/mcp/management.py",
+  "vibe/core/tools/mcp/pool.py",
+  "vibe/core/tools/mcp/tools.py",
+]
+test_paths = ["tests/tools/test_mcp.py", "tests/tools/test_mcp_registry_oauth.py"]
+symbols = ["MCPRegistry", "MCPTool"]
+fixture_class = "integration"
+rust_status = "implemented"
+divergence_status = "intentional"
+dependencies = ["surface.tools", "surface.tool-policy", "surface.managed-processes"]
+required_release = 2
+items = ["stdio", "http", "streamable-http", "oauth", "partial-failure"]
+[rows.divergence]
+rationale = "Mistral Vibe 2.23.1 leaves an in-flight MCP tool call running after its server is disabled. Rust revokes the call before it can publish a result."
+scope = "Only calls already running when an MCP server is disabled, reconnected, or closed are cancelled. Normal discovery, invocation, refresh, and cleanup remain compatible."
+upstream_fixture = "compat/corpus/upstream-2.23.1/contract-mcp-lifecycle.json"
+rust_fixture = "compat/corpus/rust-release-2/contract-mcp-lifecycle.json"
+documentation = "compat/divergences/mcp-live-revocation.md"
+
+[[rows]]
+id = "surface.operational-resources"
+owner = "US-024"
+priority = "P0"
+source_paths = [
+  "vibe/app_server/_resources.py",
+  "vibe/core/tools/connectors/connector_registry.py",
+]
+test_paths = ["tests/tools/test_connectors.py", "tests/app_server/test_mcp.py"]
+symbols = ["ResourceRequestHandler", "ConnectorRegistry"]
+fixture_class = "protocol"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.mcp", "surface.app-server-lifecycle"]
+required_release = 2
+items = ["connectors", "account", "diagnostics", "feedback", "narration", "stats", "tools"]
 
 [[rows]]
 id = "surface.extensions"

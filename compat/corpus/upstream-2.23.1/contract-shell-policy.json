@@ -1,0 +1,46 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-shell-policy",
+  "matrixRow": "surface.shell-policy",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "schema",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "destructive": "ask",
+          "findExec": "ask",
+          "gitNoIndex": "always",
+          "outsideRead": "ask",
+          "safeRead": "always"
+        },
+        "contract": "shell_policy",
+        "features": [
+          "posix",
+          "git_bash",
+          "cmd",
+          "powershell"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [
+      {
+        "path": "home/.vibe/trusted_folders.toml",
+        "operation": "created",
+        "sha256": "c1be9b448d9da5ef13e31061dbc36be756fd48c474c885eba5d209a07f272980"
+      }
+    ],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}
