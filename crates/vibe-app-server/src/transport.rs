@@ -452,6 +452,21 @@ where
                                 }
                             }
                         }
+                        DeferredWork::CloudRequest {
+                            request_id,
+                            method,
+                            params,
+                        } => {
+                            let response = server
+                                .execute_cloud_request(request_id, method, params)
+                                .await;
+                            for outbound in response.outbound {
+                                if let Err(error) = transport.send(&outbound).await {
+                                    failure = Some(error);
+                                    break 'serve;
+                                }
+                            }
+                        }
                         DeferredWork::ConfigureMcp {
                             session_id,
                             configs,
@@ -469,6 +484,35 @@ where
                             if let Err(error) = transport.send(&notification).await {
                                 failure = Some(error);
                                 break 'serve;
+                            }
+                        }
+                        DeferredWork::CompactSession {
+                            request_id,
+                            session_id,
+                            extra_instructions,
+                        } => {
+                            let batch = match driver
+                                .compact(&session_id, &extra_instructions)
+                                .await
+                            {
+                                Ok(compaction) => server.complete_manual_compaction(
+                                    request_id,
+                                    &session_id,
+                                    &compaction.new_session_id,
+                                    &compaction.summary,
+                                    compaction.hydrated,
+                                ),
+                                Err(error) => server.fail_manual_compaction(
+                                    request_id,
+                                    &session_id,
+                                    &error.to_string(),
+                                ),
+                            };
+                            for outbound in batch.outbound {
+                                if let Err(error) = transport.send(&outbound).await {
+                                    failure = Some(error);
+                                    break 'serve;
+                                }
                             }
                         }
                         DeferredWork::CloseResources {
@@ -536,16 +580,18 @@ enum DeferredTaskEvent {
 enum AppServerUpdate {
     HistoryAdded {
         session_id: String,
-        turn_id: Option<String>,
+        turn_id: String,
         emitted_at: u64,
-        entry: PublicHistoryEntry,
+        entry: Box<PublicHistoryEntry>,
+        snapshot: ProjectionSnapshot,
     },
     HistoryUpdated {
         session_id: String,
-        turn_id: Option<String>,
+        turn_id: String,
         emitted_at: u64,
         entry_id: String,
         patch: Vec<JsonPatchOperation>,
+        snapshot: ProjectionSnapshot,
     },
     SessionCompacted {
         old_session_id: String,
@@ -643,6 +689,10 @@ impl EventObserver for AppServerEventObserver {
         }
 
         let snapshot = projection.reducer.state().clone();
+        let turn_id = snapshot
+            .turn_id
+            .clone()
+            .ok_or_else(|| "live history update has no active turn".to_owned())?;
         for entry in &snapshot.history {
             let entry_id = entry.metadata().id.clone();
             match projection.entries.get(&entry_id) {
@@ -650,9 +700,10 @@ impl EventObserver for AppServerEventObserver {
                     .sender
                     .send(AppServerUpdate::HistoryAdded {
                         session_id: snapshot.session_id.clone(),
-                        turn_id: snapshot.turn_id.clone(),
+                        turn_id: turn_id.clone(),
                         emitted_at: event.emitted_at,
-                        entry: entry.clone(),
+                        entry: Box::new(entry.clone()),
+                        snapshot: snapshot.clone(),
                     })
                     .map_err(|_| "app-server update receiver is closed".to_owned())?,
                 Some(previous) if previous != entry => {
@@ -660,10 +711,11 @@ impl EventObserver for AppServerEventObserver {
                     self.sender
                         .send(AppServerUpdate::HistoryUpdated {
                             session_id: snapshot.session_id.clone(),
-                            turn_id: snapshot.turn_id.clone(),
+                            turn_id: turn_id.clone(),
                             emitted_at: event.emitted_at,
                             entry_id,
                             patch,
+                            snapshot: snapshot.clone(),
                         })
                         .map_err(|_| "app-server update receiver is closed".to_owned())?;
                 }
@@ -761,8 +813,9 @@ fn app_server_notification(
             turn_id,
             emitted_at,
             entry,
+            snapshot,
         } => {
-            let event_id = server.sequence_event(&session_id)?;
+            let event_id = server.apply_live_projection(&session_id, &turn_id, snapshot)?;
             serde_json::json!({
                 "jsonrpc": "2.0",
                 "method": "history/entryAdded",
@@ -781,8 +834,9 @@ fn app_server_notification(
             emitted_at,
             entry_id,
             patch,
+            snapshot,
         } => {
-            let event_id = server.sequence_event(&session_id)?;
+            let event_id = server.apply_live_projection(&session_id, &turn_id, snapshot)?;
             serde_json::json!({
                 "jsonrpc": "2.0",
                 "method": "history/entryUpdated",
@@ -1122,7 +1176,15 @@ async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &
             | DeferredWork::InjectContext { .. }
             | DeferredWork::ResolveCallback { .. }
             | DeferredWork::ResourceRequest { .. }
+            | DeferredWork::CloudRequest { .. }
             | DeferredWork::ConfigureMcp { .. } => {}
+            DeferredWork::CompactSession {
+                request_id,
+                session_id,
+                ..
+            } => {
+                let _ = server.fail_manual_compaction(request_id.clone(), session_id, message);
+            }
         }
     }
 }

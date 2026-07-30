@@ -95,6 +95,7 @@ pub struct Release3Service {
     agents: Arc<Mutex<AgentRegistry>>,
     active_agents: Arc<Mutex<BTreeMap<String, String>>>,
     next_session: Arc<AtomicU64>,
+    persist_runtime_sessions: bool,
 }
 
 impl Default for Release3Service {
@@ -171,7 +172,87 @@ impl Release3Service {
             agents: Arc::new(Mutex::new(registry)),
             active_agents: Arc::new(Mutex::new(BTreeMap::new())),
             next_session: Arc::new(AtomicU64::new(1)),
+            persist_runtime_sessions: false,
         }
+    }
+
+    #[must_use]
+    pub fn with_runtime_session_persistence(mut self) -> Self {
+        self.persist_runtime_sessions = true;
+        self
+    }
+
+    #[must_use]
+    pub fn for_runtime_session_root(
+        session_root: impl Into<PathBuf>,
+        working_directory: impl Into<PathBuf>,
+    ) -> Self {
+        let session_root = session_root.into();
+        let vibe_home = session_root
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| session_root.clone());
+        Self::build(
+            Release3Paths {
+                vibe_home,
+                working_directory: working_directory.into(),
+                session_root,
+            },
+            Table::new(),
+            false,
+        )
+        .with_runtime_session_persistence()
+    }
+
+    #[must_use]
+    pub const fn persists_runtime_sessions(&self) -> bool {
+        self.persist_runtime_sessions
+    }
+
+    pub fn update_runtime_settings(
+        &self,
+        session_id: &str,
+        settings: &BTreeMap<String, Value>,
+    ) -> Result<Option<HydratedSession>, Release3Error> {
+        if !self.persist_runtime_sessions {
+            return Ok(None);
+        }
+        let mut hydrated = self.store.load(session_id).map_err(storage_error)?;
+        hydrated.metadata.config.extend(settings.clone());
+        hydrated.metadata.updated_at_ms = now_millis();
+        self.store
+            .update_metadata(&hydrated.metadata)
+            .map_err(storage_error)?;
+        hydrated.current_config = hydrated.metadata.config.clone();
+        self.continuity
+            .refresh(hydrated.clone())
+            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+        Ok(Some(hydrated))
+    }
+
+    pub fn create_runtime_session(
+        &self,
+        session_id: &str,
+        working_directory: &str,
+        now_ms: u64,
+    ) -> Result<HydratedSession, Release3Error> {
+        match self.store.load(session_id) {
+            Ok(_) => {
+                return Err(Release3Error::Storage(format!(
+                    "session `{session_id}` already exists"
+                )));
+            }
+            Err(StorageError::SessionNotFound(_)) => {}
+            Err(error) => return Err(storage_error(error)),
+        }
+        self.store
+            .create(session_id, working_directory, None, now_ms)
+            .map_err(storage_error)?;
+        let hydrated = self.store.load(session_id).map_err(storage_error)?;
+        self.continuity
+            .refresh(hydrated.clone())
+            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+        Ok(hydrated)
     }
 
     #[must_use]
@@ -430,6 +511,7 @@ impl Release3Service {
 
     fn fork(&self, params: &BTreeMap<String, Value>) -> Result<Release3Dispatch, Release3Error> {
         let source = required_string(params, "sessionId")?;
+        let keep_messages = fork_keep_messages(params)?;
         let new_id = optional_string(params, "newSessionId").unwrap_or_else(|| {
             format!(
                 "session-{}-{}",
@@ -437,7 +519,7 @@ impl Release3Service {
                 self.next_session.fetch_add(1, Ordering::Relaxed)
             )
         });
-        let hydrated = self
+        let mut hydrated = self
             .store
             .fork(
                 source,
@@ -447,6 +529,17 @@ impl Release3Service {
                 now_millis(),
             )
             .map_err(storage_error)?;
+        if let Some(keep_messages) = keep_messages {
+            hydrated = self
+                .store
+                .rewind(
+                    &hydrated.metadata.id,
+                    keep_messages,
+                    hydrated.metadata.statistics.clone(),
+                    now_millis(),
+                )
+                .map_err(storage_error)?;
+        }
         self.continuity
             .refresh(hydrated.clone())
             .map_err(|error| Release3Error::Storage(error.to_string()))?;
@@ -475,9 +568,10 @@ impl Release3Service {
     }
 
     fn delete(&self, params: &BTreeMap<String, Value>) -> Result<Release3Dispatch, Release3Error> {
-        self.store
-            .delete(required_string(params, "sessionId")?)
-            .map_err(storage_error)?;
+        match self.store.delete(required_string(params, "sessionId")?) {
+            Ok(()) | Err(StorageError::SessionNotFound(_)) => {}
+            Err(error) => return Err(storage_error(error)),
+        }
         Ok(Release3Dispatch::result([("deleted", json!(true))]))
     }
 
@@ -760,6 +854,50 @@ impl Release3Service {
             BTreeMap::<String, SkillDefinition>::new(),
             BTreeMap::new(),
         )
+    }
+}
+
+fn fork_keep_messages(params: &BTreeMap<String, Value>) -> Result<Option<usize>, Release3Error> {
+    let explicit = params
+        .get("keepMessages")
+        .map(|value| {
+            value
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| {
+                    Release3Error::InvalidParams(
+                        "keepMessages must be a non-negative integer".to_owned(),
+                    )
+                })
+        })
+        .transpose()?;
+    let anchored = params
+        .get("messageId")
+        .map(|value| {
+            let message_id = value.as_str().ok_or_else(|| {
+                Release3Error::InvalidParams("messageId must be a string".to_owned())
+            })?;
+            let index = message_id
+                .strip_prefix("history-")
+                .and_then(|value| value.parse::<usize>().ok())
+                .ok_or_else(|| {
+                    Release3Error::InvalidParams(
+                        "messageId must use the stable `history-N` form".to_owned(),
+                    )
+                })?;
+            index.checked_add(1).ok_or_else(|| {
+                Release3Error::InvalidParams("messageId index is too large".to_owned())
+            })
+        })
+        .transpose()?;
+    match (explicit, anchored) {
+        (Some(explicit), Some(anchored)) if explicit != anchored => {
+            Err(Release3Error::InvalidParams(
+                "keepMessages and messageId identify different fork anchors".to_owned(),
+            ))
+        }
+        (Some(value), _) | (_, Some(value)) => Ok(Some(value)),
+        (None, None) => Ok(None),
     }
 }
 

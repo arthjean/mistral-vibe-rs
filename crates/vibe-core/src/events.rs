@@ -343,6 +343,10 @@ impl PublicHistoryEntry {
         self.metadata().generation_status == PublicEntryGenerationStatus::Completed
     }
 
+    pub fn rebind_session(&mut self, session_id: impl Into<String>) {
+        self.metadata_mut().session_id = session_id.into();
+    }
+
     fn metadata_mut(&mut self) -> &mut PublicEntryMetadata {
         match self {
             Self::Message { metadata, .. }
@@ -940,8 +944,12 @@ fn entry_metadata(
     emitted_at: u64,
     generation_status: PublicEntryGenerationStatus,
 ) -> PublicEntryMetadata {
+    let id = state.turn_id.as_ref().map_or_else(
+        || format!("entry-{event_id}"),
+        |turn_id| format!("entry-{turn_id}-{event_id}"),
+    );
     PublicEntryMetadata {
-        id: format!("entry-{event_id}"),
+        id,
         session_id: state.session_id.clone(),
         turn_id: state.turn_id.clone(),
         created_at: emitted_at,

@@ -2,6 +2,7 @@
 
 pub mod client;
 pub mod release3;
+pub mod release4;
 pub mod resources;
 pub mod server;
 pub mod transport;

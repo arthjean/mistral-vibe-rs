@@ -4,6 +4,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::release3::{RELEASE3_METHODS, Release3Error, Release3Service, RuntimeAttachment};
+use crate::release4::{
+    LoopFire, RELEASE4_METHODS, Release4Dispatch, Release4Error, Release4Service,
+};
 use crate::resources::{
     BACKEND_RESOURCE_METHODS, CoreResourceBackend, RESOURCE_METHODS, ResourceBackend,
     ResourceBackendRequest, ResourceDispatch, ResourceError, ResourceService, ResourceSession,
@@ -12,18 +15,23 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use thiserror::Error;
 use vibe_core::events::{
-    CallbackKind as EngineCallbackKind, LifecycleState, ProjectionSnapshot, PublicContentBlock,
-    PublicEntryGenerationStatus, PublicEntryMetadata, PublicError, PublicHistoryEntry,
-    PublicMessageRole, PublicMessageSource, PublicTurn, PublicTurnStatus,
+    CallbackKind as EngineCallbackKind, LifecycleState, ModelMessage, ProjectionSnapshot,
+    PublicCallbackState, PublicContentBlock, PublicEffectState, PublicEntryGenerationStatus,
+    PublicEntryMetadata, PublicError, PublicHistoryEntry, PublicMessageRole, PublicMessageSource,
+    PublicTurn, PublicTurnStatus,
 };
 use vibe_core::integrations::redact;
 use vibe_core::mcp::McpServerConfig;
-use vibe_core::policy::{
-    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore,
-    TrustDecision, TrustRootKind,
+pub use vibe_core::policy::{
+    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionRequirement,
+    PolicyError,
 };
+use vibe_core::policy::{PermissionStore, TrustDecision, TrustRootKind};
 use vibe_core::storage::HydratedSession;
-use vibe_core::tools::{ToolExecutionOutput, ToolInvocation, ToolRegistry};
+pub use vibe_core::tools::{
+    OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolInvocation,
+    ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
+};
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 use vibe_protocol::{
     CallbackKind, ClientCapabilities, Envelope, ErrorResponse, InitializeParams,
@@ -36,6 +44,11 @@ const INITIALIZE_METHOD: &str = "initialize";
 const INITIALIZED_NOTIFICATION: &str = "initialized";
 const SHUTDOWN_METHOD: &str = "shutdown";
 const EXIT_NOTIFICATION: &str = "exit";
+const MAX_CALLBACK_OUTPUT_BYTES: usize = 64 * 1024;
+const MAX_CALLBACK_REQUEST_BYTES: usize = 64 * 1024;
+const MAX_CALLBACK_ANSWERS: usize = 16;
+const MAX_CALLBACK_OPTIONS: usize = 32;
+const MAX_CALLBACK_TEXT_BYTES: usize = 8 * 1024;
 const IMPLEMENTED_METHODS: &[&str] = &[
     "account/read",
     "callback/respond",
@@ -61,10 +74,12 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "review/turnDiff",
     "runtime/read",
     "session/close",
+    "session/compact/start",
     "session/context/inject",
     "session/read",
     "session/ready/read",
     "session/ready/wait",
+    "session/settings/update",
     "session/start",
     "shell/interrupt",
     "shell/run",
@@ -82,6 +97,54 @@ struct DenyApproval;
 impl ApprovalAgent for DenyApproval {
     fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
         Box::pin(async { Ok(ApprovalDecision::Deny) })
+    }
+}
+
+struct ApproveOnce;
+
+impl ApprovalAgent for ApproveOnce {
+    fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
+        Box::pin(async { Ok(ApprovalDecision::ApproveOnce) })
+    }
+}
+
+pub trait ApprovalAgentFactory: Send + Sync {
+    fn for_session(&self, session_id: &str, auto_approve: bool) -> Arc<dyn ApprovalAgent>;
+}
+
+pub trait SessionToolFactory: Send + Sync {
+    fn register(&self, session_id: &str, tools: &ToolRegistry) -> Result<(), String>;
+}
+
+struct NoAdditionalTools;
+
+impl SessionToolFactory for NoAdditionalTools {
+    fn register(&self, _session_id: &str, _tools: &ToolRegistry) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+struct ChainedSessionToolFactory {
+    existing: Arc<dyn SessionToolFactory>,
+    additional: Arc<dyn SessionToolFactory>,
+}
+
+impl SessionToolFactory for ChainedSessionToolFactory {
+    fn register(&self, session_id: &str, tools: &ToolRegistry) -> Result<(), String> {
+        self.existing.register(session_id, tools)?;
+        self.additional.register(session_id, tools)
+    }
+}
+
+struct DefaultApprovalFactory;
+
+impl ApprovalAgentFactory for DefaultApprovalFactory {
+    fn for_session(&self, _session_id: &str, auto_approve: bool) -> Arc<dyn ApprovalAgent> {
+        if auto_approve {
+            Arc::new(ApproveOnce)
+        } else {
+            Arc::new(DenyApproval)
+        }
     }
 }
 
@@ -133,9 +196,19 @@ pub enum DeferredWork {
         method: String,
         params: BTreeMap<String, Value>,
     },
+    CloudRequest {
+        request_id: RequestId,
+        method: String,
+        params: BTreeMap<String, Value>,
+    },
     ConfigureMcp {
         session_id: String,
         configs: Vec<McpServerConfig>,
+    },
+    CompactSession {
+        request_id: RequestId,
+        session_id: String,
+        extra_instructions: String,
     },
     CloseResources {
         session_id: String,
@@ -148,6 +221,12 @@ pub struct DispatchBatch {
     pub outbound: Vec<Vec<u8>>,
     pub deferred: Vec<DeferredWork>,
     pub close_after_flush: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScheduledLoopWork {
+    pub fire: LoopFire,
+    pub work: DeferredWork,
 }
 
 impl DispatchBatch {
@@ -166,6 +245,9 @@ pub struct AppServer {
     resources: Arc<Mutex<ResourceService>>,
     resource_backend: Option<Arc<dyn ResourceBackend>>,
     release3: Arc<Release3Service>,
+    release4: Arc<Release4Service>,
+    approval_factory: Arc<dyn ApprovalAgentFactory>,
+    session_tool_factory: Arc<dyn SessionToolFactory>,
     next_session: Arc<AtomicU64>,
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
@@ -179,6 +261,9 @@ impl Default for AppServer {
             resources: Arc::new(Mutex::new(ResourceService::default())),
             resource_backend: Some(Arc::new(CoreResourceBackend::default())),
             release3: Arc::new(Release3Service::default()),
+            release4: Arc::new(Release4Service::default()),
+            approval_factory: Arc::new(DefaultApprovalFactory),
+            session_tool_factory: Arc::new(NoAdditionalTools),
             next_session: Arc::new(AtomicU64::new(1)),
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
@@ -202,6 +287,78 @@ impl AppServer {
             release3: Arc::new(service),
             ..Self::default()
         }
+    }
+
+    #[must_use]
+    pub fn with_release4_service(service: Release4Service) -> Self {
+        Self {
+            release4: Arc::new(service),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn with_approval_factory(factory: Arc<dyn ApprovalAgentFactory>) -> Self {
+        Self {
+            approval_factory: factory,
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn with_surface_factories(
+        approval_factory: Arc<dyn ApprovalAgentFactory>,
+        session_tool_factory: Arc<dyn SessionToolFactory>,
+    ) -> Self {
+        Self {
+            approval_factory,
+            session_tool_factory,
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn using_release3_service(mut self, service: Release3Service) -> Self {
+        self.release3 = Arc::new(service);
+        self
+    }
+
+    #[must_use]
+    pub fn using_release4_service(mut self, service: Release4Service) -> Self {
+        self.release4 = Arc::new(service);
+        self
+    }
+
+    #[must_use]
+    pub fn using_approval_factory(mut self, factory: Arc<dyn ApprovalAgentFactory>) -> Self {
+        self.approval_factory = factory;
+        self
+    }
+
+    #[must_use]
+    pub fn using_session_tool_factory(
+        mut self,
+        session_tool_factory: Arc<dyn SessionToolFactory>,
+    ) -> Self {
+        self.session_tool_factory = Arc::new(ChainedSessionToolFactory {
+            existing: self.session_tool_factory,
+            additional: session_tool_factory,
+        });
+        self
+    }
+
+    #[must_use]
+    pub fn using_surface_extension(
+        mut self,
+        approval_factory: Arc<dyn ApprovalAgentFactory>,
+        session_tool_factory: Arc<dyn SessionToolFactory>,
+    ) -> Self {
+        self.approval_factory = approval_factory;
+        self.session_tool_factory = Arc::new(ChainedSessionToolFactory {
+            existing: self.session_tool_factory,
+            additional: session_tool_factory,
+        });
+        self
     }
 
     #[must_use]
@@ -250,6 +407,118 @@ impl AppServer {
         )
     }
 
+    pub fn reserve_due_loop(
+        &self,
+        session_id: &str,
+        now_seconds: u64,
+    ) -> Result<Option<ScheduledLoopWork>, ServerError> {
+        let (canonical_session_id, idle) = {
+            let sessions = self.lock_sessions()?;
+            let session = session_by_id_or_alias(&sessions, session_id)
+                .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+            (
+                session.id.clone(),
+                session.active_turn.is_none()
+                    && !session.compaction_pending
+                    && session.status != SessionStatus::Closed,
+            )
+        };
+        if !idle {
+            return Ok(None);
+        }
+        let Some(loop_id) = self
+            .release4
+            .next_due_loop_id(&canonical_session_id, now_seconds)
+            .map_err(|error| ServerError::Release4(error.to_string()))?
+        else {
+            return Ok(None);
+        };
+        let mut fire = self
+            .release4
+            .fire_loop_for_session(&loop_id, &canonical_session_id, now_seconds, true)
+            .map_err(|error| ServerError::Release4(error.to_string()))?;
+        let mut sessions = self.lock_sessions()?;
+        let session = session_mut_by_id_or_alias(&mut sessions, &canonical_session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(canonical_session_id.clone()))?;
+        if session.active_turn.is_some()
+            || session.compaction_pending
+            || session.status == SessionStatus::Closed
+        {
+            self.release4
+                .finish_loop_fire(&loop_id, now_seconds)
+                .map_err(|error| ServerError::Release4(error.to_string()))?;
+            return Ok(None);
+        }
+        let turn_sequence = self.next_turn.fetch_add(1, Ordering::Relaxed);
+        let turn_id = format!("turn-{turn_sequence}");
+        let started_at = now_millis();
+        session.active_turn = Some(turn_id.clone());
+        session.active_turn_started_at = Some(started_at);
+        session.active_scheduled_loop = Some(loop_id.clone());
+        session.status = SessionStatus::Running;
+        session.latest_turn = Some(PublicTurn {
+            id: turn_id.clone(),
+            session_id: canonical_session_id.clone(),
+            status: PublicTurnStatus::InProgress,
+            started_at,
+            completed_at: None,
+            error: None,
+            stop_reason: None,
+        });
+        session.updated_at = started_at;
+        let event_id = next_event_id(session);
+        fire.notice
+            .params
+            .insert("eventId".to_owned(), json!(event_id));
+        fire.notice
+            .params
+            .insert("sessionId".to_owned(), json!(canonical_session_id.clone()));
+        fire.notice
+            .params
+            .insert("turnId".to_owned(), json!(turn_id.clone()));
+        fire.notice.params.insert(
+            "emittedAt".to_owned(),
+            json!(now_seconds.saturating_mul(1_000)),
+        );
+        if let Some(entry) = fire.notice.params.get_mut("entry") {
+            entry["id"] = json!(format!("scheduled-loop:{turn_id}"));
+            entry["sessionId"] = json!(canonical_session_id.clone());
+            entry["turnId"] = json!(turn_id.clone());
+        }
+        let prompt = fire.prompt.clone();
+        Ok(Some(ScheduledLoopWork {
+            fire,
+            work: DeferredWork::RunTurn {
+                session_id: canonical_session_id,
+                turn_id,
+                prompt: prompt.clone(),
+                input: vec![PublicContentBlock::Text { text: prompt }],
+                client_user_message_id: None,
+                auto_title: None,
+                user_display_content: Some(json!({
+                    "kind": "scheduled_loop",
+                    "loopId": loop_id,
+                    "firedAt": now_seconds,
+                })),
+                mention_stats: None,
+            },
+        }))
+    }
+
+    pub fn finish_scheduled_loop(
+        &self,
+        loop_id: &str,
+        completed_at_seconds: u64,
+    ) -> Result<(), ServerError> {
+        match self
+            .release4
+            .finish_loop_fire(loop_id, completed_at_seconds)
+        {
+            Ok(()) | Err(Release4Error::Conflict(_)) => Ok(()),
+            Err(error) => Err(ServerError::Release4(error.to_string())),
+        }
+    }
+
     pub fn complete_turn_with_stop_reason(
         &self,
         session_id: &str,
@@ -296,6 +565,11 @@ impl AppServer {
             _ => return Err(ServerError::NonTerminalCompletion(snapshot.lifecycle)),
         };
         let completed_at = now_millis();
+        if let Some(loop_id) = &session.active_scheduled_loop {
+            self.release4
+                .finish_loop_fire(loop_id, completed_at / 1_000)
+                .map_err(|error| ServerError::Release4(error.to_string()))?;
+        }
         let turn = PublicTurn {
             id: turn_id.to_owned(),
             session_id: target_session_id.clone(),
@@ -314,10 +588,12 @@ impl AppServer {
         let mut session = sessions
             .remove(&source_key)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        cancel_pending_callback(&mut session, "Turn completed before callback was answered");
         session.aliases.insert(session_id.to_owned());
         session.id.clone_from(&target_session_id);
         session.active_turn = None;
         session.active_turn_started_at = None;
+        session.active_scheduled_loop = None;
         session.status = if was_closed {
             SessionStatus::Closed
         } else {
@@ -328,7 +604,10 @@ impl AppServer {
                 _ => SessionStatus::Idle,
             }
         };
-        session.snapshot = Some(snapshot.clone());
+        session.snapshot = Some(merge_server_callback_history(
+            session.snapshot.as_ref(),
+            snapshot.clone(),
+        ));
         session.latest_turn = Some(turn.clone());
         session.updated_at = completed_at;
         let event_id = next_event_id(&mut session);
@@ -358,9 +637,15 @@ impl AppServer {
         }
         let was_closed = session.status == SessionStatus::Closed;
         let started_at = session.active_turn_started_at.unwrap_or_default();
+        if let Some(loop_id) = &session.active_scheduled_loop {
+            self.release4
+                .finish_loop_fire(loop_id, now_millis() / 1_000)
+                .map_err(|error| ServerError::Release4(error.to_string()))?;
+        }
         session.active_turn = None;
         session.active_turn_started_at = None;
-        session.pending_callback = None;
+        session.active_scheduled_loop = None;
+        cancel_pending_callback(session, message);
         session.status = if was_closed {
             SessionStatus::Closed
         } else {
@@ -404,18 +689,6 @@ impl AppServer {
             return Err(ServerError::UnsupportedCallbackKind(kind));
         }
         let prompt = prompt.into();
-        let mut sessions = self.lock_sessions()?;
-        let session = session_mut_by_id_or_alias(&mut sessions, session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if session.active_turn.as_deref() != Some(turn_id) {
-            return Err(ServerError::StaleTurn(turn_id.to_owned()));
-        }
-        if session.pending_callback.is_some() {
-            return Err(ServerError::CallbackConflict);
-        }
-        let callback_sequence = self.next_callback.fetch_add(1, Ordering::Relaxed);
-        let callback_id = format!("callback-{callback_sequence}");
-        let timestamp = now_millis();
         let detail = match kind {
             EngineCallbackKind::Approval => json!({
                 "kind": "approval",
@@ -465,18 +738,51 @@ impl AppServer {
                 return Err(ServerError::UnsupportedCallbackKind(kind));
             }
         };
+        self.request_callback_with_detail(session_id, turn_id, kind, prompt, detail)
+    }
+
+    pub fn request_callback_with_detail(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        kind: EngineCallbackKind,
+        title: impl Into<String>,
+        detail: Value,
+    ) -> Result<(String, Vec<u8>), ServerError> {
+        if kind == EngineCallbackKind::ConnectorAuth {
+            return Err(ServerError::UnsupportedCallbackKind(kind));
+        }
+        let title = title.into();
+        validate_callback_request(kind, &title, &detail)
+            .map_err(|message| ServerError::InvalidCallbackDetail(message.to_owned()))?;
+        let related_entry_id = detail
+            .get("relatedEntryId")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let mut sessions = self.lock_sessions()?;
+        let session = session_mut_by_id_or_alias(&mut sessions, session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        if session.active_turn.as_deref() != Some(turn_id) {
+            return Err(ServerError::StaleTurn(turn_id.to_owned()));
+        }
+        if session.pending_callback.is_some() {
+            return Err(ServerError::CallbackConflict);
+        }
+        let callback_sequence = self.next_callback.fetch_add(1, Ordering::Relaxed);
+        let callback_id = format!("callback-{callback_sequence}");
+        let timestamp = now_millis();
         let callback = PublicHistoryEntry::Callback {
             metadata: PublicEntryMetadata {
                 id: format!("callback:{callback_id}"),
-                session_id: session_id.to_owned(),
+                session_id: session.id.clone(),
                 turn_id: Some(turn_id.to_owned()),
                 created_at: timestamp,
                 updated_at: timestamp,
                 generation_status: PublicEntryGenerationStatus::InProgress,
-                related_entry_id: None,
+                related_entry_id,
             },
             callback_id: callback_id.clone(),
-            title: prompt,
+            title,
             detail,
             state: vibe_core::events::PublicCallbackState::Open,
         };
@@ -487,6 +793,26 @@ impl AppServer {
             kind,
             entry: callback.clone(),
         });
+        let snapshot = session.snapshot.get_or_insert_with(|| ProjectionSnapshot {
+            session_id: session.id.clone(),
+            turn_id: Some(turn_id.to_owned()),
+            watermark: 0,
+            lifecycle: LifecycleState::Running,
+            title: None,
+            history: Vec::new(),
+        });
+        if !snapshot.history.iter().any(|entry| {
+            matches!(
+                entry,
+                PublicHistoryEntry::Callback {
+                    callback_id: existing,
+                    ..
+                } if existing == &callback_id
+            )
+        }) {
+            snapshot.history.push(callback.clone());
+        }
+        next_event_id(session);
         let request = encode_frame(&Envelope::Request(ServerRequest {
             jsonrpc: JsonRpcVersion::V2,
             id: RequestId::Integer(i64::try_from(callback_sequence).unwrap_or(i64::MAX)),
@@ -496,11 +822,57 @@ impl AppServer {
         Ok((callback_id, request))
     }
 
-    pub(crate) fn sequence_event(&self, session_id: &str) -> Result<u64, ServerError> {
+    pub fn live_projection_seed(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Result<ProjectionSnapshot, ServerError> {
+        let sessions = self.lock_sessions()?;
+        let session = session_by_id_or_alias(&sessions, session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        if session.active_turn.as_deref() != Some(turn_id) {
+            return Err(ServerError::StaleTurn(turn_id.to_owned()));
+        }
+        let mut snapshot = session
+            .snapshot
+            .clone()
+            .unwrap_or_else(|| ProjectionSnapshot {
+                session_id: session.id.clone(),
+                turn_id: Some(turn_id.to_owned()),
+                watermark: 0,
+                lifecycle: LifecycleState::Idle,
+                title: None,
+                history: Vec::new(),
+            });
+        snapshot.session_id.clone_from(&session.id);
+        snapshot.turn_id = Some(turn_id.to_owned());
+        snapshot.watermark = 0;
+        snapshot.lifecycle = LifecycleState::Idle;
+        Ok(snapshot)
+    }
+
+    pub fn apply_live_projection(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        snapshot: ProjectionSnapshot,
+    ) -> Result<u64, ServerError> {
         let mut sessions = self.lock_sessions()?;
         let session = session_mut_by_id_or_alias(&mut sessions, session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        Ok(next_event_id(session))
+        if session.active_turn.as_deref() != Some(turn_id) {
+            return Err(ServerError::StaleTurn(turn_id.to_owned()));
+        }
+        if snapshot.session_id != session.id || snapshot.turn_id.as_deref() != Some(turn_id) {
+            return Err(ServerError::SessionConflict(snapshot.session_id));
+        }
+        let event_id = next_event_id(session);
+        session.snapshot = Some(merge_server_callback_history(
+            session.snapshot.as_ref(),
+            snapshot,
+        ));
+        session.updated_at = now_millis();
+        Ok(event_id)
     }
 
     pub(crate) fn handoff_active_turn(
@@ -508,7 +880,7 @@ impl AppServer {
         old_session_id: &str,
         new_session_id: &str,
         turn_id: &str,
-        snapshot: ProjectionSnapshot,
+        mut snapshot: ProjectionSnapshot,
         summary_length: usize,
         emitted_at: u64,
     ) -> Result<Vec<u8>, ServerError> {
@@ -528,13 +900,23 @@ impl AppServer {
             sessions.insert(source_key, session);
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
         }
+        self.release4
+            .rebind_session(&session.id, new_session_id)
+            .map_err(|error| ServerError::Release4(error.to_string()))?;
+        for entry in &mut snapshot.history {
+            entry.rebind_session(new_session_id);
+        }
         session.aliases.insert(old_session_id.to_owned());
         session.id = new_session_id.to_owned();
+        session.intent.resume = Some(new_session_id.to_owned());
         session.snapshot = Some(snapshot);
         session.updated_at = now_millis();
         session.event_watermark = 0;
         if let Some(turn) = session.latest_turn.as_mut() {
             turn.session_id = new_session_id.to_owned();
+        }
+        if let Some(callback) = session.pending_callback.as_mut() {
+            callback.entry.rebind_session(new_session_id);
         }
         let event_id = next_event_id(&mut session);
         let state = public_session_state(&session);
@@ -551,6 +933,144 @@ impl AppServer {
                 ("emittedAt", json!(emitted_at)),
             ]),
         )
+    }
+
+    pub fn complete_manual_compaction(
+        &self,
+        request_id: RequestId,
+        old_session_id: &str,
+        new_session_id: &str,
+        summary: &str,
+        hydrated: HydratedSession,
+    ) -> DispatchBatch {
+        let (state, event_id, emitted_at) = {
+            let mut sessions = match self.lock_sessions() {
+                Ok(sessions) => sessions,
+                Err(error) => return internal_error_batch(request_id, &error),
+            };
+            let Some(source_key) = session_key_by_id_or_alias(&sessions, old_session_id) else {
+                return error_batch(
+                    request_id,
+                    ProtocolErrorCode::NotFound,
+                    "Session was not found",
+                );
+            };
+            if source_key != new_session_id && sessions.contains_key(new_session_id) {
+                if let Some(session) = sessions.get_mut(&source_key) {
+                    session.compaction_pending = false;
+                }
+                return error_batch(
+                    request_id,
+                    ProtocolErrorCode::Conflict,
+                    "Compaction target session already exists",
+                );
+            }
+            let mut session = match sessions.remove(&source_key) {
+                Some(session) => session,
+                None => {
+                    return error_batch(
+                        request_id,
+                        ProtocolErrorCode::NotFound,
+                        "Session was not found",
+                    );
+                }
+            };
+            if !session.compaction_pending || session.active_turn.is_some() {
+                sessions.insert(source_key, session);
+                return error_batch(
+                    request_id,
+                    ProtocolErrorCode::Conflict,
+                    "Compaction reservation is stale",
+                );
+            }
+            if hydrated.metadata.id != new_session_id
+                || hydrated.metadata.parent_session_id.as_deref() != Some(old_session_id)
+            {
+                session.compaction_pending = false;
+                sessions.insert(source_key, session);
+                return error_batch(
+                    request_id,
+                    ProtocolErrorCode::CompactionFailed,
+                    "Compaction produced an invalid session handoff",
+                );
+            }
+            if let Err(error) = self.release4.rebind_session(&session.id, new_session_id) {
+                session.compaction_pending = false;
+                sessions.insert(source_key, session);
+                return internal_error_batch(request_id, &ServerError::Release4(error.to_string()));
+            }
+            session.aliases.insert(old_session_id.to_owned());
+            session.id = new_session_id.to_owned();
+            session.intent.resume = Some(new_session_id.to_owned());
+            session.status = SessionStatus::Idle;
+            session.compaction_pending = false;
+            session.persisted = Some(hydrated);
+            session.updated_at = now_millis();
+            session.event_watermark = 0;
+            if let Some(snapshot) = session.snapshot.as_mut() {
+                snapshot.session_id = new_session_id.to_owned();
+                snapshot.turn_id = None;
+                snapshot.watermark = 0;
+                snapshot.lifecycle = LifecycleState::Idle;
+                for entry in &mut snapshot.history {
+                    entry.rebind_session(new_session_id);
+                }
+            }
+            if let Some(callback) = session.pending_callback.as_mut() {
+                callback.entry.rebind_session(new_session_id);
+            }
+            if let Some(turn) = session.latest_turn.as_mut() {
+                turn.session_id = new_session_id.to_owned();
+            }
+            let event_id = next_event_id(&mut session);
+            let state = public_session_state(&session);
+            let emitted_at = now_millis();
+            sessions.insert(new_session_id.to_owned(), session);
+            (state, event_id, emitted_at)
+        };
+        let result = result_map([
+            ("summary", json!(summary)),
+            ("state", state.clone()),
+            ("sessionLog", json!({"enabled": false})),
+        ]);
+        let notification = match encode_notification(
+            "session/compacted",
+            result_map([
+                ("eventId", json!(event_id)),
+                ("sessionId", json!(new_session_id)),
+                ("oldSessionId", json!(old_session_id)),
+                ("state", state),
+                ("sessionLog", json!({"enabled": false})),
+                ("summaryLength", json!(summary.chars().count())),
+                ("emittedAt", json!(emitted_at)),
+            ]),
+        ) {
+            Ok(notification) => notification,
+            Err(error) => return internal_error_batch(request_id, &error),
+        };
+        DispatchBatch {
+            outbound: success_bytes(request_id, result)
+                .into_iter()
+                .chain([notification])
+                .collect(),
+            deferred: Vec::new(),
+            close_after_flush: false,
+        }
+    }
+
+    pub fn fail_manual_compaction(
+        &self,
+        request_id: RequestId,
+        session_id: &str,
+        reason: &str,
+    ) -> DispatchBatch {
+        if let Ok(mut sessions) = self.lock_sessions()
+            && let Some(session) = session_mut_by_id_or_alias(&mut sessions, session_id)
+        {
+            session.compaction_pending = false;
+            session.updated_at = now_millis();
+        }
+        error_batch(request_id, ProtocolErrorCode::CompactionFailed, reason)
     }
 
     fn reject_callback(
@@ -570,9 +1090,17 @@ impl AppServer {
         if callback.id != route.callback_id {
             return Err(ServerError::CallbackConflict);
         }
+        settle_pending_callback(
+            session,
+            &route.callback_id,
+            PublicCallbackState::Cancelled {
+                reason: reason.to_owned(),
+            },
+        );
         session.pending_callback = None;
         session.status = SessionStatus::Cancelled;
         session.updated_at = now_millis();
+        next_event_id(session);
         Ok(vec![
             DeferredWork::ResolveCallback {
                 session_id: route.session_id.clone(),
@@ -590,8 +1118,7 @@ impl AppServer {
 
     pub fn session(&self, session_id: &str) -> Result<SessionView, ServerError> {
         let sessions = self.lock_sessions()?;
-        sessions
-            .get(session_id)
+        session_by_id_or_alias(&sessions, session_id)
             .map(SessionView::from)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))
     }
@@ -641,6 +1168,18 @@ impl AppServer {
             params,
         };
         resource_result_batch(request_id, backend.dispatch(request).await)
+    }
+
+    pub async fn execute_cloud_request(
+        &self,
+        request_id: RequestId,
+        method: String,
+        params: BTreeMap<String, Value>,
+    ) -> DispatchBatch {
+        match self.release4.dispatch_deferred(&method, &params).await {
+            Ok(dispatch) => release4_dispatch_batch(request_id, dispatch),
+            Err(error) => release4_error_batch(request_id, error),
+        }
     }
 
     pub async fn close_resource_session(
@@ -715,25 +1254,44 @@ impl AppServer {
         if let Some(session) = sessions.get_mut(&attachment.id) {
             session.attachments = session.attachments.saturating_add(1);
             session.persisted = Some(attachment.hydrated.clone());
+            apply_persisted_session_settings(&mut session.intent, &attachment.hydrated);
             session.updated_at = now_millis();
             return Ok(());
         }
         let policy = PermissionStore::default();
         let tools = ToolRegistry::default();
+        if let Ok(workspace) = Workspace::open(&attachment.working_directory) {
+            let workspace = Arc::new(workspace);
+            let review = Arc::new(ReviewManager::new(workspace.clone()));
+            WorkspaceTools::new(workspace, review)
+                .register(
+                    &tools,
+                    policy.clone(),
+                    self.approval_factory.for_session(&attachment.id, false),
+                )
+                .map_err(|error| ServerError::Resource(error.to_string()))?;
+        }
+        self.session_tool_factory
+            .register(&attachment.id, &tools)
+            .map_err(ServerError::Resource)?;
         let timestamp = now_millis();
+        let mut intent = SessionIntent {
+            agent: attachment.agent.clone(),
+            resume: Some(attachment.id.clone()),
+            ..SessionIntent::default()
+        };
+        apply_persisted_session_settings(&mut intent, &attachment.hydrated);
         sessions.insert(
             attachment.id.clone(),
             SessionRuntime {
                 id: attachment.id.clone(),
                 working_directory: attachment.working_directory.clone(),
-                intent: SessionIntent {
-                    agent: attachment.agent.clone(),
-                    resume: Some(attachment.id.clone()),
-                    ..SessionIntent::default()
-                },
+                intent,
                 status: SessionStatus::Idle,
                 active_turn: None,
                 active_turn_started_at: None,
+                active_scheduled_loop: None,
+                compaction_pending: false,
                 pending_callback: None,
                 resolved_callbacks: BTreeMap::new(),
                 context: Vec::new(),
@@ -785,8 +1343,37 @@ impl AppServer {
             .ok_or_else(|| ServerError::SessionNotFound(attachment.id.clone()))?;
         session.persisted = Some(attachment.hydrated.clone());
         session.intent.agent = attachment.agent.clone();
+        apply_persisted_session_settings(&mut session.intent, &attachment.hydrated);
         session.updated_at = now_millis();
         Ok(())
+    }
+}
+
+fn apply_persisted_session_settings(intent: &mut SessionIntent, hydrated: &HydratedSession) {
+    let config = &hydrated.metadata.config;
+    if let Some(value) = config.get("maxTurns").and_then(Value::as_u64)
+        && let Ok(value) = u32::try_from(value)
+    {
+        intent.max_turns = Some(value);
+    }
+    if let Some(value) = config.get("maxTokens").and_then(Value::as_u64) {
+        intent.max_tokens = Some(value);
+    }
+    if let Some(value) = config.get("mode").and_then(Value::as_str)
+        && matches!(value, "code" | "plan")
+    {
+        intent.mode = Some(value.to_owned());
+    }
+    if let Some(value) = config.get("thinking").and_then(Value::as_bool) {
+        intent.thinking = value;
+    }
+    if let Some(value) = config.get("reasoningEffort").and_then(Value::as_str)
+        && matches!(value, "low" | "medium" | "high" | "max")
+    {
+        intent.reasoning_effort = Some(value.to_owned());
+    }
+    if let Some(value) = config.get("autoApprove").and_then(Value::as_bool) {
+        intent.auto_approve = value;
     }
 }
 
@@ -862,6 +1449,51 @@ impl ServerConnection {
                 session_id: session_id.to_owned(),
                 turn_id: turn_id.to_owned(),
                 callback_id: callback_id.clone(),
+                answered: false,
+            },
+        );
+        Ok((callback_id, bytes))
+    }
+
+    pub fn request_callback_with_detail(
+        &mut self,
+        session_id: &str,
+        turn_id: &str,
+        kind: EngineCallbackKind,
+        title: impl Into<String>,
+        detail: Value,
+    ) -> Result<(String, Vec<u8>), ServerError> {
+        if self.state != ConnectionState::Ready {
+            return Err(ServerError::NotInitialized);
+        }
+        let supported = match kind {
+            EngineCallbackKind::Approval => self
+                .capabilities
+                .callback_kinds
+                .contains(&CallbackKind::Approval),
+            EngineCallbackKind::UserInput => self
+                .capabilities
+                .callback_kinds
+                .contains(&CallbackKind::UserInput),
+            EngineCallbackKind::ConnectorAuth => false,
+        };
+        if !supported {
+            return Err(ServerError::UnsupportedClientCallbackKind(kind));
+        }
+        let (callback_id, bytes) = self
+            .server
+            .request_callback_with_detail(session_id, turn_id, kind, title, detail)?;
+        let request_id = match decode_frame(&bytes)? {
+            Envelope::Request(request) => request.id,
+            _ => return Err(ServerError::InvalidCallbackRequest),
+        };
+        self.pending_server_requests.insert(
+            request_id,
+            CallbackRoute {
+                session_id: session_id.to_owned(),
+                turn_id: turn_id.to_owned(),
+                callback_id: callback_id.clone(),
+                answered: false,
             },
         );
         Ok((callback_id, bytes))
@@ -881,7 +1513,7 @@ impl ServerConnection {
         if !callback_id_matches {
             return self.close_for_protocol_error();
         }
-        if accepted {
+        if accepted || route.answered {
             DispatchBatch::empty()
         } else {
             match self
@@ -902,6 +1534,9 @@ impl ServerConnection {
         let Some(route) = self.pending_server_requests.remove(&response.id) else {
             return self.close_for_protocol_error();
         };
+        if route.answered {
+            return DispatchBatch::empty();
+        }
         match self.server.reject_callback(&route, &response.error.message) {
             Ok(deferred) => DispatchBatch {
                 outbound: Vec::new(),
@@ -1005,6 +1640,8 @@ impl ServerConnection {
             "session/start" => self.session_start(request),
             "session/read" => self.session_read(request),
             "session/close" => self.session_close(request),
+            "session/compact/start" => self.session_compact_start(request),
+            "session/settings/update" => self.session_settings_update(request),
             "turn/start" => self.turn_start(request),
             "turn/steer" => self.turn_steer(request),
             "turn/interrupt" => self.turn_interrupt(request),
@@ -1012,6 +1649,7 @@ impl ServerConnection {
             "callback/respond" => self.callback_respond(request),
             method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
             method if RELEASE3_METHODS.contains(&method) => self.release3_request(request),
+            method if RELEASE4_METHODS.contains(&method) => self.release4_request(request),
             _ => error_batch(
                 request.id,
                 ProtocolErrorCode::MethodNotFound,
@@ -1073,6 +1711,7 @@ impl ServerConnection {
                 methods: IMPLEMENTED_METHODS
                     .iter()
                     .chain(RELEASE3_METHODS)
+                    .chain(RELEASE4_METHODS)
                     .map(ToString::to_string)
                     .collect(),
                 callback_kinds: vec![CallbackKind::Approval, CallbackKind::UserInput],
@@ -1125,14 +1764,76 @@ impl ServerConnection {
             },
             None => params.max_price_micros,
         };
-        let session_id = params.session_id.unwrap_or_else(|| {
-            generated_session_id(self.server.next_session.fetch_add(1, Ordering::Relaxed))
-        });
-        let created_at = now_millis();
-        let working_directory = params
+        let requested_working_directory = params
             .working_directory
             .clone()
             .unwrap_or_else(|| ".".to_owned());
+        let attachment = if let Some(selector) = params.resume.as_deref() {
+            match self.server.release3.dispatch(
+                "session/resume",
+                &result_map([
+                    ("sessionId", json!(selector)),
+                    ("systemPrompt", json!("")),
+                    ("config", json!({})),
+                ]),
+            ) {
+                Ok(dispatch) => dispatch.attachment,
+                Err(error) => return release3_error_batch(request.id, error),
+            }
+        } else if params.continue_session {
+            match self.server.release3.dispatch(
+                "session/continue",
+                &result_map([
+                    ("cwd", json!(requested_working_directory)),
+                    ("systemPrompt", json!("")),
+                    ("config", json!({})),
+                ]),
+            ) {
+                Ok(dispatch) => dispatch.attachment,
+                Err(error) => return release3_error_batch(request.id, error),
+            }
+        } else {
+            None
+        };
+        let session_id = attachment
+            .as_ref()
+            .map(|attachment| attachment.id.clone())
+            .or_else(|| params.session_id.clone())
+            .unwrap_or_else(|| {
+                generated_session_id(self.server.next_session.fetch_add(1, Ordering::Relaxed))
+            });
+        let working_directory = attachment
+            .as_ref()
+            .map(|attachment| attachment.working_directory.clone())
+            .unwrap_or(requested_working_directory);
+        let created_at = attachment
+            .as_ref()
+            .map(|attachment| attachment.hydrated.metadata.created_at_ms)
+            .filter(|timestamp| *timestamp != 0)
+            .unwrap_or_else(now_millis);
+        let updated_at = attachment
+            .as_ref()
+            .map(|attachment| attachment.hydrated.metadata.updated_at_ms)
+            .filter(|timestamp| *timestamp != 0)
+            .unwrap_or(created_at);
+        let initial_snapshot = attachment
+            .as_ref()
+            .map(|attachment| persisted_projection(&attachment.hydrated, params.history_limit));
+        let mut persisted = attachment
+            .as_ref()
+            .map(|attachment| attachment.hydrated.clone());
+        let attachment_agent = attachment
+            .as_ref()
+            .and_then(|attachment| attachment.agent.clone());
+        let mut aliases = BTreeSet::new();
+        for alias in [params.session_id.as_deref(), params.resume.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            if alias != session_id {
+                aliases.insert(alias.to_owned());
+            }
+        }
         let mcp_configs = match self.server.release3.mcp_servers_for_session(
             Path::new(&working_directory),
             params.trusted,
@@ -1162,13 +1863,32 @@ impl ServerConnection {
             if let Err(error) = WorkspaceTools::new(workspace, review).register(
                 &tools,
                 permission_store.clone(),
-                Arc::new(DenyApproval),
+                self.server
+                    .approval_factory
+                    .for_session(&session_id, params.auto_approve),
             ) {
                 return error_batch(
                     request.id,
                     ProtocolErrorCode::InternalError,
                     &error.to_string(),
                 );
+            }
+        }
+        if let Err(error) = self
+            .server
+            .session_tool_factory
+            .register(&session_id, &tools)
+        {
+            return error_batch(request.id, ProtocolErrorCode::InternalError, &error);
+        }
+        if persisted.is_none() && self.server.release3.persists_runtime_sessions() {
+            match self.server.release3.create_runtime_session(
+                &session_id,
+                &working_directory,
+                created_at,
+            ) {
+                Ok(hydrated) => persisted = Some(hydrated),
+                Err(error) => return release3_error_batch(request.id, error),
             }
         }
         let mut sessions = match self.server.lock_sessions() {
@@ -1190,7 +1910,7 @@ impl ServerConnection {
                 intent: SessionIntent {
                     add_directories: params.add_directories,
                     trusted: params.trusted,
-                    agent: params.agent,
+                    agent: params.agent.or(attachment_agent),
                     tool_filters: params.tool_filters,
                     enabled_tools: params.enabled_tools.unwrap_or_default(),
                     disabled_tools: params.disabled_tools,
@@ -1198,28 +1918,36 @@ impl ServerConnection {
                     max_turns: params.max_turns,
                     max_tokens: params.max_tokens,
                     max_price_micros,
+                    mode: params.mode,
+                    thinking: params.thinking,
+                    reasoning_effort: params.reasoning_effort,
                     auto_approve: params.auto_approve,
-                    resume: params.resume,
-                    continue_session: params.continue_session,
+                    resume: attachment
+                        .as_ref()
+                        .map(|attachment| attachment.id.clone())
+                        .or(params.resume),
+                    continue_session: params.continue_session && attachment.is_none(),
                 },
                 status: SessionStatus::Idle,
                 active_turn: None,
                 active_turn_started_at: None,
+                active_scheduled_loop: None,
+                compaction_pending: false,
                 pending_callback: None,
                 resolved_callbacks: BTreeMap::new(),
                 context: Vec::new(),
                 steering: Vec::new(),
-                snapshot: None,
+                snapshot: initial_snapshot,
                 attachments: 1,
                 resource_generation: 1,
-                aliases: BTreeSet::new(),
+                aliases,
                 created_at,
-                updated_at: created_at,
+                updated_at,
                 latest_turn: None,
                 event_watermark: 0,
                 policy: permission_store.clone(),
                 tools: tools.clone(),
-                persisted: None,
+                persisted,
             },
         );
         let resource_result = self
@@ -1279,7 +2007,7 @@ impl ServerConnection {
         }
         match self.server.session(&params.session_id) {
             Ok(_) => match self.server.lock_sessions() {
-                Ok(sessions) => match sessions.get(&params.session_id) {
+                Ok(sessions) => match session_by_id_or_alias(&sessions, &params.session_id) {
                     Some(session) => success_batch(
                         request.id,
                         result_map([("state", public_session_state(session))]),
@@ -1311,25 +2039,42 @@ impl ServerConnection {
             Ok(sessions) => sessions,
             Err(error) => return internal_error_batch(request.id, &error),
         };
-        let Some(session) = sessions.get_mut(&params.session_id) else {
+        let Some(session) = session_mut_by_id_or_alias(&mut sessions, &params.session_id) else {
             return error_batch(request.id, ProtocolErrorCode::NotFound, "Session not found");
         };
+        if session.compaction_pending {
+            return error_batch(
+                request.id,
+                ProtocolErrorCode::Conflict,
+                "Cannot close while compaction is active",
+            );
+        }
+        let canonical_session_id = session.id.clone();
         if let Err(error) = self
             .server
             .release3
-            .close_saved_session(&params.session_id, now_millis())
+            .close_saved_session(&canonical_session_id, now_millis())
         {
             return release3_error_batch(request.id, error);
+        }
+        if let Err(error) = self
+            .server
+            .release4
+            .close_transient_session(&canonical_session_id)
+        {
+            return internal_error_batch(request.id, &ServerError::Release4(error.to_string()));
         }
         let active_turn = session.active_turn.clone();
         session.status = SessionStatus::Closed;
         session.updated_at = now_millis();
-        session.pending_callback = None;
+        if cancel_pending_callback(session, "Session was closed") {
+            next_event_id(session);
+        }
         if let Some(key) = attached_key(session, &self.attached_sessions) {
             self.attached_sessions.remove(&key);
             session.attachments = session.attachments.saturating_sub(1);
         }
-        let session_id = params.session_id.clone();
+        let session_id = canonical_session_id;
         let resource_generation = session.resource_generation;
         drop(sessions);
         if let Ok(mut resources) = self.server.resources.lock() {
@@ -1359,12 +2104,48 @@ impl ServerConnection {
     }
 
     fn release3_request(&mut self, request: ServerRequest) -> DispatchBatch {
+        let target_session_id = request
+            .params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .or_else(|| {
+                request
+                    .params
+                    .get("sourceSessionId")
+                    .and_then(Value::as_str)
+            })
+            .map(ToOwned::to_owned);
+        if matches!(
+            request.method.as_str(),
+            "session/fork" | "session/history/clear" | "session/rewind"
+        ) && let Some(session_id) = &target_session_id
+        {
+            let mut sessions = match self.server.lock_sessions() {
+                Ok(sessions) => sessions,
+                Err(error) => return internal_error_batch(request.id, &error),
+            };
+            if session_mut_by_id_or_alias(&mut sessions, session_id)
+                .is_some_and(|session| session.active_turn.is_some())
+            {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::Conflict,
+                    "Session history can only change while the session is idle",
+                );
+            }
+        }
         match self
             .server
             .release3
             .dispatch(&request.method, &request.params)
         {
             Ok(dispatch) => {
+                if request.method == "session/delete"
+                    && let Some(session_id) = target_session_id.as_deref()
+                    && let Err(error) = self.server.release4.remove_session(session_id)
+                {
+                    return release4_error_batch(request.id, error);
+                }
                 if let Some(attachment) = &dispatch.attachment {
                     if self.attached_sessions.contains(&attachment.id) {
                         if let Err(error) = self.server.refresh_release3_runtime(attachment) {
@@ -1394,15 +2175,262 @@ impl ServerConnection {
         }
     }
 
-    fn turn_start(&mut self, request: ServerRequest) -> DispatchBatch {
-        let params = match from_params::<TurnStartParams>(&request.params) {
+    fn session_settings_update(&mut self, request: ServerRequest) -> DispatchBatch {
+        let params = match from_params::<SessionSettingsUpdateParams>(&request.params) {
             Ok(params) => params,
             Err(message) => {
                 return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
             }
         };
-        let prompt = content_text(&params.input);
-        if prompt.trim().is_empty() {
+        if params.max_turns.is_none()
+            && params.max_tokens.is_none()
+            && params.mode.is_none()
+            && params.thinking.is_none()
+            && params.reasoning_effort.is_none()
+            && params.auto_approve.is_none()
+        {
+            return error_batch(
+                request.id,
+                ProtocolErrorCode::InvalidParams,
+                "At least one session setting must be provided",
+            );
+        }
+        if params
+            .mode
+            .as_deref()
+            .is_some_and(|mode| !matches!(mode, "code" | "plan"))
+        {
+            return error_batch(
+                request.id,
+                ProtocolErrorCode::InvalidParams,
+                "mode must be `code` or `plan`",
+            );
+        }
+        if params
+            .reasoning_effort
+            .as_deref()
+            .is_some_and(|effort| !matches!(effort, "low" | "medium" | "high" | "max"))
+        {
+            return error_batch(
+                request.id,
+                ProtocolErrorCode::InvalidParams,
+                "reasoningEffort must be low, medium, high, or max",
+            );
+        }
+        if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
+            return batch;
+        }
+        let canonical_session_id = {
+            let sessions = match self.server.lock_sessions() {
+                Ok(sessions) => sessions,
+                Err(error) => return internal_error_batch(request.id, &error),
+            };
+            let Some(session) = session_by_id_or_alias(&sessions, &params.session_id) else {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::NotFound,
+                    "Session was not found",
+                );
+            };
+            session.id.clone()
+        };
+        let mut persisted_settings = BTreeMap::new();
+        if let Some(value) = params.max_turns {
+            persisted_settings.insert("maxTurns".to_owned(), json!(value));
+        }
+        if let Some(value) = params.max_tokens {
+            persisted_settings.insert("maxTokens".to_owned(), json!(value));
+        }
+        if let Some(value) = &params.mode {
+            persisted_settings.insert("mode".to_owned(), json!(value));
+        }
+        if let Some(value) = params.thinking {
+            persisted_settings.insert("thinking".to_owned(), json!(value));
+        }
+        if let Some(value) = &params.reasoning_effort {
+            persisted_settings.insert("reasoningEffort".to_owned(), json!(value));
+        }
+        if let Some(value) = params.auto_approve {
+            persisted_settings.insert("autoApprove".to_owned(), json!(value));
+        }
+        let persisted = match self
+            .server
+            .release3
+            .update_runtime_settings(&canonical_session_id, &persisted_settings)
+        {
+            Ok(persisted) => persisted,
+            Err(error) => return release3_error_batch(request.id, error),
+        };
+        let mut sessions = match self.server.lock_sessions() {
+            Ok(sessions) => sessions,
+            Err(error) => return internal_error_batch(request.id, &error),
+        };
+        let Some(session) = session_mut_by_id_or_alias(&mut sessions, &params.session_id) else {
+            return error_batch(
+                request.id,
+                ProtocolErrorCode::NotFound,
+                "Session was not found",
+            );
+        };
+        if let Some(max_turns) = params.max_turns {
+            session.intent.max_turns = Some(max_turns);
+        }
+        if let Some(max_tokens) = params.max_tokens {
+            session.intent.max_tokens = Some(max_tokens);
+        }
+        if let Some(mode) = params.mode {
+            session.intent.mode = Some(mode);
+        }
+        if let Some(thinking) = params.thinking {
+            session.intent.thinking = thinking;
+        }
+        if let Some(reasoning_effort) = params.reasoning_effort {
+            session.intent.reasoning_effort = Some(reasoning_effort);
+        }
+        if let Some(auto_approve) = params.auto_approve {
+            session.intent.auto_approve = auto_approve;
+        }
+        if let Some(persisted) = persisted {
+            session.persisted = Some(persisted);
+        }
+        session.updated_at = now_millis();
+        success_batch(request.id, BTreeMap::new())
+    }
+
+    fn session_compact_start(&mut self, request: ServerRequest) -> DispatchBatch {
+        let params = match from_params::<SessionCompactParams>(&request.params) {
+            Ok(params) => params,
+            Err(message) => {
+                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            }
+        };
+        if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
+            return batch;
+        }
+        let canonical_session_id = {
+            let mut sessions = match self.server.lock_sessions() {
+                Ok(sessions) => sessions,
+                Err(error) => return internal_error_batch(request.id, &error),
+            };
+            let Some(session) = session_mut_by_id_or_alias(&mut sessions, &params.session_id)
+            else {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::NotFound,
+                    "Session was not found",
+                );
+            };
+            if session.active_turn.is_some() || session.compaction_pending {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::Conflict,
+                    "Cannot compact while the session has active work",
+                );
+            }
+            if session.status == SessionStatus::Closed {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::Conflict,
+                    "Cannot compact a closed session",
+                );
+            }
+            session.compaction_pending = true;
+            session.updated_at = now_millis();
+            session.id.clone()
+        };
+        DispatchBatch {
+            outbound: Vec::new(),
+            deferred: vec![DeferredWork::CompactSession {
+                request_id: request.id,
+                session_id: canonical_session_id,
+                extra_instructions: params.extra_instructions,
+            }],
+            close_after_flush: false,
+        }
+    }
+
+    fn release4_request(&mut self, mut request: ServerRequest) -> DispatchBatch {
+        let session_id = request
+            .params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned);
+        if let Some(session_id) = &session_id {
+            if let Some(batch) = self.attachment_error(request.id.clone(), session_id) {
+                return batch;
+            }
+            let sessions = match self.server.lock_sessions() {
+                Ok(sessions) => sessions,
+                Err(error) => return internal_error_batch(request.id, &error),
+            };
+            let Some(session) = session_by_id_or_alias(&sessions, session_id) else {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::NotFound,
+                    "Session was not found",
+                );
+            };
+            if matches!(
+                request.method.as_str(),
+                "loops/create" | "loops/delete" | "loops/clear"
+            ) && session.active_turn.is_some()
+            {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::Conflict,
+                    "Scheduled loops can only change while the session is idle",
+                );
+            }
+            if matches!(
+                request.method.as_str(),
+                "vibeCode/projects/open" | "vibeCode/teleport/start"
+            ) {
+                request.params.insert(
+                    "workingDirectory".to_owned(),
+                    json!(session.working_directory),
+                );
+            }
+        }
+        if self
+            .server
+            .release4
+            .requires_deferred_dispatch(&request.method)
+        {
+            return DispatchBatch {
+                outbound: Vec::new(),
+                deferred: vec![DeferredWork::CloudRequest {
+                    request_id: request.id,
+                    method: request.method,
+                    params: request.params,
+                }],
+                close_after_flush: false,
+            };
+        }
+        match self
+            .server
+            .release4
+            .dispatch(&request.method, &request.params)
+        {
+            Ok(dispatch) => release4_dispatch_batch(request.id, dispatch),
+            Err(error) => release4_error_batch(request.id, error),
+        }
+    }
+
+    fn turn_start(&mut self, request: ServerRequest) -> DispatchBatch {
+        let mut params = match from_params::<TurnStartParams>(&request.params) {
+            Ok(params) => params,
+            Err(message) => {
+                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            }
+        };
+        let scheduled = match scheduled_loop_turn(&params.user_display_content) {
+            Ok(scheduled) => scheduled,
+            Err(message) => {
+                return error_batch(request.id, ProtocolErrorCode::InvalidParams, message);
+            }
+        };
+        let mut prompt = content_text(&params.input);
+        if scheduled.is_none() && prompt.trim().is_empty() {
             return error_batch(
                 request.id,
                 ProtocolErrorCode::InvalidParams,
@@ -1419,12 +2447,36 @@ impl ServerConnection {
         let Some(session) = sessions.get_mut(&params.session_id) else {
             return error_batch(request.id, ProtocolErrorCode::NotFound, "Session not found");
         };
-        if session.active_turn.is_some() || session.status == SessionStatus::Closed {
+        if session.active_turn.is_some()
+            || session.compaction_pending
+            || session.status == SessionStatus::Closed
+        {
             return error_batch(
                 request.id,
                 ProtocolErrorCode::Conflict,
                 "Session cannot start another turn",
             );
+        }
+        let mut loop_notice = None;
+        if let Some((loop_id, fired_at)) = scheduled {
+            let fire = match self.server.release4.fire_loop_for_session(
+                &loop_id,
+                &session.id,
+                fired_at,
+                true,
+            ) {
+                Ok(fire) => fire,
+                Err(error) => return release4_error_batch(request.id, error),
+            };
+            prompt.clone_from(&fire.prompt);
+            params.input = vec![PublicContentBlock::Text { text: fire.prompt }];
+            params.user_display_content = Some(json!({
+                "kind": "scheduled_loop",
+                "loopId": fire.loop_id,
+                "firedAt": fired_at,
+            }));
+            session.active_scheduled_loop = Some(loop_id);
+            loop_notice = Some((fire.notice, fired_at));
         }
         let turn_sequence = self.server.next_turn.fetch_add(1, Ordering::Relaxed);
         let turn_id = format!("turn-{turn_sequence}");
@@ -1432,9 +2484,10 @@ impl ServerConnection {
         let started_at = now_millis();
         session.active_turn_started_at = Some(started_at);
         session.status = SessionStatus::Running;
+        let canonical_session_id = session.id.clone();
         let turn = PublicTurn {
             id: turn_id.clone(),
-            session_id: params.session_id,
+            session_id: canonical_session_id.clone(),
             status: PublicTurnStatus::InProgress,
             started_at,
             completed_at: None,
@@ -1443,12 +2496,36 @@ impl ServerConnection {
         };
         session.latest_turn = Some(turn.clone());
         session.updated_at = started_at;
+        let mut outbound = success_bytes(request.id.clone(), result_map([("turn", json!(turn))]))
+            .into_iter()
+            .collect::<Vec<_>>();
+        if let Some((mut notice, fired_at)) = loop_notice {
+            let event_id = next_event_id(session);
+            notice.params.insert("eventId".to_owned(), json!(event_id));
+            notice
+                .params
+                .insert("sessionId".to_owned(), json!(canonical_session_id.clone()));
+            notice
+                .params
+                .insert("turnId".to_owned(), json!(turn_id.clone()));
+            notice.params.insert(
+                "emittedAt".to_owned(),
+                json!(fired_at.saturating_mul(1_000)),
+            );
+            if let Some(entry) = notice.params.get_mut("entry") {
+                entry["id"] = json!(format!("scheduled-loop:{turn_id}"));
+                entry["sessionId"] = json!(canonical_session_id.clone());
+                entry["turnId"] = json!(turn_id.clone());
+            }
+            match encode_notification(&notice.method, notice.params) {
+                Ok(notification) => outbound.push(notification),
+                Err(error) => return internal_error_batch(request.id, &error),
+            }
+        }
         DispatchBatch {
-            outbound: success_bytes(request.id, result_map([("turn", json!(turn))]))
-                .into_iter()
-                .collect(),
+            outbound,
             deferred: vec![DeferredWork::RunTurn {
-                session_id: session.id.clone(),
+                session_id: canonical_session_id,
                 turn_id,
                 prompt,
                 input: params.input,
@@ -1587,7 +2664,9 @@ impl ServerConnection {
         }
         session.status = SessionStatus::Cancelled;
         session.updated_at = now_millis();
-        session.pending_callback = None;
+        if cancel_pending_callback(session, "Turn was interrupted") {
+            next_event_id(session);
+        }
         DispatchBatch {
             outbound: success_bytes(request.id, result_map([("interrupted", json!(true))]))
                 .into_iter()
@@ -1620,16 +2699,13 @@ impl ServerConnection {
         let Some(turn_id) = session.active_turn.clone() else {
             return error_batch(request.id, ProtocolErrorCode::StaleTurn, "Turn is stale");
         };
-        let Some(kind) = callback_output_kind(&params.output) else {
-            return error_batch(
-                request.id,
-                ProtocolErrorCode::InvalidParams,
-                "Callback output kind is unsupported",
-            );
-        };
-        let accepted = callback_output_accepted(&params.output);
-        let value = serde_json::to_string(&params.output).ok();
         let Some(callback) = &session.pending_callback else {
+            let kind = match validate_callback_output(&params.output) {
+                Ok(kind) => kind,
+                Err(message) => {
+                    return error_batch(request.id, ProtocolErrorCode::InvalidParams, message);
+                }
+            };
             if let Some(resolved) = session.resolved_callbacks.get(&params.callback_id) {
                 if resolved.kind == kind && resolved.output == params.output {
                     return success_batch(request.id, result_map([("status", json!("duplicate"))]));
@@ -1653,13 +2729,21 @@ impl ServerConnection {
                 "Callback ID does not match",
             );
         }
-        if callback.kind != kind {
-            return error_batch(
-                request.id,
-                ProtocolErrorCode::InvalidParams,
-                "Callback kind does not match",
-            );
-        }
+        let kind = match validate_callback_output_against_request(&params.output, callback) {
+            Ok(kind) => kind,
+            Err(message) => {
+                return error_batch(request.id, ProtocolErrorCode::InvalidParams, message);
+            }
+        };
+        let cancel_turn = callback_requests_turn_cancel(&params.output);
+        let value = serde_json::to_string(&params.output).ok();
+        settle_pending_callback(
+            session,
+            &params.callback_id,
+            PublicCallbackState::Answered {
+                output: params.output.clone(),
+            },
+        );
         session.pending_callback = None;
         session.resolved_callbacks.insert(
             params.callback_id.clone(),
@@ -1668,25 +2752,28 @@ impl ServerConnection {
                 output: params.output.clone(),
             },
         );
-        session.status = if accepted {
-            SessionStatus::Running
-        } else {
-            SessionStatus::Cancelled
-        };
+        session.status = SessionStatus::Running;
         session.updated_at = now_millis();
+        next_event_id(session);
         let result = result_map([("status", json!("accepted"))]);
         let mut deferred = vec![DeferredWork::ResolveCallback {
             session_id: params.session_id.clone(),
             turn_id: turn_id.clone(),
-            callback_id: params.callback_id,
-            accepted,
+            callback_id: params.callback_id.clone(),
+            accepted: true,
             value,
         }];
-        if !accepted {
+        if cancel_turn {
             deferred.push(DeferredWork::InterruptTurn {
-                session_id: params.session_id,
+                session_id: params.session_id.clone(),
                 turn_id,
             });
+        }
+        drop(sessions);
+        for route in self.pending_server_requests.values_mut() {
+            if route.session_id == params.session_id && route.callback_id == params.callback_id {
+                route.answered = true;
+            }
         }
         DispatchBatch {
             outbound: success_bytes(request.id, result).into_iter().collect(),
@@ -1897,6 +2984,8 @@ struct SessionRuntime {
     status: SessionStatus,
     active_turn: Option<String>,
     active_turn_started_at: Option<u64>,
+    active_scheduled_loop: Option<String>,
+    compaction_pending: bool,
     pending_callback: Option<PendingCallback>,
     resolved_callbacks: BTreeMap<String, ResolvedCallback>,
     context: Vec<String>,
@@ -1932,6 +3021,7 @@ struct CallbackRoute {
     session_id: String,
     turn_id: String,
     callback_id: String,
+    answered: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -2050,6 +3140,120 @@ fn public_session_state(session: &SessionRuntime) -> Value {
     })
 }
 
+fn persisted_projection(hydrated: &HydratedSession, history_limit: u16) -> ProjectionSnapshot {
+    let session_id = &hydrated.metadata.id;
+    let base_timestamp = hydrated.metadata.created_at_ms;
+    let mut tool_names = BTreeMap::<String, (String, usize)>::new();
+    let mut history = Vec::new();
+    let metadata = |index: usize, suffix: &str| PublicEntryMetadata {
+        id: format!("persisted:{index}:{suffix}"),
+        session_id: session_id.clone(),
+        turn_id: None,
+        created_at: base_timestamp.saturating_add(u64::try_from(index).unwrap_or(u64::MAX)),
+        updated_at: base_timestamp.saturating_add(u64::try_from(index).unwrap_or(u64::MAX)),
+        generation_status: PublicEntryGenerationStatus::Completed,
+        related_entry_id: None,
+    };
+    for (index, message) in hydrated.messages.iter().enumerate() {
+        match message {
+            ModelMessage::System { .. } => {}
+            ModelMessage::User { content } => history.push(PublicHistoryEntry::Message {
+                metadata: metadata(index, "user"),
+                role: PublicMessageRole::User,
+                content: vec![PublicContentBlock::Text {
+                    text: content.clone(),
+                }],
+                source: Some(PublicMessageSource::TurnStart),
+                user_display_content: None,
+            }),
+            ModelMessage::Assistant {
+                content,
+                reasoning,
+                tool_calls,
+                ..
+            } => {
+                if let Some(reasoning) = reasoning.as_ref().filter(|value| !value.is_empty()) {
+                    history.push(PublicHistoryEntry::Reasoning {
+                        metadata: metadata(index, "reasoning"),
+                        text: reasoning.clone(),
+                        summary: Vec::new(),
+                    });
+                }
+                if !content.is_empty() {
+                    history.push(PublicHistoryEntry::Message {
+                        metadata: metadata(index, "assistant"),
+                        role: PublicMessageRole::Assistant,
+                        content: vec![PublicContentBlock::Text {
+                            text: content.clone(),
+                        }],
+                        source: None,
+                        user_display_content: None,
+                    });
+                }
+                for tool_call in tool_calls {
+                    tool_names.insert(tool_call.id.clone(), (tool_call.name.clone(), index));
+                }
+            }
+            ModelMessage::Tool {
+                call_id,
+                content,
+                is_error,
+            } => {
+                let (title, call_index) = tool_names
+                    .remove(call_id)
+                    .unwrap_or_else(|| ("Tool".to_owned(), index));
+                let state = if *is_error {
+                    PublicEffectState::Failed {
+                        error: PublicError {
+                            message: content.clone(),
+                            code: Some("persisted_tool_error".to_owned()),
+                            details: Value::Null,
+                        },
+                        output_text: content.clone(),
+                        duration_ms: 0,
+                        display: json!({"kind": "generic"}),
+                    }
+                } else {
+                    PublicEffectState::Completed {
+                        output: json!(content),
+                        output_text: content.clone(),
+                        duration_ms: 0,
+                        display: json!({"kind": "generic"}),
+                    }
+                };
+                history.push(PublicHistoryEntry::Effect {
+                    metadata: metadata(call_index, "effect"),
+                    title,
+                    detail: json!({"callId": call_id, "presentationKind": "generic"}),
+                    state,
+                });
+            }
+        }
+    }
+    for (call_id, (title, index)) in tool_names {
+        history.push(PublicHistoryEntry::Effect {
+            metadata: metadata(index, "effect"),
+            title,
+            detail: json!({"callId": call_id, "presentationKind": "generic"}),
+            state: PublicEffectState::Skipped {
+                reason: "Persisted tool call has no recorded result".to_owned(),
+                display: json!({"kind": "generic"}),
+            },
+        });
+    }
+    history.sort_by_key(|entry| entry.metadata().created_at);
+    let retained_from = history.len().saturating_sub(usize::from(history_limit));
+    history.drain(..retained_from);
+    ProjectionSnapshot {
+        session_id: session_id.clone(),
+        turn_id: None,
+        watermark: 0,
+        lifecycle: LifecycleState::Idle,
+        title: hydrated.metadata.title.clone(),
+        history,
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct SessionStartParams {
@@ -2080,6 +3284,12 @@ struct SessionStartParams {
     #[serde(default)]
     max_price: Option<f64>,
     #[serde(default)]
+    mode: Option<String>,
+    #[serde(default)]
+    thinking: bool,
+    #[serde(default)]
+    reasoning_effort: Option<String>,
+    #[serde(default)]
     auto_approve: bool,
     #[serde(default)]
     resume: Option<String>,
@@ -2104,6 +3314,9 @@ pub struct SessionIntent {
     pub max_turns: Option<u32>,
     pub max_tokens: Option<u64>,
     pub max_price_micros: Option<u64>,
+    pub mode: Option<String>,
+    pub thinking: bool,
+    pub reasoning_effort: Option<String>,
     pub auto_approve: bool,
     pub resume: Option<String>,
     #[serde(rename = "continue")]
@@ -2114,6 +3327,32 @@ pub struct SessionIntent {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct SessionParams {
     session_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct SessionSettingsUpdateParams {
+    session_id: String,
+    #[serde(default)]
+    max_turns: Option<u32>,
+    #[serde(default)]
+    max_tokens: Option<u64>,
+    #[serde(default)]
+    mode: Option<String>,
+    #[serde(default)]
+    thinking: Option<bool>,
+    #[serde(default)]
+    reasoning_effort: Option<String>,
+    #[serde(default)]
+    auto_approve: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct SessionCompactParams {
+    session_id: String,
+    #[serde(default)]
+    extra_instructions: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2186,23 +3425,514 @@ fn content_text(input: &[PublicContentBlock]) -> String {
         .join("\n\n")
 }
 
+fn scheduled_loop_turn(
+    user_display_content: &Option<Value>,
+) -> Result<Option<(String, u64)>, &'static str> {
+    let Some(content) = user_display_content else {
+        return Ok(None);
+    };
+    if content.get("kind").and_then(Value::as_str) != Some("scheduled_loop") {
+        return Ok(None);
+    }
+    let loop_id = content
+        .get("loopId")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or("scheduled loop turn requires loopId")?;
+    let fired_at = content
+        .get("firedAt")
+        .and_then(Value::as_u64)
+        .ok_or("scheduled loop turn requires integer firedAt")?;
+    Ok(Some((loop_id.to_owned(), fired_at)))
+}
+
 const fn default_true() -> bool {
     true
 }
 
-fn callback_output_kind(output: &Value) -> Option<EngineCallbackKind> {
+fn validate_callback_output(output: &Value) -> Result<EngineCallbackKind, &'static str> {
+    if serde_json::to_vec(output).map_or(true, |encoded| encoded.len() > MAX_CALLBACK_OUTPUT_BYTES)
+    {
+        return Err("Callback output exceeds the size limit");
+    }
+    let Some(object) = output.as_object() else {
+        return Err("Callback output must be an object");
+    };
     match output.get("type").and_then(Value::as_str) {
-        Some("approval") => Some(EngineCallbackKind::Approval),
-        Some("user_input") => Some(EngineCallbackKind::UserInput),
+        Some("approval") => {
+            if object.len() != 2 || !object.contains_key("decision") {
+                return Err("Approval output has unexpected fields");
+            }
+            let Some(decision) = output.get("decision").and_then(Value::as_object) else {
+                return Err("Approval decision must be an object");
+            };
+            if decision.len() != 1
+                || !matches!(
+                    decision.get("type").and_then(Value::as_str),
+                    Some(
+                        "approve"
+                            | "approve_for_session"
+                            | "approve_permanently"
+                            | "deny"
+                            | "cancel_turn"
+                    )
+                )
+            {
+                return Err("Approval decision is unsupported");
+            }
+            Ok(EngineCallbackKind::Approval)
+        }
+        Some("user_input") => {
+            if object.len() != 2 || !object.contains_key("result") {
+                return Err("User-input output has unexpected fields");
+            }
+            let Some(result) = output.get("result").and_then(Value::as_object) else {
+                return Err("User-input result must be an object");
+            };
+            if result.len() != 2 {
+                return Err("User-input result has unexpected fields");
+            }
+            let Some(cancelled) = result.get("cancelled").and_then(Value::as_bool) else {
+                return Err("User-input result requires a boolean cancelled field");
+            };
+            let Some(answers) = result.get("answers").and_then(Value::as_array) else {
+                return Err("User-input result requires an answers array");
+            };
+            if answers.len() > MAX_CALLBACK_ANSWERS
+                || (cancelled && !answers.is_empty())
+                || (!cancelled && answers.is_empty())
+            {
+                return Err("User-input answer count is invalid");
+            }
+            for answer in answers {
+                let Some(answer) = answer.as_object() else {
+                    return Err("User-input answers must be objects");
+                };
+                if answer.len() != 3 {
+                    return Err("User-input answer has unexpected fields");
+                }
+                let valid_question =
+                    answer
+                        .get("question")
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| {
+                            !value.is_empty() && value.len() <= MAX_CALLBACK_TEXT_BYTES
+                        });
+                let valid_answer = answer
+                    .get("answer")
+                    .and_then(Value::as_str)
+                    .is_some_and(|value| value.len() <= MAX_CALLBACK_TEXT_BYTES);
+                let valid_other = answer.get("isOther").is_some_and(Value::is_boolean);
+                if !valid_question || !valid_answer || !valid_other {
+                    return Err("User-input answer shape is invalid");
+                }
+            }
+            Ok(EngineCallbackKind::UserInput)
+        }
+        _ => Err("Callback output kind is unsupported"),
+    }
+}
+
+fn validate_callback_request(
+    kind: EngineCallbackKind,
+    title: &str,
+    detail: &Value,
+) -> Result<(), &'static str> {
+    if title.trim().is_empty() || title.len() > MAX_CALLBACK_TEXT_BYTES {
+        return Err("Callback title is empty or exceeds the size limit");
+    }
+    if serde_json::to_vec(detail).map_or(true, |encoded| encoded.len() > MAX_CALLBACK_REQUEST_BYTES)
+    {
+        return Err("Callback detail exceeds the size limit");
+    }
+    let Some(object) = detail.as_object() else {
+        return Err("Callback detail must be an object");
+    };
+    if let Some(related_entry_id) = object.get("relatedEntryId")
+        && !related_entry_id.is_null()
+        && !related_entry_id
+            .as_str()
+            .is_some_and(|value| !value.trim().is_empty() && value.len() <= MAX_CALLBACK_TEXT_BYTES)
+    {
+        return Err("Callback related entry ID is invalid");
+    }
+    match kind {
+        EngineCallbackKind::Approval => {
+            if detail.get("kind").and_then(Value::as_str) != Some("approval") {
+                return Err("Approval callback detail has the wrong kind");
+            }
+            if !detail.get("effect").is_some_and(Value::is_object) {
+                return Err("Approval callback detail requires an effect");
+            }
+            let Some(choices) = detail.get("choices").and_then(Value::as_array) else {
+                return Err("Approval callback detail requires choices");
+            };
+            if choices.is_empty() || choices.len() > MAX_CALLBACK_OPTIONS {
+                return Err("Approval callback choice count is invalid");
+            }
+            let mut seen = BTreeSet::new();
+            for choice in choices {
+                let Some(choice) = choice.as_str() else {
+                    return Err("Approval callback choices must be strings");
+                };
+                if !matches!(
+                    choice,
+                    "approve"
+                        | "approve_for_session"
+                        | "approve_permanently"
+                        | "deny"
+                        | "cancel_turn"
+                ) || !seen.insert(choice)
+                {
+                    return Err("Approval callback choice is unsupported or duplicated");
+                }
+            }
+            if let Some(permissions) = detail.get("requiredPermissions") {
+                let Some(permissions) = permissions.as_array() else {
+                    return Err("Approval callback permissions must be an array");
+                };
+                if permissions.len() > MAX_CALLBACK_OPTIONS
+                    || permissions.iter().any(|permission| {
+                        !permission.as_str().is_some_and(|value| {
+                            !value.trim().is_empty() && value.len() <= MAX_CALLBACK_TEXT_BYTES
+                        })
+                    })
+                {
+                    return Err("Approval callback permission is invalid");
+                }
+            }
+            Ok(())
+        }
+        EngineCallbackKind::UserInput => validate_user_input_request(detail),
+        EngineCallbackKind::ConnectorAuth => Err("Connector-auth callbacks are unsupported"),
+    }
+}
+
+fn validate_user_input_request(detail: &Value) -> Result<(), &'static str> {
+    if detail.get("kind").and_then(Value::as_str) != Some("user_input") {
+        return Err("User-input callback detail has the wrong kind");
+    }
+    if detail
+        .get("planReview")
+        .is_some_and(|value| !value.is_boolean())
+    {
+        return Err("User-input plan-review marker must be a boolean");
+    }
+    let Some(request) = detail.get("request").and_then(Value::as_object) else {
+        return Err("User-input callback detail requires a request");
+    };
+    if let Some(footer) = request.get("footerNote")
+        && !footer.is_null()
+        && !footer
+            .as_str()
+            .is_some_and(|value| value.len() <= MAX_CALLBACK_TEXT_BYTES)
+    {
+        return Err("User-input callback footer is invalid");
+    }
+    let Some(questions) = request.get("questions").and_then(Value::as_array) else {
+        return Err("User-input callback requires questions");
+    };
+    if questions.is_empty() || questions.len() > MAX_CALLBACK_ANSWERS {
+        return Err("User-input callback question count is invalid");
+    }
+    for question in questions {
+        let Some(question) = question.as_object() else {
+            return Err("User-input callback questions must be objects");
+        };
+        if !question
+            .get("question")
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.trim().is_empty() && value.len() <= MAX_CALLBACK_TEXT_BYTES)
+        {
+            return Err("User-input callback question text is invalid");
+        }
+        if question.get("header").is_some_and(|value| {
+            !value
+                .as_str()
+                .is_some_and(|value| value.len() <= MAX_CALLBACK_TEXT_BYTES)
+        }) {
+            return Err("User-input callback question header is invalid");
+        }
+        for field in ["multiSelect", "hideOther"] {
+            if question.get(field).is_some_and(|value| !value.is_boolean()) {
+                return Err("User-input callback question flags must be booleans");
+            }
+        }
+        let Some(options) = question.get("options").and_then(Value::as_array) else {
+            return Err("User-input callback question requires options");
+        };
+        if options.len() < 2 || options.len() > MAX_CALLBACK_OPTIONS {
+            return Err("User-input callback option count is invalid");
+        }
+        let mut labels = BTreeSet::new();
+        let mut ids = BTreeSet::new();
+        for option in options {
+            let Some(option) = option.as_object() else {
+                return Err("User-input callback options must be objects");
+            };
+            let Some(label) = option.get("label").and_then(Value::as_str) else {
+                return Err("User-input callback option label is invalid");
+            };
+            if label.trim().is_empty()
+                || label.len() > MAX_CALLBACK_TEXT_BYTES
+                || !labels.insert(label)
+            {
+                return Err("User-input callback option label is invalid or duplicated");
+            }
+            if option.get("description").is_some_and(|value| {
+                !value
+                    .as_str()
+                    .is_some_and(|value| value.len() <= MAX_CALLBACK_TEXT_BYTES)
+            }) {
+                return Err("User-input callback option description is invalid");
+            }
+            if let Some(id) = option.get("id") {
+                let Some(id) = id.as_str() else {
+                    return Err("User-input callback option ID is invalid");
+                };
+                if id.trim().is_empty() || id.len() > MAX_CALLBACK_TEXT_BYTES || !ids.insert(id) {
+                    return Err("User-input callback option ID is invalid or duplicated");
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn callback_entry_detail(entry: &PublicHistoryEntry) -> Option<&Value> {
+    match entry {
+        PublicHistoryEntry::Callback { detail, .. } => Some(detail),
         _ => None,
     }
 }
 
-fn callback_output_accepted(output: &Value) -> bool {
-    output
-        .pointer("/decision/type")
-        .and_then(Value::as_str)
-        .is_none_or(|decision| !matches!(decision, "deny" | "cancel_turn"))
+fn validate_callback_output_against_request(
+    output: &Value,
+    callback: &PendingCallback,
+) -> Result<EngineCallbackKind, &'static str> {
+    let kind = validate_callback_output(output)?;
+    if kind != callback.kind {
+        return Err("Callback kind does not match");
+    }
+    match kind {
+        EngineCallbackKind::Approval => {
+            let decision = output
+                .pointer("/decision/type")
+                .and_then(Value::as_str)
+                .ok_or("Approval output omitted its decision")?;
+            if !callback_entry_detail(&callback.entry)
+                .and_then(|detail| detail.get("choices"))
+                .and_then(Value::as_array)
+                .is_some_and(|choices| {
+                    choices
+                        .iter()
+                        .any(|choice| choice.as_str() == Some(decision))
+                })
+            {
+                return Err("Approval decision was not offered");
+            }
+        }
+        EngineCallbackKind::UserInput => {
+            validate_user_input_output_against_request(output, &callback.entry)?;
+        }
+        EngineCallbackKind::ConnectorAuth => {
+            return Err("Connector-auth callbacks are unsupported");
+        }
+    }
+    Ok(kind)
+}
+
+fn validate_user_input_output_against_request(
+    output: &Value,
+    entry: &PublicHistoryEntry,
+) -> Result<(), &'static str> {
+    let questions = callback_entry_detail(entry)
+        .and_then(|detail| detail.pointer("/request/questions"))
+        .and_then(Value::as_array)
+        .ok_or("User-input callback request omitted questions")?;
+    let answers = output
+        .pointer("/result/answers")
+        .and_then(Value::as_array)
+        .ok_or("User-input output omitted answers")?;
+    let cancelled = output
+        .pointer("/result/cancelled")
+        .and_then(Value::as_bool)
+        .ok_or("User-input output omitted cancelled")?;
+    if cancelled {
+        return if answers.is_empty() {
+            Ok(())
+        } else {
+            Err("Cancelled user-input output must not include answers")
+        };
+    }
+    if answers.len() != questions.len() {
+        return Err("User-input answer count does not match the request");
+    }
+    for (answer, question) in answers.iter().zip(questions) {
+        let expected_question = question
+            .get("question")
+            .and_then(Value::as_str)
+            .ok_or("User-input callback question is invalid")?;
+        if answer.get("question").and_then(Value::as_str) != Some(expected_question) {
+            return Err("User-input answer does not match its question");
+        }
+        let answer_text = answer
+            .get("answer")
+            .and_then(Value::as_str)
+            .ok_or("User-input answer text is invalid")?;
+        if answer_text.trim().is_empty() {
+            return Err("User-input answer text is empty");
+        }
+        let is_other = answer
+            .get("isOther")
+            .and_then(Value::as_bool)
+            .ok_or("User-input answer omitted isOther")?;
+        let hide_other = question
+            .get("hideOther")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if is_other {
+            if hide_other {
+                return Err("User-input question does not allow free text");
+            }
+            continue;
+        }
+        let options = question
+            .get("options")
+            .and_then(Value::as_array)
+            .ok_or("User-input callback options are invalid")?;
+        let multi_select = question
+            .get("multiSelect")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let selected = if multi_select {
+            answer_text.split(", ").collect::<Vec<_>>()
+        } else {
+            vec![answer_text]
+        };
+        if selected.is_empty()
+            || selected
+                .iter()
+                .enumerate()
+                .any(|(index, label)| selected[..index].contains(label))
+            || selected.iter().any(|label| {
+                !options
+                    .iter()
+                    .any(|option| option.get("label").and_then(Value::as_str) == Some(*label))
+            })
+        {
+            return Err("User-input answer selected an invalid option");
+        }
+    }
+    Ok(())
+}
+
+fn callback_requests_turn_cancel(output: &Value) -> bool {
+    output.pointer("/decision/type").and_then(Value::as_str) == Some("cancel_turn")
+}
+
+fn settle_pending_callback(
+    session: &mut SessionRuntime,
+    callback_id: &str,
+    terminal_state: PublicCallbackState,
+) {
+    let timestamp = now_millis();
+    if let Some(PendingCallback { entry, .. }) = session
+        .pending_callback
+        .as_mut()
+        .filter(|callback| callback.id == callback_id)
+    {
+        settle_callback_entry(entry, terminal_state.clone(), timestamp);
+    }
+    if let Some(snapshot) = session.snapshot.as_mut()
+        && let Some(entry) = snapshot.history.iter_mut().rev().find(|entry| {
+            matches!(
+                entry,
+                PublicHistoryEntry::Callback {
+                    callback_id: existing,
+                    ..
+                } if existing == callback_id
+            )
+        })
+    {
+        settle_callback_entry(entry, terminal_state, timestamp);
+    }
+}
+
+fn cancel_pending_callback(session: &mut SessionRuntime, reason: &str) -> bool {
+    let Some(callback_id) = session
+        .pending_callback
+        .as_ref()
+        .map(|callback| callback.id.clone())
+    else {
+        return false;
+    };
+    settle_pending_callback(
+        session,
+        &callback_id,
+        PublicCallbackState::Cancelled {
+            reason: reason.to_owned(),
+        },
+    );
+    session.pending_callback = None;
+    true
+}
+
+fn settle_callback_entry(
+    entry: &mut PublicHistoryEntry,
+    terminal_state: PublicCallbackState,
+    timestamp: u64,
+) {
+    if let PublicHistoryEntry::Callback {
+        metadata, state, ..
+    } = entry
+    {
+        metadata.updated_at = timestamp;
+        metadata.generation_status = PublicEntryGenerationStatus::Completed;
+        *state = terminal_state;
+    }
+}
+
+fn merge_server_callback_history(
+    existing: Option<&ProjectionSnapshot>,
+    mut incoming: ProjectionSnapshot,
+) -> ProjectionSnapshot {
+    let Some(existing) = existing else {
+        return incoming;
+    };
+    let target_session_id = incoming.session_id.clone();
+    let mut merged = existing.history.clone();
+    for entry in &mut merged {
+        entry.rebind_session(&target_session_id);
+    }
+    for mut entry in std::mem::take(&mut incoming.history) {
+        entry.rebind_session(&target_session_id);
+        if let Some(position) = merged
+            .iter()
+            .position(|current| current.metadata().id == entry.metadata().id)
+        {
+            let existing_callback_is_terminal = matches!(
+                &merged[position],
+                PublicHistoryEntry::Callback {
+                    state: PublicCallbackState::Answered { .. }
+                        | PublicCallbackState::Cancelled { .. }
+                        | PublicCallbackState::Expired { .. },
+                    ..
+                }
+            );
+            if !existing_callback_is_terminal {
+                merged[position] = entry;
+            }
+        } else {
+            merged.push(entry);
+        }
+    }
+    merged.sort_by_key(|entry| entry.metadata().created_at);
+    incoming.history = merged;
+    if incoming.title.is_none() {
+        incoming.title.clone_from(&existing.title);
+    }
+    incoming
 }
 
 fn price_dollars_to_micros(price: f64) -> Option<u64> {
@@ -2222,6 +3952,8 @@ pub enum ServerError {
     SessionNotFound(String),
     #[error("session `{0}` already exists")]
     SessionConflict(String),
+    #[error("release-4 workflow failed: {0}")]
+    Release4(String),
     #[error("turn `{0}` is stale")]
     StaleTurn(String),
     #[error("turn completion is not terminal: {0:?}")]
@@ -2234,6 +3966,8 @@ pub enum ServerError {
     UnsupportedClientCallbackKind(EngineCallbackKind),
     #[error("callback request did not encode as a server request")]
     InvalidCallbackRequest,
+    #[error("callback detail is invalid: {0}")]
+    InvalidCallbackDetail(String),
     #[error("server state lock is poisoned")]
     StatePoisoned,
     #[error("tool execution failed: {0}")]
@@ -2423,6 +4157,51 @@ fn release3_error_batch(id: RequestId, error: Release3Error) -> DispatchBatch {
     }
 }
 
+fn release4_error_batch(id: RequestId, error: Release4Error) -> DispatchBatch {
+    match error {
+        Release4Error::MethodNotFound(message) => {
+            error_batch(id, ProtocolErrorCode::MethodNotFound, &message)
+        }
+        Release4Error::InvalidParams(message) => {
+            error_batch(id, ProtocolErrorCode::InvalidParams, &message)
+        }
+        Release4Error::NotFound(message) => error_batch(id, ProtocolErrorCode::NotFound, &message),
+        Release4Error::Conflict(message) => error_batch(id, ProtocolErrorCode::Conflict, &message),
+        Release4Error::Cloud(crate::release4::CloudError::Unauthorized(message)) => {
+            error_batch(id, ProtocolErrorCode::Unauthorized, &message)
+        }
+        Release4Error::Cloud(error) => {
+            error_batch(id, ProtocolErrorCode::Conflict, &error.to_string())
+        }
+        Release4Error::Persistence(_)
+        | Release4Error::PersistenceState(_)
+        | Release4Error::ProjectLinkPersistence(_)
+        | Release4Error::ProjectLinkPersistenceState(_)
+        | Release4Error::BackgroundTask
+        | Release4Error::StatePoisoned
+        | Release4Error::Json(_) => {
+            error_batch(id, ProtocolErrorCode::InternalError, &error.to_string())
+        }
+    }
+}
+
+fn release4_dispatch_batch(id: RequestId, dispatch: Release4Dispatch) -> DispatchBatch {
+    let mut outbound = success_bytes(id.clone(), dispatch.result)
+        .into_iter()
+        .collect::<Vec<_>>();
+    for notification in dispatch.notifications {
+        match encode_notification(&notification.method, notification.params) {
+            Ok(bytes) => outbound.push(bytes),
+            Err(error) => return internal_error_batch(id, &error),
+        }
+    }
+    DispatchBatch {
+        outbound,
+        deferred: Vec::new(),
+        close_after_flush: false,
+    }
+}
+
 fn internal_error_batch(id: RequestId, error: &ServerError) -> DispatchBatch {
     error_batch(id, ProtocolErrorCode::InternalError, &error.to_string())
 }
@@ -2574,6 +4353,32 @@ mod tests {
         assert_eq!(batch.outbound.len(), 1);
     }
 
+    fn message_entry(
+        id: &str,
+        session_id: &str,
+        turn_id: &str,
+        created_at: u64,
+        text: &str,
+    ) -> PublicHistoryEntry {
+        PublicHistoryEntry::Message {
+            metadata: PublicEntryMetadata {
+                id: id.to_owned(),
+                session_id: session_id.to_owned(),
+                turn_id: Some(turn_id.to_owned()),
+                created_at,
+                updated_at: created_at,
+                generation_status: PublicEntryGenerationStatus::Completed,
+                related_entry_id: None,
+            },
+            role: PublicMessageRole::Assistant,
+            content: vec![PublicContentBlock::Text {
+                text: text.to_owned(),
+            }],
+            source: None,
+            user_display_content: None,
+        }
+    }
+
     #[test]
     fn lifecycle_rejects_duplicate_initialize_and_unsolicited_responses() {
         let server = AppServer::default();
@@ -2664,6 +4469,251 @@ mod tests {
     }
 
     #[test]
+    fn settings_update_is_strict_and_applies_to_the_next_turn_while_active() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        let turn = connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+        assert_eq!(turn.deferred.len(), 1);
+
+        let update = connection.dispatch(&request(
+            4,
+            "session/settings/update",
+            json!({"sessionId": "session-1", "maxTurns": 0, "maxTokens": 64}),
+        ));
+        assert_eq!(update.outbound.len(), 1);
+        let session = server.session("session-1").expect("session");
+        assert_eq!(session.intent.max_turns, Some(0));
+        assert_eq!(session.intent.max_tokens, Some(64));
+        assert_eq!(session.active_turn.as_deref(), Some("turn-1"));
+
+        for (id, params) in [
+            (5, json!({"sessionId": "session-1"})),
+            (6, json!({"sessionId": "session-1", "maxTurns": 1.5})),
+            (7, json!({"sessionId": "session-1", "maxTokens": -1})),
+            (
+                8,
+                json!({"sessionId": "session-1", "maxTurns": 1, "future": true}),
+            ),
+        ] {
+            let invalid = decode_frame(
+                &connection
+                    .dispatch(&request(id, "session/settings/update", params))
+                    .outbound[0],
+            )
+            .expect("error response");
+            assert!(matches!(
+                invalid,
+                Envelope::Error(ErrorResponse {
+                    error: ProtocolError {
+                        code: ProtocolErrorCode::InvalidParams,
+                        ..
+                    },
+                    ..
+                })
+            ));
+        }
+    }
+
+    #[test]
+    fn manual_compaction_reserves_exclusive_session_work_and_failure_releases_it() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+
+        let compact = connection.dispatch(&request(
+            3,
+            "session/compact/start",
+            json!({"sessionId": "session-1", "extraInstructions": "preserve decisions"}),
+        ));
+        assert!(compact.outbound.is_empty());
+        assert_eq!(
+            compact.deferred,
+            vec![DeferredWork::CompactSession {
+                request_id: RequestId::Integer(3),
+                session_id: "session-1".to_owned(),
+                extra_instructions: "preserve decisions".to_owned(),
+            }]
+        );
+        let blocked = connection.dispatch(&request(
+            4,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "race"}]}),
+        ));
+        assert!(matches!(
+            decode_frame(&blocked.outbound[0]).expect("conflict"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::Conflict,
+                    ..
+                },
+                ..
+            })
+        ));
+
+        let failure = server.fail_manual_compaction(
+            RequestId::Integer(3),
+            "session-1",
+            "injected provider failure",
+        );
+        assert!(matches!(
+            decode_frame(&failure.outbound[0]).expect("typed compaction failure"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::CompactionFailed,
+                    ..
+                },
+                ..
+            })
+        ));
+        let next = connection.dispatch(&request(
+            5,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "retry"}]}),
+        ));
+        assert_eq!(next.deferred.len(), 1);
+    }
+
+    #[test]
+    fn due_loop_reserves_the_normal_turn_path_and_emits_a_sequenced_notice() {
+        let temporary = tempfile::tempdir().expect("loop store");
+        let loop_path = temporary.path().join("loops.json");
+        let release4 = Release4Service::default()
+            .with_loop_store(loop_path)
+            .expect("persistent loop service");
+        let created = release4
+            .dispatch(
+                "loops/create",
+                &BTreeMap::from([
+                    ("sessionId".to_owned(), json!("session-1")),
+                    ("interval".to_owned(), json!("30s")),
+                    ("prompt".to_owned(), json!("scheduled prompt")),
+                    ("nowSeconds".to_owned(), json!(10)),
+                ]),
+            )
+            .expect("loop");
+        let loop_id = created.result["loop"]["id"]
+            .as_str()
+            .expect("loop id")
+            .to_owned();
+        assert_eq!(loop_id.len(), 8);
+        assert!(
+            loop_id
+                .chars()
+                .all(|character| character.is_ascii_hexdigit())
+        );
+
+        let server = AppServer::with_release4_service(release4);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        let scheduled = server
+            .reserve_due_loop("session-1", 40)
+            .expect("scheduler")
+            .expect("due loop");
+        assert_eq!(scheduled.fire.loop_id, loop_id);
+        assert_eq!(
+            scheduled.fire.notice.params["entry"]["turnId"],
+            scheduled.fire.notice.params["turnId"]
+        );
+        assert_eq!(scheduled.fire.notice.params["eventId"], 1);
+        let DeferredWork::RunTurn {
+            turn_id, prompt, ..
+        } = scheduled.work
+        else {
+            return;
+        };
+        assert_eq!(prompt, "scheduled prompt");
+        assert!(
+            server
+                .reserve_due_loop("session-1", 40)
+                .expect("busy scheduler")
+                .is_none()
+        );
+        server
+            .fail_turn("session-1", &turn_id, "injected interruption")
+            .expect("turn releases");
+        server
+            .finish_scheduled_loop(&loop_id, 41)
+            .expect("loop reschedules");
+        assert!(
+            server
+                .reserve_due_loop("session-1", 69)
+                .expect("not yet due")
+                .is_none()
+        );
+        assert!(
+            server
+                .reserve_due_loop("session-1", 70)
+                .expect("due again")
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn deleting_a_saved_session_removes_its_loops_from_durable_restart_state() {
+        let temporary = tempfile::tempdir().expect("session deletion stores");
+        let session_root = temporary.path().join("sessions");
+        let working_directory = temporary.path().join("workspace");
+        let loop_path = temporary.path().join("loops.json");
+        fs::create_dir_all(&working_directory).expect("workspace");
+        vibe_core::storage::SessionStore::new(&session_root)
+            .create(
+                "deleted-session",
+                &working_directory.to_string_lossy(),
+                None,
+                1,
+            )
+            .expect("saved session");
+        let release3 =
+            Release3Service::for_runtime_session_root(session_root, working_directory.clone());
+        let release4 = Release4Service::default()
+            .with_loop_store(loop_path.clone())
+            .expect("loop store");
+        release4
+            .dispatch(
+                "loops/create",
+                &BTreeMap::from([
+                    ("sessionId".to_owned(), json!("deleted-session")),
+                    ("interval".to_owned(), json!("30s")),
+                    ("prompt".to_owned(), json!("orphan check")),
+                    ("nowSeconds".to_owned(), json!(10)),
+                ]),
+            )
+            .expect("owned loop");
+        let server = AppServer::with_release3_service(release3).using_release4_service(release4);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        let deleted = connection.dispatch(&request(
+            2,
+            "session/delete",
+            json!({"sessionId": "deleted-session"}),
+        ));
+        assert!(matches!(
+            decode_frame(&deleted.outbound[0]).expect("delete response"),
+            Envelope::Success(SuccessResponse { result, .. })
+                if result.get("deleted").and_then(Value::as_bool) == Some(true)
+        ));
+
+        let restarted = Release4Service::default()
+            .with_loop_store(loop_path)
+            .expect("reloaded loop store");
+        let listed = restarted
+            .dispatch(
+                "loops/list",
+                &BTreeMap::from([("sessionId".to_owned(), json!("deleted-session"))]),
+            )
+            .expect("reloaded loops");
+        assert_eq!(listed.result["loops"].as_array().map(Vec::len), Some(0));
+    }
+
+    #[test]
     fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
         let server = AppServer::default();
         let mut connection = server.connect(TransportKind::InProcess);
@@ -2699,6 +4749,12 @@ mod tests {
             })
         ));
 
+        let event_id_before_callback = server
+            .lock_sessions()
+            .expect("sessions")
+            .get("session-1")
+            .expect("session")
+            .event_watermark;
         let (callback_id, callback_request) = connection
             .request_callback(
                 "session-1",
@@ -2707,6 +4763,15 @@ mod tests {
                 "approve?",
             )
             .expect("callback request");
+        assert_eq!(
+            server
+                .lock_sessions()
+                .expect("sessions")
+                .get("session-1")
+                .expect("session")
+                .event_watermark,
+            event_id_before_callback + 1
+        );
         let callback_request = decode_frame(&callback_request).expect("callback request frame");
         let callback_request_id = match &callback_request {
             Envelope::Request(request) => request.id.clone(),
@@ -2746,7 +4811,35 @@ mod tests {
             }),
         ));
         assert_eq!(first.outbound.len(), 1);
+        assert_eq!(
+            server
+                .lock_sessions()
+                .expect("sessions")
+                .get("session-1")
+                .expect("session")
+                .event_watermark,
+            event_id_before_callback + 2
+        );
         let after = server.session("session-1").expect("resolved session");
+        assert!(after.snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot.history.iter().any(|entry| {
+                matches!(
+                    entry,
+                    PublicHistoryEntry::Callback {
+                        callback_id,
+                        metadata:
+                            PublicEntryMetadata {
+                                generation_status: PublicEntryGenerationStatus::Completed,
+                                ..
+                            },
+                        state: PublicCallbackState::Answered { output },
+                        ..
+                    } if callback_id == "callback-1"
+                        && output.pointer("/decision/type").and_then(Value::as_str)
+                            == Some("approve")
+                )
+            })
+        }));
         let duplicate = connection.dispatch(&request(
             6,
             "callback/respond",
@@ -2768,6 +4861,35 @@ mod tests {
             Envelope::Success(SuccessResponse { result, .. })
                 if result.get("status").and_then(Value::as_str) == Some("duplicate")
         ));
+
+        server
+            .complete_turn(
+                "session-1",
+                "turn-1",
+                ProjectionSnapshot {
+                    session_id: "session-1".to_owned(),
+                    turn_id: Some("turn-1".to_owned()),
+                    watermark: 12,
+                    lifecycle: LifecycleState::Completed,
+                    title: Some("Retained title".to_owned()),
+                    history: Vec::new(),
+                },
+            )
+            .expect("terminal projection");
+        let completed = server.session("session-1").expect("completed session");
+        assert!(completed.snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot.title.as_deref() == Some("Retained title")
+                && snapshot.history.iter().any(|entry| {
+                    matches!(
+                        entry,
+                        PublicHistoryEntry::Callback {
+                            callback_id,
+                            state: PublicCallbackState::Answered { .. },
+                            ..
+                        } if callback_id == "callback-1"
+                    )
+                })
+        }));
     }
 
     #[test]
@@ -2825,10 +4947,612 @@ mod tests {
         let session = server.session("session-1").expect("cancelled session");
         assert_eq!(session.status, SessionStatus::Cancelled);
         assert_eq!(session.pending_callback, None);
+        assert!(session.snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot.history.iter().any(|entry| {
+                matches!(
+                    entry,
+                    PublicHistoryEntry::Callback {
+                        metadata:
+                            PublicEntryMetadata {
+                                generation_status: PublicEntryGenerationStatus::Completed,
+                                ..
+                            },
+                        state: PublicCallbackState::Cancelled { reason },
+                        ..
+                    } if reason == "Client did not accept callback delivery"
+                )
+            })
+        }));
 
         let duplicate = connection.dispatch(&rejection);
         assert!(duplicate.close_after_flush);
         assert_eq!(connection.state(), ConnectionState::Closed);
+    }
+
+    #[test]
+    fn cancelled_user_input_is_answered_without_interrupting_the_turn() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+        let (callback_id, callback_request) = connection
+            .request_callback(
+                "session-1",
+                "turn-1",
+                EngineCallbackKind::UserInput,
+                "continue?",
+            )
+            .expect("callback request");
+        let request_id = match decode_frame(&callback_request).expect("callback frame") {
+            Envelope::Request(request) => request.id,
+            _ => return,
+        };
+        let acknowledgement = encode_frame(&Envelope::Success(SuccessResponse {
+            jsonrpc: JsonRpcVersion::V2,
+            id: request_id,
+            result: result_map([
+                ("callbackId", json!(callback_id)),
+                ("accepted", json!(true)),
+            ]),
+        }))
+        .expect("callback acknowledgement");
+        assert_eq!(
+            connection.dispatch(&acknowledgement),
+            DispatchBatch::empty()
+        );
+
+        let response = connection.dispatch(&request(
+            4,
+            "callback/respond",
+            json!({
+                "sessionId": "session-1",
+                "callbackId": "callback-1",
+                "output": {
+                    "type": "user_input",
+                    "result": {"answers": [], "cancelled": true}
+                }
+            }),
+        ));
+        assert_eq!(
+            response.deferred,
+            vec![DeferredWork::ResolveCallback {
+                session_id: "session-1".to_owned(),
+                turn_id: "turn-1".to_owned(),
+                callback_id: "callback-1".to_owned(),
+                accepted: true,
+                value: Some(
+                    json!({
+                        "type": "user_input",
+                        "result": {"answers": [], "cancelled": true}
+                    })
+                    .to_string()
+                ),
+            }]
+        );
+        let session = server.session("session-1").expect("session");
+        assert_eq!(session.status, SessionStatus::Running);
+        assert!(session.snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot.history.iter().any(|entry| {
+                matches!(
+                    entry,
+                    PublicHistoryEntry::Callback {
+                        metadata:
+                            PublicEntryMetadata {
+                                generation_status: PublicEntryGenerationStatus::Completed,
+                                ..
+                            },
+                        state: PublicCallbackState::Answered { output },
+                        ..
+                    } if output.pointer("/result/cancelled").and_then(Value::as_bool)
+                        == Some(true)
+                )
+            })
+        }));
+    }
+
+    #[test]
+    fn approval_denial_is_answered_and_only_cancel_turn_interrupts() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+
+        connection
+            .request_callback(
+                "session-1",
+                "turn-1",
+                EngineCallbackKind::Approval,
+                "approve?",
+            )
+            .expect("denial callback");
+        let denied = connection.dispatch(&request(
+            4,
+            "callback/respond",
+            json!({
+                "sessionId": "session-1",
+                "callbackId": "callback-1",
+                "output": {
+                    "type": "approval",
+                    "decision": {"type": "deny"}
+                }
+            }),
+        ));
+        assert_eq!(
+            denied.deferred,
+            vec![DeferredWork::ResolveCallback {
+                session_id: "session-1".to_owned(),
+                turn_id: "turn-1".to_owned(),
+                callback_id: "callback-1".to_owned(),
+                accepted: true,
+                value: Some(
+                    json!({
+                        "type": "approval",
+                        "decision": {"type": "deny"}
+                    })
+                    .to_string()
+                ),
+            }]
+        );
+        let denied_session = server.session("session-1").expect("denied session");
+        assert_eq!(denied_session.status, SessionStatus::Running);
+        assert!(denied_session.snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot.history.iter().any(|entry| {
+                matches!(
+                    entry,
+                    PublicHistoryEntry::Callback {
+                        callback_id,
+                        state: PublicCallbackState::Answered { output },
+                        ..
+                    } if callback_id == "callback-1"
+                        && output.pointer("/decision/type").and_then(Value::as_str)
+                            == Some("deny")
+                )
+            })
+        }));
+
+        connection
+            .request_callback(
+                "session-1",
+                "turn-1",
+                EngineCallbackKind::Approval,
+                "cancel?",
+            )
+            .expect("cancel callback");
+        let cancelled = connection.dispatch(&request(
+            5,
+            "callback/respond",
+            json!({
+                "sessionId": "session-1",
+                "callbackId": "callback-2",
+                "output": {
+                    "type": "approval",
+                    "decision": {"type": "cancel_turn"}
+                }
+            }),
+        ));
+        assert_eq!(
+            cancelled.deferred,
+            vec![
+                DeferredWork::ResolveCallback {
+                    session_id: "session-1".to_owned(),
+                    turn_id: "turn-1".to_owned(),
+                    callback_id: "callback-2".to_owned(),
+                    accepted: true,
+                    value: Some(
+                        json!({
+                            "type": "approval",
+                            "decision": {"type": "cancel_turn"}
+                        })
+                        .to_string()
+                    ),
+                },
+                DeferredWork::InterruptTurn {
+                    session_id: "session-1".to_owned(),
+                    turn_id: "turn-1".to_owned(),
+                },
+            ]
+        );
+        assert!(
+            server
+                .session("session-1")
+                .expect("session")
+                .snapshot
+                .as_ref()
+                .is_some_and(|snapshot| snapshot.history.iter().any(|entry| {
+                    matches!(
+                        entry,
+                        PublicHistoryEntry::Callback {
+                            callback_id,
+                            state: PublicCallbackState::Answered { .. },
+                            ..
+                        } if callback_id == "callback-2"
+                    )
+                }))
+        );
+    }
+
+    #[test]
+    fn answered_delivery_ignores_a_late_negative_acknowledgement() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+        let (_, first_delivery) = connection
+            .request_callback(
+                "session-1",
+                "turn-1",
+                EngineCallbackKind::Approval,
+                "first?",
+            )
+            .expect("first callback");
+        let first_request_id = match decode_frame(&first_delivery).expect("callback delivery") {
+            Envelope::Request(request) => request.id,
+            _ => return,
+        };
+        connection.dispatch(&request(
+            4,
+            "callback/respond",
+            json!({
+                "sessionId": "session-1",
+                "callbackId": "callback-1",
+                "output": {
+                    "type": "approval",
+                    "decision": {"type": "approve"}
+                }
+            }),
+        ));
+        connection
+            .request_callback(
+                "session-1",
+                "turn-1",
+                EngineCallbackKind::Approval,
+                "second?",
+            )
+            .expect("second callback");
+
+        let late_rejection = encode_frame(&Envelope::Success(SuccessResponse {
+            jsonrpc: JsonRpcVersion::V2,
+            id: first_request_id,
+            result: result_map([
+                ("callbackId", json!("callback-1")),
+                ("accepted", json!(false)),
+            ]),
+        }))
+        .expect("late rejection");
+        assert_eq!(connection.dispatch(&late_rejection), DispatchBatch::empty());
+        assert_eq!(connection.state(), ConnectionState::Ready);
+        assert_eq!(
+            server
+                .session("session-1")
+                .expect("session")
+                .pending_callback,
+            Some("callback-2".to_owned())
+        );
+    }
+
+    #[test]
+    fn callback_requests_and_answers_are_validated_before_mutation() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+        let before = server.session("session-1").expect("session");
+        for detail in [
+            json!({
+                "kind": "user_input",
+                "request": {"questions": [], "footerNote": null},
+                "relatedEntryId": null,
+            }),
+            json!({
+                "kind": "user_input",
+                "request": {
+                    "questions": [{
+                        "question": "continue?",
+                        "options": [
+                            {"label": "Yes"},
+                            {"label": "No"}
+                        ]
+                    }],
+                    "footerNote": "x".repeat(MAX_CALLBACK_REQUEST_BYTES),
+                },
+                "relatedEntryId": null,
+            }),
+        ] {
+            assert!(matches!(
+                connection.request_callback_with_detail(
+                    "session-1",
+                    "turn-1",
+                    EngineCallbackKind::UserInput,
+                    "continue?",
+                    detail,
+                ),
+                Err(ServerError::InvalidCallbackDetail(_))
+            ));
+            assert_eq!(
+                server.session("session-1").expect("unchanged session"),
+                before
+            );
+        }
+
+        connection
+            .request_callback(
+                "session-1",
+                "turn-1",
+                EngineCallbackKind::UserInput,
+                "continue?",
+            )
+            .expect("valid callback");
+        for (id, output) in [
+            (
+                4,
+                json!({
+                    "type": "user_input",
+                    "result": {
+                        "answers": [{
+                            "question": "wrong question",
+                            "answer": "Yes",
+                            "isOther": false
+                        }],
+                        "cancelled": false
+                    }
+                }),
+            ),
+            (
+                5,
+                json!({
+                    "type": "user_input",
+                    "result": {
+                        "answers": [{
+                            "question": "continue?",
+                            "answer": "Maybe",
+                            "isOther": false
+                        }],
+                        "cancelled": false
+                    }
+                }),
+            ),
+        ] {
+            let before_answer = server.session("session-1").expect("pending session");
+            let rejected = connection.dispatch(&request(
+                id,
+                "callback/respond",
+                json!({
+                    "sessionId": "session-1",
+                    "callbackId": "callback-1",
+                    "output": output,
+                }),
+            ));
+            assert!(matches!(
+                decode_frame(&rejected.outbound[0]).expect("invalid response"),
+                Envelope::Error(ErrorResponse {
+                    error: ProtocolError {
+                        code: ProtocolErrorCode::InvalidParams,
+                        ..
+                    },
+                    ..
+                })
+            ));
+            assert_eq!(
+                server.session("session-1").expect("unchanged answer"),
+                before_answer
+            );
+        }
+    }
+
+    #[test]
+    fn final_handoff_preserves_prior_turn_history_and_rebinds_callbacks() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "first"}]}),
+        ));
+        server
+            .complete_turn(
+                "session-1",
+                "turn-1",
+                ProjectionSnapshot {
+                    session_id: "session-1".to_owned(),
+                    turn_id: Some("turn-1".to_owned()),
+                    watermark: 1,
+                    lifecycle: LifecycleState::Completed,
+                    title: Some("Cumulative".to_owned()),
+                    history: vec![message_entry(
+                        "turn-1:entry-1",
+                        "session-1",
+                        "turn-1",
+                        1,
+                        "first",
+                    )],
+                },
+            )
+            .expect("first turn");
+        connection.dispatch(&request(
+            4,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "second"}]}),
+        ));
+        connection
+            .request_callback(
+                "session-1",
+                "turn-2",
+                EngineCallbackKind::Approval,
+                "approve?",
+            )
+            .expect("second-turn callback");
+        connection.dispatch(&request(
+            5,
+            "callback/respond",
+            json!({
+                "sessionId": "session-1",
+                "callbackId": "callback-1",
+                "output": {
+                    "type": "approval",
+                    "decision": {"type": "approve"}
+                }
+            }),
+        ));
+        server
+            .complete_turn(
+                "session-1",
+                "turn-2",
+                ProjectionSnapshot {
+                    session_id: "session-2".to_owned(),
+                    turn_id: Some("turn-2".to_owned()),
+                    watermark: 2,
+                    lifecycle: LifecycleState::Completed,
+                    title: None,
+                    history: vec![message_entry(
+                        "turn-2:entry-1",
+                        "session-2",
+                        "turn-2",
+                        2,
+                        "second",
+                    )],
+                },
+            )
+            .expect("second turn handoff");
+        let session = server.session("session-1").expect("old alias resolves");
+        assert_eq!(session.id, "session-2");
+        let snapshot = session.snapshot.expect("cumulative snapshot");
+        assert_eq!(snapshot.title.as_deref(), Some("Cumulative"));
+        assert_eq!(snapshot.history.len(), 3);
+        assert!(
+            snapshot
+                .history
+                .iter()
+                .all(|entry| { entry.metadata().session_id == "session-2" })
+        );
+        assert!(["turn-1:entry-1", "turn-2:entry-1"].into_iter().all(|id| {
+            snapshot
+                .history
+                .iter()
+                .any(|entry| entry.metadata().id == id)
+        }));
+        assert!(snapshot.history.iter().any(|entry| {
+            matches!(
+                entry,
+                PublicHistoryEntry::Callback {
+                    state: PublicCallbackState::Answered { .. },
+                    ..
+                }
+            )
+        }));
+    }
+
+    #[test]
+    fn malformed_callback_outputs_fail_closed_without_settling_state() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+        let (_, callback_request) = connection
+            .request_callback(
+                "session-1",
+                "turn-1",
+                EngineCallbackKind::Approval,
+                "approve?",
+            )
+            .expect("callback request");
+        let request_id = match decode_frame(&callback_request).expect("callback frame") {
+            Envelope::Request(request) => request.id,
+            _ => return,
+        };
+        let acknowledgement = encode_frame(&Envelope::Success(SuccessResponse {
+            jsonrpc: JsonRpcVersion::V2,
+            id: request_id,
+            result: result_map([
+                ("callbackId", json!("callback-1")),
+                ("accepted", json!(true)),
+            ]),
+        }))
+        .expect("callback acknowledgement");
+        assert_eq!(
+            connection.dispatch(&acknowledgement),
+            DispatchBatch::empty()
+        );
+
+        for (id, output) in [
+            (
+                4,
+                json!({"type": "approval", "decision": {"type": "future_choice"}}),
+            ),
+            (
+                5,
+                json!({
+                    "type": "user_input",
+                    "result": {"answers": [], "cancelled": "false"}
+                }),
+            ),
+            (
+                6,
+                json!({
+                    "type": "user_input",
+                    "result": {
+                        "answers": [{
+                            "question": "q",
+                            "answer": "a",
+                            "isOther": false,
+                            "unexpected": true
+                        }],
+                        "cancelled": false
+                    }
+                }),
+            ),
+        ] {
+            let before = server.session("session-1").expect("pending session");
+            let batch = connection.dispatch(&request(
+                id,
+                "callback/respond",
+                json!({
+                    "sessionId": "session-1",
+                    "callbackId": "callback-1",
+                    "output": output,
+                }),
+            ));
+            assert!(matches!(
+                decode_frame(&batch.outbound[0]).expect("invalid-params response"),
+                Envelope::Error(ErrorResponse {
+                    error: ProtocolError {
+                        code: ProtocolErrorCode::InvalidParams,
+                        ..
+                    },
+                    ..
+                })
+            ));
+            assert_eq!(
+                server.session("session-1").expect("unchanged session"),
+                before
+            );
+        }
     }
 
     #[test]
@@ -2849,6 +5573,16 @@ mod tests {
                 .expect("attached view")
                 .attachments,
             1
+        );
+        connection
+            .detach_session("session-1")
+            .expect("explicit detach succeeds");
+        assert_eq!(
+            server
+                .session("session-1")
+                .expect("explicitly detached view")
+                .attachments,
+            0
         );
         connection.close();
         assert_eq!(
@@ -3145,6 +5879,117 @@ tool_timeout_sec = 2
             }),
         ));
         assert!(untrusted.deferred.is_empty());
+    }
+
+    #[test]
+    fn session_start_hydrates_bounded_public_resume_history() {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        let working_directory = temporary.path().join("workspace");
+        let vibe_home = temporary.path().join("home");
+        let session_root = temporary.path().join("sessions");
+        fs::create_dir_all(&working_directory).expect("working directory");
+        let store = vibe_core::storage::SessionStore::new(&session_root);
+        let mut metadata = store
+            .create(
+                "durable-session",
+                &working_directory.to_string_lossy(),
+                None,
+                10,
+            )
+            .expect("durable session");
+        for (timestamp, message) in [
+            (
+                11,
+                ModelMessage::System {
+                    content: "private system".to_owned(),
+                },
+            ),
+            (
+                12,
+                ModelMessage::User {
+                    content: "older question".to_owned(),
+                },
+            ),
+            (
+                13,
+                ModelMessage::Assistant {
+                    content: "older answer".to_owned(),
+                    reasoning: None,
+                    reasoning_signature: None,
+                    reasoning_state: Vec::new(),
+                    tool_calls: Vec::new(),
+                },
+            ),
+            (
+                14,
+                ModelMessage::User {
+                    content: "latest question".to_owned(),
+                },
+            ),
+            (
+                15,
+                ModelMessage::Assistant {
+                    content: "latest answer".to_owned(),
+                    reasoning: None,
+                    reasoning_signature: None,
+                    reasoning_state: Vec::new(),
+                    tool_calls: Vec::new(),
+                },
+            ),
+        ] {
+            store
+                .append_message(&mut metadata, &message, timestamp)
+                .expect("message persists");
+        }
+        let release3 = Release3Service::new(
+            crate::release3::Release3Paths {
+                vibe_home,
+                working_directory,
+                session_root,
+            },
+            Table::new(),
+            false,
+        )
+        .expect("release-3 service");
+        let server = AppServer::with_release3_service(release3);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+
+        let started = connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({
+                "sessionId": "durable-session",
+                "resume": "durable-session",
+                "historyLimit": 2
+            }),
+        ));
+        let decoded = decode_frame(&started.outbound[0]).expect("start response");
+        assert!(matches!(decoded, Envelope::Success(_)));
+        let Envelope::Success(SuccessResponse { result, .. }) = decoded else {
+            return;
+        };
+        let entries = result["state"]["history"]["entries"]
+            .as_array()
+            .expect("public history");
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0]["content"][0]["text"], "latest question");
+        assert_eq!(entries[1]["content"][0]["text"], "latest answer");
+        assert!(
+            entries
+                .iter()
+                .all(|entry| entry["sessionId"] == "durable-session")
+        );
+        let session = server.session("durable-session").expect("runtime session");
+        assert_eq!(session.intent.resume.as_deref(), Some("durable-session"));
+        assert!(!session.intent.continue_session);
+        assert_eq!(
+            session
+                .snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.history.len()),
+            Some(2)
+        );
     }
 
     #[tokio::test]
@@ -3528,10 +6373,13 @@ tool_timeout_sec = 2
         server
             .complete_turn("session-1", "turn-1", reducer.state().clone())
             .expect("handoff completes");
-        assert!(matches!(
-            server.session("session-1"),
-            Err(ServerError::SessionNotFound(_))
-        ));
+        assert_eq!(
+            server
+                .session("session-1")
+                .expect("source alias resolves to target runtime")
+                .id,
+            "session-2"
+        );
         assert_eq!(
             server.session("session-2").expect("target runtime").id,
             "session-2"

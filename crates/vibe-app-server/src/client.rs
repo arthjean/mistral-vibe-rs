@@ -1,7 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -10,40 +11,63 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
 use vibe_core::engine::{
-    CancellationToken, CompletionProvider, ConversationEngine, EngineLimits, EventObserver,
-    NoopEventObserver, SessionStats, SessionTranscriptSink, ToolExecutor, ToolFuture,
+    CancellationToken, CompactionResult, Compactor, CompletionProvider, ConversationEngine,
+    EngineLimits, NoopEventObserver, SessionStats, SessionTranscriptSink, ToolExecutor, ToolFuture,
     ToolStreamSink, TurnControl, TurnControlHandle, TurnOutcome,
 };
 use vibe_core::events::{
-    ApplyOutcome, EventEnvelope, LifecycleState, ModelMessage, ProjectionReducer,
-    PublicContentBlock, PublicError, PublicHistoryEntry,
+    ApplyOutcome, CallbackKind as EngineCallbackKind, EventEnvelope, LifecycleState, ModelMessage,
+    ProjectionReducer,
 };
 use vibe_core::extensions::{
     AgentKind, AgentProfile, ChildContext, ChildLoggingPolicy, DelegationRequest, DiscoveryRoots,
     ExtensionSource, SubagentFuture, SubagentManager, SubagentRunner, discover_extensions,
 };
 use vibe_core::mcp::McpServerConfig;
+use vibe_core::policy::{
+    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PolicyError,
+};
 use vibe_core::provider::{
     HttpTransport, ImageInput, ProviderBackend, ProviderInput, ProviderStyle, RequestLimits,
     ToolDefinition, Usage,
 };
-use vibe_core::storage::SessionStore;
+use vibe_core::storage::{HydratedSession, SessionStore};
 use vibe_core::tools::{
-    OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolHandler,
-    ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
+    OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler,
+    ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
 };
 use vibe_protocol::{
-    Envelope, ErrorResponse, ProtocolError, RequestId, SuccessResponse, TransportKind, decode_frame,
+    CallbackKind as ClientCallbackKind, ClientCapabilities, ClientEntrypoint, ClientInfo, Envelope,
+    ErrorResponse, ProtocolError, RequestId, SuccessResponse, TerminalEmulator, TransportKind,
+    decode_frame,
 };
 
 use crate::server::{
-    AppServer, DeferredWork, ServerConnection, ServerError, SessionIntent, SessionView,
+    AppServer, ApprovalAgentFactory, DeferredWork, ServerConnection, ServerError, SessionIntent,
+    SessionToolFactory, SessionView,
 };
 
+pub use vibe_core::engine::EventObserver;
+pub use vibe_core::engine::TurnOutcome as PublicTurnOutcome;
 pub use vibe_core::engine::TurnStopReason as PublicTurnStopReason;
+pub use vibe_core::events::CallbackKind as PublicCallbackKind;
+pub use vibe_core::events::{
+    PublicCallbackState, PublicContentBlock, PublicEffectState, PublicError, PublicHistoryEntry,
+    PublicMessageRole,
+};
 
 pub type DriverFuture<'a> =
     Pin<Box<dyn Future<Output = Result<TurnOutcome, DriverError>> + Send + 'a>>;
+pub type CompactionDriverFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<SessionCompaction, DriverError>> + Send + 'a>>;
+
+#[derive(Debug, Clone)]
+pub struct SessionCompaction {
+    pub old_session_id: String,
+    pub new_session_id: String,
+    pub summary: String,
+    pub hydrated: HydratedSession,
+}
 
 pub trait TurnDriver: Send + Sync {
     fn run<'a>(&'a self, reservation: &'a TurnReservation) -> DriverFuture<'a>;
@@ -89,6 +113,14 @@ pub trait TurnDriver: Send + Sync {
     ) -> Result<(), DriverError> {
         Err(DriverError::UnsupportedControl("callback/respond"))
     }
+
+    fn compact<'a>(
+        &'a self,
+        _session_id: &'a str,
+        _extra_instructions: &'a str,
+    ) -> CompactionDriverFuture<'a> {
+        Box::pin(async { Err(DriverError::UnsupportedControl("session/compact/start")) })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -118,6 +150,12 @@ pub struct SessionOptions {
     #[serde(default)]
     pub max_price_micros: Option<u64>,
     #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default)]
+    pub thinking: bool,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
+    #[serde(default)]
     pub auto_approve: bool,
     #[serde(default)]
     pub resume: Option<String>,
@@ -138,6 +176,45 @@ pub struct TurnReservation {
     pub working_directory: String,
     pub intent: SessionIntent,
     pub tools: ToolRegistry,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScheduledTurn {
+    pub loop_id: String,
+    pub reservation: TurnReservation,
+    pub notice: PublicNotification,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnRequest {
+    pub prompt: String,
+    pub input: Vec<PublicContentBlock>,
+    #[serde(default)]
+    pub client_user_message_id: Option<String>,
+    #[serde(default)]
+    pub auto_title: Option<String>,
+    #[serde(default)]
+    pub user_display_content: Option<Value>,
+    #[serde(default)]
+    pub mention_stats: Option<Value>,
+}
+
+impl TurnRequest {
+    #[must_use]
+    pub fn text(prompt: impl Into<String>) -> Self {
+        let prompt = prompt.into();
+        Self {
+            input: vec![PublicContentBlock::Text {
+                text: prompt.clone(),
+            }],
+            prompt,
+            client_user_message_id: None,
+            auto_title: None,
+            user_display_content: None,
+            mention_stats: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -163,6 +240,18 @@ pub struct ProgrammaticTurn {
     pub stop_reason: PublicTurnStopReason,
     #[serde(default)]
     pub teleport_events: Vec<ProgrammaticTeleportEvent>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PublicNotification {
+    pub method: String,
+    pub params: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PublicDispatch {
+    pub result: BTreeMap<String, Value>,
+    pub notifications: Vec<PublicNotification>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -200,28 +289,146 @@ pub enum ProgrammaticTeleportEvent {
     },
 }
 
+fn teleport_events(
+    notifications: &[PublicNotification],
+) -> Result<Vec<ProgrammaticTeleportEvent>, ClientError> {
+    notifications
+        .iter()
+        .filter(|notification| notification.method == "vibeCode/teleport/event")
+        .map(|notification| {
+            let event = notification.params.get("event").ok_or_else(|| {
+                ClientError::InvalidResponse("Teleport notification omitted event".to_owned())
+            })?;
+            let operation_id = event
+                .get("operationId")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    ClientError::InvalidResponse(
+                        "Teleport notification omitted operationId".to_owned(),
+                    )
+                })?
+                .to_owned();
+            match event.get("kind").and_then(Value::as_str) {
+                Some("summarizing_context") => {
+                    Ok(ProgrammaticTeleportEvent::SummarizingContext { operation_id })
+                }
+                Some("checking_git") => Ok(ProgrammaticTeleportEvent::CheckingGit { operation_id }),
+                Some("push_required") => Ok(ProgrammaticTeleportEvent::PushRequired {
+                    operation_id,
+                    unpushed_count: event
+                        .get("unpushedCount")
+                        .and_then(Value::as_u64)
+                        .unwrap_or_default(),
+                    branch_not_pushed: event
+                        .get("branchNotPushed")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                }),
+                Some("pushing") => Ok(ProgrammaticTeleportEvent::Pushing { operation_id }),
+                Some("starting_workflow") => {
+                    Ok(ProgrammaticTeleportEvent::StartingWorkflow { operation_id })
+                }
+                Some("complete") => Ok(ProgrammaticTeleportEvent::Complete {
+                    operation_id,
+                    url: event
+                        .get("url")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| {
+                            ClientError::InvalidResponse(
+                                "completed Teleport notification omitted URL".to_owned(),
+                            )
+                        })?
+                        .to_owned(),
+                }),
+                Some("failed" | "cancelled") => {
+                    let error = event.get("error").cloned().unwrap_or_else(|| {
+                        json!({
+                            "message": "Teleport was cancelled",
+                            "code": "teleport_cancelled",
+                            "details": Value::Null,
+                        })
+                    });
+                    Ok(ProgrammaticTeleportEvent::Failed {
+                        operation_id,
+                        error: serde_json::from_value(error).map_err(ClientError::Json)?,
+                    })
+                }
+                Some(kind) => Err(ClientError::InvalidResponse(format!(
+                    "unknown Teleport event kind `{kind}`"
+                ))),
+                None => Err(ClientError::InvalidResponse(
+                    "Teleport notification omitted kind".to_owned(),
+                )),
+            }
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ProgrammaticUpdate {
     HistoryEntry {
         event_id: u64,
         emitted_at: u64,
-        entry: PublicHistoryEntry,
+        entry: Box<PublicHistoryEntry>,
+    },
+    Watermark {
+        event_id: u64,
+        emitted_at: u64,
     },
 }
+
+const MAX_PROGRAMMATIC_UPDATES: usize = 1_024;
+const MAX_INTERACTIVE_CALLBACKS: usize = 8;
+const MAX_INTERACTIVE_QUESTIONS: usize = 16;
+const MAX_INTERACTIVE_OPTIONS_PER_QUESTION: usize = 32;
+const MAX_INTERACTIVE_REQUEST_BYTES: usize = 64 * 1_024;
+
+static NEXT_CLOUD_OPERATION: AtomicU64 = AtomicU64::new(1);
 
 pub fn programmatic_update_channel(
     session_id: impl Into<String>,
 ) -> (
     Arc<dyn EventObserver>,
-    tokio::sync::mpsc::UnboundedReceiver<ProgrammaticUpdate>,
+    tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
 ) {
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, receiver) = tokio::sync::mpsc::channel(MAX_PROGRAMMATIC_UPDATES);
     (
         Arc::new(ProgrammaticEventObserver {
             reducer: Mutex::new(ProjectionReducer::new(session_id)),
-            emitted: Mutex::new(BTreeSet::new()),
+            emitted: Mutex::new(BTreeMap::new()),
             sender,
+            completed_only: true,
+            next_update_id: AtomicU64::new(1),
+        }),
+        receiver,
+    )
+}
+
+pub fn interactive_update_channel(
+    session_id: impl Into<String>,
+) -> (
+    Arc<dyn EventObserver>,
+    tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
+) {
+    interactive_update_channel_after(session_id, 0)
+}
+
+pub fn interactive_update_channel_after(
+    session_id: impl Into<String>,
+    event_id: u64,
+) -> (
+    Arc<dyn EventObserver>,
+    tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
+) {
+    let (sender, receiver) = tokio::sync::mpsc::channel(MAX_PROGRAMMATIC_UPDATES);
+    (
+        Arc::new(ProgrammaticEventObserver {
+            reducer: Mutex::new(ProjectionReducer::new(session_id)),
+            emitted: Mutex::new(BTreeMap::new()),
+            sender,
+            completed_only: false,
+            next_update_id: AtomicU64::new(event_id.saturating_add(1)),
         }),
         receiver,
     )
@@ -232,14 +439,16 @@ pub fn programmatic_update_channel_for_turn(
     turn_id: impl Into<String>,
 ) -> (
     Arc<dyn EventObserver>,
-    tokio::sync::mpsc::UnboundedReceiver<ProgrammaticUpdate>,
+    tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
 ) {
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, receiver) = tokio::sync::mpsc::channel(MAX_PROGRAMMATIC_UPDATES);
     (
         Arc::new(ProgrammaticEventObserver {
             reducer: Mutex::new(ProjectionReducer::for_turn(session_id, turn_id)),
-            emitted: Mutex::new(BTreeSet::new()),
+            emitted: Mutex::new(BTreeMap::new()),
             sender,
+            completed_only: true,
+            next_update_id: AtomicU64::new(1),
         }),
         receiver,
     )
@@ -247,8 +456,10 @@ pub fn programmatic_update_channel_for_turn(
 
 struct ProgrammaticEventObserver {
     reducer: Mutex<ProjectionReducer>,
-    emitted: Mutex<BTreeSet<String>>,
-    sender: tokio::sync::mpsc::UnboundedSender<ProgrammaticUpdate>,
+    emitted: Mutex<BTreeMap<String, Value>>,
+    sender: tokio::sync::mpsc::Sender<ProgrammaticUpdate>,
+    completed_only: bool,
+    next_update_id: AtomicU64,
 }
 
 impl EventObserver for ProgrammaticEventObserver {
@@ -271,15 +482,105 @@ impl EventObserver for ProgrammaticEventObserver {
             .lock()
             .map_err(|_| "programmatic emission lock is poisoned".to_owned())?;
         for entry in &reducer.state().history {
-            if entry.is_completed() && emitted.insert(entry.metadata().id.clone()) {
-                self.sender
-                    .send(ProgrammaticUpdate::HistoryEntry {
-                        event_id: event.event_id,
-                        emitted_at: event.emitted_at,
-                        entry: entry.clone(),
-                    })
-                    .map_err(|_| "programmatic update receiver is closed".to_owned())?;
+            if self.completed_only && !entry.is_completed() {
+                continue;
             }
+            let encoded = serde_json::to_value(entry).map_err(|error| error.to_string())?;
+            let changed = emitted
+                .get(&entry.metadata().id)
+                .is_none_or(|previous| previous != &encoded);
+            if changed {
+                emitted.insert(entry.metadata().id.clone(), encoded);
+                let event_id = self.next_update_id.fetch_add(1, Ordering::Relaxed);
+                self.sender
+                    .try_send(ProgrammaticUpdate::HistoryEntry {
+                        event_id,
+                        emitted_at: event.emitted_at,
+                        entry: Box::new(entry.clone()),
+                    })
+                    .map_err(|error| {
+                        format!("programmatic update queue is unavailable: {error}")
+                    })?;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn public_history_entry_identity(entry: &PublicHistoryEntry) -> String {
+    let metadata = entry.metadata();
+    format!(
+        "{}:{}",
+        metadata.turn_id.as_deref().unwrap_or("session"),
+        metadata.id
+    )
+}
+
+struct ServerProjectionObserver {
+    server: AppServer,
+    session_id: String,
+    turn_id: String,
+    reducer: Mutex<ProjectionReducer>,
+    emitted: Mutex<BTreeMap<String, Value>>,
+    sender: tokio::sync::mpsc::Sender<ProgrammaticUpdate>,
+}
+
+impl EventObserver for ServerProjectionObserver {
+    fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
+        let (snapshot, changed) = {
+            let mut reducer = self
+                .reducer
+                .lock()
+                .map_err(|_| "interactive projection lock is poisoned".to_owned())?;
+            if reducer.apply(event).map_err(|error| error.to_string())? == ApplyOutcome::Duplicate {
+                return Ok(());
+            }
+            let mut emitted = self
+                .emitted
+                .lock()
+                .map_err(|_| "interactive emission lock is poisoned".to_owned())?;
+            let mut changed = Vec::new();
+            for entry in &reducer.state().history {
+                let encoded = serde_json::to_value(entry).map_err(|error| error.to_string())?;
+                let identity = public_history_entry_identity(entry);
+                if emitted
+                    .get(&identity)
+                    .is_none_or(|previous| previous != &encoded)
+                {
+                    emitted.insert(identity, encoded);
+                    changed.push(entry.clone());
+                }
+            }
+            (reducer.state().clone(), changed)
+        };
+
+        let mut event_id = self
+            .server
+            .apply_live_projection(&self.session_id, &self.turn_id, snapshot.clone())
+            .map_err(|error| error.to_string())?;
+        if changed.is_empty() {
+            self.sender
+                .try_send(ProgrammaticUpdate::Watermark {
+                    event_id,
+                    emitted_at: event.emitted_at,
+                })
+                .map_err(|error| format!("interactive update queue is unavailable: {error}"))?;
+            return Ok(());
+        }
+        for (index, entry) in changed.into_iter().enumerate() {
+            if index > 0 {
+                event_id = self
+                    .server
+                    .apply_live_projection(&self.session_id, &self.turn_id, snapshot.clone())
+                    .map_err(|error| error.to_string())?;
+            }
+            self.sender
+                .try_send(ProgrammaticUpdate::HistoryEntry {
+                    event_id,
+                    emitted_at: event.emitted_at,
+                    entry: Box::new(entry),
+                })
+                .map_err(|error| format!("interactive update queue is unavailable: {error}"))?;
         }
         Ok(())
     }
@@ -294,14 +595,35 @@ pub struct InProcessClient {
 
 impl InProcessClient {
     pub fn connect() -> Result<Self, ClientError> {
-        let server = AppServer::default();
+        Self::connect_with_server(AppServer::default())
+    }
+
+    pub fn connect_with_server(server: AppServer) -> Result<Self, ClientError> {
+        Self::connect_with_server_and_client(
+            server,
+            ClientInfo {
+                name: "vibe-programmatic".to_owned(),
+                version: env!("CARGO_PKG_VERSION").to_owned(),
+                title: None,
+                entrypoint: ClientEntrypoint::Programmatic,
+                terminal_emulator: TerminalEmulator::Unknown,
+            },
+            ClientCapabilities::default(),
+        )
+    }
+
+    pub fn connect_with_server_and_client(
+        server: AppServer,
+        client_info: ClientInfo,
+        capabilities: ClientCapabilities,
+    ) -> Result<Self, ClientError> {
         let mut client = Self {
             connection: server.connect(TransportKind::InProcess),
             server,
             next_request: 1,
             pending_mcp: BTreeMap::new(),
         };
-        client.initialize()?;
+        client.initialize(client_info, capabilities)?;
         Ok(client)
     }
 
@@ -364,13 +686,25 @@ impl InProcessClient {
         session_id: &str,
         prompt: &str,
     ) -> Result<TurnReservation, ClientError> {
+        self.reserve_turn_request(session_id, &TurnRequest::text(prompt))
+    }
+
+    pub fn reserve_turn_request(
+        &mut self,
+        session_id: &str,
+        turn: &TurnRequest,
+    ) -> Result<TurnReservation, ClientError> {
         let request_id = self.take_request_id();
         let request = request_bytes(
             request_id.clone(),
             "turn/start",
             json!({
                 "sessionId": session_id,
-                "input": [{"type": "text", "text": prompt}],
+                "input": turn.input,
+                "clientUserMessageId": turn.client_user_message_id,
+                "autoTitle": turn.auto_title,
+                "userDisplayContent": turn.user_display_content,
+                "mentionStats": turn.mention_stats,
             }),
         )?;
         let batch = self.connection.dispatch(&request);
@@ -391,7 +725,7 @@ impl InProcessClient {
                 },
             ] if deferred_session == session_id
                 && deferred_turn == &turn_id
-                && deferred_prompt == prompt => {}
+                && deferred_prompt == &turn.prompt => {}
             _ => {
                 return Err(ClientError::InvalidResponse(
                     "turn reservation omitted deferred work".to_owned(),
@@ -403,18 +737,63 @@ impl InProcessClient {
         Ok(TurnReservation {
             session_id: session_id.to_owned(),
             turn_id,
-            prompt: prompt.to_owned(),
-            input: vec![PublicContentBlock::Text {
-                text: prompt.to_owned(),
-            }],
-            client_user_message_id: None,
-            auto_title: None,
-            user_display_content: None,
-            mention_stats: None,
+            prompt: turn.prompt.clone(),
+            input: turn.input.clone(),
+            client_user_message_id: turn.client_user_message_id.clone(),
+            auto_title: turn.auto_title.clone(),
+            user_display_content: turn.user_display_content.clone(),
+            mention_stats: turn.mention_stats.clone(),
             working_directory: session.working_directory,
             intent: session.intent,
             tools,
         })
+    }
+
+    fn reserve_due_loop(
+        &mut self,
+        session_id: &str,
+        now_seconds: u64,
+    ) -> Result<Option<ScheduledTurn>, ClientError> {
+        let Some(scheduled) = self.server.reserve_due_loop(session_id, now_seconds)? else {
+            return Ok(None);
+        };
+        let DeferredWork::RunTurn {
+            session_id,
+            turn_id,
+            prompt,
+            input,
+            client_user_message_id,
+            auto_title,
+            user_display_content,
+            mention_stats,
+        } = scheduled.work
+        else {
+            return Err(ClientError::InvalidResponse(
+                "scheduled loop did not reserve a turn".to_owned(),
+            ));
+        };
+        let session = self.server.session(&session_id)?;
+        let tools = self.server.tool_registry(&session_id)?;
+        Ok(Some(ScheduledTurn {
+            loop_id: scheduled.fire.loop_id,
+            reservation: TurnReservation {
+                session_id,
+                turn_id,
+                prompt,
+                input,
+                client_user_message_id,
+                auto_title,
+                user_display_content,
+                mention_stats,
+                working_directory: session.working_directory,
+                intent: session.intent,
+                tools,
+            },
+            notice: PublicNotification {
+                method: scheduled.fire.notice.method,
+                params: scheduled.fire.notice.params,
+            },
+        }))
     }
 
     pub fn finish_turn(
@@ -583,21 +962,172 @@ impl InProcessClient {
         Ok(())
     }
 
-    fn initialize(&mut self) -> Result<(), ClientError> {
+    pub fn public_call(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<BTreeMap<String, Value>, ClientError> {
+        self.call(method, params)
+    }
+
+    pub fn public_call_with_notifications(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<PublicDispatch, ClientError> {
+        let request_id = self.take_request_id();
+        let request = request_bytes(request_id.clone(), method, params)?;
+        let batch = self.connection.dispatch(&request);
+        if batch.close_after_flush || !batch.deferred.is_empty() {
+            return Err(ClientError::InvalidResponse(format!(
+                "unexpected dispatch behavior for `{method}`"
+            )));
+        }
+        decode_public_dispatch(batch.outbound, &request_id, method)
+    }
+
+    pub async fn public_call_async(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<PublicDispatch, ClientError> {
+        let request_id = self.take_request_id();
+        let request = request_bytes(request_id.clone(), method, params)?;
+        let batch = self.connection.dispatch(&request);
+        if batch.close_after_flush {
+            return Err(ClientError::InvalidResponse(format!(
+                "`{method}` unexpectedly closed the connection"
+            )));
+        }
+        let mut outbound = batch.outbound;
+        for work in batch.deferred {
+            match work {
+                DeferredWork::ResourceRequest {
+                    request_id,
+                    session_id,
+                    method,
+                    params,
+                } => {
+                    let completed = self
+                        .server
+                        .execute_resource_request(request_id, session_id, method, params)
+                        .await;
+                    if completed.close_after_flush || !completed.deferred.is_empty() {
+                        return Err(ClientError::InvalidResponse(
+                            "resource request returned nested work".to_owned(),
+                        ));
+                    }
+                    outbound.extend(completed.outbound);
+                }
+                DeferredWork::CloudRequest {
+                    request_id,
+                    method,
+                    params,
+                } => {
+                    let completed = self
+                        .server
+                        .execute_cloud_request(request_id, method, params)
+                        .await;
+                    if completed.close_after_flush || !completed.deferred.is_empty() {
+                        return Err(ClientError::InvalidResponse(
+                            "cloud request returned nested work".to_owned(),
+                        ));
+                    }
+                    outbound.extend(completed.outbound);
+                }
+                _ => {
+                    return Err(ClientError::InvalidResponse(format!(
+                        "unsupported deferred work returned by `{method}`"
+                    )));
+                }
+            }
+        }
+        decode_public_dispatch(outbound, &request_id, method)
+    }
+
+    fn reserve_compaction(
+        &mut self,
+        session_id: &str,
+        extra_instructions: &str,
+    ) -> Result<(RequestId, String), ClientError> {
+        let request_id = self.take_request_id();
+        let request = request_bytes(
+            request_id.clone(),
+            "session/compact/start",
+            json!({
+                "sessionId": session_id,
+                "extraInstructions": extra_instructions,
+            }),
+        )?;
+        let batch = self.connection.dispatch(&request);
+        if batch.close_after_flush || !batch.outbound.is_empty() {
+            return Err(ClientError::InvalidResponse(
+                "compaction was not deferred".to_owned(),
+            ));
+        }
+        match batch.deferred.as_slice() {
+            [
+                DeferredWork::CompactSession {
+                    request_id: deferred_id,
+                    session_id,
+                    ..
+                },
+            ] if deferred_id == &request_id => Ok((request_id, session_id.clone())),
+            _ => Err(ClientError::InvalidResponse(
+                "compaction omitted deferred work".to_owned(),
+            )),
+        }
+    }
+
+    fn finish_compaction(
+        &mut self,
+        request_id: RequestId,
+        session_id: &str,
+        result: Result<SessionCompaction, DriverError>,
+    ) -> Result<BTreeMap<String, Value>, ClientError> {
+        let batch = match result {
+            Ok(compaction) => self.server.complete_manual_compaction(
+                request_id.clone(),
+                session_id,
+                &compaction.new_session_id,
+                &compaction.summary,
+                compaction.hydrated,
+            ),
+            Err(error) => self.server.fail_manual_compaction(
+                request_id.clone(),
+                session_id,
+                &error.to_string(),
+            ),
+        };
+        let response = batch
+            .outbound
+            .into_iter()
+            .find(|bytes| {
+                decode_frame(bytes).is_ok_and(|envelope| {
+                    matches!(
+                        envelope,
+                        Envelope::Success(SuccessResponse { ref id, .. })
+                            | Envelope::Error(ErrorResponse { ref id, .. })
+                            if id == &request_id
+                    )
+                })
+            })
+            .ok_or_else(|| {
+                ClientError::InvalidResponse("compaction response is missing".to_owned())
+            })?;
+        response_result(response, &request_id)
+    }
+
+    fn initialize(
+        &mut self,
+        client_info: ClientInfo,
+        capabilities: ClientCapabilities,
+    ) -> Result<(), ClientError> {
         self.call(
             "initialize",
             json!({
-                "clientInfo": {
-                    "name": "vibe-programmatic",
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "entrypoint": "programmatic",
-                    "terminalEmulator": "unknown"
-                },
-                "capabilities": {
-                    "callbackKinds": ["approval", "user_input"],
-                    "clientTools": [],
-                    "disabledNotifications": []
-                }
+                "clientInfo": client_info,
+                "capabilities": capabilities,
             }),
         )?;
         let initialized = serde_json::to_vec(&json!({
@@ -638,9 +1168,153 @@ impl InProcessClient {
     }
 }
 
+enum InteractiveCallbackRequest {
+    Approval {
+        session_id: String,
+        request: ApprovalRequest,
+        response: tokio::sync::oneshot::Sender<ApprovalDecision>,
+    },
+    Tool {
+        session_id: String,
+        title: String,
+        detail: Value,
+        response: tokio::sync::oneshot::Sender<Result<Value, String>>,
+    },
+}
+
+enum InteractiveCallbackResponse {
+    Approval(tokio::sync::oneshot::Sender<ApprovalDecision>),
+    Tool(tokio::sync::oneshot::Sender<Result<Value, String>>),
+}
+
+struct PendingInteractiveCallback {
+    session_id: String,
+    turn_id: String,
+    response: InteractiveCallbackResponse,
+}
+
+struct InteractiveApprovalFactory {
+    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+}
+
+impl ApprovalAgentFactory for InteractiveApprovalFactory {
+    fn for_session(&self, session_id: &str, auto_approve: bool) -> Arc<dyn ApprovalAgent> {
+        if auto_approve {
+            Arc::new(ApproveInteractiveRequest)
+        } else {
+            Arc::new(InteractiveApprovalAgent {
+                session_id: session_id.to_owned(),
+                sender: self.sender.clone(),
+            })
+        }
+    }
+}
+
+struct ApproveInteractiveRequest;
+
+impl ApprovalAgent for ApproveInteractiveRequest {
+    fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
+        Box::pin(async { Ok(ApprovalDecision::ApproveOnce) })
+    }
+}
+
+struct InteractiveApprovalAgent {
+    session_id: String,
+    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+}
+
+impl ApprovalAgent for InteractiveApprovalAgent {
+    fn request<'a>(&'a self, request: ApprovalRequest) -> ApprovalFuture<'a> {
+        Box::pin(async move {
+            let (response, receiver) = tokio::sync::oneshot::channel();
+            self.sender
+                .send(InteractiveCallbackRequest::Approval {
+                    session_id: self.session_id.clone(),
+                    request,
+                    response,
+                })
+                .await
+                .map_err(|_| PolicyError::TurnCancelled)?;
+            receiver.await.map_err(|_| PolicyError::TurnCancelled)
+        })
+    }
+}
+
+struct InteractiveSessionToolFactory {
+    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+}
+
+impl SessionToolFactory for InteractiveSessionToolFactory {
+    fn register(&self, session_id: &str, tools: &ToolRegistry) -> Result<(), String> {
+        let question_sender = self.sender.clone();
+        let question_session_id = session_id.to_owned();
+        let question_handler: Arc<dyn ToolHandler> = Arc::new(
+            move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
+                let sender = question_sender.clone();
+                let session_id = question_session_id.clone();
+                let arguments = invocation.arguments.clone();
+                Box::pin(
+                    async move { run_interactive_questions(sender, session_id, arguments).await },
+                )
+            },
+        );
+        tools
+            .register(interactive_question_spec(), question_handler)
+            .map_err(|error| error.to_string())?;
+
+        let plan_sender = self.sender.clone();
+        let plan_session_id = session_id.to_owned();
+        let plan_handler: Arc<dyn ToolHandler> = Arc::new(
+            move |_invocation: &ToolInvocation,
+                  _output: ToolOutputSink|
+                  -> OwnedToolHandlerFuture {
+                let sender = plan_sender.clone();
+                let session_id = plan_session_id.clone();
+                Box::pin(async move { run_interactive_plan_review(sender, session_id).await })
+            },
+        );
+        tools
+            .register(interactive_plan_review_spec(), plan_handler)
+            .map(drop)
+            .map_err(|error| error.to_string())
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InteractiveQuestionRequest {
+    questions: Vec<InteractiveQuestion>,
+    #[serde(default)]
+    footer_note: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InteractiveQuestion {
+    question: String,
+    #[serde(default)]
+    header: String,
+    options: Vec<InteractiveQuestionOption>,
+    #[serde(default)]
+    multi_select: bool,
+    #[serde(default)]
+    hide_other: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InteractiveQuestionOption {
+    label: String,
+    #[serde(default)]
+    description: String,
+}
+
 pub struct HeadlessService<D> {
     client: InProcessClient,
     driver: Arc<D>,
+    interactive_callbacks: Option<tokio::sync::mpsc::Receiver<InteractiveCallbackRequest>>,
+    interactive_backlog: VecDeque<InteractiveCallbackRequest>,
+    pending_interactive_callbacks: HashMap<String, PendingInteractiveCallback>,
 }
 
 impl<D> HeadlessService<D>
@@ -648,14 +1322,593 @@ where
     D: TurnDriver,
 {
     pub fn new(driver: D) -> Result<Self, ClientError> {
+        Self::new_shared(Arc::new(driver))
+    }
+
+    pub fn new_shared(driver: Arc<D>) -> Result<Self, ClientError> {
+        Self::new_shared_with_server(driver, AppServer::default())
+    }
+
+    pub fn new_shared_with_server(driver: Arc<D>, server: AppServer) -> Result<Self, ClientError> {
+        Self::new_shared_with_server_and_client(
+            driver,
+            server,
+            ClientInfo {
+                name: "vibe-programmatic".to_owned(),
+                version: env!("CARGO_PKG_VERSION").to_owned(),
+                title: None,
+                entrypoint: ClientEntrypoint::Programmatic,
+                terminal_emulator: TerminalEmulator::Unknown,
+            },
+            ClientCapabilities::default(),
+        )
+    }
+
+    pub fn new_shared_with_server_and_client(
+        driver: Arc<D>,
+        server: AppServer,
+        client_info: ClientInfo,
+        capabilities: ClientCapabilities,
+    ) -> Result<Self, ClientError> {
         Ok(Self {
-            client: InProcessClient::connect()?,
-            driver: Arc::new(driver),
+            client: InProcessClient::connect_with_server_and_client(
+                server,
+                client_info,
+                capabilities,
+            )?,
+            driver,
+            interactive_callbacks: None,
+            interactive_backlog: VecDeque::new(),
+            pending_interactive_callbacks: HashMap::new(),
+        })
+    }
+
+    pub fn new_interactive_shared_with_server(
+        driver: Arc<D>,
+        server: AppServer,
+    ) -> Result<Self, ClientError> {
+        Self::new_interactive_shared_with_server_and_client(
+            driver,
+            server,
+            ClientInfo {
+                name: "vibe-cli".to_owned(),
+                version: env!("CARGO_PKG_VERSION").to_owned(),
+                title: Some("Mistral Vibe".to_owned()),
+                entrypoint: ClientEntrypoint::Cli,
+                terminal_emulator: TerminalEmulator::Unknown,
+            },
+            ClientCapabilities {
+                callback_kinds: vec![ClientCallbackKind::Approval, ClientCallbackKind::UserInput],
+                ..ClientCapabilities::default()
+            },
+        )
+    }
+
+    pub fn new_interactive_shared_with_server_and_client(
+        driver: Arc<D>,
+        server: AppServer,
+        client_info: ClientInfo,
+        mut capabilities: ClientCapabilities,
+    ) -> Result<Self, ClientError> {
+        if !capabilities
+            .callback_kinds
+            .contains(&ClientCallbackKind::Approval)
+        {
+            capabilities
+                .callback_kinds
+                .push(ClientCallbackKind::Approval);
+        }
+        let (sender, receiver) =
+            tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(MAX_INTERACTIVE_CALLBACKS);
+        let server = server.using_surface_extension(
+            Arc::new(InteractiveApprovalFactory {
+                sender: sender.clone(),
+            }),
+            Arc::new(InteractiveSessionToolFactory { sender }),
+        );
+        Ok(Self {
+            client: InProcessClient::connect_with_server_and_client(
+                server,
+                client_info,
+                capabilities,
+            )?,
+            driver,
+            interactive_callbacks: Some(receiver),
+            interactive_backlog: VecDeque::new(),
+            pending_interactive_callbacks: HashMap::new(),
         })
     }
 
     pub fn start_session(&mut self, options: &SessionOptions) -> Result<String, ClientError> {
         self.client.start_session(options)
+    }
+
+    fn fail_interactive_callbacks(
+        &mut self,
+        session_id: Option<&str>,
+        turn_id: Option<&str>,
+        message: &str,
+    ) {
+        let matches = |candidate_session: &str, candidate_turn: Option<&str>| {
+            session_id.is_none_or(|expected| expected == candidate_session)
+                && turn_id.is_none_or(|expected| candidate_turn == Some(expected))
+        };
+        let matches_queued = |candidate_session: &str| {
+            session_id.is_none_or(|expected| expected == candidate_session)
+        };
+        let pending_ids = self
+            .pending_interactive_callbacks
+            .iter()
+            .filter(|(_, pending)| matches(&pending.session_id, Some(pending.turn_id.as_str())))
+            .map(|(callback_id, _)| callback_id.clone())
+            .collect::<Vec<_>>();
+        for callback_id in pending_ids {
+            fail_pending_interactive_callback(
+                self.pending_interactive_callbacks.remove(&callback_id),
+                message,
+            );
+        }
+
+        let mut retained = VecDeque::new();
+        while let Some(request) = self.interactive_backlog.pop_front() {
+            if matches_queued(interactive_request_session_id(&request)) {
+                reject_interactive_request(request, message);
+            } else {
+                retain_interactive_request(&mut retained, request);
+            }
+        }
+        if let Some(receiver) = self.interactive_callbacks.as_mut() {
+            while let Ok(request) = receiver.try_recv() {
+                if matches_queued(interactive_request_session_id(&request)) {
+                    reject_interactive_request(request, message);
+                } else {
+                    retain_interactive_request(&mut retained, request);
+                }
+            }
+        }
+        self.interactive_backlog = retained;
+    }
+
+    #[must_use]
+    pub fn driver(&self) -> Arc<D> {
+        self.driver.clone()
+    }
+
+    pub fn session(&mut self, session_id: &str) -> Result<SessionView, ClientError> {
+        self.client.session(session_id)
+    }
+
+    pub fn public_call(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<BTreeMap<String, Value>, ClientError> {
+        self.client.public_call(method, params)
+    }
+
+    pub fn public_call_with_notifications(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<PublicDispatch, ClientError> {
+        self.client.public_call_with_notifications(method, params)
+    }
+
+    pub async fn public_call_async(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<PublicDispatch, ClientError> {
+        self.client.public_call_async(method, params).await
+    }
+
+    pub fn interactive_update_channel_after(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        _event_id: u64,
+    ) -> Result<
+        (
+            Arc<dyn EventObserver>,
+            tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
+        ),
+        ClientError,
+    > {
+        let seed = self
+            .client
+            .server
+            .live_projection_seed(session_id, turn_id)?;
+        let mut reducer = ProjectionReducer::for_turn(session_id, turn_id);
+        reducer
+            .restore(seed.clone(), 0)
+            .map_err(|error| ClientError::InvalidResponse(error.to_string()))?;
+        let emitted = seed
+            .history
+            .iter()
+            .map(|entry| {
+                serde_json::to_value(entry)
+                    .map(|encoded| (public_history_entry_identity(entry), encoded))
+                    .map_err(ClientError::Json)
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        let (sender, receiver) =
+            tokio::sync::mpsc::channel::<ProgrammaticUpdate>(MAX_PROGRAMMATIC_UPDATES);
+        Ok((
+            Arc::new(ServerProjectionObserver {
+                server: self.client.server.clone(),
+                session_id: session_id.to_owned(),
+                turn_id: turn_id.to_owned(),
+                reducer: Mutex::new(reducer),
+                emitted: Mutex::new(emitted),
+                sender,
+            }),
+            receiver,
+        ))
+    }
+
+    pub fn request_callback_with_detail(
+        &mut self,
+        session_id: &str,
+        turn_id: &str,
+        kind: EngineCallbackKind,
+        title: impl Into<String>,
+        detail: Value,
+    ) -> Result<(String, PublicHistoryEntry), ClientError> {
+        let (callback_id, request_bytes) = self
+            .client
+            .connection
+            .request_callback_with_detail(session_id, turn_id, kind, title, detail)?;
+        let request = match decode_frame(&request_bytes).map_err(ServerError::Protocol)? {
+            Envelope::Request(request) if request.method == "callback/call" => request,
+            _ => {
+                return Err(ClientError::InvalidResponse(
+                    "callback delivery was not a callback/call request".to_owned(),
+                ));
+            }
+        };
+        let callback = request
+            .params
+            .get("callback")
+            .cloned()
+            .ok_or_else(|| {
+                ClientError::InvalidResponse("callback delivery omitted callback".to_owned())
+            })
+            .and_then(|value| {
+                serde_json::from_value::<PublicHistoryEntry>(value).map_err(ClientError::Json)
+            })?;
+        let acknowledgement = serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "id": request.id,
+            "result": {
+                "callbackId": callback_id,
+                "accepted": true,
+            },
+        }))
+        .map_err(ClientError::Json)?;
+        let batch = self.client.connection.dispatch(&acknowledgement);
+        if batch.close_after_flush || !batch.outbound.is_empty() || !batch.deferred.is_empty() {
+            return Err(ClientError::InvalidResponse(
+                "callback delivery acknowledgement was rejected".to_owned(),
+            ));
+        }
+        Ok((callback_id, callback))
+    }
+
+    pub fn drain_callbacks(&mut self) -> Result<Vec<PublicHistoryEntry>, ClientError> {
+        let mut requests = std::mem::take(&mut self.interactive_backlog);
+        if let Some(receiver) = self.interactive_callbacks.as_mut() {
+            while let Ok(request) = receiver.try_recv() {
+                requests.push_back(request);
+            }
+        }
+        let request_count = requests.len();
+        let mut entries = Vec::with_capacity(request_count);
+        for _ in 0..request_count {
+            let Some(request) = requests.pop_front() else {
+                break;
+            };
+            let (session_id, title, detail, kind) = match &request {
+                InteractiveCallbackRequest::Approval {
+                    session_id,
+                    request,
+                    ..
+                } => (
+                    session_id.clone(),
+                    format!("Approve {}?", request.tool),
+                    approval_callback_detail(request),
+                    EngineCallbackKind::Approval,
+                ),
+                InteractiveCallbackRequest::Tool {
+                    session_id,
+                    title,
+                    detail,
+                    ..
+                } => (
+                    session_id.clone(),
+                    title.clone(),
+                    detail.clone(),
+                    EngineCallbackKind::UserInput,
+                ),
+            };
+            if self
+                .pending_interactive_callbacks
+                .values()
+                .any(|pending| pending.session_id == session_id)
+            {
+                retain_interactive_request(&mut self.interactive_backlog, request);
+                continue;
+            }
+            let session = match self.client.server.session(&session_id) {
+                Ok(session) => session,
+                Err(_) => {
+                    reject_interactive_request(request, "session is no longer available");
+                    continue;
+                }
+            };
+            let turn_id = match session.active_turn {
+                Some(turn_id) => turn_id,
+                None => {
+                    reject_interactive_request(request, "turn is no longer active");
+                    continue;
+                }
+            };
+            if session.pending_callback.is_some() {
+                retain_interactive_request(&mut self.interactive_backlog, request);
+                continue;
+            }
+            match self.request_callback_with_detail(&session_id, &turn_id, kind, title, detail) {
+                Ok((callback_id, entry)) => {
+                    let response = match request {
+                        InteractiveCallbackRequest::Approval { response, .. } => {
+                            InteractiveCallbackResponse::Approval(response)
+                        }
+                        InteractiveCallbackRequest::Tool { response, .. } => {
+                            InteractiveCallbackResponse::Tool(response)
+                        }
+                    };
+                    if self
+                        .pending_interactive_callbacks
+                        .contains_key(&callback_id)
+                    {
+                        fail_interactive_response(response, "callback ID was reused");
+                        return Err(ClientError::InvalidResponse(
+                            "callback identifier was reused".to_owned(),
+                        ));
+                    }
+                    self.pending_interactive_callbacks.insert(
+                        callback_id,
+                        PendingInteractiveCallback {
+                            session_id,
+                            turn_id,
+                            response,
+                        },
+                    );
+                    entries.push(entry);
+                }
+                Err(error) => {
+                    reject_interactive_request(request, &error.to_string());
+                }
+            }
+        }
+        Ok(entries)
+    }
+
+    pub fn respond_callback(
+        &mut self,
+        params: Value,
+    ) -> Result<BTreeMap<String, Value>, ClientError> {
+        let callback_id = params
+            .get("callbackId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                ClientError::InvalidResponse("callback response omitted callbackId".to_owned())
+            })?
+            .to_owned();
+        let output = params.get("output").cloned().ok_or_else(|| {
+            ClientError::InvalidResponse("callback response omitted output".to_owned())
+        })?;
+        let request_id = self.client.take_request_id();
+        let request = request_bytes(request_id.clone(), "callback/respond", params)?;
+        let batch = self.client.connection.dispatch(&request);
+        if batch.close_after_flush {
+            return Err(ClientError::InvalidResponse(
+                "callback response closed the connection".to_owned(),
+            ));
+        }
+        let result = response_result(single_outbound(batch.outbound)?, &request_id)?;
+        for work in batch.deferred {
+            let driver_result = match work {
+                DeferredWork::ResolveCallback {
+                    session_id,
+                    turn_id,
+                    callback_id: deferred_callback_id,
+                    accepted,
+                    value,
+                } if deferred_callback_id == callback_id => self.driver.resolve_callback(
+                    &session_id,
+                    &turn_id,
+                    &deferred_callback_id,
+                    accepted,
+                    value.as_deref(),
+                ),
+                DeferredWork::InterruptTurn {
+                    session_id,
+                    turn_id,
+                } => self.driver.interrupt(&session_id, &turn_id),
+                _ => {
+                    fail_pending_interactive_callback(
+                        self.pending_interactive_callbacks.remove(&callback_id),
+                        "callback response returned unexpected deferred work",
+                    );
+                    return Err(ClientError::InvalidResponse(
+                        "callback response returned unexpected deferred work".to_owned(),
+                    ));
+                }
+            };
+            if let Err(error) = driver_result {
+                if matches!(error, DriverError::UnsupportedControl("callback/respond")) {
+                    continue;
+                }
+                fail_pending_interactive_callback(
+                    self.pending_interactive_callbacks.remove(&callback_id),
+                    &error.to_string(),
+                );
+                return Err(ClientError::Driver(error));
+            }
+        }
+
+        if let Some(pending) = self.pending_interactive_callbacks.remove(&callback_id) {
+            match pending.response {
+                InteractiveCallbackResponse::Approval(response) => {
+                    let decision = approval_decision_from_output(&output)?;
+                    let _ = response.send(decision);
+                }
+                InteractiveCallbackResponse::Tool(response) => {
+                    let _ = response.send(Ok(output));
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    pub async fn compact(
+        &mut self,
+        session_id: &str,
+        extra_instructions: &str,
+    ) -> Result<BTreeMap<String, Value>, ClientError> {
+        let (request_id, canonical_session_id) = self
+            .client
+            .reserve_compaction(session_id, extra_instructions)?;
+        let result = self
+            .driver
+            .compact(&canonical_session_id, extra_instructions)
+            .await;
+        self.client
+            .finish_compaction(request_id, &canonical_session_id, result)
+    }
+
+    pub async fn teleport(
+        &mut self,
+        session_id: &str,
+        working_directory: &str,
+        summary: &str,
+        approve_push: bool,
+    ) -> Result<Vec<ProgrammaticTeleportEvent>, ClientError> {
+        let opened = self
+            .public_call_async(
+                "vibeCode/projects/open",
+                json!({
+                    "sessionId": session_id,
+                    "workingDirectory": working_directory,
+                    "purpose": "teleport",
+                }),
+            )
+            .await?;
+        let picker_id = opened
+            .result
+            .get("pickerId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                ClientError::InvalidResponse("project picker omitted pickerId".to_owned())
+            })?;
+        let project_id = opened
+            .result
+            .get("resolvedProjectId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                ClientError::InvalidResponse(
+                    "no Vibe Code project is linked to this working directory".to_owned(),
+                )
+            })?;
+        let operation_id = unique_cloud_operation_id();
+        let started = self
+            .public_call_async(
+                "vibeCode/teleport/start",
+                json!({
+                    "sessionId": session_id,
+                    "pickerId": picker_id,
+                    "projectId": project_id,
+                    "operationId": operation_id,
+                    "workingDirectory": working_directory,
+                    "prompt": summary,
+                }),
+            )
+            .await?;
+        let mut events = teleport_events(&started.notifications)?;
+        if events
+            .iter()
+            .any(|event| matches!(event, ProgrammaticTeleportEvent::PushRequired { .. }))
+        {
+            let responded = self
+                .public_call_async(
+                    "vibeCode/teleport/push/respond",
+                    json!({
+                        "sessionId": session_id,
+                        "operationId": operation_id,
+                        "approved": approve_push,
+                    }),
+                )
+                .await?;
+            events.extend(teleport_events(&responded.notifications)?);
+        }
+        Ok(events)
+    }
+
+    pub async fn reserve_prompt(
+        &mut self,
+        session_id: &str,
+        turn: &TurnRequest,
+    ) -> Result<TurnReservation, ClientError> {
+        self.client.configure_pending_mcp(session_id).await?;
+        self.client.reserve_turn_request(session_id, turn)
+    }
+
+    pub async fn reserve_due_loop(
+        &mut self,
+        session_id: &str,
+        now_seconds: u64,
+    ) -> Result<Option<ScheduledTurn>, ClientError> {
+        self.client.configure_pending_mcp(session_id).await?;
+        self.client.reserve_due_loop(session_id, now_seconds)
+    }
+
+    pub fn finish_scheduled_loop(
+        &mut self,
+        loop_id: &str,
+        completed_at_seconds: u64,
+    ) -> Result<(), ClientError> {
+        self.client
+            .server
+            .finish_scheduled_loop(loop_id, completed_at_seconds)
+            .map_err(ClientError::Server)
+    }
+
+    pub fn finish_reserved(
+        &mut self,
+        reservation: &TurnReservation,
+        outcome: TurnOutcome,
+    ) -> Result<ProgrammaticTurn, ClientError> {
+        let result = self.client.finish_turn(reservation, outcome);
+        self.fail_interactive_callbacks(
+            Some(&reservation.session_id),
+            Some(&reservation.turn_id),
+            "turn completed before the callback was resolved",
+        );
+        result
+    }
+
+    pub fn fail_reserved(
+        &mut self,
+        reservation: &TurnReservation,
+        message: &str,
+    ) -> Result<(), ClientError> {
+        let result = self.client.fail_turn(reservation, message);
+        self.fail_interactive_callbacks(
+            Some(&reservation.session_id),
+            Some(&reservation.turn_id),
+            message,
+        );
+        result
     }
 
     pub async fn prompt(
@@ -666,9 +1919,9 @@ where
         self.client.configure_pending_mcp(session_id).await?;
         let reservation = self.client.reserve_turn(session_id, prompt)?;
         match self.driver.run(&reservation).await {
-            Ok(outcome) => self.client.finish_turn(&reservation, outcome),
+            Ok(outcome) => self.finish_reserved(&reservation, outcome),
             Err(error) => {
-                self.client.fail_turn(&reservation, &error.to_string())?;
+                self.fail_reserved(&reservation, &error.to_string())?;
                 Err(ClientError::Driver(error))
             }
         }
@@ -683,9 +1936,9 @@ where
         self.client.configure_pending_mcp(session_id).await?;
         let reservation = self.client.reserve_turn(session_id, prompt)?;
         match self.driver.run_observed(&reservation, observer).await {
-            Ok(outcome) => self.client.finish_turn(&reservation, outcome),
+            Ok(outcome) => self.finish_reserved(&reservation, outcome),
             Err(error) => {
-                self.client.fail_turn(&reservation, &error.to_string())?;
+                self.fail_reserved(&reservation, &error.to_string())?;
                 Err(ClientError::Driver(error))
             }
         }
@@ -693,19 +1946,544 @@ where
 
     pub fn interrupt(&mut self, session_id: &str, turn_id: &str) -> Result<(), ClientError> {
         self.client.interrupt(session_id, turn_id)?;
+        self.fail_interactive_callbacks(Some(session_id), Some(turn_id), "turn was interrupted");
         self.driver.interrupt(session_id, turn_id)?;
         Ok(())
     }
 
     pub async fn close_session(&mut self, session_id: &str) -> Result<(), ClientError> {
-        if let Some((session_id, turn_id)) = self.client.close_session(session_id).await? {
-            self.driver.interrupt(&session_id, &turn_id)?;
+        let interrupt = self.client.close_session(session_id).await?;
+        self.fail_interactive_callbacks(Some(session_id), None, "session was closed");
+        if let Some((canonical_session_id, turn_id)) = interrupt {
+            if canonical_session_id != session_id {
+                self.fail_interactive_callbacks(
+                    Some(&canonical_session_id),
+                    None,
+                    "session was closed",
+                );
+            }
+            self.driver.interrupt(&canonical_session_id, &turn_id)?;
         }
         Ok(())
     }
 
     pub fn shutdown(&mut self) -> Result<(), ClientError> {
-        self.client.shutdown()
+        let result = self.client.shutdown();
+        if result.is_ok() {
+            self.fail_interactive_callbacks(None, None, "service was shut down");
+        }
+        result
+    }
+}
+
+fn unique_cloud_operation_id() -> String {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos());
+    let sequence = NEXT_CLOUD_OPERATION.fetch_add(1, Ordering::Relaxed);
+    format!(
+        "teleport-programmatic-{}-{timestamp}-{sequence}",
+        std::process::id()
+    )
+}
+
+fn approval_callback_detail(request: &ApprovalRequest) -> Value {
+    json!({
+        "kind": "approval",
+        "effect": {
+            "kind": "tool",
+            "toolName": request.tool,
+            "input": null,
+            "display": {
+                "summary": request.rationale,
+                "content": null,
+                "suffix": "",
+                "verb": "",
+                "message": null,
+                "settledVerb": "",
+                "settledMessage": null,
+                "statusText": "",
+            },
+        },
+        "requiredPermissions": request
+            .requirements
+            .iter()
+            .map(vibe_core::policy::PermissionRequirement::scope)
+            .collect::<Vec<_>>(),
+        "choices": [
+            "approve",
+            "approve_for_session",
+            "approve_permanently",
+            "deny",
+            "cancel_turn",
+        ],
+        "relatedEntryId": null,
+    })
+}
+
+fn approval_decision_from_output(output: &Value) -> Result<ApprovalDecision, ClientError> {
+    if output.get("type").and_then(Value::as_str) != Some("approval") {
+        return Err(ClientError::InvalidResponse(
+            "approval callback returned a non-approval output".to_owned(),
+        ));
+    }
+    match output.pointer("/decision/type").and_then(Value::as_str) {
+        Some("approve") => Ok(ApprovalDecision::ApproveOnce),
+        Some("approve_for_session") => Ok(ApprovalDecision::ApproveForSession),
+        Some("approve_permanently") => Ok(ApprovalDecision::ApprovePermanently),
+        Some("deny") => Ok(ApprovalDecision::Deny),
+        Some("cancel_turn") => Ok(ApprovalDecision::CancelTurn),
+        Some(decision) => Err(ClientError::InvalidResponse(format!(
+            "unknown approval decision `{decision}`"
+        ))),
+        None => Err(ClientError::InvalidResponse(
+            "approval callback omitted its decision".to_owned(),
+        )),
+    }
+}
+
+fn interactive_request_session_id(request: &InteractiveCallbackRequest) -> &str {
+    match request {
+        InteractiveCallbackRequest::Approval { session_id, .. }
+        | InteractiveCallbackRequest::Tool { session_id, .. } => session_id,
+    }
+}
+
+fn reject_interactive_request(request: InteractiveCallbackRequest, message: &str) {
+    match request {
+        InteractiveCallbackRequest::Approval { response, .. } => {
+            let _ = response.send(ApprovalDecision::CancelTurn);
+        }
+        InteractiveCallbackRequest::Tool { response, .. } => {
+            let _ = response.send(Err(message.to_owned()));
+        }
+    }
+}
+
+fn retain_interactive_request(
+    backlog: &mut VecDeque<InteractiveCallbackRequest>,
+    request: InteractiveCallbackRequest,
+) {
+    if backlog.len() < MAX_INTERACTIVE_CALLBACKS {
+        backlog.push_back(request);
+    } else {
+        reject_interactive_request(request, "interactive callback backlog is full");
+    }
+}
+
+fn fail_pending_interactive_callback(pending: Option<PendingInteractiveCallback>, message: &str) {
+    if let Some(pending) = pending {
+        fail_interactive_response(pending.response, message);
+    }
+}
+
+fn fail_interactive_response(response: InteractiveCallbackResponse, message: &str) {
+    match response {
+        InteractiveCallbackResponse::Approval(response) => {
+            let _ = response.send(ApprovalDecision::CancelTurn);
+        }
+        InteractiveCallbackResponse::Tool(response) => {
+            let _ = response.send(Err(message.to_owned()));
+        }
+    }
+}
+
+async fn run_interactive_questions(
+    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+    session_id: String,
+    arguments: Value,
+) -> Result<ToolExecutionOutput, ToolError> {
+    let request_bytes = serde_json::to_vec(&arguments)
+        .map_err(|error| ToolError::Execution(format!("invalid question request: {error}")))?
+        .len();
+    if request_bytes > MAX_INTERACTIVE_REQUEST_BYTES {
+        return Err(ToolError::Execution(format!(
+            "question request exceeds {MAX_INTERACTIVE_REQUEST_BYTES} bytes"
+        )));
+    }
+    let request = serde_json::from_value::<InteractiveQuestionRequest>(arguments)
+        .map_err(|error| ToolError::Execution(format!("invalid question request: {error}")))?;
+    validate_interactive_question_request(&request)?;
+    let questions = request.questions.clone();
+    let title = request
+        .questions
+        .iter()
+        .enumerate()
+        .map(|(index, question)| {
+            if question.header.is_empty() {
+                format!("{}. {}", index + 1, question.question)
+            } else {
+                format!("{}. {}: {}", index + 1, question.header, question.question)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let detail = json!({
+        "kind": "user_input",
+        "request": {
+            "questions": questions,
+            "footerNote": request.footer_note.clone(),
+        },
+        "relatedEntryId": null,
+    });
+    let output = request_interactive_tool_callback(sender, session_id, title, detail).await?;
+    question_tool_output(&output, &request.questions)
+}
+
+fn validate_interactive_question_request(
+    request: &InteractiveQuestionRequest,
+) -> Result<(), ToolError> {
+    if request.questions.is_empty() || request.questions.len() > MAX_INTERACTIVE_QUESTIONS {
+        return Err(ToolError::Execution(format!(
+            "question count must be between 1 and {MAX_INTERACTIVE_QUESTIONS}"
+        )));
+    }
+    for question in &request.questions {
+        if question.question.trim().is_empty() {
+            return Err(ToolError::Execution(
+                "question text must not be empty".to_owned(),
+            ));
+        }
+        if question.header.chars().count() > 20 {
+            return Err(ToolError::Execution(
+                "question header exceeds 20 characters".to_owned(),
+            ));
+        }
+        if question.options.len() < 2
+            || question.options.len() > MAX_INTERACTIVE_OPTIONS_PER_QUESTION
+        {
+            return Err(ToolError::Execution(format!(
+                "each question must have between 2 and \
+                 {MAX_INTERACTIVE_OPTIONS_PER_QUESTION} options"
+            )));
+        }
+        if question
+            .options
+            .iter()
+            .any(|option| option.label.trim().is_empty())
+        {
+            return Err(ToolError::Execution(
+                "question option labels must not be empty".to_owned(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+async fn request_interactive_tool_callback(
+    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+    session_id: String,
+    title: String,
+    detail: Value,
+) -> Result<Value, ToolError> {
+    let (response, receiver) = tokio::sync::oneshot::channel();
+    sender
+        .send(InteractiveCallbackRequest::Tool {
+            session_id,
+            title,
+            detail,
+            response,
+        })
+        .await
+        .map_err(|_| ToolError::Execution("interactive callback queue closed".to_owned()))?;
+    receiver
+        .await
+        .map_err(|_| ToolError::Execution("interactive callback was abandoned".to_owned()))?
+        .map_err(ToolError::Execution)
+}
+
+fn question_tool_output(
+    output: &Value,
+    questions: &[InteractiveQuestion],
+) -> Result<ToolExecutionOutput, ToolError> {
+    let (answers, cancelled) = user_input_result(output)?;
+    if cancelled {
+        if !answers.is_empty() {
+            return Err(ToolError::Execution(
+                "cancelled question response included answers".to_owned(),
+            ));
+        }
+        return Ok(ToolExecutionOutput {
+            typed_result: json!({"answers": [], "cancelled": true}),
+            model_text: "The user cancelled the question.".to_owned(),
+            display: json!({"kind": "user_question"}),
+            chunks: Vec::new(),
+        });
+    }
+    if answers.len() != questions.len() {
+        return Err(ToolError::Execution(format!(
+            "expected {} question answers, received {}",
+            questions.len(),
+            answers.len()
+        )));
+    }
+    let mut model_lines = Vec::with_capacity(answers.len());
+    for (answer, question) in answers.iter().zip(questions) {
+        let returned_question = required_output_string(answer, "question")?;
+        let answer_text = required_output_string(answer, "answer")?;
+        let is_other = answer
+            .get("isOther")
+            .and_then(Value::as_bool)
+            .ok_or_else(|| ToolError::Execution("question answer omitted isOther".to_owned()))?;
+        if returned_question != question.question {
+            return Err(ToolError::Execution(
+                "question answer does not match the request".to_owned(),
+            ));
+        }
+        validate_interactive_answer(question, answer_text, is_other)?;
+        model_lines.push(format!("{}: {answer_text}", question.question));
+    }
+    Ok(ToolExecutionOutput {
+        typed_result: output
+            .get("result")
+            .cloned()
+            .ok_or_else(|| ToolError::Execution("question output omitted result".to_owned()))?,
+        model_text: model_lines.join("\n"),
+        display: json!({"kind": "user_question"}),
+        chunks: Vec::new(),
+    })
+}
+
+fn validate_interactive_answer(
+    question: &InteractiveQuestion,
+    answer: &str,
+    is_other: bool,
+) -> Result<(), ToolError> {
+    if answer.trim().is_empty() {
+        return Err(ToolError::Execution(
+            "question answer must not be empty".to_owned(),
+        ));
+    }
+    if is_other {
+        return if question.hide_other {
+            Err(ToolError::Execution(
+                "question does not allow a free-text answer".to_owned(),
+            ))
+        } else {
+            Ok(())
+        };
+    }
+    let labels = answer.split(", ").collect::<Vec<_>>();
+    if (!question.multi_select && labels.len() != 1)
+        || labels
+            .iter()
+            .any(|label| !question.options.iter().any(|option| option.label == *label))
+        || labels
+            .iter()
+            .enumerate()
+            .any(|(index, label)| labels[..index].contains(label))
+    {
+        return Err(ToolError::Execution(
+            "question answer selected an invalid option".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+async fn run_interactive_plan_review(
+    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+    session_id: String,
+) -> Result<ToolExecutionOutput, ToolError> {
+    const QUESTION: &str = "Plan is complete. Switch to code mode and start implementing?";
+    let detail = json!({
+        "kind": "user_input",
+        "request": {
+            "questions": [{
+                "question": QUESTION,
+                "header": "Plan ready",
+                "options": interactive_plan_options(),
+                "multiSelect": false,
+                "hideOther": false,
+            }],
+            "footerNote": null,
+        },
+        "planReview": true,
+        "relatedEntryId": null,
+    });
+    let output =
+        request_interactive_tool_callback(sender, session_id, QUESTION.to_owned(), detail).await?;
+    let (answers, cancelled) = user_input_result(&output)?;
+    let (switched, message) = if cancelled {
+        if !answers.is_empty() {
+            return Err(ToolError::Execution(
+                "cancelled plan review included an answer".to_owned(),
+            ));
+        }
+        (false, "User cancelled. Staying in plan mode.".to_owned())
+    } else {
+        if answers.len() != 1 {
+            return Err(ToolError::Execution(
+                "plan review requires exactly one answer".to_owned(),
+            ));
+        }
+        let answer = &answers[0];
+        if required_output_string(answer, "question")? != QUESTION {
+            return Err(ToolError::Execution(
+                "plan review answer does not match the request".to_owned(),
+            ));
+        }
+        let value = required_output_string(answer, "answer")?;
+        if answer.get("isOther").and_then(Value::as_bool) == Some(true) {
+            if value.trim().is_empty() {
+                return Err(ToolError::Execution(
+                    "plan feedback must not be empty".to_owned(),
+                ));
+            }
+            (
+                false,
+                format!("Stay in plan mode and incorporate this feedback: {value}"),
+            )
+        } else {
+            match value {
+                "Yes, clear context and auto approve edits" => (
+                    true,
+                    "Plan approved. Switch to code mode, clear planning context, and auto approve \
+                     edits."
+                        .to_owned(),
+                ),
+                "Yes, and auto approve edits" => (
+                    true,
+                    "Plan approved. Switch to code mode and auto approve edits.".to_owned(),
+                ),
+                "Yes, and request approval for edits" => (
+                    true,
+                    "Plan approved. Switch to code mode and request approval for edits.".to_owned(),
+                ),
+                "No" => (
+                    false,
+                    "Plan rejected. Stay in plan mode and continue refining it.".to_owned(),
+                ),
+                _ => {
+                    return Err(ToolError::Execution(
+                        "plan review selected an invalid option".to_owned(),
+                    ));
+                }
+            }
+        }
+    };
+    Ok(ToolExecutionOutput {
+        typed_result: json!({"switched": switched, "message": message}),
+        model_text: message,
+        display: json!({"kind": "plan_review", "switched": switched}),
+        chunks: Vec::new(),
+    })
+}
+
+fn user_input_result(output: &Value) -> Result<(&[Value], bool), ToolError> {
+    if output.get("type").and_then(Value::as_str) != Some("user_input") {
+        return Err(ToolError::Execution(
+            "interactive tool returned a non-user-input output".to_owned(),
+        ));
+    }
+    let result = output
+        .get("result")
+        .and_then(Value::as_object)
+        .ok_or_else(|| ToolError::Execution("user-input output omitted result".to_owned()))?;
+    let answers = result
+        .get("answers")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ToolError::Execution("user-input output omitted answers".to_owned()))?;
+    let cancelled = result
+        .get("cancelled")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| ToolError::Execution("user-input output omitted cancelled".to_owned()))?;
+    Ok((answers, cancelled))
+}
+
+fn required_output_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, ToolError> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ToolError::Execution(format!("interactive answer omitted string `{key}`")))
+}
+
+fn interactive_plan_options() -> Vec<Value> {
+    [
+        (
+            "Yes, clear context and auto approve edits",
+            "Clear planning context, switch to code mode, and auto approve edits",
+        ),
+        (
+            "Yes, and auto approve edits",
+            "Switch to code mode with auto-approved edits",
+        ),
+        (
+            "Yes, and request approval for edits",
+            "Switch to code mode and keep edit approvals",
+        ),
+        ("No", "Stay in plan mode and continue planning"),
+    ]
+    .into_iter()
+    .map(|(label, description)| json!({"label": label, "description": description}))
+    .collect()
+}
+
+fn interactive_question_spec() -> ToolSpec {
+    ToolSpec {
+        name: "ask_user_question".to_owned(),
+        description: "Ask the user one or more interactive questions before continuing".to_owned(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "questions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string", "minLength": 1},
+                            "header": {"type": "string", "maxLength": 20},
+                            "options": {
+                                "type": "array",
+                                "minItems": 2,
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "label": {"type": "string", "minLength": 1},
+                                        "description": {"type": "string"}
+                                    },
+                                    "required": ["label"],
+                                    "additionalProperties": false
+                                }
+                            },
+                            "multiSelect": {"type": "boolean"},
+                            "hideOther": {"type": "boolean"}
+                        },
+                        "required": ["question", "options"],
+                        "additionalProperties": false
+                    }
+                },
+                "footerNote": {"type": ["string", "null"]}
+            },
+            "required": ["questions"],
+            "additionalProperties": false
+        }),
+        output_schema: None,
+        config: Value::Null,
+        state: Value::Null,
+        availability: ToolAvailability::Available,
+        presentation: ToolPresentationKind::Generic,
+        source: ToolSource::BuiltIn,
+        selection_priority: 50,
+    }
+}
+
+fn interactive_plan_review_spec() -> ToolSpec {
+    ToolSpec {
+        name: "exit_plan_mode".to_owned(),
+        description: "Request user approval before leaving plan mode".to_owned(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        }),
+        output_schema: None,
+        config: Value::Null,
+        state: Value::Null,
+        availability: ToolAvailability::Available,
+        presentation: ToolPresentationKind::Generic,
+        source: ToolSource::BuiltIn,
+        selection_priority: 50,
     }
 }
 
@@ -723,12 +2501,108 @@ pub struct LiveDriverConfig {
 
 pub struct LiveTurnDriver {
     provider: Arc<dyn CompletionProvider>,
+    compactor: ProviderSessionCompactor,
     system_prompt: String,
     session_root: Option<PathBuf>,
     input_price_per_million_micros: u64,
     output_price_per_million_micros: u64,
     controls: Mutex<HashMap<(String, String), LiveTurnControl>>,
     pending_context: Mutex<HashMap<String, Vec<String>>>,
+}
+
+#[derive(Clone)]
+struct ProviderSessionCompactor {
+    provider: Arc<dyn CompletionProvider>,
+    next_session: Arc<AtomicU64>,
+}
+
+impl ProviderSessionCompactor {
+    fn new(provider: Arc<dyn CompletionProvider>) -> Self {
+        Self {
+            provider,
+            next_session: Arc::new(AtomicU64::new(1)),
+        }
+    }
+
+    async fn compact_with_instructions(
+        &self,
+        current_session_id: &str,
+        messages: &[ModelMessage],
+        extra_instructions: &str,
+    ) -> Result<CompactionResult, String> {
+        let mut prompt =
+            "Summarize the conversation for a continuation agent. Preserve goals, decisions, \
+             constraints, file paths, commands, failures, and unfinished work. Return only the \
+             compact summary."
+                .to_owned();
+        if !extra_instructions.trim().is_empty() {
+            prompt.push_str("\n\nAdditional instructions:\n");
+            prompt.push_str(extra_instructions.trim());
+        }
+        let mut input_messages = messages.to_vec();
+        input_messages.push(ModelMessage::User { content: prompt });
+        let response = self
+            .provider
+            .complete(&ProviderInput {
+                turn_id: None,
+                messages: input_messages,
+                stream: false,
+                images: Vec::new(),
+                tools: Vec::new(),
+                tool_choice: None,
+                thinking: false,
+                reasoning_effort: None,
+                headers: BTreeMap::new(),
+                limits: RequestLimits {
+                    max_tokens: 4096,
+                    temperature_millis: None,
+                    max_response_bytes: 2 * 1024 * 1024,
+                },
+                metadata: BTreeMap::from([(
+                    "operation".to_owned(),
+                    "session_compaction".to_owned(),
+                )]),
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        let summary = response.text.trim().to_owned();
+        if summary.is_empty() {
+            return Err("provider returned an empty compaction summary".to_owned());
+        }
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| "system clock precedes UNIX epoch".to_owned())?
+            .as_millis();
+        let sequence = self.next_session.fetch_add(1, Ordering::Relaxed);
+        let new_session_id = format!("{current_session_id}-compact-{timestamp}-{sequence}");
+        let mut compacted = messages
+            .iter()
+            .find(|message| matches!(message, ModelMessage::System { .. }))
+            .cloned()
+            .into_iter()
+            .collect::<Vec<_>>();
+        compacted.push(ModelMessage::User {
+            content: format!("[Conversation summary]\n{summary}"),
+        });
+        Ok(CompactionResult {
+            new_session_id,
+            summary,
+            messages: compacted,
+        })
+    }
+}
+
+impl Compactor for ProviderSessionCompactor {
+    fn compact<'a>(
+        &'a self,
+        current_session_id: &'a str,
+        messages: &'a [ModelMessage],
+    ) -> vibe_core::engine::CompactionFuture<'a> {
+        Box::pin(async move {
+            self.compact_with_instructions(current_session_id, messages, "")
+                .await
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -813,14 +2687,16 @@ struct LiveTurnControl {
 }
 
 impl LiveTurnDriver {
-    #[cfg(feature = "test-fixtures")]
+    #[cfg(any(test, feature = "test-fixtures"))]
     #[must_use]
     pub fn from_provider_for_tests(
         provider: Arc<dyn CompletionProvider>,
         system_prompt: impl Into<String>,
     ) -> Self {
+        let compactor = ProviderSessionCompactor::new(provider.clone());
         Self {
             provider,
+            compactor,
             system_prompt: system_prompt.into(),
             session_root: None,
             input_price_per_million_micros: 0,
@@ -830,11 +2706,30 @@ impl LiveTurnDriver {
         }
     }
 
+    #[cfg(any(test, feature = "test-fixtures"))]
+    #[must_use]
+    pub fn with_session_root_for_tests(mut self, session_root: Option<PathBuf>) -> Self {
+        self.session_root = session_root;
+        self
+    }
+
     pub fn from_environment(config: LiveDriverConfig) -> Result<Self, DriverError> {
-        let style = ProviderStyle::parse(&config.style).map_err(DriverError::Provider)?;
         let credential = std::env::var(&config.credential_environment).map_err(|_| {
             DriverError::MissingCredentialEnvironment(config.credential_environment.clone())
         })?;
+        if credential.is_empty() {
+            return Err(DriverError::MissingCredentialEnvironment(
+                config.credential_environment,
+            ));
+        }
+        Self::from_credential(config, credential)
+    }
+
+    pub fn from_credential(
+        config: LiveDriverConfig,
+        credential: String,
+    ) -> Result<Self, DriverError> {
+        let style = ProviderStyle::parse(&config.style).map_err(DriverError::Provider)?;
         if credential.is_empty() {
             return Err(DriverError::MissingCredentialEnvironment(
                 config.credential_environment,
@@ -848,10 +2743,14 @@ impl LiveTurnDriver {
             SecretString::from(credential),
             transport,
         );
+        let provider: Arc<dyn CompletionProvider> = Arc::new(provider);
+        let compactor = ProviderSessionCompactor::new(provider.clone());
+        let session_root = config.session_root.or_else(default_session_root);
         Ok(Self {
-            provider: Arc::new(provider),
+            provider,
+            compactor,
             system_prompt: config.system_prompt,
-            session_root: config.session_root,
+            session_root,
             input_price_per_million_micros: config.input_price_per_million_micros,
             output_price_per_million_micros: config.output_price_per_million_micros,
             controls: Mutex::new(HashMap::new()),
@@ -883,8 +2782,8 @@ impl LiveTurnDriver {
             images: Vec::new(),
             tools: Vec::new(),
             tool_choice: None,
-            thinking: false,
-            reasoning_effort: None,
+            thinking: reservation.intent.thinking,
+            reasoning_effort: reservation.intent.reasoning_effort.clone(),
             headers: BTreeMap::new(),
             limits: RequestLimits {
                 max_tokens: reservation
@@ -897,6 +2796,13 @@ impl LiveTurnDriver {
             },
             metadata: BTreeMap::new(),
         };
+        if reservation.intent.mode.as_deref() == Some("plan") {
+            input.messages.push(ModelMessage::System {
+                content:
+                    "Plan mode is active. Inspect and reason, but do not execute mutating tools."
+                        .to_owned(),
+            });
+        }
         let session_tools =
             SessionToolExecutor::new(reservation.tools.clone(), &reservation.intent);
         for (key, value) in [
@@ -999,8 +2905,14 @@ impl LiveTurnDriver {
                         .map(|content| ModelMessage::User { content }),
                 );
             }
+            input.messages.extend(
+                resource_contexts(reservation)
+                    .into_iter()
+                    .map(|content| ModelMessage::User { content }),
+            );
             ConversationEngine::new(Arc::clone(&self.provider))
                 .with_tools(session_tools.clone())
+                .with_compactor(self.compactor.clone())
                 .with_sink(SessionTranscriptSink::new(store, metadata))
                 .with_limits(limits)
                 .with_baseline(baseline)
@@ -1023,8 +2935,14 @@ impl LiveTurnDriver {
                         .map(|content| ModelMessage::User { content }),
                 );
             }
+            input.messages.extend(
+                resource_contexts(reservation)
+                    .into_iter()
+                    .map(|content| ModelMessage::User { content }),
+            );
             ConversationEngine::new(Arc::clone(&self.provider))
                 .with_tools(session_tools)
+                .with_compactor(self.compactor.clone())
                 .with_limits(limits)
                 .with_observer(observer)
                 .run_turn_controlled(
@@ -1182,6 +3100,37 @@ impl LiveTurnDriver {
     }
 }
 
+fn resource_contexts(reservation: &TurnReservation) -> Vec<String> {
+    reservation
+        .input
+        .iter()
+        .filter_map(|block| {
+            let PublicContentBlock::Resource { resource } = block else {
+                return None;
+            };
+            let embedded = resource.get("resource").unwrap_or(resource);
+            let uri = embedded
+                .get("uri")
+                .or_else(|| resource.get("uri"))
+                .and_then(Value::as_str)
+                .unwrap_or("attached resource");
+            let name = embedded
+                .get("name")
+                .or_else(|| resource.get("name"))
+                .and_then(Value::as_str)
+                .unwrap_or(uri);
+            let text = embedded
+                .get("text")
+                .or_else(|| resource.get("text"))
+                .and_then(Value::as_str);
+            Some(text.map_or_else(
+                || format!("Attached resource `{name}` is available at {uri}."),
+                |text| format!("Attached resource `{name}` ({uri}):\n{text}"),
+            ))
+        })
+        .collect()
+}
+
 struct ProviderSubagentRunner {
     provider: Arc<dyn CompletionProvider>,
     system_prompt: String,
@@ -1332,6 +3281,53 @@ impl TurnDriver for LiveTurnDriver {
         })
     }
 
+    fn compact<'a>(
+        &'a self,
+        session_id: &'a str,
+        extra_instructions: &'a str,
+    ) -> CompactionDriverFuture<'a> {
+        Box::pin(async move {
+            let root = self
+                .session_root
+                .as_ref()
+                .ok_or(DriverError::UnsupportedControl("session/compact/start"))?;
+            let store = SessionStore::new(root);
+            let hydrated = store
+                .resume(
+                    session_id,
+                    &self.system_prompt,
+                    BTreeMap::<String, Value>::new(),
+                )
+                .map_err(DriverError::Storage)?;
+            let compaction = self
+                .compactor
+                .compact_with_instructions(
+                    &hydrated.metadata.id,
+                    &hydrated.messages,
+                    extra_instructions,
+                )
+                .await
+                .map_err(DriverError::Compaction)?;
+            store
+                .handoff_messages(
+                    &hydrated.metadata,
+                    &compaction.new_session_id,
+                    &compaction.messages,
+                    now_millis()?,
+                )
+                .map_err(DriverError::Storage)?;
+            let compacted = store
+                .load(&compaction.new_session_id)
+                .map_err(DriverError::Storage)?;
+            Ok(SessionCompaction {
+                old_session_id: hydrated.metadata.id,
+                new_session_id: compaction.new_session_id,
+                summary: compaction.summary,
+                hydrated: compacted,
+            })
+        })
+    }
+
     fn interrupt(&self, session_id: &str, turn_id: &str) -> Result<(), DriverError> {
         let mut controls = self
             .controls
@@ -1425,6 +3421,7 @@ impl Drop for ControlRegistration<'_> {
 #[derive(Debug, Clone)]
 pub struct EchoTurnDriver {
     response: String,
+    session_root: Option<PathBuf>,
 }
 
 impl EchoTurnDriver {
@@ -1432,7 +3429,14 @@ impl EchoTurnDriver {
     pub fn new(response: impl Into<String>) -> Self {
         Self {
             response: response.into(),
+            session_root: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_session_root(mut self, session_root: impl Into<PathBuf>) -> Self {
+        self.session_root = Some(session_root.into());
+        self
     }
 }
 
@@ -1472,7 +3476,7 @@ impl TurnDriver for EchoTurnDriver {
                     .map_err(DriverError::Engine)?;
                 events.push(envelope);
             }
-            Ok(TurnOutcome {
+            let outcome = TurnOutcome {
                 session_id: reservation.session_id.clone(),
                 events,
                 snapshot: reducer.state().clone(),
@@ -1497,7 +3501,29 @@ impl TurnDriver for EchoTurnDriver {
                 steps: 1,
                 checkpoints: 1,
                 stop_reason: PublicTurnStopReason::Complete,
-            })
+            };
+            if let Some(session_root) = &self.session_root {
+                let store = SessionStore::new(session_root);
+                let timestamp = now_millis()?;
+                let mut metadata = match store.load(&reservation.session_id) {
+                    Ok(hydrated) => hydrated.metadata,
+                    Err(vibe_core::storage::StorageError::SessionNotFound(_)) => store
+                        .create(
+                            &reservation.session_id,
+                            &reservation.working_directory,
+                            None,
+                            timestamp,
+                        )
+                        .map_err(DriverError::Storage)?,
+                    Err(error) => return Err(DriverError::Storage(error)),
+                };
+                for message in &outcome.messages {
+                    store
+                        .append_message(&mut metadata, message, timestamp)
+                        .map_err(DriverError::Storage)?;
+                }
+            }
+            Ok(outcome)
         })
     }
 
@@ -1552,6 +3578,8 @@ pub enum DriverError {
     UnsupportedControl(&'static str),
     #[error("event observer failed: {0}")]
     Observation(String),
+    #[error("compaction failed: {0}")]
+    Compaction(String),
     #[error("tool registry failed: {0}")]
     Tool(String),
     #[error("system clock precedes UNIX epoch")]
@@ -1648,6 +3676,48 @@ fn response_result(
     }
 }
 
+fn decode_public_dispatch(
+    outbound: Vec<Vec<u8>>,
+    request_id: &RequestId,
+    method: &str,
+) -> Result<PublicDispatch, ClientError> {
+    let mut result = None;
+    let mut notifications = Vec::new();
+    for bytes in outbound {
+        match decode_frame(&bytes)
+            .map_err(|error| ClientError::InvalidResponse(error.to_string()))?
+        {
+            Envelope::Success(SuccessResponse {
+                id,
+                result: response,
+                ..
+            }) if &id == request_id => result = Some(response),
+            Envelope::Error(ErrorResponse {
+                id,
+                error: ProtocolError { code, message, .. },
+                ..
+            }) if &id == request_id => return Err(ClientError::Protocol(code, message)),
+            Envelope::Notification(notification) => {
+                notifications.push(PublicNotification {
+                    method: notification.method,
+                    params: notification.params,
+                });
+            }
+            _ => {
+                return Err(ClientError::InvalidResponse(format!(
+                    "unexpected frame returned by `{method}`"
+                )));
+            }
+        }
+    }
+    Ok(PublicDispatch {
+        result: result.ok_or_else(|| {
+            ClientError::InvalidResponse(format!("missing response for `{method}`"))
+        })?,
+        notifications,
+    })
+}
+
 fn now_millis() -> Result<u64, DriverError> {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1656,10 +3726,27 @@ fn now_millis() -> Result<u64, DriverError> {
     Ok(u64::try_from(millis).unwrap_or(u64::MAX))
 }
 
+fn default_session_root() -> Option<PathBuf> {
+    std::env::var_os("VIBE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .map(|home| home.join(".vibe"))
+        })
+        .or_else(|| std::env::current_dir().ok().map(|cwd| cwd.join(".vibe")))
+        .map(|vibe_home| vibe_home.join("sessions"))
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::time::Duration;
 
+    use crate::release4::{
+        CloudError, GitProbe, GitSnapshot, Project, ProjectCloud, ProjectPage, ProjectRepository,
+        Release4Service, TeleportCloud, TeleportStartRequest,
+    };
     use vibe_core::events::ModelToolCall;
     use vibe_core::provider::{AssistantMessage, Usage};
     use vibe_core::tools::{
@@ -1668,6 +3755,60 @@ mod tests {
     };
 
     use super::*;
+
+    struct ProgrammaticProjects;
+
+    impl ProjectCloud for ProgrammaticProjects {
+        fn create(
+            &self,
+            _name: &str,
+            _repo_url: &str,
+            _default_branch: &str,
+        ) -> Result<Project, CloudError> {
+            Err(CloudError::Unavailable(
+                "project creation is not used by this fixture".to_owned(),
+            ))
+        }
+
+        fn list(&self, _cursor: Option<&str>) -> Result<ProjectPage, CloudError> {
+            Ok(ProjectPage {
+                projects: vec![Project {
+                    project_id: "project-public-dispatch".to_owned(),
+                    name: "Public dispatch".to_owned(),
+                    repositories: vec![ProjectRepository {
+                        repo_url: "https://git.example/public-dispatch".to_owned(),
+                        default_branch: Some("main".to_owned()),
+                    }],
+                    is_read_only: false,
+                }],
+                next_cursor: None,
+            })
+        }
+    }
+
+    struct ProgrammaticTeleport;
+
+    impl TeleportCloud for ProgrammaticTeleport {
+        fn start(&self, request: &TeleportStartRequest) -> Result<String, CloudError> {
+            Ok(format!("https://cloud.example/{}", request.idempotency_key))
+        }
+    }
+
+    struct ProgrammaticGit;
+
+    impl GitProbe for ProgrammaticGit {
+        fn inspect(&self, _working_directory: &std::path::Path) -> Result<GitSnapshot, CloudError> {
+            Ok(GitSnapshot {
+                repository: "https://git.example/public-dispatch".to_owned(),
+                dirty: false,
+                unpushed: false,
+            })
+        }
+
+        fn push(&self, _working_directory: &std::path::Path) -> Result<(), CloudError> {
+            Ok(())
+        }
+    }
 
     struct RecordingProvider {
         seen: Arc<Mutex<Vec<ModelMessage>>>,
@@ -1914,6 +4055,9 @@ mod tests {
             max_turns: Some(4),
             max_tokens: Some(1000),
             max_price_micros: Some(500),
+            mode: None,
+            thinking: false,
+            reasoning_effort: None,
             auto_approve: true,
             resume: None,
             continue_session: false,
@@ -1948,6 +4092,121 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn public_calls_preserve_notifications_and_execute_resource_work() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let release4 = Release4Service::with_backends(
+            Arc::new(ProgrammaticProjects),
+            Arc::new(ProgrammaticTeleport),
+            Arc::new(ProgrammaticGit),
+        )
+        .with_loop_store(workspace.path().join("loops.json"))
+        .expect("loop store");
+        let mut service = HeadlessService::new_shared_with_server(
+            Arc::new(EchoTurnDriver::new("unused")),
+            AppServer::with_release4_service(release4),
+        )
+        .expect("service starts");
+        let mut session_options = options();
+        session_options.session_id = Some("public-dispatch".to_owned());
+        session_options.working_directory = workspace.path().to_string_lossy().into_owned();
+        session_options.trusted = false;
+        let session_id = service
+            .start_session(&session_options)
+            .expect("session starts");
+
+        let picker = service
+            .public_call(
+                "vibeCode/projects/open",
+                json!({
+                    "sessionId": session_id,
+                    "workingDirectory": workspace.path(),
+                    "purpose": "configure",
+                }),
+            )
+            .expect("project picker opens");
+        let picker_id = picker["pickerId"].as_str().expect("picker ID");
+        service
+            .public_call(
+                "vibeCode/projects/select",
+                json!({
+                    "sessionId": session_id,
+                    "pickerId": picker_id,
+                    "projectId": "project-public-dispatch",
+                }),
+            )
+            .expect("project selects");
+        let programmatic = service
+            .teleport(
+                &session_id,
+                &workspace.path().to_string_lossy(),
+                "continue",
+                false,
+            )
+            .await
+            .expect("programmatic Teleport completes");
+        assert!(matches!(
+            programmatic.as_slice(),
+            [
+                ProgrammaticTeleportEvent::SummarizingContext { .. },
+                ProgrammaticTeleportEvent::CheckingGit { .. },
+                ProgrammaticTeleportEvent::StartingWorkflow { .. },
+                ProgrammaticTeleportEvent::Complete { .. },
+            ]
+        ));
+        let teleport = service
+            .public_call_with_notifications(
+                "vibeCode/teleport/start",
+                json!({
+                    "sessionId": session_id,
+                    "pickerId": picker_id,
+                    "projectId": "project-public-dispatch",
+                    "operationId": "teleport-public-dispatch",
+                    "workingDirectory": workspace.path(),
+                }),
+            )
+            .expect("response and notifications decode together");
+        assert_eq!(
+            teleport.result["operationId"],
+            json!("teleport-public-dispatch")
+        );
+        assert_eq!(teleport.notifications.len(), 4);
+        assert_eq!(
+            teleport
+                .notifications
+                .last()
+                .map(|event| event.method.as_str()),
+            Some("vibeCode/teleport/event")
+        );
+        assert_eq!(
+            teleport
+                .notifications
+                .last()
+                .map(|event| &event.params["event"]["kind"]),
+            Some(&json!("complete"))
+        );
+
+        let trusted = service
+            .public_call_async(
+                "workspace/trust/decision",
+                json!({
+                    "sessionId": session_id,
+                    "cwd": workspace.path(),
+                    "decision": "trust_cwd",
+                }),
+            )
+            .await
+            .expect("deferred resource response");
+        assert!(trusted.result.is_empty());
+        assert_eq!(
+            trusted
+                .notifications
+                .first()
+                .map(|event| event.method.as_str()),
+            Some("workspace/trust/updated")
+        );
+    }
+
+    #[tokio::test]
     async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
         let temporary = tempfile::tempdir().expect("temporary sessions");
         let provider = Arc::new(SubagentSelectingProvider {
@@ -1957,15 +4216,8 @@ mod tests {
             child_hid_task_definition: AtomicBool::new(false),
             child_inherited_restrictions: AtomicBool::new(false),
         });
-        let driver = LiveTurnDriver {
-            provider: provider.clone(),
-            system_prompt: "system".to_owned(),
-            session_root: Some(temporary.path().to_path_buf()),
-            input_price_per_million_micros: 0,
-            output_price_per_million_micros: 0,
-            controls: Mutex::new(HashMap::new()),
-            pending_context: Mutex::new(HashMap::new()),
-        };
+        let driver = LiveTurnDriver::from_provider_for_tests(provider.clone(), "system")
+            .with_session_root_for_tests(Some(temporary.path().to_path_buf()));
         let store = SessionStore::new(temporary.path());
         store
             .create(
@@ -2135,17 +4387,13 @@ mod tests {
             .update_metadata(&metadata)
             .expect("baseline stats persist");
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let driver = LiveTurnDriver {
-            provider: Arc::new(RecordingProvider {
+        let driver = LiveTurnDriver::from_provider_for_tests(
+            Arc::new(RecordingProvider {
                 seen: Arc::clone(&seen),
             }),
-            system_prompt: "current system".to_owned(),
-            session_root: Some(temporary.path().to_path_buf()),
-            input_price_per_million_micros: 0,
-            output_price_per_million_micros: 0,
-            controls: Mutex::new(HashMap::new()),
-            pending_context: Mutex::new(HashMap::new()),
-        };
+            "current system",
+        )
+        .with_session_root_for_tests(Some(temporary.path().to_path_buf()));
         let outcome = driver
             .run(&TurnReservation {
                 session_id: "session-resume".to_owned(),
@@ -2197,6 +4445,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn manual_compaction_uses_provider_summary_and_durable_handoff() {
+        let temporary = tempfile::tempdir().expect("temporary session root");
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let driver = LiveTurnDriver::from_provider_for_tests(
+            Arc::new(RecordingProvider {
+                seen: Arc::clone(&seen),
+            }),
+            "current system",
+        )
+        .with_session_root_for_tests(Some(temporary.path().to_path_buf()));
+        let mut service = HeadlessService::new(driver).expect("service");
+        let mut compact_options = options();
+        compact_options.working_directory = temporary.path().to_string_lossy().into_owned();
+        compact_options.session_id = Some("manual-compact".to_owned());
+        compact_options.add_directories.clear();
+        compact_options.tool_filters.clear();
+        compact_options.enabled_tools.clear();
+        compact_options.disabled_tools.clear();
+        compact_options.agent = None;
+        let session_id = service.start_session(&compact_options).expect("session");
+        service
+            .prompt(&session_id, "retain this decision")
+            .await
+            .expect("turn");
+
+        let result = service
+            .compact(&session_id, "Keep exact file paths")
+            .await
+            .expect("compaction");
+        assert_eq!(result["summary"], "resumed answer");
+        let new_session_id = result["state"]["session"]["id"]
+            .as_str()
+            .expect("new session id");
+        assert_ne!(new_session_id, session_id);
+        let compacted = SessionStore::new(temporary.path())
+            .load(new_session_id)
+            .expect("durable compacted session");
+        assert_eq!(
+            compacted.metadata.parent_session_id.as_deref(),
+            Some(session_id.as_str())
+        );
+        assert!(compacted.messages.iter().any(|message| {
+            matches!(
+                message,
+                ModelMessage::User { content }
+                    if content.contains("[Conversation summary]")
+                        && content.contains("resumed answer")
+            )
+        }));
+        assert_eq!(
+            service.session(&session_id).expect("old alias resolves").id,
+            new_session_id
+        );
+        assert!(seen.lock().expect("provider input").iter().any(|message| {
+            matches!(
+                message,
+                ModelMessage::User { content } if content.contains("Keep exact file paths")
+            )
+        }));
+    }
+
+    #[tokio::test]
     async fn live_driver_exposes_and_executes_the_session_tool_registry() {
         let tools = ToolRegistry::default();
         tools
@@ -2233,18 +4543,13 @@ mod tests {
             )
             .expect("register test MCP tool");
         let saw_definition = Arc::new(AtomicBool::new(false));
-        let driver = LiveTurnDriver {
-            provider: Arc::new(ToolSelectingProvider {
+        let driver = LiveTurnDriver::from_provider_for_tests(
+            Arc::new(ToolSelectingProvider {
                 calls: AtomicUsize::new(0),
                 saw_definition: Arc::clone(&saw_definition),
             }),
-            system_prompt: "system".to_owned(),
-            session_root: None,
-            input_price_per_million_micros: 0,
-            output_price_per_million_micros: 0,
-            controls: Mutex::new(HashMap::new()),
-            pending_context: Mutex::new(HashMap::new()),
-        };
+            "system",
+        );
         let outcome = driver
             .run(&TurnReservation {
                 session_id: "session-1".to_owned(),
@@ -2315,5 +4620,321 @@ mod tests {
             .expect_err("disabled tool cannot execute");
         assert!(error.contains("disabled for this session"));
         assert_eq!(executions.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn interactive_user_input_callbacks_serialize_and_resolve_through_the_server() {
+        let mut service = HeadlessService::new_interactive_shared_with_server(
+            Arc::new(EchoTurnDriver::new("unused")),
+            AppServer::default(),
+        )
+        .expect("interactive service starts");
+        let mut session_options = options();
+        session_options.auto_approve = false;
+        session_options.enabled_tools.clear();
+        session_options.disabled_tools.clear();
+        session_options.tool_filters.clear();
+        let session_id = service
+            .start_session(&session_options)
+            .expect("session starts");
+        let reservation = service
+            .reserve_prompt(&session_id, &TurnRequest::text("ask"))
+            .await
+            .expect("turn reserves");
+        let arguments = json!({
+            "questions": [{
+                "question": "Language?",
+                "header": "Runtime",
+                "options": [
+                    {"label": "Rust", "description": "Native"},
+                    {"label": "Python", "description": "Dynamic"}
+                ],
+                "multiSelect": false,
+                "hideOther": false
+            }]
+        })
+        .to_string();
+        let first_tools = reservation.tools.clone();
+        let first_arguments = arguments.clone();
+        let first = tokio::spawn(async move {
+            first_tools
+                .execute("ask_user_question", &first_arguments)
+                .await
+        });
+        let second_tools = reservation.tools.clone();
+        let second =
+            tokio::spawn(
+                async move { second_tools.execute("ask_user_question", &arguments).await },
+            );
+
+        let first_entry = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                let entries = service
+                    .drain_callbacks()
+                    .expect("callback queue remains valid");
+                if let Some(entry) = entries.into_iter().next() {
+                    break entry;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("first callback arrives");
+        assert!(
+            service
+                .drain_callbacks()
+                .expect("second request remains queued")
+                .is_empty()
+        );
+        assert!(matches!(first_entry, PublicHistoryEntry::Callback { .. }));
+        let PublicHistoryEntry::Callback {
+            callback_id: first_callback_id,
+            ..
+        } = first_entry
+        else {
+            return;
+        };
+        service
+            .respond_callback(json!({
+                "sessionId": session_id,
+                "callbackId": first_callback_id,
+                "output": {
+                    "type": "user_input",
+                    "result": {
+                        "answers": [{
+                            "question": "Language?",
+                            "answer": "Rust",
+                            "isOther": false
+                        }],
+                        "cancelled": false
+                    }
+                }
+            }))
+            .expect("first response is accepted");
+
+        let second_entry = service
+            .drain_callbacks()
+            .expect("queued callback opens")
+            .pop()
+            .expect("second callback is delivered");
+        assert!(matches!(second_entry, PublicHistoryEntry::Callback { .. }));
+        let PublicHistoryEntry::Callback {
+            callback_id: second_callback_id,
+            ..
+        } = second_entry
+        else {
+            return;
+        };
+        service
+            .respond_callback(json!({
+                "sessionId": session_id,
+                "callbackId": second_callback_id,
+                "output": {
+                    "type": "user_input",
+                    "result": {
+                        "answers": [{
+                            "question": "Language?",
+                            "answer": "Python",
+                            "isOther": false
+                        }],
+                        "cancelled": false
+                    }
+                }
+            }))
+            .expect("second response is accepted");
+
+        for task in [first, second] {
+            let output = tokio::time::timeout(Duration::from_secs(2), task)
+                .await
+                .expect("tool callback unblocks")
+                .expect("tool task joins")
+                .expect("tool returns output");
+            assert_eq!(output.typed_result["cancelled"], false);
+        }
+        service
+            .fail_reserved(&reservation, "fixture complete")
+            .expect("fixture turn closes");
+    }
+
+    #[tokio::test]
+    async fn interactive_approval_callback_returns_the_exact_policy_decision() {
+        let (sender, receiver) =
+            tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(MAX_INTERACTIVE_CALLBACKS);
+        let server = AppServer::default().using_surface_extension(
+            Arc::new(InteractiveApprovalFactory {
+                sender: sender.clone(),
+            }),
+            Arc::new(InteractiveSessionToolFactory {
+                sender: sender.clone(),
+            }),
+        );
+        let driver = Arc::new(EchoTurnDriver::new("unused"));
+        let mut service = HeadlessService {
+            client: InProcessClient::connect_with_server_and_client(
+                server,
+                ClientInfo {
+                    name: "approval-test".to_owned(),
+                    version: "1".to_owned(),
+                    title: None,
+                    entrypoint: ClientEntrypoint::Cli,
+                    terminal_emulator: TerminalEmulator::Unknown,
+                },
+                ClientCapabilities {
+                    callback_kinds: vec![ClientCallbackKind::Approval],
+                    ..ClientCapabilities::default()
+                },
+            )
+            .expect("client connects"),
+            driver,
+            interactive_callbacks: Some(receiver),
+            interactive_backlog: VecDeque::new(),
+            pending_interactive_callbacks: HashMap::new(),
+        };
+        let mut session_options = options();
+        session_options.auto_approve = false;
+        let session_id = service
+            .start_session(&session_options)
+            .expect("session starts");
+        let reservation = service
+            .reserve_prompt(&session_id, &TurnRequest::text("approve"))
+            .await
+            .expect("turn reserves");
+        let approval_agent = InteractiveApprovalAgent {
+            session_id: session_id.clone(),
+            sender,
+        };
+        let requested = tokio::spawn(async move {
+            approval_agent
+                .request(ApprovalRequest {
+                    tool: "shell".to_owned(),
+                    requirements: vec![vibe_core::policy::PermissionRequirement::Shell {
+                        command: "cargo test".to_owned(),
+                    }],
+                    rationale: "shell command requires approval".to_owned(),
+                })
+                .await
+        });
+        let entry = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(entry) = service
+                    .drain_callbacks()
+                    .expect("callback queue remains valid")
+                    .pop()
+                {
+                    break entry;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("approval callback arrives");
+        assert!(matches!(entry, PublicHistoryEntry::Callback { .. }));
+        let PublicHistoryEntry::Callback {
+            callback_id,
+            detail,
+            ..
+        } = entry
+        else {
+            return;
+        };
+        assert_eq!(detail["requiredPermissions"], json!(["shell cargo test"]));
+        service
+            .respond_callback(json!({
+                "sessionId": session_id,
+                "callbackId": callback_id,
+                "output": {
+                    "type": "approval",
+                    "decision": {"type": "approve_for_session"}
+                }
+            }))
+            .expect("approval response is accepted");
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), requested)
+                .await
+                .expect("approval unblocks")
+                .expect("approval task joins")
+                .expect("approval succeeds"),
+            ApprovalDecision::ApproveForSession
+        );
+        service
+            .fail_reserved(&reservation, "fixture complete")
+            .expect("fixture turn closes");
+    }
+
+    #[tokio::test]
+    async fn server_bound_observer_sequences_repeated_turns_without_replaying_history() {
+        let mut service = HeadlessService::new_shared_with_server(
+            Arc::new(EchoTurnDriver::new("reply")),
+            AppServer::default(),
+        )
+        .expect("service starts");
+        let session_id = service.start_session(&options()).expect("session starts");
+
+        let first = service
+            .reserve_prompt(&session_id, &TurnRequest::text("first"))
+            .await
+            .expect("first turn reserves");
+        let (first_observer, mut first_updates) = service
+            .interactive_update_channel_after(&session_id, &first.turn_id, 0)
+            .expect("first observer binds");
+        let first_outcome = service
+            .driver()
+            .run_observed(&first, first_observer)
+            .await
+            .expect("first turn runs");
+        let mut first_event_ids = Vec::new();
+        while let Ok(ProgrammaticUpdate::HistoryEntry {
+            event_id, entry, ..
+        }) = first_updates.try_recv()
+        {
+            assert_eq!(
+                entry.metadata().turn_id.as_deref(),
+                Some(first.turn_id.as_str())
+            );
+            first_event_ids.push(event_id);
+        }
+        assert!(!first_event_ids.is_empty());
+        service
+            .finish_reserved(&first, first_outcome)
+            .expect("first turn finishes");
+        let first_watermark = service
+            .public_call("session/read", json!({"sessionId": session_id}))
+            .expect("canonical state reads")["state"]["eventId"]
+            .as_u64()
+            .expect("canonical watermark");
+
+        let second = service
+            .reserve_prompt(&session_id, &TurnRequest::text("second"))
+            .await
+            .expect("second turn reserves");
+        let (second_observer, mut second_updates) = service
+            .interactive_update_channel_after(&session_id, &second.turn_id, first_watermark)
+            .expect("second observer binds");
+        let second_outcome = service
+            .driver()
+            .run_observed(&second, second_observer)
+            .await
+            .expect("second turn runs");
+        let mut second_event_ids = Vec::new();
+        while let Ok(ProgrammaticUpdate::HistoryEntry {
+            event_id, entry, ..
+        }) = second_updates.try_recv()
+        {
+            assert_eq!(
+                entry.metadata().turn_id.as_deref(),
+                Some(second.turn_id.as_str())
+            );
+            assert!(event_id > first_watermark);
+            second_event_ids.push(event_id);
+        }
+        assert!(!second_event_ids.is_empty());
+        assert!(
+            second_event_ids
+                .windows(2)
+                .all(|window| window[1] == window[0].saturating_add(1))
+        );
+        service
+            .finish_reserved(&second, second_outcome)
+            .expect("second turn finishes");
     }
 }
