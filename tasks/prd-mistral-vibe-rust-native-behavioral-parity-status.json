@@ -41,10 +41,10 @@
     {
       "id": "EP-005",
       "title": "Release 4 - TUI, ACP, and Cloud Workflows",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 8,
-      "stories_done": 0
+      "stories_done": 8
     },
     {
       "id": "EP-006",
@@ -444,97 +444,97 @@
       "id": "US-033",
       "title": "Validate the terminal UI stack and restoration model",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": ["US-004", "US-009", "US-010"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-30",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-034",
       "title": "Build the TUI shell, event loop, and transcript recovery",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-016", "US-028", "US-033"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-30",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-035",
       "title": "Render messages, reasoning, effects, diffs, and rich content",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-017", "US-020", "US-034"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-30",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-036",
       "title": "Implement prompt editing, history, completion, and mentions",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-019", "US-026", "US-034"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-30",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-037",
       "title": "Implement approvals, questions, plans, and session controls",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-011", "US-018", "US-020", "US-028", "US-034"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-30",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-038",
       "title": "Implement setup, auth, config, trust, theme, update, and voice UI",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-024", "US-025", "US-034"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-30",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-039",
       "title": "Complete ACP lifecycle and editor capabilities",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-016", "US-023", "US-028", "US-029"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-30",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-040",
       "title": "Implement Vibe Code projects, Teleport, and scheduled loops",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": ["US-024", "US-028", "US-034"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-30",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-041",

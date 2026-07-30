@@ -8,6 +8,7 @@
 | 1.0 | 2026-07-29 | Arthur Jean | Initial research-informed product and delivery specification |
 | 1.1 | 2026-07-29 | Arthur Jean | Replace Python custom-tool parity with a Rust-native, MCP-first extension boundary and require production MCP end-to-end proof |
 | 1.2 | 2026-07-29 | Arthur Jean | Assign support classification to US-031, separate excluded Python custom tools from the required MCP stdio extension surface, and close both paths explicitly during final certification |
+| 1.3 | 2026-07-30 | Arthur Jean | Validate Release 4 evidence ownership, preserve Rust 1.85-compatible terminal and keyring dependencies, and pin ACP compatibility to negotiated protocol v1 |
 
 ## Problem Statement
 
@@ -667,6 +668,8 @@ Expose the completed engine through compatible interactive terminal and editor e
 
 **Definition of Done:** TUI and ACP consume only public app-server contracts; all audited keyboard, rendering, callback, completion, session, setup, voice, and editor workflows have fixtures; and cloud operations degrade safely without contaminating local state.
 
+**Release 4 evidence boundary:** US-033 owns the terminal-stack and restoration decision. US-034 through US-038 separately own shell, rendering, input, controls, and setup evidence. US-039 owns full ACP evidence. US-040 owns project, Teleport, and scheduled-loop evidence. Each story requires an independently failing capability-matrix row so Release 4 cannot pass through the aggregate TUI row alone.
+
 #### US-033: Validate the terminal UI stack and restoration model
 
 **Description:** As a TUI maintainer, I want a measured terminal-stack decision so that rendering and restoration are proven before the full interface is built.
@@ -1018,10 +1021,10 @@ Systematic coverage of unhappy paths:
 - **Async ownership:** Should session tasks use Tokio `JoinSet` plus explicit child-process owners? Recommended: yes. Engineering must prove shutdown behavior for blocking work and OS process trees.
 - **Data Model:** Should private transcripts, public projections, metadata, and fixture schemas be separate versioned types? Recommended: yes. Engineering must choose migration encoding while preserving JSON compatibility.
 - **API Design:** Should the internal memory path serialize the same JSON protocol as stdio? Recommended: yes, because serialization is observable and prevents surface/core coupling.
-- **Terminal:** Can Ratatui meet restoration, buffer-testing, Unicode, input, and five-target requirements? Recommended: validate in US-033 before locking it; compare a lower-level crossterm renderer if it fails.
+- **Terminal:** Decision for Release 4: Ratatui 0.29.0 with crossterm 0.28.1. It preserves the workspace Rust 1.85 contract, supplies deterministic `TestBackend` buffers, and supports Linux, macOS, and Windows. The measured alternative is a direct crossterm renderer, retained only as spike evidence because it lacks Ratatui's layout and buffer-test contract. Ratatui 0.30.x is deferred because its Rust 1.88 MSRV would widen the product baseline without a parity requirement.
 - **Provider stack:** Should one HTTP stack serve Mistral and generic adapters? Recommended: yes if it supports streaming backpressure, custom TLS/proxy, cancellation, and fixtureable transport without provider leakage into core.
-- **ACP/MCP:** Is an official Rust SDK mature enough for pinned ACP 0.11-compatible and MCP behavior? Recommended: evaluate exact protocol coverage before adoption; handwritten strict wire types remain acceptable when an SDK obscures required behavior.
-- **Credentials:** Which native credential abstraction covers Keychain, Windows Credential Manager, and Linux keyring/fallback? Recommended: choose only after native failure-mode tests; no plaintext fallback without explicit opt-in.
+- **ACP/MCP:** Decision for ACP: retain strict handwritten protocol-v1 wire types. ACP wire compatibility is negotiated through `protocolVersion`, independently from the current Rust artifact version, and local types keep the app-server boundary and upstream fixtures observable. MCP remains independently owned by EP-003.
+- **Credentials:** Decision for Release 4: keyring 3.6.3 with explicit macOS Keychain, Windows Credential Manager, and Linux persistent Secret Service features. Access is serialized, unavailable stores degrade with a typed recovery path, and no plaintext fallback is permitted. Native failure-mode certification remains owned by EP-006.
 - **Compatibility model:** Should product support scope reuse mutable Rust implementation status? Recommended: no. Keep `support = "required-native" | "excluded"` as an independent stable field, use `known_rows` only for audited-inventory completeness, and let class-specific report rules own certification.
 - **Executable extensions:** Should Vibe add a TOML manifest protocol, dynamic Rust ABI, or WASM runtime beside MCP? Recommended: no. Use typed TOML to configure MCP stdio and add another mechanism only when a concrete requirement cannot be expressed through MCP.
 - **Migration:** How should future upstream baselines evolve fixtures? Recommended: immutable baseline directories and explicit migration/rebaseline reports, never in-place expected-output replacement.
@@ -1045,9 +1048,9 @@ Systematic coverage of unhappy paths:
 ## Open Questions
 
 - Which production MCP Rust implementation provides stdio, HTTP, streamable HTTP, cancellation, OAuth, and process ownership without obscuring the required wire contract? Owner: US-023 and US-032; answer required before EP-003 and EP-004 exit.
-- Which terminal stack passes restoration and native-backend requirements? Owner: US-033; answer required before US-034.
-- Which ACP/MCP Rust implementation exposes enough low-level wire control? Owner: US-003, US-023, and US-039; decide before adding either SDK.
-- Which credential-store abstraction passes all three OS failure modes? Owner: US-008 and US-038; decide before EP-005 exit.
+- Answered for Release 4: Ratatui 0.29.0 plus crossterm 0.28.1 passes the in-process restoration and buffer-test gates without raising the Rust 1.85 MSRV. US-041 through US-043 retain native-backend certification.
+- Answered for ACP: strict local protocol-v1 wire types preserve the low-level contract; no ACP SDK is added for EP-005. MCP remains on the EP-003 implementation.
+- Answered for credentials: keyring 3.6.3 with explicit native platform stores and no plaintext fallback. EP-006 retains native OS failure-mode certification.
 - Which native CI/notarization providers cover all five targets within project budget? Owner: US-041 through US-043; decide before EP-006 execution.
 - Which audited upstream defects qualify for safety divergence beyond secrets, data loss, and orphan processes? Owner: US-007 and US-047; each decision requires a fixture and rationale before certification.
 [/PRD]
