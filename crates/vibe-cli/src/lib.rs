@@ -1,7 +1,19 @@
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::expect_used,
+        clippy::panic,
+        clippy::type_complexity,
+        clippy::unwrap_in_result,
+        clippy::unwrap_used
+    )
+)]
+
+pub mod tui;
 
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use clap::{ArgAction, Parser, ValueEnum};
 use serde::Serialize;
@@ -11,6 +23,8 @@ use vibe_app_server::client::{
     ProgrammaticTurn, ProgrammaticUpdate, PublicTurnStopReason, SessionOptions, TurnDriver,
     programmatic_update_channel,
 };
+use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
+use vibe_app_server::server::AppServer;
 
 pub const ADAPTER_NAME: &str = "vibe-cli";
 
@@ -24,7 +38,7 @@ pub const ADAPTER_NAME: &str = "vibe-cli";
 pub struct Arguments {
     pub initial_prompt: Option<String>,
     #[arg(short = 'v', long = "version", action = ArgAction::Version)]
-    pub version: bool,
+    pub version: Option<bool>,
     #[arg(short = 'p', long, num_args = 0..=1, default_missing_value = "")]
     pub prompt: Option<String>,
     #[arg(long, value_enum, default_value_t = OutputMode::Text)]
@@ -123,13 +137,27 @@ pub async fn run(
             input_price_per_million_micros: price_per_million_micros(arguments.input_price)?,
             output_price_per_million_micros: price_per_million_micros(arguments.output_price)?,
         })?;
-        execute(arguments, driver, stdout, stderr).await
+        let server = production_server(&arguments)?;
+        execute_with_server(arguments, driver, server, stdout, stderr).await
     }
 }
 
 pub async fn execute<D>(
     arguments: Arguments,
     driver: D,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+) -> Result<(), CliError>
+where
+    D: TurnDriver,
+{
+    execute_with_server(arguments, driver, AppServer::default(), stdout, stderr).await
+}
+
+async fn execute_with_server<D>(
+    arguments: Arguments,
+    driver: D,
+    server: AppServer,
     stdout: &mut impl Write,
     stderr: &mut impl Write,
 ) -> Result<(), CliError>
@@ -171,55 +199,93 @@ where
         max_turns: arguments.max_turns,
         max_tokens: arguments.max_tokens,
         max_price_micros,
+        mode: None,
+        thinking: false,
+        reasoning_effort: None,
         auto_approve: arguments.auto_approve,
         resume: arguments.resume.clone(),
         continue_session: arguments.continue_session,
     };
-    let mut service = HeadlessService::new(driver)?;
+    let mut service = HeadlessService::new_shared_with_server(Arc::new(driver), server)?;
     let session_id = service.start_session(&options)?;
     let mut close_session_id = session_id.clone();
-    let turn_result: Result<ProgrammaticTurn, CliError> =
-        if arguments.output == OutputMode::Streaming {
-            let (observer, mut updates) = programmatic_update_channel(&session_id);
-            let prompt_future = service.prompt_observed(&session_id, &prompt, observer);
-            tokio::pin!(prompt_future);
-            let mut result = loop {
-                tokio::select! {
-                    result = &mut prompt_future => break result.map_err(CliError::Client),
-                    update = updates.recv() => {
-                        let Some(ProgrammaticUpdate::HistoryEntry { entry, .. }) = update else {
-                            continue;
-                        };
-                        if let Err(error) = write_json_line(stdout, &entry)
-                            .and_then(|()| stdout.flush().map_err(CliError::Stdout))
-                        {
-                            break Err(error);
-                        }
-                    }
-                }
-            };
-            if result.is_ok() {
-                while let Ok(ProgrammaticUpdate::HistoryEntry { entry, .. }) = updates.try_recv() {
-                    if let Err(error) = write_json_line(stdout, &entry) {
-                        result = Err(error);
-                        break;
+    let turn_result: Result<ProgrammaticTurn, CliError> = if arguments.teleport {
+        service
+            .teleport(
+                &session_id,
+                &working_directory.to_string_lossy(),
+                &prompt,
+                true,
+            )
+            .await
+            .map_err(|error| CliError::Teleport(error.to_string()))
+            .and_then(|teleport_events| {
+                let history = service
+                    .session(&session_id)
+                    .map_err(CliError::Client)?
+                    .snapshot
+                    .map(|snapshot| snapshot.history)
+                    .unwrap_or_default();
+                Ok(ProgrammaticTurn {
+                    session_id: session_id.clone(),
+                    turn_id: String::new(),
+                    final_assistant: String::new(),
+                    history,
+                    events: Vec::new(),
+                    usage: vibe_app_server::client::PublicUsage {
+                        input_tokens: 0,
+                        output_tokens: 0,
+                        price_micros: 0,
+                    },
+                    context_tokens: 0,
+                    steps: 0,
+                    checkpoints: 0,
+                    stop_reason: PublicTurnStopReason::Complete,
+                    teleport_events,
+                })
+            })
+    } else if arguments.output == OutputMode::Streaming {
+        let (observer, mut updates) = programmatic_update_channel(&session_id);
+        let prompt_future = service.prompt_observed(&session_id, &prompt, observer);
+        tokio::pin!(prompt_future);
+        let mut result = loop {
+            tokio::select! {
+                result = &mut prompt_future => break result.map_err(CliError::Client),
+                update = updates.recv() => {
+                    let Some(ProgrammaticUpdate::HistoryEntry { entry, .. }) = update else {
+                        continue;
+                    };
+                    if let Err(error) = write_json_line(stdout, &entry)
+                        .and_then(|()| stdout.flush().map_err(CliError::Stdout))
+                    {
+                        break Err(error);
                     }
                 }
             }
-            result
-        } else {
-            service
-                .prompt(&session_id, &prompt)
-                .await
-                .map_err(CliError::Client)
         };
+        if result.is_ok() {
+            while let Ok(ProgrammaticUpdate::HistoryEntry { entry, .. }) = updates.try_recv() {
+                if let Err(error) = write_json_line(stdout, &entry) {
+                    result = Err(error);
+                    break;
+                }
+            }
+        }
+        result
+    } else {
+        service
+            .prompt(&session_id, &prompt)
+            .await
+            .map_err(CliError::Client)
+    };
     let execution = match turn_result {
         Ok(turn) => {
             close_session_id.clone_from(&turn.session_id);
             let teleport_url =
-                write_teleport_events(arguments.output, &turn.teleport_events, stdout)?;
-            match turn.stop_reason {
-                PublicTurnStopReason::Complete => {
+                write_teleport_events(arguments.output, &turn.teleport_events, stdout);
+            match (turn.stop_reason.clone(), teleport_url) {
+                (_, Err(error)) => Err(error),
+                (PublicTurnStopReason::Complete, Ok(teleport_url)) => {
                     if arguments.output == OutputMode::Streaming {
                         Ok(())
                     } else {
@@ -232,25 +298,28 @@ where
                         )
                     }
                 }
-                PublicTurnStopReason::MaxSteps
-                | PublicTurnStopReason::TokenLimit
-                | PublicTurnStopReason::PriceLimit => {
-                    Err(CliError::Limit(if !turn.final_assistant.is_empty() {
-                        turn.final_assistant
-                    } else {
-                        "The configured conversation limit was reached".to_owned()
-                    }))
-                }
-                PublicTurnStopReason::ResponseLength => Err(CliError::TurnFailed(
+                (
+                    PublicTurnStopReason::MaxSteps
+                    | PublicTurnStopReason::TokenLimit
+                    | PublicTurnStopReason::PriceLimit,
+                    Ok(_),
+                ) => Err(CliError::Limit(if !turn.final_assistant.is_empty() {
+                    turn.final_assistant
+                } else {
+                    "The configured conversation limit was reached".to_owned()
+                })),
+                (PublicTurnStopReason::ResponseLength, Ok(_)) => Err(CliError::TurnFailed(
                     "The model's response exceeded the maximum output token limit.".to_owned(),
                 )),
-                PublicTurnStopReason::Refusal => Err(CliError::TurnFailed(
+                (PublicTurnStopReason::Refusal, Ok(_)) => Err(CliError::TurnFailed(
                     "Provider refused the request".to_owned(),
                 )),
-                PublicTurnStopReason::Cancelled => {
+                (PublicTurnStopReason::Cancelled, Ok(_)) => {
                     Err(CliError::TurnFailed("Turn cancelled".to_owned()))
                 }
-                PublicTurnStopReason::Failed => Err(CliError::TurnFailed("Turn failed".to_owned())),
+                (PublicTurnStopReason::Failed, Ok(_)) => {
+                    Err(CliError::TurnFailed("Turn failed".to_owned()))
+                }
             }
         }
         Err(error) => Err(error),
@@ -261,6 +330,23 @@ where
     close_result?;
     shutdown_result?;
     Ok(())
+}
+
+fn production_server(arguments: &Arguments) -> Result<AppServer, CliError> {
+    if !arguments.teleport {
+        return Ok(AppServer::default());
+    }
+    let credential = std::env::var(&arguments.credential_environment).map_err(|_| {
+        CliError::Teleport(format!(
+            "credential environment `{}` is unavailable",
+            arguments.credential_environment
+        ))
+    })?;
+    let config = VibeCodeCloudConfig::from_credential(credential)
+        .map_err(|error| CliError::Teleport(error.to_string()))?;
+    let release4 = Release4Service::production(config)
+        .map_err(|error| CliError::Teleport(error.to_string()))?;
+    Ok(AppServer::default().using_release4_service(release4))
 }
 
 fn validate_arguments(arguments: &Arguments) -> Result<(), CliError> {
@@ -401,6 +487,8 @@ pub enum CliError {
     TurnFailed(String),
     #[error("{0}")]
     Teleport(String),
+    #[error("terminal UI failed: {0}")]
+    Terminal(String),
     #[error(transparent)]
     Json(serde_json::Error),
     #[error(transparent)]
@@ -427,7 +515,15 @@ mod tests {
     use std::io;
 
     use super::*;
-    use vibe_app_server::client::EchoTurnDriver;
+    use vibe_app_server::client::{DriverFuture, EchoTurnDriver, TurnReservation};
+
+    struct NeverTurnDriver;
+
+    impl TurnDriver for NeverTurnDriver {
+        fn run<'a>(&'a self, _reservation: &'a TurnReservation) -> DriverFuture<'a> {
+            panic!("Teleport must not run a model turn")
+        }
+    }
 
     struct BrokenStdout;
 
@@ -444,7 +540,7 @@ mod tests {
     fn arguments(mode: OutputMode) -> Arguments {
         Arguments {
             initial_prompt: None,
-            version: false,
+            version: None,
             prompt: Some("hello".to_owned()),
             output: mode,
             resume: None,
@@ -488,6 +584,14 @@ mod tests {
         assert!(parsed.is_err());
     }
 
+    #[test]
+    fn interactive_mode_does_not_require_the_version_flag() {
+        let parsed = Arguments::try_parse_from(["vibe"]).expect("interactive arguments");
+        assert!(parsed.version.is_none());
+        assert!(parsed.initial_prompt.is_none());
+        assert!(parsed.prompt.is_none());
+    }
+
     #[tokio::test]
     async fn text_json_and_streaming_have_deterministic_channels() {
         for (mode, expected) in [
@@ -525,6 +629,28 @@ mod tests {
         .expect_err("broken stdout fails");
         assert!(matches!(error, CliError::Stdout(_)));
         assert_eq!(error.exit_code(), 1);
+    }
+
+    #[tokio::test]
+    async fn teleport_flag_bypasses_the_model_and_reports_unavailable_git_context() {
+        let mut arguments = arguments(OutputMode::Text);
+        arguments.teleport = true;
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+
+        let error = execute(arguments, NeverTurnDriver, &mut stdout, &mut stderr)
+            .await
+            .expect_err("default cloud backend is unavailable");
+
+        assert!(
+            matches!(
+                error,
+                CliError::Teleport(ref message)
+                    if message.contains("not an inspectable Git repository")
+            ),
+            "{error:?}"
+        );
+        assert!(stdout.is_empty());
     }
 
     #[test]

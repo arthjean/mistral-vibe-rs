@@ -9,6 +9,15 @@ use vibe_cli::Arguments;
 #[tokio::main]
 async fn main() -> ExitCode {
     let arguments = Arguments::parse();
+    if arguments.prompt.is_none() && arguments.initial_prompt.is_none() {
+        return match vibe_cli::tui::run_interactive(arguments).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("{error}");
+                ExitCode::from(error.exit_code())
+            }
+        };
+    }
     let mut stdout = std::io::stdout().lock();
     let mut stderr = std::io::stderr().lock();
     match vibe_cli::run(arguments, &mut stdout, &mut stderr).await {
