@@ -1628,6 +1628,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "toml",
  "url",
  "vibe-core",
  "vibe-protocol",

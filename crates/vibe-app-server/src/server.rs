@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::release3::{RELEASE3_METHODS, Release3Error, Release3Service, RuntimeAttachment};
 use crate::resources::{
     BACKEND_RESOURCE_METHODS, CoreResourceBackend, RESOURCE_METHODS, ResourceBackend,
     ResourceBackendRequest, ResourceDispatch, ResourceError, ResourceService, ResourceSession,
@@ -14,10 +16,13 @@ use vibe_core::events::{
     PublicEntryGenerationStatus, PublicEntryMetadata, PublicError, PublicHistoryEntry,
     PublicMessageRole, PublicMessageSource, PublicTurn, PublicTurnStatus,
 };
+use vibe_core::integrations::redact;
+use vibe_core::mcp::McpServerConfig;
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore,
     TrustDecision, TrustRootKind,
 };
+use vibe_core::storage::HydratedSession;
 use vibe_core::tools::{ToolExecutionOutput, ToolInvocation, ToolRegistry};
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 use vibe_protocol::{
@@ -128,6 +133,10 @@ pub enum DeferredWork {
         method: String,
         params: BTreeMap<String, Value>,
     },
+    ConfigureMcp {
+        session_id: String,
+        configs: Vec<McpServerConfig>,
+    },
     CloseResources {
         session_id: String,
         generation: u64,
@@ -156,6 +165,7 @@ pub struct AppServer {
     sessions: Arc<Mutex<BTreeMap<String, SessionRuntime>>>,
     resources: Arc<Mutex<ResourceService>>,
     resource_backend: Option<Arc<dyn ResourceBackend>>,
+    release3: Arc<Release3Service>,
     next_session: Arc<AtomicU64>,
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
@@ -168,6 +178,7 @@ impl Default for AppServer {
             sessions: Arc::new(Mutex::new(BTreeMap::new())),
             resources: Arc::new(Mutex::new(ResourceService::default())),
             resource_backend: Some(Arc::new(CoreResourceBackend::default())),
+            release3: Arc::new(Release3Service::default()),
             next_session: Arc::new(AtomicU64::new(1)),
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
@@ -181,6 +192,14 @@ impl AppServer {
     pub fn with_resource_backend(backend: Arc<dyn ResourceBackend>) -> Self {
         Self {
             resource_backend: Some(backend),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn with_release3_service(service: Release3Service) -> Self {
+        Self {
+            release3: Arc::new(service),
             ..Self::default()
         }
     }
@@ -577,6 +596,13 @@ impl AppServer {
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))
     }
 
+    pub(crate) fn tool_registry(&self, session_id: &str) -> Result<ToolRegistry, ServerError> {
+        let sessions = self.lock_sessions()?;
+        session_by_id_or_alias(&sessions, session_id)
+            .map(|session| session.tools.clone())
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))
+    }
+
     pub async fn invoke_tool(
         &self,
         session_id: &str,
@@ -631,6 +657,43 @@ impl AppServer {
         }
     }
 
+    pub async fn configure_mcp_servers(
+        &self,
+        session_id: &str,
+        configs: Vec<McpServerConfig>,
+    ) -> Result<Vec<u8>, ServerError> {
+        let Some(backend) = &self.resource_backend else {
+            return encode_notification(
+                "mcp/updated",
+                result_map([
+                    ("mcp", json!({"sources": []})),
+                    (
+                        "diagnostics",
+                        json!(["MCP transport backend is not configured"]),
+                    ),
+                ]),
+            );
+        };
+        match backend.configure_mcp(session_id, configs).await {
+            Ok(dispatch) => match dispatch.notification {
+                Some(notification) => {
+                    encode_notification(&notification.method, notification.params)
+                }
+                None => encode_notification(
+                    "mcp/updated",
+                    result_map([("mcp", json!({"sources": []})), ("diagnostics", json!([]))]),
+                ),
+            },
+            Err(error) => encode_notification(
+                "mcp/updated",
+                result_map([
+                    ("mcp", json!({"sources": []})),
+                    ("diagnostics", json!([redact(&error.to_string())])),
+                ]),
+            ),
+        }
+    }
+
     pub(crate) fn orphaned_resource_generation(
         &self,
         session_id: &str,
@@ -645,6 +708,85 @@ impl AppServer {
         &self,
     ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, SessionRuntime>>, ServerError> {
         self.sessions.lock().map_err(|_| ServerError::StatePoisoned)
+    }
+
+    fn attach_release3_runtime(&self, attachment: &RuntimeAttachment) -> Result<(), ServerError> {
+        let mut sessions = self.lock_sessions()?;
+        if let Some(session) = sessions.get_mut(&attachment.id) {
+            session.attachments = session.attachments.saturating_add(1);
+            session.persisted = Some(attachment.hydrated.clone());
+            session.updated_at = now_millis();
+            return Ok(());
+        }
+        let policy = PermissionStore::default();
+        let tools = ToolRegistry::default();
+        let timestamp = now_millis();
+        sessions.insert(
+            attachment.id.clone(),
+            SessionRuntime {
+                id: attachment.id.clone(),
+                working_directory: attachment.working_directory.clone(),
+                intent: SessionIntent {
+                    agent: attachment.agent.clone(),
+                    resume: Some(attachment.id.clone()),
+                    ..SessionIntent::default()
+                },
+                status: SessionStatus::Idle,
+                active_turn: None,
+                active_turn_started_at: None,
+                pending_callback: None,
+                resolved_callbacks: BTreeMap::new(),
+                context: Vec::new(),
+                steering: Vec::new(),
+                snapshot: None,
+                attachments: 1,
+                resource_generation: 1,
+                aliases: BTreeSet::new(),
+                created_at: timestamp,
+                updated_at: timestamp,
+                latest_turn: None,
+                event_watermark: 0,
+                policy: policy.clone(),
+                tools: tools.clone(),
+                persisted: Some(attachment.hydrated.clone()),
+            },
+        );
+        if let Err(error) = self
+            .resources
+            .lock()
+            .map_err(|_| ServerError::StatePoisoned)?
+            .open_session(&attachment.id, policy.clone(), tools.clone())
+        {
+            sessions.remove(&attachment.id);
+            return Err(ServerError::Resource(error.to_string()));
+        }
+        if let Some(backend) = &self.resource_backend {
+            if let Err(error) = backend.open_session(ResourceSession {
+                session_id: attachment.id.clone(),
+                generation: 1,
+                working_directory: attachment.working_directory.clone(),
+                policy,
+                tools,
+            }) {
+                if let Ok(mut resources) = self.resources.lock() {
+                    resources.close_session(&attachment.id);
+                }
+                sessions.remove(&attachment.id);
+                return Err(ServerError::Resource(error.to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn refresh_release3_runtime(&self, attachment: &RuntimeAttachment) -> Result<(), ServerError> {
+        let mut sessions = self.lock_sessions()?;
+        let session = sessions
+            .get_mut(&attachment.id)
+            .ok_or_else(|| ServerError::SessionNotFound(attachment.id.clone()))?;
+        session.persisted = Some(attachment.hydrated.clone());
+        session.intent.agent = attachment.agent.clone();
+        session.updated_at = now_millis();
+        Ok(())
     }
 }
 
@@ -869,6 +1011,7 @@ impl ServerConnection {
             "session/context/inject" => self.context_inject(request),
             "callback/respond" => self.callback_respond(request),
             method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
+            method if RELEASE3_METHODS.contains(&method) => self.release3_request(request),
             _ => error_batch(
                 request.id,
                 ProtocolErrorCode::MethodNotFound,
@@ -929,6 +1072,7 @@ impl ServerConnection {
             capabilities: ServerCapabilities {
                 methods: IMPLEMENTED_METHODS
                     .iter()
+                    .chain(RELEASE3_METHODS)
                     .map(ToString::to_string)
                     .collect(),
                 callback_kinds: vec![CallbackKind::Approval, CallbackKind::UserInput],
@@ -989,6 +1133,14 @@ impl ServerConnection {
             .working_directory
             .clone()
             .unwrap_or_else(|| ".".to_owned());
+        let mcp_configs = match self.server.release3.mcp_servers_for_session(
+            Path::new(&working_directory),
+            params.trusted,
+            &params.mcp_servers,
+        ) {
+            Ok(configs) => configs,
+            Err(error) => return release3_error_batch(request.id, error),
+        };
         let permission_store = PermissionStore::default();
         let tools = ToolRegistry::default();
         if let Ok(workspace) = Workspace::open(&working_directory) {
@@ -1067,6 +1219,7 @@ impl ServerConnection {
                 event_watermark: 0,
                 policy: permission_store.clone(),
                 tools: tools.clone(),
+                persisted: None,
             },
         );
         let resource_result = self
@@ -1104,7 +1257,14 @@ impl ServerConnection {
             .get(&session_id)
             .map(public_session_state)
             .unwrap_or(Value::Null);
-        success_batch(request.id, result_map([("state", state)]))
+        let mut batch = success_batch(request.id, result_map([("state", state)]));
+        if !mcp_configs.is_empty() {
+            batch.deferred.push(DeferredWork::ConfigureMcp {
+                session_id,
+                configs: mcp_configs,
+            });
+        }
+        batch
     }
 
     fn session_read(&mut self, request: ServerRequest) -> DispatchBatch {
@@ -1154,6 +1314,13 @@ impl ServerConnection {
         let Some(session) = sessions.get_mut(&params.session_id) else {
             return error_batch(request.id, ProtocolErrorCode::NotFound, "Session not found");
         };
+        if let Err(error) = self
+            .server
+            .release3
+            .close_saved_session(&params.session_id, now_millis())
+        {
+            return release3_error_batch(request.id, error);
+        }
         let active_turn = session.active_turn.clone();
         session.status = SessionStatus::Closed;
         session.updated_at = now_millis();
@@ -1188,6 +1355,42 @@ impl ServerConnection {
                 .collect(),
             deferred,
             close_after_flush: true,
+        }
+    }
+
+    fn release3_request(&mut self, request: ServerRequest) -> DispatchBatch {
+        match self
+            .server
+            .release3
+            .dispatch(&request.method, &request.params)
+        {
+            Ok(dispatch) => {
+                if let Some(attachment) = &dispatch.attachment {
+                    if self.attached_sessions.contains(&attachment.id) {
+                        if let Err(error) = self.server.refresh_release3_runtime(attachment) {
+                            return internal_error_batch(request.id, &error);
+                        }
+                    } else {
+                        if let Err(error) = self.server.attach_release3_runtime(attachment) {
+                            return internal_error_batch(request.id, &error);
+                        }
+                        self.attached_sessions.insert(attachment.id.clone());
+                    }
+                }
+                if request.method == "session/agent/update"
+                    && let (Some(session_id), Some(agent)) = (
+                        request.params.get("sessionId").and_then(Value::as_str),
+                        request.params.get("name").and_then(Value::as_str),
+                    )
+                    && let Ok(mut sessions) = self.server.lock_sessions()
+                    && let Some(session) = session_mut_by_id_or_alias(&mut sessions, session_id)
+                {
+                    session.intent.agent = Some(agent.to_owned());
+                    session.updated_at = now_millis();
+                }
+                success_batch(request.id, dispatch.result)
+            }
+            Err(error) => release3_error_batch(request.id, error),
         }
     }
 
@@ -1708,6 +1911,7 @@ struct SessionRuntime {
     event_watermark: u64,
     policy: PermissionStore,
     tools: ToolRegistry,
+    persisted: Option<HydratedSession>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1789,21 +1993,38 @@ fn public_session_state(session: &SessionRuntime) -> Value {
         }),
         SessionStatus::Closed => json!({"type": "archived"}),
     };
-    let preview = history
-        .iter()
-        .rev()
-        .find_map(|entry| match entry {
-            PublicHistoryEntry::Message { content, .. } => Some(content_text(content)),
-            _ => None,
-        })
-        .unwrap_or_default();
+    let preview =
+        history
+            .iter()
+            .rev()
+            .find_map(|entry| match entry {
+                PublicHistoryEntry::Message { content, .. } => Some(content_text(content)),
+                _ => None,
+            })
+            .or_else(|| {
+                session.persisted.as_ref()?.messages.iter().rev().find_map(
+                    |message| match message {
+                        vibe_core::events::ModelMessage::System { .. } => None,
+                        vibe_core::events::ModelMessage::User { content }
+                        | vibe_core::events::ModelMessage::Assistant { content, .. }
+                        | vibe_core::events::ModelMessage::Tool { content, .. } => {
+                            Some(content.clone())
+                        }
+                    },
+                )
+            })
+            .unwrap_or_default();
+    let parent_session_id = session
+        .persisted
+        .as_ref()
+        .and_then(|persisted| persisted.metadata.parent_session_id.as_deref());
     json!({
         "format": "vibe.public-session-state/v1",
         "eventId": session.event_watermark,
         "session": {
             "id": session.id,
             "rootSessionId": session.aliases.first().unwrap_or(&session.id),
-            "parentSessionId": null,
+            "parentSessionId": parent_session_id,
             "title": session.snapshot.as_ref().and_then(|snapshot| snapshot.title.as_ref()),
             "preview": preview,
             "status": status,
@@ -2183,6 +2404,25 @@ fn resource_error_batch(id: RequestId, error: ResourceError) -> DispatchBatch {
     }
 }
 
+fn release3_error_batch(id: RequestId, error: Release3Error) -> DispatchBatch {
+    match error {
+        Release3Error::MethodNotFound(message) => {
+            error_batch(id, ProtocolErrorCode::MethodNotFound, &message)
+        }
+        Release3Error::InvalidParams(message) => {
+            error_batch(id, ProtocolErrorCode::InvalidParams, &message)
+        }
+        Release3Error::NotFound(message) => error_batch(id, ProtocolErrorCode::NotFound, &message),
+        Release3Error::Config(message)
+        | Release3Error::Storage(message)
+        | Release3Error::Extension(message)
+        | Release3Error::Prompt(message) => error_batch(id, ProtocolErrorCode::Conflict, &message),
+        Release3Error::StatePoisoned | Release3Error::Json(_) => {
+            error_batch(id, ProtocolErrorCode::InternalError, &error.to_string())
+        }
+    }
+}
+
 fn internal_error_batch(id: RequestId, error: &ServerError) -> DispatchBatch {
     error_batch(id, ProtocolErrorCode::InternalError, &error.to_string())
 }
@@ -2213,6 +2453,8 @@ fn now_millis() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use toml::Table;
 
     #[derive(Default)]
     struct RecordingResourceBackend {
@@ -2654,7 +2896,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn operational_resources_are_typed_and_unavailable_backends_fail_actionably() {
+    async fn operational_resources_are_typed_and_transport_failures_are_canonical() {
         let server = AppServer::default();
         let mut connection = server.connect(TransportKind::InProcess);
         initialize(&mut connection);
@@ -2701,14 +2943,15 @@ mod tests {
             .await;
         assert!(matches!(
             decode_frame(&add.outbound[0]).expect("MCP response"),
-            Envelope::Error(ErrorResponse {
-                error: ProtocolError {
-                    code: ProtocolErrorCode::Conflict,
-                    message,
-                    ..
-                },
-                ..
-            }) if message.contains("MCP transport backend is not configured")
+            Envelope::Success(SuccessResponse { result, .. })
+                if result["mcp"]["sources"][0]["status"] == json!("failed")
+                    && result["diagnostics"][0]
+                        .as_str()
+                        .is_some_and(|message| message.contains("supports stdio transports only"))
+        ));
+        assert!(matches!(
+            decode_frame(&add.outbound[1]).expect("MCP notification"),
+            Envelope::Notification(Notification { method, .. }) if method == "mcp/updated"
         ));
     }
 
@@ -2835,6 +3078,73 @@ mod tests {
             *backend.closed.lock().expect("closed state"),
             vec!["session-1".to_owned()]
         );
+    }
+
+    #[test]
+    fn trusted_session_start_schedules_typed_project_mcp_activation() {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        let working_directory = temporary.path().join("workspace");
+        let vibe_home = temporary.path().join("home");
+        fs::create_dir_all(working_directory.join(".vibe")).expect("project config directory");
+        fs::create_dir_all(&vibe_home).expect("user config directory");
+        fs::write(
+            working_directory.join(".vibe/config.toml"),
+            r#"
+[[mcp_servers]]
+name = "fixture"
+transport = "stdio"
+command = "/fixture"
+args = ["--stdio"]
+startup_timeout_sec = 1
+tool_timeout_sec = 2
+"#,
+        )
+        .expect("project MCP config");
+        let release3 = Release3Service::new(
+            crate::release3::Release3Paths {
+                vibe_home,
+                working_directory: working_directory.clone(),
+                session_root: temporary.path().join("sessions"),
+            },
+            Table::new(),
+            true,
+        )
+        .expect("release-3 service");
+        let server = AppServer::with_release3_service(release3);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+
+        let trusted = connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({
+                "sessionId": "trusted",
+                "workingDirectory": working_directory,
+                "trustWorkspace": true
+            }),
+        ));
+        assert!(matches!(
+            trusted.deferred.as_slice(),
+            [DeferredWork::ConfigureMcp {
+                session_id,
+                configs
+            }] if session_id == "trusted"
+                && configs.len() == 1
+                && configs[0].alias == "fixture"
+                && configs[0].startup_timeout_ms == 1_000
+                && configs[0].tool_timeout_ms == 2_000
+        ));
+
+        let untrusted = connection.dispatch(&request(
+            3,
+            "session/start",
+            json!({
+                "sessionId": "untrusted",
+                "workingDirectory": temporary.path().join("workspace"),
+                "trustWorkspace": false
+            }),
+        ));
+        assert!(untrusted.deferred.is_empty());
     }
 
     #[tokio::test]

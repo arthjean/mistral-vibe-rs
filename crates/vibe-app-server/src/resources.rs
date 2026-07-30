@@ -14,6 +14,7 @@ use vibe_core::integrations::{
 };
 use vibe_core::mcp::{
     McpPeerFactory, McpRegistry, McpServerConfig, McpServerView, McpTransportConfig,
+    StdioMcpPeerFactory,
 };
 use vibe_core::platform::{Platform, parse_policy_path};
 use vibe_core::policy::{
@@ -110,6 +111,18 @@ pub type ResourceFuture<'a, T> =
 pub trait ResourceBackend: Send + Sync {
     fn open_session(&self, session: ResourceSession) -> Result<(), ResourceError>;
 
+    fn configure_mcp<'a>(
+        &'a self,
+        _session_id: &'a str,
+        _configs: Vec<McpServerConfig>,
+    ) -> ResourceFuture<'a, ResourceDispatch> {
+        Box::pin(async {
+            Err(ResourceError::Unavailable(
+                "MCP transport backend is not configured".to_owned(),
+            ))
+        })
+    }
+
     fn dispatch<'a>(
         &'a self,
         request: ResourceBackendRequest,
@@ -162,7 +175,7 @@ impl Default for CoreResourceBackend {
     fn default() -> Self {
         Self {
             sessions: Arc::new(StdMutex::new(BTreeMap::new())),
-            mcp_factory: None,
+            mcp_factory: Some(Arc::new(StdioMcpPeerFactory)),
             connector_definitions: Arc::new(Vec::new()),
             connector_backend: None,
             connector_base_url: None,
@@ -222,23 +235,72 @@ impl CoreResourceBackend {
                 let factory = self.mcp_factory.clone().ok_or_else(|| {
                     ResourceError::Unavailable("MCP transport backend is not configured".to_owned())
                 })?;
-                let raw_url = required_string(&request.params, "url")?;
-                let url = Url::parse(raw_url)
-                    .map_err(|error| ResourceError::InvalidParams(error.to_string()))?;
-                let alias = optional_string(&request.params, "name")?
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| mcp_alias(&url));
-                let transport = match optional_string(&request.params, "transport")?
-                    .unwrap_or("streamable-http")
-                {
-                    "http" | "sse" => McpTransportConfig::Http {
-                        url,
-                        headers: BTreeMap::new(),
-                    },
-                    "streamable-http" => McpTransportConfig::StreamableHttp {
-                        url,
-                        headers: BTreeMap::new(),
-                    },
+                let transport_name =
+                    optional_string(&request.params, "transport")?.unwrap_or("streamable-http");
+                let (alias, transport) = match transport_name {
+                    "stdio" => {
+                        let session_root = PathBuf::from(&session.working_directory);
+                        let working_directory =
+                            optional_string(&request.params, "workingDirectory")?
+                                .map(PathBuf::from)
+                                .map(|path| {
+                                    if path.is_absolute() {
+                                        path
+                                    } else {
+                                        session_root.join(path)
+                                    }
+                                })
+                                .unwrap_or(session_root);
+                        if !matches!(
+                            session
+                                .policy
+                                .try_trust_decision(&working_directory)
+                                .map_err(policy_error)?,
+                            Some(TrustDecision::Trusted | TrustDecision::SessionTrusted)
+                        ) {
+                            return Err(ResourceError::Unavailable(
+                                "workspace trust is required before launching a project MCP executable"
+                                    .to_owned(),
+                            ));
+                        }
+                        let command = required_string(&request.params, "command")?.to_owned();
+                        let alias = optional_string(&request.params, "name")?
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| mcp_command_alias(&command));
+                        let arguments =
+                            optional_string_list(&request.params, "arguments")?.unwrap_or_default();
+                        let environment = optional_string_map(&request.params, "environment")?
+                            .unwrap_or_default();
+                        (
+                            alias,
+                            McpTransportConfig::Stdio {
+                                command,
+                                arguments,
+                                environment,
+                                working_directory: Some(working_directory),
+                            },
+                        )
+                    }
+                    "http" | "sse" | "streamable-http" => {
+                        let raw_url = required_string(&request.params, "url")?;
+                        let url = Url::parse(raw_url)
+                            .map_err(|error| ResourceError::InvalidParams(error.to_string()))?;
+                        let alias = optional_string(&request.params, "name")?
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| mcp_alias(&url));
+                        let transport = if matches!(transport_name, "http" | "sse") {
+                            McpTransportConfig::Http {
+                                url,
+                                headers: BTreeMap::new(),
+                            }
+                        } else {
+                            McpTransportConfig::StreamableHttp {
+                                url,
+                                headers: BTreeMap::new(),
+                            }
+                        };
+                        (alias, transport)
+                    }
                     value => {
                         return Err(ResourceError::InvalidParams(format!(
                             "unsupported MCP transport `{value}`"
@@ -252,6 +314,9 @@ impl CoreResourceBackend {
                             alias,
                             transport,
                             enabled: true,
+                            disabled_tools: Default::default(),
+                            startup_timeout_ms: vibe_core::mcp::DEFAULT_MCP_STARTUP_TIMEOUT_MS,
+                            tool_timeout_ms: vibe_core::mcp::DEFAULT_MCP_TOOL_TIMEOUT_MS,
                             oauth: None,
                         }],
                         factory,
@@ -517,6 +582,31 @@ impl ResourceBackend for CoreResourceBackend {
             },
         );
         Ok(())
+    }
+
+    fn configure_mcp<'a>(
+        &'a self,
+        session_id: &'a str,
+        configs: Vec<McpServerConfig>,
+    ) -> ResourceFuture<'a, ResourceDispatch> {
+        Box::pin(async move {
+            let session = self.session(session_id)?;
+            let factory = self.mcp_factory.clone().ok_or_else(|| {
+                ResourceError::Unavailable("MCP transport backend is not configured".to_owned())
+            })?;
+            let diagnostics = session
+                .mcp
+                .discover_all(
+                    configs,
+                    factory,
+                    &session.tools,
+                    session.policy.clone(),
+                    self.approval.clone(),
+                )
+                .await;
+            let state = mcp_view(session.mcp.read().await);
+            Ok(canonical_mutation("mcp", state, "mcp/updated", diagnostics))
+        })
     }
 
     fn dispatch<'a>(
@@ -787,27 +877,32 @@ impl ResourceService {
                 Ok(())
             }
             "mcp/add" => {
-                let raw_url = required_string(params, "url")?;
-                let url = Url::parse(raw_url).map_err(|_| {
-                    ResourceError::InvalidParams("url must be valid HTTPS".to_owned())
-                })?;
-                if url.scheme() != "https" {
-                    return Err(ResourceError::InvalidParams(
-                        "MCP HTTP endpoints require HTTPS".to_owned(),
-                    ));
-                }
-                let name = optional_string(params, "name")?.unwrap_or_else(|| {
-                    url.host_str()
-                        .unwrap_or("mcp")
-                        .trim_matches(|character: char| !character.is_ascii_alphanumeric())
-                });
+                let transport = optional_string(params, "transport")?.unwrap_or("streamable-http");
+                let default_name = if transport == "stdio" {
+                    let command = required_string(params, "command")?;
+                    optional_string_list(params, "arguments")?;
+                    optional_string_map(params, "environment")?;
+                    optional_string(params, "workingDirectory")?;
+                    mcp_command_alias(command)
+                } else {
+                    let raw_url = required_string(params, "url")?;
+                    let url = Url::parse(raw_url).map_err(|_| {
+                        ResourceError::InvalidParams("url must be valid HTTPS".to_owned())
+                    })?;
+                    if url.scheme() != "https" {
+                        return Err(ResourceError::InvalidParams(
+                            "MCP HTTP endpoints require HTTPS".to_owned(),
+                        ));
+                    }
+                    mcp_alias(&url)
+                };
+                let name = optional_string(params, "name")?.unwrap_or(&default_name);
                 if name.is_empty() {
                     return Err(ResourceError::InvalidParams(
                         "MCP source name cannot be empty".to_owned(),
                     ));
                 }
-                let transport = optional_string(params, "transport")?.unwrap_or("streamable-http");
-                if !matches!(transport, "http" | "streamable-http" | "sse") {
+                if !matches!(transport, "http" | "streamable-http" | "sse" | "stdio") {
                     return Err(ResourceError::InvalidParams(
                         "unsupported MCP transport".to_owned(),
                     ));
@@ -1476,6 +1571,24 @@ fn mcp_alias(url: &Url) -> String {
     alias.trim_matches('_').to_owned()
 }
 
+fn mcp_command_alias(command: &str) -> String {
+    PathBuf::from(command)
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("mcp")
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('_')
+        .to_owned()
+}
+
 fn integration_error(error: vibe_core::integrations::IntegrationError) -> ResourceError {
     match error {
         vibe_core::integrations::IntegrationError::ConnectorNotFound(name) => {
@@ -1529,6 +1642,66 @@ fn optional_string<'a>(
             "{key} must be a string"
         ))),
     }
+}
+
+fn optional_string_list(
+    params: &BTreeMap<String, Value>,
+    key: &str,
+) -> Result<Option<Vec<String>>, ResourceError> {
+    let Some(value) = params.get(key) else {
+        return Ok(None);
+    };
+    let values = value
+        .as_array()
+        .ok_or_else(|| ResourceError::InvalidParams(format!("{key} must be an array")))?;
+    if values.len() > 256 {
+        return Err(ResourceError::InvalidParams(format!(
+            "{key} contains too many entries"
+        )));
+    }
+    values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .filter(|value| value.len() <= MAX_RESOURCE_STRING_BYTES && !value.contains('\0'))
+                .map(str::to_owned)
+                .ok_or_else(|| {
+                    ResourceError::InvalidParams(format!("{key} entries must be bounded strings"))
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(Some)
+}
+
+fn optional_string_map(
+    params: &BTreeMap<String, Value>,
+    key: &str,
+) -> Result<Option<BTreeMap<String, String>>, ResourceError> {
+    let Some(value) = params.get(key) else {
+        return Ok(None);
+    };
+    let values = value
+        .as_object()
+        .ok_or_else(|| ResourceError::InvalidParams(format!("{key} must be an object")))?;
+    if values.len() > 256 {
+        return Err(ResourceError::InvalidParams(format!(
+            "{key} contains too many entries"
+        )));
+    }
+    values
+        .iter()
+        .map(|(name, value)| {
+            let value = value
+                .as_str()
+                .filter(|value| value.len() <= MAX_RESOURCE_STRING_BYTES && !value.contains('\0'))
+                .ok_or_else(|| {
+                    ResourceError::InvalidParams(format!("{key} values must be bounded strings"))
+                })?;
+            Ok((name.clone(), value.to_owned()))
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()
+        .map(Some)
 }
 
 fn required_bool(params: &BTreeMap<String, Value>, key: &str) -> Result<bool, ResourceError> {
@@ -1758,6 +1931,76 @@ mod tests {
             )
             .expect_err("insecure URL");
         assert!(matches!(error, ResourceError::InvalidParams(_)));
+    }
+
+    #[tokio::test]
+    async fn core_backend_denies_stdio_mcp_before_workspace_trust() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let backend = CoreResourceBackend::default();
+        backend
+            .open_session(ResourceSession {
+                session_id: "s1".to_owned(),
+                generation: 1,
+                working_directory: workspace.path().to_string_lossy().into_owned(),
+                policy: PermissionStore::default(),
+                tools: ToolRegistry::default(),
+            })
+            .expect("open session");
+        let error = backend
+            .dispatch(ResourceBackendRequest {
+                session_id: "s1".to_owned(),
+                method: "mcp/add".to_owned(),
+                params: params(json!({
+                    "name": "untrusted",
+                    "transport": "stdio",
+                    "command": "must-not-launch"
+                })),
+            })
+            .await
+            .expect_err("untrusted executable must be denied before spawn");
+        assert!(
+            matches!(error, ResourceError::Unavailable(message) if message.contains("workspace trust"))
+        );
+    }
+
+    #[tokio::test]
+    async fn core_backend_denies_stdio_mcp_working_directory_outside_trust() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let outside = tempfile::tempdir().expect("outside directory");
+        let policy = PermissionStore::default();
+        policy
+            .try_set_trust(
+                workspace.path(),
+                TrustDecision::SessionTrusted,
+                TrustRootKind::Workspace,
+            )
+            .expect("trust workspace");
+        let backend = CoreResourceBackend::default();
+        backend
+            .open_session(ResourceSession {
+                session_id: "s1".to_owned(),
+                generation: 1,
+                working_directory: workspace.path().to_string_lossy().into_owned(),
+                policy,
+                tools: ToolRegistry::default(),
+            })
+            .expect("open session");
+        let error = backend
+            .dispatch(ResourceBackendRequest {
+                session_id: "s1".to_owned(),
+                method: "mcp/add".to_owned(),
+                params: params(json!({
+                    "name": "outside",
+                    "transport": "stdio",
+                    "command": "must-not-launch",
+                    "workingDirectory": outside.path()
+                })),
+            })
+            .await
+            .expect_err("outside working directory must be denied before spawn");
+        assert!(
+            matches!(error, ResourceError::Unavailable(message) if message.contains("workspace trust"))
+        );
     }
 
     #[tokio::test]

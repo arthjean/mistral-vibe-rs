@@ -236,6 +236,13 @@ where
                                     break 'serve;
                                 }
                             };
+                            let tools = match server.tool_registry(&session_id) {
+                                Ok(tools) => tools,
+                                Err(error) => {
+                                    failure = Some(TransportError::Server(error));
+                                    break 'serve;
+                                }
+                            };
                             let reservation = TurnReservation {
                                 session_id: session_id.clone(),
                                 turn_id: turn_id.clone(),
@@ -247,6 +254,7 @@ where
                                 mention_stats,
                                 working_directory: session.working_directory,
                                 intent: session.intent,
+                                tools,
                             };
                             active.insert((session_id.clone(), turn_id.clone()));
                             let task_server = server.clone();
@@ -442,6 +450,25 @@ where
                                     failure = Some(error);
                                     break 'serve;
                                 }
+                            }
+                        }
+                        DeferredWork::ConfigureMcp {
+                            session_id,
+                            configs,
+                        } => {
+                            let notification = match server
+                                .configure_mcp_servers(&session_id, configs)
+                                .await
+                            {
+                                Ok(notification) => notification,
+                                Err(error) => {
+                                    failure = Some(TransportError::Server(error));
+                                    break 'serve;
+                                }
+                            };
+                            if let Err(error) = transport.send(&notification).await {
+                                failure = Some(error);
+                                break 'serve;
                             }
                         }
                         DeferredWork::CloseResources {
@@ -1094,7 +1121,8 @@ async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &
             | DeferredWork::SteerTurn { .. }
             | DeferredWork::InjectContext { .. }
             | DeferredWork::ResolveCallback { .. }
-            | DeferredWork::ResourceRequest { .. } => {}
+            | DeferredWork::ResourceRequest { .. }
+            | DeferredWork::ConfigureMcp { .. } => {}
         }
     }
 }

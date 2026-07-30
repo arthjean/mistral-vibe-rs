@@ -11,17 +11,27 @@ use serde_json::{Value, json};
 use thiserror::Error;
 use vibe_core::engine::{
     CancellationToken, CompletionProvider, ConversationEngine, EngineLimits, EventObserver,
-    NoopEventObserver, SessionStats, SessionTranscriptSink, TurnControl, TurnControlHandle,
-    TurnOutcome,
+    NoopEventObserver, SessionStats, SessionTranscriptSink, ToolExecutor, ToolFuture,
+    ToolStreamSink, TurnControl, TurnControlHandle, TurnOutcome,
 };
 use vibe_core::events::{
     ApplyOutcome, EventEnvelope, LifecycleState, ModelMessage, ProjectionReducer,
     PublicContentBlock, PublicError, PublicHistoryEntry,
 };
+use vibe_core::extensions::{
+    AgentKind, AgentProfile, ChildContext, ChildLoggingPolicy, DelegationRequest, DiscoveryRoots,
+    ExtensionSource, SubagentFuture, SubagentManager, SubagentRunner, discover_extensions,
+};
+use vibe_core::mcp::McpServerConfig;
 use vibe_core::provider::{
-    HttpTransport, ImageInput, ProviderBackend, ProviderInput, ProviderStyle, RequestLimits, Usage,
+    HttpTransport, ImageInput, ProviderBackend, ProviderInput, ProviderStyle, RequestLimits,
+    ToolDefinition, Usage,
 };
 use vibe_core::storage::SessionStore;
+use vibe_core::tools::{
+    OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolHandler,
+    ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
+};
 use vibe_protocol::{
     Envelope, ErrorResponse, ProtocolError, RequestId, SuccessResponse, TransportKind, decode_frame,
 };
@@ -127,6 +137,7 @@ pub struct TurnReservation {
     pub mention_stats: Option<Value>,
     pub working_directory: String,
     pub intent: SessionIntent,
+    pub tools: ToolRegistry,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -278,6 +289,7 @@ pub struct InProcessClient {
     server: AppServer,
     connection: ServerConnection,
     next_request: i64,
+    pending_mcp: BTreeMap<String, Vec<McpServerConfig>>,
 }
 
 impl InProcessClient {
@@ -287,22 +299,59 @@ impl InProcessClient {
             connection: server.connect(TransportKind::InProcess),
             server,
             next_request: 1,
+            pending_mcp: BTreeMap::new(),
         };
         client.initialize()?;
         Ok(client)
     }
 
     pub fn start_session(&mut self, options: &SessionOptions) -> Result<String, ClientError> {
-        let result = self.call(
+        let request_id = self.take_request_id();
+        let request = request_bytes(
+            request_id.clone(),
             "session/start",
             serde_json::to_value(options).map_err(ClientError::Json)?,
         )?;
-        result
+        let batch = self.connection.dispatch(&request);
+        if batch.close_after_flush {
+            return Err(ClientError::InvalidResponse(
+                "session start unexpectedly closed the connection".to_owned(),
+            ));
+        }
+        let result = response_result(single_outbound(batch.outbound)?, &request_id)?;
+        let session_id = result
             .get("state")
             .and_then(|state| state.pointer("/session/id"))
             .and_then(Value::as_str)
             .map(str::to_owned)
-            .ok_or_else(|| ClientError::InvalidResponse("missing sessionId".to_owned()))
+            .ok_or_else(|| ClientError::InvalidResponse("missing sessionId".to_owned()))?;
+        for work in batch.deferred {
+            match work {
+                DeferredWork::ConfigureMcp {
+                    session_id: deferred_session,
+                    configs,
+                } if deferred_session == session_id => {
+                    self.pending_mcp.insert(deferred_session, configs);
+                }
+                _ => {
+                    return Err(ClientError::InvalidResponse(
+                        "session start returned unexpected deferred work".to_owned(),
+                    ));
+                }
+            }
+        }
+        Ok(session_id)
+    }
+
+    pub async fn configure_pending_mcp(&mut self, session_id: &str) -> Result<(), ClientError> {
+        let Some(configs) = self.pending_mcp.remove(session_id) else {
+            return Ok(());
+        };
+        self.server
+            .configure_mcp_servers(session_id, configs)
+            .await
+            .map(drop)
+            .map_err(ClientError::Server)
     }
 
     pub fn session(&mut self, session_id: &str) -> Result<SessionView, ClientError> {
@@ -350,6 +399,7 @@ impl InProcessClient {
             }
         }
         let session = self.server.session(session_id)?;
+        let tools = self.server.tool_registry(session_id)?;
         Ok(TurnReservation {
             session_id: session_id.to_owned(),
             turn_id,
@@ -363,6 +413,7 @@ impl InProcessClient {
             mention_stats: None,
             working_directory: session.working_directory,
             intent: session.intent,
+            tools,
         })
     }
 
@@ -471,6 +522,7 @@ impl InProcessClient {
         &mut self,
         session_id: &str,
     ) -> Result<Option<(String, String)>, ClientError> {
+        self.pending_mcp.remove(session_id);
         let request_id = self.take_request_id();
         let request = request_bytes(
             request_id.clone(),
@@ -611,6 +663,7 @@ where
         session_id: &str,
         prompt: &str,
     ) -> Result<ProgrammaticTurn, ClientError> {
+        self.client.configure_pending_mcp(session_id).await?;
         let reservation = self.client.reserve_turn(session_id, prompt)?;
         match self.driver.run(&reservation).await {
             Ok(outcome) => self.client.finish_turn(&reservation, outcome),
@@ -627,6 +680,7 @@ where
         prompt: &str,
         observer: Arc<dyn EventObserver>,
     ) -> Result<ProgrammaticTurn, ClientError> {
+        self.client.configure_pending_mcp(session_id).await?;
         let reservation = self.client.reserve_turn(session_id, prompt)?;
         match self.driver.run_observed(&reservation, observer).await {
             Ok(outcome) => self.client.finish_turn(&reservation, outcome),
@@ -677,6 +731,81 @@ pub struct LiveTurnDriver {
     pending_context: Mutex<HashMap<String, Vec<String>>>,
 }
 
+#[derive(Clone)]
+struct SessionToolExecutor {
+    tools: ToolRegistry,
+    enabled: BTreeSet<String>,
+    disabled: BTreeSet<String>,
+    allowed: Option<BTreeSet<String>>,
+}
+
+impl SessionToolExecutor {
+    fn new(tools: ToolRegistry, intent: &SessionIntent) -> Self {
+        Self {
+            tools,
+            enabled: intent.enabled_tools.iter().cloned().collect(),
+            disabled: intent.disabled_tools.iter().cloned().collect(),
+            allowed: None,
+        }
+    }
+
+    fn with_allowed_tools(mut self, allowed: BTreeSet<String>) -> Self {
+        self.allowed = Some(allowed);
+        self
+    }
+
+    fn permits(&self, name: &str) -> bool {
+        (self.enabled.is_empty() || self.enabled.contains(name))
+            && !self.disabled.contains(name)
+            && self
+                .allowed
+                .as_ref()
+                .is_none_or(|allowed| allowed.contains(name))
+    }
+
+    fn definitions(&self) -> Result<Vec<ToolDefinition>, DriverError> {
+        self.tools
+            .available(&self.enabled, &self.disabled)
+            .map_err(|error| DriverError::Tool(error.to_string()))
+            .map(|definitions| {
+                definitions
+                    .into_iter()
+                    .filter(|definition| self.permits(&definition.name))
+                    .map(|spec| ToolDefinition {
+                        name: spec.name,
+                        description: spec.description,
+                        input_schema: spec.input_schema,
+                    })
+                    .collect()
+            })
+    }
+}
+
+impl ToolExecutor for SessionToolExecutor {
+    fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a> {
+        if !self.permits(name) {
+            return Box::pin(
+                async move { Err(format!("tool `{name}` is disabled for this session")) },
+            );
+        }
+        self.tools.execute(name, arguments)
+    }
+
+    fn execute_stream<'a>(
+        &'a self,
+        name: &'a str,
+        arguments: &'a str,
+        output: ToolStreamSink,
+    ) -> ToolFuture<'a> {
+        if !self.permits(name) {
+            return Box::pin(
+                async move { Err(format!("tool `{name}` is disabled for this session")) },
+            );
+        }
+        self.tools.execute_stream(name, arguments, output)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 struct LiveTurnControl {
     cancellation: CancellationToken,
@@ -684,6 +813,23 @@ struct LiveTurnControl {
 }
 
 impl LiveTurnDriver {
+    #[cfg(feature = "test-fixtures")]
+    #[must_use]
+    pub fn from_provider_for_tests(
+        provider: Arc<dyn CompletionProvider>,
+        system_prompt: impl Into<String>,
+    ) -> Self {
+        Self {
+            provider,
+            system_prompt: system_prompt.into(),
+            session_root: None,
+            input_price_per_million_micros: 0,
+            output_price_per_million_micros: 0,
+            controls: Mutex::new(HashMap::new()),
+            pending_context: Mutex::new(HashMap::new()),
+        }
+    }
+
     pub fn from_environment(config: LiveDriverConfig) -> Result<Self, DriverError> {
         let style = ProviderStyle::parse(&config.style).map_err(DriverError::Provider)?;
         let credential = std::env::var(&config.credential_environment).map_err(|_| {
@@ -751,6 +897,8 @@ impl LiveTurnDriver {
             },
             metadata: BTreeMap::new(),
         };
+        let session_tools =
+            SessionToolExecutor::new(reservation.tools.clone(), &reservation.intent);
         for (key, value) in [
             (
                 "client_user_message_id",
@@ -841,6 +989,8 @@ impl LiveTurnDriver {
                     (metadata, reservation.session_id.clone())
                 }
             };
+            self.register_task_tool(reservation, store.clone(), engine_session_id.clone())?;
+            input.tools = session_tools.definitions()?;
             let baseline = session_stats(&metadata);
             if let Some(context) = pending_context.take() {
                 input.messages.extend(
@@ -850,6 +1000,7 @@ impl LiveTurnDriver {
                 );
             }
             ConversationEngine::new(Arc::clone(&self.provider))
+                .with_tools(session_tools.clone())
                 .with_sink(SessionTranscriptSink::new(store, metadata))
                 .with_limits(limits)
                 .with_baseline(baseline)
@@ -864,6 +1015,7 @@ impl LiveTurnDriver {
                 .await
                 .map_err(DriverError::Engine)
         } else {
+            input.tools = session_tools.definitions()?;
             if let Some(context) = pending_context.take() {
                 input.messages.extend(
                     context
@@ -872,6 +1024,7 @@ impl LiveTurnDriver {
                 );
             }
             ConversationEngine::new(Arc::clone(&self.provider))
+                .with_tools(session_tools)
                 .with_limits(limits)
                 .with_observer(observer)
                 .run_turn_controlled(
@@ -885,6 +1038,270 @@ impl LiveTurnDriver {
                 .map_err(DriverError::Engine)
         }
     }
+
+    fn register_task_tool(
+        &self,
+        reservation: &TurnReservation,
+        store: SessionStore,
+        parent_session_id: String,
+    ) -> Result<(), DriverError> {
+        let built_in = AgentProfile {
+            name: "explore".to_owned(),
+            display_name: "Explore".to_owned(),
+            description: "Inspect a bounded task in an independent child session".to_owned(),
+            kind: AgentKind::Subagent,
+            safety: "read_only".to_owned(),
+            overrides: toml::Table::new(),
+            source: ExtensionSource::Builtin,
+            path: None,
+        };
+        let vibe_home = std::env::var_os("VIBE_HOME")
+            .map(PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("HOME")
+                    .map(PathBuf::from)
+                    .map(|home| home.join(".vibe"))
+            })
+            .unwrap_or_else(|| PathBuf::from(".vibe"));
+        let catalog = discover_extensions(
+            &DiscoveryRoots {
+                configured: Vec::new(),
+                project: vec![PathBuf::from(&reservation.working_directory).join(".vibe")],
+                user: vec![vibe_home.join("extensions")],
+                project_trusted: reservation.intent.trusted,
+            },
+            BTreeMap::from([(built_in.name.clone(), built_in)]),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        let subagents = catalog
+            .agents
+            .into_iter()
+            .filter(|(_, profile)| profile.kind == AgentKind::Subagent)
+            .collect::<BTreeMap<_, _>>();
+        let subagent_names = subagents.keys().cloned().collect::<Vec<_>>();
+        let runner = Arc::new(ProviderSubagentRunner {
+            provider: self.provider.clone(),
+            system_prompt: self.system_prompt.clone(),
+            store: store.clone(),
+            tools: reservation.tools.clone(),
+            input_price_per_million_micros: self.input_price_per_million_micros,
+            output_price_per_million_micros: self.output_price_per_million_micros,
+            parent_intent: reservation.intent.clone(),
+        });
+        let manager = Arc::new(SubagentManager::new(store, runner));
+        let handler: Arc<dyn ToolHandler> = Arc::new(
+            move |invocation: &vibe_core::tools::ToolInvocation,
+                  _output: vibe_core::tools::ToolOutputSink|
+                  -> OwnedToolHandlerFuture {
+                let manager = manager.clone();
+                let subagents = subagents.clone();
+                let parent_session_id = parent_session_id.clone();
+                let arguments = invocation.arguments.clone();
+                Box::pin(async move {
+                    let agent_name =
+                        arguments
+                            .get("agent")
+                            .and_then(Value::as_str)
+                            .ok_or_else(|| vibe_core::tools::ToolError::SchemaViolation {
+                                path: "/agent".to_owned(),
+                                message: "must be a string".to_owned(),
+                            })?;
+                    let task = arguments
+                        .get("task")
+                        .and_then(Value::as_str)
+                        .filter(|task| !task.is_empty())
+                        .ok_or_else(|| vibe_core::tools::ToolError::SchemaViolation {
+                            path: "/task".to_owned(),
+                            message: "must be a non-empty string".to_owned(),
+                        })?;
+                    let agent = subagents.get(agent_name).cloned().ok_or_else(|| {
+                        vibe_core::tools::ToolError::Unavailable(format!(
+                            "subagent `{agent_name}` is unavailable"
+                        ))
+                    })?;
+                    let effect = manager
+                        .delegate(
+                            DelegationRequest {
+                                parent_session_id,
+                                agent,
+                                prompt: task.to_owned(),
+                                logging: ChildLoggingPolicy::SummaryOnly,
+                            },
+                            now_millis().map_err(|error| {
+                                vibe_core::tools::ToolError::Execution(error.to_string())
+                            })?,
+                        )
+                        .await
+                        .map_err(|error| {
+                            vibe_core::tools::ToolError::Execution(error.to_string())
+                        })?;
+                    let typed_result = serde_json::to_value(&effect).map_err(|error| {
+                        vibe_core::tools::ToolError::InvalidResult(error.to_string())
+                    })?;
+                    Ok(ToolExecutionOutput {
+                        model_text: effect.result.clone(),
+                        typed_result,
+                        display: json!({"kind": "subagent", "effect": effect}),
+                        chunks: Vec::new(),
+                    })
+                })
+            },
+        );
+        reservation
+            .tools
+            .register(
+                ToolSpec {
+                    name: "task".to_owned(),
+                    description: "Delegate a bounded task to an independent child session"
+                        .to_owned(),
+                    input_schema: json!({
+                        "type": "object",
+                        "properties": {
+                            "agent": {
+                                "type": "string",
+                                "enum": subagent_names
+                            },
+                            "task": {"type": "string", "minLength": 1}
+                        },
+                        "required": ["agent", "task"],
+                        "additionalProperties": false
+                    }),
+                    output_schema: None,
+                    config: Value::Null,
+                    state: Value::Null,
+                    availability: ToolAvailability::Available,
+                    presentation: vibe_core::tools::ToolPresentationKind::Generic,
+                    source: ToolSource::BuiltIn,
+                    selection_priority: 40,
+                },
+                handler,
+            )
+            .map(drop)
+            .map_err(|error| DriverError::Tool(error.to_string()))
+    }
+}
+
+struct ProviderSubagentRunner {
+    provider: Arc<dyn CompletionProvider>,
+    system_prompt: String,
+    store: SessionStore,
+    tools: ToolRegistry,
+    input_price_per_million_micros: u64,
+    output_price_per_million_micros: u64,
+    parent_intent: SessionIntent,
+}
+
+impl SubagentRunner for ProviderSubagentRunner {
+    fn run<'a>(
+        &'a self,
+        context: ChildContext,
+        cancellation: CancellationToken,
+    ) -> SubagentFuture<'a> {
+        Box::pin(async move {
+            let metadata = self
+                .store
+                .load(&context.child_session_id)
+                .map_err(|error| error.to_string())?
+                .metadata;
+            let parent_executor = SessionToolExecutor::new(self.tools.clone(), &self.parent_intent);
+            let enabled_by_agent = agent_tool_override(&context.agent, "enabled_tools")?;
+            let disabled_by_agent =
+                agent_tool_override(&context.agent, "disabled_tools")?.unwrap_or_default();
+            let allowed = self
+                .tools
+                .available(&BTreeSet::new(), &BTreeSet::new())
+                .map_err(|error| error.to_string())?
+                .into_iter()
+                .filter(|spec| {
+                    parent_executor.permits(&spec.name)
+                        && spec.name != "task"
+                        && !disabled_by_agent.contains(&spec.name)
+                        && enabled_by_agent
+                            .as_ref()
+                            .is_none_or(|enabled| enabled.contains(&spec.name))
+                        && (context.agent.safety != "read_only"
+                            || matches!(
+                                spec.presentation,
+                                ToolPresentationKind::Read | ToolPresentationKind::Search
+                            ))
+                })
+                .map(|spec| spec.name)
+                .collect();
+            let executor = parent_executor.with_allowed_tools(allowed);
+            let definitions = executor.definitions().map_err(|error| error.to_string())?;
+            let input = ProviderInput {
+                turn_id: Some(format!("{}-turn", context.child_session_id)),
+                messages: vec![ModelMessage::System {
+                    content: self.system_prompt.clone(),
+                }],
+                stream: true,
+                images: Vec::new(),
+                tools: definitions,
+                tool_choice: None,
+                thinking: false,
+                reasoning_effort: None,
+                headers: BTreeMap::new(),
+                limits: RequestLimits {
+                    max_tokens: 4096,
+                    temperature_millis: None,
+                    max_response_bytes: 2 * 1024 * 1024,
+                },
+                metadata: BTreeMap::from([
+                    ("parent_session_id".to_owned(), context.parent_session_id),
+                    ("agent".to_owned(), context.agent.name),
+                    ("working_directory".to_owned(), context.working_directory),
+                ]),
+            };
+            let outcome = ConversationEngine::new(self.provider.clone())
+                .with_tools(executor)
+                .with_sink(SessionTranscriptSink::new(self.store.clone(), metadata))
+                .with_limits(EngineLimits {
+                    input_price_per_million_micros: self.input_price_per_million_micros,
+                    output_price_per_million_micros: self.output_price_per_million_micros,
+                    ..EngineLimits::default()
+                })
+                .run_turn(
+                    context.child_session_id,
+                    input,
+                    context.prompt,
+                    cancellation,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(outcome
+                .messages
+                .iter()
+                .rev()
+                .find_map(|message| match message {
+                    ModelMessage::Assistant { content, .. } if !content.is_empty() => {
+                        Some(content.clone())
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| "Subagent completed without a text response".to_owned()))
+        })
+    }
+}
+
+fn agent_tool_override(
+    agent: &AgentProfile,
+    key: &str,
+) -> Result<Option<BTreeSet<String>>, String> {
+    let Some(value) = agent.overrides.get(key) else {
+        return Ok(None);
+    };
+    let values = value
+        .as_array()
+        .ok_or_else(|| format!("agent `{}` {key} must be an array", agent.name))?;
+    let mut names = BTreeSet::new();
+    for value in values {
+        let name = value
+            .as_str()
+            .ok_or_else(|| format!("agent `{}` {key} entries must be strings", agent.name))?;
+        names.insert(name.to_owned());
+    }
+    Ok(Some(names))
 }
 
 impl TurnDriver for LiveTurnDriver {
@@ -1135,6 +1552,8 @@ pub enum DriverError {
     UnsupportedControl(&'static str),
     #[error("event observer failed: {0}")]
     Observation(String),
+    #[error("tool registry failed: {0}")]
+    Tool(String),
     #[error("system clock precedes UNIX epoch")]
     InvalidSystemTime,
     #[error(transparent)]
@@ -1239,7 +1658,14 @@ fn now_millis() -> Result<u64, DriverError> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    use vibe_core::events::ModelToolCall;
     use vibe_core::provider::{AssistantMessage, Usage};
+    use vibe_core::tools::{
+        ToolAvailability, ToolExecutionOutput, ToolPresentationKind, ToolSource, ToolSpec,
+        object_schema,
+    };
 
     use super::*;
 
@@ -1272,6 +1698,204 @@ mod tests {
                     stop_reason: "stop".to_owned(),
                     correlation_id: None,
                 })
+            })
+        }
+    }
+
+    struct ToolSelectingProvider {
+        calls: AtomicUsize,
+        saw_definition: Arc<AtomicBool>,
+    }
+
+    struct SubagentSelectingProvider {
+        root_calls: AtomicUsize,
+        child_calls: AtomicUsize,
+        saw_task_definition: AtomicBool,
+        child_hid_task_definition: AtomicBool,
+        child_inherited_restrictions: AtomicBool,
+    }
+
+    impl CompletionProvider for SubagentSelectingProvider {
+        fn complete<'a>(
+            &'a self,
+            input: &'a ProviderInput,
+        ) -> vibe_core::engine::ProviderFuture<'a> {
+            Box::pin(async move {
+                if input.metadata.contains_key("parent_session_id") {
+                    let child_call = self.child_calls.fetch_add(1, Ordering::AcqRel);
+                    self.child_hid_task_definition.store(
+                        !input.tools.iter().any(|tool| tool.name == "task"),
+                        Ordering::Release,
+                    );
+                    self.child_inherited_restrictions.store(
+                        input
+                            .tools
+                            .iter()
+                            .map(|tool| tool.name.as_str())
+                            .eq(["read"]),
+                        Ordering::Release,
+                    );
+                    if child_call == 0 {
+                        return Ok(AssistantMessage {
+                            text: String::new(),
+                            reasoning: None,
+                            reasoning_signature: None,
+                            reasoning_state: Vec::new(),
+                            tool_calls: vec![
+                                ModelToolCall {
+                                    id: "child-edit".to_owned(),
+                                    name: "edit".to_owned(),
+                                    arguments: "{}".to_owned(),
+                                },
+                                ModelToolCall {
+                                    id: "child-shell".to_owned(),
+                                    name: "shell".to_owned(),
+                                    arguments: "{}".to_owned(),
+                                },
+                            ],
+                            usage: Usage::default(),
+                            refusal: None,
+                            stop_reason: "tool_calls".to_owned(),
+                            correlation_id: None,
+                        });
+                    }
+                    for call_id in ["child-edit", "child-shell"] {
+                        if !input.messages.iter().any(|message| {
+                            matches!(
+                                message,
+                                ModelMessage::Tool {
+                                    call_id: actual,
+                                    is_error: true,
+                                    ..
+                                } if actual == call_id
+                            )
+                        }) {
+                            return Err(vibe_core::provider::ProviderError::MalformedStream(
+                                format!("restricted child tool `{call_id}` was not rejected"),
+                            ));
+                        }
+                    }
+                    return Ok(AssistantMessage {
+                        text: "child answer".to_owned(),
+                        reasoning: None,
+                        reasoning_signature: None,
+                        reasoning_state: Vec::new(),
+                        tool_calls: Vec::new(),
+                        usage: Usage::default(),
+                        refusal: None,
+                        stop_reason: "stop".to_owned(),
+                        correlation_id: None,
+                    });
+                }
+                let call = self.root_calls.fetch_add(1, Ordering::AcqRel);
+                if call == 0 {
+                    self.saw_task_definition.store(
+                        input.tools.iter().any(|tool| tool.name == "task"),
+                        Ordering::Release,
+                    );
+                    Ok(AssistantMessage {
+                        text: String::new(),
+                        reasoning: None,
+                        reasoning_signature: None,
+                        reasoning_state: Vec::new(),
+                        tool_calls: vec![ModelToolCall {
+                            id: "delegate-1".to_owned(),
+                            name: "task".to_owned(),
+                            arguments: r#"{"agent":"explore","task":"inspect"}"#.to_owned(),
+                        }],
+                        usage: Usage::default(),
+                        refusal: None,
+                        stop_reason: "tool_calls".to_owned(),
+                        correlation_id: None,
+                    })
+                } else if input.messages.iter().any(|message| {
+                    matches!(
+                        message,
+                        ModelMessage::Tool {
+                            call_id,
+                            content,
+                            is_error: false,
+                        } if call_id == "delegate-1" && content == "child answer"
+                    )
+                }) {
+                    Ok(AssistantMessage {
+                        text: "root done".to_owned(),
+                        reasoning: None,
+                        reasoning_signature: None,
+                        reasoning_state: Vec::new(),
+                        tool_calls: Vec::new(),
+                        usage: Usage::default(),
+                        refusal: None,
+                        stop_reason: "stop".to_owned(),
+                        correlation_id: None,
+                    })
+                } else {
+                    Err(vibe_core::provider::ProviderError::MalformedStream(
+                        "subagent result did not return to the parent".to_owned(),
+                    ))
+                }
+            })
+        }
+    }
+
+    impl CompletionProvider for ToolSelectingProvider {
+        fn complete<'a>(
+            &'a self,
+            input: &'a ProviderInput,
+        ) -> vibe_core::engine::ProviderFuture<'a> {
+            Box::pin(async move {
+                let call = self.calls.fetch_add(1, Ordering::AcqRel);
+                if call == 0 {
+                    self.saw_definition.store(
+                        input
+                            .tools
+                            .iter()
+                            .any(|tool| tool.name == "mcp_fixture_echo"),
+                        Ordering::Release,
+                    );
+                    Ok(AssistantMessage {
+                        text: String::new(),
+                        reasoning: None,
+                        reasoning_signature: None,
+                        reasoning_state: Vec::new(),
+                        tool_calls: vec![ModelToolCall {
+                            id: "call-1".to_owned(),
+                            name: "mcp_fixture_echo".to_owned(),
+                            arguments: r#"{"message":"rust"}"#.to_owned(),
+                        }],
+                        usage: Usage::default(),
+                        refusal: None,
+                        stop_reason: "tool_calls".to_owned(),
+                        correlation_id: None,
+                    })
+                } else {
+                    let returned = input.messages.iter().any(|message| {
+                        matches!(
+                            message,
+                            ModelMessage::Tool {
+                                call_id,
+                                content,
+                                is_error: false,
+                            } if call_id == "call-1" && content == "hello rust"
+                        )
+                    });
+                    if !returned {
+                        return Err(vibe_core::provider::ProviderError::MalformedStream(
+                            "tool result did not return through the live driver".to_owned(),
+                        ));
+                    }
+                    Ok(AssistantMessage {
+                        text: "done".to_owned(),
+                        reasoning: None,
+                        reasoning_signature: None,
+                        reasoning_state: Vec::new(),
+                        tool_calls: Vec::new(),
+                        usage: Usage::default(),
+                        refusal: None,
+                        stop_reason: "stop".to_owned(),
+                        correlation_id: None,
+                    })
+                }
             })
         }
     }
@@ -1321,6 +1945,136 @@ mod tests {
             .await
             .expect("session closes");
         service.shutdown().expect("connection shuts down");
+    }
+
+    #[tokio::test]
+    async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
+        let temporary = tempfile::tempdir().expect("temporary sessions");
+        let provider = Arc::new(SubagentSelectingProvider {
+            root_calls: AtomicUsize::new(0),
+            child_calls: AtomicUsize::new(0),
+            saw_task_definition: AtomicBool::new(false),
+            child_hid_task_definition: AtomicBool::new(false),
+            child_inherited_restrictions: AtomicBool::new(false),
+        });
+        let driver = LiveTurnDriver {
+            provider: provider.clone(),
+            system_prompt: "system".to_owned(),
+            session_root: Some(temporary.path().to_path_buf()),
+            input_price_per_million_micros: 0,
+            output_price_per_million_micros: 0,
+            controls: Mutex::new(HashMap::new()),
+            pending_context: Mutex::new(HashMap::new()),
+        };
+        let store = SessionStore::new(temporary.path());
+        store
+            .create(
+                "persisted-root",
+                &temporary.path().to_string_lossy(),
+                None,
+                1,
+            )
+            .expect("durable parent");
+        let tools = ToolRegistry::default();
+        for (name, presentation) in [
+            ("read", ToolPresentationKind::Read),
+            ("edit", ToolPresentationKind::Diff),
+            ("shell", ToolPresentationKind::Shell),
+        ] {
+            tools
+                .register(
+                    ToolSpec {
+                        name: name.to_owned(),
+                        description: format!("{name} test tool"),
+                        input_schema: json!({
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                        }),
+                        output_schema: None,
+                        config: Value::Null,
+                        state: Value::Null,
+                        availability: ToolAvailability::Available,
+                        presentation,
+                        source: ToolSource::BuiltIn,
+                        selection_priority: 10,
+                    },
+                    Arc::new(
+                        |_invocation: &vibe_core::tools::ToolInvocation,
+                         _output: vibe_core::tools::ToolOutputSink|
+                         -> vibe_core::tools::OwnedToolHandlerFuture {
+                            Box::pin(async { Ok(ToolExecutionOutput::text("unexpected")) })
+                        },
+                    ),
+                )
+                .expect("test tool");
+        }
+        let outcome = driver
+            .run(&TurnReservation {
+                session_id: "runtime-alias".to_owned(),
+                turn_id: "root-turn".to_owned(),
+                prompt: "delegate".to_owned(),
+                input: vec![PublicContentBlock::Text {
+                    text: "delegate".to_owned(),
+                }],
+                client_user_message_id: None,
+                auto_title: None,
+                user_display_content: None,
+                mention_stats: None,
+                working_directory: temporary.path().to_string_lossy().into_owned(),
+                intent: SessionIntent {
+                    trusted: true,
+                    enabled_tools: vec!["task".to_owned(), "read".to_owned(), "edit".to_owned()],
+                    disabled_tools: vec!["shell".to_owned()],
+                    resume: Some("persisted-root".to_owned()),
+                    ..SessionIntent::default()
+                },
+                tools,
+            })
+            .await
+            .expect("root and child complete");
+        assert_eq!(outcome.stop_reason, PublicTurnStopReason::Complete);
+        assert!(provider.saw_task_definition.load(Ordering::Acquire));
+        assert!(provider.child_hid_task_definition.load(Ordering::Acquire));
+        assert!(
+            provider
+                .child_inherited_restrictions
+                .load(Ordering::Acquire)
+        );
+        let page = store.list(None, 0, 10).expect("sessions list");
+        assert_eq!(page.sessions.len(), 2);
+        let child = page
+            .sessions
+            .iter()
+            .find(|session| session.parent_session_id.as_deref() == Some("persisted-root"))
+            .expect("child session");
+        assert_eq!(
+            store
+                .load(&child.id)
+                .expect("child hydrates")
+                .messages
+                .iter()
+                .filter_map(|message| match message {
+                    ModelMessage::Assistant { content, .. } if !content.is_empty() => {
+                        Some(content.as_str())
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            ["child answer"]
+        );
+        assert_eq!(
+            store
+                .continue_session(
+                    &temporary.path().to_string_lossy(),
+                    "system",
+                    BTreeMap::new(),
+                )
+                .expect("root pointer remains authoritative")
+                .metadata
+                .id,
+            "persisted-root"
+        );
     }
 
     #[test]
@@ -1409,6 +2163,7 @@ mod tests {
                     resume: Some("session-resume".to_owned()),
                     ..SessionIntent::default()
                 },
+                tools: ToolRegistry::default(),
             })
             .await
             .expect("resumed turn completes");
@@ -1439,5 +2194,126 @@ mod tests {
         );
         assert_eq!(persisted.metadata.statistics["context_tokens"], 5);
         assert_eq!(persisted.metadata.statistics["steps"], 3);
+    }
+
+    #[tokio::test]
+    async fn live_driver_exposes_and_executes_the_session_tool_registry() {
+        let tools = ToolRegistry::default();
+        tools
+            .register(
+                ToolSpec {
+                    name: "mcp_fixture_echo".to_owned(),
+                    description: "Echo through MCP".to_owned(),
+                    input_schema: object_schema(
+                        [("message", json!({"type": "string"}))],
+                        ["message"],
+                    ),
+                    output_schema: None,
+                    config: Value::Null,
+                    state: Value::Null,
+                    availability: ToolAvailability::Available,
+                    presentation: ToolPresentationKind::Mcp,
+                    source: ToolSource::Mcp,
+                    selection_priority: 50,
+                },
+                Arc::new(
+                    |_invocation: &vibe_core::tools::ToolInvocation,
+                     _output: vibe_core::tools::ToolOutputSink|
+                     -> vibe_core::tools::OwnedToolHandlerFuture {
+                        Box::pin(async {
+                            Ok(ToolExecutionOutput {
+                                typed_result: json!({"echo": "rust"}),
+                                model_text: "hello rust".to_owned(),
+                                display: Value::Null,
+                                chunks: Vec::new(),
+                            })
+                        })
+                    },
+                ),
+            )
+            .expect("register test MCP tool");
+        let saw_definition = Arc::new(AtomicBool::new(false));
+        let driver = LiveTurnDriver {
+            provider: Arc::new(ToolSelectingProvider {
+                calls: AtomicUsize::new(0),
+                saw_definition: Arc::clone(&saw_definition),
+            }),
+            system_prompt: "system".to_owned(),
+            session_root: None,
+            input_price_per_million_micros: 0,
+            output_price_per_million_micros: 0,
+            controls: Mutex::new(HashMap::new()),
+            pending_context: Mutex::new(HashMap::new()),
+        };
+        let outcome = driver
+            .run(&TurnReservation {
+                session_id: "session-1".to_owned(),
+                turn_id: "turn-1".to_owned(),
+                prompt: "use MCP".to_owned(),
+                input: vec![PublicContentBlock::Text {
+                    text: "use MCP".to_owned(),
+                }],
+                client_user_message_id: None,
+                auto_title: None,
+                user_display_content: None,
+                mention_stats: None,
+                working_directory: "/workspace".to_owned(),
+                intent: SessionIntent::default(),
+                tools,
+            })
+            .await
+            .expect("live turn completes");
+        assert_eq!(outcome.stop_reason, PublicTurnStopReason::Complete);
+        assert!(saw_definition.load(Ordering::Acquire));
+    }
+
+    #[tokio::test]
+    async fn session_tool_filters_apply_again_at_execution_time() {
+        let executions = Arc::new(AtomicUsize::new(0));
+        let handler_executions = Arc::clone(&executions);
+        let tools = ToolRegistry::default();
+        tools
+            .register(
+                ToolSpec {
+                    name: "mcp_fixture_echo".to_owned(),
+                    description: "Echo through MCP".to_owned(),
+                    input_schema: object_schema(
+                        [("message", json!({"type": "string"}))],
+                        ["message"],
+                    ),
+                    output_schema: None,
+                    config: Value::Null,
+                    state: Value::Null,
+                    availability: ToolAvailability::Available,
+                    presentation: ToolPresentationKind::Mcp,
+                    source: ToolSource::Mcp,
+                    selection_priority: 50,
+                },
+                Arc::new(
+                    move |_invocation: &vibe_core::tools::ToolInvocation,
+                          _output: vibe_core::tools::ToolOutputSink|
+                          -> vibe_core::tools::OwnedToolHandlerFuture {
+                        let executions = Arc::clone(&handler_executions);
+                        Box::pin(async move {
+                            executions.fetch_add(1, Ordering::AcqRel);
+                            Ok(ToolExecutionOutput::text("unexpected execution"))
+                        })
+                    },
+                ),
+            )
+            .expect("register test MCP tool");
+        let executor = SessionToolExecutor::new(
+            tools,
+            &SessionIntent {
+                disabled_tools: vec!["mcp_fixture_echo".to_owned()],
+                ..SessionIntent::default()
+            },
+        );
+        let error = executor
+            .execute("mcp_fixture_echo", r#"{"message":"rust"}"#)
+            .await
+            .expect_err("disabled tool cannot execute");
+        assert!(error.contains("disabled for this session"));
+        assert_eq!(executions.load(Ordering::Acquire), 0);
     }
 }
