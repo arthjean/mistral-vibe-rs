@@ -227,26 +227,10 @@ impl TranscriptSink for SessionTranscriptSink {
                 .lock()
                 .map_err(|_| "session metadata lock poisoned".to_owned())?;
             if snapshot.session_id != metadata.id {
-                let parent_session_id = Some(metadata.id.clone());
-                let working_directory = metadata.working_directory.clone();
-                let statistics = metadata.statistics.clone();
-                let experiment_state = metadata.experiment_state.clone();
-                let mut handoff = self
+                let handoff = self
                     .store
-                    .create(
-                        &snapshot.session_id,
-                        &working_directory,
-                        parent_session_id,
-                        persisted_at,
-                    )
+                    .handoff_messages(&metadata, &snapshot.session_id, messages, persisted_at)
                     .map_err(|error| error.to_string())?;
-                handoff.statistics = statistics;
-                handoff.experiment_state = experiment_state;
-                for message in messages {
-                    self.store
-                        .append_message(&mut handoff, message, persisted_at)
-                        .map_err(|error| error.to_string())?;
-                }
                 *metadata = handoff;
                 return Ok(());
             }

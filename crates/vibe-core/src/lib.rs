@@ -1,14 +1,18 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod bootstrap;
+pub mod config;
+pub mod continuity;
 pub mod engine;
 pub mod events;
+pub mod extensions;
 pub mod fakes;
 pub mod integrations;
 pub mod mcp;
 pub mod platform;
 pub mod policy;
 pub mod process;
+pub mod prompt;
 pub mod provider;
 pub mod shell;
 pub mod storage;

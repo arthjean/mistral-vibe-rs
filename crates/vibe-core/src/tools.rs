@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 use std::future::Future;
 use std::io::{self, Write};
 use std::panic::AssertUnwindSafe;
@@ -123,7 +124,7 @@ impl ToolSpec {
         validate_tool_name(&self.name)?;
         validate_schema_object(&self.input_schema, "input")?;
         if let Some(schema) = &self.output_schema {
-            validate_schema_object(schema, "output")?;
+            validate_output_schema(schema)?;
         }
         Ok(())
     }
@@ -194,6 +195,27 @@ pub struct ToolRegistry {
     next_discovery_index: Arc<AtomicU64>,
     max_output_bytes: usize,
 }
+
+impl fmt::Debug for ToolRegistry {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ToolRegistry")
+            .field(
+                "tool_count",
+                &self.tools.read().map_or(0, |tools| tools.len()),
+            )
+            .field("max_output_bytes", &self.max_output_bytes)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for ToolRegistry {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.tools, &other.tools) && self.max_output_bytes == other.max_output_bytes
+    }
+}
+
+impl Eq for ToolRegistry {}
 
 impl Default for ToolRegistry {
     fn default() -> Self {
@@ -522,6 +544,20 @@ fn validate_schema_object(schema: &Value, kind: &'static str) -> Result<(), Tool
         return Err(ToolError::InvalidSchema {
             kind,
             message: "required must be an array of strings".to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_output_schema(schema: &Value) -> Result<(), ToolError> {
+    let object = schema.as_object().ok_or_else(|| ToolError::InvalidSchema {
+        kind: "output",
+        message: "schema must be an object".to_owned(),
+    })?;
+    if object.get("type").and_then(Value::as_str).is_none() {
+        return Err(ToolError::InvalidSchema {
+            kind: "output",
+            message: "root type must be declared".to_owned(),
         });
     }
     Ok(())
