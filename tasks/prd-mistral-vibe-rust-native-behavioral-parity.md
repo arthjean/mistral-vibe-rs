@@ -1,34 +1,46 @@
 [PRD]
-# PRD: Mistral Vibe RS Full Functional Parity
+# PRD: Mistral Vibe RS Rust-Native Behavioral Parity
 
 ## Changelog
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
 | 1.0 | 2026-07-29 | Arthur Jean | Initial research-informed product and delivery specification |
+| 1.1 | 2026-07-29 | Arthur Jean | Replace Python custom-tool parity with a Rust-native, MCP-first extension boundary and require production MCP end-to-end proof |
+| 1.2 | 2026-07-29 | Arthur Jean | Assign support classification to US-031, separate excluded Python custom tools from the required MCP stdio extension surface, and close both paths explicitly during final certification |
 
 ## Problem Statement
 
-1. Developers who depend on Mistral Vibe have no native Rust implementation that preserves its complete observable contract across terminal, headless, editor, tool, configuration, persistence, and platform boundaries.
-2. The target repository defines full parity as its mission but currently contains no Rust workspace, executable, compatibility corpus, architecture, or delivery plan. Implementing modules directly would make omissions and accidental behavior changes likely.
+1. Developers who depend on Mistral Vibe have no native Rust implementation that preserves its required observable contract across terminal, headless, editor, tool, configuration, persistence, and platform boundaries.
+2. The target repository defines native behavioral parity as its mission. Implementing modules without an explicit supported-surface boundary would make omissions, accidental behavior changes, and misleading compatibility claims likely.
 3. The upstream 2.23.1 behavior is broader than its documented UX and contains timing-sensitive concurrency, lossy public projections, platform-specific shell behavior, dynamic Python extensions, persistence migrations, and ADR/code contradictions. Source-shape imitation cannot prove compatibility.
-4. Existing coding-agent users expect one resumable engine across terminal, automation, and editors, with deterministic structured output, granular permissions, MCP, bounded cancellation cleanup, and native platform behavior. A partial port would create a misleading compatibility claim.
+4. Existing coding-agent users expect one resumable engine across terminal, automation, and editors, with deterministic structured output, granular permissions, MCP, bounded cancellation cleanup, and native platform behavior. The product must distinguish required native parity from explicitly unsupported implementation-specific extension surfaces.
 
 **Why now:** Mistral Vibe RS is still at the project-definition stage, so its compatibility contract and ownership boundaries can be fixed before implementation debt accumulates. The upstream reference has been audited and can be pinned to version 2.23.1, while current agent products increasingly converge on shared terminal, headless, ACP, and MCP surfaces.
 
 ## Overview
 
-Mistral Vibe RS will be an independent, from-scratch Rust implementation of the externally observable behavior of Mistral Vibe 2.23.1. Compatibility will be measured at process, protocol, state, filesystem, configuration, tool, and terminal boundaries by a versioned capability matrix and a black-box differential harness. The upstream source tree remains reference-only; Rust internals need not reproduce Python module structure.
+Mistral Vibe RS will be an independent, from-scratch Rust implementation of the required externally observable behavior of Mistral Vibe 2.23.1. Compatibility will be measured at process, protocol, state, filesystem, configuration, tool, and terminal boundaries by a versioned capability matrix and a black-box differential harness. The upstream source tree remains reference-only; Rust internals need not reproduce Python module structure.
 
-The product will use one provider-neutral engine behind serialized app-server boundaries and thin programmatic CLI, TUI, and ACP adapters. Typed events, explicit task and subprocess ownership, a private durable transcript, a lossy public projection, policy-controlled tools, and deterministic configuration composition form the core. Tokio, Serde, and Clap are planned foundations. Terminal, ACP/MCP SDK, keyring, PTY, and Python-extension bridge choices remain gated by validation stories.
+The product will use one provider-neutral engine behind serialized app-server boundaries and thin programmatic CLI, TUI, and ACP adapters. Typed events, explicit task and subprocess ownership, a private durable transcript, a lossy public projection, policy-controlled tools, and deterministic configuration composition form the core. Tokio, Serde, and Clap are planned foundations. Terminal, ACP/MCP SDK, keyring, and PTY choices remain gated by validation stories.
 
-Observed 2.23.1 behavior is the default compatibility oracle, including non-dangerous quirks. Secret disclosure, credential exposure, data loss, and orphan-process behavior will not be copied. Each such correction must be registered as an intentional, versioned divergence with a fixture proving both the upstream behavior and the Rust behavior. Delivery is split into six gated releases so that 48 session-sized stories remain tractable.
+Observed 2.23.1 behavior is the default compatibility oracle for required native surfaces, including non-dangerous quirks. Secret disclosure, credential exposure, data loss, orphan-process behavior, and arbitrary Python custom-tool loading will not be copied. Each correction or excluded surface must be registered as an intentional, versioned divergence with evidence proving both the upstream behavior and the Rust boundary. Delivery is split into six gated releases so that 48 session-sized stories remain tractable.
+
+### Native compatibility boundary
+
+- Every capability-matrix row declares `support = "required-native"` or `support = "excluded"` independently from implementation status. The 1.0 compatibility claim covers every `required-native` row.
+- Upstream Python `BaseTool` modules and their in-process Python API are inventoried but explicitly excluded. They are an approved product-boundary divergence, not a hidden omission and not a release blocker.
+- The completed external-Python-host spike is retained only as non-shipping decision evidence. It is not a product capability, extension path, or separately certifiable matrix surface.
+- Rust-authored and language-neutral external tools use MCP. Local executables use MCP stdio and are configured through `[[mcp_servers]]` TOML entries.
+- TOML is configuration, not an invocation protocol. The product will not add a Vibe-specific JSONL tool protocol, a dynamic Rust library ABI, or a WASM runtime without a separate concrete requirement.
+- A configured MCP executable is operator-trusted at process launch. Project-local executable configuration must not activate before workspace trust. Vibe still owns tool discovery limits, invocation policy, output bounds, cancellation, process cleanup, and public effects, but does not claim to sandbox arbitrary server internals.
+- Documentation must provide a migration path from Python custom tools to MCP servers and state the unsupported surface before users install the native binary.
 
 ## Goals
 
 | Goal | Month-1 Target | Month-6 Target |
 |------|---------------|----------------|
-| Versioned capability-matrix coverage | At least 20% of inventoried contracts have an owner, fixture, and verdict | 100% of required 2.23.1 contracts have an owner, fixture, and passing verdict |
+| Versioned capability-matrix coverage | At least 20% of inventoried contracts have an owner, fixture, classification, and verdict | 100% of required native 2.23.1 contracts have an owner, fixture, and passing verdict; excluded rows have approved divergence evidence |
 | Differential conformance | At least 95% pass rate for implemented EP-001 and EP-002 scenarios | 100% pass rate for required scenarios, with zero undocumented divergences |
 | Native platform coverage | Linux x86_64 artifact passes its native smoke suite | Linux x86_64/aarch64, macOS x86_64/aarch64, and Windows x86_64 all pass native suites |
 | Secret-safety corpus | Zero disclosures across at least 500 seeded error/config/transcript cases | Zero disclosures across at least 10,000 seeded cases |
@@ -55,11 +67,11 @@ Observed 2.23.1 behavior is the default compatibility oracle, including non-dang
 
 ### Extension and platform maintainers
 
-- **Role:** Authors of agents, skills, hooks, custom tools, MCP servers, connectors, installers, and OS-specific integrations.
+- **Role:** Authors of agents, skills, hooks, MCP servers, connectors, installers, and OS-specific integrations.
 - **Behaviors:** Add project or user configuration, run external processes, authenticate services, package releases, and diagnose platform failures.
-- **Pain points:** Discovery precedence, Python extension compatibility, shell quoting, credentials, PTY behavior, and cleanup differ by environment.
+- **Pain points:** Discovery precedence, migration from Python custom tools, shell quoting, credentials, PTY behavior, and cleanup differ by environment.
 - **Current workaround:** Test manually against upstream on a subset of platforms.
-- **Success looks like:** A documented extension contract, fixtureable host protocols, native platform suites, and actionable diagnostics.
+- **Success looks like:** One documented MCP-first external tool contract, native platform suites, a Python-to-MCP migration path, and actionable diagnostics.
 
 ## Research Findings
 
@@ -77,6 +89,7 @@ Key findings that informed this PRD:
 - Define parity as a versioned observable contract and compare black-box outcomes instead of copying source architecture.
 - Use byte equality for deterministic process and wire outputs, semantic equality with narrowly declared normalizers for volatile fields, and golden PTY transcripts for terminal workflows.
 - Keep ACP editor transport separate from MCP tool/context transport, and enforce policy at the engine rather than trusting MCP roots.
+- Use MCP stdio as the sole external executable tool seam. Keep TOML as typed configuration and avoid a second Vibe-specific invocation protocol.
 - Follow [MCP security guidance](https://modelcontextprotocol.io/docs/2026-07-28/tutorials/security/security_best_practices): default-deny sensitive operations, prevent token passthrough, bind tokens to intended resources, redact logs, and treat local project configuration as untrusted before folder trust.
 - Own asynchronous work explicitly. Tokio `JoinSet` supports tracked shutdown, but task abort is cooperative and cannot stop already-running blocking work; subprocesses require explicit kill-and-wait ownership.
 - Build and test each target natively. [cross-rs](https://github.com/cross-rs/cross) can aid builds but does not replace native terminal, shell, credential-store, and process-lifecycle validation.
@@ -105,7 +118,7 @@ US-002 must provision a separate clean checkout or installed artifact, verify it
 - Mistral Vibe 2.23.1 can be installed and executed hermetically as a black-box oracle in development and CI.
 - Nondeterministic values can be normalized through an explicit allowlist without hiding semantic regressions.
 - A Rust terminal stack can reproduce required interaction and restoration behavior; US-033 validates Ratatui and alternatives before adoption.
-- Arbitrary upstream Python custom tools can be supported only through an explicitly launched external Python host; US-031 validates this before US-032.
+- A production MCP stdio implementation can expose Rust-authored tools through the same session-owned registry used by built-ins; US-023 and US-032 must prove this without injected test peers.
 - Native or provider-hosted CI is available for five release targets before parity certification.
 - Upstream Apache-2.0 terms permit independent implementation and behavioral fixtures when attribution, notices, and provenance are maintained.
 
@@ -115,7 +128,9 @@ US-002 must provision a separate clean checkout or installed artifact, verify it
 - Treat `/home/arthur/dev/mistral-vibe` as a read-only navigation checkout, never as the executable oracle; record fixtures only from the clean baseline provisioned by US-002.
 - Do not fork, vendor, translate, or ship upstream Python implementation code.
 - Do not embed a Python runtime in the primary binary.
-- Preserve the repository mission: complete observable parity before product differentiation.
+- Do not ship a Python-specific extension host or configuration surface.
+- Do not add a Vibe-specific executable tool protocol, dynamic Rust plugin ABI, or WASM runtime without a separately approved requirement.
+- Preserve the repository mission: complete required native behavioral parity before product differentiation.
 - Use one engine and serialized app-server contract for interactive, programmatic, and ACP surfaces.
 - Support Linux x86_64/aarch64, macOS x86_64/aarch64, and Windows x86_64 before the 1.0 parity claim.
 - Register every intentional incompatibility with rationale, scope, fixtures, and user-visible documentation.
@@ -392,7 +407,7 @@ Deliver the first usable vertical product slice: one durable engine, compatible 
 
 Implement typed side effects, granular policy, filesystem and shell semantics, managed processes, MCP, connectors, and operational app-server resources.
 
-**Definition of Done:** Built-in side effects produce compatible public effects and model-visible results; permission decisions are default-deny and race-safe; subprocesses are owned; MCP/connectors clean up; and every resource mutation returns canonical state.
+**Definition of Done:** Built-in side effects produce compatible public effects and model-visible results; permission decisions are default-deny and race-safe; subprocesses are owned; production MCP transports discover tools into the session registry; the model receives those definitions and invokes the same registry; MCP/connectors clean up; and every resource mutation returns canonical state. Fake-peer or registry-only tests cannot satisfy this gate.
 
 #### US-017: Define the tool ABI, registry, and effect lifecycle
 
@@ -495,9 +510,10 @@ Implement typed side effects, granular policy, filesystem and shell semantics, m
 **Acceptance Criteria:**
 
 - [ ] Given stdio, HTTP, streamable HTTP, static headers, and OAuth configurations, when connected, then discovery, toggle, refresh, login, logout, and cleanup match fixtures.
+- [ ] Given a production build with no injected test double, when a fixture MCP server is configured over stdio, then Vibe launches the process, discovers its tools, exposes their definitions to the model, executes model-selected calls through the session `ToolRegistry`, and returns results through the normal effect lifecycle.
 - [ ] Given partial MCP failures, when the runtime starts, then healthy servers remain usable and canonical diagnostics identify failed servers.
 - [ ] Given OAuth, when tokens are acquired or refreshed, then resource binding, audience validation, secure storage, and no-token-passthrough rules are enforced.
-- [ ] Given malformed tool schemas/results, server timeout, process crash, auth conflict, credential-store failure, or root claim outside policy, when handled, then the server is isolated and cannot grant permission.
+- [ ] Given malformed tool schemas/results, untrusted project configuration, server timeout, process crash, auth conflict, credential-store failure, or root claim outside policy, when handled, then activation fails closed, the server cannot grant permission, and every owned process is killed and waited.
 
 #### US-024: Implement connectors and operational resources
 
@@ -516,9 +532,9 @@ Implement typed side effects, granular policy, filesystem and shell semantics, m
 
 ### EP-004: Release 3 - Configuration, Sessions, and Extensions
 
-Complete layered configuration, prompt composition, durable lifecycle, handoffs, child sessions, agents, skills, hooks, and the explicit external Python compatibility decision.
+Complete layered configuration, prompt composition, durable lifecycle, handoffs, child sessions, agents, skills, hooks, and the Rust-native MCP extension path.
 
-**Definition of Done:** Configuration and prompts reproduce precedence; every saved-session operation is durable; handoff/reconnect fault tests lose no data; extension discovery is deterministic; child sessions power subagents; and Python-tool parity is either passing through the external host or visibly blocking the full-parity claim.
+**Definition of Done:** Configuration and prompts reproduce precedence; every saved-session operation is durable; handoff/reconnect fault tests lose no data; extension discovery is deterministic; child sessions power subagents; Python custom tools are recorded as an intentional unsupported divergence; and a Rust MCP stdio server works end-to-end through typed TOML configuration, session discovery, model exposure, policy, invocation, cancellation, and cleanup.
 
 #### US-025: Complete layered configuration and public config resources
 
@@ -605,40 +621,45 @@ Complete layered configuration, prompt composition, durable lifecycle, handoffs,
 
 **Acceptance Criteria:**
 
-- [ ] Given built-in, configured, project, and user sources, when agents, skills, hooks, prompts, commands, and tools are discovered, then each mechanism follows its audited ordering and duplicate rule.
+- [ ] Given built-in, configured, project, and user sources, when agents, skills, hooks, prompts, and commands are discovered, then each mechanism follows its audited ordering and duplicate rule.
 - [ ] Given pre-tool, post-tool, and post-agent hooks, when executed, then typed input/output, timeout, retries, text replacement, notices, reload, and failure isolation match fixtures.
 - [ ] Given skill invocation and lazy subdirectory instructions, when content is injected, then scope, ordering, and repeated-injection behavior are compatible.
-- [ ] Given duplicate names, malformed TOML/Markdown/Python metadata, timeout, hook crash, missing file, or untrusted project source, when discovered, then safe mechanisms continue and canonical issues are reported.
+- [ ] Given duplicate names, malformed TOML or Markdown metadata, timeout, hook crash, missing file, or untrusted project source, when discovered, then safe mechanisms continue and canonical issues are reported.
 
-#### US-031: Validate an external Python extension host
+#### US-031: Codify the Rust-native extension boundary
 
-**Description:** As a product owner, I want a bounded feasibility result for arbitrary upstream Python custom tools so that the project does not make an impossible full-parity claim.
+**Description:** As a product owner, I want the Python custom-tool incompatibility and the MCP-first replacement recorded explicitly so that the native compatibility claim is honest and the implementation has one external tool seam.
 
-**Priority:** P0  
-**Size:** M (3 pts)  
-**Dependencies:** Blocked by US-017, US-030
+**Priority:** P0
+
+**Size:** L (5 pts)
+
+**Dependencies:** Blocked by US-017, US-023, US-030
 
 **Acceptance Criteria:**
 
-- [ ] Given at least 10 representative custom Python tools covering typed args/results, imports, state, streaming, permission resolution, re-exports, and exceptions, when prototyped through an external process, then compatibility gaps are measured.
-- [ ] Given the native-binary constraint, when architecture is reviewed, then no Python interpreter or upstream implementation code is embedded in the primary artifacts.
-- [ ] Given process startup, schema exchange, cancellation, timeout, crash, and malicious output, when tested, then isolation and lifecycle limits are documented with measured results.
-- [ ] Given infeasible fidelity, unacceptable startup/resource cost, or unsafe isolation, when the spike concludes, then US-032 and the full-parity release remain BLOCKED with no substitute claim.
+- [ ] Given the upstream `BaseTool` contract and the completed external-host spike, when the boundary is reviewed, then typed args/results/config/state, imports, re-exports, streaming, `InvokeContext`, permissions, startup cost, and trust limitations are documented as compatibility evidence.
+- [ ] Given capability-matrix schema version 2, when validated, then every row declares `support = "required-native"` or `support = "excluded"`; the `known_rows` inventory contains every audited surface; and a missing row, duplicate row, missing classification, or unknown classification fails closed.
+- [ ] Given the Python custom-tool surface, when represented in the capability matrix, then exactly one `surface.python-custom-tools` row owned by US-031 is classified `excluded`, carries an approved intentional product-boundary divergence with upstream and Rust-boundary fixtures plus user-visible documentation, and cannot appear as implemented, blocked, passing native behavior, or an MCP substitute.
+- [ ] Given the completed external-host spike and native product artifacts, when inspected, then the spike remains evidence only and no compiled module, shipped script, configuration schema, runtime path, capability row, embedded interpreter, Python tool path, or upstream implementation code exposes a Python-specific host.
+- [ ] Given compatibility reports, when native conformance is calculated, then only `required-native` rows contribute to the native pass denominator while every `excluded` row must have current approved evidence and documentation or certification fails.
+- [ ] Given extension guidance, when reviewed, then MCP stdio is the only external executable tool seam, TOML is described only as configuration, and migration guidance explains how to replace a Python custom tool with an MCP server.
 
-#### US-032: Implement the external Python custom-tool adapter
+#### US-032: Complete the Rust-native MCP stdio extension path
 
-**Description:** As an upstream extension user, I want opt-in custom Python tools through an explicit host so that existing extensions can run without contaminating the native engine.
+**Description:** As an extension author, I want a Rust-native MCP stdio path integrated with configuration and the live agent runtime so that external tools work without Python or a proprietary plugin protocol.
 
 **Priority:** P0  
 **Size:** L (5 pts)  
-**Dependencies:** Blocked by US-031
+**Dependencies:** Blocked by US-023, US-025, US-030, US-031
 
 **Acceptance Criteria:**
 
-- [ ] Given an explicitly configured Python executable and custom-tool paths, when discovery runs, then modules, typed schemas, state, precedence, availability, and presentation match validated fixtures.
-- [ ] Given a tool invocation, when streamed through the host protocol, then permissions remain server-owned and results enter the same tool/effect lifecycle as native tools.
-- [ ] Given no Python configuration, when the native product starts, then it has no Python runtime dependency and reports Python-only extensions as unavailable without delaying unrelated startup.
-- [ ] Given host crash, invalid schema, arbitrary stdout noise, timeout, cancellation, or attempted permission bypass, when handled, then the host is terminated, output is bounded, and the engine remains valid.
+- [ ] Given the capability matrix, when Release 3 is validated, then one `surface.mcp-stdio-extension` row owned by US-032 is classified `required-native`, depends on the production MCP, configuration, extension-discovery, and tool-registry surfaces, and has no dependency on the excluded Python custom-tool row.
+- [ ] Given a typed `[[mcp_servers]]` TOML entry with stdio command, arguments, environment, working directory, and timeouts, when a trusted session starts, then the configured server is launched and discovered without a Python-specific setting or runtime dependency.
+- [ ] Given discovered MCP tools plus built-ins, when a turn starts, then enabled and disabled filters select one session-owned `ToolRegistry`, the provider receives exactly those definitions, and model-selected calls execute through that same registry.
+- [ ] Given an MCP invocation, when approval, streaming, typed result, display projection, transcript persistence, refresh, disable, reconnect, or session close occurs, then it follows the same bounded tool/effect lifecycle as native tools.
+- [ ] Given untrusted project configuration, invalid schema, stdout protocol noise, timeout, cancellation, crash, duplicate name, or attempted permission bypass, when handled, then activation or invocation fails closed, diagnostics are canonical, and the child process is killed and waited.
 
 ### EP-005: Release 4 - TUI, ACP, and Cloud Workflows
 
@@ -864,7 +885,7 @@ Prove native shell, terminal, credential, packaging, telemetry, supply-chain, pe
 
 #### US-047: Close the compatibility and security matrices
 
-**Description:** As a product owner, I want an evidence-backed final audit so that “full parity” has a precise, inspectable meaning.
+**Description:** As a product owner, I want an evidence-backed final audit so that “native behavioral parity” has a precise, inspectable meaning.
 
 **Priority:** P0  
 **Size:** L (5 pts)  
@@ -872,10 +893,11 @@ Prove native shell, terminal, credential, packaging, telemetry, supply-chain, pe
 
 **Acceptance Criteria:**
 
-- [ ] Given the complete 2.23.1 matrix, when certification runs, then every required row has a passing native verdict or an approved intentional safety divergence.
+- [ ] Given the complete 2.23.1 matrix, when certification runs, then every `known_rows` entry has exactly one support classification and every `required-native` row has a passing native verdict or an approved intentional safety divergence.
+- [ ] Given an `excluded` row, when certification runs, then it has an approved intentional product-boundary divergence, current upstream and Rust-boundary fixtures, user-visible documentation, and migration guidance where applicable; it is reported separately from native conformance and any missing evidence blocks release.
 - [ ] Given process, wire, persistence, config, permission, provider, tool, TUI, ACP, extension, telemetry, and packaging fixtures, when rerun, then reports contain zero undocumented differences.
 - [ ] Given threat modeling and secret, path, protocol, OAuth, subprocess, extension, and supply-chain tests, when audited, then all high-impact findings are resolved or block release.
-- [ ] Given a missing platform, blocked Python extension bridge, flaky required fixture, unowned method, or unresolved data-loss race, when certification runs, then the parity claim remains blocked.
+- [ ] Given a missing platform, incomplete production MCP path, flaky required fixture, unowned method, or unresolved data-loss race, when certification runs, then the native parity claim remains blocked.
 
 #### US-048: Publish the 1.0 parity release and rebaseline process
 
@@ -888,14 +910,14 @@ Prove native shell, terminal, credential, packaging, telemetry, supply-chain, pe
 **Acceptance Criteria:**
 
 - [ ] Given a release candidate, when benchmarked, then startup, event latency, memory, cancellation, handoff, persistence, and five-target goals meet all NFR thresholds.
-- [ ] Given user documentation, when reviewed, then supported capabilities, installation, config, security differences, external Python requirement, platform limits, diagnostics, and compatibility report are linked from the README.
+- [ ] Given user documentation, when reviewed, then supported capabilities, installation, config, security differences, unsupported Python custom tools, MCP migration guidance, platform limits, diagnostics, and compatibility report are linked from the README.
 - [ ] Given the approved candidate, when published, then versioned artifacts, reports, schemas, notices, changelog, and rollback instructions point to the same immutable source revision.
 - [ ] Given a newer upstream release, post-release regression, failed artifact, or newly discovered undocumented divergence, when triaged, then 1.0 artifacts remain immutable and a new baseline/change report is opened rather than silently replacing evidence.
 
 ## Functional Requirements
 
 - FR-01: The system must pin every compatibility baseline to an immutable upstream version and digest.
-- FR-02: The system must maintain a machine-readable capability matrix covering all observable 2.23.1 surfaces and platforms.
+- FR-02: The system must maintain a machine-readable capability matrix covering all observable 2.23.1 surfaces and platforms, with a complete `known_rows` inventory and an explicit `support = "required-native" | "excluded"` classification on every row that is independent from implementation status.
 - FR-03: The system must compare Rust and upstream outcomes through versioned byte, schema, semantic, filesystem, and PTY fixtures.
 - FR-04: The app-server must serialize JSON even for in-process memory transport and enforce strict protocol version 1 models.
 - FR-05: Request concurrency, attachment buffering, event sequencing, duplicate suppression, gap recovery, and callback lifecycles must follow method-specific compatibility verdicts.
@@ -907,22 +929,22 @@ Prove native shell, terminal, credential, packaging, telemetry, supply-chain, pe
 - FR-11: Tool execution must use typed args/results/config/state and one semantic public effect lifecycle.
 - FR-12: Tool permission and workspace trust must be server-enforced, default-deny, path-aware, and race-safe.
 - FR-13: Filesystem, mutation, shell, managed-terminal, and client ToolIO behavior must be compatible and bounded.
-- FR-14: MCP transports, OAuth, connectors, proxy, TLS, account, diagnostics, feedback, narration, stats, and runtime resources must be exposed through typed app-server methods.
+- FR-14: Production MCP stdio, HTTP, and streamable HTTP transports, OAuth, connectors, proxy, TLS, account, diagnostics, feedback, narration, stats, and runtime resources must be exposed through typed app-server methods and the live session tool registry.
 - FR-15: Configuration must reproduce defaults, selected TOML, experiment, environment, runtime, and agent-overlay precedence.
 - FR-16: Prompt construction must preserve system, platform, tool, skill, subagent, project, AGENTS.md, scratchpad, attachment, and display-content semantics.
 - FR-17: Built-in and custom agents, child sessions, subagents, task delegation, skills, hooks, prompts, commands, and discovery precedence must be represented.
-- FR-18: Python custom-tool compatibility must use only an explicit external host and must never grant permissions outside the Rust policy engine.
+- FR-18: External executable tools must use MCP; local MCP servers must be configured through typed TOML, activated only from trusted configuration, exposed to the model and invoked through one session-owned registry, and cleaned up by the Rust runtime. Python `BaseTool` compatibility is explicitly out of scope.
 - FR-19: Programmatic mode must support compatible flags, text, JSON, NDJSON, stdout/stderr, callback, Teleport, and exit behavior.
 - FR-20: The TUI must support compatible transcript rendering, prompt editing, history, completion, mentions, approvals, questions, plans, session controls, setup, auth, themes, notifications, updates, and voice.
 - FR-21: ACP must support full advertised lifecycle, history, capabilities, filesystem/terminal client tools, permissions, and multi-session isolation.
 - FR-22: Vibe Code project, Teleport, and scheduled-loop clients must preserve local state on cloud failure.
 - FR-23: Telemetry must be user-controllable, schema-versioned, redacted, and absent when disabled.
 - FR-24: Native artifacts, installers, updates, completions, and GitHub Action behavior must be tested on supported hosts.
-- FR-25: A full-parity claim must be impossible while any required row is missing, blocked, flaky, or undocumented.
+- FR-25: A native-behavioral-parity claim must be impossible while any `required-native` row is missing, blocked, flaky, or undocumented; while any `excluded` row lacks approved evidence and a user-visible divergence; or while an excluded row is counted in the native conformance denominator.
 
 ## Non-Functional Requirements
 
-- **Compatibility:** 100% of required 2.23.1 matrix rows must have a passing native verdict or approved intentional safety divergence; undocumented divergence count must equal 0.
+- **Compatibility:** 100% of required native 2.23.1 matrix rows must have a passing verdict or approved intentional safety divergence; every excluded row must have approved evidence and migration guidance where applicable; undocumented divergence count must equal 0.
 - **Startup:** Cold `vibe --help` p95 must be at most 100 ms and cold local TUI-ready p95, excluding provider/network work, at most 300 ms on each supported release target.
 - **Streaming latency:** With the deterministic fake provider, p95 time from backend-chunk receipt to client-visible event must be at most 20 ms and p99 at most 50 ms over 100,000 chunks.
 - **Concurrency:** A session must process 32 concurrent fake tool calls without deadlock, event loss, or more than 100 ms scheduler-induced p99 delay.
@@ -931,7 +953,7 @@ Prove native shell, terminal, credential, packaging, telemetry, supply-chain, pe
 - **Persistence:** Across 10,000 injected crash points, acknowledged metadata writes must remain atomic, append logs must expose corruption explicitly, and unrelated sessions must have 0 lost or misattributed records.
 - **Handoff reliability:** Across 10,000 compaction/disconnect/reconnect schedules, wrong-session attachment, duplicate turn execution, and durable-entry loss must each equal 0.
 - **Security:** Across at least 10,000 seeded config, proxy, MCP, error, log, telemetry, transcript, and crash cases, public secret disclosures must equal 0.
-- **Policy:** 100% of mutation, external-path, shell, network, MCP, connector, and client-hosted side effects must pass through a typed server-side permission decision.
+- **Policy:** 100% of Vibe-owned mutation, external-path, shell, network, connector, and client-hosted side effects, plus 100% of MCP tool invocations, must pass through a typed server-side permission decision. Configured MCP executables are trusted code after activation and are not represented as sandboxed.
 - **Terminal safety:** Across normal exit, error, panic, SIGINT/CTRL_C, transport loss, and forced cancellation suites, terminal restoration failures must equal 0 on all five targets.
 - **Cross-platform:** Native suites must pass on Linux x86_64/aarch64, macOS x86_64/aarch64, and Windows x86_64; emulated-only evidence cannot count.
 - **Output determinism:** Repeating any deterministic compatibility fixture 100 times must produce identical canonical output and report digests.
@@ -953,14 +975,15 @@ Systematic coverage of unhappy paths:
 | 7 | Boundary value | Zero/max limits, huge output/history, event-ID gap, context overflow, long path | Enforce numeric bounds, truncate only declared content, compact/resync explicitly | Stable limit-specific message |
 | 8 | Undo or reversal | Rewind, revert, clear, delete, failed patch, interrupted migration | Restore the last acknowledged checkpoint or leave evidence for recovery | "The operation could not be completed; no unrelated state changed." |
 | 9 | Interrupted flow | SIGINT, CTRL_C, terminal close, EOF, client disconnect, crash during handoff | Finalize once, kill/wait owned processes, restore terminal, preserve durable state | "Interrupted; recoverable session state was preserved." |
-| 10 | External dependency outage | Keyring, browser auth, Python host, Git, shell, audio, CI runner, or cloud unavailable | Degrade only the dependent capability and mark parity evidence blocked where required | Dependency-specific recovery instruction |
+| 10 | External dependency outage | Keyring, browser auth, MCP subprocess, Git, shell, audio, CI runner, or cloud unavailable | Degrade only the dependent capability and mark parity evidence blocked where required | Dependency-specific recovery instruction |
+| 11 | Capability classification drift | A known row loses its support class, changes class without approval, or an excluded row enters native conformance | Reject the matrix or report before certification and identify the exact row and invalid transition | "Compatibility classification is incomplete or inconsistent." |
 
 ## Risks & Mitigations
 
 | # | Risk | Probability | Impact | Mitigation |
 |---|------|------------|--------|------------|
-| 1 | Full parity scope exceeds a single release and drifts into horizontal rewrites | High | High | Six gated epics, 48 bounded stories, matrix ownership, vertical executable slices, no differentiation before certification |
-| 2 | Arbitrary Python custom tools cannot be supported safely without violating the native mission | High | High | US-031 blocking spike, explicit external host only, US-032 blocks parity if infeasible |
+| 1 | Native parity scope exceeds a single release and drifts into horizontal rewrites | High | High | Six gated epics, 48 bounded stories, matrix ownership, vertical executable slices, no differentiation before certification |
+| 2 | MCP appears complete through registry and fake-peer tests while no production server reaches the live model loop | High | High | US-023 and US-032 require a real stdio subprocess, typed config, model-visible definitions, invocation through the session registry, policy, and cleanup |
 | 3 | Prompt/provider nondeterminism makes differential tests flaky or masks regressions | High | High | Pinned fixtures, fake providers, narrow canonicalization allowlist, repeated oracle runs, flaky rows cannot pass |
 | 4 | Windows/macOS shell, PTY, keyring, path, and signal semantics diverge late | Medium | High | Cross-platform abstractions in EP-001/003, Linux-simulated path tests, mandatory native EP-006 suites |
 | 5 | Async cancellation detaches tasks or leaves child processes | Medium | High | Explicit task sets, child ownership, cooperative cancellation plus kill/wait, 10,000-trial fault tests |
@@ -968,12 +991,14 @@ Systematic coverage of unhappy paths:
 | 7 | Upstream releases invalidate the baseline during implementation | High | Medium | Keep 2.23.1 immutable until 1.0; evaluate newer versions only through a separate rebaseline report |
 | 8 | TUI library cannot reproduce restoration, rendering, or target support | Medium | Medium | US-033 compares Ratatui and alternatives before dependency lock; downstream TUI remains blocked on failure |
 | 9 | License, attribution, or copied-source provenance becomes ambiguous | Low | High | Apache-2.0 notice, source-copy prohibition, provenance review, fixture redaction, release license inventory |
-| 10 | A large compatibility matrix creates false completion through missing rows | Medium | High | Required row schema, discovery checks, unowned/missing fixture rows fail release reports closed |
+| 10 | A large compatibility matrix creates false completion through missing or misclassified rows | Medium | High | Complete `known_rows` inventory, independent support classification, class-specific report gates, and unowned or unevidenced rows fail certification closed |
 
 ## Non-Goals
 
 - New agent capabilities, product differentiation, or UX redesign before the 2.23.1 parity baseline is certified.
 - Source-level, module-level, plugin-ABI, or Python internal API compatibility with upstream implementation code.
+- Direct loading or execution of upstream Python custom tools.
+- A Vibe-specific executable tool protocol, dynamic Rust library plugin ABI, or WASM plugin runtime in 1.0.
 - Reimplementation of Mistral-hosted cloud services; only compatible clients and local state transitions are in scope.
 - Embedding or silently downloading a Python interpreter in primary artifacts.
 - Supporting additional CPU/OS targets before the five declared targets pass.
@@ -997,14 +1022,16 @@ Systematic coverage of unhappy paths:
 - **Provider stack:** Should one HTTP stack serve Mistral and generic adapters? Recommended: yes if it supports streaming backpressure, custom TLS/proxy, cancellation, and fixtureable transport without provider leakage into core.
 - **ACP/MCP:** Is an official Rust SDK mature enough for pinned ACP 0.11-compatible and MCP behavior? Recommended: evaluate exact protocol coverage before adoption; handwritten strict wire types remain acceptable when an SDK obscures required behavior.
 - **Credentials:** Which native credential abstraction covers Keychain, Windows Credential Manager, and Linux keyring/fallback? Recommended: choose only after native failure-mode tests; no plaintext fallback without explicit opt-in.
-- **Python extensions:** Can an external process protocol preserve arbitrary custom-tool semantics? Recommended: implement only if US-031 proves schema, lifecycle, performance, and isolation; otherwise keep the parity claim blocked.
+- **Compatibility model:** Should product support scope reuse mutable Rust implementation status? Recommended: no. Keep `support = "required-native" | "excluded"` as an independent stable field, use `known_rows` only for audited-inventory completeness, and let class-specific report rules own certification.
+- **Executable extensions:** Should Vibe add a TOML manifest protocol, dynamic Rust ABI, or WASM runtime beside MCP? Recommended: no. Use typed TOML to configure MCP stdio and add another mechanism only when a concrete requirement cannot be expressed through MCP.
 - **Migration:** How should future upstream baselines evolve fixtures? Recommended: immutable baseline directories and explicit migration/rebaseline reports, never in-place expected-output replacement.
 
 ## Success Metrics
 
 | Metric | Baseline (current) | Target | Timeframe | How Measured |
 |--------|-------------------|--------|-----------|-------------|
-| Required capability rows with passing/approved verdict | 0% | 100% | Month 6 | Machine-readable compatibility report |
+| `required-native` capability rows with passing or approved safety-divergence verdict | Support classification not yet modeled | 100% | Month 6 | Machine-readable compatibility report |
+| `excluded` capability rows with approved evidence and user-visible divergence | Support classification not yet modeled | 100% | Before US-047 exit | Machine-readable compatibility report and documentation audit |
 | Undocumented observable divergences | N/A, no implementation | 0 | Every release gate | Differential suite and audit |
 | Native certified targets | 0 of 5 | 5 of 5 | Month 6 | Signed native CI reports |
 | Secret disclosures in seeded corpus | No corpus | 0 across at least 10,000 cases | Month 6 | Property/fuzz corpus report |
@@ -1013,11 +1040,11 @@ Systematic coverage of unhappy paths:
 | Cold `vibe --help` p95 | N/A | At most 100 ms per target | Month 6 | Release benchmark runner |
 | Fake-provider chunk-to-client p95 latency | N/A | At most 20 ms over 100,000 chunks | Before EP-002 exit | Instrumented deterministic benchmark |
 | Deterministic fixture repeatability | No fixtures | 100 identical digests in 100 repetitions | Every epic exit | Compatibility runner |
-| Required matrix rows without owner or fixture | All rows initially absent | 0 | Before EP-001 exit and thereafter | Matrix schema validation |
+| Known matrix rows without owner, support classification, or current evidence | Support classification not yet modeled | 0 | Before US-031 exit and thereafter | Matrix schema validation and compatibility report |
 
 ## Open Questions
 
-- Can the external Python host reach required fidelity without embedding Python? Owner: US-031; answer required before US-032 and EP-004 exit.
+- Which production MCP Rust implementation provides stdio, HTTP, streamable HTTP, cancellation, OAuth, and process ownership without obscuring the required wire contract? Owner: US-023 and US-032; answer required before EP-003 and EP-004 exit.
 - Which terminal stack passes restoration and native-backend requirements? Owner: US-033; answer required before US-034.
 - Which ACP/MCP Rust implementation exposes enough low-level wire control? Owner: US-003, US-023, and US-039; decide before adding either SDK.
 - Which credential-store abstraction passes all three OS failure modes? Owner: US-008 and US-038; decide before EP-005 exit.

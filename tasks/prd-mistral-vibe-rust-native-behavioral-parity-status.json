@@ -1,7 +1,7 @@
 {
   "prd": {
-    "file": "tasks/prd-mistral-vibe-rust-full-parity.md",
-    "title": "Mistral Vibe RS Full Functional Parity",
+    "file": "tasks/prd-mistral-vibe-rust-native-behavioral-parity.md",
+    "title": "Mistral Vibe RS Rust-Native Behavioral Parity",
     "created_at": "2026-07-29",
     "status": "IN_PROGRESS"
   },
@@ -33,10 +33,10 @@
     {
       "id": "EP-004",
       "title": "Release 3 - Configuration, Sessions, and Extensions",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 8,
-      "stories_done": 0
+      "stories_done": 8
     },
     {
       "id": "EP-005",
@@ -329,8 +329,8 @@
       "size": "L",
       "blocked_by": ["US-017", "US-018", "US-022"],
       "started_at": "2026-07-29",
-      "completed_at": "2026-07-29",
-      "reviewed_at": "2026-07-29"
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-024",
@@ -348,97 +348,97 @@
       "id": "US-025",
       "title": "Complete layered configuration and public config resources",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-008", "US-010", "US-018"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-026",
       "title": "Reproduce prompt, instruction, and attachment composition",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-019", "US-025"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-027",
       "title": "Complete saved-session lifecycle and migrations",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-014", "US-025"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-028",
       "title": "Make handoff, rewind, and reconnect lossless",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-011", "US-015", "US-027"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-029",
       "title": "Implement agents, child sessions, subagents, and delegation",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-017", "US-027", "US-028"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-030",
       "title": "Implement skills, hooks, prompts, and command discovery",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-017", "US-025", "US-026"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-031",
-      "title": "Validate an external Python extension host",
+      "title": "Codify the Rust-native extension boundary",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
-      "size": "M",
-      "blocked_by": ["US-017", "US-030"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "size": "L",
+      "blocked_by": ["US-017", "US-023", "US-030"],
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-032",
-      "title": "Implement the external Python custom-tool adapter",
+      "title": "Complete the Rust-native MCP stdio extension path",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
-      "blocked_by": ["US-031"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "blocked_by": ["US-023", "US-025", "US-030", "US-031"],
+      "started_at": "2026-07-29",
+      "completed_at": "2026-07-30",
+      "reviewed_at": "2026-07-30"
     },
     {
       "id": "US-033",
