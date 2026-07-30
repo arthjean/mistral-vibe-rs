@@ -12,11 +12,16 @@ name = "vibe-acp"
 path = "src/main.rs"
 
 [dependencies]
+base64.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 vibe-app-server = { path = "../vibe-app-server" }
+vibe-protocol = { path = "../vibe-protocol" }
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

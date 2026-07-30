@@ -18,7 +18,10 @@ test = false
 bench = false
 
 [dependencies]
+base64.workspace = true
+command-group.workspace = true
 futures-util.workspace = true
+reqwest.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -28,6 +31,7 @@ toml.workspace = true
 url.workspace = true
 vibe-core = { path = "../vibe-core" }
 vibe-protocol = { path = "../vibe-protocol" }
+zstd.workspace = true
 
 [lints]
 workspace = true

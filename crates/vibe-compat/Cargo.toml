@@ -14,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 clap.workspace = true
 hex.workspace = true
+ratatui.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -25,6 +26,7 @@ toml.workspace = true
 url.workspace = true
 vibe-acp = { path = "../vibe-acp" }
 vibe-app-server = { path = "../vibe-app-server", features = ["test-fixtures"] }
+vibe-cli = { path = "../vibe-cli" }
 vibe-core = { path = "../vibe-core" }
 vibe-protocol = { path = "../vibe-protocol" }
 
