@@ -3,7 +3,7 @@
   "scenarioId": "contract-provider-dialects",
   "matrixRow": "surface.provider-dialects",
   "upstreamBaseline": "2.23.1",
-  "comparison": "semantic",
+  "comparison": "schema",
   "stabilityRuns": 2,
   "volatility": [],
   "outcome": {

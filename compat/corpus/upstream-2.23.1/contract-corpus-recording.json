@@ -3,7 +3,7 @@
   "scenarioId": "contract-corpus-recording",
   "matrixRow": "corpus.recording",
   "upstreamBaseline": "2.23.1",
-  "comparison": "semantic",
+  "comparison": "schema",
   "stabilityRuns": 2,
   "volatility": [],
   "outcome": {

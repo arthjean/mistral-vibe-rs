@@ -1,0 +1,48 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-session-lifecycle",
+  "matrixRow": "surface.session-lifecycle",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [
+    {
+      "pointer": "/filesystemDelta",
+      "placeholder": "<ENVIRONMENTAL>",
+      "changedBetweenRuns": false
+    }
+  ],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "durableFormats": true,
+          "publicMethods": true,
+          "versionedMigration": true
+        },
+        "contract": "session_lifecycle",
+        "methods": [
+          "session/list",
+          "history/list",
+          "session/log/read",
+          "session/continue",
+          "session/resume",
+          "session/fork",
+          "session/title/update",
+          "session/delete"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

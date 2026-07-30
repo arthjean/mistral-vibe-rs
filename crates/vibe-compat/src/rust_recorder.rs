@@ -54,6 +54,10 @@ use vibe_protocol::{Envelope, TransportKind, decode_frame};
 
 use crate::canonical::{canonicalize, volatility_evidence};
 use crate::model::{OracleOutcome, RecordedFixture, Scenario, ScenarioKind};
+use crate::release4_contracts::{
+    acp_full_contract, cloud_workflows_contract, tui_controls_contract, tui_input_contract,
+    tui_rendering_contract, tui_setup_contract, tui_shell_contract, tui_terminal_stack_contract,
+};
 
 #[derive(Debug, Error)]
 pub enum RustRecorderError {
@@ -147,10 +151,22 @@ fn run_once(root: &Path, scenario: &Scenario) -> Result<OracleOutcome, RustRecor
                 .push(contract_result(root, &payload, scenario)?);
         }
         ScenarioKind::Pty => {
-            return Err(failed(
-                scenario,
-                "PTY Rust recording is not required before Release 4".to_owned(),
-            ));
+            let binary = root.join("target/debug/vibe");
+            if !binary.is_file() {
+                return Err(failed(
+                    scenario,
+                    format!("missing Rust CLI binary {}", binary.display()),
+                ));
+            }
+            let completed = Command::new(binary)
+                .args(&scenario.args)
+                .current_dir(root)
+                .env("TERM", "xterm-256color")
+                .output()?;
+            outcome.exit_status = completed.status.code();
+            let mut transcript = String::from_utf8_lossy(&completed.stdout).into_owned();
+            transcript.push_str(&String::from_utf8_lossy(&completed.stderr));
+            outcome.terminal_transcript = Some(transcript.replace('\n', "\r\n"));
         }
     }
     Ok(outcome)
@@ -574,6 +590,138 @@ fn contract_result(
             ],
             "protocolVersion": vibe_acp::ACP_PROTOCOL_VERSION,
             "valid": source("crates/vibe-acp/src/lib.rs")?.contains("prompt_streaming"),
+        }),
+        "tui_terminal_stack" => json!({
+            "contract": name,
+            "features": [
+                "stack_decision",
+                "immutable_snapshots",
+                "resize",
+                "unicode",
+                "input",
+                "mouse",
+                "clipboard",
+                "restoration",
+            ],
+            "checks": tui_terminal_stack_contract()
+                .map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "tui_shell" => json!({
+            "contract": name,
+            "features": [
+                "startup",
+                "attach",
+                "ready",
+                "bounded_events",
+                "history",
+                "gap_resync",
+                "reconnect",
+                "shutdown",
+            ],
+            "checks": tui_shell_contract().map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "tui_rendering" => json!({
+            "contract": name,
+            "features": [
+                "messages",
+                "reasoning",
+                "effects",
+                "diffs",
+                "rich_content",
+                "streaming",
+                "hostile_content",
+            ],
+            "checks": tui_rendering_contract().map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "tui_input" => json!({
+            "contract": name,
+            "features": [
+                "unicode_editing",
+                "history",
+                "completion",
+                "mentions",
+                "external_editor",
+                "paste",
+                "clipboard",
+            ],
+            "checks": tui_input_contract().map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "tui_controls" => json!({
+            "contract": name,
+            "features": [
+                "approvals",
+                "questions",
+                "plans",
+                "interrupt",
+                "rewind",
+                "compact",
+                "fork",
+                "callback_races",
+            ],
+            "checks": tui_controls_contract().map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "tui_setup" => json!({
+            "contract": name,
+            "features": [
+                "setup",
+                "auth",
+                "keyring",
+                "trust",
+                "theme",
+                "no_color",
+                "update",
+                "voice",
+            ],
+            "checks": tui_setup_contract().map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "acp_full" => json!({
+            "contract": name,
+            "methods": [
+                "initialize",
+                "authenticate",
+                "session/new",
+                "session/load",
+                "session/list",
+                "session/fork",
+                "session/close",
+                "session/set_mode",
+                "session/set_config_option",
+                "session/prompt",
+                "session/cancel",
+            ],
+            "clientTools": [
+                "fs/read_text_file",
+                "fs/write_text_file",
+                "terminal/create",
+                "terminal/output",
+                "terminal/wait_for_exit",
+                "terminal/kill",
+                "terminal/release",
+            ],
+            "protocolVersion": vibe_acp::ACP_PROTOCOL_VERSION,
+            "checks": acp_full_contract().map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "cloud_workflows" => json!({
+            "contract": name,
+            "features": [
+                "project_picker",
+                "project_recovery",
+                "teleport_events",
+                "push_approval",
+                "scheduled_loops",
+                "persistence",
+                "cancellation",
+                "failure_local_safety",
+            ],
+            "checks": cloud_workflows_contract().map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
         }),
         _ => return Err(failed(scenario, format!("unknown contract `{name}`"))),
     };

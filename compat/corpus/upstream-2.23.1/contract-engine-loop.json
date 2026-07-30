@@ -3,7 +3,7 @@
   "scenarioId": "contract-engine-loop",
   "matrixRow": "surface.engine-loop",
   "upstreamBaseline": "2.23.1",
-  "comparison": "semantic",
+  "comparison": "schema",
   "stabilityRuns": 2,
   "volatility": [],
   "outcome": {

@@ -1,0 +1,39 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-tool-abi",
+  "matrixRow": "surface.tools",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "schema",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "invalidArgumentsRejected": true,
+          "laterPriorityWins": true,
+          "streamObserved": true,
+          "typedMetadataQueryable": true
+        },
+        "contract": "tool_abi",
+        "features": [
+          "typed_schema",
+          "registry",
+          "streaming",
+          "effects"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

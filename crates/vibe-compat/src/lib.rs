@@ -6,6 +6,7 @@ pub mod differential;
 pub mod matrix;
 pub mod model;
 pub mod oracle;
+mod release4_contracts;
 pub mod rust_recorder;
 pub mod workspace;
 

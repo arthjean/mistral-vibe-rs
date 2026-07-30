@@ -317,12 +317,10 @@ fn first_difference(
             }
         }
         ComparisonMode::Pty => {
-            if expected.terminal_transcript != actual.terminal_transcript {
-                Some("terminal transcript differs".to_owned())
-            } else if expected.exit_status != actual.exit_status {
+            if expected.exit_status != actual.exit_status {
                 Some("PTY exit status differs".to_owned())
             } else {
-                None
+                pty_semantic_difference(expected, actual)
             }
         }
         ComparisonMode::Semantic => {
@@ -331,6 +329,91 @@ fn first_difference(
             semantic_difference(&expected, &actual, "")
         }
     }
+}
+
+fn pty_semantic_difference(
+    expected: &crate::model::OracleOutcome,
+    actual: &crate::model::OracleOutcome,
+) -> Option<String> {
+    let expected_text = strip_terminal_controls(expected.terminal_transcript.as_deref()?);
+    let actual_text = strip_terminal_controls(actual.terminal_transcript.as_deref()?);
+    if expected
+        .argv
+        .iter()
+        .any(|argument| matches!(argument.as_str(), "--version" | "-v"))
+    {
+        return (semantic_version(&expected_text) != semantic_version(&actual_text))
+            .then(|| "PTY version differs".to_owned());
+    }
+    if expected.argv.iter().any(|argument| argument == "--help") {
+        let expected_flags = long_flags(&expected_text);
+        let actual_flags = long_flags(&actual_text);
+        let missing = expected_flags
+            .difference(&actual_flags)
+            .cloned()
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            return Some(format!(
+                "PTY help is missing upstream options: {}",
+                missing.join(", ")
+            ));
+        }
+        for required in ["usage", "options"] {
+            if !actual_text.to_ascii_lowercase().contains(required) {
+                return Some(format!("PTY help is missing the `{required}` section"));
+            }
+        }
+        return None;
+    }
+    (expected_text != actual_text).then(|| "terminal transcript differs".to_owned())
+}
+
+fn strip_terminal_controls(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut characters = input.chars().peekable();
+    while let Some(character) = characters.next() {
+        if character != '\u{1b}' {
+            output.push(character);
+            continue;
+        }
+        match characters.next() {
+            Some('[') => {
+                for next in characters.by_ref() {
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                while let Some(next) = characters.next() {
+                    if next == '\u{7}' {
+                        break;
+                    }
+                    if next == '\u{1b}' && characters.peek() == Some(&'\\') {
+                        characters.next();
+                        break;
+                    }
+                }
+            }
+            Some(_) | None => {}
+        }
+    }
+    output
+}
+
+fn semantic_version(input: &str) -> Option<String> {
+    input
+        .split(|character: char| !character.is_ascii_digit() && character != '.')
+        .find(|candidate| candidate.split('.').filter(|part| !part.is_empty()).count() >= 3)
+        .map(ToOwned::to_owned)
+}
+
+fn long_flags(input: &str) -> BTreeSet<String> {
+    input
+        .split(|character: char| !(character.is_ascii_alphanumeric() || character == '-'))
+        .filter(|token| token.starts_with("--") && token.len() > 2 && !token.ends_with('-'))
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 fn semantic_difference(expected: &Value, actual: &Value, path: &str) -> Option<String> {
@@ -389,6 +472,7 @@ mod tests {
     use crate::model::{
         CapabilityRow, CompatibilityReport, DivergenceDeclaration, OracleOutcome, SupportClass,
     };
+    use crate::oracle::load_scenarios;
 
     fn matrix() -> CapabilityMatrix {
         CapabilityMatrix {
@@ -494,6 +578,103 @@ mod tests {
             first_difference(&expected, &actual, ComparisonMode::Semantic),
             Some("first semantic difference at /publicEvents/0/code".to_owned())
         );
+    }
+
+    #[test]
+    fn release4_contract_mutations_fail_only_their_own_rows() {
+        let mutations = [
+            ("contract-tui-terminal-stack", "/checks/headless/unicode"),
+            ("contract-tui-shell", "/checks/queue/fifo"),
+            (
+                "contract-tui-rendering",
+                "/checks/hostileContent/terminalControlsSafe",
+            ),
+            ("contract-tui-input", "/checks/completion/tabHandled"),
+            (
+                "contract-tui-controls",
+                "/checks/callbackRaces/overlapQueued",
+            ),
+            ("contract-tui-setup", "/checks/updateFailureRecoverable"),
+            (
+                "contract-acp-full",
+                "/checks/lifecycle/activeCancelInterrupts",
+            ),
+            ("contract-cloud-workflows", "/checks/teleport/cancelled"),
+        ];
+        let ids = mutations.map(|(id, _)| id);
+        let scenarios = load_scenarios().expect("scenario inventory");
+        let selected = scenarios
+            .scenarios
+            .into_iter()
+            .filter(|scenario| ids.contains(&scenario.id.as_str()))
+            .collect::<Vec<_>>();
+        assert_eq!(selected.len(), ids.len());
+        assert!(
+            selected
+                .iter()
+                .all(|scenario| scenario.comparison == ComparisonMode::Semantic)
+        );
+
+        let corpus =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../compat/corpus/upstream-2.23.1");
+        for (mutated_id, pointer) in mutations {
+            let expected = tempfile::tempdir().expect("expected fixture directory");
+            let actual = tempfile::tempdir().expect("actual fixture directory");
+            for scenario in &selected {
+                let fixture = load_fixture(&fixture_path(&corpus, &scenario.id))
+                    .expect("load recorded Release 4 fixture");
+                let expected_outcome = fixture.outcome;
+                let mut actual_outcome = expected_outcome.clone();
+                if scenario.id == mutated_id {
+                    let selected = actual_outcome.json_frames[0]
+                        .pointer_mut(pointer)
+                        .expect("recorded mutation pointer");
+                    assert_eq!(*selected, Value::Bool(true));
+                    *selected = Value::Bool(false);
+                }
+                for (directory, outcome) in [
+                    (expected.path(), expected_outcome),
+                    (actual.path(), actual_outcome),
+                ] {
+                    let fixture = RecordedFixture {
+                        fixture_schema_version: 1,
+                        scenario_id: scenario.id.clone(),
+                        matrix_row: scenario.matrix_row.clone(),
+                        upstream_baseline: "2.23.1".to_owned(),
+                        comparison: scenario.comparison,
+                        stability_runs: 2,
+                        volatility: Vec::new(),
+                        outcome,
+                    };
+                    fs::write(
+                        fixture_path(directory, &scenario.id),
+                        serde_json::to_vec(&fixture).expect("fixture JSON"),
+                    )
+                    .expect("fixture write");
+                }
+            }
+            let verdicts = compare_directories(
+                expected.path(),
+                actual.path(),
+                &selected,
+                &BTreeSet::new(),
+                &BTreeSet::new(),
+                &BTreeSet::new(),
+            )
+            .expect("focused comparison");
+            for verdict in verdicts {
+                assert_eq!(
+                    verdict.status,
+                    if verdict.scenario_id == mutated_id {
+                        VerdictStatus::Fail
+                    } else {
+                        VerdictStatus::Pass
+                    },
+                    "mutation isolation failed for {mutated_id} against {}",
+                    verdict.scenario_id
+                );
+            }
+        }
     }
 
     #[test]

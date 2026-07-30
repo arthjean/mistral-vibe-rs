@@ -247,6 +247,65 @@ payload = '{"contract":"mcp_stdio_extension"}'
 volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
 
 [[scenarios]]
+id = "contract-tui-terminal-stack"
+matrix_row = "surface.tui-workflows"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"tui_terminal_stack"}'
+
+[[scenarios]]
+id = "contract-tui-shell"
+matrix_row = "surface.tui-shell"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"tui_shell"}'
+
+[[scenarios]]
+id = "contract-tui-rendering"
+matrix_row = "surface.tui-rendering"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"tui_rendering"}'
+
+[[scenarios]]
+id = "contract-tui-input"
+matrix_row = "surface.tui-input"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"tui_input"}'
+
+[[scenarios]]
+id = "contract-tui-controls"
+matrix_row = "surface.tui-controls"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"tui_controls"}'
+
+[[scenarios]]
+id = "contract-tui-setup"
+matrix_row = "surface.tui-setup"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"tui_setup"}'
+volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
+
+[[scenarios]]
+id = "contract-acp-full"
+matrix_row = "surface.acp"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"acp_full"}'
+volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
+
+[[scenarios]]
+id = "contract-cloud-workflows"
+matrix_row = "surface.cloud-workflows"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"cloud_workflows"}'
+volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
+
+[[scenarios]]
 id = "protocol-success-string-id"
 matrix_row = "protocol.app-server"
 kind = "protocol"

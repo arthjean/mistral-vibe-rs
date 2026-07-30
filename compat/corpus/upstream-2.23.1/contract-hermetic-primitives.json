@@ -3,7 +3,7 @@
   "scenarioId": "contract-hermetic-primitives",
   "matrixRow": "harness.hermetic-primitives",
   "upstreamBaseline": "2.23.1",
-  "comparison": "semantic",
+  "comparison": "schema",
   "stabilityRuns": 2,
   "volatility": [],
   "outcome": {

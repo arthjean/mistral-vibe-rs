@@ -1,0 +1,54 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-tui-input",
+  "matrixRow": "surface.tui-input",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "clipboard": {
+            "copyAccepted": true,
+            "emptyRejected": true
+          },
+          "completion": {
+            "applied": "/review",
+            "staleIgnored": true,
+            "tabHandled": true
+          },
+          "externalEditor": "draft edited",
+          "history": {
+            "draftRestored": "draft",
+            "previous": "a\nβ",
+            "unicodePreserved": true
+          },
+          "imagePathRewritten": true
+        },
+        "contract": "tui_input",
+        "features": [
+          "unicode_editing",
+          "history",
+          "completion",
+          "mentions",
+          "external_editor",
+          "paste",
+          "clipboard"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

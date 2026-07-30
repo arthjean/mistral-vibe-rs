@@ -1,0 +1,57 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-tui-controls",
+  "matrixRow": "surface.tui-controls",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "approval": {
+            "decision": "approve",
+            "kind": "approval"
+          },
+          "callbackRaces": {
+            "overlapQueued": true
+          },
+          "commands": {
+            "clear": true,
+            "compact": true,
+            "continue": true,
+            "rename": true,
+            "resume": true,
+            "rewind": true
+          },
+          "interrupt": {
+            "clearsCallbacks": true
+          }
+        },
+        "contract": "tui_controls",
+        "features": [
+          "approvals",
+          "questions",
+          "plans",
+          "interrupt",
+          "rewind",
+          "compact",
+          "fork",
+          "callback_races"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

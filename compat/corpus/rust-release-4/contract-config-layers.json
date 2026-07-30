@@ -1,0 +1,46 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-config-layers",
+  "matrixRow": "surface.config-layers",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [
+    {
+      "pointer": "/filesystemDelta",
+      "placeholder": "<ENVIRONMENTAL>",
+      "changedBetweenRuns": false
+    }
+  ],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "atomicMutation": true,
+          "publicMethods": true,
+          "unknownFieldsPreserved": true
+        },
+        "contract": "config_layers",
+        "features": [
+          "defaults",
+          "selected_toml",
+          "experiments",
+          "environment",
+          "runtime",
+          "agent"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

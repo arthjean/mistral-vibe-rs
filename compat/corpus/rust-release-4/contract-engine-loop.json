@@ -1,0 +1,37 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-engine-loop",
+  "matrixRow": "surface.engine-loop",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "schema",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "contract": "engine_loop",
+        "outcomes": [
+          "complete",
+          "max_steps",
+          "token_limit",
+          "price_limit",
+          "refusal",
+          "response_length",
+          "cancelled",
+          "failed"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

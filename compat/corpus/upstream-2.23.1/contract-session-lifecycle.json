@@ -5,7 +5,13 @@
   "upstreamBaseline": "2.23.1",
   "comparison": "semantic",
   "stabilityRuns": 2,
-  "volatility": [],
+  "volatility": [
+    {
+      "pointer": "/filesystemDelta",
+      "placeholder": "<ENVIRONMENTAL>",
+      "changedBetweenRuns": false
+    }
+  ],
   "outcome": {
     "argv": [],
     "stdin": "",

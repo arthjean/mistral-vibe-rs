@@ -3,7 +3,7 @@
   "scenarioId": "contract-turn-lifecycle",
   "matrixRow": "surface.turn-lifecycle",
   "upstreamBaseline": "2.23.1",
-  "comparison": "semantic",
+  "comparison": "schema",
   "stabilityRuns": 2,
   "volatility": [],
   "outcome": {

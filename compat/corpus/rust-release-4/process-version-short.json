@@ -1,0 +1,24 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "process-version-short",
+  "matrixRow": "surface.cli-flags",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "byte",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [
+      "-v"
+    ],
+    "stdin": "",
+    "stdout": "vibe 2.23.1\n",
+    "stderr": "",
+    "exitStatus": 0,
+    "jsonFrames": [],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "protocol-error",
+  "matrixRow": "protocol.app-server",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "schema",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "accepted": true,
+        "value": {
+          "error": {
+            "code": "conflict",
+            "data": null,
+            "message": "busy"
+          },
+          "id": "client-1",
+          "jsonrpc": "2.0"
+        },
+        "variant": "JsonRpcErrorResponse"
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

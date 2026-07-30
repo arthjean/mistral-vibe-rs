@@ -1,0 +1,84 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-cloud-workflows",
+  "matrixRow": "surface.cloud-workflows",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [
+    {
+      "pointer": "/filesystemDelta",
+      "placeholder": "<ENVIRONMENTAL>",
+      "changedBetweenRuns": false
+    }
+  ],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "failureSafety": {
+            "executionIdle": true,
+            "projectLinkPreserved": true,
+            "teleportEvents": [
+              "summarizing_context",
+              "checking_git",
+              "failed"
+            ]
+          },
+          "loops": {
+            "earlyDue": false,
+            "firedAtDue": true,
+            "listSnapshotIsolated": true,
+            "persistedCount": 1,
+            "rearmedAfterSeconds": 30,
+            "restoredCount": 1
+          },
+          "projects": {
+            "readOnlyRejected": true,
+            "resolvedProjectId": "page-first",
+            "staleLinkCleared": true
+          },
+          "teleport": {
+            "approvalEvents": [
+              "summarizing_context",
+              "checking_git",
+              "push_required",
+              "pushing",
+              "starting_workflow",
+              "complete"
+            ],
+            "cancelEvents": [
+              "summarizing_context",
+              "checking_git",
+              "push_required"
+            ],
+            "cancelled": true,
+            "pushApproved": true
+          }
+        },
+        "contract": "cloud_workflows",
+        "features": [
+          "project_picker",
+          "project_recovery",
+          "teleport_events",
+          "push_approval",
+          "scheduled_loops",
+          "persistence",
+          "cancellation",
+          "failure_local_safety"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

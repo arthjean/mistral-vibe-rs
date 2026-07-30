@@ -714,12 +714,87 @@ priority = "P0"
 source_paths = ["vibe/cli/textual_ui"]
 test_paths = ["tests/snapshots", "tests/cli"]
 symbols = ["VibeApp"]
-fixture_class = "pty"
-rust_status = "planned"
+fixture_class = "contract"
+rust_status = "implemented"
 divergence_status = "none"
-dependencies = ["surface.wire-variants"]
+dependencies = ["harness.hermetic-primitives", "surface.app-server-lifecycle", "surface.wire-variants"]
 required_release = 4
-items = ["startup", "prompt", "stream", "approval", "restore"]
+items = ["stack-decision", "snapshot-backend", "resize", "unicode", "input", "mouse", "clipboard", "restore"]
+
+[[rows]]
+id = "surface.tui-shell"
+owner = "US-034"
+support = "required-native"
+priority = "P0"
+source_paths = ["vibe/cli/textual_ui/app.py", "vibe/cli/textual_ui/windowing"]
+test_paths = ["tests/cli/textual_ui", "tests/snapshots"]
+symbols = ["VibeApp", "WindowManager"]
+fixture_class = "contract"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.tui-workflows", "surface.session-continuity"]
+required_release = 4
+items = ["startup", "attach", "ready", "bounded-events", "history", "gap-resync", "reconnect", "shutdown"]
+
+[[rows]]
+id = "surface.tui-rendering"
+owner = "US-035"
+support = "required-native"
+priority = "P0"
+source_paths = ["vibe/cli/textual_ui/widgets", "docs/adr/0010-textual-content-rendering.md"]
+test_paths = ["tests/cli/textual_ui", "tests/snapshots"]
+symbols = ["Message", "ToolCall", "Diff", "Plan"]
+fixture_class = "contract"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.tui-shell", "surface.tools", "surface.review-tools"]
+required_release = 4
+items = ["messages", "reasoning", "effects", "diffs", "markdown", "rich-content", "streaming", "hostile-content"]
+
+[[rows]]
+id = "surface.tui-input"
+owner = "US-036"
+support = "required-native"
+priority = "P0"
+source_paths = ["vibe/cli/history_manager.py", "vibe/cli/autocompletion", "vibe/cli/clipboard.py"]
+test_paths = ["tests/cli", "tests/snapshots"]
+symbols = ["HistoryManager", "Autocomplete", "Clipboard"]
+fixture_class = "contract"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.tui-shell", "surface.workspace-tools", "surface.extension-discovery"]
+required_release = 4
+items = ["editing", "history", "completion", "mentions", "external-editor", "paste", "clipboard", "resource-separation"]
+
+[[rows]]
+id = "surface.tui-controls"
+owner = "US-037"
+support = "required-native"
+priority = "P0"
+source_paths = ["vibe/cli/commands.py", "vibe/cli/textual_ui"]
+test_paths = ["tests/cli/textual_ui", "tests/app_server/test_review.py"]
+symbols = ["Approval", "Question", "Plan", "SessionControls"]
+fixture_class = "contract"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.tui-shell", "surface.turn-lifecycle", "surface.tool-policy", "surface.session-continuity"]
+required_release = 4
+items = ["approval", "questions", "plans", "interrupt", "rewind", "compact", "fork", "resume", "close", "callback-races"]
+
+[[rows]]
+id = "surface.tui-setup"
+owner = "US-038"
+support = "required-native"
+priority = "P0"
+source_paths = ["vibe/cli/cli.py", "vibe/cli/commands.py", "vibe/cli/textual_ui"]
+test_paths = ["tests/cli", "tests/snapshots"]
+symbols = ["Setup", "Auth", "Theme", "Update", "Voice"]
+fixture_class = "contract"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.tui-shell", "config.bootstrap", "surface.config-layers", "surface.operational-resources"]
+required_release = 4
+items = ["setup", "auth", "keyring", "trust", "theme", "no-color", "update", "voice", "degraded-dependencies"]
 
 [[rows]]
 id = "surface.acp"
@@ -730,22 +805,53 @@ source_paths = ["vibe/acp/agent.py", "vibe/acp/session.py"]
 test_paths = ["tests/acp"]
 symbols = ["VibeAgent", "VibeSession"]
 fixture_class = "protocol"
-rust_status = "planned"
+rust_status = "implemented"
 divergence_status = "none"
-dependencies = ["protocol.app-server"]
+dependencies = ["protocol.app-server", "surface.session-continuity", "surface.tool-policy", "surface.managed-processes", "surface.mcp"]
 required_release = 4
 items = [
+  "initialize",
   "authenticate",
+  "new",
   "load",
   "list",
   "fork",
+  "close",
   "modes",
   "config-options",
   "commands",
   "history",
+  "prompt-content",
+  "approvals",
   "filesystem",
   "terminal",
+  "disconnect",
+  "multi-session",
 ]
+
+[[rows]]
+id = "surface.cloud-workflows"
+owner = "US-040"
+support = "required-native"
+priority = "P1"
+source_paths = [
+  "vibe/app_server/_vibe_code.py",
+  "vibe/core/vibe_code_project",
+  "vibe/core/teleport",
+  "vibe/core/loop.py",
+]
+test_paths = [
+  "tests/app_server/test_vibe_code.py",
+  "tests/app_server/test_loops.py",
+  "tests/agent_loop/e2e/test_e2e_teleport.py",
+]
+symbols = ["VibeCodeController", "TeleportService", "LoopManager"]
+fixture_class = "protocol"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.operational-resources", "surface.session-continuity", "surface.tui-shell"]
+required_release = 4
+items = ["projects", "teleport", "push-approval", "scheduled-loops", "cancellation", "cloud-failure-local-safety"]
 
 [[rows]]
 id = "surface.telemetry"

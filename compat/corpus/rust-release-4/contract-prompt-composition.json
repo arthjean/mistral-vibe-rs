@@ -1,0 +1,40 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-prompt-composition",
+  "matrixRow": "surface.prompt-composition",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [
+    {
+      "pointer": "/filesystemDelta",
+      "placeholder": "<ENVIRONMENTAL>",
+      "changedBetweenRuns": false
+    }
+  ],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "contract": "prompt_composition",
+        "features": [
+          "ordered_sections",
+          "prompt_precedence",
+          "instructions",
+          "attachments",
+          "display_content"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

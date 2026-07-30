@@ -209,6 +209,879 @@ def volatile() -> dict[str, object]:
     }
 
 
+def tui_terminal_stack_checks() -> dict[str, object]:
+    import asyncio
+
+    from textual.app import App, ComposeResult
+    from textual.widgets import Button, Input
+
+    class ProbeInput(Input):
+        def on_mount(self) -> None:
+            self.app.mounted = True
+
+        def on_unmount(self) -> None:
+            self.app.unmounted = True
+
+    class ProbeApp(App[None]):
+        def __init__(self) -> None:
+            super().__init__()
+            self.clicks = 0
+            self.mounted = False
+            self.unmounted = False
+
+        def compose(self) -> ComposeResult:
+            yield ProbeInput(id="probe-input")
+            yield Button("select", id="probe-button")
+
+        def on_button_pressed(self, _: Button.Pressed) -> None:
+            self.clicks += 1
+
+    async def exercise() -> dict[str, object]:
+        app = ProbeApp()
+        async with app.run_test(size=(72, 18)) as pilot:
+            input_widget = app.query_one("#probe-input", Input)
+            input_widget.focus()
+            await pilot.press("β")
+            await pilot.click("#probe-button")
+            observed = {
+                "mounted": app.mounted,
+                "mouse": app.clicks == 1,
+                "resize": [app.size.width, app.size.height],
+                "unicode": input_widget.value == "β",
+            }
+        observed["cleanShutdown"] = app.unmounted
+        return observed
+
+    first = asyncio.run(exercise())
+    second = asyncio.run(exercise())
+    return {
+        "headless": {
+            key: first[key] for key in ("mounted", "mouse", "resize", "unicode")
+        },
+        "lifecycle": {
+            "cleanShutdown": first["cleanShutdown"],
+            "restartable": second["mounted"] and second["cleanShutdown"],
+        },
+    }
+
+
+def tui_shell_checks() -> dict[str, object]:
+    from vibe.cli.textual_ui.message_queue import MessageQueue
+    from vibe.cli.textual_ui.windowing.state import SessionWindowing
+
+    queue = MessageQueue()
+    queue.append_prompt("first")
+    queue.append_bash("ls")
+    queue.append_prompt("third")
+    snapshot = queue.items
+    popped = []
+    while item := queue.pop_first():
+        popped.append(item.content)
+    queue.pause()
+    queue.clear()
+
+    windowing = SessionWindowing(load_more_batch_size=2)
+    windowing.set_backfill(["h0", "h1", "h2", "h3"])
+    batches = []
+    while batch := windowing.next_load_more_batch():
+        batches.append(batch.entries)
+
+    return {
+        "history": {
+            "backfillOrdered": [item for batch in reversed(batches) for item in batch]
+            == ["h0", "h1", "h2", "h3"],
+            "batchSizes": [len(batch) for batch in batches],
+            "exhausted": not windowing.has_backfill,
+        },
+        "queue": {
+            "clearResumes": not queue.paused,
+            "fifo": popped == ["first", "ls", "third"],
+            "snapshotIsolated": [item.content for item in snapshot]
+            == ["first", "ls", "third"],
+        },
+    }
+
+
+def tui_rendering_checks() -> dict[str, object]:
+    from vibe.cli.textual_ui.widgets.diff_rendering import (
+        DiffOccurrence,
+        render_edit_diff,
+    )
+    from vibe.cli.textual_ui.widgets.messages import BashOutputMessage
+    from vibe.cli.textual_ui.widgets.no_markup_static import NoMarkupStatic
+
+    lines = render_edit_diff(
+        [DiffOccurrence(42, "value = 1", "value = 2")],
+        "py",
+        ansi=False,
+        dark=True,
+    )
+    classes = [line.css_class for line in lines]
+    output = BashOutputMessage(
+        "fixture", "/workspace", "\x1b[31mred\x1b[0m\rfinal\x07"
+    )
+    return {
+        "diff": {
+            "added": classes.count("diff-added") == 1,
+            "removed": classes.count("diff-removed") == 1,
+        },
+        "hostileContent": {
+            "markupLiteral": str(NoMarkupStatic("[/]").render()) == "[/]",
+            "terminalControlsSafe": output._preview_text() == "final",
+        },
+    }
+
+
+def tui_input_checks() -> dict[str, object]:
+    import tempfile
+    from unittest.mock import patch
+
+    from textual import events
+
+    from vibe.cli.autocompletion.base import CompletionResult
+    from vibe.cli.autocompletion.slash_command import SlashCommandController
+    from vibe.cli.clipboard import try_copy_text_to_clipboard
+    from vibe.cli.history_manager import HistoryManager
+    from vibe.cli.textual_ui.external_editor import ExternalEditor
+    from vibe.cli.textual_ui.widgets.chat_input.paste_path import (
+        maybe_prepend_at_for_image_path,
+    )
+
+    class Completer:
+        def get_completion_items(
+            self, _text: str, _cursor_index: int
+        ) -> list[tuple[str, str]]:
+            return [("/review", "Review changes")]
+
+        def get_replacement_range(
+            self, _text: str, cursor_index: int
+        ) -> tuple[int, int]:
+            return (0, cursor_index)
+
+    class View:
+        def __init__(self) -> None:
+            self.replacement = ""
+
+        def clear_completion_suggestions(self) -> None:
+            pass
+
+        def render_completion_suggestions(
+            self, _suggestions: list[tuple[str, str]], _selected_index: int
+        ) -> None:
+            pass
+
+        def replace_completion_range(
+            self,
+            _start: int,
+            _end: int,
+            value: str,
+            *,
+            suppress_update: bool = False,
+        ) -> None:
+            del suppress_update
+            self.replacement = value
+
+    with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+        root = Path(directory)
+        history = HistoryManager(root / "history.jsonl")
+        history.add("a\nβ")
+        history.persist("a\nβ")
+        previous = history.get_previous("draft")
+        restored = history.get_next()
+
+        image = root / "fixture image.png"
+        image.write_bytes(b"\x89PNG\r\n\x1a\n")
+        image_rewritten = maybe_prepend_at_for_image_path(str(image)).startswith("@")
+
+        with patch.object(
+            ExternalEditor,
+            "edit_file",
+            lambda _cls, path, *, check=False: path.write_text(
+                "draft edited\n", encoding="utf-8"
+            ),
+        ):
+            external_editor = ExternalEditor().edit("draft")
+
+    view = View()
+    completion = SlashCommandController(Completer(), view)
+    completion.on_text_changed("/rev", 4)
+    applied = completion.on_key(events.Key("tab", "\t"), "/rev", 4)
+    stale = completion.on_key(events.Key("tab", "\t"), "/rev", 4)
+    with patch("vibe.cli.clipboard._copy_to_clipboard", lambda _text: None):
+        copied = try_copy_text_to_clipboard("copied")
+
+    return {
+        "clipboard": {
+            "copyAccepted": copied,
+            "emptyRejected": not try_copy_text_to_clipboard(""),
+        },
+        "completion": {
+            "applied": view.replacement,
+            "staleIgnored": stale is CompletionResult.IGNORED,
+            "tabHandled": applied is CompletionResult.HANDLED,
+        },
+        "externalEditor": external_editor,
+        "history": {
+            "draftRestored": restored,
+            "previous": previous,
+            "unicodePreserved": previous == "a\nβ",
+        },
+        "imagePathRewritten": image_rewritten,
+    }
+
+
+def tui_controls_checks() -> dict[str, object]:
+    import asyncio
+    from collections import deque
+    from unittest.mock import AsyncMock, MagicMock
+
+    from vibe.app_server.models import (
+        ApprovalCallbackDetail,
+        ApprovalCallbackOutput,
+        ApprovalDecision,
+        EffectCallDisplay,
+        GenericEffectDetail,
+        OpenCallbackState,
+        PublicCallbackEntry,
+        PublicEntryGenerationStatus,
+        QuestionChoice,
+        UserInputCallbackDetail,
+        UserQuestion,
+        UserQuestionRequest,
+    )
+    from vibe.cli.commands import CommandRegistry
+    from vibe.cli.textual_ui.app import VibeApp
+
+    def callback(callback_id: str) -> PublicCallbackEntry:
+        return PublicCallbackEntry(
+            id=f"callback:{callback_id}",
+            session_id="session",
+            turn_id="turn",
+            created_at=1,
+            updated_at=1,
+            generation_status=PublicEntryGenerationStatus.IN_PROGRESS,
+            callback_id=callback_id,
+            title="Input required",
+            detail=UserInputCallbackDetail(
+                request=UserQuestionRequest(
+                    questions=[
+                        UserQuestion(
+                            question="Choose",
+                            options=[
+                                QuestionChoice(label="One"),
+                                QuestionChoice(label="Two"),
+                            ],
+                        )
+                    ]
+                )
+            ),
+            state=OpenCallbackState(),
+        )
+
+    async def exercise_queue() -> bool:
+        app = MagicMock()
+        app._active_callback = callback("first")
+        app._pending_callbacks = deque()
+        await VibeApp._show_callback(app, callback("second"))
+        return [item.callback_id for item in app._pending_callbacks] == ["second"]
+
+    async def exercise_interrupt() -> bool:
+        app = MagicMock()
+        app._active_callback = callback("active")
+        app._pending_callbacks = deque([callback("queued")])
+        app._pending_local_question = None
+        app._agent_task = None
+        app._interrupt_requested = False
+        app._agent_job_active.return_value = True
+        app.app_server.turn_active = True
+        app.app_server.interrupt = AsyncMock()
+        app.event_handler = None
+        app._loading_area.remove_children = AsyncMock()
+        app._mount_and_scroll = AsyncMock()
+        await VibeApp._interrupt_turn(app)
+        return (
+            app._active_callback is None
+            and not app._pending_callbacks
+            and app.app_server.interrupt.await_count == 1
+        )
+
+    registry = CommandRegistry()
+    commands = {
+        command: registry.parse_command(value) is not None
+        for command, value in {
+            "clear": "/clear",
+            "compact": "/compact",
+            "continue": "/continue",
+            "rename": "/rename title",
+            "resume": "/resume",
+            "rewind": "/rewind",
+        }.items()
+    }
+    approval = ApprovalCallbackOutput(
+        decision=ApprovalDecision(type="approve")
+    ).model_dump(mode="json", by_alias=True)
+    effect = GenericEffectDetail(
+        tool_name="fixture",
+        input={"value": "ok"},
+        display=EffectCallDisplay(summary="fixture", status_text="Running"),
+    )
+    detail = ApprovalCallbackDetail(effect=effect)
+    return {
+        "approval": {
+            "decision": approval["decision"]["type"],
+            "kind": detail.kind,
+        },
+        "callbackRaces": {
+            "overlapQueued": asyncio.run(exercise_queue()),
+        },
+        "commands": commands,
+        "interrupt": {
+            "clearsCallbacks": asyncio.run(exercise_interrupt()),
+        },
+    }
+
+
+def tui_setup_checks() -> dict[str, object]:
+    import asyncio
+    import tempfile
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from vibe.cli.audio_recorder.audio_recorder_port import RecordingMode
+    from vibe.cli.theme import resolve_theme_name
+    from vibe.cli.update_notifier import (
+        UpdateCache,
+        UpdateGatewayCause,
+        UpdateGatewayError,
+    )
+    from vibe.cli.update_notifier.update import UpdateError, get_update_if_available
+    from vibe.cli.voice_manager.voice_manager import VoiceManager
+    from vibe.cli.voice_manager.voice_manager_port import TranscribeState
+    from vibe.core.config import DEFAULT_MISTRAL_API_ENV_KEY, ProviderConfig
+    from vibe.core.types import Backend
+    from vibe.setup.auth import AuthStateKind, assess_auth_state
+    from vibe.setup.trusted_folders.trust_folder_dialog import TrustFolderDialog
+
+    class FailingGateway:
+        async def fetch_update(self) -> None:
+            raise UpdateGatewayError(cause=UpdateGatewayCause.REQUEST_FAILED)
+
+    class MemoryRepository:
+        def __init__(self) -> None:
+            self.value: UpdateCache | None = None
+
+        async def get(self) -> UpdateCache | None:
+            return self.value
+
+        async def set(self, value: UpdateCache) -> None:
+            self.value = value
+
+    class Recorder:
+        def __init__(self) -> None:
+            self.mode = RecordingMode.STREAM
+            self.peak = 0.0
+            self.cancelled = False
+
+        def start(self, mode: RecordingMode, *, sample_rate: int) -> None:
+            del sample_rate
+            self.mode = mode
+
+        def cancel(self) -> None:
+            self.cancelled = True
+
+        async def audio_stream(self):
+            if False:
+                yield b""
+
+    class Transcriber:
+        async def transcribe(self, _audio_stream):
+            await asyncio.Event().wait()
+            if False:
+                yield None
+
+        async def close(self) -> None:
+            pass
+
+    provider = ProviderConfig(
+        name="mistral",
+        api_base="https://api.mistral.ai/v1",
+        api_key_env_var=DEFAULT_MISTRAL_API_ENV_KEY,
+        browser_auth_base_url="https://console.mistral.ai",
+        browser_auth_api_base_url="https://console.mistral.ai/api",
+        backend=Backend.MISTRAL,
+    )
+    with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+        env_path = Path(directory) / ".env"
+        with patch(
+            "vibe.setup.auth.auth_state.get_api_key_from_keyring",
+            lambda _key: None,
+        ):
+            missing = assess_auth_state(provider, env_path=env_path, environ={})
+            process = assess_auth_state(
+                provider,
+                env_path=env_path,
+                environ={DEFAULT_MISTRAL_API_ENV_KEY: "fixture"},
+            )
+
+    dialog = TrustFolderDialog(
+        Path("/workspace"),
+        None,
+        ["AGENTS.md"],
+    )
+    with patch.object(dialog, "post_message") as post_message:
+        dialog.action_select()
+        trust_decision = post_message.call_args.args[0].decision
+
+    async def exercise_update() -> bool:
+        repository = MemoryRepository()
+        try:
+            await get_update_if_available(
+                FailingGateway(),
+                "1.0.0",
+                repository,
+                get_current_timestamp=lambda: 100,
+            )
+        except UpdateError:
+            return (
+                repository.value is not None
+                and repository.value.latest_version == "1.0.0"
+            )
+        return False
+
+    async def exercise_voice() -> tuple[bool, bool]:
+        recorder = Recorder()
+        manager = VoiceManager(
+            lambda: SimpleNamespace(
+                voice_mode_enabled=True,
+                transcription=SimpleNamespace(
+                    model=SimpleNamespace(sample_rate=16_000)
+                ),
+            ),
+            recorder,
+            Transcriber(),
+        )
+        manager.start_recording()
+        started = manager.transcribe_state is TranscribeState.RECORDING
+        manager.cancel_recording()
+        cancelled = (
+            recorder.cancelled and manager.transcribe_state is TranscribeState.IDLE
+        )
+        await manager.close()
+        return started, cancelled
+
+    voice_started, voice_cancelled = asyncio.run(exercise_voice())
+    return {
+        "authentication": {
+            "missingRejected": (
+                missing.kind is AuthStateKind.SIGNED_OUT
+                and not missing.can_use_active_provider
+            ),
+            "processCredentialExternal": (
+                process.kind is AuthStateKind.PROCESS_ENV
+                and not process.sign_out_available
+            ),
+            "workspaceTrustDecision": trust_decision,
+        },
+        "theme": {
+            "explicitPreserved": resolve_theme_name("textual-dark")
+            == "textual-dark",
+            "invalidFallsBack": resolve_theme_name("not-a-theme")
+            != "not-a-theme",
+        },
+        "updateFailureRecoverable": asyncio.run(exercise_update()),
+        "voice": {
+            "cancelSafe": voice_cancelled,
+            "recordingStarted": voice_started,
+        },
+    }
+
+
+def acp_full_checks() -> dict[str, object]:
+    import asyncio
+    from types import SimpleNamespace
+
+    from acp.schema import ClientCapabilities
+
+    from vibe.acp.agent import VibeAcpAgent
+    from vibe.acp.session import AcpSession
+
+    class AppServer:
+        def __init__(self) -> None:
+            self.turn_active = True
+            self.interrupts = 0
+            self.closes = 0
+
+        async def interrupt(self) -> None:
+            self.interrupts += 1
+
+        async def close(self) -> None:
+            self.closes += 1
+
+    async def exercise() -> dict[str, object]:
+        agent = VibeAcpAgent()
+        initialized = await agent.initialize(
+            1, client_capabilities=ClientCapabilities()
+        )
+        app_server = AppServer()
+        session = AcpSession(
+            session_id="session",
+            app_server=app_server,
+            cwd=Path.cwd(),
+            commands=SimpleNamespace(),
+        )
+        await session.cancel_prompt()
+        active_cancel = app_server.interrupts == 1
+        app_server.turn_active = False
+        await session.cancel_prompt()
+        idle_cancel = app_server.interrupts == 1
+
+        started = asyncio.Event()
+
+        async def pending() -> None:
+            started.set()
+            await asyncio.Event().wait()
+
+        task = session.spawn(pending())
+        await started.wait()
+        await session.close()
+        await session.close()
+
+        async def noop() -> None:
+            pass
+
+        rejected = session.spawn(noop()) is None
+        capabilities = initialized.agent_capabilities
+        return {
+            "initialize": {
+                "closeSession": capabilities.session_capabilities.close is not None,
+                "embeddedContext": (
+                    capabilities.prompt_capabilities.embedded_context
+                ),
+                "forkSession": capabilities.session_capabilities.fork is not None,
+                "imagePrompts": capabilities.prompt_capabilities.image,
+                "listSessions": capabilities.session_capabilities.list is not None,
+                "loadSession": capabilities.load_session,
+                "protocolVersion": initialized.protocol_version,
+            },
+            "lifecycle": {
+                "activeCancelInterrupts": active_cancel,
+                "closeCancelsTasks": task is not None and task.cancelled(),
+                "closeIdempotent": app_server.closes == 1,
+                "idleCancelNoop": idle_cancel,
+                "spawnRejectedAfterClose": rejected,
+            },
+        }
+
+    return asyncio.run(exercise())
+
+
+def cloud_workflow_checks() -> dict[str, object]:
+    import asyncio
+    import tempfile
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from vibe.app_server._execution import SessionExecution
+    from vibe.app_server._vibe_code import VibeCodeController
+    from vibe.app_server.models import AccountStatus, AccountView
+    from vibe.app_server.protocol import TeleportStartParams
+    from vibe.core.agent_loop import TeleportError
+    from vibe.core.loop import LoopManager
+    from vibe.core.teleport.git import GitRepoInfo
+    from vibe.core.teleport.types import (
+        TeleportCheckingGitEvent,
+        TeleportCompleteEvent,
+        TeleportPushingEvent,
+        TeleportPushRequiredEvent,
+        TeleportStartingWorkflowEvent,
+        TeleportSummarizingContextEvent,
+    )
+    from vibe.core.types import Role
+    from vibe.core.vibe_code_project import (
+        ProjectRepository,
+        TeleportProjectResolution,
+        VibeCodeProject,
+        VibeCodeProjectLink,
+        VibeCodeProjectPage,
+        VibeCodeProjectPickerService,
+        VibeCodeProjectResolverError,
+        VibeProjectsStore,
+    )
+
+    repo_url = "https://github.com/mistralai/mistral-vibe.git"
+
+    class PageFetcher:
+        def __init__(self, pages: list[VibeCodeProjectPage]) -> None:
+            self.pages = pages
+
+        async def list_projects(
+            self, cursor: str | None = None, limit: int | None = None
+        ) -> VibeCodeProjectPage:
+            del cursor, limit
+            return self.pages.pop(0)
+
+    class Telemetry:
+        def send_remote_project_configured(self, **_kwargs: object) -> None:
+            pass
+
+        def send_teleport_failed(self, **_kwargs: object) -> None:
+            pass
+
+    class Config:
+        def is_active_model_mistral(self) -> bool:
+            return True
+
+    class AgentLoop:
+        def __init__(self) -> None:
+            self.config = Config()
+            self.base_config = SimpleNamespace(vibe_base_url="https://example.test")
+            self.telemetry_client = Telemetry()
+            self.messages = [SimpleNamespace(role=Role.user)]
+            self.mode = "complete"
+            self.push_responses: list[bool] = []
+
+        async def teleport_to_vibe_code(
+            self,
+            _prompt: str | None,
+            *,
+            project_id: str | None = None,
+            project_picker: object | None = None,
+        ):
+            assert project_id == "page-first"
+            assert project_picker is not None
+            yield TeleportSummarizingContextEvent()
+            yield TeleportCheckingGitEvent()
+            if self.mode == "failure":
+                raise TeleportError("injected teleport failure")
+            response = yield TeleportPushRequiredEvent(
+                unpushed_count=2, branch_not_pushed=True
+            )
+            self.push_responses.append(bool(response and response.approved))
+            if self.mode == "cancel":
+                await asyncio.Event().wait()
+            yield TeleportPushingEvent()
+            yield TeleportStartingWorkflowEvent()
+            yield TeleportCompleteEvent(url="https://example.test/session")
+
+    class Controller(VibeCodeController):
+        def __init__(
+            self,
+            agent_loop: AgentLoop,
+            notify,
+            execution: SessionExecution,
+            service: VibeCodeProjectPickerService,
+            git: GitRepoInfo,
+        ) -> None:
+            super().__init__(
+                agent_loop,
+                notify,
+                execution,
+                lambda: asyncio.sleep(
+                    0,
+                    result=AccountView(
+                        status=AccountStatus.READY, teleport_eligible=True
+                    ),
+                ),
+            )
+            self.fixture_service = service
+            self.fixture_git = git
+
+        def _make_service(self) -> VibeCodeProjectPickerService:
+            return self.fixture_service
+
+        async def _read_git(self) -> GitRepoInfo:
+            return self.fixture_git
+
+    class SessionMetadata:
+        def __init__(self) -> None:
+            self.loops = []
+
+    class SessionLogger:
+        def __init__(self) -> None:
+            self.session_metadata = SessionMetadata()
+            self.persisted: list[list[object]] = []
+
+        async def persist_loops(self) -> None:
+            self.persisted.append(list(self.session_metadata.loops))
+
+    async def wait_for(
+        predicate, *, attempts: int = 100
+    ) -> None:
+        for _ in range(attempts):
+            if predicate():
+                return
+            await asyncio.sleep(0)
+        raise TimeoutError("cloud workflow fixture did not settle")
+
+    async def exercise(root: Path) -> dict[str, object]:
+        repo_root = root / "repo"
+        repo_root.mkdir()
+        projects_path = root / "projects.toml"
+        store = VibeProjectsStore(projects_path)
+        page_first = VibeCodeProject(
+            project_id="page-first",
+            name="First",
+            repositories=(ProjectRepository(repo_url=repo_url),),
+        )
+        read_only = VibeCodeProject(
+            project_id="read-only-first",
+            name="Read only",
+            repositories=(ProjectRepository(repo_url=repo_url),),
+            is_read_only=True,
+        )
+        stale = VibeCodeProjectLink(
+            repo_root=repo_root,
+            repo_url="https://github.com/mistralai/other.git",
+            project_id="stale",
+            project_name="Stale",
+        )
+        store.upsert_remote_project(stale)
+        picker = VibeCodeProjectPickerService(
+            base_url="https://example.test",
+            api_key="fixture",
+            repo_root=repo_root,
+            page_fetcher=PageFetcher(
+                [
+                    VibeCodeProjectPage(
+                        projects=[page_first, read_only], next_cursor=None
+                    ),
+                    VibeCodeProjectPage(
+                        projects=[page_first, read_only], next_cursor=None
+                    ),
+                ]
+            ),
+            project_store=store,
+        )
+        git = GitRepoInfo(
+            remote_name="origin",
+            remote_url=repo_url,
+            owner="mistralai",
+            repo="mistral-vibe",
+            branch="main",
+            commit="abc123",
+            diff="",
+            default_branch="main",
+            repo_root=repo_root,
+        )
+        initial = await picker.load_initial(git)
+        resolution: TeleportProjectResolution = picker.resolve_project_for_teleport(
+            initial
+        )
+        try:
+            await picker.find_linkable_project(
+                project_id=read_only.project_id, repo_url=repo_url
+            )
+            read_only_rejected = False
+        except VibeCodeProjectResolverError:
+            read_only_rejected = True
+        picker.save_project_link(
+            context=resolution.initial_data.context,
+            project_id=page_first.project_id,
+            project_name=page_first.name,
+        )
+
+        events: dict[str, list[str]] = {}
+        current_operation = ""
+
+        async def notify(_method: str, params: object) -> None:
+            events.setdefault(current_operation, []).append(params.event.kind)
+
+        loop = AgentLoop()
+        execution = SessionExecution()
+        controller = Controller(loop, notify, execution, picker, git)
+        picker_id, _, resolved = await controller.open(
+            purpose="teleport", prompt="continue"
+        )
+
+        def params(operation_id: str) -> TeleportStartParams:
+            return TeleportStartParams(
+                session_id="session",
+                picker_id=picker_id,
+                operation_id=operation_id,
+                prompt="continue",
+                project_id="page-first",
+            )
+
+        current_operation = "approved"
+        approved_params = params(current_operation)
+        await controller.reserve_teleport(approved_params)
+        controller.start_teleport(approved_params)
+        await wait_for(
+            lambda: events.get("approved", [])[-1:] == ["push_required"]
+        )
+        controller.respond_to_push("approved", True)
+        await wait_for(lambda: "approved" not in controller._tasks)
+
+        loop.mode = "cancel"
+        current_operation = "cancelled"
+        cancelled_params = params(current_operation)
+        await controller.reserve_teleport(cancelled_params)
+        controller.start_teleport(cancelled_params)
+        await wait_for(
+            lambda: events.get("cancelled", [])[-1:] == ["push_required"]
+        )
+        controller.respond_to_push("cancelled", True)
+        await wait_for(lambda: loop.push_responses[-1:] == [True])
+        cancelled = await controller.cancel_teleport("cancelled")
+
+        loop.mode = "failure"
+        current_operation = "failed"
+        failed_params = params(current_operation)
+        await controller.reserve_teleport(failed_params)
+        controller.start_teleport(failed_params)
+        await wait_for(lambda: "failed" not in controller._tasks)
+        view = controller.view()
+        link = view.context.saved_link
+        await controller.close()
+
+        logger = SessionLogger()
+        manager = LoopManager(logger)
+        with patch("vibe.core.loop.time.time", return_value=100.0):
+            scheduled = await manager.create("30s", "review")
+        snapshot = manager.loops
+        snapshot.clear()
+        early_due = manager.due(now=129.0)
+        fired = await manager.pop_due(now=130.0)
+        restored = LoopManager(logger)
+        restored.restore(list(logger.session_metadata.loops))
+
+        return {
+            "failureSafety": {
+                "executionIdle": execution.active is None,
+                "projectLinkPreserved": (
+                    link is not None and link.project_id == "page-first"
+                ),
+                "teleportEvents": events["failed"],
+            },
+            "loops": {
+                "earlyDue": early_due is not None,
+                "firedAtDue": fired is not None and fired.id == scheduled.id,
+                "listSnapshotIsolated": len(manager.loops) == 1,
+                "persistedCount": len(logger.session_metadata.loops),
+                "rearmedAfterSeconds": (
+                    None
+                    if fired is None
+                    else int(fired.next_fire_at - 130.0)
+                ),
+                "restoredCount": len(restored.loops),
+            },
+            "projects": {
+                "readOnlyRejected": read_only_rejected,
+                "resolvedProjectId": resolved,
+                "staleLinkCleared": resolution.stale_link_cleared,
+            },
+            "teleport": {
+                "approvalEvents": events["approved"],
+                "cancelEvents": events["cancelled"],
+                "cancelled": cancelled,
+                "pushApproved": loop.push_responses[0],
+            },
+        }
+
+    with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+        return asyncio.run(exercise(Path(directory)))
+
+
 def contract(upstream: Path, payload: str) -> dict[str, object]:
     value = json.loads(payload)
     name = value["contract"]
@@ -895,6 +1768,147 @@ def contract(upstream: Path, payload: str) -> dict[str, object]:
                 "cleanupObserved": True,
             },
             "valid": MCPRegistry is not None,
+        }
+    elif name == "tui_terminal_stack":
+        result = {
+            "contract": name,
+            "features": [
+                "stack_decision",
+                "immutable_snapshots",
+                "resize",
+                "unicode",
+                "input",
+                "mouse",
+                "clipboard",
+                "restoration",
+            ],
+            "checks": tui_terminal_stack_checks(),
+            "valid": True,
+        }
+    elif name == "tui_shell":
+        result = {
+            "contract": name,
+            "features": [
+                "startup",
+                "attach",
+                "ready",
+                "bounded_events",
+                "history",
+                "gap_resync",
+                "reconnect",
+                "shutdown",
+            ],
+            "checks": tui_shell_checks(),
+            "valid": True,
+        }
+    elif name == "tui_rendering":
+        result = {
+            "contract": name,
+            "features": [
+                "messages",
+                "reasoning",
+                "effects",
+                "diffs",
+                "rich_content",
+                "streaming",
+                "hostile_content",
+            ],
+            "checks": tui_rendering_checks(),
+            "valid": True,
+        }
+    elif name == "tui_input":
+        result = {
+            "contract": name,
+            "features": [
+                "unicode_editing",
+                "history",
+                "completion",
+                "mentions",
+                "external_editor",
+                "paste",
+                "clipboard",
+            ],
+            "checks": tui_input_checks(),
+            "valid": True,
+        }
+    elif name == "tui_controls":
+        result = {
+            "contract": name,
+            "features": [
+                "approvals",
+                "questions",
+                "plans",
+                "interrupt",
+                "rewind",
+                "compact",
+                "fork",
+                "callback_races",
+            ],
+            "checks": tui_controls_checks(),
+            "valid": True,
+        }
+    elif name == "tui_setup":
+        result = {
+            "contract": name,
+            "features": [
+                "setup",
+                "auth",
+                "keyring",
+                "trust",
+                "theme",
+                "no_color",
+                "update",
+                "voice",
+            ],
+            "checks": tui_setup_checks(),
+            "valid": True,
+        }
+    elif name == "acp_full":
+        from acp.meta import PROTOCOL_VERSION
+
+        result = {
+            "contract": name,
+            "methods": [
+                "initialize",
+                "authenticate",
+                "session/new",
+                "session/load",
+                "session/list",
+                "session/fork",
+                "session/close",
+                "session/set_mode",
+                "session/set_config_option",
+                "session/prompt",
+                "session/cancel",
+            ],
+            "clientTools": [
+                "fs/read_text_file",
+                "fs/write_text_file",
+                "terminal/create",
+                "terminal/output",
+                "terminal/wait_for_exit",
+                "terminal/kill",
+                "terminal/release",
+            ],
+            "protocolVersion": PROTOCOL_VERSION,
+            "checks": acp_full_checks(),
+            "valid": True,
+        }
+    elif name == "cloud_workflows":
+        result = {
+            "contract": name,
+            "features": [
+                "project_picker",
+                "project_recovery",
+                "teleport_events",
+                "push_approval",
+                "scheduled_loops",
+                "persistence",
+                "cancellation",
+                "failure_local_safety",
+            ],
+            "checks": cloud_workflow_checks(),
+            "valid": True,
         }
     else:
         raise ValueError(f"unknown contract: {name}")
