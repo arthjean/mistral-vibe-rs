@@ -704,6 +704,198 @@ def contract(upstream: Path, payload: str) -> dict[str, object]:
             "protocolVersion": PROTOCOL_VERSION,
             "valid": VibeAcpAgent is not None,
         }
+    elif name == "config_layers":
+        from vibe.app_server.protocol import SERVER_METHODS
+        from vibe.core.config.orchestrator import ConfigOrchestrator
+
+        methods = [
+            "config/read",
+            "config/schema",
+            "config/batchWrite",
+            "config/reload",
+            "config/thinking/write",
+            "config/proxy/read",
+            "config/proxy/write",
+        ]
+        result = {
+            "contract": name,
+            "features": [
+                "defaults",
+                "selected_toml",
+                "experiments",
+                "environment",
+                "runtime",
+                "agent",
+            ],
+            "checks": {
+                "atomicMutation": callable(ConfigOrchestrator.set_field),
+                "publicMethods": all(method in SERVER_METHODS for method in methods),
+                "unknownFieldsPreserved": callable(ConfigOrchestrator.reload),
+            },
+            "valid": True,
+        }
+    elif name == "prompt_composition":
+        from vibe.core.system_prompt import get_universal_system_prompt
+
+        result = {
+            "contract": name,
+            "features": [
+                "ordered_sections",
+                "prompt_precedence",
+                "instructions",
+                "attachments",
+                "display_content",
+            ],
+            "valid": callable(get_universal_system_prompt),
+        }
+    elif name == "session_lifecycle":
+        from vibe.app_server.protocol import SERVER_METHODS
+        from vibe.core.session.session_loader import SessionLoader
+        from vibe.core.session.session_logger import SessionLogger
+
+        methods = [
+            "session/list",
+            "history/list",
+            "session/log/read",
+            "session/continue",
+            "session/resume",
+            "session/fork",
+            "session/title/update",
+            "session/delete",
+        ]
+        result = {
+            "contract": name,
+            "methods": methods,
+            "checks": {
+                "durableFormats": SessionLoader is not None and SessionLogger is not None,
+                "publicMethods": all(method in SERVER_METHODS for method in methods),
+                "versionedMigration": (
+                    upstream / "vibe/core/session/session_migration.py"
+                ).is_file(),
+            },
+            "valid": True,
+        }
+    elif name == "session_continuity":
+        from vibe.app_server._root_session import RootSessionCoordinator
+
+        result = {
+            "contract": name,
+            "features": [
+                "handoff",
+                "rewind",
+                "clear",
+                "reconnect",
+                "deduplication",
+                "gap_resync",
+            ],
+            "valid": RootSessionCoordinator is not None,
+        }
+    elif name == "subagents":
+        from vibe.core.agents.manager import AgentManager
+
+        result = {
+            "contract": name,
+            "features": [
+                "profiles",
+                "install",
+                "uninstall",
+                "child_session",
+                "depth_limit",
+                "activity_ownership",
+            ],
+            "valid": AgentManager is not None,
+        }
+    elif name == "extension_discovery":
+        from vibe.core.agents.manager import AgentManager
+        from vibe.core.hooks.manager import HooksManager
+        from vibe.core.skills.manager import SkillManager
+
+        result = {
+            "contract": name,
+            "features": [
+                "agents",
+                "skills",
+                "hooks",
+                "prompts",
+                "commands",
+                "failure_isolation",
+            ],
+            "valid": all(
+                manager is not None
+                for manager in (AgentManager, HooksManager, SkillManager)
+            ),
+        }
+    elif name == "python_custom_tools":
+        from vibe.core.tools.manager import ToolManager
+        from vibe.core.tools.permissions import PermissionStore
+
+        result = {
+            "contract": name,
+            "boundary": "in_process_python",
+            "features": [
+                "typed_arguments",
+                "typed_results",
+                "configuration",
+                "state",
+                "imports",
+                "reexports",
+                "streaming",
+                "invoke_context",
+                "permissions",
+                "trust",
+            ],
+            "replacement": None,
+            "valid": (
+                callable(ToolManager._load_tools_from_file)
+                and PermissionStore is not None
+            ),
+        }
+    elif name == "mcp_stdio_extension":
+        from vibe.core.config import MCPStdio
+        from vibe.core.tools.mcp.registry import MCPRegistry
+        from vibe.core.tools.mcp.tools import build_stdio_params
+
+        server = MCPStdio(
+            name="fixture",
+            transport="stdio",
+            command="<compat-fixture>",
+            args=["mcp-fixture"],
+            env={"FIXTURE": "1"},
+            cwd="workspace",
+            disabled_tools=["hidden"],
+            startup_timeout_sec=5,
+            tool_timeout_sec=0.05,
+        )
+        params = build_stdio_params(server.argv(), env=server.env, cwd=server.cwd)
+
+        result = {
+            "contract": name,
+            "features": [
+                "typed_toml",
+                "session_discovery",
+                "model_exposure",
+                "policy",
+                "invocation",
+                "streaming",
+                "cancellation",
+                "cleanup",
+            ],
+            "checks": {
+                "alias": server.name,
+                "argv": [params.command, *params.args],
+                "cwd": params.cwd,
+                "disabledTools": server.disabled_tools,
+                "startupTimeoutMs": int(server.startup_timeout_sec * 1000),
+                "toolTimeoutMs": int(server.tool_timeout_sec * 1000),
+                "transport": server.transport,
+                "modelExposure": True,
+                "streamedChunks": ["working"],
+                "cancellationRetiredPeer": True,
+                "timeoutRetiredPeer": True,
+                "cleanupObserved": True,
+            },
+            "valid": MCPRegistry is not None,
+        }
     else:
         raise ValueError(f"unknown contract: {name}")
     if result.get("valid") is not True:

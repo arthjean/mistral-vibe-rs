@@ -12,6 +12,7 @@ use vibe_compat::differential::{
     build_report, compare_directories, report_is_release_ready, write_reports,
 };
 use vibe_compat::matrix;
+use vibe_compat::model::SupportClass;
 use vibe_compat::oracle::{record_all, validate_corpus, validate_scenarios};
 use vibe_compat::rust_recorder::record_rust_all;
 use vibe_compat::workspace;
@@ -31,6 +32,8 @@ struct Arguments {
 
 #[derive(Subcommand)]
 enum Command {
+    #[command(hide = true)]
+    McpFixture,
     Provision {
         #[arg(long)]
         source: PathBuf,
@@ -83,6 +86,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let arguments = Arguments::parse();
     let root = arguments.root;
     match arguments.command {
+        Command::McpFixture => vibe_compat::rust_recorder::serve_mcp_stdio_fixture()?,
         Command::Provision { source, sync } => {
             let checkout = baseline::provision(&root, &source, sync)?;
             println!("{}", checkout.display());
@@ -195,13 +199,27 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .filter(|row| row.divergence_status == "intentional")
                 .map(|row| row.id.as_str())
                 .collect::<BTreeSet<_>>();
+            let blocked = matrix
+                .rows
+                .iter()
+                .filter(|row| row.rust_status == "blocked")
+                .map(|row| row.id.as_str())
+                .collect::<BTreeSet<_>>();
+            let excluded = matrix
+                .rows
+                .iter()
+                .filter(|row| row.support == SupportClass::Excluded)
+                .map(|row| row.id.as_str())
+                .collect::<BTreeSet<_>>();
             let verdicts = compare_directories(
                 &root.join(expected),
                 &root.join(actual),
                 &selected,
                 &intentional,
+                &blocked,
+                &excluded,
             )?;
-            let report = build_report(&matrix, release, verdicts);
+            let report = build_report(&root, &matrix, release, verdicts);
             write_reports(
                 &report,
                 &root.join(report_json),

@@ -1,6 +1,7 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::future::Future;
+use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -10,9 +11,22 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use thiserror::Error;
 use tokio::sync::Notify;
+use toml::Table;
 use url::Url;
-use vibe_app_server::resources::ResourceService;
-use vibe_app_server::server::{AppServer, DeferredWork};
+use vibe_app_server::client::{LiveTurnDriver, TurnDriver, TurnReservation};
+use vibe_app_server::release3::{Release3Paths, Release3Service};
+use vibe_app_server::resources::{
+    CoreResourceBackend, ResourceBackend, ResourceBackendRequest, ResourceService, ResourceSession,
+};
+use vibe_app_server::server::{AppServer, DeferredWork, SessionIntent};
+use vibe_core::config::{ConfigMutation, ConfigPaths, ConfigTarget, ConfigWrite, LayeredConfig};
+use vibe_core::continuity::{CallbackRoute, SessionContinuity};
+use vibe_core::engine::{CompletionProvider, ProviderFuture, TurnStopReason};
+use vibe_core::events::{ModelMessage, ModelToolCall, PublicContentBlock};
+use vibe_core::extensions::{
+    AgentKind, AgentProfile, ChildLoggingPolicy, DelegationRequest, DiscoveryRoots,
+    ExtensionSource, SubagentFuture, SubagentManager, SubagentRunner, discover_extensions,
+};
 use vibe_core::mcp::{
     McpError, McpFuture, McpOAuthConfig, McpPeer, McpPeerFactory, McpRegistry, McpServerConfig,
     McpServerStatus, McpTransportConfig, RemoteTool, rejected_root_claims, validate_config,
@@ -23,7 +37,13 @@ use vibe_core::policy::{
     PermissionRequirement, PermissionRule, PermissionStore, TrustDecision, TrustRootKind,
 };
 use vibe_core::process::{ProcessSpec, ProcessStream, TerminalManager, TerminalState};
+use vibe_core::prompt::{
+    InstructionLoader, PromptComposition, PromptResolver, UserResource, UserResourceKind,
+    prepare_user_resources,
+};
+use vibe_core::provider::{AssistantMessage, ProviderInput, Usage};
 use vibe_core::shell::{ShellFlavor, ShellPolicyContext, analyze_shell};
+use vibe_core::storage::SessionStore;
 use vibe_core::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolExecutionOutput,
     ToolHandler, ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource,
@@ -434,6 +454,115 @@ fn contract_result(
             "checks": operational_contract().map_err(|detail| failed(scenario, detail))?,
             "valid": true,
         }),
+        "config_layers" => json!({
+            "contract": name,
+            "features": [
+                "defaults",
+                "selected_toml",
+                "experiments",
+                "environment",
+                "runtime",
+                "agent",
+            ],
+            "checks": config_contract().map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "prompt_composition" => json!({
+            "contract": name,
+            "features": [
+                "ordered_sections",
+                "prompt_precedence",
+                "instructions",
+                "attachments",
+                "display_content",
+            ],
+            "valid": prompt_contract().map_err(|detail| failed(scenario, detail))?,
+        }),
+        "session_lifecycle" => json!({
+            "contract": name,
+            "methods": [
+                "session/list",
+                "history/list",
+                "session/log/read",
+                "session/continue",
+                "session/resume",
+                "session/fork",
+                "session/title/update",
+                "session/delete",
+            ],
+            "checks": session_contract().map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "session_continuity" => json!({
+            "contract": name,
+            "features": [
+                "handoff",
+                "rewind",
+                "clear",
+                "reconnect",
+                "deduplication",
+                "gap_resync",
+            ],
+            "valid": continuity_contract().map_err(|detail| failed(scenario, detail))?,
+        }),
+        "subagents" => json!({
+            "contract": name,
+            "features": [
+                "profiles",
+                "install",
+                "uninstall",
+                "child_session",
+                "depth_limit",
+                "activity_ownership",
+            ],
+            "valid": subagent_contract().map_err(|detail| failed(scenario, detail))?,
+        }),
+        "extension_discovery" => json!({
+            "contract": name,
+            "features": [
+                "agents",
+                "skills",
+                "hooks",
+                "prompts",
+                "commands",
+                "failure_isolation",
+            ],
+            "valid": extension_contract().map_err(|detail| failed(scenario, detail))?,
+        }),
+        "python_custom_tools" => json!({
+            "contract": name,
+            "boundary": "excluded",
+            "features": [
+                "typed_arguments",
+                "typed_results",
+                "configuration",
+                "state",
+                "imports",
+                "reexports",
+                "streaming",
+                "invoke_context",
+                "permissions",
+                "trust",
+            ],
+            "replacement": "mcp_stdio",
+            "valid": true,
+        }),
+        "mcp_stdio_extension" => json!({
+            "contract": name,
+            "features": [
+                "typed_toml",
+                "session_discovery",
+                "model_exposure",
+                "policy",
+                "invocation",
+                "streaming",
+                "cancellation",
+                "cleanup",
+            ],
+            "checks": mcp_stdio_extension_contract()
+                .map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
         "acp_minimal" => json!({
             "contract": name,
             "methods": [
@@ -452,6 +581,876 @@ fn contract_result(
         return Err(failed(scenario, format!("contract check failed: {name}")));
     }
     Ok(result)
+}
+
+fn mcp_stdio_extension_contract() -> Result<Value, String> {
+    let temporary = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let working_directory = temporary.path().join("workspace");
+    let config_home = temporary.path().join("home");
+    let exit_marker = temporary.path().join("fixture-closed");
+    let call_marker = temporary.path().join("fixture-call-started");
+    fs::create_dir_all(working_directory.join(".vibe")).map_err(|error| error.to_string())?;
+    fs::create_dir_all(working_directory.join("workspace")).map_err(|error| error.to_string())?;
+    fs::create_dir_all(&config_home).map_err(|error| error.to_string())?;
+    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+    let config = toml::Table::from_iter([(
+        "mcp_servers".to_owned(),
+        toml::Value::Array(vec![toml::Value::Table(toml::Table::from_iter([
+            ("name".to_owned(), toml::Value::String("fixture".to_owned())),
+            (
+                "transport".to_owned(),
+                toml::Value::String("stdio".to_owned()),
+            ),
+            (
+                "command".to_owned(),
+                toml::Value::String(executable.to_string_lossy().into_owned()),
+            ),
+            (
+                "args".to_owned(),
+                toml::Value::Array(vec![toml::Value::String("mcp-fixture".to_owned())]),
+            ),
+            (
+                "disabled_tools".to_owned(),
+                toml::Value::Array(vec![toml::Value::String("hidden".to_owned())]),
+            ),
+            (
+                "env".to_owned(),
+                toml::Value::Table(toml::Table::from_iter([
+                    (
+                        "VIBE_MCP_EXIT_FILE".to_owned(),
+                        toml::Value::String(exit_marker.to_string_lossy().into_owned()),
+                    ),
+                    (
+                        "VIBE_MCP_CALL_FILE".to_owned(),
+                        toml::Value::String(call_marker.to_string_lossy().into_owned()),
+                    ),
+                ])),
+            ),
+            (
+                "cwd".to_owned(),
+                toml::Value::String("workspace".to_owned()),
+            ),
+            ("startup_timeout_sec".to_owned(), toml::Value::Integer(5)),
+            ("tool_timeout_sec".to_owned(), toml::Value::Float(0.05)),
+        ]))]),
+    )]);
+    fs::write(
+        working_directory.join(".vibe/config.toml"),
+        toml::to_string(&config).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    let release3 = Release3Service::new(
+        Release3Paths {
+            vibe_home: config_home,
+            working_directory: working_directory.clone(),
+            session_root: temporary.path().join("sessions"),
+        },
+        Table::new(),
+        true,
+    )
+    .map_err(|error| error.to_string())?;
+    let mut servers = release3
+        .mcp_servers_for_session(&working_directory, true, &[])
+        .map_err(|error| error.to_string())?;
+    let server = servers
+        .pop()
+        .ok_or_else(|| "typed stdio server was not activated".to_owned())?;
+    if !servers.is_empty() {
+        return Err("typed stdio activation returned extra servers".to_owned());
+    }
+    let McpTransportConfig::Stdio {
+        command,
+        arguments,
+        working_directory: configured_cwd,
+        ..
+    } = &server.transport
+    else {
+        return Err("typed stdio config selected another transport".to_owned());
+    };
+    let cwd = configured_cwd
+        .as_deref()
+        .and_then(|path| path.strip_prefix(&working_directory).ok())
+        .map(|path| path.to_string_lossy().into_owned());
+    let checks = json!({
+        "alias": server.alias.clone(),
+        "argv": ["<compat-fixture>", "mcp-fixture"],
+        "cwd": cwd,
+        "disabledTools": server.disabled_tools.clone(),
+        "startupTimeoutMs": server.startup_timeout_ms,
+        "toolTimeoutMs": server.tool_timeout_ms,
+        "transport": "stdio",
+    });
+    if command.as_str() != executable.to_string_lossy().as_ref()
+        || arguments != &["mcp-fixture"]
+        || server.tool_timeout_ms != 50
+    {
+        return Err("typed TOML did not preserve the executable contract".to_owned());
+    }
+    run_async(async move {
+        let policy = PermissionStore::default();
+        policy
+            .set_trust(
+                &working_directory,
+                TrustDecision::SessionTrusted,
+                TrustRootKind::Workspace,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        for tool in ["mcp_fixture_echo", "mcp_fixture_hang"] {
+            policy
+                .add_rule(PermissionRule {
+                    tool: tool.to_owned(),
+                    scope: format!("mcp fixture/{}", tool.trim_start_matches("mcp_fixture_")),
+                    mode: PermissionMode::Always,
+                    rationale: "compatibility fixture".to_owned(),
+                })
+                .await;
+        }
+        let tools = ToolRegistry::default();
+        let backend = CoreResourceBackend::default();
+        backend
+            .open_session(ResourceSession {
+                session_id: "mcp-contract".to_owned(),
+                generation: 1,
+                working_directory: working_directory.to_string_lossy().into_owned(),
+                policy,
+                tools: tools.clone(),
+            })
+            .map_err(|error| error.to_string())?;
+        let configured = backend
+            .configure_mcp("mcp-contract", vec![server.clone()])
+            .await
+            .map_err(|error| error.to_string())?;
+        if configured.result["mcp"]["sources"][0]["status"] != json!("healthy") {
+            return Err("live stdio discovery was not healthy".to_owned());
+        }
+        let definitions = tools
+            .available(&BTreeSet::new(), &BTreeSet::new())
+            .map_err(|error| error.to_string())?;
+        if !definitions
+            .iter()
+            .any(|definition| definition.name == "mcp_fixture_echo")
+        {
+            return Err("live MCP tool was not exposed to the model registry".to_owned());
+        }
+        let provider = Arc::new(McpContractProvider::default());
+        let outcome = LiveTurnDriver::from_provider_for_tests(provider.clone(), "system")
+            .run(&TurnReservation {
+                session_id: "mcp-contract".to_owned(),
+                turn_id: "mcp-contract-turn".to_owned(),
+                prompt: "use MCP".to_owned(),
+                input: vec![PublicContentBlock::Text {
+                    text: "use MCP".to_owned(),
+                }],
+                client_user_message_id: None,
+                auto_title: None,
+                user_display_content: None,
+                mention_stats: None,
+                working_directory: working_directory.to_string_lossy().into_owned(),
+                intent: SessionIntent::default(),
+                tools: tools.clone(),
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        if outcome.stop_reason != TurnStopReason::Complete
+            || !provider.model_exposed.load(Ordering::Acquire)
+        {
+            return Err("the model did not select the live MCP definition".to_owned());
+        }
+        let streamed = Arc::new(Mutex::new(Vec::new()));
+        let stream_capture = streamed.clone();
+        let stream: vibe_core::engine::ToolStreamSink = Arc::new(move |chunk| {
+            stream_capture
+                .lock()
+                .map_err(|_| "MCP stream capture lock is poisoned".to_owned())?
+                .push(chunk);
+            Ok(())
+        });
+        let output = tools
+            .invoke_stream(
+                "mcp_fixture_echo",
+                ToolInvocation {
+                    call_id: "contract-stream".to_owned(),
+                    arguments: json!({"message": "stream"}),
+                },
+                Some(stream),
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        if output.model_text != "hello stream"
+            || output.typed_result["echo"] != "stream"
+            || streamed
+                .lock()
+                .map_err(|_| "MCP stream capture lock is poisoned".to_owned())?
+                .as_slice()
+                != ["working"]
+        {
+            return Err("live MCP invocation lost streaming or its typed result".to_owned());
+        }
+        backend
+            .dispatch(ResourceBackendRequest {
+                session_id: "mcp-contract".to_owned(),
+                method: "mcp/refresh".to_owned(),
+                params: BTreeMap::from([("name".to_owned(), json!("fixture"))]),
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        backend
+            .dispatch(ResourceBackendRequest {
+                session_id: "mcp-contract".to_owned(),
+                method: "mcp/toggle".to_owned(),
+                params: BTreeMap::from([
+                    ("name".to_owned(), json!("fixture")),
+                    ("disabled".to_owned(), json!(true)),
+                ]),
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        if tools
+            .invoke(
+                "mcp_fixture_echo",
+                ToolInvocation {
+                    call_id: "contract-disabled".to_owned(),
+                    arguments: json!({"message": "blocked"}),
+                },
+            )
+            .await
+            .is_ok()
+        {
+            return Err("disabled MCP tool remained invocable".to_owned());
+        }
+        backend
+            .dispatch(ResourceBackendRequest {
+                session_id: "mcp-contract".to_owned(),
+                method: "mcp/toggle".to_owned(),
+                params: BTreeMap::from([
+                    ("name".to_owned(), json!("fixture")),
+                    ("disabled".to_owned(), json!(false)),
+                ]),
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        if exit_marker.exists() {
+            fs::remove_file(&exit_marker).map_err(|error| error.to_string())?;
+        }
+        if call_marker.exists() {
+            fs::remove_file(&call_marker).map_err(|error| error.to_string())?;
+        }
+        let cancellation_tools = tools.clone();
+        let cancelled = tokio::spawn(async move {
+            cancellation_tools
+                .invoke(
+                    "mcp_fixture_hang",
+                    ToolInvocation {
+                        call_id: "contract-cancel".to_owned(),
+                        arguments: json!({}),
+                    },
+                )
+                .await
+        });
+        wait_for_marker(&call_marker, "live MCP call start").await?;
+        cancelled.abort();
+        if !cancelled.await.is_err_and(|error| error.is_cancelled()) {
+            return Err("live MCP invocation task was not cancelled".to_owned());
+        }
+        wait_for_mcp_status(&backend, "failed").await?;
+        wait_for_marker(&exit_marker, "cancelled MCP peer cleanup").await?;
+        backend
+            .configure_mcp("mcp-contract", vec![server.clone()])
+            .await
+            .map_err(|error| error.to_string())?;
+        if exit_marker.exists() {
+            fs::remove_file(&exit_marker).map_err(|error| error.to_string())?;
+        }
+        let timeout = match tools
+            .invoke(
+                "mcp_fixture_hang",
+                ToolInvocation {
+                    call_id: "contract-timeout".to_owned(),
+                    arguments: json!({}),
+                },
+            )
+            .await
+        {
+            Ok(_) => return Err("hung live MCP call unexpectedly completed".to_owned()),
+            Err(error) => error,
+        };
+        if !timeout.to_string().contains("timed out") {
+            return Err("hung live MCP call did not report a timeout".to_owned());
+        }
+        let state = backend
+            .dispatch(ResourceBackendRequest {
+                session_id: "mcp-contract".to_owned(),
+                method: "mcp/read".to_owned(),
+                params: BTreeMap::new(),
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        if state.result["mcp"]["sources"][0]["status"] != json!("failed") {
+            return Err("timed-out live MCP peer was not retired".to_owned());
+        }
+        wait_for_marker(&exit_marker, "timed-out MCP peer cleanup").await?;
+        backend
+            .configure_mcp("mcp-contract", vec![server])
+            .await
+            .map_err(|error| error.to_string())?;
+        if exit_marker.exists() {
+            fs::remove_file(&exit_marker).map_err(|error| error.to_string())?;
+        }
+        backend
+            .close_session("mcp-contract", 1)
+            .await
+            .map_err(|error| error.to_string())?;
+        wait_for_marker(&exit_marker, "session MCP cleanup").await?;
+        let mut checks = checks;
+        checks["modelExposure"] = json!(true);
+        checks["streamedChunks"] = json!(["working"]);
+        checks["cancellationRetiredPeer"] = json!(true);
+        checks["timeoutRetiredPeer"] = json!(true);
+        checks["cleanupObserved"] = json!(true);
+        Ok(checks)
+    })
+}
+
+#[derive(Default)]
+struct McpContractProvider {
+    calls: AtomicUsize,
+    model_exposed: AtomicBool,
+}
+
+impl CompletionProvider for McpContractProvider {
+    fn complete<'a>(&'a self, input: &'a ProviderInput) -> ProviderFuture<'a> {
+        Box::pin(async move {
+            let call = self.calls.fetch_add(1, Ordering::AcqRel);
+            if call == 0 {
+                let exposed = input
+                    .tools
+                    .iter()
+                    .any(|tool| tool.name == "mcp_fixture_echo");
+                self.model_exposed.store(exposed, Ordering::Release);
+                if !exposed {
+                    return Err(vibe_core::provider::ProviderError::InvalidRequest(
+                        "MCP definition was not exposed to the model".to_owned(),
+                    ));
+                }
+                return Ok(AssistantMessage {
+                    text: String::new(),
+                    reasoning: None,
+                    reasoning_signature: None,
+                    reasoning_state: Vec::new(),
+                    tool_calls: vec![ModelToolCall {
+                        id: "contract-model-call".to_owned(),
+                        name: "mcp_fixture_echo".to_owned(),
+                        arguments: r#"{"message":"model"}"#.to_owned(),
+                    }],
+                    usage: Usage::default(),
+                    refusal: None,
+                    stop_reason: "tool_calls".to_owned(),
+                    correlation_id: None,
+                });
+            }
+            if !input.messages.iter().any(|message| {
+                matches!(
+                    message,
+                    ModelMessage::Tool {
+                        call_id,
+                        content,
+                        is_error: false,
+                    } if call_id == "contract-model-call" && content == "hello model"
+                )
+            }) {
+                return Err(vibe_core::provider::ProviderError::InvalidRequest(
+                    "MCP result did not return through the engine transcript".to_owned(),
+                ));
+            }
+            Ok(AssistantMessage {
+                text: "model complete".to_owned(),
+                reasoning: None,
+                reasoning_signature: None,
+                reasoning_state: Vec::new(),
+                tool_calls: Vec::new(),
+                usage: Usage::default(),
+                refusal: None,
+                stop_reason: "stop".to_owned(),
+                correlation_id: None,
+            })
+        })
+    }
+}
+
+async fn wait_for_marker(path: &Path, label: &str) -> Result<(), String> {
+    for _ in 0..200 {
+        if path.is_file() {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    Err(format!("{label} was not observed"))
+}
+
+async fn wait_for_mcp_status(backend: &CoreResourceBackend, status: &str) -> Result<(), String> {
+    for _ in 0..200 {
+        let state = backend
+            .dispatch(ResourceBackendRequest {
+                session_id: "mcp-contract".to_owned(),
+                method: "mcp/read".to_owned(),
+                params: BTreeMap::new(),
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        if state.result["mcp"]["sources"][0]["status"] == json!(status) {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    Err(format!("MCP status `{status}` was not observed"))
+}
+
+pub fn serve_mcp_stdio_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    let stdin = io::stdin();
+    let mut stdout = io::stdout().lock();
+    for line in stdin.lock().lines() {
+        let request: Value = serde_json::from_str(&line?)?;
+        let Some(method) = request.get("method").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(id) = request.get("id").cloned() else {
+            continue;
+        };
+        let response = match method {
+            "initialize" => json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {"tools": {"listChanged": false}},
+                    "serverInfo": {"name": "vibe-compat-fixture", "version": "1.0.0"}
+                }
+            }),
+            "tools/list" => json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": {
+                    "tools": [
+                        {
+                            "name": "echo",
+                            "description": "Echo a bounded message",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {"message": {"type": "string"}},
+                                "required": ["message"],
+                                "additionalProperties": false
+                            }
+                        },
+                        {
+                            "name": "hang",
+                            "description": "Wait until the client cancels",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                            }
+                        }
+                    ]
+                }
+            }),
+            "tools/call"
+                if request.pointer("/params/name").and_then(Value::as_str) == Some("hang") =>
+            {
+                if let Ok(path) = std::env::var("VIBE_MCP_CALL_FILE") {
+                    fs::write(path, b"started")?;
+                }
+                std::thread::sleep(Duration::from_millis(250));
+                json!({"jsonrpc": "2.0", "id": id, "result": {"content": []}})
+            }
+            "tools/call" => {
+                if let Some(progress_token) = request.pointer("/params/_meta/progressToken") {
+                    serde_json::to_writer(
+                        &mut stdout,
+                        &json!({
+                            "jsonrpc": "2.0",
+                            "method": "notifications/progress",
+                            "params": {
+                                "progressToken": progress_token,
+                                "progress": 0.5,
+                                "message": "working"
+                            }
+                        }),
+                    )?;
+                    stdout.write_all(b"\n")?;
+                    stdout.flush()?;
+                }
+                let message = request
+                    .pointer("/params/arguments/message")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "result": {
+                        "content": [{"type": "text", "text": format!("hello {message}")}],
+                        "structuredContent": {"echo": message},
+                        "isError": false
+                    }
+                })
+            }
+            _ => json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": {"code": -32601, "message": "Method not found"}
+            }),
+        };
+        serde_json::to_writer(&mut stdout, &response)?;
+        stdout.write_all(b"\n")?;
+        stdout.flush()?;
+    }
+    if let Ok(path) = std::env::var("VIBE_MCP_EXIT_FILE") {
+        fs::write(path, b"closed")?;
+    }
+    Ok(())
+}
+
+fn config_contract() -> Result<Value, String> {
+    let temporary = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let vibe_home = temporary.path().join("home/.vibe");
+    let working_directory = temporary.path().join("workspace");
+    fs::create_dir_all(working_directory.join(".vibe")).map_err(|error| error.to_string())?;
+    fs::create_dir_all(&vibe_home).map_err(|error| error.to_string())?;
+    fs::write(
+        working_directory.join(".vibe/config.toml"),
+        "winner = \"project\"\n[future]\nunknown = true\n",
+    )
+    .map_err(|error| error.to_string())?;
+    let defaults = "winner = \"default\""
+        .parse::<Table>()
+        .map_err(|error| error.to_string())?;
+    let config = LayeredConfig::new(
+        ConfigPaths {
+            vibe_home: vibe_home.clone(),
+            working_directory: working_directory.clone(),
+        },
+        defaults,
+    )
+    .with_project_trusted(true)
+    .with_experiments(
+        "experiment = true"
+            .parse::<Table>()
+            .map_err(|error| error.to_string())?,
+    )
+    .with_environment([("VIBE_WINNER".to_owned(), "\"environment\"".to_owned())])
+    .with_runtime_overrides(
+        "winner = \"runtime\""
+            .parse::<Table>()
+            .map_err(|error| error.to_string())?,
+    )
+    .with_agent_overlay(
+        "winner = \"agent\""
+            .parse::<Table>()
+            .map_err(|error| error.to_string())?,
+    );
+    let before = config.load().map_err(|error| error.to_string())?;
+    let project_fingerprint = before
+        .fingerprints
+        .get(&ConfigTarget::Project)
+        .cloned()
+        .flatten();
+    let after = config
+        .batch_write(&[ConfigWrite {
+            target: ConfigTarget::Project,
+            expected_fingerprint: project_fingerprint,
+            mutations: vec![ConfigMutation::set(["updated"], toml::Value::Boolean(true))],
+        }])
+        .map_err(|error| error.to_string())?;
+    let service = Release3Service::new(
+        Release3Paths {
+            session_root: vibe_home.join("sessions"),
+            vibe_home,
+            working_directory,
+        },
+        Table::new(),
+        true,
+    )
+    .map_err(|error| error.to_string())?;
+    let public_methods = service.dispatch("config/schema", &BTreeMap::new()).is_ok()
+        && service.dispatch("config/read", &BTreeMap::new()).is_ok();
+    Ok(json!({
+        "atomicMutation": after.effective.get("updated").and_then(toml::Value::as_bool) == Some(true),
+        "publicMethods": public_methods,
+        "unknownFieldsPreserved": after
+            .effective
+            .get("future")
+            .and_then(toml::Value::as_table)
+            .and_then(|table| table.get("unknown"))
+            .and_then(toml::Value::as_bool)
+            == Some(true),
+    }))
+}
+
+fn prompt_contract() -> Result<bool, String> {
+    let temporary = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let project = temporary.path().join("workspace");
+    let user_home = temporary.path().join("home");
+    let project_prompts = project.join(".vibe/prompts");
+    fs::create_dir_all(&project_prompts).map_err(|error| error.to_string())?;
+    fs::create_dir_all(&user_home).map_err(|error| error.to_string())?;
+    fs::write(user_home.join("AGENTS.md"), "user instructions")
+        .map_err(|error| error.to_string())?;
+    fs::write(project.join("AGENTS.md"), "project instructions")
+        .map_err(|error| error.to_string())?;
+    fs::write(project_prompts.join("review.md"), "project prompt")
+        .map_err(|error| error.to_string())?;
+    let loader = InstructionLoader::new(user_home, vec![(project.clone(), project.clone())]);
+    let resolved = PromptResolver::new(vec![project_prompts], Vec::new(), BTreeMap::new(), true)
+        .resolve("review")
+        .map_err(|error| error.to_string())?;
+    let composed = PromptComposition {
+        base: resolved.content,
+        headless: true,
+        commit_policy: Some("Do not commit".to_owned()),
+        model_info: Some("fixture".to_owned()),
+        os_tool_guidance: Some("Use tools".to_owned()),
+        skills: Vec::new(),
+        subagents: Vec::new(),
+        scratchpad: None,
+        project_context: Some("clean".to_owned()),
+        project_context_stale: false,
+        additional_directories: Vec::new(),
+        user_instructions: loader.user_document().map_err(|error| error.to_string())?,
+        project_instructions: loader
+            .project_documents()
+            .map_err(|error| error.to_string())?,
+    }
+    .compose();
+    let prepared = prepare_user_resources(
+        &[UserResource {
+            kind: UserResourceKind::Text,
+            path: None,
+            text: Some("hello".to_owned()),
+            mime_type: None,
+            metadata: Value::Null,
+        }],
+        &[project],
+        false,
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(
+        composed.section_names.first().map(String::as_str) == Some("base")
+            && composed.text.contains("user instructions")
+            && composed.text.contains("project instructions")
+            && prepared.model_content.len() == 1
+            && prepared.display_content.len() == 1,
+    )
+}
+
+fn session_contract() -> Result<Value, String> {
+    let temporary = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let root = temporary.path().join("sessions");
+    let store = SessionStore::new(&root).with_pointer_key("compat");
+    let mut metadata = store
+        .create("root-alpha", "/workspace", None, 1)
+        .map_err(|error| error.to_string())?;
+    store
+        .append_message(
+            &mut metadata,
+            &ModelMessage::User {
+                content: "hello".to_owned(),
+            },
+            2,
+        )
+        .map_err(|error| error.to_string())?;
+    let listed = store.list(None, 0, 10).map_err(|error| error.to_string())?;
+    let resumed = store
+        .resume("root-alpha", "current prompt", BTreeMap::new())
+        .map_err(|error| error.to_string())?;
+    let forked = store
+        .fork(
+            "root-alpha",
+            "child-beta",
+            "child prompt",
+            BTreeMap::new(),
+            3,
+        )
+        .map_err(|error| error.to_string())?;
+    store
+        .update_title("root-alpha", "Renamed", 4)
+        .map_err(|error| error.to_string())?;
+    store
+        .delete("child-beta")
+        .map_err(|error| error.to_string())?;
+    let migration = store.migrate_legacy().map_err(|error| error.to_string())?;
+    let service = Release3Service::new(
+        Release3Paths {
+            vibe_home: temporary.path().join("home/.vibe"),
+            working_directory: temporary.path().join("workspace"),
+            session_root: root,
+        },
+        Table::new(),
+        false,
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(json!({
+        "durableFormats": listed.sessions.len() == 1
+            && resumed.messages.len() == 2
+            && forked.metadata.parent_session_id.as_deref() == Some("root-alpha"),
+        "publicMethods": service.dispatch("session/list", &BTreeMap::new()).is_ok(),
+        "versionedMigration": migration.issues.is_empty(),
+    }))
+}
+
+fn continuity_contract() -> Result<bool, String> {
+    let temporary = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let store = SessionStore::new(temporary.path()).with_pointer_key("compat");
+    let mut metadata = store
+        .create("root-session", "/workspace", None, 1)
+        .map_err(|error| error.to_string())?;
+    store
+        .append_message(
+            &mut metadata,
+            &ModelMessage::User {
+                content: "before".to_owned(),
+            },
+            2,
+        )
+        .map_err(|error| error.to_string())?;
+    let continuity = SessionContinuity::new(store.clone());
+    continuity
+        .attach(
+            store
+                .load("root-session")
+                .map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+    continuity
+        .bind_callback(
+            "root-session",
+            CallbackRoute {
+                callback_id: "callback-1".to_owned(),
+                turn_id: "turn-1".to_owned(),
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    continuity
+        .add_resource("root-session", "terminal-1")
+        .map_err(|error| error.to_string())?;
+    continuity
+        .accept_operation("root-session", "operation-1", 1)
+        .map_err(|error| error.to_string())?;
+    let reconnected = SessionContinuity::new(store.clone())
+        .reconnect("root-session")
+        .map_err(|error| error.to_string())?;
+    let handed_off = continuity
+        .handoff("root-session", "root-next", "prompt", BTreeMap::new(), 3)
+        .map_err(|error| error.to_string())?;
+    Ok(reconnected.callback_routes.contains_key("callback-1")
+        && reconnected.resources.contains("terminal-1")
+        && reconnected.completed_operations.contains("operation-1")
+        && handed_off.parent_session_id.as_deref() == Some("root-session")
+        && continuity.stale_interrupt_target("root-session").is_ok())
+}
+
+struct RecorderSubagent;
+
+impl SubagentRunner for RecorderSubagent {
+    fn run<'a>(
+        &'a self,
+        context: vibe_core::extensions::ChildContext,
+        _cancellation: vibe_core::engine::CancellationToken,
+    ) -> SubagentFuture<'a> {
+        Box::pin(async move { Ok(format!("{}:{}", context.agent.name, context.prompt)) })
+    }
+}
+
+fn subagent_contract() -> Result<bool, String> {
+    let temporary = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let store = SessionStore::new(temporary.path()).with_pointer_key("compat");
+    let mut parent = store
+        .create("root", "/workspace", None, 0)
+        .map_err(|error| error.to_string())?;
+    parent.config.insert("model".to_owned(), json!("fixture"));
+    store
+        .update_metadata(&parent)
+        .map_err(|error| error.to_string())?;
+    let manager = SubagentManager::new(store.clone(), Arc::new(RecorderSubagent));
+    let agent = AgentProfile {
+        name: "reviewer".to_owned(),
+        display_name: "Reviewer".to_owned(),
+        description: "Reviews code".to_owned(),
+        kind: AgentKind::Subagent,
+        safety: "neutral".to_owned(),
+        overrides: Table::new(),
+        source: ExtensionSource::Builtin,
+        path: None,
+    };
+    let effect = run_async(async {
+        manager
+            .delegate(
+                DelegationRequest {
+                    parent_session_id: "root".to_owned(),
+                    agent,
+                    prompt: "inspect".to_owned(),
+                    logging: ChildLoggingPolicy::Full,
+                },
+                1,
+            )
+            .await
+            .map_err(|error| error.to_string())
+    })?;
+    let child = store
+        .load(&effect.child_session_id)
+        .map_err(|error| error.to_string())?;
+    let activity = SubagentManager::activity(&effect, "tool");
+    Ok(effect.result == "reviewer:inspect"
+        && child.metadata.parent_session_id.as_deref() == Some("root")
+        && child.metadata.config.get("model") == Some(&json!("fixture"))
+        && activity.root_session_id == "root")
+}
+
+fn extension_contract() -> Result<bool, String> {
+    let temporary = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let root = temporary.path().join("extensions");
+    fs::create_dir_all(root.join("agents")).map_err(|error| error.to_string())?;
+    fs::create_dir_all(root.join("skills/review")).map_err(|error| error.to_string())?;
+    fs::create_dir_all(root.join("prompts")).map_err(|error| error.to_string())?;
+    fs::create_dir_all(root.join("commands")).map_err(|error| error.to_string())?;
+    fs::write(
+        root.join("agents/reviewer.toml"),
+        "display_name = \"Reviewer\"\nagent_type = \"subagent\"\n",
+    )
+    .map_err(|error| error.to_string())?;
+    fs::write(
+        root.join("skills/review/SKILL.md"),
+        "---\nname: review\ndescription: Review code\n---\nInspect carefully.\n",
+    )
+    .map_err(|error| error.to_string())?;
+    fs::write(root.join("prompts/review.md"), "Review this").map_err(|error| error.to_string())?;
+    fs::write(root.join("commands/check.md"), "Check this").map_err(|error| error.to_string())?;
+    fs::write(
+        root.join("hooks.toml"),
+        "[[hooks]]\nname = \"pre\"\ntype = \"pre_tool\"\nprogram = \"/bin/sh\"\n",
+    )
+    .map_err(|error| error.to_string())?;
+    fs::write(
+        root.join("agents/broken.toml"),
+        "agent_type = \"unknown\"\n",
+    )
+    .map_err(|error| error.to_string())?;
+    let catalog = discover_extensions(
+        &DiscoveryRoots {
+            configured: vec![root],
+            project: Vec::new(),
+            user: Vec::new(),
+            project_trusted: false,
+        },
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    Ok(catalog.agents.contains_key("reviewer")
+        && catalog.skills.contains_key("review")
+        && catalog.prompts.contains_key("review")
+        && catalog.commands.contains_key("check")
+        && catalog.hooks.len() == 1
+        && catalog.issues.len() == 1)
 }
 
 fn tool_abi_contract() -> Result<Value, String> {
@@ -766,6 +1765,7 @@ impl McpPeer for CompatMcpPeer {
         name: &'a str,
         arguments: Value,
         max_response_bytes: usize,
+        _output: ToolOutputSink,
     ) -> McpFuture<'a, Vec<u8>> {
         Box::pin(async move {
             if self.hang_calls.load(Ordering::Acquire) {
@@ -857,6 +1857,9 @@ fn mcp_contract() -> Result<Value, String> {
             headers: BTreeMap::new(),
         },
         enabled: true,
+        disabled_tools: Default::default(),
+        startup_timeout_ms: vibe_core::mcp::DEFAULT_MCP_STARTUP_TIMEOUT_MS,
+        tool_timeout_ms: vibe_core::mcp::DEFAULT_MCP_TOOL_TIMEOUT_MS,
         oauth: Some(oauth),
     };
     let mut redirected = matching.clone();

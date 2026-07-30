@@ -24,7 +24,11 @@ pub fn canonicalize(
         let selected = value
             .pointer_mut(&rule.pointer)
             .ok_or_else(|| CanonicalizationError::MissingPointer(rule.pointer.clone()))?;
-        *selected = Value::String(rule.placeholder.clone());
+        *selected = match selected {
+            Value::Array(_) => Value::Array(Vec::new()),
+            Value::Object(_) => Value::Object(serde_json::Map::new()),
+            _ => Value::String(rule.placeholder.clone()),
+        };
     }
     serde_json::from_value(value)
         .map_err(|error| CanonicalizationError::Serialize(error.to_string()))

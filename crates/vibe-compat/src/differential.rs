@@ -7,8 +7,8 @@ use thiserror::Error;
 
 use crate::canonical::canonicalize;
 use crate::model::{
-    CapabilityMatrix, ComparisonMode, CompatibilityReport, RecordedFixture, Scenario, Verdict,
-    VerdictStatus,
+    CapabilityMatrix, ComparisonMode, CompatibilityReport, RecordedFixture, Scenario, SupportClass,
+    Verdict, VerdictStatus,
 };
 
 #[derive(Debug, Error)]
@@ -28,12 +28,29 @@ pub fn compare_directories(
     actual_directory: &Path,
     scenarios: &[Scenario],
     intentional_rows: &BTreeSet<&str>,
+    blocked_rows: &BTreeSet<&str>,
+    excluded_rows: &BTreeSet<&str>,
 ) -> Result<Vec<Verdict>, DifferentialError> {
     let mut verdicts = Vec::with_capacity(scenarios.len());
     for scenario in scenarios {
         let filename = format!("{}.json", scenario.id);
         let expected_path = expected_directory.join(&filename);
         let actual_path = actual_directory.join(&filename);
+        if blocked_rows.contains(scenario.matrix_row.as_str()) {
+            verdicts.push(Verdict {
+                matrix_row: scenario.matrix_row.clone(),
+                scenario_id: scenario.id.clone(),
+                status: VerdictStatus::Blocked,
+                first_difference: Some("capability matrix row is explicitly blocked".to_owned()),
+                artifacts: vec![
+                    expected_path.display().to_string(),
+                    actual_path.display().to_string(),
+                ],
+                upstream_baseline: "mistral-vibe@2.23.1".to_owned(),
+                rust_build: rust_build(),
+            });
+            continue;
+        }
         if !expected_path.exists() || !actual_path.exists() {
             verdicts.push(Verdict {
                 matrix_row: scenario.matrix_row.clone(),
@@ -65,12 +82,17 @@ pub fn compare_directories(
         let actual_outcome = canonicalize(&actual.outcome, &scenario.volatile)?;
         let difference = metadata_difference
             .or_else(|| first_difference(&expected_outcome, &actual_outcome, scenario.comparison));
-        let status = if difference.is_none() {
-            VerdictStatus::Pass
+        let (status, difference) = if excluded_rows.contains(scenario.matrix_row.as_str()) {
+            (
+                VerdictStatus::IntentionalDivergence,
+                difference.or_else(|| Some("excluded product boundary".to_owned())),
+            )
+        } else if difference.is_none() {
+            (VerdictStatus::Pass, difference)
         } else if intentional_rows.contains(scenario.matrix_row.as_str()) {
-            VerdictStatus::IntentionalDivergence
+            (VerdictStatus::IntentionalDivergence, difference)
         } else {
-            VerdictStatus::Fail
+            (VerdictStatus::Fail, difference)
         };
         verdicts.push(Verdict {
             matrix_row: scenario.matrix_row.clone(),
@@ -92,6 +114,7 @@ pub fn compare_directories(
 }
 
 pub fn build_report(
+    root: &Path,
     matrix: &CapabilityMatrix,
     release: u32,
     mut verdicts: Vec<Verdict>,
@@ -127,25 +150,82 @@ pub fn build_report(
             .entry(key.to_owned())
             .and_modify(|count| *count += 1);
     }
+    let mut native_summary = BTreeMap::from([("certified".to_owned(), 0), ("total".to_owned(), 0)]);
+    let mut excluded_summary =
+        BTreeMap::from([("documented".to_owned(), 0), ("total".to_owned(), 0)]);
+    let mut certification_failures = Vec::new();
+    for row in matrix
+        .rows
+        .iter()
+        .filter(|row| row.required_release <= release)
+    {
+        let row_verdicts = verdicts
+            .iter()
+            .filter(|verdict| verdict.matrix_row == row.id)
+            .collect::<Vec<_>>();
+        match row.support {
+            SupportClass::RequiredNative => {
+                *native_summary.entry("total".to_owned()).or_default() += 1;
+                let certified = row.rust_status == "implemented"
+                    && !row_verdicts.is_empty()
+                    && row_verdicts.iter().all(|verdict| {
+                        matches!(
+                            verdict.status,
+                            VerdictStatus::Pass | VerdictStatus::IntentionalDivergence
+                        )
+                    });
+                if certified {
+                    *native_summary.entry("certified".to_owned()).or_default() += 1;
+                } else {
+                    certification_failures.push(format!(
+                        "{} is not certified required-native behavior",
+                        row.id
+                    ));
+                }
+            }
+            SupportClass::Excluded => {
+                *excluded_summary.entry("total".to_owned()).or_default() += 1;
+                let artifacts_exist = row.divergence.as_ref().is_some_and(|declaration| {
+                    [
+                        &declaration.upstream_fixture,
+                        &declaration.rust_fixture,
+                        &declaration.documentation,
+                    ]
+                    .into_iter()
+                    .all(|path| root.join(path).is_file())
+                });
+                let documented = row.rust_status == "excluded"
+                    && row.divergence_status == "intentional"
+                    && artifacts_exist
+                    && !row_verdicts.is_empty()
+                    && row_verdicts
+                        .iter()
+                        .all(|verdict| verdict.status == VerdictStatus::IntentionalDivergence);
+                if documented {
+                    *excluded_summary.entry("documented".to_owned()).or_default() += 1;
+                } else {
+                    certification_failures
+                        .push(format!("{} lacks excluded-boundary evidence", row.id));
+                }
+            }
+        }
+    }
     CompatibilityReport {
-        schema_version: 1,
+        schema_version: 2,
         upstream_baseline: format!("mistral-vibe@{}", matrix.baseline_version),
         rust_build: rust_build(),
         release,
         summary,
+        native_summary,
+        excluded_summary,
         verdicts,
         missing_evidence,
+        certification_failures,
     }
 }
 
 pub fn report_is_release_ready(report: &CompatibilityReport) -> bool {
-    report.missing_evidence.is_empty()
-        && report.verdicts.iter().all(|verdict| {
-            matches!(
-                verdict.status,
-                VerdictStatus::Pass | VerdictStatus::IntentionalDivergence
-            )
-        })
+    report.missing_evidence.is_empty() && report.certification_failures.is_empty()
 }
 
 pub fn write_reports(
@@ -166,8 +246,18 @@ pub fn write_reports(
 
 pub fn render_markdown(report: &CompatibilityReport) -> String {
     let mut output = format!(
-        "# Compatibility report\n\n- Baseline: `{}`\n- Rust build: `{}`\n- Release: `{}`\n\n",
-        report.upstream_baseline, report.rust_build, report.release
+        "# Compatibility report\n\n- Baseline: `{}`\n- Rust build: `{}`\n- Release: `{}`\n- Native certification: `{}/{}` rows\n- Excluded boundaries documented: `{}/{}` rows\n\n",
+        report.upstream_baseline,
+        report.rust_build,
+        report.release,
+        report.native_summary.get("certified").copied().unwrap_or(0),
+        report.native_summary.get("total").copied().unwrap_or(0),
+        report
+            .excluded_summary
+            .get("documented")
+            .copied()
+            .unwrap_or(0),
+        report.excluded_summary.get("total").copied().unwrap_or(0),
     );
     output.push_str("| Matrix row | Scenario | Verdict | First difference |\n");
     output.push_str("|---|---|---|---|\n");
@@ -182,6 +272,12 @@ pub fn render_markdown(report: &CompatibilityReport) -> String {
         output.push_str("\n## Missing evidence\n\n");
         for row in &report.missing_evidence {
             output.push_str(&format!("- `{row}`\n"));
+        }
+    }
+    if !report.certification_failures.is_empty() {
+        output.push_str("\n## Certification failures\n\n");
+        for failure in &report.certification_failures {
+            output.push_str(&format!("- {failure}\n"));
         }
     }
     output
@@ -290,15 +386,18 @@ pub fn fixture_path(directory: &Path, scenario_id: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{CapabilityRow, CompatibilityReport, OracleOutcome};
+    use crate::model::{
+        CapabilityRow, CompatibilityReport, DivergenceDeclaration, OracleOutcome, SupportClass,
+    };
 
     fn matrix() -> CapabilityMatrix {
         CapabilityMatrix {
-            schema_version: 1,
+            schema_version: 2,
             baseline_version: "2.23.1".to_owned(),
             rows: vec![CapabilityRow {
                 id: "required".to_owned(),
                 owner: "US-001".to_owned(),
+                support: SupportClass::RequiredNative,
                 priority: "P0".to_owned(),
                 source_paths: vec![],
                 test_paths: vec![],
@@ -316,8 +415,69 @@ mod tests {
 
     #[test]
     fn release_report_fails_closed_without_evidence() {
-        let report = build_report(&matrix(), 0, vec![]);
+        let report = build_report(Path::new("."), &matrix(), 0, vec![]);
         assert_eq!(report.missing_evidence, ["required"]);
+        assert!(!report_is_release_ready(&report));
+    }
+
+    #[test]
+    fn excluded_pass_never_counts_as_native_or_documented() {
+        let temporary = tempfile::tempdir().expect("temporary evidence root");
+        for path in ["upstream.json", "rust.json", "boundary.md"] {
+            fs::write(temporary.path().join(path), "{}").expect("evidence fixture");
+        }
+        let mut matrix = matrix();
+        matrix.rows.push(CapabilityRow {
+            id: "surface.python-custom-tools".to_owned(),
+            owner: "US-031".to_owned(),
+            support: SupportClass::Excluded,
+            priority: "P0".to_owned(),
+            source_paths: vec![],
+            test_paths: vec![],
+            symbols: vec![],
+            fixture_class: "contract".to_owned(),
+            rust_status: "excluded".to_owned(),
+            divergence_status: "intentional".to_owned(),
+            dependencies: vec![],
+            required_release: 0,
+            items: vec![],
+            divergence: Some(DivergenceDeclaration {
+                rationale: "product boundary".to_owned(),
+                scope: "Python custom tools".to_owned(),
+                upstream_fixture: "upstream.json".to_owned(),
+                rust_fixture: "rust.json".to_owned(),
+                documentation: "boundary.md".to_owned(),
+            }),
+        });
+        let report = build_report(
+            temporary.path(),
+            &matrix,
+            0,
+            vec![
+                Verdict {
+                    matrix_row: "required".to_owned(),
+                    scenario_id: "required".to_owned(),
+                    status: VerdictStatus::Pass,
+                    first_difference: None,
+                    artifacts: vec![],
+                    upstream_baseline: "2.23.1".to_owned(),
+                    rust_build: "test".to_owned(),
+                },
+                Verdict {
+                    matrix_row: "surface.python-custom-tools".to_owned(),
+                    scenario_id: "excluded".to_owned(),
+                    status: VerdictStatus::Pass,
+                    first_difference: None,
+                    artifacts: vec![],
+                    upstream_baseline: "2.23.1".to_owned(),
+                    rust_build: "test".to_owned(),
+                },
+            ],
+        );
+        assert_eq!(report.native_summary["total"], 1);
+        assert_eq!(report.native_summary["certified"], 1);
+        assert_eq!(report.excluded_summary["total"], 1);
+        assert_eq!(report.excluded_summary["documented"], 0);
         assert!(!report_is_release_ready(&report));
     }
 
@@ -339,13 +499,16 @@ mod tests {
     #[test]
     fn markdown_and_json_are_deterministic() {
         let report = CompatibilityReport {
-            schema_version: 1,
+            schema_version: 2,
             upstream_baseline: "mistral-vibe@2.23.1".to_owned(),
             rust_build: "mistral-vibe-rs@0.0.1".to_owned(),
             release: 0,
             summary: BTreeMap::new(),
+            native_summary: BTreeMap::new(),
+            excluded_summary: BTreeMap::new(),
             verdicts: vec![],
             missing_evidence: vec!["required".to_owned()],
+            certification_failures: vec!["required is not certified".to_owned()],
         };
         assert_eq!(render_markdown(&report), render_markdown(&report));
         assert_eq!(

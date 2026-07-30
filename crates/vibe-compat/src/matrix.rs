@@ -4,7 +4,7 @@ use std::path::{Component, Path};
 use thiserror::Error;
 use vibe_protocol::SERVER_METHODS;
 
-use crate::model::{CapabilityMatrix, DiscoveredSurfaces};
+use crate::model::{CapabilityMatrix, DiscoveredSurfaces, SupportClass};
 use crate::{DISCOVERED_TOML, MATRIX_TOML};
 
 #[derive(Debug, Error)]
@@ -29,7 +29,7 @@ pub fn validate(checkout: &Path) -> Result<CapabilityMatrix, MatrixError> {
     let matrix = load()?;
     let discovered: DiscoveredSurfaces =
         toml::from_str(DISCOVERED_TOML).map_err(MatrixError::DiscoveryToml)?;
-    if matrix.schema_version != 1 || discovered.schema_version != 1 {
+    if matrix.schema_version != 2 || discovered.schema_version != 2 {
         return Err(rule("matrix", "unsupported schema version"));
     }
     let ids = matrix
@@ -40,6 +40,20 @@ pub fn validate(checkout: &Path) -> Result<CapabilityMatrix, MatrixError> {
     if ids.len() != matrix.rows.len() {
         return Err(rule("matrix", "row IDs must be unique"));
     }
+    let discovered_ids = discovered
+        .known_rows
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    if discovered_ids.len() != discovered.known_rows.len() {
+        return Err(rule("discovery", "known row IDs must be unique"));
+    }
+    if ids != discovered_ids {
+        return Err(rule(
+            "discovery",
+            "known rows must exactly match the capability matrix",
+        ));
+    }
     for row in &matrix.rows {
         if row.owner.is_empty()
             || !matches!(row.priority.as_str(), "P0" | "P1" | "P2")
@@ -47,7 +61,7 @@ pub fn validate(checkout: &Path) -> Result<CapabilityMatrix, MatrixError> {
             || row.fixture_class.is_empty()
             || !matches!(
                 row.rust_status.as_str(),
-                "planned" | "implemented" | "blocked"
+                "planned" | "implemented" | "blocked" | "excluded"
             )
             || !matches!(
                 row.divergence_status.as_str(),
@@ -58,6 +72,23 @@ pub fn validate(checkout: &Path) -> Result<CapabilityMatrix, MatrixError> {
                 &row.id,
                 "required ownership/status fields are invalid",
             ));
+        }
+        match row.support {
+            SupportClass::RequiredNative if row.rust_status == "excluded" => {
+                return Err(rule(
+                    &row.id,
+                    "required-native rows cannot have excluded Rust status",
+                ));
+            }
+            SupportClass::Excluded
+                if row.rust_status != "excluded" || row.divergence_status != "intentional" =>
+            {
+                return Err(rule(
+                    &row.id,
+                    "excluded rows require excluded Rust status and an intentional divergence",
+                ));
+            }
+            _ => {}
         }
         for path in row.source_paths.iter().chain(&row.test_paths) {
             validate_reference(checkout, &row.id, path)?;
@@ -92,6 +123,13 @@ pub fn validate(checkout: &Path) -> Result<CapabilityMatrix, MatrixError> {
                     "intentional divergence declaration fields must not be empty",
                 ));
             }
+            for path in [
+                &declaration.upstream_fixture,
+                &declaration.rust_fixture,
+                &declaration.documentation,
+            ] {
+                validate_root_relative(&row.id, path)?;
+            }
         } else if row.divergence.is_some() {
             return Err(rule(
                 &row.id,
@@ -99,10 +137,58 @@ pub fn validate(checkout: &Path) -> Result<CapabilityMatrix, MatrixError> {
             ));
         }
     }
-    for required in discovered.required_rows {
-        if !ids.contains(required.as_str()) {
-            return Err(MatrixError::MissingDiscovery(required));
-        }
+    let excluded = matrix
+        .rows
+        .iter()
+        .filter(|row| row.support == SupportClass::Excluded)
+        .collect::<Vec<_>>();
+    if excluded.len() != 1 || excluded[0].id != "surface.python-custom-tools" {
+        return Err(rule(
+            "surface.python-custom-tools",
+            "the Python custom-tool boundary must be the only excluded row",
+        ));
+    }
+    let python_row = excluded[0];
+    if python_row.owner != "US-031" {
+        return Err(rule(
+            &python_row.id,
+            "the excluded Python custom-tool row must be owned by US-031",
+        ));
+    }
+    if ids.contains("surface.python-host-feasibility") || ids.contains("surface.python-tools") {
+        return Err(rule(
+            "surface.python-custom-tools",
+            "legacy Python host capability rows are forbidden",
+        ));
+    }
+    let mcp_stdio_row = matrix
+        .rows
+        .iter()
+        .find(|row| row.id == "surface.mcp-stdio-extension")
+        .ok_or_else(|| MatrixError::MissingDiscovery("surface.mcp-stdio-extension".to_owned()))?;
+    let expected_dependencies = [
+        "surface.config-layers",
+        "surface.extension-discovery",
+        "surface.mcp",
+        "surface.tools",
+    ]
+    .into_iter()
+    .collect::<BTreeSet<_>>();
+    let actual_dependencies = mcp_stdio_row
+        .dependencies
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    if mcp_stdio_row.owner != "US-032"
+        || mcp_stdio_row.support != SupportClass::RequiredNative
+        || mcp_stdio_row.rust_status != "implemented"
+        || actual_dependencies != expected_dependencies
+        || actual_dependencies.contains("surface.python-custom-tools")
+    {
+        return Err(rule(
+            &mcp_stdio_row.id,
+            "the MCP stdio extension row must be native, implemented, owned by US-032, and depend on config, discovery, MCP, and tools only",
+        ));
     }
     let protocol_row = matrix
         .rows
@@ -136,6 +222,15 @@ pub fn validate(checkout: &Path) -> Result<CapabilityMatrix, MatrixError> {
 }
 
 fn validate_reference(checkout: &Path, row: &str, raw: &str) -> Result<(), MatrixError> {
+    validate_root_relative(row, raw)?;
+    let path = Path::new(raw);
+    if !checkout.join(path).exists() {
+        return Err(rule(row, &format!("referenced path does not exist: {raw}")));
+    }
+    Ok(())
+}
+
+fn validate_root_relative(row: &str, raw: &str) -> Result<(), MatrixError> {
     let path = Path::new(raw);
     if path.is_absolute()
         || path
@@ -143,9 +238,6 @@ fn validate_reference(checkout: &Path, row: &str, raw: &str) -> Result<(), Matri
             .any(|component| matches!(component, Component::ParentDir))
     {
         return Err(rule(row, &format!("path is not root-relative: {raw}")));
-    }
-    if !checkout.join(path).exists() {
-        return Err(rule(row, &format!("referenced path does not exist: {raw}")));
     }
     Ok(())
 }

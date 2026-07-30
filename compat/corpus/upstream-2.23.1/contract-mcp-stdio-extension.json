@@ -1,0 +1,64 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-mcp-stdio-extension",
+  "matrixRow": "surface.mcp-stdio-extension",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [
+    {
+      "pointer": "/filesystemDelta",
+      "placeholder": "<ENVIRONMENTAL>",
+      "changedBetweenRuns": false
+    }
+  ],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "alias": "fixture",
+          "argv": [
+            "<compat-fixture>",
+            "mcp-fixture"
+          ],
+          "cancellationRetiredPeer": true,
+          "cleanupObserved": true,
+          "cwd": "workspace",
+          "disabledTools": [
+            "hidden"
+          ],
+          "modelExposure": true,
+          "startupTimeoutMs": 5000,
+          "streamedChunks": [
+            "working"
+          ],
+          "timeoutRetiredPeer": true,
+          "toolTimeoutMs": 50,
+          "transport": "stdio"
+        },
+        "contract": "mcp_stdio_extension",
+        "features": [
+          "typed_toml",
+          "session_discovery",
+          "model_exposure",
+          "policy",
+          "invocation",
+          "streaming",
+          "cancellation",
+          "cleanup"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

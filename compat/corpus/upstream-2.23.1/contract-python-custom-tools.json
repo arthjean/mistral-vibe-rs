@@ -1,0 +1,47 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-python-custom-tools",
+  "matrixRow": "surface.python-custom-tools",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [
+    {
+      "pointer": "/filesystemDelta",
+      "placeholder": "<ENVIRONMENTAL>",
+      "changedBetweenRuns": false
+    }
+  ],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "boundary": "in_process_python",
+        "contract": "python_custom_tools",
+        "features": [
+          "typed_arguments",
+          "typed_results",
+          "configuration",
+          "state",
+          "imports",
+          "reexports",
+          "streaming",
+          "invoke_context",
+          "permissions",
+          "trust"
+        ],
+        "replacement": null,
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

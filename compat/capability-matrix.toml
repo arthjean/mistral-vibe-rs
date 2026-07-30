@@ -1,9 +1,10 @@
-schema_version = 1
+schema_version = 2
 baseline_version = "2.23.1"
 
 [[rows]]
 id = "foundation.workspace"
 owner = "US-001"
+support = "required-native"
 priority = "P0"
 source_paths = ["pyproject.toml", "docs/adr/0001-architecture-principles.md"]
 test_paths = ["tests/conftest.py"]
@@ -17,6 +18,7 @@ required_release = 0
 [[rows]]
 id = "foundation.baseline"
 owner = "US-002"
+support = "required-native"
 priority = "P0"
 source_paths = ["pyproject.toml", "uv.lock"]
 test_paths = ["tests/conftest.py"]
@@ -30,6 +32,7 @@ required_release = 0
 [[rows]]
 id = "protocol.app-server"
 owner = "US-003"
+support = "required-native"
 priority = "P0"
 source_paths = [
   "vibe/app_server/protocol.py",
@@ -133,6 +136,7 @@ items = [
 [[rows]]
 id = "harness.hermetic-primitives"
 owner = "US-004"
+support = "required-native"
 priority = "P0"
 source_paths = ["tests/conftest.py", "tests/stubs"]
 test_paths = ["tests/app_server/test_transport.py"]
@@ -146,6 +150,7 @@ required_release = 0
 [[rows]]
 id = "oracle.canonicalization"
 owner = "US-005"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/cli/entrypoint.py", "vibe/app_server/protocol.py"]
 test_paths = ["tests/app_server/test_protocol.py", "tests/session"]
@@ -159,6 +164,7 @@ required_release = 0
 [[rows]]
 id = "corpus.recording"
 owner = "US-006"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/cli/entrypoint.py", "vibe/core/session/session_loader.py"]
 test_paths = ["tests/cli", "tests/session", "tests/app_server/test_transport.py"]
@@ -172,6 +178,7 @@ required_release = 0
 [[rows]]
 id = "differential.reports"
 owner = "US-007"
+support = "required-native"
 priority = "P0"
 source_paths = ["docs/adr/0002-core-engine-and-delivery-surfaces.md"]
 test_paths = ["tests/app_server/test_protocol.py"]
@@ -185,6 +192,7 @@ required_release = 0
 [[rows]]
 id = "config.bootstrap"
 owner = "US-008"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/core/config/vibe_schema.py", "vibe/core/config/orchestrator.py"]
 test_paths = ["tests/core/config", "tests/app_server/test_harness_contracts.py"]
@@ -198,6 +206,7 @@ required_release = 0
 [[rows]]
 id = "surface.cli-flags"
 owner = "US-016"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/cli/entrypoint.py"]
 test_paths = ["tests/cli"]
@@ -218,6 +227,7 @@ documentation = "compat/divergences/cli-formatting.md"
 [[rows]]
 id = "surface.wire-variants"
 owner = "US-009"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/app_server/events.py", "vibe/app_server/models.py"]
 test_paths = ["tests/app_server/test_events.py", "tests/app_server/test_projection.py"]
@@ -232,6 +242,7 @@ items = ["request", "response", "error", "notification", "public-event"]
 [[rows]]
 id = "surface.app-server-lifecycle"
 owner = "US-010"
+support = "required-native"
 priority = "P0"
 source_paths = [
   "vibe/app_server/server.py",
@@ -253,6 +264,7 @@ items = ["memory", "stdio", "initialize", "initialized", "shutdown", "exit"]
 [[rows]]
 id = "surface.turn-lifecycle"
 owner = "US-011"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/app_server/_turns.py", "vibe/app_server/session.py"]
 test_paths = ["tests/app_server/test_session.py", "tests/app_server/test_projection.py"]
@@ -273,6 +285,7 @@ items = [
 [[rows]]
 id = "surface.provider-mistral"
 owner = "US-012"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/core/llm/backend/mistral.py"]
 test_paths = ["tests/backend/test_backend.py"]
@@ -287,6 +300,7 @@ items = ["streaming", "non-streaming", "images", "tools", "thinking", "usage"]
 [[rows]]
 id = "surface.provider-dialects"
 owner = "US-013"
+support = "required-native"
 priority = "P0"
 source_paths = [
   "vibe/core/llm/backend/generic.py",
@@ -312,6 +326,7 @@ items = ["openai", "reasoning", "openai-responses", "anthropic", "vertex-anthrop
 [[rows]]
 id = "surface.engine-loop"
 owner = "US-015"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/core/agent_loop/_loop.py"]
 test_paths = ["tests/agent_loop/e2e/test_e2e_agent_loop.py"]
@@ -331,6 +346,7 @@ items = ["cycles", "limits", "compaction", "cancellation", "persistence"]
 [[rows]]
 id = "surface.acp-minimal"
 owner = "US-016"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/acp/agent.py"]
 test_paths = ["tests/acp"]
@@ -343,22 +359,187 @@ required_release = 1
 items = ["initialize", "session/new", "session/prompt", "session/update", "session/close"]
 
 [[rows]]
-id = "surface.config-fields"
+id = "surface.config-layers"
 owner = "US-025"
+support = "required-native"
 priority = "P0"
-source_paths = ["vibe/core/config/vibe_schema.py", "vibe/core/config/layers"]
-test_paths = ["tests/core/config"]
-symbols = ["VibeConfigSchema"]
+source_paths = [
+  "vibe/core/config/orchestrator.py",
+  "vibe/core/config/vibe_schema.py",
+  "vibe/core/config/layers",
+  "vibe/app_server/_resources.py",
+]
+test_paths = ["tests/core/config", "tests/app_server/test_harness_contracts.py"]
+symbols = ["ConfigOrchestrator", "VibeConfigSchema", "ResourceRequestHandler"]
 fixture_class = "config"
-rust_status = "planned"
+rust_status = "implemented"
 divergence_status = "none"
-dependencies = ["config.bootstrap"]
+dependencies = ["config.bootstrap", "surface.app-server-lifecycle"]
 required_release = 3
-items = ["defaults", "user", "project", "environment", "session"]
+items = [
+  "defaults",
+  "selected-toml",
+  "experiments",
+  "environment",
+  "runtime",
+  "agent",
+  "atomic-batch-write",
+  "redaction",
+]
+
+[[rows]]
+id = "surface.prompt-composition"
+owner = "US-026"
+support = "required-native"
+priority = "P0"
+source_paths = [
+  "vibe/core/system_prompt.py",
+  "vibe/core/prompts",
+  "vibe/core/config/harness_files/_harness_manager.py",
+]
+test_paths = ["tests/agent_loop/e2e", "tests/skills"]
+symbols = ["SystemPrompt", "HarnessManager"]
+fixture_class = "prompt"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.config-layers", "surface.workspace-tools"]
+required_release = 3
+items = ["ordered-sections", "prompt-precedence", "instructions", "attachments", "display-content"]
+
+[[rows]]
+id = "surface.session-lifecycle"
+owner = "US-027"
+support = "required-native"
+priority = "P0"
+source_paths = [
+  "vibe/core/session/session_logger.py",
+  "vibe/core/session/session_loader.py",
+  "vibe/core/session/session_migration.py",
+  "vibe/app_server/_sessions.py",
+]
+test_paths = ["tests/session", "tests/app_server/test_session.py"]
+symbols = ["SessionLogger", "SessionLoader", "SessionMigrator"]
+fixture_class = "persistence"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.config-layers", "surface.persistence-formats"]
+required_release = 3
+items = ["list", "read", "continue", "resume", "fork", "title", "delete", "migration"]
+
+[[rows]]
+id = "surface.session-continuity"
+owner = "US-028"
+support = "required-native"
+priority = "P0"
+source_paths = ["vibe/app_server/_root_session.py", "vibe/app_server/_projector.py", "vibe/app_server/session.py"]
+test_paths = ["tests/app_server/test_projection.py", "tests/app_server/test_session_persistence.py"]
+symbols = ["RootSession", "SessionProjector", "AppServerSession"]
+fixture_class = "fault"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.session-lifecycle", "surface.turn-lifecycle"]
+required_release = 3
+items = ["handoff", "rewind", "clear", "reconnect", "deduplication", "gap-resync"]
+
+[[rows]]
+id = "surface.subagents"
+owner = "US-029"
+support = "required-native"
+priority = "P0"
+source_paths = ["vibe/core/agents", "vibe/app_server/_root_session.py", "vibe/app_server/_sessions.py"]
+test_paths = ["tests/app_server/test_subagents.py", "tests/app_server/test_fork_config_isolation.py"]
+symbols = ["agents", "RootSession"]
+fixture_class = "extension"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.session-continuity", "surface.tools"]
+required_release = 3
+items = ["profiles", "install", "uninstall", "child-session", "depth-limit", "activity-ownership"]
+
+[[rows]]
+id = "surface.extension-discovery"
+owner = "US-030"
+support = "required-native"
+priority = "P0"
+source_paths = ["vibe/core/agents", "vibe/core/skills", "vibe/core/hooks", "vibe/core/prompts"]
+test_paths = ["tests/skills", "tests/core/hooks"]
+symbols = ["agents", "skills", "hooks"]
+fixture_class = "extension"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = ["surface.config-layers", "surface.prompt-composition", "surface.tools"]
+required_release = 3
+items = ["agents", "skills", "hooks", "prompts", "commands", "failure-isolation"]
+
+[[rows]]
+id = "surface.python-custom-tools"
+owner = "US-031"
+support = "excluded"
+priority = "P0"
+source_paths = ["vibe/core/tools/manager.py", "vibe/core/tools/base.py"]
+test_paths = ["tests/tools"]
+symbols = ["ToolManager", "BaseTool"]
+fixture_class = "extension"
+rust_status = "excluded"
+divergence_status = "intentional"
+dependencies = ["surface.extension-discovery"]
+required_release = 3
+items = [
+  "typed-arguments",
+  "typed-results",
+  "configuration",
+  "state",
+  "imports",
+  "reexports",
+  "streaming",
+  "invoke-context",
+  "permissions",
+  "trust",
+]
+[rows.divergence]
+rationale = "Executing arbitrary Python modules would add a second privileged runtime whose import, state, streaming, invoke-context, and permission semantics cannot be made native to the Rust product boundary."
+scope = "Python custom tools are excluded from the Rust product. Existing integrations must migrate to the production MCP stdio extension path; the bounded external-host spike remains evidence only and is neither compiled nor shipped."
+upstream_fixture = "compat/corpus/upstream-2.23.1/contract-python-custom-tools.json"
+rust_fixture = "compat/corpus/rust-release-3/contract-python-custom-tools.json"
+documentation = "compat/divergences/external-python-host.md"
+
+[[rows]]
+id = "surface.mcp-stdio-extension"
+owner = "US-032"
+support = "required-native"
+priority = "P0"
+source_paths = [
+  "vibe/core/config/vibe_schema.py",
+  "vibe/core/tools/mcp/registry.py",
+  "vibe/core/tools/mcp/tools.py",
+]
+test_paths = ["tests/core/config", "tests/tools/test_mcp.py"]
+symbols = ["VibeConfigSchema", "MCPRegistry", "MCPTool"]
+fixture_class = "extension"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = [
+  "surface.config-layers",
+  "surface.extension-discovery",
+  "surface.mcp",
+  "surface.tools",
+]
+required_release = 3
+items = [
+  "typed-toml",
+  "session-discovery",
+  "model-exposure",
+  "policy",
+  "invocation",
+  "streaming",
+  "cancellation",
+  "cleanup",
+]
 
 [[rows]]
 id = "surface.persistence-formats"
 owner = "US-014"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/core/session/session_logger.py", "vibe/core/session/session_loader.py"]
 test_paths = ["tests/session"]
@@ -373,6 +554,7 @@ items = ["meta.json", "messages.jsonl", ".last_session"]
 [[rows]]
 id = "surface.tools"
 owner = "US-017"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/core/tools/base.py", "vibe/core/tools/manager.py", "vibe/core/tools/models.py"]
 test_paths = ["tests/tools/test_invoke_context.py", "tests/app_server/test_tool_projection.py"]
@@ -387,6 +569,7 @@ items = ["typed-schema", "registry", "streaming", "effects"]
 [[rows]]
 id = "surface.tool-policy"
 owner = "US-018"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/core/tools/permissions.py"]
 test_paths = ["tests/tools/test_granular_permissions.py"]
@@ -401,6 +584,7 @@ items = ["always", "ask", "never", "trust", "approvals"]
 [[rows]]
 id = "surface.workspace-tools"
 owner = "US-019"
+support = "required-native"
 priority = "P0"
 source_paths = [
   "vibe/core/tools/builtins/read_file.py",
@@ -418,6 +602,7 @@ items = ["discovery", "read", "search", "context"]
 [[rows]]
 id = "surface.review-tools"
 owner = "US-020"
+support = "required-native"
 priority = "P0"
 source_paths = [
   "vibe/core/tools/builtins/edit.py",
@@ -436,6 +621,7 @@ items = ["write", "edit", "checkpoint", "review"]
 [[rows]]
 id = "surface.shell-policy"
 owner = "US-021"
+support = "required-native"
 priority = "P0"
 source_paths = [
   "vibe/core/tools/builtins/bash.py",
@@ -460,6 +646,7 @@ documentation = "compat/divergences/shell-policy-hardening.md"
 [[rows]]
 id = "surface.managed-processes"
 owner = "US-022"
+support = "required-native"
 priority = "P0"
 source_paths = [
   "vibe/core/tools/terminal_runtime.py",
@@ -478,6 +665,7 @@ items = ["foreground", "background", "terminal", "tool-io", "cleanup"]
 [[rows]]
 id = "surface.mcp"
 owner = "US-023"
+support = "required-native"
 priority = "P0"
 source_paths = [
   "vibe/core/tools/mcp/registry.py",
@@ -503,6 +691,7 @@ documentation = "compat/divergences/mcp-live-revocation.md"
 [[rows]]
 id = "surface.operational-resources"
 owner = "US-024"
+support = "required-native"
 priority = "P0"
 source_paths = [
   "vibe/app_server/_resources.py",
@@ -518,22 +707,9 @@ required_release = 2
 items = ["connectors", "account", "diagnostics", "feedback", "narration", "stats", "tools"]
 
 [[rows]]
-id = "surface.extensions"
-owner = "US-031"
-priority = "P1"
-source_paths = ["vibe/core/agents", "vibe/core/skills", "vibe/core/hooks"]
-test_paths = ["tests/skills", "tests/core/hooks"]
-symbols = ["agents", "skills", "hooks"]
-fixture_class = "extension"
-rust_status = "planned"
-divergence_status = "none"
-dependencies = ["surface.config-fields"]
-required_release = 3
-items = ["agents", "skills", "hooks", "python-tools"]
-
-[[rows]]
 id = "surface.tui-workflows"
 owner = "US-033"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/cli/textual_ui"]
 test_paths = ["tests/snapshots", "tests/cli"]
@@ -548,6 +724,7 @@ items = ["startup", "prompt", "stream", "approval", "restore"]
 [[rows]]
 id = "surface.acp"
 owner = "US-039"
+support = "required-native"
 priority = "P0"
 source_paths = ["vibe/acp/agent.py", "vibe/acp/session.py"]
 test_paths = ["tests/acp"]
@@ -573,6 +750,7 @@ items = [
 [[rows]]
 id = "surface.telemetry"
 owner = "US-041"
+support = "required-native"
 priority = "P1"
 source_paths = ["vibe/core/telemetry/send.py", "vibe/core/telemetry/types.py"]
 test_paths = ["tests/core/telemetry/test_telemetry_send.py"]
@@ -587,6 +765,7 @@ items = ["events", "opt-out", "redaction", "proxy"]
 [[rows]]
 id = "surface.distribution"
 owner = "US-045"
+support = "required-native"
 priority = "P0"
 source_paths = ["action.yml", "scripts/install.sh", ".github/workflows/release.yml"]
 test_paths = ["scripts/ci"]
@@ -601,6 +780,7 @@ items = ["archives", "installer", "github-action", "checksums"]
 [[rows]]
 id = "surface.native-targets"
 owner = "US-044"
+support = "required-native"
 priority = "P0"
 source_paths = [".github/workflows/ci.yml", ".github/workflows/build-and-upload.yml"]
 test_paths = ["scripts/ci"]

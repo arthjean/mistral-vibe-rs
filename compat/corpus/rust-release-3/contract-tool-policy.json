@@ -1,0 +1,39 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-tool-policy",
+  "matrixRow": "surface.tool-policy",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "schema",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "closestTrustWins": true,
+          "defaultAsk": true,
+          "specificRuleWins": true
+        },
+        "contract": "tool_policy",
+        "features": [
+          "always",
+          "ask",
+          "never",
+          "trust",
+          "approvals"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

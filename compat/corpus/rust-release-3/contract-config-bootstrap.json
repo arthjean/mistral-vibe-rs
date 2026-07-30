@@ -1,0 +1,27 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-config-bootstrap",
+  "matrixRow": "config.bootstrap",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "schema",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "contract": "config_bootstrap",
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

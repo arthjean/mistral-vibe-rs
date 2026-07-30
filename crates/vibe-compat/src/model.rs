@@ -30,6 +30,7 @@ pub struct CapabilityMatrix {
 pub struct CapabilityRow {
     pub id: String,
     pub owner: String,
+    pub support: SupportClass,
     pub priority: String,
     pub source_paths: Vec<String>,
     pub test_paths: Vec<String>,
@@ -44,6 +45,13 @@ pub struct CapabilityRow {
     pub divergence: Option<DivergenceDeclaration>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SupportClass {
+    RequiredNative,
+    Excluded,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct DivergenceDeclaration {
     pub rationale: String,
@@ -56,7 +64,7 @@ pub struct DivergenceDeclaration {
 #[derive(Debug, Clone, Deserialize)]
 pub struct DiscoveredSurfaces {
     pub schema_version: u32,
-    pub required_rows: Vec<String>,
+    pub known_rows: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -204,6 +212,54 @@ pub struct CompatibilityReport {
     pub rust_build: String,
     pub release: u32,
     pub summary: BTreeMap<String, usize>,
+    pub native_summary: BTreeMap<String, usize>,
+    pub excluded_summary: BTreeMap<String, usize>,
     pub verdicts: Vec<Verdict>,
     pub missing_evidence: Vec<String>,
+    pub certification_failures: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn matrix_with_support(support: Option<&str>) -> String {
+        format!(
+            r#"
+schema_version = 2
+baseline_version = "2.23.1"
+
+[[rows]]
+id = "surface.example"
+owner = "US-001"
+{}
+priority = "P0"
+source_paths = []
+test_paths = []
+symbols = ["Example"]
+fixture_class = "contract"
+rust_status = "implemented"
+divergence_status = "none"
+dependencies = []
+required_release = 1
+"#,
+            support.map_or_else(String::new, |value| format!("support = \"{value}\""))
+        )
+    }
+
+    #[test]
+    fn support_classification_is_required_and_closed() {
+        assert!(
+            toml::from_str::<CapabilityMatrix>(&matrix_with_support(None)).is_err(),
+            "a missing support classification must fail"
+        );
+        assert!(
+            toml::from_str::<CapabilityMatrix>(&matrix_with_support(Some("future"))).is_err(),
+            "an unknown support classification must fail"
+        );
+        let parsed =
+            toml::from_str::<CapabilityMatrix>(&matrix_with_support(Some("required-native")))
+                .expect("known support classification");
+        assert_eq!(parsed.rows[0].support, SupportClass::RequiredNative);
+    }
 }

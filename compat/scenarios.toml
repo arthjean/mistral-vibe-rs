@@ -183,6 +183,70 @@ comparison = "schema"
 payload = '{"contract":"acp_minimal"}'
 
 [[scenarios]]
+id = "contract-config-layers"
+matrix_row = "surface.config-layers"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"config_layers"}'
+volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
+
+[[scenarios]]
+id = "contract-prompt-composition"
+matrix_row = "surface.prompt-composition"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"prompt_composition"}'
+volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
+
+[[scenarios]]
+id = "contract-session-lifecycle"
+matrix_row = "surface.session-lifecycle"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"session_lifecycle"}'
+volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
+
+[[scenarios]]
+id = "contract-session-continuity"
+matrix_row = "surface.session-continuity"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"session_continuity"}'
+volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
+
+[[scenarios]]
+id = "contract-subagents"
+matrix_row = "surface.subagents"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"subagents"}'
+volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
+
+[[scenarios]]
+id = "contract-extension-discovery"
+matrix_row = "surface.extension-discovery"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"extension_discovery"}'
+volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
+
+[[scenarios]]
+id = "contract-python-custom-tools"
+matrix_row = "surface.python-custom-tools"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"python_custom_tools"}'
+volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
+
+[[scenarios]]
+id = "contract-mcp-stdio-extension"
+matrix_row = "surface.mcp-stdio-extension"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"mcp_stdio_extension"}'
+volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
+
+[[scenarios]]
 id = "protocol-success-string-id"
 matrix_row = "protocol.app-server"
 kind = "protocol"

@@ -1,0 +1,47 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-mcp-lifecycle",
+  "matrixRow": "surface.mcp",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "schema",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "closed": true,
+          "disabled": true,
+          "discovered": true,
+          "invoked": true,
+          "liveRevocation": true,
+          "oauthResourceBound": true,
+          "partialFailure": true,
+          "reconnected": true,
+          "refreshed": true,
+          "rootClaimsRestricted": true,
+          "secureTransport": true
+        },
+        "contract": "mcp_lifecycle",
+        "features": [
+          "stdio",
+          "http",
+          "streamable_http",
+          "oauth",
+          "partial_failure"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

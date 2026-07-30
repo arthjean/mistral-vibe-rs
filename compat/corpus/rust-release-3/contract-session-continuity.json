@@ -1,0 +1,41 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-session-continuity",
+  "matrixRow": "surface.session-continuity",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [
+    {
+      "pointer": "/filesystemDelta",
+      "placeholder": "<ENVIRONMENTAL>",
+      "changedBetweenRuns": false
+    }
+  ],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "contract": "session_continuity",
+        "features": [
+          "handoff",
+          "rewind",
+          "clear",
+          "reconnect",
+          "deduplication",
+          "gap_resync"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

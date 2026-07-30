@@ -1,0 +1,41 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-session-continuity",
+  "matrixRow": "surface.session-continuity",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "contract": "session_continuity",
+        "features": [
+          "handoff",
+          "rewind",
+          "clear",
+          "reconnect",
+          "deduplication",
+          "gap_resync"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [
+      {
+        "path": "home/.vibe/trusted_folders.toml",
+        "operation": "created",
+        "sha256": "c1be9b448d9da5ef13e31061dbc36be756fd48c474c885eba5d209a07f272980"
+      }
+    ],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}
