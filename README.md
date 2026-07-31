@@ -2,12 +2,6 @@
 
 **An independent, from-scratch Rust implementation of [Mistral Vibe](https://github.com/mistralai/mistral-vibe).**
 
-> **Compatibility target 2.23.1**
->
-> The native implementation is complete through Release 4. Release 5 native
-> host, signing, notarization, supply-chain, and 1.0 certification evidence is
-> still required before publication.
-
 ## Mission
 
 Mistral Vibe RS rebuilds Mistral Vibe as a native Rust application.
@@ -31,7 +25,7 @@ Rust gives this implementation the foundations to pursue:
 - robust failure handling at security-sensitive boundaries;
 - a portable core shared by interactive, programmatic, and ACP surfaces.
 
-These are engineering targets, not assumed advantages. They will be validated through compatibility tests, profiling, and benchmarks as the implementation matures.
+These are engineering targets, not assumed advantages. They will be validated through profiling, benchmarks, and direct comparison with the upstream implementation as the project matures.
 
 ## Full parity
 
@@ -51,44 +45,9 @@ Parity means reproducing every externally observable capability of Mistral Vibe,
 
 Parity is measured at public boundaries: commands, flags, configuration, workflows, protocols, persisted behavior, tool semantics, and user-visible output. The internal architecture is free to differ when Rust offers a stronger design.
 
-A versioned parity matrix and automated compatibility suite will track the implementation against a pinned upstream release. Any intentional incompatibility must be explicit and documented.
-
-## Current certification state
-
-The terminal, programmatic CLI, ACP adapter, engine, tools, sessions, MCP,
-configuration, and cloud-client contracts are implemented. The 1.0 release
-gate remains fail-closed until all five native targets and every non-functional
-threshold have current evidence from the same source revision.
-
-Use the release surfaces through these documents:
-
-- [Installation and updates](docs/installation.md)
-- [Configuration and diagnostics](docs/diagnostics.md)
-- [Security model and intentional differences](docs/security.md)
-- [Supported platforms and certification](docs/platforms.md)
-- [Python custom-tool to MCP migration](docs/mcp-migration.md)
-- [Compatibility reports and rebaseline policy](docs/compatibility.md)
-- [Release and rollback process](docs/release-process.md)
-
-Product differentiation begins after the parity baseline is complete.
-
-## Compatibility foundation
-
-The Rust workspace separates protocol, core, app-server, CLI, ACP, and
-compatibility-harness ownership. `compat/capability-matrix.toml` inventories
-the pinned 2.23.1 surface, while the checked-in corpus records deterministic,
-redacted black-box outcomes from the clean checkout identified by
-`compat/baseline.toml`.
-
-```console
-cargo run -p vibe-compat -- provision --source ../mistral-vibe --sync
-cargo run -p vibe-compat -- record
-cargo run -p vibe-compat -- validate --corpus compat/corpus/upstream-2.23.1
-```
-
-The mutable sibling checkout is navigation-only. Provisioning creates an
-ignored detached checkout under `target/compat`; only that checkout may be
-executed as the upstream oracle. See `PROVENANCE.md` and `compat/README.md`.
+Alignment is reviewed iteratively, axis by axis, against the official upstream
+repository. This repository does not claim automated compatibility
+certification.
 
 ## Relationship to Mistral Vibe
 
