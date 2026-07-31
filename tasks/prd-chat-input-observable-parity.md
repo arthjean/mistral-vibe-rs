@@ -6,6 +6,7 @@
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
 | 1.0 | 2026-07-31 | Arthur Jean | Initial draft based on the Python to Rust parity audit |
+| 1.1 | 2026-08-01 | Arthur Jean | Track latest stable Rust and dependencies instead of pinning 1.85 / Ratatui 0.29 / Crossterm 0.28; quality gates run on `stable` |
 
 ## Problem Statement
 
@@ -87,7 +88,7 @@ Key findings that informed this PRD:
 - Observable behavior, not internal structure, defines parity.
 - The Python repository under `/home/arthur/dev/mistral-vibe` is read-only.
 - Changes are restricted to the `vibe-cli` crate and focused tests unless a separately approved PRD changes dependency layering.
-- Existing Rust 1.85, edition 2024, Ratatui 0.29, Crossterm 0.28, lint policy, and workspace dependency rules remain in force.
+- Edition 2024, the lint policy, and workspace dependency rules remain in force. The toolchain and dependency set track latest stable (see Changelog 1.1); a downgrade, not an upgrade, is what needs a separate decision.
 - Input processing must not block the terminal event loop on filesystem scans, clipboard subprocesses, image conversion, microphone capture, or transcription.
 - No new dependency is introduced by default. A dependency requires a separate decision with concrete parity evidence.
 
@@ -95,10 +96,10 @@ Key findings that informed this PRD:
 
 These commands must pass for every user story:
 
-- `cargo +1.85.0 fmt --all -- --check` - verify workspace formatting
-- `cargo +1.85.0 check --workspace --all-targets --all-features` - verify all targets and feature combinations compile
-- `cargo +1.85.0 clippy --workspace --all-targets --all-features -- -D warnings` - enforce the repository lint policy with zero warnings
-- `cargo +1.85.0 test --workspace --all-features` - run the workspace test suite
+- `cargo +stable fmt --all -- --check` - verify workspace formatting
+- `cargo +stable check --workspace --all-targets --all-features` - verify all targets and feature combinations compile
+- `cargo +stable clippy --workspace --all-targets --all-features -- -D warnings` - enforce the repository lint policy with zero warnings
+- `cargo +stable test --workspace --all-features` - run the workspace test suite
 - Targeted Ratatui `TestBackend` snapshots at 40, 80, and 120 columns - verify composer, completion, state chrome, cursor, and long-prompt viewport output
 - Targeted PTY scenarios on Linux plus injected macOS and Windows adapter tests - verify key event kinds, bracketed paste, resize, focus, and terminal-mode teardown
 
@@ -494,7 +495,7 @@ Explicit boundaries for this version:
 - `crates/vibe-core/**` - core agent behavior is outside the chat-input boundary.
 - `crates/vibe-app-server/**` - app-server APIs and runtime behavior are outside scope; a missing voice boundary blocks US-016.
 - `crates/vibe-protocol/**` - protocol schemas must not change for UI parity.
-- `Cargo.toml` and `Cargo.lock` - no dependency is required by the chosen design; any change needs a separate approved dependency decision.
+- `Cargo.toml` and `Cargo.lock` - no chat-input story may *add* a dependency; adding one still needs a separate approved decision. Toolchain and version bumps are handled outside this PRD in their own commit.
 - Session, memory, database, plugin-cache, browser-state, `.sandbox*`, and temporary application-managed data - test fixtures must use isolated test directories only.
 
 ## Technical Considerations
