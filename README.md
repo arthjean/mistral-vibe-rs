@@ -2,10 +2,11 @@
 
 **An independent, from-scratch Rust implementation of [Mistral Vibe](https://github.com/mistralai/mistral-vibe).**
 
-> **Version 0.0.1**
+> **Compatibility target 2.23.1**
 >
-> Mistral Vibe RS is at the compatibility-foundation stage. There is no usable
-> agent CLI yet.
+> The native implementation is complete through Release 4. Release 5 native
+> host, signing, notarization, supply-chain, and 1.0 certification evidence is
+> still required before publication.
 
 ## Mission
 
@@ -52,17 +53,22 @@ Parity is measured at public boundaries: commands, flags, configuration, workflo
 
 A versioned parity matrix and automated compatibility suite will track the implementation against a pinned upstream release. Any intentional incompatibility must be explicit and documented.
 
-## Development plan
+## Current certification state
 
-`v0.0.1` establishes the mission and compatibility contract.
+The terminal, programmatic CLI, ACP adapter, engine, tools, sessions, MCP,
+configuration, and cloud-client contracts are implemented. The 1.0 release
+gate remains fail-closed until all five native targets and every non-functional
+threshold have current evidence from the same source revision.
 
-The initial development track is:
+Use the release surfaces through these documents:
 
-1. inventory and pin the upstream behavioral surface;
-2. establish the Rust workspace and compatibility harness;
-3. implement parity in end-to-end vertical slices;
-4. close every documented platform and behavior gap;
-5. publish the first release only when its supported surface is honest and testable.
+- [Installation and updates](docs/installation.md)
+- [Configuration and diagnostics](docs/diagnostics.md)
+- [Security model and intentional differences](docs/security.md)
+- [Supported platforms and certification](docs/platforms.md)
+- [Python custom-tool to MCP migration](docs/mcp-migration.md)
+- [Compatibility reports and rebaseline policy](docs/compatibility.md)
+- [Release and rollback process](docs/release-process.md)
 
 Product differentiation begins after the parity baseline is complete.
 
