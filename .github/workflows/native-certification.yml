@@ -1,0 +1,121 @@
+name: Native certification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: linux-x86_64
+          - runner: ubuntu-22.04-arm
+            target: linux-aarch64
+          - runner: macos-15-intel
+            target: macos-x86_64
+          - runner: macos-14
+            target: macos-aarch64
+          - runner: windows-2022
+            target: windows-x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Install Rust 1.85
+        shell: bash
+        run: rustup toolchain install 1.85.0 --profile minimal --component clippy,rustfmt
+      - name: Run native suites
+        shell: bash
+        run: bash scripts/ci/native-smoke.sh "${{ matrix.target }}"
+      - name: Package native binaries
+        shell: bash
+        env:
+          VIBE_SKIP_BUILD: "true"
+        run: bash scripts/ci/package-release.sh "${{ matrix.target }}" "2.23.1"
+      - name: Generate SBOM and license inventory
+        shell: bash
+        run: python scripts/ci/generate-supply-chain.py --output "dist/release-assets/supply-chain/${{ matrix.target }}"
+      - name: Upload unsigned candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: unsigned-${{ matrix.target }}
+          path: dist/release-assets/
+          if-no-files-found: error
+
+  certify:
+    name: Certify ${{ matrix.target }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: linux-x86_64
+            minimum_runtime: glibc-2.35
+          - runner: ubuntu-22.04-arm
+            target: linux-aarch64
+            minimum_runtime: glibc-2.35
+          - runner: macos-15-intel
+            target: macos-x86_64
+            minimum_runtime: macos-15
+          - runner: macos-14
+            target: macos-aarch64
+            minimum_runtime: macos-14
+          - runner: windows-2022
+            target: windows-x86_64
+            minimum_runtime: windows-server-2022
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: unsigned-${{ matrix.target }}
+          path: dist/release-assets
+      - name: Verify native host
+        shell: bash
+        run: bash scripts/ci/native-smoke.sh "${{ matrix.target }}"
+      - name: Stress process-tree cleanup
+        shell: bash
+        run: cargo run -p vibe-compat -- benchmark-cleanup --trials 10000 --output compat/native/cleanup.json
+      - name: Require platform signing evidence
+        shell: bash
+        env:
+          LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: bash scripts/ci/sign-and-verify.sh "${{ matrix.target }}" dist/release-assets
+      - name: Verify signed clean-download installer
+        shell: bash
+        run: bash scripts/ci/test-installer.sh "$(pwd)/dist/release-assets" "2.23.1"
+      - name: Capture native evidence
+        shell: bash
+        run: |
+          artifact="$(find dist/release-assets -type f \( -name '*.tar.gz' -o -name '*.zip' \) | head -n 1)"
+          notarized=()
+          if [[ "${{ matrix.target }}" == macos-* ]]; then notarized=(--notarized); fi
+          python scripts/ci/native-evidence-input.py \
+            --target "${{ matrix.target }}" \
+            --source-revision "${GITHUB_SHA}" \
+            --artifact "${artifact}" \
+            --minimum-runtime "${{ matrix.minimum_runtime }}" \
+            --cleanup compat/native/cleanup.json \
+            --output compat/native/input.json \
+            "${notarized[@]}"
+          cargo run -p vibe-compat -- capture-native \
+            --input compat/native/input.json \
+            --output "dist/release-assets/native/${{ matrix.target }}.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: certified-${{ matrix.target }}
+          path: dist/release-assets/
+          if-no-files-found: error

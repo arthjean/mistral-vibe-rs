@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Install Rust 1.85
+        run: rustup toolchain install 1.85.0 --profile minimal --component clippy,rustfmt
+      - name: Quality gates
+        run: |
+          cargo +1.85.0 fmt --all -- --check
+          cargo +1.85.0 check --workspace --all-targets --all-features
+          cargo +1.85.0 clippy --workspace --all-targets --all-features -- -D warnings
+          cargo +1.85.0 test --workspace --all-features

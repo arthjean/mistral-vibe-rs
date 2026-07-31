@@ -14,6 +14,10 @@ use vibe_compat::differential::{
 use vibe_compat::matrix;
 use vibe_compat::model::SupportClass;
 use vibe_compat::oracle::{record_all, validate_corpus, validate_scenarios};
+use vibe_compat::release5::{
+    NativeCaptureInput, NativeEvidence, ReleaseCandidate, benchmark_cleanup, certify_release,
+    validate_native_evidence_set, write_json,
+};
 use vibe_compat::rust_recorder::record_rust_all;
 use vibe_compat::workspace;
 
@@ -77,6 +81,32 @@ enum Command {
             long,
             default_value = "compat/reports/release-1-streaming-latency.json"
         )]
+        output: PathBuf,
+    },
+    CaptureNative {
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    BenchmarkCleanup {
+        #[arg(long, default_value_t = 10_000)]
+        trials: u64,
+        #[arg(long, default_value_t = 32)]
+        concurrency: usize,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    CertifyNative {
+        #[arg(long)]
+        evidence_directory: PathBuf,
+        #[arg(long)]
+        source_revision: String,
+    },
+    CertifyRelease {
+        #[arg(long)]
+        candidate: PathBuf,
+        #[arg(long, default_value = "compat/reports/release-5-certification.json")]
         output: PathBuf,
     },
     SchemaDigest,
@@ -244,6 +274,57 @@ fn main() -> Result<(), Box<dyn Error>> {
             println!("{}", serde_json::to_string(&report)?);
             if !report.release_gate_passed {
                 return Err("streaming latency release gate failed".into());
+            }
+        }
+        Command::CaptureNative { input, output } => {
+            let input: NativeCaptureInput = serde_json::from_slice(&fs::read(root.join(input))?)?;
+            let evidence = NativeEvidence::capture(&root, input)?;
+            write_json(&root.join(output), &evidence)?;
+            println!("{}", serde_json::to_string(&evidence)?);
+        }
+        Command::BenchmarkCleanup {
+            trials,
+            concurrency,
+            output,
+        } => {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?;
+            let evidence = runtime.block_on(benchmark_cleanup(trials, concurrency))?;
+            write_json(&root.join(output), &evidence)?;
+            println!("{}", serde_json::to_string(&evidence)?);
+            if evidence.trials < 10_000
+                || evidence.terminated_within_5_s != evidence.trials
+                || evidence.terminated_within_500_ms.saturating_mul(100)
+                    < evidence.trials.saturating_mul(99)
+                || evidence.orphaned_after_5_s != 0
+            {
+                return Err("cleanup benchmark release gate failed".into());
+            }
+        }
+        Command::CertifyNative {
+            evidence_directory,
+            source_revision,
+        } => {
+            let evidence = validate_native_evidence_set(
+                &root,
+                &root.join(evidence_directory),
+                &source_revision,
+            )?;
+            println!(
+                "{{\"nativeTargets\":{},\"sourceRevision\":\"{}\",\"status\":\"pass\"}}",
+                evidence.len(),
+                source_revision
+            );
+        }
+        Command::CertifyRelease { candidate, output } => {
+            let candidate: ReleaseCandidate =
+                serde_json::from_slice(&fs::read(root.join(candidate))?)?;
+            let certification = certify_release(&root, &candidate)?;
+            write_json(&root.join(output), &certification)?;
+            println!("{}", serde_json::to_string(&certification)?);
+            if !certification.ready {
+                return Err("release 5 certification is blocked".into());
             }
         }
         Command::SchemaDigest => println!("{}", vibe_protocol::protocol_schema_digest()),

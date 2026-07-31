@@ -7,6 +7,8 @@ pub mod matrix;
 pub mod model;
 pub mod oracle;
 mod release4_contracts;
+pub mod release5;
+mod release5_contracts;
 pub mod rust_recorder;
 pub mod workspace;
 

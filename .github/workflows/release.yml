@@ -1,0 +1,56 @@
+name: Release candidate promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      native_run_id:
+        description: Successful native-certification workflow run ID
+        required: true
+      candidate:
+        description: Root-relative release candidate JSON
+        required: true
+        default: compat/release/release-candidate.json
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  certify:
+    environment: release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Download certified evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: certified-*
+          merge-multiple: true
+          path: dist/release-assets
+          run-id: ${{ inputs.native_run_id }}
+          github-token: ${{ github.token }}
+      - name: Assemble target checksums
+        run: |
+          checksum_count="$(find dist/release-assets -type f -name 'SHA256SUMS.*' | wc -l)"
+          test "${checksum_count}" -eq 5
+          find dist/release-assets -type f -name 'SHA256SUMS.*' -exec cat {} + \
+            | sort -k2,2 -u \
+            > dist/release-assets/SHA256SUMS
+      - name: Fail closed unless every release gate passes
+        run: |
+          cargo run -p vibe-compat -- certify-release \
+            --candidate "${{ inputs.candidate }}" \
+            --output compat/reports/release-5-certification.json
+      - name: Upload immutable release bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-5-certified-${{ github.sha }}
+          path: |
+            dist/release-assets/
+            compat/reports/release-5-certification.json
+            compat/reports/release-5.json
+            compat/reports/release-5.md
+            LICENSE
+            NOTICE
+            PROVENANCE.md
+          if-no-files-found: error
