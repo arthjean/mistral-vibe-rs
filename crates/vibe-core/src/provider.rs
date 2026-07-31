@@ -723,15 +723,14 @@ fn build_chat_request(
     if style == ProviderStyle::Mistral && input.thinking {
         body["temperature"] = json!(1.0);
     }
-    if style == ProviderStyle::Reasoning {
-        if let Some(effort) = input
+    if style == ProviderStyle::Reasoning
+        && let Some(effort) = input
             .reasoning_effort
             .as_deref()
             .filter(|effort| !matches!(*effort, "off" | "none"))
             .or(input.thinking.then_some("medium"))
-        {
-            body["reasoning_effort"] = json!(effort);
-        }
+    {
+        body["reasoning_effort"] = json!(effort);
     }
     if !input.metadata.is_empty() {
         body["metadata"] = serde_json::to_value(&input.metadata)
@@ -964,10 +963,10 @@ fn build_responses_request(model: &str, input: &ProviderInput) -> Result<Value, 
     if let Some(choice) = &input.tool_choice {
         body["tool_choice"] = responses_tool_choice(choice);
     }
-    if model.starts_with("gpt-4") || model.starts_with("gpt-3.5") {
-        if let Some(temperature) = input.limits.temperature_millis {
-            body["temperature"] = json!(f64::from(temperature) / 1000.0);
-        }
+    if (model.starts_with("gpt-4") || model.starts_with("gpt-3.5"))
+        && let Some(temperature) = input.limits.temperature_millis
+    {
+        body["temperature"] = json!(f64::from(temperature) / 1000.0);
     }
     Ok(body)
 }

@@ -139,7 +139,7 @@ impl McpOAuthConfig {
             self.redirect_uri,
             scopes.join(" ")
         );
-        format!("sha256:{:x}", Sha256::digest(payload.as_bytes()))
+        format!("sha256:{}", hex::encode(Sha256::digest(payload.as_bytes())))
     }
 }
 

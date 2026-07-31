@@ -17,6 +17,7 @@ clap.workspace = true
 crossterm.workspace = true
 futures-util.workspace = true
 hex.workspace = true
+keyring.workspace = true
 ratatui.workspace = true
 secrecy.workspace = true
 serde.workspace = true
@@ -31,15 +32,6 @@ unicode-width.workspace = true
 url.workspace = true
 vibe-app-server = { path = "../vibe-app-server" }
 vibe-core = { path = "../vibe-core" }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { workspace = true, features = ["crypto-rust", "linux-native-sync-persistent"] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-keyring = { workspace = true, features = ["apple-native"] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-keyring = { workspace = true, features = ["windows-native"] }
 
 [dev-dependencies]
 tempfile.workspace = true

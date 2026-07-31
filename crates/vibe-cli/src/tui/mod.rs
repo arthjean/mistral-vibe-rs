@@ -431,14 +431,13 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
         } else {
             Ok(())
         };
-    if let Some(mut active) = active {
-        if tokio::time::timeout(Duration::from_secs(2), &mut active.task)
+    if let Some(mut active) = active
+        && tokio::time::timeout(Duration::from_secs(2), &mut active.task)
             .await
             .is_err()
-        {
-            active.task.abort();
-            let _ = active.task.await;
-        }
+    {
+        active.task.abort();
+        let _ = active.task.await;
     }
     if let Some(runtime) = runtime.as_mut() {
         interrupt_shell(runtime, &mut state).await;

@@ -1049,14 +1049,14 @@ where
                 .map_err(|_| AcpError::StatePoisoned)?;
             *active = Some(reservation.turn_id.clone());
         }
-        if harness.cancel_requested.swap(false, Ordering::AcqRel) {
-            if let Err(error) = driver.interrupt(session_id, &reservation.turn_id) {
-                let error = AcpError::Driver(error.to_string());
-                let mut service = harness.service.lock().await;
-                let _ = service.fail_reserved(&reservation, &error.to_string());
-                clear_active(&harness)?;
-                return Err(error);
-            }
+        if harness.cancel_requested.swap(false, Ordering::AcqRel)
+            && let Err(error) = driver.interrupt(session_id, &reservation.turn_id)
+        {
+            let error = AcpError::Driver(error.to_string());
+            let mut service = harness.service.lock().await;
+            let _ = service.fail_reserved(&reservation, &error.to_string());
+            clear_active(&harness)?;
+            return Err(error);
         }
         let run = driver.run_observed(&reservation, observer);
         tokio::pin!(run);

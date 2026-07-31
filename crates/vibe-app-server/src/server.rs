@@ -1365,20 +1365,20 @@ impl AppServer {
             sessions.remove(&attachment.id);
             return Err(ServerError::Resource(error.to_string()));
         }
-        if let Some(backend) = &self.resource_backend {
-            if let Err(error) = backend.open_session(ResourceSession {
+        if let Some(backend) = &self.resource_backend
+            && let Err(error) = backend.open_session(ResourceSession {
                 session_id: attachment.id.clone(),
                 generation: 1,
                 working_directory: attachment.working_directory.clone(),
                 policy,
                 tools,
-            }) {
-                if let Ok(mut resources) = self.resources.lock() {
-                    resources.close_session(&attachment.id);
-                }
-                sessions.remove(&attachment.id);
-                return Err(ServerError::Resource(error.to_string()));
+            })
+        {
+            if let Ok(mut resources) = self.resources.lock() {
+                resources.close_session(&attachment.id);
             }
+            sessions.remove(&attachment.id);
+            return Err(ServerError::Resource(error.to_string()));
         }
         Ok(())
     }

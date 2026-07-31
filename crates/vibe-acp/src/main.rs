@@ -584,12 +584,11 @@ where
                         break response?;
                     }
                     update = updates.recv() => {
-                        if let Some(update) = update {
-                            if let Err(error) = send_update(writer, &update) {
+                        if let Some(update) = update
+                            && let Err(error) = send_update(writer, &update) {
                                 let _ = agent.cancel(&session_id).await;
                                 return Err(error);
                             }
-                        }
                     }
                 }
             };

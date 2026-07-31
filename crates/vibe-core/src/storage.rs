@@ -380,12 +380,11 @@ impl SessionStore {
             self.recover_handoff_locked(&journal_path)?;
         }
         let prompt = current_system_prompt.into();
-        if let Some(pointer) = self.read_pointer()? {
-            if let Ok(metadata) = self.resolve(&pointer)
-                && same_working_directory(&metadata.working_directory, working_directory)
-            {
-                return self.resume(&metadata.id, prompt, current_config);
-            }
+        if let Some(pointer) = self.read_pointer()?
+            && let Ok(metadata) = self.resolve(&pointer)
+            && same_working_directory(&metadata.working_directory, working_directory)
+        {
+            return self.resume(&metadata.id, prompt, current_config);
         }
         let latest = self
             .valid_metadata()?
