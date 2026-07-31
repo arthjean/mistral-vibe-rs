@@ -1,0 +1,83 @@
+name: Mistral Vibe RS
+description: Install and run the signed native Mistral Vibe RS artifact
+author: Arthur Jean
+
+inputs:
+  prompt:
+    description: Prompt passed to the agent
+    required: true
+  mistral_api_key:
+    description: Mistral API credential
+    required: true
+  approvals:
+    description: Approval policy, either ask or always
+    required: false
+    default: ask
+  install_python:
+    description: Install Python for tools that need it
+    required: false
+    default: "false"
+  python_version:
+    description: Optional Python version
+    required: false
+    default: "3.12"
+  version:
+    description: Mistral Vibe RS release version
+    required: false
+    default: "2.23.1"
+  release_base_url:
+    description: Optional HTTPS release asset base URL
+    required: false
+
+outputs:
+  result:
+    description: Programmatic JSON result
+    value: ${{ steps.run.outputs.result }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up optional Python
+      if: inputs.install_python == 'true'
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    - name: Install signed native binaries
+      shell: bash
+      env:
+        VIBE_VERSION: ${{ inputs.version }}
+        VIBE_RELEASE_BASE_URL: ${{ inputs.release_base_url }}
+        VIBE_INSTALL_DIR: ${{ runner.temp }}/mistral-vibe-rs/bin
+        VIBE_COMPLETION_DIR: ${{ runner.temp }}/mistral-vibe-rs/completions
+      run: |
+        if [[ -z "${VIBE_RELEASE_BASE_URL}" ]]; then
+          unset VIBE_RELEASE_BASE_URL
+        fi
+        sh "${{ github.action_path }}/scripts/install.sh"
+        echo "${VIBE_INSTALL_DIR}" >> "${GITHUB_PATH}"
+
+    - name: Run Mistral Vibe RS
+      id: run
+      shell: bash
+      env:
+        MISTRAL_API_KEY: ${{ inputs.mistral_api_key }}
+        PROMPT_INPUT: ${{ inputs.prompt }}
+        APPROVALS_INPUT: ${{ inputs.approvals }}
+      run: |
+        arguments=(--prompt "${PROMPT_INPUT}" --output json)
+        case "${APPROVALS_INPUT}" in
+          ask) ;;
+          always) arguments+=(--auto-approve) ;;
+          *) echo "approvals must be ask or always" >&2; exit 2 ;;
+        esac
+        if [[ -n "${VIBE_ACTION_TEST_RESPONSE:-}" ]]; then
+          arguments+=(--fake-response "${VIBE_ACTION_TEST_RESPONSE}")
+        fi
+        result="$(vibe "${arguments[@]}")"
+        delimiter="vibe-result-${RANDOM}-${RANDOM}"
+        {
+          echo "result<<${delimiter}"
+          echo "${result}"
+          echo "${delimiter}"
+        } >> "${GITHUB_OUTPUT}"

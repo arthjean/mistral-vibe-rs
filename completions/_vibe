@@ -1,0 +1,20 @@
+#compdef vibe
+
+_arguments \
+  '(-v --version)'{-v,--version}'[print version]' \
+  '(-p --prompt)'{-p,--prompt}'[run a prompt]:prompt:' \
+  '--output[select output mode]:mode:(text json streaming)' \
+  '--resume[resume a session]:session id:' \
+  '(-c --continue)'{-c,--continue}'[continue the last session]' \
+  '--workdir[set working directory]:directory:_directories' \
+  '--add-dir[authorize an additional directory]:directory:_directories' \
+  '--trust[trust the working directory]' \
+  '--agent[select agent]:agent:' \
+  '--max-turns[limit turns]:count:' \
+  '--max-tokens[limit tokens]:count:' \
+  '--max-price[limit price]:amount:' \
+  '--auto-approve[approve tool requests]' \
+  '--setup[run setup]' \
+  '--check-upgrade[check for an update]' \
+  '--telemetry[enable privacy-safe telemetry]' \
+  '--help[print help]'

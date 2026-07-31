@@ -9,6 +9,7 @@
     )
 )]
 
+pub mod distribution;
 pub mod tui;
 
 use std::io::Write;

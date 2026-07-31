@@ -1,0 +1,40 @@
+name: GitHub Action contract
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  action:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Package local artifact
+        run: bash scripts/ci/package-release.sh linux-x86_64 2.23.1
+      - name: Run local action with string inputs
+        id: vibe
+        uses: ./
+        env:
+          VIBE_ACTION_TEST_RESPONSE: action-ok
+        with:
+          prompt: Inspect the workspace
+          mistral_api_key: test-only
+          approvals: ask
+          install_python: "true"
+          python_version: "3.12"
+          version: "2.23.1"
+          release_base_url: file://${{ github.workspace }}/dist/release-assets
+      - name: Validate action output
+        env:
+          ACTION_RESULT: ${{ steps.vibe.outputs.result }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          result = json.loads(os.environ["ACTION_RESULT"])
+          assert result[-1]["content"][0]["text"] == "action-ok"
+          PY
