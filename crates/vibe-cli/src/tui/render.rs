@@ -1,18 +1,56 @@
+use std::path::{Path, PathBuf};
+
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Padding, Paragraph, Wrap};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use super::input::PromptEditor;
+use super::input::{CompletionEngine, PromptEditor, completion_description};
 use super::setup::{ResolvedTheme, Theme};
 use super::state::{EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
 
 pub const MAX_RENDER_CHARS: usize = 64 * 1024;
 pub const MAX_RENDER_LINE_CHARS: usize = 4 * 1024;
 const MAX_RENDER_LINES: usize = 4 * 1024;
+const COMPOSER_MIN_BODY_HEIGHT: u16 = 3;
+const COMPOSER_CHROME_HEIGHT: u16 = 2;
+const COMPOSER_PROMPT_WIDTH: u16 = 2;
+const COMPLETION_MAX_HEIGHT: u16 = 12;
+const MISTRAL_ORANGE: Color = Color::Rgb(255, 130, 5);
+const PETIT_CHAT: [&str; 3] = ["  ⡠⣒⠄  ⡔⢄⠔⡄", " ⢸⠸⣀⡔⢉⠱⣃⡢⣂⡣", "  ⠉⠒⠣⠤⠵⠤⠬⠮⠆"];
+
+#[derive(Debug, Clone, Copy)]
+pub struct BannerContext<'a> {
+    pub version: &'a str,
+    pub model: &'a str,
+    pub thinking: &'a str,
+    pub models_count: usize,
+    pub skills_count: usize,
+    pub mcp_servers_enabled: usize,
+    pub mcp_servers_total: usize,
+    pub connectors_connected: usize,
+    pub connectors_total: usize,
+    pub hooks_count: usize,
+    pub plan: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TokenState {
+    pub max_tokens: u64,
+    pub current_tokens: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct UiContext<'a> {
+    pub cwd: &'a Path,
+    pub agent_name: &'a str,
+    pub secret_input: bool,
+    pub banner: BannerContext<'a>,
+    pub tokens: TokenState,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenderLimits {
@@ -33,41 +71,123 @@ pub fn draw(
     frame: &mut Frame<'_>,
     state: &mut TuiState,
     editor: &PromptEditor,
+    completion: &CompletionEngine,
     theme: ResolvedTheme,
-    secret_input: bool,
+    context: UiContext<'_>,
 ) {
-    let [transcript_area, status_area, input_area] = Layout::vertical([
-        Constraint::Min(3),
+    let requested_completion_height = completion.view().map_or(0, |view| {
+        u16::try_from(view.candidates.len())
+            .unwrap_or(u16::MAX)
+            .saturating_add(2)
+            .min(COMPLETION_MAX_HEIGHT)
+    });
+    let activity_height = u16::from(activity_text(state).is_some());
+    let input_height = composer_height(editor, frame.area(), context.secret_input);
+    let completion_height = requested_completion_height.min(
+        frame
+            .area()
+            .height
+            .saturating_sub(activity_height)
+            .saturating_sub(input_height)
+            .saturating_sub(2),
+    );
+    let [
+        transcript_area,
+        activity_area,
+        completion_area,
+        input_area,
+        footer_area,
+    ] = Layout::vertical([
+        Constraint::Min(1),
+        Constraint::Length(activity_height),
+        Constraint::Length(completion_height),
+        Constraint::Length(input_height),
         Constraint::Length(1),
-        Constraint::Length(5),
     ])
     .areas(frame.area());
-    draw_transcript(frame, transcript_area, state, theme);
-    draw_status(frame, status_area, state, theme);
-    draw_input(frame, input_area, editor, theme, secret_input);
+    draw_transcript(frame, transcript_area, state, theme, context.banner);
+    draw_activity(frame, activity_area, state, theme);
+    draw_completion(frame, completion_area, completion, theme);
+    draw_input(frame, input_area, editor, theme, context);
+    draw_footer(frame, footer_area, context.cwd, context.tokens, theme);
 }
 
-fn draw_transcript(frame: &mut Frame<'_>, area: Rect, state: &mut TuiState, theme: ResolvedTheme) {
-    let visible_height = usize::from(area.height.saturating_sub(2)).max(1);
+fn composer_height(editor: &PromptEditor, area: Rect, secret_input: bool) -> u16 {
+    let input_width = area.width.saturating_sub(COMPOSER_PROMPT_WIDTH).max(1);
+    let body_height = editor_visual_height(editor, secret_input, input_width)
+        .max(COMPOSER_MIN_BODY_HEIGHT)
+        .min(area.height.saturating_div(2).max(COMPOSER_MIN_BODY_HEIGHT));
+    body_height.saturating_add(COMPOSER_CHROME_HEIGHT)
+}
+
+fn editor_visual_height(editor: &PromptEditor, secret_input: bool, width: u16) -> u16 {
+    let (_, prefix) = editor_mode(editor, secret_input);
+    let mut rows = 1usize;
+    let mut column = 0usize;
+    let width = usize::from(width.max(1));
+    for grapheme in editor.text().graphemes(true).skip(prefix) {
+        if grapheme == "\n" {
+            rows = rows.saturating_add(1);
+            column = 0;
+            continue;
+        }
+        let visible = if secret_input {
+            "•".to_owned()
+        } else {
+            sanitize_inline(grapheme)
+        };
+        let grapheme_width = UnicodeWidthStr::width(visible.as_str()).max(1);
+        if column.saturating_add(grapheme_width) > width {
+            rows = rows.saturating_add(1);
+            column = 0;
+        }
+        column = column.saturating_add(grapheme_width);
+        if column >= width {
+            rows = rows.saturating_add(column / width);
+            column %= width;
+        }
+    }
+    u16::try_from(rows).unwrap_or(u16::MAX)
+}
+
+fn draw_transcript(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    state: &mut TuiState,
+    theme: ResolvedTheme,
+    banner: BannerContext<'_>,
+) {
+    let visible_height = usize::from(area.height).max(1);
     let mut newest_first = Vec::new();
     let mut rendered_chars = 0usize;
+    let mut history_truncated = false;
     'entries: for entry in state.entries.iter().rev() {
-        for line in semantic_lines(entry, area.width.saturating_sub(2), theme)
-            .into_iter()
-            .rev()
-        {
+        for line in semantic_lines(entry, area.width, theme).into_iter().rev() {
             let line_chars = line.to_string().chars().count();
             if newest_first.len() >= MAX_RENDER_LINES
                 || rendered_chars.saturating_add(line_chars) > MAX_RENDER_CHARS
             {
+                history_truncated = true;
                 break 'entries;
             }
             rendered_chars = rendered_chars.saturating_add(line_chars);
             newest_first.push(line);
         }
     }
+    if !history_truncated {
+        for line in banner_lines(banner, theme).into_iter().rev() {
+            let line_chars = line.to_string().chars().count();
+            if newest_first.len() >= MAX_RENDER_LINES
+                || rendered_chars.saturating_add(line_chars) > MAX_RENDER_CHARS
+            {
+                break;
+            }
+            rendered_chars = rendered_chars.saturating_add(line_chars);
+            newest_first.push(line);
+        }
+    }
     state.set_scroll_line_limit(newest_first.len().saturating_sub(visible_height));
-    let lines = newest_first
+    let mut lines = newest_first
         .into_iter()
         .skip(state.scroll_offset)
         .take(visible_height)
@@ -75,36 +195,264 @@ fn draw_transcript(frame: &mut Frame<'_>, area: Rect, state: &mut TuiState, them
         .into_iter()
         .rev()
         .collect::<Vec<_>>();
-    let transcript = Paragraph::new(Text::from(lines))
-        .block(Block::default().borders(Borders::ALL).title("Transcript"));
-    frame.render_widget(transcript, area);
+    if lines.len() < visible_height {
+        lines.splice(
+            0..0,
+            std::iter::repeat_with(Line::default).take(visible_height - lines.len()),
+        );
+    }
+    frame.render_widget(Paragraph::new(Text::from(lines)), area);
 }
 
-fn draw_status(frame: &mut Frame<'_>, area: Rect, state: &TuiState, theme: ResolvedTheme) {
-    let connection = if state.connected {
-        "connected"
-    } else {
-        "disconnected"
-    };
-    let activity = if state.resync_required {
-        "resync required"
-    } else if state.waiting {
-        "waiting"
-    } else if state.ready {
-        "ready"
-    } else {
-        "starting"
-    };
-    let mut text = format!("{connection} | {activity} | event {}", state.watermark);
-    if let Some(diagnostic) = state.diagnostics().last() {
-        text.push_str(" | ! ");
-        text.push_str(&sanitize_inline(diagnostic));
+fn banner_lines(banner: BannerContext<'_>, theme: ResolvedTheme) -> Vec<Line<'static>> {
+    let mut lines = vec![Line::default()];
+    lines.extend(
+        PETIT_CHAT
+            .into_iter()
+            .map(|line| Line::styled(line, base_style(theme))),
+    );
+    lines.push(Line::default());
+    let mut identity = vec![
+        Span::styled(
+            "Mistral Vibe",
+            orange_style(theme).add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" "),
+        Span::styled(
+            format!("v{} · ", sanitize_inline(banner.version)),
+            base_style(theme),
+        ),
+        Span::styled(
+            format!(
+                "{}[{}]",
+                sanitize_inline(banner.model),
+                sanitize_inline(banner.thinking)
+            ),
+            secondary_style(theme),
+        ),
+    ];
+    if let Some(plan) = banner.plan {
+        identity.push(Span::styled(
+            format!(" · {}", sanitize_inline(plan)),
+            base_style(theme),
+        ));
     }
-    let text = truncate_width(&text, usize::from(area.width));
+    lines.push(Line::from(identity));
+    lines.push(Line::styled(banner_counts(banner), base_style(theme)));
+    lines.push(Line::from(vec![
+        Span::styled("Type ", base_style(theme)),
+        Span::styled("/help", secondary_style(theme)),
+        Span::styled(" for more information", base_style(theme)),
+    ]));
+    lines.push(Line::default());
+    lines
+}
+
+fn banner_counts(banner: BannerContext<'_>) -> String {
+    let mut parts = vec![pluralized(banner.models_count, "model")];
+    if banner.connectors_total > 0 {
+        parts.push(if banner.connectors_connected == banner.connectors_total {
+            pluralized(banner.connectors_connected, "connector")
+        } else {
+            format!(
+                "{}/{} connector{}",
+                banner.connectors_connected,
+                banner.connectors_total,
+                if banner.connectors_total == 1 {
+                    ""
+                } else {
+                    "s"
+                }
+            )
+        });
+    }
+    parts.push(if banner.mcp_servers_enabled == banner.mcp_servers_total {
+        pluralized(banner.mcp_servers_enabled, "MCP server")
+    } else {
+        format!(
+            "{}/{} MCP server{}",
+            banner.mcp_servers_enabled,
+            banner.mcp_servers_total,
+            if banner.mcp_servers_total == 1 {
+                ""
+            } else {
+                "s"
+            }
+        )
+    });
+    parts.push(pluralized(banner.skills_count, "skill"));
+    if banner.hooks_count > 0 {
+        parts.push(pluralized(banner.hooks_count, "hook"));
+    }
+    parts.join(" · ")
+}
+
+fn pluralized(count: usize, singular: &str) -> String {
+    format!("{count} {singular}{}", if count == 1 { "" } else { "s" })
+}
+
+fn activity_text(state: &TuiState) -> Option<(String, bool)> {
+    if let Some(diagnostic) = state.diagnostics().last() {
+        return Some((format!("! {}", sanitize_inline(diagnostic)), true));
+    }
+    if !state.connected || state.resync_required {
+        return Some(("! Connection lost".to_owned(), true));
+    }
+    state.waiting.then(|| ("⠋ Working…".to_owned(), false))
+}
+
+fn draw_activity(frame: &mut Frame<'_>, area: Rect, state: &TuiState, theme: ResolvedTheme) {
+    let Some((text, warning)) = activity_text(state) else {
+        return;
+    };
     frame.render_widget(
-        Paragraph::new(text).style(status_style(theme, state.resync_required)),
+        Paragraph::new(truncate_width(&text, usize::from(area.width))).style(if warning {
+            warning_style(theme)
+        } else {
+            orange_style(theme)
+        }),
         area,
     );
+}
+
+fn draw_completion(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    completion: &CompletionEngine,
+    theme: ResolvedTheme,
+) {
+    let Some(view) = completion.view() else {
+        return;
+    };
+    let label_width = view
+        .candidates
+        .iter()
+        .map(|candidate| UnicodeWidthStr::width(candidate.label.trim_start_matches('@')))
+        .max()
+        .unwrap_or_default()
+        .min(usize::from(area.width.saturating_mul(3) / 10));
+    let visible_rows = usize::from(area.height.saturating_sub(2)).max(1);
+    let first_visible = view.selected.saturating_add(1).saturating_sub(visible_rows);
+    let lines = view
+        .candidates
+        .iter()
+        .enumerate()
+        .skip(first_visible)
+        .take(visible_rows)
+        .map(|(index, candidate)| {
+            let label = candidate.label.trim_start_matches('@');
+            let description = completion_description(&candidate.label);
+            let selected = index == view.selected;
+            let command_style = if selected {
+                base_style(theme)
+                    .add_modifier(Modifier::BOLD)
+                    .add_modifier(Modifier::REVERSED)
+            } else {
+                base_style(theme).add_modifier(Modifier::BOLD)
+            };
+            let description_style = if selected {
+                base_style(theme).add_modifier(Modifier::ITALIC)
+            } else {
+                muted_style(theme)
+            };
+            if description.is_empty() {
+                Line::from(Span::styled(label.to_owned(), command_style))
+            } else {
+                Line::from(vec![
+                    Span::styled(format!("{label:label_width$}"), command_style),
+                    Span::raw("  "),
+                    Span::styled(description, description_style),
+                ])
+            }
+        })
+        .collect::<Vec<_>>();
+    frame.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .padding(Padding::horizontal(1))
+                .border_style(muted_style(theme)),
+        ),
+        area,
+    );
+}
+
+fn draw_footer(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    cwd: &Path,
+    tokens: TokenState,
+    theme: ResolvedTheme,
+) {
+    let path = display_path(cwd);
+    let context = format_context_progress(tokens);
+    let context_width = u16::try_from(UnicodeWidthStr::width(context.as_str()))
+        .unwrap_or(u16::MAX)
+        .min(area.width);
+    let [path_area, context_area] =
+        Layout::horizontal([Constraint::Min(1), Constraint::Length(context_width)]).areas(area);
+    frame.render_widget(
+        Paragraph::new(truncate_width(&path, usize::from(path_area.width)))
+            .style(muted_style(theme)),
+        path_area,
+    );
+    frame.render_widget(
+        Paragraph::new(context)
+            .alignment(Alignment::Right)
+            .style(muted_style(theme)),
+        context_area,
+    );
+}
+
+fn format_context_progress(tokens: TokenState) -> String {
+    if tokens.max_tokens == 0 {
+        return String::new();
+    }
+    let ratio = (tokens.current_tokens as f64 / tokens.max_tokens as f64).min(1.0);
+    format!(
+        "{}/{} tokens ({:.0}%)",
+        format_token_count(tokens.current_tokens),
+        format_token_count(tokens.max_tokens),
+        ratio * 100.0
+    )
+}
+
+fn format_token_count(tokens: u64) -> String {
+    if tokens >= 1_000_000 {
+        return format!("{:.1}M", tokens as f64 / 1_000_000.0);
+    }
+    if tokens >= 1_000 {
+        return format!("{}k", tokens / 1_000);
+    }
+    tokens.to_string()
+}
+
+fn display_path(path: &Path) -> String {
+    let Some(home) = user_home_directory() else {
+        return path.to_string_lossy().into_owned();
+    };
+    match path.strip_prefix(&home) {
+        Ok(relative) if relative.as_os_str().is_empty() => "~".to_owned(),
+        Ok(relative) => Path::new("~").join(relative).to_string_lossy().into_owned(),
+        Err(_) => path.to_string_lossy().into_owned(),
+    }
+}
+
+fn user_home_directory() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .or_else(|| {
+                let mut home = PathBuf::from(std::env::var_os("HOMEDRIVE")?);
+                home.push(std::env::var_os("HOMEPATH")?);
+                Some(home)
+            })
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var_os("HOME").map(PathBuf::from)
+    }
 }
 
 fn draw_input(
@@ -112,40 +460,64 @@ fn draw_input(
     area: Rect,
     editor: &PromptEditor,
     theme: ResolvedTheme,
-    secret_input: bool,
+    context: UiContext<'_>,
 ) {
-    let text = editor_text(editor, secret_input);
-    let title = if secret_input {
-        "API key (stored in native keyring)"
+    let text = editor_text(editor, context.secret_input);
+    let (mode, _) = editor_mode(editor, context.secret_input);
+    let title = if context.secret_input {
+        " API key (stored in native keyring) "
+    } else if context.agent_name.is_empty() {
+        ""
     } else {
-        "Prompt"
+        context.agent_name
     };
-    let inner_width = area.width.saturating_sub(2).max(1);
-    let inner_height = area.height.saturating_sub(2).max(1);
-    let (cursor_row, cursor_column) = editor_cursor(editor, secret_input, inner_width);
-    let scroll = cursor_row.saturating_sub(inner_height.saturating_sub(1));
+    let block = Block::default()
+        .borders(Borders::TOP | Borders::BOTTOM)
+        .border_style(muted_style(theme))
+        .title_style(muted_style(theme))
+        .title_alignment(Alignment::Right)
+        .title(title);
+    frame.render_widget(block, area);
+    let body = Rect::new(
+        area.x,
+        area.y.saturating_add(1),
+        area.width,
+        area.height.saturating_sub(COMPOSER_CHROME_HEIGHT),
+    );
+    let [prompt_area, input_area] = Layout::horizontal([
+        Constraint::Length(COMPOSER_PROMPT_WIDTH),
+        Constraint::Min(1),
+    ])
+    .areas(body);
+    let (cursor_row, cursor_column) = editor_cursor(editor, context.secret_input, input_area.width);
+    let scroll = cursor_row.saturating_sub(input_area.height.saturating_sub(1));
+    frame.render_widget(
+        Paragraph::new(mode.to_string()).style(orange_style(theme)),
+        prompt_area,
+    );
     frame.render_widget(
         Paragraph::new(text)
-            .block(Block::default().borders(Borders::ALL).title(title))
             .style(base_style(theme))
+            .wrap(Wrap { trim: false })
             .scroll((scroll, 0)),
-        area,
+        input_area,
     );
     frame.set_cursor_position((
-        area.x
-            .saturating_add(1)
-            .saturating_add(cursor_column.min(inner_width.saturating_sub(1))),
-        area.y
-            .saturating_add(1)
+        input_area
+            .x
+            .saturating_add(cursor_column.min(input_area.width.saturating_sub(1))),
+        input_area
+            .y
             .saturating_add(cursor_row.saturating_sub(scroll)),
     ));
 }
 
 fn editor_text(editor: &PromptEditor, secret_input: bool) -> Text<'static> {
+    let (_, prefix) = editor_mode(editor, secret_input);
     let selection = editor.selection();
     let mut lines = vec![Vec::<Span<'static>>::new()];
     let mut rendered = 0usize;
-    for (index, grapheme) in editor.text().graphemes(true).enumerate() {
+    for (index, grapheme) in editor.text().graphemes(true).enumerate().skip(prefix) {
         if rendered >= MAX_RENDER_CHARS {
             if let Some(line) = lines.last_mut() {
                 line.push(Span::raw("…"));
@@ -179,10 +551,16 @@ fn editor_text(editor: &PromptEditor, secret_input: bool) -> Text<'static> {
 }
 
 fn editor_cursor(editor: &PromptEditor, secret_input: bool, width: u16) -> (u16, u16) {
+    let (_, prefix) = editor_mode(editor, secret_input);
     let width = usize::from(width.max(1));
     let mut row = 0usize;
     let mut column = 0usize;
-    for grapheme in editor.text().graphemes(true).take(editor.cursor()) {
+    for grapheme in editor
+        .text()
+        .graphemes(true)
+        .skip(prefix)
+        .take(editor.cursor().saturating_sub(prefix))
+    {
         if grapheme == "\n" {
             row = row.saturating_add(1);
             column = 0;
@@ -210,10 +588,30 @@ fn editor_cursor(editor: &PromptEditor, secret_input: bool, width: u16) -> (u16,
     )
 }
 
+fn editor_mode(editor: &PromptEditor, secret_input: bool) -> (char, usize) {
+    if secret_input {
+        return ('>', 0);
+    }
+    match editor.text().chars().next() {
+        Some('/') => ('/', 1),
+        _ => ('>', 0),
+    }
+}
+
 fn semantic_lines(entry: &TranscriptEntry, width: u16, theme: ResolvedTheme) -> Vec<Line<'static>> {
+    if entry.kind == TranscriptKind::UserMessage {
+        return user_message_lines(entry, width, theme);
+    }
+    if entry.kind == TranscriptKind::AssistantMessage {
+        return assistant_message_lines(entry, width, theme);
+    }
+    if entry.kind == TranscriptKind::Notice {
+        return notice_message_lines(entry, width, theme);
+    }
     let (kind, style) = match entry.kind {
-        TranscriptKind::UserMessage => ("USER", user_style(theme)),
-        TranscriptKind::AssistantMessage => ("ASSISTANT", assistant_style(theme)),
+        TranscriptKind::UserMessage | TranscriptKind::AssistantMessage => {
+            ("MESSAGE", base_style(theme))
+        }
         TranscriptKind::Reasoning => ("REASONING", muted_style(theme)),
         TranscriptKind::Effect => ("TOOL", effect_style(theme)),
         TranscriptKind::Callback => ("ACTION REQUIRED", warning_style(theme)),
@@ -284,6 +682,163 @@ fn semantic_lines(entry: &TranscriptEntry, width: u16, theme: ResolvedTheme) -> 
         }
     }
     lines
+}
+
+fn notice_message_lines(
+    entry: &TranscriptEntry,
+    width: u16,
+    theme: ResolvedTheme,
+) -> Vec<Line<'static>> {
+    let content_width = usize::from(width.saturating_sub(4).max(1));
+    let wrapped = wrapped_terminal_lines(&entry.text, content_width);
+    let last = wrapped.len().saturating_sub(1);
+    let mut lines = wrapped
+        .into_iter()
+        .enumerate()
+        .map(|(index, line)| {
+            Line::from(vec![
+                Span::styled(
+                    if index == last { "  ⎣ " } else { "  ⎢ " },
+                    muted_style(theme),
+                ),
+                Span::styled(line, base_style(theme)),
+            ])
+        })
+        .collect::<Vec<_>>();
+    append_terminal_status(&mut lines, entry, theme);
+    lines
+}
+
+fn user_message_lines(
+    entry: &TranscriptEntry,
+    width: u16,
+    theme: ResolvedTheme,
+) -> Vec<Line<'static>> {
+    let (prompt, content) = match entry.text.chars().next() {
+        Some('/') => ('/', &entry.text[1..]),
+        _ => ('>', entry.text.as_str()),
+    };
+    let pending = entry.status == EntryStatus::Streaming;
+    let prompt_style = orange_style(theme)
+        .add_modifier(Modifier::BOLD)
+        .add_modifier(if pending {
+            Modifier::ITALIC
+        } else {
+            Modifier::empty()
+        });
+    let content_style = if prompt == '/' {
+        orange_style(theme).add_modifier(Modifier::BOLD)
+    } else {
+        base_style(theme).add_modifier(Modifier::BOLD)
+    }
+    .add_modifier(if pending {
+        Modifier::ITALIC
+    } else {
+        Modifier::empty()
+    });
+    let max_width = usize::from(width.saturating_sub(COMPOSER_PROMPT_WIDTH).max(1));
+    let mut lines = vec![Line::default()];
+    for (index, wrapped_line) in wrapped_terminal_lines(content, max_width)
+        .into_iter()
+        .take(MAX_RENDER_LINES.saturating_sub(lines.len()))
+        .enumerate()
+    {
+        let prefix = if index == 0 {
+            Span::styled(format!("{prompt} "), prompt_style)
+        } else {
+            Span::raw("  ")
+        };
+        lines.push(Line::from(vec![
+            prefix,
+            Span::styled(wrapped_line, content_style),
+        ]));
+    }
+    append_terminal_status(&mut lines, entry, theme);
+    if !pending && prompt != '/' {
+        lines.push(Line::styled(
+            "─".repeat(usize::from(width)),
+            muted_style(theme),
+        ));
+    }
+    lines
+}
+
+fn assistant_message_lines(
+    entry: &TranscriptEntry,
+    width: u16,
+    theme: ResolvedTheme,
+) -> Vec<Line<'static>> {
+    let max_width = usize::from(width.saturating_sub(COMPOSER_PROMPT_WIDTH).max(1));
+    let mut lines = vec![Line::default()];
+    lines.extend(
+        wrapped_terminal_lines(&entry.text, max_width)
+            .into_iter()
+            .take(MAX_RENDER_LINES.saturating_sub(lines.len()))
+            .map(|wrapped_line| {
+                Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(wrapped_line, base_style(theme)),
+                ])
+            }),
+    );
+    append_terminal_status(&mut lines, entry, theme);
+    lines
+}
+
+fn append_terminal_status(
+    lines: &mut Vec<Line<'static>>,
+    entry: &TranscriptEntry,
+    theme: ResolvedTheme,
+) {
+    let status = match entry.status {
+        EntryStatus::Failed => entry
+            .details
+            .get("error")
+            .and_then(|value| value.as_str())
+            .map_or_else(|| "failed".to_owned(), |error| format!("failed: {error}")),
+        EntryStatus::Cancelled => "cancelled".to_owned(),
+        EntryStatus::Streaming | EntryStatus::Completed => return,
+    };
+    lines.push(Line::from(vec![
+        Span::raw("  "),
+        Span::styled(
+            format!("({})", sanitize_inline(&status)),
+            error_style(theme),
+        ),
+    ]));
+}
+
+fn wrapped_terminal_lines(input: &str, width: usize) -> Vec<String> {
+    let sanitized = sanitize_terminal(input, RenderLimits::default());
+    let mut wrapped = Vec::new();
+    for logical_line in sanitized.split('\n') {
+        wrap_visual_line(logical_line, width.max(1), &mut wrapped);
+    }
+    if wrapped.is_empty() {
+        wrapped.push(String::new());
+    }
+    wrapped
+}
+
+fn wrap_visual_line(line: &str, width: usize, output: &mut Vec<String>) {
+    if line.is_empty() {
+        output.push(String::new());
+        return;
+    }
+    let mut current = String::new();
+    let mut current_width = 0usize;
+    for grapheme in line.graphemes(true) {
+        let grapheme_width = UnicodeWidthStr::width(grapheme).max(1);
+        if current_width > 0 && current_width.saturating_add(grapheme_width) > width {
+            output.push(std::mem::take(&mut current));
+            current_width = 0;
+        }
+        current.push_str(grapheme);
+        current_width = current_width.saturating_add(grapheme_width);
+    }
+    if !current.is_empty() {
+        output.push(current);
+    }
 }
 
 #[must_use]
@@ -374,13 +929,9 @@ fn base_style(theme: ResolvedTheme) -> Style {
         return Style::default();
     }
     match theme.theme {
-        Theme::Light => Style::default().fg(Color::Black).bg(Color::White),
-        Theme::Dark | Theme::System => Style::default().fg(Color::White).bg(Color::Black),
+        Theme::Light => Style::default().fg(Color::Black),
+        Theme::Dark | Theme::System => Style::default().fg(Color::White),
     }
-}
-
-fn user_style(theme: ResolvedTheme) -> Style {
-    colored(theme, Color::Cyan).add_modifier(Modifier::BOLD)
 }
 
 fn assistant_style(theme: ResolvedTheme) -> Style {
@@ -411,12 +962,12 @@ fn muted_style(theme: ResolvedTheme) -> Style {
     colored(theme, Color::DarkGray)
 }
 
-fn status_style(theme: ResolvedTheme, warning: bool) -> Style {
-    if warning {
-        warning_style(theme)
-    } else {
-        muted_style(theme)
-    }
+fn orange_style(theme: ResolvedTheme) -> Style {
+    colored(theme, MISTRAL_ORANGE).add_modifier(Modifier::BOLD)
+}
+
+fn secondary_style(theme: ResolvedTheme) -> Style {
+    colored(theme, Color::Cyan)
 }
 
 fn colored(theme: ResolvedTheme, color: Color) -> Style {
@@ -441,6 +992,47 @@ mod tests {
             theme: Theme::Dark,
             colors_enabled,
         }
+    }
+
+    fn test_context(secret_input: bool) -> UiContext<'static> {
+        UiContext {
+            cwd: Path::new("/workspace"),
+            agent_name: " default ",
+            secret_input,
+            banner: BannerContext {
+                version: "2.23.2",
+                model: "mistral-medium-3.5",
+                thinking: "high",
+                models_count: 3,
+                skills_count: 53,
+                mcp_servers_enabled: 0,
+                mcp_servers_total: 0,
+                connectors_connected: 0,
+                connectors_total: 17,
+                hooks_count: 0,
+                plan: Some("Free"),
+            },
+            tokens: TokenState {
+                max_tokens: 200_000,
+                current_tokens: 0,
+            },
+        }
+    }
+
+    fn draw_test(
+        frame: &mut Frame<'_>,
+        state: &mut TuiState,
+        editor: &PromptEditor,
+        secret_input: bool,
+    ) {
+        draw(
+            frame,
+            state,
+            editor,
+            &CompletionEngine::default(),
+            theme(false),
+            test_context(secret_input),
+        );
     }
 
     #[test]
@@ -484,7 +1076,7 @@ mod tests {
         });
         let editor = PromptEditor::default();
         terminal
-            .draw(|frame| draw(frame, &mut state, &editor, theme(false), false))
+            .draw(|frame| draw_test(frame, &mut state, &editor, false))
             .expect("snapshot renders");
         let text = terminal
             .backend()
@@ -501,7 +1093,7 @@ mod tests {
     }
 
     #[test]
-    fn no_color_snapshot_still_exposes_semantic_labels() {
+    fn notices_follow_the_upstream_user_command_message_contract() {
         let entry = TranscriptEntry {
             id: "notice".to_owned(),
             revision: 1,
@@ -511,8 +1103,129 @@ mod tests {
             details: serde_json::Value::Null,
         };
         let lines = semantic_lines(&entry, 40, theme(false));
-        assert_eq!(lines[0].to_string(), "[NOTICE] (complete)");
-        assert_eq!(lines[1].to_string(), "scheduled loop fired");
+        assert_eq!(lines[0].to_string(), "  ⎣ scheduled loop fired");
+        assert!(!lines[0].to_string().contains("[NOTICE]"));
+    }
+
+    #[test]
+    fn user_messages_follow_the_upstream_prompt_and_separator_contract() {
+        let entry = TranscriptEntry {
+            id: "user".to_owned(),
+            revision: 1,
+            kind: TranscriptKind::UserMessage,
+            text: "/help".to_owned(),
+            status: EntryStatus::Completed,
+            details: serde_json::Value::Null,
+        };
+        let lines = semantic_lines(&entry, 24, theme(false));
+        assert_eq!(lines[1].to_string(), "/ help");
+        assert_eq!(lines.len(), 2);
+        assert!(!lines.iter().any(|line| line.to_string().contains("[USER]")));
+
+        let mut prompt = entry;
+        prompt.text = "hello".to_owned();
+        let lines = semantic_lines(&prompt, 24, theme(false));
+        assert_eq!(lines[1].to_string(), "> hello");
+        assert_eq!(lines[2].to_string(), "─".repeat(24));
+    }
+
+    #[test]
+    fn messages_wrap_without_losing_status_or_content() {
+        let entry = TranscriptEntry {
+            id: "assistant".to_owned(),
+            revision: 1,
+            kind: TranscriptKind::AssistantMessage,
+            text: "abcdefghijkl".to_owned(),
+            status: EntryStatus::Failed,
+            details: json!({"error": "network"}),
+        };
+        let lines = semantic_lines(&entry, 7, theme(false));
+        assert_eq!(lines[1].to_string(), "  abcde");
+        assert_eq!(lines[2].to_string(), "  fghij");
+        assert_eq!(lines[3].to_string(), "  kl");
+        assert_eq!(lines[4].to_string(), "  (failed: network)");
+    }
+
+    #[test]
+    fn composer_uses_upstream_chrome_modes_completion_and_footer() {
+        let backend = TestBackend::new(84, 30);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut state = TuiState::new("session");
+        let mut editor = PromptEditor::default();
+        editor.set_text("/he");
+        let mut completion = CompletionEngine::default();
+        completion
+            .refresh(&editor, Path::new("/workspace"))
+            .expect("slash completion");
+
+        terminal
+            .draw(|frame| {
+                draw(
+                    frame,
+                    &mut state,
+                    &editor,
+                    &completion,
+                    theme(true),
+                    test_context(false),
+                );
+            })
+            .expect("composer renders");
+
+        let text = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(text.contains(" default "));
+        assert!(text.contains("Show commands and shortcuts"));
+        assert!(text.contains("/workspace"));
+        assert!(text.contains("Mistral Vibe v2.23.2 · mistral-medium-3.5[high] · Free"));
+        assert!(text.contains("3 models · 0/17 connectors · 0 MCP servers · 53 skills"));
+        assert!(text.contains("Type /help for more information"));
+        assert!(text.contains("0/200k tokens (0%)"));
+        assert!(!text.contains("Transcript"));
+        assert!(!text.contains("Prompt"));
+        assert!(!text.contains("connected |"));
+        assert_eq!(
+            terminal
+                .backend()
+                .buffer()
+                .cell((2, 25))
+                .expect("composer body cell")
+                .bg,
+            Color::Reset
+        );
+    }
+
+    #[test]
+    fn context_progress_uses_the_official_compact_format() {
+        assert_eq!(
+            format_context_progress(TokenState {
+                max_tokens: 200_000,
+                current_tokens: 12_345,
+            }),
+            "12k/200k tokens (6%)"
+        );
+        assert_eq!(
+            format_context_progress(TokenState {
+                max_tokens: 2_000_000,
+                current_tokens: 2_500_000,
+            }),
+            "2.5M/2.0M tokens (100%)"
+        );
+    }
+
+    #[test]
+    fn composer_only_promotes_modes_supported_by_the_rust_dispatcher() {
+        let mut editor = PromptEditor::default();
+        editor.set_text("/help");
+        assert_eq!(editor_mode(&editor, false), ('/', 1));
+        editor.set_text("!pwd");
+        assert_eq!(editor_mode(&editor, false), ('>', 0));
+        editor.set_text("&remote");
+        assert_eq!(editor_mode(&editor, false), ('>', 0));
     }
 
     #[test]
@@ -522,15 +1235,7 @@ mod tests {
         let mut state = TuiState::new("session");
         state.push_diagnostic("Keyring unavailable; run /setup after repairing access");
         terminal
-            .draw(|frame| {
-                draw(
-                    frame,
-                    &mut state,
-                    &PromptEditor::default(),
-                    theme(false),
-                    false,
-                );
-            })
+            .draw(|frame| draw_test(frame, &mut state, &PromptEditor::default(), false))
             .expect("diagnostic renders");
         let text = terminal
             .backend()
@@ -552,14 +1257,14 @@ mod tests {
         editor.select(1..2);
 
         terminal
-            .draw(|frame| draw(frame, &mut state, &editor, theme(false), false))
+            .draw(|frame| draw_test(frame, &mut state, &editor, false))
             .expect("prompt renders");
 
-        let input_y = 5;
+        let input_y = 4;
         let selected = terminal
             .backend()
             .buffer()
-            .cell((2, input_y))
+            .cell((3, input_y))
             .expect("selected cell");
         assert_eq!(selected.symbol(), "β");
         assert!(selected.modifier.contains(Modifier::REVERSED));
@@ -567,7 +1272,7 @@ mod tests {
             terminal
                 .get_cursor_position()
                 .expect("rendered cursor position"),
-            ratatui::layout::Position::new(3, input_y)
+            ratatui::layout::Position::new(4, input_y)
         );
     }
 
@@ -587,6 +1292,7 @@ mod tests {
                 "line-four",
                 "line-five",
                 "line-six",
+                "line-seven",
             ]
             .join("\n"),
             status: EntryStatus::Completed,
@@ -594,15 +1300,7 @@ mod tests {
         });
 
         terminal
-            .draw(|frame| {
-                draw(
-                    frame,
-                    &mut state,
-                    &PromptEditor::default(),
-                    theme(false),
-                    false,
-                );
-            })
+            .draw(|frame| draw_test(frame, &mut state, &PromptEditor::default(), false))
             .expect("latest semantic lines render");
         let latest = terminal
             .backend()
@@ -612,19 +1310,11 @@ mod tests {
             .map(|cell| cell.symbol())
             .collect::<String>();
         assert!(!latest.contains("line-one"));
-        assert!(latest.contains("line-six"));
+        assert!(latest.contains("line-seven"));
 
         assert!(state.scroll_up(2));
         terminal
-            .draw(|frame| {
-                draw(
-                    frame,
-                    &mut state,
-                    &PromptEditor::default(),
-                    theme(false),
-                    false,
-                );
-            })
+            .draw(|frame| draw_test(frame, &mut state, &PromptEditor::default(), false))
             .expect("older semantic lines render");
         let scrolled = terminal
             .backend()
@@ -634,6 +1324,6 @@ mod tests {
             .map(|cell| cell.symbol())
             .collect::<String>();
         assert!(scrolled.contains("line-one"));
-        assert!(!scrolled.contains("line-six"));
+        assert!(!scrolled.contains("line-seven"));
     }
 }

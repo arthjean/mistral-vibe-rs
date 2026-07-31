@@ -34,9 +34,10 @@ use self::controls::{
     PendingCallback, UserInputChoice,
 };
 use self::input::{
-    CompletionEngine, ExternalEditorPort, PromptEditor, SystemExternalEditor, prepare_submission,
+    CompletionAction, CompletionEngine, ExternalEditorPort, PromptEditor, SystemExternalEditor,
+    normalize_pasted_text, prepare_submission,
 };
-use self::render::draw;
+use self::render::{BannerContext, TokenState, UiContext, draw};
 use self::setup::{
     CredentialStore, EnvironmentThemeDetector, NativeCredentialStore, NotificationPreference,
     ResolvedTheme, SetupCompletion, SetupFlow, SetupProgress, TerminalThemeDetector, Theme,
@@ -58,6 +59,7 @@ const MAX_CALLBACK_DETAIL_BYTES: usize = 64 * 1024;
 const MAX_CALLBACK_QUESTIONS: usize = 16;
 const MAX_CALLBACK_OPTIONS: usize = 32;
 const MAX_CALLBACK_TEXT_BYTES: usize = 8 * 1024;
+const DEFAULT_CONTEXT_WINDOW: u64 = 200_000;
 
 #[derive(Debug, Deserialize)]
 struct PublicHistoryList {
@@ -95,11 +97,43 @@ struct InteractiveRuntime {
     service: HeadlessService<LiveTurnDriver>,
     session_id: String,
     model: String,
+    thinking: String,
     mode: String,
+    agent_name: String,
+    banner: BannerMetrics,
+    context_tokens: u64,
+    context_window: u64,
     auto_approve: bool,
     clear_context_after_turn: bool,
     cloud: CloudWorkflowState,
     telemetry: Option<Arc<CliTelemetryObserver>>,
+}
+
+#[derive(Debug, Clone)]
+struct BannerMetrics {
+    models_count: usize,
+    skills_count: usize,
+    mcp_servers_enabled: usize,
+    mcp_servers_total: usize,
+    connectors_connected: usize,
+    connectors_total: usize,
+    hooks_count: usize,
+    plan: Option<String>,
+}
+
+impl Default for BannerMetrics {
+    fn default() -> Self {
+        Self {
+            models_count: 1,
+            skills_count: 0,
+            mcp_servers_enabled: 0,
+            mcp_servers_total: 0,
+            connectors_connected: 0,
+            connectors_total: 0,
+            hooks_count: 0,
+            plan: None,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -133,6 +167,10 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     let mut runtime = initial_credential
         .map(|credential| start_runtime(&arguments, &working_directory, credential))
         .transpose()?;
+    let fallback_banner = runtime.as_ref().map_or_else(
+        || local_banner_metrics(&arguments, &working_directory),
+        |runtime| runtime.banner.clone(),
+    );
     let session_id = runtime
         .as_ref()
         .map_or_else(|| "setup".to_owned(), |runtime| runtime.session_id.clone());
@@ -197,8 +235,57 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
             drain_updates(&mut state, runtime.as_mut(), active.as_mut(), &mut controls);
             drain_callback_requests(runtime.as_mut(), &mut state, &mut controls);
             finish_active(&mut state, &mut controls, &mut runtime, &mut active).await?;
+            if let Err(error) = completion.poll() {
+                completion.cancel();
+                state.push_diagnostic(error.to_string());
+            }
+            let runtime_view = runtime.as_ref();
+            let agent_name =
+                runtime_view.map_or("default", |runtime| runtime.agent_name.as_str());
+            let border_title = format!(" {} ", agent_name.to_lowercase());
+            let banner = runtime_view.map_or(&fallback_banner, |runtime| &runtime.banner);
+            let model =
+                runtime_view.map_or(arguments.model.as_str(), |runtime| runtime.model.as_str());
+            let thinking = runtime_view.map_or("off", |runtime| runtime.thinking.as_str());
+            let tokens = runtime_view.map_or(
+                TokenState {
+                    max_tokens: arguments.max_tokens.unwrap_or(DEFAULT_CONTEXT_WINDOW),
+                    current_tokens: 0,
+                },
+                |runtime| TokenState {
+                    max_tokens: runtime.context_window,
+                    current_tokens: runtime.context_tokens,
+                },
+            );
             terminal
-                .draw(|frame| draw(frame, &mut state, &editor, theme, secret_input))
+                .draw(|frame| {
+                    draw(
+                        frame,
+                        &mut state,
+                        &editor,
+                        &completion,
+                        theme,
+                        UiContext {
+                            cwd: &working_directory,
+                            agent_name: &border_title,
+                            secret_input,
+                            banner: BannerContext {
+                                version: env!("CARGO_PKG_VERSION"),
+                                model,
+                                thinking,
+                                models_count: banner.models_count,
+                                skills_count: banner.skills_count,
+                                mcp_servers_enabled: banner.mcp_servers_enabled,
+                                mcp_servers_total: banner.mcp_servers_total,
+                                connectors_connected: banner.connectors_connected,
+                                connectors_total: banner.connectors_total,
+                                hooks_count: banner.hooks_count,
+                                plan: banner.plan.as_deref(),
+                            },
+                            tokens,
+                        },
+                    );
+                })
                 .map_err(|error| CliError::Terminal(error.to_string()))?;
             tokio::select! {
                 signal = tokio::signal::ctrl_c() => {
@@ -354,10 +441,11 @@ async fn handle_terminal_event(
     match event {
         Event::Resize(width, height) => state.resize(width, height),
         Event::Paste(text) => {
-            completion.cancel();
+            let text = normalize_pasted_text(working_directory, &text);
             if let Err(error) = editor.paste(&text) {
                 state.push_diagnostic(error.to_string());
             }
+            refresh_completion(completion, editor, working_directory, *secret_input, state);
         }
         Event::Mouse(mouse) => match mouse.kind {
             MouseEventKind::ScrollUp => {
@@ -583,11 +671,39 @@ async fn handle_key(
     terminal_guard: &mut TerminalGuard<CrosstermOps<std::io::Stdout>>,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<bool, CliError> {
-    let plain_tab = key.code == KeyCode::Tab && key.modifiers.is_empty();
-    if !plain_tab {
-        completion.cancel();
+    if !*secret_input && completion.view().is_some() {
+        match key.code {
+            KeyCode::Esc => {
+                completion.cancel();
+                return Ok(false);
+            }
+            KeyCode::Up if key.modifiers.is_empty() => {
+                completion.move_selection(-1);
+                return Ok(false);
+            }
+            KeyCode::Down if key.modifiers.is_empty() => {
+                completion.move_selection(1);
+                return Ok(false);
+            }
+            KeyCode::Tab if key.modifiers.is_empty() => {
+                if let Err(error) = completion.accept(editor) {
+                    state.push_diagnostic(error.to_string());
+                }
+                return Ok(false);
+            }
+            KeyCode::Enter if key.modifiers.is_empty() => match completion.accept(editor) {
+                Ok(CompletionAction::Applied) => return Ok(false),
+                Ok(CompletionAction::Submit) => {}
+                Err(error) => {
+                    state.push_diagnostic(error.to_string());
+                    return Ok(false);
+                }
+            },
+            _ => {}
+        }
     }
     if key.modifiers.contains(KeyModifiers::CONTROL) {
+        completion.cancel();
         match key.code {
             KeyCode::Char('c') => {
                 if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_mut()) {
@@ -624,12 +740,15 @@ async fn handle_key(
                     Ok(edited) => editor.set_text(edited),
                     Err(error) => state.push_diagnostic(error),
                 }
+                refresh_completion(completion, editor, working_directory, *secret_input, state);
                 return Ok(false);
             }
             KeyCode::Char('a') => editor.move_home(false),
             KeyCode::Char('e') => editor.move_end(false),
+            KeyCode::Char('j') => editor.insert("\n"),
             _ => {}
         }
+        refresh_completion(completion, editor, working_directory, *secret_input, state);
         return Ok(false);
     }
     match key.code {
@@ -843,7 +962,11 @@ async fn handle_key(
             state.scroll_down(10);
         }
         KeyCode::Tab if !*secret_input => {
-            if let Err(error) = completion.complete_prompt(editor, working_directory) {
+            refresh_completion(completion, editor, working_directory, false, state);
+            if completion.view().is_some()
+                && let Err(error) = completion.accept(editor)
+            {
+                completion.cancel();
                 state.push_diagnostic(error.to_string());
             }
         }
@@ -853,7 +976,25 @@ async fn handle_key(
         KeyCode::Char(character) => editor.insert(&character.to_string()),
         _ => {}
     }
+    refresh_completion(completion, editor, working_directory, *secret_input, state);
     Ok(false)
+}
+
+fn refresh_completion(
+    completion: &mut CompletionEngine,
+    editor: &PromptEditor,
+    working_directory: &Path,
+    secret_input: bool,
+    state: &mut TuiState,
+) {
+    if secret_input {
+        completion.cancel();
+        return;
+    }
+    if let Err(error) = completion.refresh(editor, working_directory) {
+        completion.cancel();
+        state.push_diagnostic(error.to_string());
+    }
 }
 
 async fn handle_runtime_command(
@@ -1138,6 +1279,7 @@ async fn handle_runtime_command(
                         )
                         .is_some()
                         {
+                            runtime.thinking = (*value).to_owned();
                             push_local_notice(
                                 state,
                                 "Thinking preference and active session updated",
@@ -1171,6 +1313,7 @@ async fn handle_runtime_command(
                     )
                     .is_some()
                     {
+                        runtime.agent_name = (*value).to_owned();
                         push_local_notice(state, "Session agent updated", EntryStatus::Completed);
                     }
                 }
@@ -1378,6 +1521,9 @@ fn update_session_limit(
             )
             .is_some()
             {
+                if key == "tokens" {
+                    runtime.context_window = value;
+                }
                 push_local_notice(state, "Session limits updated", EntryStatus::Completed);
             }
         }
@@ -1887,7 +2033,14 @@ fn overlay_latest_saved_history(
         "session/rewind/read",
         json!({"sessionId": state.session_id}),
     ) {
-        Ok(result) => result.get("messageCount").and_then(Value::as_u64),
+        Ok(result) => {
+            runtime.context_tokens = result
+                .get("statistics")
+                .and_then(|statistics| statistics.get("context_tokens"))
+                .and_then(Value::as_u64)
+                .unwrap_or_default();
+            result.get("messageCount").and_then(Value::as_u64)
+        }
         Err(_) => None,
     };
     let Some(message_count) = count.and_then(|count| usize::try_from(count).ok()) else {
@@ -2117,6 +2270,7 @@ fn start_runtime(
     credential: String,
 ) -> Result<InteractiveRuntime, CliError> {
     let release3 = release3_service(arguments, working_directory)?;
+    let mut banner = banner_metrics_from_release3(&release3, arguments, working_directory);
     let preferences = startup_preferences(arguments, &release3)?;
     let release4 = Release4Service::production(
         VibeCodeCloudConfig::from_credential(credential.clone())
@@ -2157,25 +2311,110 @@ fn start_runtime(
             .map(|price| (price * 1_000_000.0).round() as u64),
         mode: Some(preferences.mode.clone()),
         thinking: preferences.thinking,
-        reasoning_effort: preferences.reasoning_effort,
+        reasoning_effort: preferences.reasoning_effort.clone(),
         auto_approve: arguments.auto_approve,
         resume: arguments.resume.clone(),
         continue_session: arguments.continue_session,
     })?;
+    refresh_server_banner_metrics(&mut service, &mut banner);
     let session = service.session(&session_id)?;
     Ok(InteractiveRuntime {
         service,
         session_id,
         model: preferences.model,
+        thinking: preferences
+            .reasoning_effort
+            .unwrap_or_else(|| "off".to_owned()),
         mode: session
             .intent
             .mode
             .unwrap_or_else(|| preferences.mode.clone()),
+        agent_name: arguments
+            .agent
+            .clone()
+            .unwrap_or_else(|| "default".to_owned()),
+        banner,
+        context_tokens: 0,
+        context_window: arguments.max_tokens.unwrap_or(DEFAULT_CONTEXT_WINDOW),
         auto_approve: session.intent.auto_approve,
         clear_context_after_turn: false,
         cloud: CloudWorkflowState::default(),
         telemetry,
     })
+}
+
+fn local_banner_metrics(arguments: &Arguments, working_directory: &Path) -> BannerMetrics {
+    release3_service(arguments, working_directory).map_or_else(
+        |_| BannerMetrics::default(),
+        |release3| banner_metrics_from_release3(&release3, arguments, working_directory),
+    )
+}
+
+fn banner_metrics_from_release3(
+    release3: &Release3Service,
+    arguments: &Arguments,
+    working_directory: &Path,
+) -> BannerMetrics {
+    let mut banner = BannerMetrics::default();
+    if let Ok(dispatch) = release3.dispatch("skills/list", &BTreeMap::new()) {
+        banner.skills_count = dispatch
+            .result
+            .get("skills")
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len);
+    }
+    if let Ok(servers) = release3.mcp_servers_for_session(working_directory, arguments.trust, &[]) {
+        banner.mcp_servers_total = servers.len();
+        banner.mcp_servers_enabled = servers.iter().filter(|server| server.enabled).count();
+    }
+    banner
+}
+
+fn refresh_server_banner_metrics(
+    service: &mut HeadlessService<LiveTurnDriver>,
+    banner: &mut BannerMetrics,
+) {
+    if let Ok(result) = service.public_call("connectors/read", json!({}))
+        && let Some(counts) = result.get("counts")
+    {
+        banner.connectors_connected = json_usize(counts.get("connected"));
+        banner.connectors_total = json_usize(counts.get("total"));
+    }
+    if let Ok(result) = service.public_call("mcp/read", json!({}))
+        && let Some(sources) = result
+            .get("mcp")
+            .and_then(|mcp| mcp.get("sources"))
+            .and_then(Value::as_array)
+    {
+        banner.mcp_servers_total = sources.len();
+        banner.mcp_servers_enabled = sources
+            .iter()
+            .filter(|source| {
+                source
+                    .get("status")
+                    .and_then(Value::as_str)
+                    .is_none_or(|status| status != "disabled")
+            })
+            .count();
+    }
+    if let Ok(result) = service.public_call("diagnostics/list", json!({})) {
+        banner.hooks_count = json_usize(result.get("hooksCount"));
+    }
+    if let Ok(result) = service.public_call("account/read", json!({})) {
+        banner.plan = result
+            .get("account")
+            .and_then(|account| account.get("plan"))
+            .and_then(|plan| plan.get("title"))
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned);
+    }
+}
+
+fn json_usize(value: Option<&Value>) -> usize {
+    value
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or_default()
 }
 
 struct StartupPreferences {
@@ -2449,6 +2688,7 @@ async fn finish_active(
         .ok_or_else(|| CliError::Terminal("interactive runtime disappeared".to_owned()))?;
     match outcome {
         Ok(outcome) => {
+            runtime.context_tokens = outcome.context_tokens;
             runtime.service.finish_reserved(&reservation, outcome)?;
             controls.complete_turn(&turn_id, "Turn complete");
             state.waiting = false;
@@ -2476,6 +2716,7 @@ async fn finish_active(
             json!({"sessionId": runtime.session_id}),
         ) {
             Ok(_) => {
+                runtime.context_tokens = 0;
                 resync_current_projection(runtime, state);
                 sync_active_callbacks(runtime, state, controls);
                 push_local_notice(
@@ -3009,7 +3250,12 @@ mod tests {
             service,
             session_id,
             model: "test-model".to_owned(),
+            thinking: "off".to_owned(),
             mode: "code".to_owned(),
+            agent_name: "default".to_owned(),
+            banner: BannerMetrics::default(),
+            context_tokens: 0,
+            context_window: DEFAULT_CONTEXT_WINDOW,
             auto_approve: true,
             clear_context_after_turn: false,
             cloud: CloudWorkflowState::default(),

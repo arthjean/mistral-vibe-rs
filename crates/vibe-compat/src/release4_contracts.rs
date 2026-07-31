@@ -26,7 +26,9 @@ use vibe_cli::tui::input::{
     ClipboardPort, CompletionCandidate, CompletionEngine, CompletionKind, ExternalEditorPort,
     InputError, PromptEditor, prepare_submission,
 };
-use vibe_cli::tui::render::{RenderLimits, draw, sanitize_terminal};
+use vibe_cli::tui::render::{
+    BannerContext, RenderLimits, TokenState, UiContext, draw, sanitize_terminal,
+};
 use vibe_cli::tui::setup::{
     CredentialError, CredentialStore, DetectedTheme, SetupError, SetupState, Theme, UpdateState,
     VoiceState, detect_terminal_theme, resolve_theme,
@@ -223,7 +225,7 @@ pub(crate) fn tui_rendering_contract() -> Result<Value, String> {
     state.entries = vec![transcript_entry(
         "answer",
         1,
-        TranscriptKind::AssistantMessage,
+        TranscriptKind::Effect,
         "answer\n\u{1b}[31munsafe",
         EntryStatus::Completed,
         json!({
@@ -236,8 +238,39 @@ pub(crate) fn tui_rendering_contract() -> Result<Value, String> {
     let backend = TestBackend::new(72, 18);
     let mut terminal = Terminal::new(backend).map_err(|error| error.to_string())?;
     let theme = resolve_theme(Theme::System, DetectedTheme::Dark, true);
+    let completion = CompletionEngine::default();
     terminal
-        .draw(|frame| draw(frame, &mut state, &editor, theme, false))
+        .draw(|frame| {
+            draw(
+                frame,
+                &mut state,
+                &editor,
+                &completion,
+                theme,
+                UiContext {
+                    cwd: Path::new("/workspace"),
+                    agent_name: " default ",
+                    secret_input: false,
+                    banner: BannerContext {
+                        version: env!("CARGO_PKG_VERSION"),
+                        model: "test-model",
+                        thinking: "off",
+                        models_count: 1,
+                        skills_count: 0,
+                        mcp_servers_enabled: 0,
+                        mcp_servers_total: 0,
+                        connectors_connected: 0,
+                        connectors_total: 0,
+                        hooks_count: 0,
+                        plan: None,
+                    },
+                    tokens: TokenState {
+                        max_tokens: 200_000,
+                        current_tokens: 0,
+                    },
+                },
+            );
+        })
         .map_err(|error| error.to_string())?;
     let snapshot = test_backend_text(&terminal);
     let markup_literal = sanitize_terminal(
