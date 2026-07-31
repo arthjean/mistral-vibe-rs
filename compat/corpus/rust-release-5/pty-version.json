@@ -1,0 +1,24 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "pty-version",
+  "matrixRow": "surface.tui-workflows",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "pty",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [
+      "--version"
+    ],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": 0,
+    "jsonFrames": [],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": "vibe 2.23.1\r\n",
+    "failure": null
+  }
+}

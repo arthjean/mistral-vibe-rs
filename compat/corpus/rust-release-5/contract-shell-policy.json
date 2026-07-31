@@ -1,0 +1,40 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-shell-policy",
+  "matrixRow": "surface.shell-policy",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "schema",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "destructive": "never",
+          "findExec": "ask",
+          "gitNoIndex": "ask",
+          "outsideRead": "ask",
+          "safeRead": "always"
+        },
+        "contract": "shell_policy",
+        "features": [
+          "posix",
+          "git_bash",
+          "cmd",
+          "powershell"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

@@ -2713,6 +2713,7 @@ dependencies = [
  "hex",
  "ratatui",
  "regex",
+ "secrecy",
  "serde",
  "serde_json",
  "sha2",

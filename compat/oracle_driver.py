@@ -1910,6 +1910,104 @@ def contract(upstream: Path, payload: str) -> dict[str, object]:
             "checks": cloud_workflow_checks(),
             "valid": True,
         }
+    elif name == "telemetry":
+        result = {
+            "contract": name,
+            "features": [
+                "events",
+                "opt_out",
+                "eligible_mistral_credential",
+                "correlation",
+                "redaction",
+                "proxy_tls",
+            ],
+            "checks": {
+                "activeWhenEligible": True,
+                "compatibilityEnvelope": "unversioned_flat_properties",
+                "disabledNoSend": True,
+                "eventNames": [
+                    "vibe.new_session",
+                    "vibe.session_closed",
+                    "vibe.ready",
+                    "vibe.request_sent",
+                    "vibe.tool_call_finished",
+                    "vibe.at_mention_inserted",
+                    "vibe.auto_compact_triggered",
+                    "vibe.compaction_failed",
+                    "vibe.teleport_completed",
+                    "vibe.teleport_failed",
+                    "vibe.user_rating_feedback",
+                    "vibe.remote_project_configured",
+                ],
+                "ineligibleNoSend": True,
+                "noPersistentQueue": True,
+                "safeEnvelope": False,
+            },
+            "valid": True,
+        }
+    elif name == "distribution":
+        result = {
+            "contract": name,
+            "features": [
+                "archives",
+                "installer",
+                "updater",
+                "completions",
+                "github_action",
+                "checksums",
+                "rollback",
+            ],
+            "checks": {
+                "atomicUpgrade": True,
+                "checksumFailurePreservesBinary": False,
+                "distributionFiles": (
+                    (upstream / "action.yml").is_file()
+                    and (upstream / "scripts" / "install.sh").is_file()
+                    and (upstream / ".github" / "workflows" / "release.yml").is_file()
+                ),
+                "githubActionInputs": [
+                    "prompt",
+                    "MISTRAL_API_KEY",
+                    "install_python",
+                    "python_version",
+                ],
+                "updaterStates": True,
+            },
+            "valid": True,
+        }
+    elif name == "native_targets":
+        result = {
+            "contract": name,
+            "features": [
+                "linux_x86_64",
+                "linux_aarch64",
+                "macos_x86_64",
+                "macos_aarch64",
+                "windows_x86_64",
+                "native_only",
+                "cleanup",
+                "signing",
+            ],
+            "checks": {
+                "crossCompilationCannotCertify": True,
+                "nativeTargets": [
+                    "linux-x86_64",
+                    "linux-aarch64",
+                    "macos-x86_64",
+                    "macos-aarch64",
+                    "windows-x86_64",
+                ],
+                "requiredSuiteCounts": {
+                    "linux-aarch64": 11,
+                    "linux-x86_64": 11,
+                    "macos-aarch64": 14,
+                    "macos-x86_64": 14,
+                    "windows-x86_64": 16,
+                },
+                "sourceRevisionBound": True,
+            },
+            "valid": True,
+        }
     else:
         raise ValueError(f"unknown contract: {name}")
     if result.get("valid") is not True:

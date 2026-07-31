@@ -210,6 +210,10 @@ pub struct CompatibilityReport {
     pub schema_version: u32,
     pub upstream_baseline: String,
     pub rust_build: String,
+    #[serde(default)]
+    pub source_revision: String,
+    #[serde(default)]
+    pub dirty_source: bool,
     pub release: u32,
     pub summary: BTreeMap<String, usize>,
     pub native_summary: BTreeMap<String, usize>,

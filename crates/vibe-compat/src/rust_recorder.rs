@@ -52,11 +52,14 @@ use vibe_core::tools::{
 use vibe_core::workspace::{EditOperation, ReviewManager, Workspace};
 use vibe_protocol::{Envelope, TransportKind, decode_frame};
 
-use crate::canonical::{canonicalize, volatility_evidence};
+use crate::canonical::{canonicalize, redact, volatility_evidence};
 use crate::model::{OracleOutcome, RecordedFixture, Scenario, ScenarioKind};
 use crate::release4_contracts::{
     acp_full_contract, cloud_workflows_contract, tui_controls_contract, tui_input_contract,
     tui_rendering_contract, tui_setup_contract, tui_shell_contract, tui_terminal_stack_contract,
+};
+use crate::release5_contracts::{
+    distribution_contract, native_targets_contract, telemetry_contract,
 };
 
 #[derive(Debug, Error)]
@@ -84,7 +87,8 @@ pub fn record_rust_all(
         let first = run_once(root, scenario)?;
         let second = run_once(root, scenario)?;
         let volatility = volatility_evidence(&first, &second, &scenario.volatile)?;
-        let outcome = canonicalize(&first, &scenario.volatile)?;
+        let mut outcome = canonicalize(&first, &scenario.volatile)?;
+        redact(&mut outcome, &[])?;
         let fixture = RecordedFixture {
             fixture_schema_version,
             scenario_id: scenario.id.clone(),
@@ -721,6 +725,48 @@ fn contract_result(
                 "failure_local_safety",
             ],
             "checks": cloud_workflows_contract().map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "telemetry" => json!({
+            "contract": name,
+            "features": [
+                "events",
+                "opt_out",
+                "eligible_mistral_credential",
+                "correlation",
+                "redaction",
+                "proxy_tls",
+            ],
+            "checks": telemetry_contract().map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "distribution" => json!({
+            "contract": name,
+            "features": [
+                "archives",
+                "installer",
+                "updater",
+                "completions",
+                "github_action",
+                "checksums",
+                "rollback",
+            ],
+            "checks": distribution_contract(root).map_err(|detail| failed(scenario, detail))?,
+            "valid": true,
+        }),
+        "native_targets" => json!({
+            "contract": name,
+            "features": [
+                "linux_x86_64",
+                "linux_aarch64",
+                "macos_x86_64",
+                "macos_aarch64",
+                "windows_x86_64",
+                "native_only",
+                "cleanup",
+                "signing",
+            ],
+            "checks": native_targets_contract().map_err(|detail| failed(scenario, detail))?,
             "valid": true,
         }),
         _ => return Err(failed(scenario, format!("unknown contract `{name}`"))),

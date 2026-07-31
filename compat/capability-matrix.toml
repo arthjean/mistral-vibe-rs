@@ -855,18 +855,25 @@ items = ["projects", "teleport", "push-approval", "scheduled-loops", "cancellati
 
 [[rows]]
 id = "surface.telemetry"
-owner = "US-041"
+owner = "US-044"
 support = "required-native"
 priority = "P1"
 source_paths = ["vibe/core/telemetry/send.py", "vibe/core/telemetry/types.py"]
 test_paths = ["tests/core/telemetry/test_telemetry_send.py"]
 symbols = ["TelemetryClient"]
 fixture_class = "telemetry"
-rust_status = "planned"
-divergence_status = "none"
+rust_status = "implemented"
+divergence_status = "intentional"
 dependencies = ["config.bootstrap"]
 required_release = 5
 items = ["events", "opt-out", "redaction", "proxy"]
+
+[rows.divergence]
+rationale = "The upstream flat unversioned properties envelope can represent arbitrary prompt, path, exception, and tool-output fields. The native client uses a schema-versioned envelope, nested typed metadata, bounded scalar attributes, and an intended-resource endpoint."
+scope = "Telemetry wire envelope and metadata field allowlist only; registered event names and opt-out eligibility remain compatible."
+upstream_fixture = "compat/corpus/upstream-2.23.1/contract-telemetry.json"
+rust_fixture = "compat/corpus/rust-release-5/contract-telemetry.json"
+documentation = "compat/divergences/telemetry-envelope.md"
 
 [[rows]]
 id = "surface.distribution"
@@ -877,22 +884,29 @@ source_paths = ["action.yml", "scripts/install.sh", ".github/workflows/release.y
 test_paths = ["scripts/ci"]
 symbols = ["vibe", "vibe-acp"]
 fixture_class = "artifact"
-rust_status = "planned"
-divergence_status = "none"
+rust_status = "implemented"
+divergence_status = "intentional"
 dependencies = ["surface.native-targets"]
 required_release = 5
 items = ["archives", "installer", "github-action", "checksums"]
 
+[rows.divergence]
+rationale = "The upstream Python and uv distribution surface does not provide the Rust-native signed archive, checksum-before-replace, atomic rollback, or approval-aware Action contract required by the native product."
+scope = "Artifact packaging, installation, update rollback, completions, and GitHub Action invocation; user-facing CLI and ACP behavior remains fixture-compatible."
+upstream_fixture = "compat/corpus/upstream-2.23.1/contract-distribution.json"
+rust_fixture = "compat/corpus/rust-release-5/contract-distribution.json"
+documentation = "compat/divergences/native-distribution.md"
+
 [[rows]]
 id = "surface.native-targets"
-owner = "US-044"
+owner = "US-041/US-042/US-043"
 support = "required-native"
 priority = "P0"
 source_paths = [".github/workflows/ci.yml", ".github/workflows/build-and-upload.yml"]
 test_paths = ["scripts/ci"]
 symbols = ["build", "test"]
 fixture_class = "platform"
-rust_status = "planned"
+rust_status = "blocked"
 divergence_status = "none"
 dependencies = ["foundation.workspace"]
 required_release = 5

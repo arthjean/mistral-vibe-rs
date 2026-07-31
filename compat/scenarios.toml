@@ -306,6 +306,27 @@ payload = '{"contract":"cloud_workflows"}'
 volatile = [{ pointer = "/filesystemDelta", placeholder = "<ENVIRONMENTAL>" }]
 
 [[scenarios]]
+id = "contract-telemetry"
+matrix_row = "surface.telemetry"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"telemetry"}'
+
+[[scenarios]]
+id = "contract-distribution"
+matrix_row = "surface.distribution"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"distribution"}'
+
+[[scenarios]]
+id = "contract-native-targets"
+matrix_row = "surface.native-targets"
+kind = "contract"
+comparison = "semantic"
+payload = '{"contract":"native_targets"}'
+
+[[scenarios]]
 id = "protocol-success-string-id"
 matrix_row = "protocol.app-server"
 kind = "protocol"

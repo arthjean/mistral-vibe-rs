@@ -1,0 +1,74 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-acp-full",
+  "matrixRow": "surface.acp",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [
+    {
+      "pointer": "/filesystemDelta",
+      "placeholder": "<ENVIRONMENTAL>",
+      "changedBetweenRuns": false
+    }
+  ],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "initialize": {
+            "closeSession": true,
+            "embeddedContext": true,
+            "forkSession": true,
+            "imagePrompts": true,
+            "listSessions": true,
+            "loadSession": true,
+            "protocolVersion": 1
+          },
+          "lifecycle": {
+            "activeCancelInterrupts": true,
+            "closeCancelsTasks": true,
+            "closeIdempotent": true,
+            "idleCancelNoop": true,
+            "spawnRejectedAfterClose": true
+          }
+        },
+        "clientTools": [
+          "fs/read_text_file",
+          "fs/write_text_file",
+          "terminal/create",
+          "terminal/output",
+          "terminal/wait_for_exit",
+          "terminal/kill",
+          "terminal/release"
+        ],
+        "contract": "acp_full",
+        "methods": [
+          "initialize",
+          "authenticate",
+          "session/new",
+          "session/load",
+          "session/list",
+          "session/fork",
+          "session/close",
+          "session/set_mode",
+          "session/set_config_option",
+          "session/prompt",
+          "session/cancel"
+        ],
+        "protocolVersion": 1,
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

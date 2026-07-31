@@ -1,0 +1,48 @@
+{
+  "fixtureSchemaVersion": 1,
+  "scenarioId": "contract-distribution",
+  "matrixRow": "surface.distribution",
+  "upstreamBaseline": "2.23.1",
+  "comparison": "semantic",
+  "stabilityRuns": 2,
+  "volatility": [],
+  "outcome": {
+    "argv": [],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "",
+    "exitStatus": null,
+    "jsonFrames": [
+      {
+        "checks": {
+          "atomicUpgrade": true,
+          "checksumFailurePreservesBinary": false,
+          "distributionFiles": true,
+          "githubActionInputs": [
+            "prompt",
+            "MISTRAL_API_KEY",
+            "install_python",
+            "python_version"
+          ],
+          "updaterStates": true
+        },
+        "contract": "distribution",
+        "features": [
+          "archives",
+          "installer",
+          "updater",
+          "completions",
+          "github_action",
+          "checksums",
+          "rollback"
+        ],
+        "valid": true
+      }
+    ],
+    "publicEvents": [],
+    "filesystemDelta": [],
+    "persistedState": null,
+    "terminalTranscript": null,
+    "failure": null
+  }
+}

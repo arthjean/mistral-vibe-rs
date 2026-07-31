@@ -210,10 +210,13 @@ pub fn build_report(
             }
         }
     }
+    let (source_revision, dirty_source) = source_state(root);
     CompatibilityReport {
         schema_version: 2,
         upstream_baseline: format!("mistral-vibe@{}", matrix.baseline_version),
         rust_build: rust_build(),
+        source_revision,
+        dirty_source,
         release,
         summary,
         native_summary,
@@ -246,9 +249,11 @@ pub fn write_reports(
 
 pub fn render_markdown(report: &CompatibilityReport) -> String {
     let mut output = format!(
-        "# Compatibility report\n\n- Baseline: `{}`\n- Rust build: `{}`\n- Release: `{}`\n- Native certification: `{}/{}` rows\n- Excluded boundaries documented: `{}/{}` rows\n\n",
+        "# Compatibility report\n\n- Baseline: `{}`\n- Rust build: `{}`\n- Source revision: `{}`\n- Dirty source: `{}`\n- Release: `{}`\n- Native certification: `{}/{}` rows\n- Excluded boundaries documented: `{}/{}` rows\n\n",
         report.upstream_baseline,
         report.rust_build,
+        report.source_revision,
+        report.dirty_source,
         report.release,
         report.native_summary.get("certified").copied().unwrap_or(0),
         report.native_summary.get("total").copied().unwrap_or(0),
@@ -456,6 +461,32 @@ fn semantic_difference(expected: &Value, actual: &Value, path: &str) -> Option<S
 
 fn rust_build() -> String {
     format!("mistral-vibe-rs@{}", env!("CARGO_PKG_VERSION"))
+}
+
+fn source_state(root: &Path) -> (String, bool) {
+    let revision = std::env::var("GITHUB_SHA")
+        .ok()
+        .filter(|value| value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .or_else(|| {
+            std::process::Command::new("git")
+                .current_dir(root)
+                .args(["rev-parse", "HEAD"])
+                .output()
+                .ok()
+                .filter(|output| output.status.success())
+                .and_then(|output| String::from_utf8(output.stdout).ok())
+                .map(|value| value.trim().to_owned())
+        })
+        .unwrap_or_default();
+    let status = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["status", "--porcelain=v1", "--untracked-files=normal"])
+        .output();
+    let dirty_source = match status {
+        Ok(output) if output.status.success() => !output.stdout.is_empty(),
+        _ => true,
+    };
+    (revision, dirty_source)
 }
 
 pub fn load_fixture(path: &Path) -> Result<RecordedFixture, DifferentialError> {
@@ -683,6 +714,8 @@ mod tests {
             schema_version: 2,
             upstream_baseline: "mistral-vibe@2.23.1".to_owned(),
             rust_build: "mistral-vibe-rs@0.0.1".to_owned(),
+            source_revision: "a".repeat(40),
+            dirty_source: false,
             release: 0,
             summary: BTreeMap::new(),
             native_summary: BTreeMap::new(),
