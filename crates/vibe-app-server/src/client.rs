@@ -11,9 +11,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
 use vibe_core::engine::{
-    CancellationToken, CompactionResult, Compactor, CompletionProvider, ConversationEngine,
-    EngineLimits, NoopEventObserver, SessionStats, SessionTranscriptSink, ToolExecutor, ToolFuture,
-    ToolStreamSink, TurnControl, TurnControlHandle, TurnOutcome,
+    CancellationToken, CompactionResult, Compactor, CompletionProvider, CompositeEventObserver,
+    ConversationEngine, EngineLimits, NoopEventObserver, SessionStats, SessionTranscriptSink,
+    ToolExecutor, ToolFuture, ToolStreamSink, TurnControl, TurnControlHandle, TurnOutcome,
 };
 use vibe_core::events::{
     ApplyOutcome, CallbackKind as EngineCallbackKind, EventEnvelope, LifecycleState, ModelMessage,
@@ -2508,6 +2508,7 @@ pub struct LiveTurnDriver {
     output_price_per_million_micros: u64,
     controls: Mutex<HashMap<(String, String), LiveTurnControl>>,
     pending_context: Mutex<HashMap<String, Vec<String>>>,
+    event_observer: Arc<dyn EventObserver>,
 }
 
 #[derive(Clone)]
@@ -2703,6 +2704,7 @@ impl LiveTurnDriver {
             output_price_per_million_micros: 0,
             controls: Mutex::new(HashMap::new()),
             pending_context: Mutex::new(HashMap::new()),
+            event_observer: Arc::new(NoopEventObserver),
         }
     }
 
@@ -2755,7 +2757,14 @@ impl LiveTurnDriver {
             output_price_per_million_micros: config.output_price_per_million_micros,
             controls: Mutex::new(HashMap::new()),
             pending_context: Mutex::new(HashMap::new()),
+            event_observer: Arc::new(NoopEventObserver),
         })
+    }
+
+    #[must_use]
+    pub fn with_event_observer(mut self, observer: Arc<dyn EventObserver>) -> Self {
+        self.event_observer = observer;
+        self
     }
 
     async fn run_engine(
@@ -2765,6 +2774,10 @@ impl LiveTurnDriver {
         controls: TurnControlHandle,
         observer: Arc<dyn EventObserver>,
     ) -> Result<TurnOutcome, DriverError> {
+        let observer: Arc<dyn EventObserver> = Arc::new(CompositeEventObserver::new(
+            observer,
+            Arc::clone(&self.event_observer),
+        ));
         let limits = EngineLimits {
             max_steps: reservation.intent.max_turns.unwrap_or(20),
             max_total_tokens: reservation.intent.max_tokens.unwrap_or(200_000),

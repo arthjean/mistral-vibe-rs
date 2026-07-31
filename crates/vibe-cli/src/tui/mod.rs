@@ -46,7 +46,10 @@ use self::state::{
     ApplyResult, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiSnapshot, TuiState,
 };
 use self::terminal::{CrosstermOps, TerminalGuard};
-use crate::{Arguments, CliError, price_per_million_micros, validate_arguments};
+use crate::{
+    Arguments, CliError, CliTelemetryObserver, price_per_million_micros, telemetry_event_observer,
+    validate_arguments,
+};
 
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const INITIAL_HISTORY_LIMIT: usize = 200;
@@ -96,6 +99,7 @@ struct InteractiveRuntime {
     auto_approve: bool,
     clear_context_after_turn: bool,
     cloud: CloudWorkflowState,
+    telemetry: Option<Arc<CliTelemetryObserver>>,
 }
 
 #[derive(Default)]
@@ -303,6 +307,9 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
             let _ = active.task.await;
         }
     }
+    let telemetry = runtime
+        .as_ref()
+        .and_then(|runtime| runtime.telemetry.clone());
     let (close_result, shutdown_result) = if let Some(mut runtime) = runtime {
         let session_id = runtime.session_id.clone();
         let close = runtime
@@ -315,11 +322,15 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     } else {
         (Ok(()), Ok(()))
     };
-    event_loop?;
-    restoration?;
-    interrupt_result?;
-    close_result?;
-    shutdown_result
+    let result = event_loop
+        .and(restoration)
+        .and(interrupt_result)
+        .and(close_result)
+        .and(shutdown_result);
+    if let Some(telemetry) = telemetry {
+        telemetry.flush().await;
+    }
+    result
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2112,10 +2123,15 @@ fn start_runtime(
             .map_err(|error| CliError::Terminal(error.to_string()))?,
     )
     .map_err(|error| CliError::Terminal(error.to_string()))?;
-    let driver = Arc::new(LiveTurnDriver::from_credential(
+    let telemetry = telemetry_event_observer(arguments, &credential, "tui")?;
+    let mut driver = LiveTurnDriver::from_credential(
         live_driver_config(arguments, &preferences.model)?,
         credential,
-    )?);
+    )?;
+    if let Some(observer) = telemetry.as_ref() {
+        driver = driver.with_event_observer(observer.clone());
+    }
+    let driver = Arc::new(driver);
     let server = AppServer::default()
         .using_release3_service(release3)
         .using_release4_service(release4);
@@ -2158,6 +2174,7 @@ fn start_runtime(
         auto_approve: session.intent.auto_approve,
         clear_context_after_turn: false,
         cloud: CloudWorkflowState::default(),
+        telemetry,
     })
 }
 
@@ -2996,6 +3013,7 @@ mod tests {
             auto_approve: true,
             clear_context_after_turn: false,
             cloud: CloudWorkflowState::default(),
+            telemetry: None,
         }
     }
 

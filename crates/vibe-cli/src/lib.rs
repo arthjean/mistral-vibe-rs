@@ -17,8 +17,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::{ArgAction, Parser, ValueEnum};
+use secrecy::SecretString;
 use serde::Serialize;
 use thiserror::Error;
+use url::Url;
 use vibe_app_server::client::{
     ClientError, HeadlessService, LiveDriverConfig, LiveTurnDriver, ProgrammaticTeleportEvent,
     ProgrammaticTurn, ProgrammaticUpdate, PublicTurnStopReason, SessionOptions, TurnDriver,
@@ -26,6 +28,10 @@ use vibe_app_server::client::{
 };
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
+use vibe_core::telemetry::{
+    ReqwestTelemetryTransport, TelemetryClient, TelemetryConfig, TelemetryEventObserver,
+    TelemetryMetadata,
+};
 
 pub const ADAPTER_NAME: &str = "vibe-cli";
 
@@ -79,6 +85,8 @@ pub struct Arguments {
     pub setup: bool,
     #[arg(long, action = ArgAction::SetTrue)]
     pub check_upgrade: bool,
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub telemetry: bool,
     #[arg(long)]
     pub worktree: Option<String>,
     #[arg(long, hide = true)]
@@ -128,7 +136,7 @@ pub async fn run(
         )
         .await
     } else {
-        let driver = LiveTurnDriver::from_environment(LiveDriverConfig {
+        let config = LiveDriverConfig {
             style: arguments.provider_style.clone(),
             endpoint: arguments.api_base.clone(),
             model: arguments.model.clone(),
@@ -137,9 +145,23 @@ pub async fn run(
             session_root: arguments.session_root.clone(),
             input_price_per_million_micros: price_per_million_micros(arguments.input_price)?,
             output_price_per_million_micros: price_per_million_micros(arguments.output_price)?,
+        };
+        let credential = std::env::var(&arguments.credential_environment).map_err(|_| {
+            vibe_app_server::client::DriverError::MissingCredentialEnvironment(
+                arguments.credential_environment.clone(),
+            )
         })?;
+        let telemetry = telemetry_event_observer(&arguments, &credential, "cli")?;
+        let mut driver = LiveTurnDriver::from_credential(config, credential)?;
+        if let Some(observer) = telemetry.as_ref() {
+            driver = driver.with_event_observer(observer.clone());
+        }
         let server = production_server(&arguments)?;
-        execute_with_server(arguments, driver, server, stdout, stderr).await
+        let result = execute_with_server(arguments, driver, server, stdout, stderr).await;
+        if let Some(observer) = telemetry {
+            observer.flush().await;
+        }
+        result
     }
 }
 
@@ -490,12 +512,46 @@ pub enum CliError {
     Teleport(String),
     #[error("terminal UI failed: {0}")]
     Terminal(String),
+    #[error("telemetry setup failed: {0}")]
+    Telemetry(String),
     #[error(transparent)]
     Json(serde_json::Error),
     #[error(transparent)]
     Client(#[from] ClientError),
     #[error(transparent)]
     Driver(#[from] vibe_app_server::client::DriverError),
+}
+
+pub(crate) type CliTelemetryObserver = TelemetryEventObserver<ReqwestTelemetryTransport>;
+
+pub(crate) fn telemetry_event_observer(
+    arguments: &Arguments,
+    credential: &str,
+    entrypoint: &str,
+) -> Result<Option<Arc<CliTelemetryObserver>>, CliError> {
+    if !arguments.telemetry || arguments.provider_style != "mistral" || credential.is_empty() {
+        return Ok(None);
+    }
+    let api_base =
+        Url::parse(&arguments.api_base).map_err(|error| CliError::Telemetry(error.to_string()))?;
+    let config = TelemetryConfig::new(
+        true,
+        &api_base,
+        Some(SecretString::from(credential.to_owned())),
+    )
+    .map_err(|error| CliError::Telemetry(error.to_string()))?;
+    let transport = ReqwestTelemetryTransport::try_new()
+        .map_err(|error| CliError::Telemetry(error.to_string()))?;
+    let metadata = TelemetryMetadata::new(
+        env!("CARGO_PKG_VERSION"),
+        format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+        entrypoint,
+    )
+    .map_err(|error| CliError::Telemetry(error.to_string()))?;
+    Ok(Some(Arc::new(TelemetryEventObserver::new(
+        TelemetryClient::new(config, transport),
+        metadata,
+    ))))
 }
 
 impl CliError {
@@ -559,6 +615,7 @@ mod tests {
             auto_approve: true,
             setup: false,
             check_upgrade: true,
+            telemetry: false,
             worktree: None,
             teleport: false,
             provider_style: "mistral".to_owned(),
@@ -591,6 +648,23 @@ mod tests {
         assert!(parsed.version.is_none());
         assert!(parsed.initial_prompt.is_none());
         assert!(parsed.prompt.is_none());
+    }
+
+    #[test]
+    fn telemetry_is_explicitly_opt_in() {
+        let disabled = arguments(OutputMode::Text);
+        assert!(
+            telemetry_event_observer(&disabled, "credential", "cli")
+                .expect("disabled telemetry")
+                .is_none()
+        );
+        let mut enabled = disabled;
+        enabled.telemetry = true;
+        assert!(
+            telemetry_event_observer(&enabled, "credential", "cli")
+                .expect("enabled telemetry")
+                .is_some()
+        );
     }
 
     #[tokio::test]

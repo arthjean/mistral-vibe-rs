@@ -16,5 +16,6 @@ pub mod prompt;
 pub mod provider;
 pub mod shell;
 pub mod storage;
+pub mod telemetry;
 pub mod tools;
 pub mod workspace;

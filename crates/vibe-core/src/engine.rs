@@ -155,6 +155,25 @@ pub trait EventObserver: Send + Sync {
     fn observe(&self, event: &EventEnvelope) -> Result<(), String>;
 }
 
+pub struct CompositeEventObserver {
+    primary: Arc<dyn EventObserver>,
+    secondary: Arc<dyn EventObserver>,
+}
+
+impl CompositeEventObserver {
+    #[must_use]
+    pub fn new(primary: Arc<dyn EventObserver>, secondary: Arc<dyn EventObserver>) -> Self {
+        Self { primary, secondary }
+    }
+}
+
+impl EventObserver for CompositeEventObserver {
+    fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
+        self.primary.observe(event)?;
+        self.secondary.observe(event)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct NoopEventObserver;
 

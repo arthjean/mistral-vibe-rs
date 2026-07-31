@@ -2689,6 +2689,7 @@ dependencies = [
  "keyring",
  "nix 0.30.1",
  "ratatui",
+ "secrecy",
  "serde",
  "serde_json",
  "sha2",
@@ -2701,6 +2702,7 @@ dependencies = [
  "unicode-width 0.2.0",
  "url",
  "vibe-app-server",
+ "vibe-core",
 ]
 
 [[package]]
