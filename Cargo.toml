@@ -3,7 +3,6 @@ members = [
     "crates/vibe-acp",
     "crates/vibe-app-server",
     "crates/vibe-cli",
-    "crates/vibe-compat",
     "crates/vibe-core",
     "crates/vibe-protocol",
 ]
@@ -62,5 +61,4 @@ dependency-layers = [
     ["vibe-protocol", "vibe-core"],
     ["vibe-app-server"],
     ["vibe-cli", "vibe-acp"],
-    ["vibe-compat"],
 ]

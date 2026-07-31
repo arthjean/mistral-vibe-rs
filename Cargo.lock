@@ -2706,30 +2706,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vibe-compat"
-version = "2.23.1"
-dependencies = [
- "clap",
- "hex",
- "ratatui",
- "regex",
- "secrecy",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror",
- "tokio",
- "toml",
- "url",
- "vibe-acp",
- "vibe-app-server",
- "vibe-cli",
- "vibe-core",
- "vibe-protocol",
-]
-
-[[package]]
 name = "vibe-core"
 version = "2.23.1"
 dependencies = [

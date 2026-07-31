@@ -30,7 +30,7 @@ cp "target/release/vibe${binary_suffix}" "${staging_directory}/bin/"
 cp "target/release/vibe-acp${binary_suffix}" "${staging_directory}/bin/"
 cp completions/vibe.bash completions/_vibe completions/vibe.fish completions/vibe.ps1 \
     "${staging_directory}/completions/"
-cp LICENSE NOTICE PROVENANCE.md "${staging_directory}/"
+cp LICENSE NOTICE "${staging_directory}/"
 
 archive="mistral-vibe-rs-${version}-${target}.${archive_suffix}"
 if [[ "${archive_suffix}" == "zip" ]]; then
