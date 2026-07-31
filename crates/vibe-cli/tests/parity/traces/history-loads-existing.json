@@ -1,0 +1,325 @@
+{
+  "capabilities": [
+    "core"
+  ],
+  "events": [
+    {
+      "char": null,
+      "key": "up",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "up",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "up",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "up",
+      "mods": [],
+      "type": "key"
+    }
+  ],
+  "gap": "GAP-06",
+  "id": "history-loads-existing",
+  "initial": {
+    "effects": [],
+    "history": [
+      "oldest",
+      "middle",
+      "newest"
+    ],
+    "render": {
+      "borderClasses": [],
+      "borderTitle": "",
+      "cursorCell": [
+        0,
+        0
+      ],
+      "popupRows": [],
+      "popupVisible": false,
+      "prompt": ">",
+      "visualLines": [
+        ""
+      ],
+      "wrapWidth": 71
+    },
+    "state": {
+      "completion": {
+        "items": [],
+        "kind": null,
+        "open": false,
+        "selected": 0
+      },
+      "cursor": 0,
+      "feedbackActive": false,
+      "history": {
+        "cursorMovedSinceLoad": false,
+        "loadedEntry": false,
+        "navigating": false
+      },
+      "mode": ">",
+      "selection": null,
+      "switching": false,
+      "text": ""
+    }
+  },
+  "observations": [
+    {
+      "effects": [
+        {
+          "type": "historyPrevious"
+        },
+        {
+          "type": "completionReset"
+        }
+      ],
+      "event": {
+        "char": null,
+        "key": "up",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "oldest",
+        "middle",
+        "newest"
+      ],
+      "index": 0,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          6
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "newest"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 6,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": true,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "newest"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyPrevious"
+        },
+        {
+          "type": "completionReset"
+        }
+      ],
+      "event": {
+        "char": null,
+        "key": "up",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "oldest",
+        "middle",
+        "newest"
+      ],
+      "index": 1,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          6
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "middle"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 6,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": true,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "middle"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyPrevious"
+        },
+        {
+          "type": "completionReset"
+        }
+      ],
+      "event": {
+        "char": null,
+        "key": "up",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "oldest",
+        "middle",
+        "newest"
+      ],
+      "index": 2,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          6
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "oldest"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 6,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": true,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "oldest"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyPrevious"
+        }
+      ],
+      "event": {
+        "char": null,
+        "key": "up",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "oldest",
+        "middle",
+        "newest"
+      ],
+      "index": 3,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          6
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "oldest"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 6,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": true,
+          "navigating": true
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "oldest"
+      }
+    }
+  ],
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "version": "2.23.2"
+  },
+  "schemaVersion": 1,
+  "setup": {
+    "agentName": "",
+    "commands": {},
+    "history": {
+      "entries": [
+        "oldest",
+        "middle",
+        "newest"
+      ]
+    },
+    "initial": {},
+    "safety": "neutral",
+    "skills": [],
+    "viewport": {
+      "height": 24,
+      "width": 80
+    },
+    "voice": null,
+    "workspace": "empty"
+  },
+  "story": "US-006",
+  "title": "Existing entries are recalled in reference order"
+}

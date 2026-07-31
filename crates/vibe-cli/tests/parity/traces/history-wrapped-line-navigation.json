@@ -1,0 +1,3691 @@
+{
+  "capabilities": [
+    "core"
+  ],
+  "events": [
+    {
+      "char": "w",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "r",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "a",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "p",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "p",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "e",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "d",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "p",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "r",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "o",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "m",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "p",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "t",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "t",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "h",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "a",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "t",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "i",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "s",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "l",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "o",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "n",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "g",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "e",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "n",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "o",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "u",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "g",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "h",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "t",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "o",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "s",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "o",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "f",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "t",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "w",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "r",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "a",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "p",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "a",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "c",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "r",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "o",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "s",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "s",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "l",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "i",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "n",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "e",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "s",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "up",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "up",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "up",
+      "mods": [],
+      "type": "key"
+    }
+  ],
+  "gap": "GAP-07",
+  "id": "history-wrapped-line-navigation",
+  "initial": {
+    "effects": [],
+    "history": [
+      "recalled"
+    ],
+    "render": {
+      "borderClasses": [],
+      "borderTitle": "",
+      "cursorCell": [
+        0,
+        0
+      ],
+      "popupRows": [],
+      "popupVisible": false,
+      "prompt": ">",
+      "visualLines": [
+        ""
+      ],
+      "wrapWidth": 31
+    },
+    "state": {
+      "completion": {
+        "items": [],
+        "kind": null,
+        "open": false,
+        "selected": 0
+      },
+      "cursor": 0,
+      "feedbackActive": false,
+      "history": {
+        "cursorMovedSinceLoad": false,
+        "loadedEntry": false,
+        "navigating": false
+      },
+      "mode": ">",
+      "selection": null,
+      "switching": false,
+      "text": ""
+    }
+  },
+  "observations": [
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "w",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 0,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          1
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "w"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 1,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "w"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "r",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 1,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          2
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wr"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 2,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wr"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "a",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 2,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          3
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wra"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 3,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wra"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "p",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 3,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          4
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrap"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 4,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrap"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "p",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 4,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          5
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapp"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 5,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapp"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "e",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 5,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          6
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrappe"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 6,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrappe"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "d",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 6,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          7
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 7,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 7,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          8
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped "
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 8,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "p",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 8,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          9
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped p"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 9,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped p"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "r",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 9,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          10
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped pr"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 10,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped pr"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "o",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 10,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          11
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped pro"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 11,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped pro"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "m",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 11,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          12
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prom"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 12,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prom"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "p",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 12,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          13
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped promp"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 13,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped promp"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "t",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 13,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          14
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 14,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 14,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          15
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt "
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 15,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "t",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 15,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          16
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt t"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 16,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt t"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "h",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 16,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          17
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt th"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 17,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt th"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "a",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 17,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          18
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt tha"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 18,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt tha"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "t",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 18,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          19
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 19,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 19,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          20
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that "
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 20,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "i",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 20,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          21
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that i"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 21,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that i"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "s",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 21,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          22
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 22,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 22,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          23
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is "
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 23,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "l",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 23,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          24
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is l"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 24,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is l"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "o",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 24,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          25
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is lo"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 25,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is lo"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "n",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 25,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          26
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is lon"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 26,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is lon"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "g",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 26,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          27
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 27,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 27,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          28
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long "
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 28,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "e",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 28,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          29
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long e"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 29,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long e"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "n",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 29,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          30
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long en"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 30,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long en"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "o",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 30,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          31
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long eno"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 31,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long eno"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "u",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 31,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          4
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enou"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 32,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enou"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "g",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 32,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          5
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enoug"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 33,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enoug"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "h",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 33,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          6
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 34,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 34,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          7
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough "
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 35,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "t",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 35,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          8
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough t"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 36,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough t"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "o",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 36,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          9
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 37,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 37,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          10
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to "
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 38,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "s",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 38,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          11
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to s"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 39,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to s"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "o",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 39,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          12
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to so"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 40,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to so"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "f",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 40,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          13
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to sof"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 41,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to sof"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "t",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 41,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          14
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 42,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 42,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          15
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft "
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 43,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "w",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 43,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          16
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft w"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 44,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft w"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "r",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 44,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          17
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wr"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 45,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wr"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "a",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 45,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          18
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wra"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 46,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wra"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "p",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 46,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          19
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 47,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 47,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          20
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap "
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 48,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "a",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 48,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          21
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap a"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 49,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap a"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "c",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 49,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          22
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap ac"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 50,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap ac"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "r",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 50,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          23
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap acr"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 51,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap acr"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "o",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 51,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          24
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap acro"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 52,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap acro"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "s",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 52,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          25
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap acros"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 53,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap acros"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "s",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 53,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          26
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap across"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 54,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap across"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 54,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          27
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap across "
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 55,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap across "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "l",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 55,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          28
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap across l"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 56,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap across l"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "i",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 56,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          29
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap across li"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 57,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap across li"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "n",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 57,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          30
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap across lin"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 58,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap across lin"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "e",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 58,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          31
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap across line"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 59,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap across line"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "s",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 59,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          2,
+          5
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap across ",
+          "lines"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 60,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap across lines"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "up",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 60,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          5
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap across ",
+          "lines"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 33,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap across lines"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "up",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 61,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          5
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap across ",
+          "lines"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 5,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap across lines"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "up",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 62,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          0
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "wrapped prompt that is long ",
+          "enough to soft wrap across ",
+          "lines"
+        ],
+        "wrapWidth": 31
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 0,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "wrapped prompt that is long enough to soft wrap across lines"
+      }
+    }
+  ],
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "version": "2.23.2"
+  },
+  "schemaVersion": 1,
+  "setup": {
+    "agentName": "",
+    "commands": {},
+    "history": {
+      "entries": [
+        "recalled"
+      ]
+    },
+    "initial": {},
+    "safety": "neutral",
+    "skills": [],
+    "viewport": {
+      "height": 24,
+      "width": 40
+    },
+    "voice": null,
+    "workspace": "empty"
+  },
+  "story": "US-007",
+  "title": "Up inside a soft-wrapped line moves visually before recalling"
+}

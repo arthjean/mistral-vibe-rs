@@ -1,0 +1,1166 @@
+{
+  "capabilities": [
+    "core"
+  ],
+  "events": [
+    {
+      "char": "l",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "i",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "n",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "e",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "o",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "n",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "e",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "enter",
+      "mods": [
+        "shift"
+      ],
+      "type": "key"
+    },
+    {
+      "char": "l",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "i",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "n",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "e",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "t",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "w",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "o",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "up",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "up",
+      "mods": [],
+      "type": "key"
+    }
+  ],
+  "gap": "GAP-07",
+  "id": "history-up-moves-inside-multiline",
+  "initial": {
+    "effects": [],
+    "history": [
+      "recalled"
+    ],
+    "render": {
+      "borderClasses": [],
+      "borderTitle": "",
+      "cursorCell": [
+        0,
+        0
+      ],
+      "popupRows": [],
+      "popupVisible": false,
+      "prompt": ">",
+      "visualLines": [
+        ""
+      ],
+      "wrapWidth": 71
+    },
+    "state": {
+      "completion": {
+        "items": [],
+        "kind": null,
+        "open": false,
+        "selected": 0
+      },
+      "cursor": 0,
+      "feedbackActive": false,
+      "history": {
+        "cursorMovedSinceLoad": false,
+        "loadedEntry": false,
+        "navigating": false
+      },
+      "mode": ">",
+      "selection": null,
+      "switching": false,
+      "text": ""
+    }
+  },
+  "observations": [
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "l",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 0,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          1
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "l"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 1,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "l"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "i",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 1,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          2
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "li"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 2,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "li"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "n",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 2,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          3
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "lin"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 3,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "lin"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "e",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 3,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          4
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 4,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 4,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          5
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line "
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 5,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "o",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 5,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          6
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line o"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 6,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line o"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "n",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 6,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          7
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line on"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 7,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line on"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "e",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 7,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          8
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 8,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": null,
+        "key": "enter",
+        "mods": [
+          "shift"
+        ],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 8,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          0
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one",
+          ""
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 9,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one\n"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "l",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 9,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          1
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one",
+          "l"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 10,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one\nl"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "i",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 10,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          2
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one",
+          "li"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 11,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one\nli"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "n",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 11,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          3
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one",
+          "lin"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 12,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one\nlin"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "e",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 12,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          4
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one",
+          "line"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 13,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one\nline"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 13,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          5
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one",
+          "line "
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 14,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one\nline "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "t",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 14,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          6
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one",
+          "line t"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 15,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one\nline t"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "w",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 15,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          7
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one",
+          "line tw"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 16,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one\nline tw"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "o",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 16,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          1,
+          8
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one",
+          "line two"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 17,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one\nline two"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "up",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 17,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          8
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one",
+          "line two"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 8,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one\nline two"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "up",
+        "mods": [],
+        "type": "key"
+      },
+      "history": [
+        "recalled"
+      ],
+      "index": 18,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          0
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "line one",
+          "line two"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 0,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "line one\nline two"
+      }
+    }
+  ],
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "version": "2.23.2"
+  },
+  "schemaVersion": 1,
+  "setup": {
+    "agentName": "",
+    "commands": {},
+    "history": {
+      "entries": [
+        "recalled"
+      ]
+    },
+    "initial": {},
+    "safety": "neutral",
+    "skills": [],
+    "viewport": {
+      "height": 24,
+      "width": 80
+    },
+    "voice": null,
+    "workspace": "empty"
+  },
+  "story": "US-007",
+  "title": "Up moves within a hard multiline prompt before recalling history"
+}

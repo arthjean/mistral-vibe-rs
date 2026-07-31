@@ -1,0 +1,119 @@
+{
+  "capabilities": [
+    "core"
+  ],
+  "events": [
+    {
+      "text": "before\u001b[Aafter\u0003end",
+      "type": "paste"
+    }
+  ],
+  "gap": "GAP-15",
+  "id": "paste-control-characters",
+  "initial": {
+    "effects": [],
+    "render": {
+      "borderClasses": [],
+      "borderTitle": "",
+      "cursorCell": [
+        0,
+        0
+      ],
+      "popupRows": [],
+      "popupVisible": false,
+      "prompt": ">",
+      "visualLines": [
+        ""
+      ],
+      "wrapWidth": 71
+    },
+    "state": {
+      "completion": {
+        "items": [],
+        "kind": null,
+        "open": false,
+        "selected": 0
+      },
+      "cursor": 0,
+      "feedbackActive": false,
+      "history": {
+        "cursorMovedSinceLoad": false,
+        "loadedEntry": false,
+        "navigating": false
+      },
+      "mode": ">",
+      "selection": null,
+      "switching": false,
+      "text": ""
+    }
+  },
+  "observations": [
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "text": "before\u001b[Aafter\u0003end",
+        "type": "paste"
+      },
+      "index": 0,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          16
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "before\u001b[Aafter\u0003end"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 18,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "before\u001b[Aafter\u0003end"
+      }
+    }
+  ],
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "version": "2.23.2"
+  },
+  "schemaVersion": 1,
+  "setup": {
+    "agentName": "",
+    "commands": {},
+    "history": null,
+    "initial": {},
+    "safety": "neutral",
+    "skills": [],
+    "viewport": {
+      "height": 24,
+      "width": 80
+    },
+    "voice": null,
+    "workspace": "empty"
+  },
+  "story": "US-012",
+  "title": "Control-like payloads are inserted as text"
+}

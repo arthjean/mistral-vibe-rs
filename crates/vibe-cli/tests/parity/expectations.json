@@ -1,0 +1,483 @@
+{
+  "traces": {
+    "async-cancelled-by-space": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "async-generation-supersedes": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "async-history-recall-closes": {
+      "effects": "gap",
+      "history": "deferred",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "clipboard-explicit-ctrl-v": {
+      "state": "unavailable"
+    },
+    "clipboard-implicit-empty-paste": {
+      "effects": "parity",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "clipboard-whitespace-paste": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "commands-excluded": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "commands-full-surface": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "commands-unknown-alias": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "commands-vibe-code-enabled": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "corpus-dot-query": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "corpus-gitignore": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "corpus-hidden-files": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "corpus-nested-ranking": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "dnd-absolute-image": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "dnd-escaped-image": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "dnd-text-path-untouched": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "external-editor-replaces-text": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "external-editor-unchanged": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "feedback-other-character": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "feedback-rating-keys": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "feedback-snooze-key": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "history-down-restores-draft": {
+      "effects": "gap",
+      "history": "deferred",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "history-edit-after-recall": {
+      "effects": "gap",
+      "history": "deferred",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "history-loads-existing": {
+      "effects": "gap",
+      "history": "deferred",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "history-persists-submission": {
+      "effects": "gap",
+      "history": "deferred",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "history-suppresses-duplicates": {
+      "effects": "gap",
+      "history": "deferred",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "history-tolerates-corrupt-lines": {
+      "effects": "gap",
+      "history": "deferred",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "history-up-from-first-line": {
+      "effects": "gap",
+      "history": "deferred",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "history-up-moves-inside-multiline": {
+      "effects": "gap",
+      "history": "deferred",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "history-wrapped-line-navigation": {
+      "effects": "gap",
+      "history": "deferred",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "long-prompt-resize": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "long-prompt-unicode": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "long-prompt-viewport-40": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "long-prompt-viewport-80": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "mention-directory-submission": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "mention-external-path-submission": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "mention-missing-path-submission": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "mention-text-file-submission": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "mode-backspace-keeps-text": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "mode-backspace-resets": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "mode-teleport-unavailable": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "modes-bang-prefix": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "modes-prompt-default": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "modes-slash-prefix": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "modes-teleport-available": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "paste-control-characters": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "paste-empty-triggers-clipboard": {
+      "effects": "parity",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "paste-large-payload": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "paste-mode-characters": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "paste-multiline-atomic": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "path-accept-directory": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "path-accept-inserts-space": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "path-mid-token-completion": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "path-trigger-after-punctuation": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "path-trigger-bare-at": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "path-trigger-basic": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "path-trigger-nested": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "path-trigger-space-closes": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "popup-render-120": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "popup-render-40": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "popup-render-80": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "popup-render-path-bound": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "safety-destructive-chrome": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "safety-transition": {
+      "effects": "parity",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "slash-no-match": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "slash-popup-arrows": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "slash-popup-enter-submits": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "slash-popup-escape": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "slash-popup-right": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "slash-popup-tab-applies": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "slash-popup-wraps-selection": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "slash-ranking-c": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "slash-ranking-empty-boosts": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "slash-ranking-fuzzy": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "slash-skill-entries": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "submit-empty-composer": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "submit-multiline-shift-enter": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "submit-strips-whitespace": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "submit-whitespace-only": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "switching-blocks-submission": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "switching-resolves": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "unicode-combining-backspace": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "unicode-emoji-motion": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "unicode-home-end": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "unicode-shift-selection": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "unicode-wide-characters": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "unicode-word-motion": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "voice-ctrl-c-cancels": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "voice-disabled-ignores-key": {
+      "effects": "parity",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "voice-key-stops-recording": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "gap"
+    },
+    "voice-start-failure": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "voice-start-recording": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    },
+    "voice-transcript-insertion": {
+      "effects": "gap",
+      "render": "deferred",
+      "state": "parity"
+    }
+  },
+  "version": 1
+}

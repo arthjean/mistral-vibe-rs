@@ -1,0 +1,150 @@
+{
+  "capabilities": [
+    "core"
+  ],
+  "events": [
+    {
+      "char": "@",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    }
+  ],
+  "gap": "GAP-14",
+  "id": "popup-render-path-bound",
+  "initial": {
+    "effects": [],
+    "render": {
+      "borderClasses": [],
+      "borderTitle": "",
+      "cursorCell": [
+        0,
+        0
+      ],
+      "popupRows": [],
+      "popupVisible": false,
+      "prompt": ">",
+      "visualLines": [
+        ""
+      ],
+      "wrapWidth": 71
+    },
+    "state": {
+      "completion": {
+        "items": [],
+        "kind": null,
+        "open": false,
+        "selected": 0
+      },
+      "cursor": 0,
+      "feedbackActive": false,
+      "history": {
+        "cursorMovedSinceLoad": false,
+        "loadedEntry": false,
+        "navigating": false
+      },
+      "mode": ">",
+      "selection": null,
+      "switching": false,
+      "text": ""
+    }
+  },
+  "observations": [
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "@",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 0,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          1
+        ],
+        "popupRows": [
+          "@README.md",
+          "@docs/",
+          "@image one.png",
+          "@notes.txt",
+          "@src/"
+        ],
+        "popupVisible": true,
+        "prompt": ">",
+        "visualLines": [
+          "@"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "",
+              "label": "@README.md"
+            },
+            {
+              "description": "",
+              "label": "@docs/"
+            },
+            {
+              "description": "",
+              "label": "@image one.png"
+            },
+            {
+              "description": "",
+              "label": "@notes.txt"
+            },
+            {
+              "description": "",
+              "label": "@src/"
+            }
+          ],
+          "kind": "path",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 1,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "@"
+      }
+    }
+  ],
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "version": "2.23.2"
+  },
+  "schemaVersion": 1,
+  "setup": {
+    "agentName": "",
+    "commands": {},
+    "history": null,
+    "initial": {},
+    "safety": "neutral",
+    "skills": [],
+    "viewport": {
+      "height": 24,
+      "width": 80
+    },
+    "voice": null,
+    "workspace": "sample"
+  },
+  "story": "US-011",
+  "title": "Path popup is bounded to ten rows"
+}

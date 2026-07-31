@@ -195,6 +195,12 @@ impl PromptEditor {
         (!submitted.trim().is_empty()).then_some(submitted)
     }
 
+    /// Whether Up/Down are currently walking history rather than the draft.
+    #[must_use]
+    pub fn history_navigating(&self) -> bool {
+        self.history_index.is_some()
+    }
+
     fn move_cursor(&mut self, target: usize, extend_selection: bool) {
         if extend_selection {
             let anchor = *self.selection_anchor.get_or_insert(self.cursor);
@@ -386,6 +392,27 @@ pub enum CompletionAction {
     Submit,
 }
 
+/// The keys an open completion popup claims before the editor sees them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompletionKey {
+    Escape,
+    Up,
+    Down,
+    Tab,
+    Enter,
+}
+
+/// What the caller must do after routing a key through the popup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompletionKeyOutcome {
+    /// The popup handled the key; the editor must not see it.
+    Consumed,
+    /// A slash command was accepted and the caller must submit the prompt.
+    Submit,
+    /// No popup was open, or it does not claim this key.
+    Ignored,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct CompletionView<'a> {
     pub candidates: &'a [CompletionCandidate],
@@ -447,7 +474,7 @@ impl CompletionEngine {
         self.active = None;
         if query.starts_with('/') {
             let candidates = self.prompt_candidates(workspace, &query)?;
-            self.install_completion(self.generation, token_range, &query, candidates);
+            self.install(self.generation, token_range, &query, candidates);
             return Ok(());
         }
         let worker = match self.worker.as_ref() {
@@ -493,7 +520,7 @@ impl CompletionEngine {
                 continue;
             }
             let candidates = response.candidates?;
-            self.install_completion(
+            self.install(
                 response.generation,
                 response.token_range,
                 &response.query,
@@ -504,7 +531,21 @@ impl CompletionEngine {
         Ok(changed)
     }
 
-    fn install_completion(
+    /// Generation of the most recent completion request.
+    ///
+    /// Callers that resolve candidates outside the engine tag their request
+    /// with it and hand it back, so a late answer can be recognised as stale.
+    #[must_use]
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Ranks candidates and presents them without touching the filesystem.
+    ///
+    /// Candidates arrive raw: ranking, the mention cap and the empty-result
+    /// rule are part of the observable contract and stay in this layer
+    /// whether the lookup ran on the worker thread or in a replay adapter.
+    pub fn install(
         &mut self,
         generation: u64,
         token_range: Range<usize>,
@@ -555,6 +596,42 @@ impl CompletionEngine {
             active.selected.saturating_add(distance) % count
         };
         true
+    }
+
+    /// Routes a key through an open popup, mirroring the reference precedence.
+    ///
+    /// The interactive loop and the deterministic replay boundary both enter
+    /// here, so selection, acceptance and dismissal cannot drift apart.
+    pub fn handle_key(
+        &mut self,
+        key: CompletionKey,
+        editor: &mut PromptEditor,
+    ) -> Result<CompletionKeyOutcome, InputError> {
+        if self.active.is_none() {
+            return Ok(CompletionKeyOutcome::Ignored);
+        }
+        match key {
+            CompletionKey::Escape => {
+                self.cancel();
+                Ok(CompletionKeyOutcome::Consumed)
+            }
+            CompletionKey::Up => {
+                self.move_selection(-1);
+                Ok(CompletionKeyOutcome::Consumed)
+            }
+            CompletionKey::Down => {
+                self.move_selection(1);
+                Ok(CompletionKeyOutcome::Consumed)
+            }
+            CompletionKey::Tab => {
+                self.accept(editor)?;
+                Ok(CompletionKeyOutcome::Consumed)
+            }
+            CompletionKey::Enter => match self.accept(editor)? {
+                CompletionAction::Applied => Ok(CompletionKeyOutcome::Consumed),
+                CompletionAction::Submit => Ok(CompletionKeyOutcome::Submit),
+            },
+        }
     }
 
     pub fn accept(&mut self, editor: &mut PromptEditor) -> Result<CompletionAction, InputError> {
@@ -617,7 +694,7 @@ impl CompletionEngine {
             .map_err(|error| InputError::CompletionWorker(error.to_string()))?;
         if response.generation == self.generation {
             let candidates = response.candidates?;
-            self.install_completion(
+            self.install(
                 response.generation,
                 response.token_range,
                 &response.query,
@@ -683,7 +760,7 @@ fn fuzzy_completion_score(candidate: &str, query: &str) -> Option<usize> {
     Some(usize::MAX.saturating_sub(score))
 }
 
-fn active_token(editor: &PromptEditor) -> Option<(Range<usize>, String)> {
+pub(crate) fn active_token(editor: &PromptEditor) -> Option<(Range<usize>, String)> {
     let text = editor.text();
     let cursor_byte = grapheme_byte(text, editor.cursor());
     if text.starts_with('/') {
@@ -709,7 +786,8 @@ fn active_token(editor: &PromptEditor) -> Option<(Range<usize>, String)> {
     ))
 }
 
-fn prompt_candidates(
+/// Filesystem-backed candidate lookup used by the completion adapter.
+pub fn prompt_candidates(
     workspace: &Path,
     query: &str,
 ) -> Result<Vec<CompletionCandidate>, InputError> {

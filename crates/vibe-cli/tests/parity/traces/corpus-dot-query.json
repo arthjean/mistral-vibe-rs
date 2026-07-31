@@ -1,0 +1,704 @@
+{
+  "capabilities": [
+    "core"
+  ],
+  "events": [
+    {
+      "char": "s",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "h",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "o",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "w",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "@",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": ".",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "h",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "i",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "d",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    }
+  ],
+  "gap": "GAP-12",
+  "id": "corpus-dot-query",
+  "initial": {
+    "effects": [],
+    "render": {
+      "borderClasses": [],
+      "borderTitle": "",
+      "cursorCell": [
+        0,
+        0
+      ],
+      "popupRows": [],
+      "popupVisible": false,
+      "prompt": ">",
+      "visualLines": [
+        ""
+      ],
+      "wrapWidth": 71
+    },
+    "state": {
+      "completion": {
+        "items": [],
+        "kind": null,
+        "open": false,
+        "selected": 0
+      },
+      "cursor": 0,
+      "feedbackActive": false,
+      "history": {
+        "cursorMovedSinceLoad": false,
+        "loadedEntry": false,
+        "navigating": false
+      },
+      "mode": ">",
+      "selection": null,
+      "switching": false,
+      "text": ""
+    }
+  },
+  "observations": [
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "s",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 0,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          1
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "s"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 1,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "s"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "h",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 1,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          2
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "sh"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 2,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "sh"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "o",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 2,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          3
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "sho"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 3,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "sho"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "w",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 3,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          4
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "show"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 4,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "show"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 4,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          5
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "show "
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 5,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "show "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "@",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 5,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          6
+        ],
+        "popupRows": [
+          "@README.md",
+          "@docs/",
+          "@image one.png",
+          "@notes.txt",
+          "@src/"
+        ],
+        "popupVisible": true,
+        "prompt": ">",
+        "visualLines": [
+          "show @"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "",
+              "label": "@README.md"
+            },
+            {
+              "description": "",
+              "label": "@docs/"
+            },
+            {
+              "description": "",
+              "label": "@image one.png"
+            },
+            {
+              "description": "",
+              "label": "@notes.txt"
+            },
+            {
+              "description": "",
+              "label": "@src/"
+            }
+          ],
+          "kind": "path",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 6,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "show @"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": ".",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 6,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          7
+        ],
+        "popupRows": [
+          "@.gitignore",
+          "@.hidden",
+          "@notes.txt",
+          "@README.md",
+          "@src/lib.rs",
+          "@src/main.rs",
+          "@image one.png",
+          "@docs/guide.md",
+          "@src/inner/deep.rs"
+        ],
+        "popupVisible": true,
+        "prompt": ">",
+        "visualLines": [
+          "show @."
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "",
+              "label": "@.gitignore"
+            },
+            {
+              "description": "",
+              "label": "@.hidden"
+            },
+            {
+              "description": "",
+              "label": "@notes.txt"
+            },
+            {
+              "description": "",
+              "label": "@README.md"
+            },
+            {
+              "description": "",
+              "label": "@src/lib.rs"
+            },
+            {
+              "description": "",
+              "label": "@src/main.rs"
+            },
+            {
+              "description": "",
+              "label": "@image one.png"
+            },
+            {
+              "description": "",
+              "label": "@docs/guide.md"
+            },
+            {
+              "description": "",
+              "label": "@src/inner/deep.rs"
+            }
+          ],
+          "kind": "path",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 7,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "show @."
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "h",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 7,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          8
+        ],
+        "popupRows": [
+          "@.hidden"
+        ],
+        "popupVisible": true,
+        "prompt": ">",
+        "visualLines": [
+          "show @.h"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "",
+              "label": "@.hidden"
+            }
+          ],
+          "kind": "path",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 8,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "show @.h"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "i",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 8,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          9
+        ],
+        "popupRows": [
+          "@.hidden"
+        ],
+        "popupVisible": true,
+        "prompt": ">",
+        "visualLines": [
+          "show @.hi"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "",
+              "label": "@.hidden"
+            }
+          ],
+          "kind": "path",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 9,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "show @.hi"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "d",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 9,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          10
+        ],
+        "popupRows": [
+          "@.hidden"
+        ],
+        "popupVisible": true,
+        "prompt": ">",
+        "visualLines": [
+          "show @.hid"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "",
+              "label": "@.hidden"
+            }
+          ],
+          "kind": "path",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 10,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "show @.hid"
+      }
+    }
+  ],
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "version": "2.23.2"
+  },
+  "schemaVersion": 1,
+  "setup": {
+    "agentName": "",
+    "commands": {},
+    "history": null,
+    "initial": {},
+    "safety": "neutral",
+    "skills": [],
+    "viewport": {
+      "height": 24,
+      "width": 80
+    },
+    "voice": null,
+    "workspace": "sample"
+  },
+  "story": "US-010",
+  "title": "A dot query exposes hidden entries"
+}

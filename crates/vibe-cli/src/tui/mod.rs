@@ -1,3 +1,4 @@
+pub mod chat_input;
 pub mod clipboard;
 pub mod commands;
 pub mod controls;
@@ -42,8 +43,8 @@ use self::controls::{
     PendingCallback, UserInputChoice,
 };
 use self::input::{
-    CompletionAction, CompletionEngine, ExternalEditorPort, PromptEditor, SystemExternalEditor,
-    normalize_pasted_text,
+    CompletionEngine, CompletionKey, CompletionKeyOutcome, ExternalEditorPort, PromptEditor,
+    SystemExternalEditor, normalize_pasted_text,
 };
 use self::render::{BannerContext, TokenState, UiContext, draw};
 use self::setup::{
@@ -740,35 +741,16 @@ async fn handle_key(
     if key.code != KeyCode::Esc {
         state.rewind_confirmation.cancel();
     }
-    if !*secret_input && completion.view().is_some() {
-        match key.code {
-            KeyCode::Esc => {
-                completion.cancel();
+    if !*secret_input && let Some(completion_key) = completion_key(key) {
+        match completion.handle_key(completion_key, editor) {
+            // `Submit` falls through to the Enter arm below, which owns
+            // dispatching the accepted command.
+            Ok(CompletionKeyOutcome::Submit | CompletionKeyOutcome::Ignored) => {}
+            Ok(CompletionKeyOutcome::Consumed) => return Ok(false),
+            Err(error) => {
+                state.push_diagnostic(error.to_string());
                 return Ok(false);
             }
-            KeyCode::Up if key.modifiers.is_empty() => {
-                completion.move_selection(-1);
-                return Ok(false);
-            }
-            KeyCode::Down if key.modifiers.is_empty() => {
-                completion.move_selection(1);
-                return Ok(false);
-            }
-            KeyCode::Tab if key.modifiers.is_empty() => {
-                if let Err(error) = completion.accept(editor) {
-                    state.push_diagnostic(error.to_string());
-                }
-                return Ok(false);
-            }
-            KeyCode::Enter if key.modifiers.is_empty() => match completion.accept(editor) {
-                Ok(CompletionAction::Applied) => return Ok(false),
-                Ok(CompletionAction::Submit) => {}
-                Err(error) => {
-                    state.push_diagnostic(error.to_string());
-                    return Ok(false);
-                }
-            },
-            _ => {}
         }
     }
     if key.code == KeyCode::BackTab
@@ -1171,6 +1153,21 @@ async fn handle_key(
     }
     refresh_completion(completion, editor, working_directory, *secret_input, state);
     Ok(false)
+}
+
+/// Maps a terminal key onto the popup vocabulary, honouring the modifier rules.
+///
+/// Escape dismisses whatever the modifiers are; the navigation and acceptance
+/// keys only reach the popup unmodified.
+fn completion_key(key: KeyEvent) -> Option<CompletionKey> {
+    match key.code {
+        KeyCode::Esc => Some(CompletionKey::Escape),
+        KeyCode::Up if key.modifiers.is_empty() => Some(CompletionKey::Up),
+        KeyCode::Down if key.modifiers.is_empty() => Some(CompletionKey::Down),
+        KeyCode::Tab if key.modifiers.is_empty() => Some(CompletionKey::Tab),
+        KeyCode::Enter if key.modifiers.is_empty() => Some(CompletionKey::Enter),
+        _ => None,
+    }
 }
 
 fn refresh_completion(

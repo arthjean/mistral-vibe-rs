@@ -1,0 +1,982 @@
+{
+  "schemaVersion": 1,
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "version": "2.23.2"
+  },
+  "workspaces": {
+    "empty": {},
+    "sample": {
+      "README.md": "# sample\n",
+      "notes.txt": "context\n",
+      ".gitignore": "ignored/\n*.log\n",
+      ".hidden": "hidden\n",
+      "ignored/secret.txt": "secret\n",
+      "build.log": "log\n",
+      "src/lib.rs": "pub fn nested() {}\n",
+      "src/main.rs": "fn main() {}\n",
+      "src/inner/deep.rs": "pub fn deep() {}\n",
+      "docs/guide.md": "# guide\n",
+      "image one.png": "PNG\r\n\u001a\n"
+    }
+  },
+  "gaps": [
+    {
+      "id": "GAP-01",
+      "story": "US-004",
+      "title": "Input modes, prefix rendering and completion source"
+    },
+    {
+      "id": "GAP-02",
+      "story": "US-004",
+      "title": "Submission stripping and empty-turn suppression"
+    },
+    {
+      "id": "GAP-03",
+      "story": "US-004",
+      "title": "Mode removal on backspace and teleport gating"
+    },
+    {
+      "id": "GAP-04",
+      "story": "US-005",
+      "title": "Unicode cursor, selection and word editing"
+    },
+    {
+      "id": "GAP-05",
+      "story": "US-005",
+      "title": "External editor round-trip state"
+    },
+    {
+      "id": "GAP-06",
+      "story": "US-006",
+      "title": "Persistent bounded prompt history"
+    },
+    {
+      "id": "GAP-07",
+      "story": "US-007",
+      "title": "Visual-line history navigation and draft restoration"
+    },
+    {
+      "id": "GAP-08",
+      "story": "US-008",
+      "title": "Command registry, aliases, availability and Rust-only surface"
+    },
+    {
+      "id": "GAP-09",
+      "story": "US-009",
+      "title": "Slash ranking, promotion boosts and skill metadata"
+    },
+    {
+      "id": "GAP-10",
+      "story": "US-009",
+      "title": "Slash popup control keys and dismissal"
+    },
+    {
+      "id": "GAP-11",
+      "story": "US-010",
+      "title": "Path completion trigger range and query semantics"
+    },
+    {
+      "id": "GAP-12",
+      "story": "US-010",
+      "title": "Indexed corpus, ignores and deterministic order"
+    },
+    {
+      "id": "GAP-13",
+      "story": "US-011",
+      "title": "Asynchronous completion generations and cancellation"
+    },
+    {
+      "id": "GAP-14",
+      "story": "US-011",
+      "title": "Completion popup rendering and bounds"
+    },
+    {
+      "id": "GAP-15",
+      "story": "US-012",
+      "title": "Atomic paste without shortcut dispatch"
+    },
+    {
+      "id": "GAP-16",
+      "story": "US-012",
+      "title": "Drag-and-drop image path normalisation"
+    },
+    {
+      "id": "GAP-17",
+      "story": "US-013",
+      "title": "Mention submission semantics"
+    },
+    {
+      "id": "GAP-18",
+      "story": "US-014",
+      "title": "Clipboard image triggers and lifecycle"
+    },
+    {
+      "id": "GAP-19",
+      "story": "US-016",
+      "title": "Voice recording state and transcript insertion"
+    },
+    {
+      "id": "GAP-20",
+      "story": "US-017",
+      "title": "Feedback, safety and model-switching chrome"
+    },
+    {
+      "id": "GAP-21",
+      "story": "US-018",
+      "title": "Long prompt viewport and cursor reachability"
+    }
+  ],
+  "traces": [
+    {
+      "id": "async-cancelled-by-space",
+      "gap": "GAP-13",
+      "story": "US-011",
+      "file": "traces/async-cancelled-by-space.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "async-generation-supersedes",
+      "gap": "GAP-13",
+      "story": "US-011",
+      "file": "traces/async-generation-supersedes.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "async-history-recall-closes",
+      "gap": "GAP-13",
+      "story": "US-011",
+      "file": "traces/async-history-recall-closes.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "clipboard-implicit-empty-paste",
+      "gap": "GAP-18",
+      "story": "US-014",
+      "file": "traces/clipboard-implicit-empty-paste.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "clipboard-whitespace-paste",
+      "gap": "GAP-18",
+      "story": "US-014",
+      "file": "traces/clipboard-whitespace-paste.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "commands-excluded",
+      "gap": "GAP-08",
+      "story": "US-008",
+      "file": "traces/commands-excluded.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "commands-full-surface",
+      "gap": "GAP-08",
+      "story": "US-008",
+      "file": "traces/commands-full-surface.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "commands-unknown-alias",
+      "gap": "GAP-08",
+      "story": "US-008",
+      "file": "traces/commands-unknown-alias.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "commands-vibe-code-enabled",
+      "gap": "GAP-08",
+      "story": "US-008",
+      "file": "traces/commands-vibe-code-enabled.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "corpus-dot-query",
+      "gap": "GAP-12",
+      "story": "US-010",
+      "file": "traces/corpus-dot-query.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "corpus-gitignore",
+      "gap": "GAP-12",
+      "story": "US-010",
+      "file": "traces/corpus-gitignore.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "corpus-hidden-files",
+      "gap": "GAP-12",
+      "story": "US-010",
+      "file": "traces/corpus-hidden-files.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "corpus-nested-ranking",
+      "gap": "GAP-12",
+      "story": "US-010",
+      "file": "traces/corpus-nested-ranking.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "dnd-absolute-image",
+      "gap": "GAP-16",
+      "story": "US-012",
+      "file": "traces/dnd-absolute-image.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "dnd-escaped-image",
+      "gap": "GAP-16",
+      "story": "US-012",
+      "file": "traces/dnd-escaped-image.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "dnd-text-path-untouched",
+      "gap": "GAP-16",
+      "story": "US-012",
+      "file": "traces/dnd-text-path-untouched.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "external-editor-replaces-text",
+      "gap": "GAP-05",
+      "story": "US-005",
+      "file": "traces/external-editor-replaces-text.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "external-editor-unchanged",
+      "gap": "GAP-05",
+      "story": "US-005",
+      "file": "traces/external-editor-unchanged.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "feedback-other-character",
+      "gap": "GAP-20",
+      "story": "US-017",
+      "file": "traces/feedback-other-character.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "feedback-rating-keys",
+      "gap": "GAP-20",
+      "story": "US-017",
+      "file": "traces/feedback-rating-keys.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "feedback-snooze-key",
+      "gap": "GAP-20",
+      "story": "US-017",
+      "file": "traces/feedback-snooze-key.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "history-down-restores-draft",
+      "gap": "GAP-07",
+      "story": "US-007",
+      "file": "traces/history-down-restores-draft.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "history-edit-after-recall",
+      "gap": "GAP-07",
+      "story": "US-007",
+      "file": "traces/history-edit-after-recall.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "history-loads-existing",
+      "gap": "GAP-06",
+      "story": "US-006",
+      "file": "traces/history-loads-existing.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "history-persists-submission",
+      "gap": "GAP-06",
+      "story": "US-006",
+      "file": "traces/history-persists-submission.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "history-suppresses-duplicates",
+      "gap": "GAP-06",
+      "story": "US-006",
+      "file": "traces/history-suppresses-duplicates.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "history-tolerates-corrupt-lines",
+      "gap": "GAP-06",
+      "story": "US-006",
+      "file": "traces/history-tolerates-corrupt-lines.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "history-up-from-first-line",
+      "gap": "GAP-07",
+      "story": "US-007",
+      "file": "traces/history-up-from-first-line.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "history-up-moves-inside-multiline",
+      "gap": "GAP-07",
+      "story": "US-007",
+      "file": "traces/history-up-moves-inside-multiline.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "history-wrapped-line-navigation",
+      "gap": "GAP-07",
+      "story": "US-007",
+      "file": "traces/history-wrapped-line-navigation.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "long-prompt-resize",
+      "gap": "GAP-21",
+      "story": "US-018",
+      "file": "traces/long-prompt-resize.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "long-prompt-unicode",
+      "gap": "GAP-21",
+      "story": "US-018",
+      "file": "traces/long-prompt-unicode.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "long-prompt-viewport-40",
+      "gap": "GAP-21",
+      "story": "US-018",
+      "file": "traces/long-prompt-viewport-40.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "long-prompt-viewport-80",
+      "gap": "GAP-21",
+      "story": "US-018",
+      "file": "traces/long-prompt-viewport-80.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "mention-directory-submission",
+      "gap": "GAP-17",
+      "story": "US-013",
+      "file": "traces/mention-directory-submission.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "mention-external-path-submission",
+      "gap": "GAP-17",
+      "story": "US-013",
+      "file": "traces/mention-external-path-submission.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "mention-missing-path-submission",
+      "gap": "GAP-17",
+      "story": "US-013",
+      "file": "traces/mention-missing-path-submission.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "mention-text-file-submission",
+      "gap": "GAP-17",
+      "story": "US-013",
+      "file": "traces/mention-text-file-submission.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "mode-backspace-keeps-text",
+      "gap": "GAP-03",
+      "story": "US-004",
+      "file": "traces/mode-backspace-keeps-text.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "mode-backspace-resets",
+      "gap": "GAP-03",
+      "story": "US-004",
+      "file": "traces/mode-backspace-resets.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "mode-teleport-unavailable",
+      "gap": "GAP-03",
+      "story": "US-004",
+      "file": "traces/mode-teleport-unavailable.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "modes-bang-prefix",
+      "gap": "GAP-01",
+      "story": "US-004",
+      "file": "traces/modes-bang-prefix.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "modes-prompt-default",
+      "gap": "GAP-01",
+      "story": "US-004",
+      "file": "traces/modes-prompt-default.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "modes-slash-prefix",
+      "gap": "GAP-01",
+      "story": "US-004",
+      "file": "traces/modes-slash-prefix.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "modes-teleport-available",
+      "gap": "GAP-01",
+      "story": "US-004",
+      "file": "traces/modes-teleport-available.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "paste-control-characters",
+      "gap": "GAP-15",
+      "story": "US-012",
+      "file": "traces/paste-control-characters.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "paste-empty-triggers-clipboard",
+      "gap": "GAP-15",
+      "story": "US-012",
+      "file": "traces/paste-empty-triggers-clipboard.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "paste-large-payload",
+      "gap": "GAP-15",
+      "story": "US-012",
+      "file": "traces/paste-large-payload.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "paste-mode-characters",
+      "gap": "GAP-15",
+      "story": "US-012",
+      "file": "traces/paste-mode-characters.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "paste-multiline-atomic",
+      "gap": "GAP-15",
+      "story": "US-012",
+      "file": "traces/paste-multiline-atomic.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "path-accept-directory",
+      "gap": "GAP-11",
+      "story": "US-010",
+      "file": "traces/path-accept-directory.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "path-accept-inserts-space",
+      "gap": "GAP-11",
+      "story": "US-010",
+      "file": "traces/path-accept-inserts-space.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "path-mid-token-completion",
+      "gap": "GAP-11",
+      "story": "US-010",
+      "file": "traces/path-mid-token-completion.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "path-trigger-after-punctuation",
+      "gap": "GAP-11",
+      "story": "US-010",
+      "file": "traces/path-trigger-after-punctuation.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "path-trigger-bare-at",
+      "gap": "GAP-11",
+      "story": "US-010",
+      "file": "traces/path-trigger-bare-at.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "path-trigger-basic",
+      "gap": "GAP-11",
+      "story": "US-010",
+      "file": "traces/path-trigger-basic.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "path-trigger-nested",
+      "gap": "GAP-11",
+      "story": "US-010",
+      "file": "traces/path-trigger-nested.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "path-trigger-space-closes",
+      "gap": "GAP-11",
+      "story": "US-010",
+      "file": "traces/path-trigger-space-closes.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "popup-render-120",
+      "gap": "GAP-14",
+      "story": "US-011",
+      "file": "traces/popup-render-120.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "popup-render-40",
+      "gap": "GAP-14",
+      "story": "US-011",
+      "file": "traces/popup-render-40.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "popup-render-80",
+      "gap": "GAP-14",
+      "story": "US-011",
+      "file": "traces/popup-render-80.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "popup-render-path-bound",
+      "gap": "GAP-14",
+      "story": "US-011",
+      "file": "traces/popup-render-path-bound.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "safety-destructive-chrome",
+      "gap": "GAP-20",
+      "story": "US-017",
+      "file": "traces/safety-destructive-chrome.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "safety-transition",
+      "gap": "GAP-20",
+      "story": "US-017",
+      "file": "traces/safety-transition.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-no-match",
+      "gap": "GAP-09",
+      "story": "US-009",
+      "file": "traces/slash-no-match.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-popup-arrows",
+      "gap": "GAP-10",
+      "story": "US-009",
+      "file": "traces/slash-popup-arrows.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-popup-enter-submits",
+      "gap": "GAP-10",
+      "story": "US-009",
+      "file": "traces/slash-popup-enter-submits.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-popup-escape",
+      "gap": "GAP-10",
+      "story": "US-009",
+      "file": "traces/slash-popup-escape.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-popup-right",
+      "gap": "GAP-10",
+      "story": "US-009",
+      "file": "traces/slash-popup-right.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-popup-tab-applies",
+      "gap": "GAP-10",
+      "story": "US-009",
+      "file": "traces/slash-popup-tab-applies.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-popup-wraps-selection",
+      "gap": "GAP-10",
+      "story": "US-009",
+      "file": "traces/slash-popup-wraps-selection.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-ranking-c",
+      "gap": "GAP-09",
+      "story": "US-009",
+      "file": "traces/slash-ranking-c.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-ranking-empty-boosts",
+      "gap": "GAP-09",
+      "story": "US-009",
+      "file": "traces/slash-ranking-empty-boosts.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-ranking-fuzzy",
+      "gap": "GAP-09",
+      "story": "US-009",
+      "file": "traces/slash-ranking-fuzzy.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-skill-entries",
+      "gap": "GAP-09",
+      "story": "US-009",
+      "file": "traces/slash-skill-entries.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "submit-empty-composer",
+      "gap": "GAP-02",
+      "story": "US-004",
+      "file": "traces/submit-empty-composer.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "submit-multiline-shift-enter",
+      "gap": "GAP-02",
+      "story": "US-004",
+      "file": "traces/submit-multiline-shift-enter.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "submit-strips-whitespace",
+      "gap": "GAP-02",
+      "story": "US-004",
+      "file": "traces/submit-strips-whitespace.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "submit-whitespace-only",
+      "gap": "GAP-02",
+      "story": "US-004",
+      "file": "traces/submit-whitespace-only.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "switching-blocks-submission",
+      "gap": "GAP-20",
+      "story": "US-017",
+      "file": "traces/switching-blocks-submission.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "switching-resolves",
+      "gap": "GAP-20",
+      "story": "US-017",
+      "file": "traces/switching-resolves.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "unicode-combining-backspace",
+      "gap": "GAP-04",
+      "story": "US-005",
+      "file": "traces/unicode-combining-backspace.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "unicode-emoji-motion",
+      "gap": "GAP-04",
+      "story": "US-005",
+      "file": "traces/unicode-emoji-motion.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "unicode-home-end",
+      "gap": "GAP-04",
+      "story": "US-005",
+      "file": "traces/unicode-home-end.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "unicode-shift-selection",
+      "gap": "GAP-04",
+      "story": "US-005",
+      "file": "traces/unicode-shift-selection.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "unicode-wide-characters",
+      "gap": "GAP-04",
+      "story": "US-005",
+      "file": "traces/unicode-wide-characters.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "unicode-word-motion",
+      "gap": "GAP-04",
+      "story": "US-005",
+      "file": "traces/unicode-word-motion.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "voice-ctrl-c-cancels",
+      "gap": "GAP-19",
+      "story": "US-016",
+      "file": "traces/voice-ctrl-c-cancels.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "voice-disabled-ignores-key",
+      "gap": "GAP-19",
+      "story": "US-016",
+      "file": "traces/voice-disabled-ignores-key.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "voice-key-stops-recording",
+      "gap": "GAP-19",
+      "story": "US-016",
+      "file": "traces/voice-key-stops-recording.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "voice-start-failure",
+      "gap": "GAP-19",
+      "story": "US-016",
+      "file": "traces/voice-start-failure.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "voice-start-recording",
+      "gap": "GAP-19",
+      "story": "US-016",
+      "file": "traces/voice-start-recording.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "voice-transcript-insertion",
+      "gap": "GAP-19",
+      "story": "US-016",
+      "file": "traces/voice-transcript-insertion.json",
+      "capabilities": [
+        "core"
+      ]
+    }
+  ],
+  "unavailable": [
+    {
+      "id": "clipboard-explicit-ctrl-v",
+      "gap": "GAP-18",
+      "story": "US-014",
+      "capabilities": [
+        "macos-clipboard"
+      ],
+      "missingCapabilities": [
+        "macos-clipboard"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,743 @@
+{
+  "capabilities": [
+    "core"
+  ],
+  "events": [
+    {
+      "char": "/",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "a",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "b",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "backspace",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "backspace",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "backspace",
+      "mods": [],
+      "type": "key"
+    }
+  ],
+  "gap": "GAP-03",
+  "id": "mode-backspace-keeps-text",
+  "initial": {
+    "effects": [],
+    "render": {
+      "borderClasses": [],
+      "borderTitle": "",
+      "cursorCell": [
+        0,
+        0
+      ],
+      "popupRows": [],
+      "popupVisible": false,
+      "prompt": ">",
+      "visualLines": [
+        ""
+      ],
+      "wrapWidth": 71
+    },
+    "state": {
+      "completion": {
+        "items": [],
+        "kind": null,
+        "open": false,
+        "selected": 0
+      },
+      "cursor": 0,
+      "feedbackActive": false,
+      "history": {
+        "cursorMovedSinceLoad": false,
+        "loadedEntry": false,
+        "navigating": false
+      },
+      "mode": ">",
+      "selection": null,
+      "switching": false,
+      "text": ""
+    }
+  },
+  "observations": [
+    {
+      "effects": [
+        {
+          "mode": "/",
+          "type": "modeChanged"
+        }
+      ],
+      "event": {
+        "char": "/",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 0,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          0
+        ],
+        "popupRows": [
+          "/help",
+          "/config",
+          "/clear",
+          "/compact",
+          "/connectors",
+          "/continue",
+          "/copy",
+          "/data-retention",
+          "/debug",
+          "/exit",
+          "/leanstall",
+          "/log",
+          "/loop",
+          "/mcp",
+          "/model",
+          "/new",
+          "/proxy-setup",
+          "/reload",
+          "/rename",
+          "/resume",
+          "/rewind",
+          "/status",
+          "/theme",
+          "/thinking",
+          "/unleanstall",
+          "/voice"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          ""
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Show help message",
+              "label": "/help"
+            },
+            {
+              "description": "Edit config settings",
+              "label": "/config"
+            },
+            {
+              "description": "Clear conversation history",
+              "label": "/clear"
+            },
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/connectors"
+            },
+            {
+              "description": "Browse, resume, or delete saved sessions",
+              "label": "/continue"
+            },
+            {
+              "description": "Copy the last agent message to the clipboard",
+              "label": "/copy"
+            },
+            {
+              "description": "Show data retention information",
+              "label": "/data-retention"
+            },
+            {
+              "description": "Toggle debug console",
+              "label": "/debug"
+            },
+            {
+              "description": "Exit the application",
+              "label": "/exit"
+            },
+            {
+              "description": "Install the Lean 4 agent (leanstral)",
+              "label": "/leanstall"
+            },
+            {
+              "description": "Show path to current interaction log file",
+              "label": "/log"
+            },
+            {
+              "description": "Schedule a recurring prompt. Use `/loop <interval> <prompt>`, `/loop list`, or `/loop cancel <id|all>`",
+              "label": "/loop"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            },
+            {
+              "description": "Select active model",
+              "label": "/model"
+            },
+            {
+              "description": "Clear conversation history",
+              "label": "/new"
+            },
+            {
+              "description": "Configure proxy and SSL certificate settings",
+              "label": "/proxy-setup"
+            },
+            {
+              "description": "Reload configuration, agent instructions, and skills from disk",
+              "label": "/reload"
+            },
+            {
+              "description": "Rename the current session",
+              "label": "/rename"
+            },
+            {
+              "description": "Browse, resume, or delete saved sessions",
+              "label": "/resume"
+            },
+            {
+              "description": "Rewind to a previous message (or press Esc twice)",
+              "label": "/rewind"
+            },
+            {
+              "description": "Display agent statistics",
+              "label": "/status"
+            },
+            {
+              "description": "Select theme",
+              "label": "/theme"
+            },
+            {
+              "description": "Select thinking level",
+              "label": "/thinking"
+            },
+            {
+              "description": "Uninstall the Lean 4 agent",
+              "label": "/unleanstall"
+            },
+            {
+              "description": "Configure voice settings",
+              "label": "/voice"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 1,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "a",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 1,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          1
+        ],
+        "popupRows": [
+          "/data-retention",
+          "/leanstall",
+          "/status",
+          "/clear",
+          "/rename",
+          "/compact",
+          "/reload",
+          "/unleanstall"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "a"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Show data retention information",
+              "label": "/data-retention"
+            },
+            {
+              "description": "Install the Lean 4 agent (leanstral)",
+              "label": "/leanstall"
+            },
+            {
+              "description": "Display agent statistics",
+              "label": "/status"
+            },
+            {
+              "description": "Clear conversation history",
+              "label": "/clear"
+            },
+            {
+              "description": "Rename the current session",
+              "label": "/rename"
+            },
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Reload configuration, agent instructions, and skills from disk",
+              "label": "/reload"
+            },
+            {
+              "description": "Uninstall the Lean 4 agent",
+              "label": "/unleanstall"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 2,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/a"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "b",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 2,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          2
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": "/",
+        "visualLines": [
+          "ab"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 3,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/ab"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": null,
+        "key": "backspace",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 3,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          1
+        ],
+        "popupRows": [
+          "/data-retention",
+          "/leanstall",
+          "/status",
+          "/clear",
+          "/rename",
+          "/compact",
+          "/reload",
+          "/unleanstall"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "a"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Show data retention information",
+              "label": "/data-retention"
+            },
+            {
+              "description": "Install the Lean 4 agent (leanstral)",
+              "label": "/leanstall"
+            },
+            {
+              "description": "Display agent statistics",
+              "label": "/status"
+            },
+            {
+              "description": "Clear conversation history",
+              "label": "/clear"
+            },
+            {
+              "description": "Rename the current session",
+              "label": "/rename"
+            },
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Reload configuration, agent instructions, and skills from disk",
+              "label": "/reload"
+            },
+            {
+              "description": "Uninstall the Lean 4 agent",
+              "label": "/unleanstall"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 2,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/a"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": null,
+        "key": "backspace",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 4,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          0
+        ],
+        "popupRows": [
+          "/help",
+          "/config",
+          "/clear",
+          "/compact",
+          "/connectors",
+          "/continue",
+          "/copy",
+          "/data-retention",
+          "/debug",
+          "/exit",
+          "/leanstall",
+          "/log",
+          "/loop",
+          "/mcp",
+          "/model",
+          "/new",
+          "/proxy-setup",
+          "/reload",
+          "/rename",
+          "/resume",
+          "/rewind",
+          "/status",
+          "/theme",
+          "/thinking",
+          "/unleanstall",
+          "/voice"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          ""
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Show help message",
+              "label": "/help"
+            },
+            {
+              "description": "Edit config settings",
+              "label": "/config"
+            },
+            {
+              "description": "Clear conversation history",
+              "label": "/clear"
+            },
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/connectors"
+            },
+            {
+              "description": "Browse, resume, or delete saved sessions",
+              "label": "/continue"
+            },
+            {
+              "description": "Copy the last agent message to the clipboard",
+              "label": "/copy"
+            },
+            {
+              "description": "Show data retention information",
+              "label": "/data-retention"
+            },
+            {
+              "description": "Toggle debug console",
+              "label": "/debug"
+            },
+            {
+              "description": "Exit the application",
+              "label": "/exit"
+            },
+            {
+              "description": "Install the Lean 4 agent (leanstral)",
+              "label": "/leanstall"
+            },
+            {
+              "description": "Show path to current interaction log file",
+              "label": "/log"
+            },
+            {
+              "description": "Schedule a recurring prompt. Use `/loop <interval> <prompt>`, `/loop list`, or `/loop cancel <id|all>`",
+              "label": "/loop"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            },
+            {
+              "description": "Select active model",
+              "label": "/model"
+            },
+            {
+              "description": "Clear conversation history",
+              "label": "/new"
+            },
+            {
+              "description": "Configure proxy and SSL certificate settings",
+              "label": "/proxy-setup"
+            },
+            {
+              "description": "Reload configuration, agent instructions, and skills from disk",
+              "label": "/reload"
+            },
+            {
+              "description": "Rename the current session",
+              "label": "/rename"
+            },
+            {
+              "description": "Browse, resume, or delete saved sessions",
+              "label": "/resume"
+            },
+            {
+              "description": "Rewind to a previous message (or press Esc twice)",
+              "label": "/rewind"
+            },
+            {
+              "description": "Display agent statistics",
+              "label": "/status"
+            },
+            {
+              "description": "Select theme",
+              "label": "/theme"
+            },
+            {
+              "description": "Select thinking level",
+              "label": "/thinking"
+            },
+            {
+              "description": "Uninstall the Lean 4 agent",
+              "label": "/unleanstall"
+            },
+            {
+              "description": "Configure voice settings",
+              "label": "/voice"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 1,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/"
+      }
+    },
+    {
+      "effects": [
+        {
+          "mode": ">",
+          "type": "modeChanged"
+        }
+      ],
+      "event": {
+        "char": null,
+        "key": "backspace",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 5,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          0
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          ""
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 0,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": ""
+      }
+    }
+  ],
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "version": "2.23.2"
+  },
+  "schemaVersion": 1,
+  "setup": {
+    "agentName": "",
+    "commands": {},
+    "history": null,
+    "initial": {},
+    "safety": "neutral",
+    "skills": [],
+    "viewport": {
+      "height": 24,
+      "width": 80
+    },
+    "voice": null,
+    "workspace": "empty"
+  },
+  "story": "US-004",
+  "title": "Backspace inside command text deletes characters before the mode"
+}
