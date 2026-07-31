@@ -1,9 +1,12 @@
 use std::cmp::Ordering;
+use std::collections::VecDeque;
 use std::fs;
 use std::fs::OpenOptions;
 use std::ops::Range;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
@@ -17,31 +20,33 @@ use vibe_app_server::client::{PublicContentBlock, TurnRequest};
 pub const MAX_PASTE_BYTES: usize = 256 * 1024;
 pub const MAX_RESOURCE_BYTES: u64 = 8 * 1024 * 1024;
 pub const MAX_COMPLETION_CANDIDATES: usize = 64;
+pub const MAX_VISIBLE_COMPLETIONS: usize = 10;
 const MAX_COMPLETION_SCAN_ENTRIES: usize = 4_096;
-const SLASH_COMMANDS: &[&str] = &[
-    "/approve",
-    "/clear",
-    "/close",
-    "/compact",
-    "/continue",
-    "/deny",
-    "/exit",
-    "/fork",
-    "/help",
-    "/history",
-    "/loop",
-    "/quit",
-    "/remote-project",
-    "/resume",
-    "/rewind",
-    "/setup",
-    "/settings",
-    "/teleport",
-    "/theme",
-    "/title",
-    "/trust",
-    "/update",
-    "/voice",
+const IMAGE_EXTENSIONS: &[&str] = &["gif", "jpeg", "jpg", "png", "webp"];
+const SLASH_COMMANDS: &[(&str, &str)] = &[
+    ("/approve", "Approve the pending action"),
+    ("/clear", "Clear the current conversation"),
+    ("/close", "Close the current session"),
+    ("/compact", "Compact the current context"),
+    ("/continue", "Continue the latest session"),
+    ("/deny", "Deny the pending action"),
+    ("/exit", "Exit Vibe"),
+    ("/fork", "Fork the current session"),
+    ("/help", "Show commands and shortcuts"),
+    ("/history", "Browse saved history"),
+    ("/loop", "Manage scheduled loops"),
+    ("/quit", "Exit Vibe"),
+    ("/remote-project", "Manage Vibe Code projects"),
+    ("/resume", "Resume a saved session"),
+    ("/rewind", "Rewind the conversation"),
+    ("/setup", "Configure credentials and preferences"),
+    ("/settings", "Update session settings"),
+    ("/teleport", "Move work to another environment"),
+    ("/theme", "Change the terminal theme"),
+    ("/title", "Rename the session"),
+    ("/trust", "Trust the current workspace"),
+    ("/update", "Check for updates"),
+    ("/voice", "Start voice input"),
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -268,9 +273,138 @@ pub struct CompletionResult {
     pub candidates: Vec<CompletionCandidate>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct CompletionEngine {
     generation: u64,
+    active: Option<ActiveCompletion>,
+    worker: Option<CompletionWorker>,
+}
+
+#[derive(Debug, Clone)]
+struct ActiveCompletion {
+    token_range: Range<usize>,
+    result: CompletionResult,
+    selected: usize,
+}
+
+#[derive(Debug)]
+struct CompletionWorker {
+    state: Arc<(Mutex<CompletionWorkerState>, Condvar)>,
+    results: Receiver<CompletionResponse>,
+}
+
+#[derive(Debug, Default)]
+struct CompletionWorkerState {
+    pending: Option<CompletionRequest>,
+    shutdown: bool,
+}
+
+#[derive(Debug)]
+struct CompletionRequest {
+    generation: u64,
+    token_range: Range<usize>,
+    query: String,
+    workspace: PathBuf,
+}
+
+#[derive(Debug)]
+struct CompletionResponse {
+    generation: u64,
+    token_range: Range<usize>,
+    query: String,
+    candidates: Result<Vec<CompletionCandidate>, InputError>,
+}
+
+impl CompletionWorker {
+    fn spawn() -> Result<Self, InputError> {
+        let state = Arc::new((Mutex::new(CompletionWorkerState::default()), Condvar::new()));
+        let thread_state = Arc::clone(&state);
+        let (results_tx, results) = mpsc::channel();
+        std::thread::Builder::new()
+            .name("vibe-path-completion".to_owned())
+            .spawn(move || completion_worker_loop(&thread_state, &results_tx))
+            .map_err(|error| InputError::CompletionWorker(error.to_string()))?;
+        Ok(Self { state, results })
+    }
+
+    fn submit(&self, request: CompletionRequest) -> Result<(), InputError> {
+        let (state, ready) = self.state.as_ref();
+        let mut state = state
+            .lock()
+            .map_err(|_| InputError::CompletionWorker("worker lock is poisoned".to_owned()))?;
+        state.pending = Some(request);
+        ready.notify_one();
+        Ok(())
+    }
+
+    fn cancel_pending(&self) {
+        let (state, _) = self.state.as_ref();
+        if let Ok(mut state) = state.lock() {
+            state.pending = None;
+        }
+    }
+}
+
+impl Drop for CompletionWorker {
+    fn drop(&mut self) {
+        let (state, ready) = self.state.as_ref();
+        if let Ok(mut state) = state.lock() {
+            state.shutdown = true;
+            state.pending = None;
+            ready.notify_one();
+        }
+    }
+}
+
+fn completion_worker_loop(
+    shared: &Arc<(Mutex<CompletionWorkerState>, Condvar)>,
+    results: &mpsc::Sender<CompletionResponse>,
+) {
+    loop {
+        let request = {
+            let (state, ready) = shared.as_ref();
+            let Ok(mut state) = state.lock() else {
+                return;
+            };
+            while state.pending.is_none() && !state.shutdown {
+                let Ok(next) = ready.wait(state) else {
+                    return;
+                };
+                state = next;
+            }
+            if state.shutdown {
+                return;
+            }
+            state.pending.take()
+        };
+        let Some(request) = request else {
+            continue;
+        };
+        let candidates = prompt_candidates(&request.workspace, &request.query);
+        if results
+            .send(CompletionResponse {
+                generation: request.generation,
+                token_range: request.token_range,
+                query: request.query,
+                candidates,
+            })
+            .is_err()
+        {
+            return;
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompletionAction {
+    Applied,
+    Submit,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CompletionView<'a> {
+    pub candidates: &'a [CompletionCandidate],
+    pub selected: usize,
 }
 
 impl CompletionEngine {
@@ -280,23 +414,8 @@ impl CompletionEngine {
         candidates: impl IntoIterator<Item = CompletionCandidate>,
     ) -> CompletionResult {
         self.generation = self.generation.saturating_add(1);
-        let normalized = query.to_lowercase();
-        let mut candidates = candidates
-            .into_iter()
-            .filter(|candidate| candidate.label.to_lowercase().contains(&normalized))
-            .collect::<Vec<_>>();
-        candidates.sort_by(|left, right| {
-            completion_rank(left, &normalized)
-                .cmp(&completion_rank(right, &normalized))
-                .then_with(|| left.kind.cmp(&right.kind))
-                .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
-                .then_with(|| left.id.cmp(&right.id))
-        });
-        candidates.truncate(MAX_COMPLETION_CANDIDATES);
-        CompletionResult {
-            generation: self.generation,
-            candidates,
-        }
+        self.active = None;
+        ranked_completion(self.generation, query, candidates)
     }
 
     pub fn complete_prompt(
@@ -318,6 +437,140 @@ impl CompletionEngine {
         Ok(true)
     }
 
+    pub fn refresh(&mut self, editor: &PromptEditor, workspace: &Path) -> Result<(), InputError> {
+        let Some((token_range, query)) = active_token(editor) else {
+            self.cancel();
+            return Ok(());
+        };
+        self.generation = self.generation.saturating_add(1);
+        self.active = None;
+        if query.starts_with('/') {
+            let candidates = prompt_candidates(workspace, &query)?;
+            self.install_completion(self.generation, token_range, &query, candidates);
+            return Ok(());
+        }
+        let worker = match self.worker.as_ref() {
+            Some(worker) => worker,
+            None => {
+                self.worker = Some(CompletionWorker::spawn()?);
+                self.worker.as_ref().ok_or_else(|| {
+                    InputError::CompletionWorker("worker is unavailable".to_owned())
+                })?
+            }
+        };
+        worker.submit(CompletionRequest {
+            generation: self.generation,
+            token_range,
+            query,
+            workspace: workspace.to_path_buf(),
+        })?;
+        Ok(())
+    }
+
+    pub fn poll(&mut self) -> Result<bool, InputError> {
+        let mut responses = Vec::new();
+        if let Some(worker) = &self.worker {
+            loop {
+                match worker.results.try_recv() {
+                    Ok(response) => responses.push(response),
+                    Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
+                }
+            }
+        }
+        let mut changed = false;
+        for response in responses {
+            if response.generation != self.generation {
+                continue;
+            }
+            let candidates = response.candidates?;
+            self.install_completion(
+                response.generation,
+                response.token_range,
+                &response.query,
+                candidates,
+            );
+            changed = true;
+        }
+        Ok(changed)
+    }
+
+    fn install_completion(
+        &mut self,
+        generation: u64,
+        token_range: Range<usize>,
+        query: &str,
+        candidates: Vec<CompletionCandidate>,
+    ) {
+        let mut result = ranked_completion(generation, query, candidates);
+        if result
+            .candidates
+            .first()
+            .is_some_and(|candidate| candidate.kind == CompletionKind::Mention)
+        {
+            result.candidates.truncate(MAX_VISIBLE_COMPLETIONS);
+        }
+        if !result.candidates.is_empty() {
+            self.active = Some(ActiveCompletion {
+                token_range,
+                result,
+                selected: 0,
+            });
+        }
+    }
+
+    #[must_use]
+    pub fn view(&self) -> Option<CompletionView<'_>> {
+        self.active.as_ref().map(|active| CompletionView {
+            candidates: &active.result.candidates,
+            selected: active.selected,
+        })
+    }
+
+    pub fn move_selection(&mut self, delta: isize) -> bool {
+        let Some(active) = self.active.as_mut() else {
+            return false;
+        };
+        let count = active.result.candidates.len();
+        if count == 0 {
+            return false;
+        }
+        let distance = delta.unsigned_abs() % count;
+        active.selected = if delta.is_negative() {
+            active
+                .selected
+                .saturating_add(count)
+                .saturating_sub(distance)
+                % count
+        } else {
+            active.selected.saturating_add(distance) % count
+        };
+        true
+    }
+
+    pub fn accept(&mut self, editor: &mut PromptEditor) -> Result<CompletionAction, InputError> {
+        let active = self.active.take().ok_or(InputError::MissingCompletion)?;
+        if active.result.generation != self.generation {
+            return Err(InputError::StaleCompletion);
+        }
+        let candidate = active
+            .result
+            .candidates
+            .get(active.selected)
+            .ok_or(InputError::MissingCompletion)?
+            .clone();
+        editor.select(active.token_range);
+        editor.insert(&candidate.insertion);
+        if candidate.kind == CompletionKind::Mention && !candidate.insertion.ends_with('/') {
+            editor.insert(" ");
+        }
+        self.generation = self.generation.saturating_add(1);
+        Ok(if candidate.kind == CompletionKind::SlashCommand {
+            CompletionAction::Submit
+        } else {
+            CompletionAction::Applied
+        })
+    }
+
     pub fn apply(
         &self,
         editor: &mut PromptEditor,
@@ -337,6 +590,59 @@ impl CompletionEngine {
 
     pub fn cancel(&mut self) {
         self.generation = self.generation.saturating_add(1);
+        self.active = None;
+        if let Some(worker) = &self.worker {
+            worker.cancel_pending();
+        }
+    }
+
+    #[cfg(test)]
+    fn wait_for_pending(&mut self) -> Result<(), InputError> {
+        let response = self
+            .worker
+            .as_ref()
+            .ok_or_else(|| InputError::CompletionWorker("worker is unavailable".to_owned()))?
+            .results
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .map_err(|error| InputError::CompletionWorker(error.to_string()))?;
+        if response.generation == self.generation {
+            let candidates = response.candidates?;
+            self.install_completion(
+                response.generation,
+                response.token_range,
+                &response.query,
+                candidates,
+            );
+        }
+        Ok(())
+    }
+}
+
+fn ranked_completion(
+    generation: u64,
+    query: &str,
+    candidates: impl IntoIterator<Item = CompletionCandidate>,
+) -> CompletionResult {
+    let normalized = query.to_lowercase();
+    let mut candidates = candidates
+        .into_iter()
+        .filter(|candidate| fuzzy_completion_score(&candidate.label, &normalized).is_some())
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        completion_rank(left, &normalized)
+            .cmp(&completion_rank(right, &normalized))
+            .then_with(|| {
+                fuzzy_completion_score(&right.label, &normalized)
+                    .cmp(&fuzzy_completion_score(&left.label, &normalized))
+            })
+            .then_with(|| left.kind.cmp(&right.kind))
+            .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    candidates.truncate(MAX_COMPLETION_CANDIDATES);
+    CompletionResult {
+        generation,
+        candidates,
     }
 }
 
@@ -349,24 +655,46 @@ fn completion_rank(candidate: &CompletionCandidate, query: &str) -> u8 {
     }
 }
 
+fn fuzzy_completion_score(candidate: &str, query: &str) -> Option<usize> {
+    if query.is_empty() {
+        return Some(0);
+    }
+    let candidate = candidate.to_lowercase();
+    let mut candidate_chars = candidate.chars().enumerate();
+    let mut score = 0usize;
+    let mut previous = None;
+    for query_character in query.chars() {
+        let (index, _) = candidate_chars
+            .find(|(_, candidate_character)| *candidate_character == query_character)?;
+        score = score
+            .saturating_add(previous.map_or(1, |previous| index.saturating_sub(previous).max(1)));
+        previous = Some(index);
+    }
+    Some(usize::MAX.saturating_sub(score))
+}
+
 fn active_token(editor: &PromptEditor) -> Option<(Range<usize>, String)> {
     let text = editor.text();
     let cursor_byte = grapheme_byte(text, editor.cursor());
+    if text.starts_with('/') {
+        let end_byte = text.find(char::is_whitespace).unwrap_or(text.len());
+        let query_end = cursor_byte.min(end_byte);
+        return Some((
+            0..grapheme_count(&text[..query_end]),
+            text[..query_end].to_owned(),
+        ));
+    }
     let start_byte = text[..cursor_byte]
         .char_indices()
         .rev()
         .find(|(_, character)| character.is_whitespace())
         .map_or(0, |(byte, character)| byte + character.len_utf8());
-    let end_byte = text[cursor_byte..]
-        .char_indices()
-        .find(|(_, character)| character.is_whitespace())
-        .map_or(text.len(), |(byte, _)| cursor_byte + byte);
     let query = text[start_byte..cursor_byte].to_owned();
-    if query.is_empty() {
+    if !query.starts_with('@') || query.len() == 1 && cursor_byte != text.len() {
         return None;
     }
     Some((
-        grapheme_count(&text[..start_byte])..grapheme_count(&text[..end_byte]),
+        grapheme_count(&text[..start_byte])..grapheme_count(&text[..cursor_byte]),
         query,
     ))
 }
@@ -378,7 +706,7 @@ fn prompt_candidates(
     if query.starts_with('/') {
         return Ok(SLASH_COMMANDS
             .iter()
-            .map(|command| CompletionCandidate {
+            .map(|(command, _)| CompletionCandidate {
                 id: format!("command:{command}"),
                 kind: CompletionKind::SlashCommand,
                 label: (*command).to_owned(),
@@ -387,11 +715,21 @@ fn prompt_candidates(
             .collect());
     }
 
-    let (kind, marker, raw_query) = if let Some(query) = query.strip_prefix('@') {
-        (CompletionKind::Mention, "@", query)
-    } else {
-        (CompletionKind::Path, "", query)
+    let Some(raw_query) = query.strip_prefix('@') else {
+        return Ok(Vec::new());
     };
+    let canonical_workspace =
+        fs::canonicalize(workspace).map_err(|error| InputError::Workspace(error.to_string()))?;
+    if raw_query.is_empty() || raw_query.ends_with('/') || raw_query.contains('/') {
+        return directory_candidates(&canonical_workspace, raw_query);
+    }
+    recursive_candidates(&canonical_workspace, raw_query)
+}
+
+fn directory_candidates(
+    canonical_workspace: &Path,
+    raw_query: &str,
+) -> Result<Vec<CompletionCandidate>, InputError> {
     let (parent_display, leaf) = raw_query
         .rsplit_once('/')
         .map_or(("", raw_query), |(parent, leaf)| {
@@ -401,8 +739,6 @@ fn prompt_candidates(
     let Ok(relative_parent) = safe_relative_path(parent) else {
         return Ok(Vec::new());
     };
-    let canonical_workspace =
-        fs::canonicalize(workspace).map_err(|error| InputError::Workspace(error.to_string()))?;
     let directory = canonical_workspace.join(relative_parent);
     let Ok(canonical_directory) = fs::canonicalize(directory) else {
         return Ok(Vec::new());
@@ -417,37 +753,189 @@ fn prompt_candidates(
         .take(MAX_COMPLETION_SCAN_ENTRIES.saturating_add(1))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| InputError::Resource(error.to_string()))?;
-    if entries.len() > MAX_COMPLETION_SCAN_ENTRIES {
-        return Ok(Vec::new());
-    }
+    entries.truncate(MAX_COMPLETION_SCAN_ENTRIES);
     entries.sort_by_key(|entry| entry.file_name());
     let mut candidates = Vec::new();
     for entry in entries {
         let Ok(name) = entry.file_name().into_string() else {
             continue;
         };
-        if !name.to_lowercase().contains(&leaf.to_lowercase()) {
+        if name.starts_with('.') && !leaf.starts_with('.') {
             continue;
         }
-        let Ok(canonical) = fs::canonicalize(entry.path()) else {
+        if fuzzy_completion_score(&name, leaf).is_none() {
+            continue;
+        }
+        let Some((is_directory, _)) = safe_entry_kind(&entry, canonical_workspace) else {
             continue;
         };
-        if !canonical.starts_with(&canonical_workspace) {
-            continue;
-        }
-        let directory_suffix = if canonical.is_dir() { "/" } else { "" };
-        let insertion = format!("{marker}{parent_display}{name}{directory_suffix}");
-        candidates.push(CompletionCandidate {
-            id: format!(
-                "{}:{insertion}",
-                if marker.is_empty() { "path" } else { "mention" }
-            ),
-            kind,
-            label: insertion.clone(),
-            insertion,
-        });
+        candidates.push(mention_candidate(
+            format!("{parent_display}{name}"),
+            is_directory,
+        ));
     }
     Ok(candidates)
+}
+
+fn recursive_candidates(
+    canonical_workspace: &Path,
+    raw_query: &str,
+) -> Result<Vec<CompletionCandidate>, InputError> {
+    let mut directories = VecDeque::from([canonical_workspace.to_path_buf()]);
+    let mut candidates = Vec::new();
+    let mut scanned = 0usize;
+    while let Some(directory) = directories.pop_front() {
+        let entries =
+            fs::read_dir(directory).map_err(|error| InputError::Resource(error.to_string()))?;
+        for entry in entries {
+            if scanned >= MAX_COMPLETION_SCAN_ENTRIES {
+                return Ok(candidates);
+            }
+            scanned = scanned.saturating_add(1);
+            let entry = entry.map_err(|error| InputError::Resource(error.to_string()))?;
+            let Ok(name) = entry.file_name().into_string() else {
+                continue;
+            };
+            if name.starts_with('.') && !raw_query.starts_with('.') {
+                continue;
+            }
+            let Some((is_directory, should_recurse)) = safe_entry_kind(&entry, canonical_workspace)
+            else {
+                continue;
+            };
+            if should_recurse {
+                directories.push_back(entry.path());
+            }
+            let entry_path = entry.path();
+            let Ok(relative) = entry_path.strip_prefix(canonical_workspace) else {
+                continue;
+            };
+            let display = relative
+                .components()
+                .map(|component| component.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/");
+            if fuzzy_completion_score(&display, raw_query).is_some() {
+                candidates.push(mention_candidate(display, is_directory));
+            }
+        }
+    }
+    Ok(candidates)
+}
+
+fn safe_entry_kind(entry: &fs::DirEntry, workspace: &Path) -> Option<(bool, bool)> {
+    let file_type = entry.file_type().ok()?;
+    if !file_type.is_symlink() {
+        return Some((file_type.is_dir(), file_type.is_dir()));
+    }
+    let canonical = fs::canonicalize(entry.path()).ok()?;
+    canonical
+        .starts_with(workspace)
+        .then(|| (canonical.is_dir(), false))
+}
+
+fn mention_candidate(path: String, is_directory: bool) -> CompletionCandidate {
+    let suffix = if is_directory { "/" } else { "" };
+    let insertion = format!("@{path}{suffix}");
+    CompletionCandidate {
+        id: format!("mention:{insertion}"),
+        kind: CompletionKind::Mention,
+        label: insertion.clone(),
+        insertion,
+    }
+}
+
+#[must_use]
+pub fn completion_description(label: &str) -> &'static str {
+    SLASH_COMMANDS
+        .iter()
+        .find_map(|(command, description)| (*command == label).then_some(*description))
+        .unwrap_or_default()
+}
+
+#[must_use]
+pub fn normalize_pasted_text(workspace: &Path, pasted: &str) -> String {
+    let trimmed = pasted.trim();
+    if trimmed.is_empty()
+        || trimmed.contains('\n')
+        || trimmed.contains('\r')
+        || trimmed.starts_with('@')
+        || (trimmed.contains('\'') && !has_matched_quotes(trimmed, '\''))
+        || (trimmed.contains('"') && !has_matched_quotes(trimmed, '"'))
+    {
+        return pasted.to_owned();
+    }
+    let unquoted = if has_matched_quotes(trimmed, '\'') || has_matched_quotes(trimmed, '"') {
+        &trimmed[1..trimmed.len().saturating_sub(1)]
+    } else {
+        trimmed
+    };
+    let candidate = unquoted.replace("\\ ", " ");
+    let path = expand_tilde_path(&candidate);
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !path.is_absolute() || !IMAGE_EXTENSIONS.contains(&extension.as_str()) || !path.is_file() {
+        return pasted.to_owned();
+    }
+    let Ok(workspace) = fs::canonicalize(workspace) else {
+        return pasted.to_owned();
+    };
+    let Ok(path) = fs::canonicalize(path) else {
+        return pasted.to_owned();
+    };
+    let Ok(relative) = path.strip_prefix(workspace) else {
+        return pasted.to_owned();
+    };
+    let display = relative
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
+    if display.contains('\'') {
+        return pasted.to_owned();
+    }
+    if display.chars().any(char::is_whitespace) {
+        format!("@'{display}'")
+    } else {
+        format!("@{display}")
+    }
+}
+
+fn has_matched_quotes(value: &str, quote: char) -> bool {
+    value.len() >= 2 && value.starts_with(quote) && value.ends_with(quote)
+}
+
+fn expand_tilde_path(value: &str) -> PathBuf {
+    let path = Path::new(value);
+    let mut components = path.components();
+    if !matches!(components.next(), Some(Component::Normal(first)) if first == "~") {
+        return path.to_path_buf();
+    }
+    let Some(mut home) = user_home_directory() else {
+        return path.to_path_buf();
+    };
+    home.extend(components);
+    home
+}
+
+fn user_home_directory() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .or_else(|| {
+                let mut home = PathBuf::from(std::env::var_os("HOMEDRIVE")?);
+                home.push(std::env::var_os("HOMEPATH")?);
+                Some(home)
+            })
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var_os("HOME").map(PathBuf::from)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -474,31 +962,25 @@ pub fn prepare_submission(
         text: prompt.to_owned(),
     }];
     let mut metrics = Vec::new();
-    for token in prompt
-        .split_whitespace()
-        .filter(|token| token.starts_with('@'))
-    {
-        let raw = token
-            .trim_start_matches('@')
-            .trim_matches(|character: char| ",.;:!?)]}".contains(character));
+    for (token, raw) in mention_tokens(prompt) {
         if raw.is_empty() {
             continue;
         }
-        let relative = safe_relative_path(raw)?;
+        let relative = safe_relative_path(&raw)?;
         let path = canonical_workspace.join(relative);
         let canonical =
-            fs::canonicalize(&path).map_err(|_| InputError::MissingMention(raw.to_owned()))?;
+            fs::canonicalize(&path).map_err(|_| InputError::MissingMention(raw.clone()))?;
         if !canonical.starts_with(&canonical_workspace) {
-            return Err(InputError::MentionOutsideWorkspace(raw.to_owned()));
+            return Err(InputError::MentionOutsideWorkspace(raw));
         }
         let metadata =
             fs::metadata(&canonical).map_err(|error| InputError::Resource(error.to_string()))?;
         if !metadata.is_file() {
-            return Err(InputError::InvalidMention(raw.to_owned()));
+            return Err(InputError::InvalidMention(raw));
         }
         if metadata.len() > MAX_RESOURCE_BYTES {
             return Err(InputError::ResourceTooLarge {
-                path: raw.to_owned(),
+                path: raw,
                 bytes: metadata.len(),
                 limit: MAX_RESOURCE_BYTES,
             });
@@ -521,7 +1003,7 @@ pub fn prepare_submission(
             input.push(PublicContentBlock::Image {
                 attachment: json!({
                     "uri": uri,
-                    "name": raw,
+                    "name": &raw,
                     "bytes": metadata.len(),
                     "mediaType": media_type,
                     "data": BASE64_STANDARD.encode(&bytes),
@@ -541,7 +1023,7 @@ pub fn prepare_submission(
             input.push(PublicContentBlock::Resource {
                 resource: json!({
                     "uri": uri,
-                    "name": raw,
+                    "name": &raw,
                     "text": text,
                 }),
             });
@@ -561,6 +1043,53 @@ pub fn prepare_submission(
         mention_stats: Some(serde_json::to_value(&metrics).map_err(InputError::Json)?),
     };
     Ok(PreparedSubmission { turn, metrics })
+}
+
+fn mention_tokens(prompt: &str) -> Vec<(String, String)> {
+    let mut tokens = Vec::new();
+    let mut cursor = 0usize;
+    while cursor < prompt.len() {
+        let Some(relative_start) = prompt[cursor..].find('@') else {
+            break;
+        };
+        let start = cursor.saturating_add(relative_start);
+        let boundary = prompt[..start].chars().next_back();
+        if boundary
+            .is_some_and(|character| !character.is_whitespace() && !"(<[".contains(character))
+        {
+            cursor = start.saturating_add(1);
+            continue;
+        }
+        let value_start = start.saturating_add(1);
+        let Some(first) = prompt[value_start..].chars().next() else {
+            break;
+        };
+        let (raw, end) = if matches!(first, '\'' | '"') {
+            let content_start = value_start.saturating_add(first.len_utf8());
+            let Some(relative_end) = prompt[content_start..].find(first) else {
+                break;
+            };
+            let content_end = content_start.saturating_add(relative_end);
+            (
+                prompt[content_start..content_end].to_owned(),
+                content_end.saturating_add(first.len_utf8()),
+            )
+        } else {
+            let relative_end = prompt[value_start..]
+                .find(char::is_whitespace)
+                .unwrap_or(prompt.len().saturating_sub(value_start));
+            let end = value_start.saturating_add(relative_end);
+            (
+                prompt[value_start..end]
+                    .trim_matches(|character: char| ",.;:!?)]}".contains(character))
+                    .to_owned(),
+                end,
+            )
+        };
+        tokens.push((prompt[start..end].to_owned(), raw));
+        cursor = end;
+    }
+    tokens
 }
 
 fn safe_relative_path(raw: &str) -> Result<PathBuf, InputError> {
@@ -658,6 +1187,8 @@ pub enum InputError {
     StaleCompletion,
     #[error("selected completion does not exist")]
     MissingCompletion,
+    #[error("completion worker failed: {0}")]
+    CompletionWorker(String),
     #[error("workspace is unavailable: {0}")]
     Workspace(String),
     #[error("mentioned path `{0}` does not exist")]
@@ -780,10 +1311,9 @@ mod tests {
     }
 
     #[test]
-    fn runtime_completion_applies_slash_path_and_mention_candidates() {
+    fn runtime_completion_applies_slash_and_at_mention_candidates() {
         let temporary = tempfile::tempdir().expect("temporary workspace");
         fs::create_dir(temporary.path().join("src")).expect("path fixture");
-        fs::write(temporary.path().join("notes.txt"), "context").expect("mention fixture");
         let mut engine = CompletionEngine::default();
         let mut editor = PromptEditor::default();
 
@@ -797,19 +1327,90 @@ mod tests {
 
         editor.set_text("inspect sr");
         assert!(
-            engine
+            !engine
                 .complete_prompt(&mut editor, temporary.path())
-                .expect("path completion")
+                .expect("bare paths do not activate completion")
         );
-        assert_eq!(editor.text(), "inspect src/");
+        assert_eq!(editor.text(), "inspect sr");
 
-        editor.set_text("inspect @no");
+        editor.set_text("inspect @sr");
         assert!(
             engine
                 .complete_prompt(&mut editor, temporary.path())
                 .expect("mention completion")
         );
-        assert_eq!(editor.text(), "inspect @notes.txt");
+        assert_eq!(editor.text(), "inspect @src/");
+    }
+
+    #[test]
+    fn live_completion_tracks_selection_and_applies_official_spacing() {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        fs::write(temporary.path().join("notes.txt"), "context").expect("mention fixture");
+        let mut engine = CompletionEngine::default();
+        let mut editor = PromptEditor::default();
+
+        editor.set_text("/cl");
+        engine
+            .refresh(&editor, temporary.path())
+            .expect("slash suggestions");
+        let view = engine.view().expect("visible slash suggestions");
+        assert_eq!(view.candidates[view.selected].label, "/clear");
+        let suggestion_count = view.candidates.len();
+        assert!(engine.move_selection(-1));
+        assert_eq!(
+            engine.view().expect("wrapped selection").selected,
+            suggestion_count - 1
+        );
+        assert!(engine.move_selection(1));
+        assert_eq!(engine.view().expect("rewrapped selection").selected, 0);
+        assert_eq!(
+            engine.accept(&mut editor).expect("slash completion"),
+            CompletionAction::Submit
+        );
+        assert_eq!(editor.text(), "/clear");
+        assert!(engine.view().is_none());
+
+        editor.set_text("inspect @no");
+        engine
+            .refresh(&editor, temporary.path())
+            .expect("mention suggestions");
+        engine.wait_for_pending().expect("completed mention search");
+        assert_eq!(
+            engine.accept(&mut editor).expect("mention completion"),
+            CompletionAction::Applied
+        );
+        assert_eq!(editor.text(), "inspect @notes.txt ");
+
+        fs::create_dir(temporary.path().join("src")).expect("nested directory");
+        fs::write(temporary.path().join("src/lib.rs"), "pub fn nested() {}")
+            .expect("nested mention fixture");
+        editor.set_text("inspect @lib");
+        engine
+            .refresh(&editor, temporary.path())
+            .expect("recursive mention suggestions");
+        engine
+            .wait_for_pending()
+            .expect("completed recursive search");
+        assert_eq!(
+            engine
+                .view()
+                .expect("recursive suggestion")
+                .candidates
+                .first()
+                .map(|candidate| candidate.label.as_str()),
+            Some("@src/lib.rs")
+        );
+
+        editor.set_text("inspect @noXYZ");
+        editor.move_left(false);
+        editor.move_left(false);
+        editor.move_left(false);
+        engine
+            .refresh(&editor, temporary.path())
+            .expect("partial mention suggestions");
+        engine.wait_for_pending().expect("completed partial search");
+        engine.accept(&mut editor).expect("partial completion");
+        assert_eq!(editor.text(), "inspect @notes.txt XYZ");
     }
 
     #[test]
@@ -870,6 +1471,29 @@ mod tests {
                 .and_then(|value| value.get("text"))
                 .and_then(serde_json::Value::as_str),
             Some("inspect @notes.txt and @image.png")
+        );
+    }
+
+    #[test]
+    fn pasted_workspace_images_become_quoted_mentions() {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        let image = temporary.path().join("image one.png");
+        fs::write(&image, b"image").expect("image fixture");
+
+        let pasted =
+            normalize_pasted_text(temporary.path(), &format!("'{}'", image.to_string_lossy()));
+        assert_eq!(pasted, "@'image one.png'");
+
+        let prepared = prepare_submission(temporary.path(), &format!("inspect {pasted}"))
+            .expect("quoted image mention prepares");
+        assert_eq!(prepared.turn.input.len(), 2);
+        assert_eq!(prepared.metrics[0].kind, "image");
+
+        let text = temporary.path().join("notes one.txt");
+        fs::write(&text, "context").expect("text fixture");
+        assert_eq!(
+            normalize_pasted_text(temporary.path(), &text.to_string_lossy()),
+            text.to_string_lossy()
         );
     }
 
