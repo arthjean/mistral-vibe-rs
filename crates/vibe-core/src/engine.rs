@@ -1403,6 +1403,7 @@ mod tests {
     fn provider_input() -> ProviderInput {
         ProviderInput {
             turn_id: None,
+            model_override: None,
             messages: vec![ModelMessage::System {
                 content: "system".to_owned(),
             }],

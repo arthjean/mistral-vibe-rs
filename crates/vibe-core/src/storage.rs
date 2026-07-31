@@ -529,6 +529,34 @@ impl SessionStore {
         )
     }
 
+    pub fn fork_rewound(
+        &self,
+        selector: &str,
+        new_id: &str,
+        keep_messages: usize,
+        statistics: BTreeMap<String, Value>,
+        now_ms: u64,
+    ) -> Result<HydratedSession, StorageError> {
+        let mut parent = self.load(selector)?;
+        if keep_messages > parent.messages.len() {
+            return Err(StorageError::InvalidRewind {
+                requested: keep_messages,
+                available: parent.messages.len(),
+            });
+        }
+        let mut messages = parent.messages.clone();
+        messages.truncate(keep_messages);
+        parent.metadata.statistics = statistics;
+        self.publish_handoff(
+            &parent.metadata,
+            new_id,
+            messages,
+            parent.metadata.config.clone(),
+            BTreeMap::new(),
+            now_ms,
+        )
+    }
+
     pub fn handoff_messages(
         &self,
         parent: &SessionMetadata,
@@ -2035,6 +2063,49 @@ mod tests {
             store.load("child-session"),
             Err(StorageError::SessionNotFound(_))
         ));
+    }
+
+    #[test]
+    fn rewound_fork_is_published_once_without_mutating_its_parent() {
+        let temporary = tempfile::tempdir().expect("temporary session root");
+        let store = SessionStore::new(temporary.path()).with_pointer_key("rewind-fork");
+        let mut parent = store
+            .create("parent", "/workspace", None, 10)
+            .expect("parent session");
+        parent
+            .config
+            .insert("model".to_owned(), Value::from("parent-model"));
+        store.update_metadata(&parent).expect("parent metadata");
+        for (index, message) in [user("one"), user("two"), user("three")]
+            .into_iter()
+            .enumerate()
+        {
+            store
+                .append_message(&mut parent, &message, 11 + index as u64)
+                .expect("parent message");
+        }
+
+        let child = store
+            .fork_rewound(
+                "parent",
+                "child",
+                2,
+                BTreeMap::from([("tokens".to_owned(), Value::from(42))]),
+                20,
+            )
+            .expect("rewound fork");
+
+        assert_eq!(child.metadata.parent_session_id.as_deref(), Some("parent"));
+        assert_eq!(child.messages, [user("one"), user("two")]);
+        assert_eq!(child.current_config["model"], "parent-model");
+        assert_eq!(child.metadata.statistics["tokens"], 42);
+        assert_eq!(
+            store
+                .load("parent")
+                .expect("parent remains intact")
+                .messages,
+            [user("one"), user("two"), user("three")]
+        );
     }
 
     #[test]

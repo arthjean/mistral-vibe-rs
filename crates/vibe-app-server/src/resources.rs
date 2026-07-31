@@ -448,6 +448,60 @@ impl CoreResourceBackend {
         match request.method.as_str() {
             "shell/run" => {
                 let command = required_string(&request.params, "command")?;
+                let existing_terminal = session
+                    .shell_operations
+                    .lock()
+                    .await
+                    .get(&operation_id)
+                    .cloned();
+                if let Some(terminal_id) = existing_terminal {
+                    let mut output = session
+                        .terminals
+                        .read(&terminal_id)
+                        .await
+                        .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
+                    if !matches!(output.state, vibe_core::process::TerminalState::Running) {
+                        let final_output =
+                            session
+                                .terminals
+                                .wait(&terminal_id)
+                                .await
+                                .map_err(|error| {
+                                    ResourceError::Unavailable(redact(&error.to_string()))
+                                })?;
+                        output.chunks.extend(final_output.chunks);
+                        output.state = final_output.state;
+                        output.backpressure_dropped |= final_output.backpressure_dropped;
+                        let removed = session
+                            .shell_operations
+                            .lock()
+                            .await
+                            .remove(&operation_id)
+                            .is_some_and(|candidate| candidate == terminal_id);
+                        if removed {
+                            session
+                                .terminals
+                                .release(&terminal_id)
+                                .await
+                                .map_err(|error| {
+                                    ResourceError::Unavailable(redact(&error.to_string()))
+                                })?;
+                        }
+                    }
+                    let status = output.state.clone();
+                    let state = json!({
+                        "operationId": operation_id,
+                        "terminalId": terminal_id,
+                        "status": status,
+                        "output": output,
+                    });
+                    return Ok(canonical_mutation(
+                        "shell",
+                        state,
+                        "shell/updated",
+                        Vec::new(),
+                    ));
+                }
                 if !matches!(
                     session
                         .policy
@@ -490,6 +544,11 @@ impl CoreResourceBackend {
                     .run(spec)
                     .await
                     .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
+                if let Err(error) = session.terminals.close_stdin(&terminal_id).await {
+                    let _ = session.terminals.interrupt(&terminal_id).await;
+                    let _ = session.terminals.release(&terminal_id).await;
+                    return Err(ResourceError::Unavailable(redact(&error.to_string())));
+                }
                 let mut operations = session.shell_operations.lock().await;
                 if operations.contains_key(&operation_id) {
                     drop(operations);
@@ -533,10 +592,12 @@ impl CoreResourceBackend {
                     .release(&terminal_id)
                     .await
                     .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
+                let status = output.state.clone();
                 let state = json!({
                     "operationId": operation_id,
                     "terminalId": terminal_id,
-                    "status": output.state
+                    "status": status,
+                    "output": output,
                 });
                 Ok(canonical_mutation(
                     "shell",
@@ -2043,6 +2104,67 @@ mod tests {
                 .map(|notification| notification.method.as_str()),
             Some("shell/updated")
         );
+        let (completed, saw_output) =
+            tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                let mut saw_output = false;
+                loop {
+                    let dispatch = backend
+                        .dispatch(ResourceBackendRequest {
+                            session_id: "s1".to_owned(),
+                            method: "shell/run".to_owned(),
+                            params: params(json!({
+                                "sessionId": "s1",
+                                "operationId": "shell-1",
+                                "command": "pwd"
+                            })),
+                        })
+                        .await
+                        .expect("poll shell");
+                    saw_output |= dispatch
+                        .result
+                        .get("shell")
+                        .and_then(|shell| shell.pointer("/output/chunks"))
+                        .and_then(Value::as_array)
+                        .is_some_and(|chunks| !chunks.is_empty());
+                    if dispatch
+                        .result
+                        .get("shell")
+                        .and_then(|shell| shell.pointer("/output/state/status"))
+                        .and_then(Value::as_str)
+                        != Some("running")
+                    {
+                        break (dispatch, saw_output);
+                    }
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .expect("shell completes within the test deadline");
+        assert_eq!(
+            completed
+                .result
+                .get("shell")
+                .and_then(|shell| shell.pointer("/output/state/status"))
+                .and_then(Value::as_str),
+            Some("exited")
+        );
+        assert!(
+            saw_output,
+            "shell output must be drained before process release"
+        );
+        let denied = backend
+            .dispatch(ResourceBackendRequest {
+                session_id: "s1".to_owned(),
+                method: "shell/run".to_owned(),
+                params: params(json!({
+                    "sessionId": "s1",
+                    "operationId": "shell-2",
+                    "command": "rm forbidden"
+                })),
+            })
+            .await
+            .expect_err("destructive shell command must be denied before spawn");
+        assert!(matches!(denied, ResourceError::Conflict(_)));
         backend.close_session("s1", 1).await.expect("cleanup");
     }
 

@@ -190,6 +190,8 @@ impl ProviderStyle {
 pub struct ProviderInput {
     #[serde(skip)]
     pub turn_id: Option<String>,
+    #[serde(skip)]
+    pub model_override: Option<String>,
     pub messages: Vec<ModelMessage>,
     #[serde(default = "default_streaming")]
     pub stream: bool,
@@ -388,13 +390,14 @@ where
                 "at least one message is required".to_owned(),
             ));
         }
+        let model = input.model_override.as_deref().unwrap_or(&self.model);
         let body = match self.style {
             ProviderStyle::Mistral | ProviderStyle::Openai | ProviderStyle::Reasoning => {
-                build_chat_request(self.style, &self.model, input)?
+                build_chat_request(self.style, model, input)?
             }
-            ProviderStyle::OpenaiResponses => build_responses_request(&self.model, input)?,
+            ProviderStyle::OpenaiResponses => build_responses_request(model, input)?,
             ProviderStyle::Anthropic | ProviderStyle::VertexAnthropic => {
-                build_anthropic_request(self.style, &self.model, input)?
+                build_anthropic_request(self.style, model, input)?
             }
         };
         let mut headers = BTreeMap::new();
@@ -1674,6 +1677,7 @@ mod tests {
     fn input() -> ProviderInput {
         ProviderInput {
             turn_id: None,
+            model_override: None,
             messages: vec![
                 ModelMessage::System {
                     content: "system".to_owned(),
@@ -1766,6 +1770,29 @@ mod tests {
         .build_request(&value)
         .expect("Mistral request");
         assert!(request.body["metadata"].get("turn_id").is_none());
+        assert_eq!(request.body["metadata"]["public-key"], "public-value");
+    }
+
+    #[test]
+    fn model_override_changes_routing_without_using_provider_metadata() {
+        let mut value = input();
+        value.model_override = Some("next-model".to_owned());
+        value
+            .metadata
+            .insert("public-key".to_owned(), "public-value".to_owned());
+
+        let request = backend(
+            ProviderStyle::Mistral,
+            WireResponse {
+                status: 200,
+                headers: BTreeMap::new(),
+                chunks: Vec::new(),
+            },
+        )
+        .build_request(&value)
+        .expect("Mistral request");
+
+        assert_eq!(request.body["model"], "next-model");
         assert_eq!(request.body["metadata"]["public-key"], "public-value");
     }
 

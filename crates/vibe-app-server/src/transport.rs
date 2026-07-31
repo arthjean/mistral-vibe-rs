@@ -1066,6 +1066,7 @@ pub async fn benchmark_fake_provider_chunk_latency(
     };
     let input = ProviderInput {
         turn_id: Some(turn_id),
+        model_override: None,
         messages: vec![ModelMessage::System {
             content: "deterministic streaming benchmark".to_owned(),
         }],

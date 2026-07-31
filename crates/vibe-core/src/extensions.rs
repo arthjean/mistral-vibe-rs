@@ -17,6 +17,7 @@ use tokio::time::timeout;
 use toml::Table;
 
 use crate::engine::CancellationToken;
+use crate::policy::{PermissionMode, PermissionRule};
 use crate::storage::{SessionStore, StorageError};
 
 const MAX_EXTENSION_FILE_BYTES: u64 = 2 * 1024 * 1024;
@@ -28,7 +29,7 @@ const MAX_CHILD_ID_ATTEMPTS: usize = 1024;
 static INSTALL_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static CHILD_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExtensionSource {
     Builtin,
@@ -44,7 +45,7 @@ pub enum AgentKind {
     Subagent,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentProfile {
     pub name: String,
@@ -55,6 +56,247 @@ pub struct AgentProfile {
     pub overrides: Table,
     pub source: ExtensionSource,
     pub path: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AgentApproval {
+    #[default]
+    Prompt,
+    Edits,
+    All,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AgentRuntimeSettings {
+    pub enabled_tools: Vec<String>,
+    pub disabled_tools: Vec<String>,
+    pub permission_rules: Vec<PermissionRule>,
+    pub approval: AgentApproval,
+    pub model: Option<String>,
+    pub thinking: Option<bool>,
+    pub reasoning_effort: Option<String>,
+    pub mode: Option<String>,
+    pub system_prompt_id: Option<String>,
+}
+
+impl AgentProfile {
+    #[must_use]
+    pub fn runtime_settings(&self) -> AgentRuntimeSettings {
+        let approval = if self
+            .overrides
+            .get("bypass_tool_permissions")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false)
+        {
+            AgentApproval::All
+        } else if auto_approves_edits(&self.overrides) {
+            AgentApproval::Edits
+        } else {
+            AgentApproval::Prompt
+        };
+        let active_model = self
+            .overrides
+            .get("active_model")
+            .and_then(toml::Value::as_str);
+        let model = active_model.map(|active_model| {
+            profile_model(&self.overrides, active_model)
+                .and_then(|model| model.get("name"))
+                .and_then(toml::Value::as_str)
+                .unwrap_or(active_model)
+                .to_owned()
+        });
+        let reasoning_effort = active_model
+            .and_then(|active_model| profile_model(&self.overrides, active_model))
+            .and_then(|model| model.get("thinking"))
+            .and_then(toml::Value::as_str)
+            .map(ToOwned::to_owned);
+        let mut disabled_tools = profile_tool_names(&self.overrides, "disabled_tools");
+        disabled_tools.extend(profile_tools_disabled_without_allowlist(&self.overrides));
+        disabled_tools.sort();
+        disabled_tools.dedup();
+        AgentRuntimeSettings {
+            enabled_tools: profile_tool_names(&self.overrides, "enabled_tools"),
+            disabled_tools,
+            permission_rules: profile_permission_rules(&self.name, &self.overrides),
+            approval,
+            model,
+            thinking: reasoning_effort.as_deref().map(|effort| effort != "off"),
+            reasoning_effort: reasoning_effort.filter(|effort| effort != "off"),
+            mode: self
+                .overrides
+                .get("mode")
+                .and_then(toml::Value::as_str)
+                .filter(|mode| matches!(*mode, "code" | "plan"))
+                .map(ToOwned::to_owned),
+            system_prompt_id: self
+                .overrides
+                .get("system_prompt_id")
+                .and_then(toml::Value::as_str)
+                .map(ToOwned::to_owned),
+        }
+    }
+}
+
+fn profile_tool_names(overrides: &Table, key: &str) -> Vec<String> {
+    overrides
+        .get(key)
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(toml::Value::as_str)
+        .map(canonical_tool_name)
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn profile_model<'a>(overrides: &'a Table, active_model: &str) -> Option<&'a Table> {
+    overrides
+        .get("models")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(toml::Value::as_table)
+        .find(|model| model.get("alias").and_then(toml::Value::as_str) == Some(active_model))
+}
+
+fn profile_tools_disabled_without_allowlist(overrides: &Table) -> Vec<String> {
+    overrides
+        .get("tools")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(Table::iter)
+        .filter(|(_, value)| {
+            value.as_table().is_some_and(|settings| {
+                settings.get("permission").and_then(toml::Value::as_str) == Some("never")
+                    && settings
+                        .get("allowlist")
+                        .and_then(toml::Value::as_array)
+                        .is_none_or(Vec::is_empty)
+            })
+        })
+        .map(|(name, _)| canonical_tool_name(name))
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn profile_permission_rules(profile_name: &str, overrides: &Table) -> Vec<PermissionRule> {
+    let mut rules = BTreeMap::<(String, String), PermissionRule>::new();
+    for (raw_tool, value) in overrides
+        .get("tools")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(Table::iter)
+    {
+        let Some(settings) = value.as_table() else {
+            continue;
+        };
+        let Some(mode) = settings
+            .get("permission")
+            .and_then(toml::Value::as_str)
+            .and_then(profile_permission_mode)
+        else {
+            continue;
+        };
+        let tool = canonical_tool_name(raw_tool).to_owned();
+        let allowlist = settings
+            .get("allowlist")
+            .and_then(toml::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(toml::Value::as_str)
+            .collect::<Vec<_>>();
+        if allowlist.is_empty() || mode == PermissionMode::Never {
+            insert_profile_rule(&mut rules, profile_name, &tool, "*".to_owned(), mode);
+        }
+        for pattern in allowlist {
+            let allowlist_mode = if mode == PermissionMode::Never {
+                PermissionMode::Always
+            } else {
+                mode
+            };
+            insert_profile_rule(
+                &mut rules,
+                profile_name,
+                &tool,
+                profile_permission_scope(&tool, pattern),
+                allowlist_mode,
+            );
+        }
+    }
+    rules.into_values().collect()
+}
+
+fn insert_profile_rule(
+    rules: &mut BTreeMap<(String, String), PermissionRule>,
+    profile_name: &str,
+    tool: &str,
+    scope: String,
+    mode: PermissionMode,
+) {
+    rules.insert(
+        (tool.to_owned(), scope.clone()),
+        PermissionRule {
+            tool: tool.to_owned(),
+            scope,
+            mode,
+            rationale: format!("agent-profile:{profile_name}"),
+        },
+    );
+}
+
+fn profile_permission_mode(value: &str) -> Option<PermissionMode> {
+    match value {
+        "never" => Some(PermissionMode::Never),
+        "ask" => Some(PermissionMode::Ask),
+        "always" => Some(PermissionMode::Always),
+        _ => None,
+    }
+}
+
+fn profile_permission_scope(tool: &str, pattern: &str) -> String {
+    if pattern == "*" {
+        return "*".to_owned();
+    }
+    let requirement = match tool {
+        "read" | "search" => "read",
+        "edit" => "write",
+        "shell" | "bash" => "shell",
+        _ => return pattern.to_owned(),
+    };
+    pattern.strip_suffix("/*").map_or_else(
+        || format!("{requirement} {pattern}"),
+        |prefix| format!("{requirement} {prefix} *"),
+    )
+}
+
+fn canonical_tool_name(name: &str) -> &str {
+    match name {
+        "read_file" => "read",
+        "grep" => "search",
+        "write" | "write_file" => "edit",
+        "bash" => "shell",
+        other => other,
+    }
+}
+
+fn auto_approves_edits(overrides: &Table) -> bool {
+    overrides
+        .get("tools")
+        .and_then(toml::Value::as_table)
+        .is_some_and(|tools| {
+            ["edit", "write", "write_file"].into_iter().any(|tool| {
+                tools
+                    .get(tool)
+                    .and_then(toml::Value::as_table)
+                    .is_some_and(|settings| {
+                        settings.get("permission").and_then(toml::Value::as_str) == Some("always")
+                            && settings
+                                .get("allowlist")
+                                .and_then(toml::Value::as_array)
+                                .is_none_or(Vec::is_empty)
+                    })
+            })
+        })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -612,7 +854,7 @@ impl AgentRegistry {
         self.agents.values().collect()
     }
 
-    pub fn set_active(&mut self, name: &str) -> Result<&AgentProfile, ExtensionError> {
+    pub fn profile(&self, name: &str) -> Result<&AgentProfile, ExtensionError> {
         let profile = self
             .agents
             .get(name)
@@ -620,8 +862,17 @@ impl AgentRegistry {
         if profile.kind != AgentKind::Agent {
             return Err(ExtensionError::SubagentCannotBePrimary(name.to_owned()));
         }
-        self.active = name.to_owned();
         Ok(profile)
+    }
+
+    pub fn set_active(&mut self, name: &str) -> Result<&AgentProfile, ExtensionError> {
+        self.profile(name)?;
+        self.active = name.to_owned();
+        Ok(&self.agents[name])
+    }
+
+    pub fn register_builtin(&mut self, profile: AgentProfile) {
+        self.agents.insert(profile.name.clone(), profile);
     }
 
     pub fn install(&mut self, source: &Path) -> Result<AgentProfile, ExtensionError> {
@@ -1441,6 +1692,155 @@ mod tests {
             source: ExtensionSource::Builtin,
             path: None,
         }
+    }
+
+    #[test]
+    fn agent_runtime_settings_resolve_profile_policy_without_name_conventions() {
+        let mut profile = builtin_agent("custom-reviewer", AgentKind::Agent);
+        profile.overrides.insert(
+            "enabled_tools".to_owned(),
+            toml::Value::Array(vec![
+                toml::Value::String("read_file".to_owned()),
+                toml::Value::String("write_file".to_owned()),
+            ]),
+        );
+        profile.overrides.insert(
+            "disabled_tools".to_owned(),
+            toml::Value::Array(vec![toml::Value::String("grep".to_owned())]),
+        );
+        profile.overrides.insert(
+            "tools".to_owned(),
+            toml::Value::Table(Table::from_iter([(
+                "write_file".to_owned(),
+                toml::Value::Table(Table::from_iter([(
+                    "permission".to_owned(),
+                    toml::Value::String("always".to_owned()),
+                )])),
+            )])),
+        );
+        profile.overrides.insert(
+            "models".to_owned(),
+            toml::Value::Array(vec![toml::Value::Table(Table::from_iter([
+                ("alias".to_owned(), toml::Value::String("review".to_owned())),
+                (
+                    "name".to_owned(),
+                    toml::Value::String("mistral-review".to_owned()),
+                ),
+                (
+                    "thinking".to_owned(),
+                    toml::Value::String("high".to_owned()),
+                ),
+            ]))]),
+        );
+        profile.overrides.insert(
+            "active_model".to_owned(),
+            toml::Value::String("review".to_owned()),
+        );
+        profile
+            .overrides
+            .insert("mode".to_owned(), toml::Value::String("plan".to_owned()));
+
+        let settings = profile.runtime_settings();
+
+        assert_eq!(settings.enabled_tools, ["read", "edit"]);
+        assert_eq!(settings.disabled_tools, ["search"]);
+        assert_eq!(settings.approval, AgentApproval::Edits);
+        assert_eq!(settings.model.as_deref(), Some("mistral-review"));
+        assert_eq!(settings.thinking, Some(true));
+        assert_eq!(settings.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(settings.mode.as_deref(), Some("plan"));
+        assert_eq!(settings.system_prompt_id, None);
+    }
+
+    #[test]
+    fn agent_runtime_settings_enforce_never_permissions_and_prompt_selection() {
+        let mut profile = builtin_agent("planner", AgentKind::Agent);
+        profile.overrides.insert(
+            "tools".to_owned(),
+            toml::Value::Table(Table::from_iter([(
+                "write_file".to_owned(),
+                toml::Value::Table(Table::from_iter([(
+                    "permission".to_owned(),
+                    toml::Value::String("never".to_owned()),
+                )])),
+            )])),
+        );
+        profile.overrides.insert(
+            "system_prompt_id".to_owned(),
+            toml::Value::String("plan".to_owned()),
+        );
+
+        let settings = profile.runtime_settings();
+
+        assert_eq!(settings.disabled_tools, ["edit"]);
+        assert_eq!(settings.system_prompt_id.as_deref(), Some("plan"));
+    }
+
+    #[test]
+    fn agent_runtime_settings_preserve_never_policy_allowlist_exceptions() {
+        let mut profile = builtin_agent("planner", AgentKind::Agent);
+        profile.overrides.insert(
+            "tools".to_owned(),
+            toml::Value::Table(Table::from_iter([(
+                "write_file".to_owned(),
+                toml::Value::Table(Table::from_iter([
+                    (
+                        "permission".to_owned(),
+                        toml::Value::String("never".to_owned()),
+                    ),
+                    (
+                        "allowlist".to_owned(),
+                        toml::Value::Array(vec![toml::Value::String(
+                            "/workspace/plans/*".to_owned(),
+                        )]),
+                    ),
+                ])),
+            )])),
+        );
+
+        let settings = profile.runtime_settings();
+
+        assert!(settings.disabled_tools.is_empty());
+        assert!(settings.permission_rules.iter().any(|rule| {
+            rule.tool == "edit" && rule.scope == "*" && rule.mode == PermissionMode::Never
+        }));
+        assert!(settings.permission_rules.iter().any(|rule| {
+            rule.tool == "edit"
+                && rule.scope == "write /workspace/plans *"
+                && rule.mode == PermissionMode::Always
+        }));
+    }
+
+    #[test]
+    fn allowlisted_edit_approval_does_not_expand_to_every_path() {
+        let mut profile = builtin_agent("scoped-editor", AgentKind::Agent);
+        profile.overrides.insert(
+            "tools".to_owned(),
+            toml::Value::Table(Table::from_iter([(
+                "edit".to_owned(),
+                toml::Value::Table(Table::from_iter([
+                    (
+                        "permission".to_owned(),
+                        toml::Value::String("always".to_owned()),
+                    ),
+                    (
+                        "allowlist".to_owned(),
+                        toml::Value::Array(vec![toml::Value::String(
+                            "/workspace/generated/*".to_owned(),
+                        )]),
+                    ),
+                ])),
+            )])),
+        );
+
+        let settings = profile.runtime_settings();
+
+        assert_eq!(settings.approval, AgentApproval::Prompt);
+        assert_eq!(settings.permission_rules.len(), 1);
+        assert_eq!(
+            settings.permission_rules[0].scope,
+            "write /workspace/generated *"
+        );
     }
 
     #[test]

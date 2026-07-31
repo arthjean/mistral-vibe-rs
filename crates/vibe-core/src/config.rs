@@ -42,7 +42,7 @@ pub enum ConfigTarget {
     Project,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ConfigLayer {
     pub kind: ConfigLayerKind,
     pub values: Table,
@@ -75,7 +75,7 @@ pub struct ConfigSnapshot {
     pub selected_target: ConfigTarget,
     pub selected_path: PathBuf,
     pub fingerprints: BTreeMap<ConfigTarget, Option<String>>,
-    pub layers: Vec<ConfigLayerKind>,
+    pub layer_values: Vec<ConfigLayer>,
 }
 
 impl ConfigSnapshot {
@@ -86,7 +86,11 @@ impl ConfigSnapshot {
             "selectedTarget": self.selected_target,
             "selectedPath": self.selected_path,
             "fingerprints": self.fingerprints,
-            "layers": self.layers,
+            "layers": self.layer_values.iter().map(|layer| layer.kind).collect::<Vec<_>>(),
+            "layerValues": self.layer_values.iter().map(|layer| json!({
+                "layer": layer.kind,
+                "values": redact_table(&layer.values),
+            })).collect::<Vec<_>>(),
         })
     }
 
@@ -330,7 +334,7 @@ impl LayeredConfig {
             selected_target,
             selected_path,
             fingerprints,
-            layers: layers.into_iter().map(|layer| layer.kind).collect(),
+            layer_values: layers,
         })
     }
 
@@ -414,8 +418,17 @@ impl LayeredConfig {
             "type": "object",
             "additionalProperties": true,
             "properties": {
-                "active_model": {"type": "string"},
-                "thinking": {"enum": ["off", "low", "medium", "high"]},
+                "active_model": {"type": "string", "default": ""},
+                "thinking": {"enum": ["off", "low", "medium", "high", "max"], "default": "off"},
+                "theme": {"enum": ["system", "light", "dark"], "default": "system"},
+                "notifications": {
+                    "enum": ["off", "unfocused", "always"],
+                    "default": "unfocused"
+                },
+                "enable_update_checks": {"type": "boolean", "default": true},
+                "show_thinking_nodes": {"type": "boolean", "default": true},
+                "voice_mode_enabled": {"type": "boolean", "default": false},
+                "narrator_enabled": {"type": "boolean", "default": false},
                 "proxy": {"type": ["string", "null"], "format": "uri"},
                 "tls_ca_path": {"type": ["string", "null"]},
                 "dotenv_path": {"type": ["string", "null"]},
@@ -1322,6 +1335,15 @@ winner = "defaults"
         assert_eq!(trusted.public_view()["config"]["api_key"], "[redacted]");
         assert_eq!(trusted.public_view()["config"]["privateKey"], "[redacted]");
         assert_eq!(trusted.public_view()["config"]["proxy"], "[redacted]");
+        assert!(
+            trusted.public_view()["layerValues"]
+                .as_array()
+                .is_some_and(|layers| layers.iter().all(|layer| {
+                    layer
+                        .pointer("/values/api_key")
+                        .is_none_or(|value| value == "[redacted]")
+                }))
+        );
 
         let revoked = config
             .with_project_trusted(false)
@@ -1352,7 +1374,7 @@ disabled_tools = ["admin"]
             selected_target: ConfigTarget::User,
             selected_path: PathBuf::from("/home/user/.vibe/config.toml"),
             fingerprints: BTreeMap::new(),
-            layers: Vec::new(),
+            layer_values: Vec::new(),
         };
         let servers = snapshot
             .mcp_servers(&working_directory)
@@ -1398,7 +1420,7 @@ command = "top-secret-command"
             selected_target: ConfigTarget::User,
             selected_path: PathBuf::from("/home/user/.vibe/config.toml"),
             fingerprints: BTreeMap::new(),
-            layers: Vec::new(),
+            layer_values: Vec::new(),
         };
         let error = snapshot
             .mcp_servers(Path::new("/workspace"))
@@ -1422,7 +1444,7 @@ command = "must-not-run"
             selected_target: ConfigTarget::User,
             selected_path: PathBuf::from("/home/user/.vibe/config.toml"),
             fingerprints: BTreeMap::new(),
-            layers: Vec::new(),
+            layer_values: Vec::new(),
         };
         let error = snapshot
             .mcp_servers(Path::new("/workspace"))

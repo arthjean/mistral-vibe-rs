@@ -1,0 +1,302 @@
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use serde::Deserialize;
+use serde_json::json;
+
+use super::state::{EntryStatus, TuiState};
+use super::{CliError, InteractiveRuntime, push_local_notice};
+
+const SHELL_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+pub(super) struct ActiveShell {
+    command: String,
+    operation_id: String,
+    chunks: Vec<ShellChunk>,
+    backpressure_dropped: bool,
+    last_poll: Instant,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ShellRead {
+    chunks: Vec<ShellChunk>,
+    state: ShellState,
+    backpressure_dropped: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ShellChunk {
+    cursor: u64,
+    bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+enum ShellState {
+    Running,
+    Exited {
+        #[serde(default)]
+        code: Option<i32>,
+        success: bool,
+    },
+    Interrupted {
+        #[serde(default)]
+        code: Option<i32>,
+    },
+    Failed {
+        message: String,
+    },
+}
+
+pub(super) async fn start_shell(
+    input: &str,
+    runtime: &mut Option<InteractiveRuntime>,
+    state: &mut TuiState,
+) -> Result<bool, CliError> {
+    let Some(runtime) = runtime.as_mut() else {
+        state.push_diagnostic("Setup is required before running shell commands");
+        return Ok(false);
+    };
+    let command = input
+        .trim_start()
+        .strip_prefix('!')
+        .map(str::trim)
+        .unwrap_or_default();
+    if command.is_empty() {
+        state.push_diagnostic("No command provided after '!'");
+        return Ok(true);
+    }
+    let operation_id = format!(
+        "manual-shell-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos())
+    );
+    let params = shell_params(&runtime.session_id, &operation_id, command);
+    if let Err(error) = runtime.service.public_call_async("shell/run", params).await {
+        state.push_diagnostic(error.to_string());
+        return Ok(true);
+    }
+    runtime.shell = Some(ActiveShell {
+        command: command.to_owned(),
+        operation_id,
+        chunks: Vec::new(),
+        backpressure_dropped: false,
+        last_poll: Instant::now(),
+    });
+    state.waiting = true;
+    push_local_notice(
+        state,
+        &format!("Running shell command: `{command}`"),
+        EntryStatus::Streaming,
+    );
+    Ok(true)
+}
+
+pub(super) async fn finish_shell(runtime: Option<&mut InteractiveRuntime>, state: &mut TuiState) {
+    let Some(runtime) = runtime else {
+        return;
+    };
+    let Some(mut shell) = runtime.shell.take() else {
+        return;
+    };
+    if shell.last_poll.elapsed() < SHELL_POLL_INTERVAL {
+        runtime.shell = Some(shell);
+        return;
+    }
+    let params = shell_params(&runtime.session_id, &shell.operation_id, &shell.command);
+    let dispatch = match runtime.service.public_call_async("shell/run", params).await {
+        Ok(dispatch) => dispatch,
+        Err(error) => {
+            state.waiting = false;
+            state.push_diagnostic(format!("Shell command failed: {error}"));
+            return;
+        }
+    };
+    let Some(read) = shell_read(&dispatch.result) else {
+        state.waiting = false;
+        state.push_diagnostic("Shell response did not contain typed process output");
+        return;
+    };
+    shell.chunks.extend(read.chunks);
+    shell.backpressure_dropped |= read.backpressure_dropped;
+    if matches!(read.state, ShellState::Running) {
+        shell.last_poll = Instant::now();
+        runtime.shell = Some(shell);
+        return;
+    }
+    state.waiting = false;
+    render_shell_result(
+        state,
+        &shell.command,
+        &shell.chunks,
+        &read.state,
+        shell.backpressure_dropped,
+    );
+}
+
+pub(super) async fn interrupt_shell(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
+    let Some(mut shell) = runtime.shell.take() else {
+        return;
+    };
+    let result = runtime
+        .service
+        .public_call_async(
+            "shell/interrupt",
+            json!({
+                "sessionId": runtime.session_id,
+                "operationId": shell.operation_id,
+            }),
+        )
+        .await;
+    state.waiting = false;
+    state.prompt_queue.pause();
+    match result {
+        Ok(dispatch) => {
+            if let Some(read) = shell_read(&dispatch.result) {
+                shell.chunks.extend(read.chunks);
+                shell.backpressure_dropped |= read.backpressure_dropped;
+                render_shell_result(
+                    state,
+                    &shell.command,
+                    &shell.chunks,
+                    &read.state,
+                    shell.backpressure_dropped,
+                );
+            } else {
+                state.push_diagnostic("Shell interruption did not return typed process output");
+            }
+        }
+        Err(error) => state.push_diagnostic(format!("Shell interruption failed: {error}")),
+    }
+}
+
+fn shell_params(session_id: &str, operation_id: &str, command: &str) -> serde_json::Value {
+    json!({
+        "sessionId": session_id,
+        "operationId": operation_id,
+        "command": command,
+    })
+}
+
+fn shell_read(result: &std::collections::BTreeMap<String, serde_json::Value>) -> Option<ShellRead> {
+    serde_json::from_value(result.get("shell")?.get("output")?.clone()).ok()
+}
+
+fn render_shell_result(
+    state: &mut TuiState,
+    command: &str,
+    chunks: &[ShellChunk],
+    process_state: &ShellState,
+    backpressure_dropped: bool,
+) {
+    let output = sanitized_process_output(chunks);
+    let status = match process_state {
+        ShellState::Exited { success: true, .. } => EntryStatus::Completed,
+        ShellState::Running => EntryStatus::Streaming,
+        ShellState::Exited { success: false, .. }
+        | ShellState::Interrupted { .. }
+        | ShellState::Failed { .. } => EntryStatus::Failed,
+    };
+    let rendered_output = if output.trim().is_empty() {
+        "(no output)".to_owned()
+    } else {
+        output
+            .lines()
+            .map(|line| format!("    {line}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let failure = match process_state {
+        ShellState::Exited {
+            success: false,
+            code,
+        } => code.map_or_else(
+            || "\n\nCommand exited unsuccessfully.".to_owned(),
+            |code| format!("\n\nCommand exited with code {code}."),
+        ),
+        ShellState::Interrupted { code } => code.map_or_else(
+            || "\n\nCommand was interrupted.".to_owned(),
+            |code| format!("\n\nCommand was interrupted with code {code}."),
+        ),
+        ShellState::Failed { message } => format!("\n\n{message}"),
+        _ => String::new(),
+    };
+    let truncation = if backpressure_dropped {
+        "\n\nOutput was truncated by process backpressure."
+    } else {
+        ""
+    };
+    push_local_notice(
+        state,
+        &format!("### Shell\n\n`$ {command}`\n\n{rendered_output}{failure}{truncation}"),
+        status,
+    );
+}
+
+fn sanitized_process_output(chunks: &[ShellChunk]) -> String {
+    let mut chunks = chunks.to_vec();
+    chunks.sort_by_key(|chunk| chunk.cursor);
+    let bytes = chunks
+        .into_iter()
+        .flat_map(|chunk| chunk.bytes)
+        .collect::<Vec<_>>();
+    let mut sanitized = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != 0x1b {
+            let byte = bytes[index];
+            if byte == b'\n' || byte == b'\t' || byte >= b' ' {
+                sanitized.push(byte);
+            }
+            index += 1;
+            continue;
+        }
+        index += 1;
+        match bytes.get(index).copied() {
+            Some(b'[') => {
+                index += 1;
+                while index < bytes.len() {
+                    let byte = bytes[index];
+                    index += 1;
+                    if (0x40..=0x7e).contains(&byte) {
+                        break;
+                    }
+                }
+            }
+            Some(b']') => {
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == 0x07 {
+                        index += 1;
+                        break;
+                    }
+                    if bytes[index] == 0x1b && bytes.get(index + 1) == Some(&b'\\') {
+                        index += 2;
+                        break;
+                    }
+                    index += 1;
+                }
+            }
+            Some(_) => index += 1,
+            None => {}
+        }
+    }
+    String::from_utf8_lossy(&sanitized).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_output_strips_terminal_control_sequences() {
+        let chunks = vec![ShellChunk {
+            cursor: 0,
+            bytes: b"plain \x1b[31mred\x1b[0m\n\x1b]0;title\x07done".to_vec(),
+        }];
+
+        assert_eq!(sanitized_process_output(&chunks), "plain red\ndone");
+    }
+}

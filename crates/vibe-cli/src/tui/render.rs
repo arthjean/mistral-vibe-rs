@@ -4,13 +4,16 @@ use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, Borders, Padding, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
+
+mod markdown;
 
 use super::input::{CompletionEngine, PromptEditor, completion_description};
 use super::setup::{ResolvedTheme, Theme};
 use super::state::{EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
+use markdown::markdown_lines;
 
 pub const MAX_RENDER_CHARS: usize = 64 * 1024;
 pub const MAX_RENDER_LINE_CHARS: usize = 4 * 1024;
@@ -110,6 +113,100 @@ pub fn draw(
     draw_completion(frame, completion_area, completion, theme);
     draw_input(frame, input_area, editor, theme, context);
     draw_footer(frame, footer_area, context.cwd, context.tokens, theme);
+    if let Some(overlay) = &state.overlay {
+        draw_overlay(frame, overlay, theme);
+    }
+}
+
+fn draw_overlay(
+    frame: &mut Frame<'_>,
+    overlay: &super::interaction::Overlay,
+    theme: ResolvedTheme,
+) {
+    let outer = frame.area();
+    let width = outer.width.saturating_sub(4).clamp(1, 86);
+    let visible = overlay.visible_items();
+    let content_height = u16::try_from(visible.len())
+        .unwrap_or(u16::MAX)
+        .saturating_add(5);
+    let available_height = outer.height.saturating_sub(2).max(1);
+    let height = content_height.min(available_height);
+    let area = Rect::new(
+        outer
+            .x
+            .saturating_add(outer.width.saturating_sub(width) / 2),
+        outer
+            .y
+            .saturating_add(outer.height.saturating_sub(height) / 2),
+        width,
+        height,
+    );
+    frame.render_widget(Clear, area);
+    let inner_width = usize::from(width.saturating_sub(4).max(1));
+    let mut lines = Vec::with_capacity(visible.len().saturating_add(3));
+    if !overlay.query.is_empty() {
+        lines.push(Line::from(vec![
+            Span::styled("Filter: ", muted_style(theme)),
+            Span::raw(truncate_width(
+                &overlay.query,
+                inner_width.saturating_sub(8),
+            )),
+        ]));
+        lines.push(Line::default());
+    }
+    for (selected, item) in visible {
+        let marker = if selected { "▸ " } else { "  " };
+        let style = if item.disabled {
+            muted_style(theme)
+        } else if selected {
+            secondary_style(theme).add_modifier(Modifier::BOLD)
+        } else {
+            base_style(theme)
+        };
+        let description_width = inner_width.saturating_sub(item.label.width().saturating_add(5));
+        lines.push(Line::from(vec![
+            Span::styled(marker, style),
+            Span::styled(truncate_width(&item.label, inner_width), style),
+            Span::raw("  "),
+            Span::styled(
+                truncate_width(&item.description, description_width),
+                muted_style(theme),
+            ),
+        ]));
+    }
+    if let Some(notice) = &overlay.notice {
+        lines.push(Line::default());
+        lines.push(Line::styled(
+            truncate_width(notice, inner_width),
+            warning_style(theme),
+        ));
+    }
+    lines.push(Line::default());
+    let help = match overlay.kind {
+        super::interaction::OverlayKind::Config => {
+            "↑↓/jk Navigate  Enter Edit  Ctrl+R Reset  Esc Close"
+        }
+        super::interaction::OverlayKind::Sessions => {
+            "↑↓/jk Navigate  Enter Resume  Delete Remove  Esc Close"
+        }
+        super::interaction::OverlayKind::Mcp | super::interaction::OverlayKind::Connectors => {
+            "↑↓/jk Navigate  Enter Toggle  Ctrl+R Refresh  Esc Close"
+        }
+        _ => "↑↓/jk Navigate  Enter Select  Esc Close",
+    };
+    lines.push(Line::styled(help, muted_style(theme)));
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(format!(" {} ", overlay.title))
+                    .padding(Padding::horizontal(1))
+                    .style(base_style(theme)),
+            )
+            .wrap(Wrap { trim: false }),
+        area,
+    );
 }
 
 fn composer_height(editor: &PromptEditor, area: Rect, secret_input: bool) -> u16 {
@@ -162,7 +259,15 @@ fn draw_transcript(
     let mut rendered_chars = 0usize;
     let mut history_truncated = false;
     'entries: for entry in state.entries.iter().rev() {
-        for line in semantic_lines(entry, area.width, theme).into_iter().rev() {
+        if entry.kind == TranscriptKind::Reasoning && !state.show_reasoning {
+            continue;
+        }
+        let entry_lines = if entry.kind == TranscriptKind::Effect && state.tools_collapsed {
+            collapsed_effect_lines(entry, area.width, theme)
+        } else {
+            semantic_lines(entry, area.width, theme)
+        };
+        for line in entry_lines.into_iter().rev() {
             let line_chars = line.to_string().chars().count();
             if newest_first.len() >= MAX_RENDER_LINES
                 || rendered_chars.saturating_add(line_chars) > MAX_RENDER_CHARS
@@ -298,7 +403,17 @@ fn activity_text(state: &TuiState) -> Option<(String, bool)> {
     if !state.connected || state.resync_required {
         return Some(("! Connection lost".to_owned(), true));
     }
-    state.waiting.then(|| ("⠋ Working…".to_owned(), false))
+    state.waiting.then(|| {
+        let queued = state.prompt_queue.len();
+        (
+            if queued == 0 {
+                "⠋ Working…".to_owned()
+            } else {
+                format!("⠋ Working… · {queued} queued")
+            },
+            false,
+        )
+    })
 }
 
 fn draw_activity(frame: &mut Frame<'_>, area: Rect, state: &TuiState, theme: ResolvedTheme) {
@@ -768,21 +883,37 @@ fn assistant_message_lines(
     width: u16,
     theme: ResolvedTheme,
 ) -> Vec<Line<'static>> {
-    let max_width = usize::from(width.saturating_sub(COMPOSER_PROMPT_WIDTH).max(1));
     let mut lines = vec![Line::default()];
     lines.extend(
-        wrapped_terminal_lines(&entry.text, max_width)
+        markdown_lines(&entry.text, usize::from(width), theme)
             .into_iter()
-            .take(MAX_RENDER_LINES.saturating_sub(lines.len()))
-            .map(|wrapped_line| {
-                Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(wrapped_line, base_style(theme)),
-                ])
-            }),
+            .take(MAX_RENDER_LINES.saturating_sub(lines.len())),
     );
     append_terminal_status(&mut lines, entry, theme);
     lines
+}
+
+fn collapsed_effect_lines(
+    entry: &TranscriptEntry,
+    width: u16,
+    theme: ResolvedTheme,
+) -> Vec<Line<'static>> {
+    let status = match entry.status {
+        EntryStatus::Streaming => "streaming",
+        EntryStatus::Completed => "complete",
+        EntryStatus::Failed => "failed",
+        EntryStatus::Cancelled => "cancelled",
+    };
+    let title = entry.text.lines().next().unwrap_or("Tool call");
+    vec![Line::from(vec![
+        Span::styled("[TOOL]", effect_style(theme)),
+        Span::raw(format!(" ({status}) ")),
+        Span::styled(
+            truncate_width(title, usize::from(width.saturating_sub(30).max(1))),
+            base_style(theme),
+        ),
+        Span::styled(" · collapsed (Ctrl+O)", muted_style(theme)),
+    ])]
 }
 
 fn append_terminal_status(
@@ -1000,7 +1131,7 @@ mod tests {
             agent_name: " default ",
             secret_input,
             banner: BannerContext {
-                version: "2.23.2",
+                version: env!("CARGO_PKG_VERSION"),
                 model: "mistral-medium-3.5",
                 thinking: "high",
                 models_count: 3,
@@ -1179,9 +1310,12 @@ mod tests {
             .map(|cell| cell.symbol())
             .collect::<String>();
         assert!(text.contains(" default "));
-        assert!(text.contains("Show commands and shortcuts"));
+        assert!(text.contains("Show help message"));
         assert!(text.contains("/workspace"));
-        assert!(text.contains("Mistral Vibe v2.23.2 · mistral-medium-3.5[high] · Free"));
+        assert!(text.contains(&format!(
+            "Mistral Vibe v{} · mistral-medium-3.5[high] · Free",
+            env!("CARGO_PKG_VERSION")
+        )));
         assert!(text.contains("3 models · 0/17 connectors · 0 MCP servers · 53 skills"));
         assert!(text.contains("Type /help for more information"));
         assert!(text.contains("0/200k tokens (0%)"));

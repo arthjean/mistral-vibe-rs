@@ -219,6 +219,7 @@ where
         enabled_tools: arguments.enabled_tools.clone(),
         disabled_tools: arguments.disabled_tools.clone(),
         mcp_servers: Vec::new(),
+        model: Some(arguments.model.clone()),
         max_turns: arguments.max_turns,
         max_tokens: arguments.max_tokens,
         max_price_micros,

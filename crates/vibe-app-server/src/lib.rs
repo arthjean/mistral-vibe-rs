@@ -1,5 +1,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+mod builtin_agents;
 pub mod client;
 pub mod release3;
 pub mod release4;

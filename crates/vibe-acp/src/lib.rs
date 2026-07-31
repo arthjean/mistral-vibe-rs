@@ -1953,6 +1953,7 @@ fn session_options(
         enabled_tools: Vec::new(),
         disabled_tools: vec!["ask_user_question".to_owned(), "exit_plan_mode".to_owned()],
         mcp_servers,
+        model: None,
         max_turns: None,
         max_tokens: None,
         max_price_micros: None,

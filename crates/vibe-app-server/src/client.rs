@@ -144,6 +144,8 @@ pub struct SessionOptions {
     #[serde(default)]
     pub mcp_servers: Vec<Value>,
     #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
     pub max_turns: Option<u32>,
     #[serde(default)]
     pub max_tokens: Option<u64>,
@@ -2546,6 +2548,7 @@ impl ProviderSessionCompactor {
             .provider
             .complete(&ProviderInput {
                 turn_id: None,
+                model_override: None,
                 messages: input_messages,
                 stream: false,
                 images: Vec::new(),
@@ -2788,6 +2791,7 @@ impl LiveTurnDriver {
         };
         let mut input = ProviderInput {
             turn_id: Some(reservation.turn_id.clone()),
+            model_override: reservation.intent.model.clone(),
             messages: vec![ModelMessage::System {
                 content: self.system_prompt.clone(),
             }],
@@ -2814,6 +2818,16 @@ impl LiveTurnDriver {
                 content:
                     "Plan mode is active. Inspect and reason, but do not execute mutating tools."
                         .to_owned(),
+            });
+        }
+        if let Some(profile_prompt) = reservation
+            .intent
+            .system_prompt_id
+            .as_deref()
+            .and_then(crate::builtin_agents::system_prompt)
+        {
+            input.messages.push(ModelMessage::System {
+                content: profile_prompt.to_owned(),
             });
         }
         let session_tools =
@@ -3167,9 +3181,29 @@ impl SubagentRunner for ProviderSubagentRunner {
                 .map_err(|error| error.to_string())?
                 .metadata;
             let parent_executor = SessionToolExecutor::new(self.tools.clone(), &self.parent_intent);
-            let enabled_by_agent = agent_tool_override(&context.agent, "enabled_tools")?;
-            let disabled_by_agent =
-                agent_tool_override(&context.agent, "disabled_tools")?.unwrap_or_default();
+            let settings = context.agent.runtime_settings();
+            let enabled_by_agent =
+                context
+                    .agent
+                    .overrides
+                    .contains_key("enabled_tools")
+                    .then(|| {
+                        settings
+                            .enabled_tools
+                            .iter()
+                            .cloned()
+                            .collect::<BTreeSet<_>>()
+                    });
+            let disabled_by_agent = settings
+                .disabled_tools
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            let policy_restricted_tools = settings
+                .permission_rules
+                .iter()
+                .map(|rule| rule.tool.clone())
+                .collect::<BTreeSet<_>>();
             let allowed = self
                 .tools
                 .available(&BTreeSet::new(), &BTreeSet::new())
@@ -3179,6 +3213,7 @@ impl SubagentRunner for ProviderSubagentRunner {
                     parent_executor.permits(&spec.name)
                         && spec.name != "task"
                         && !disabled_by_agent.contains(&spec.name)
+                        && !policy_restricted_tools.contains(&spec.name)
                         && enabled_by_agent
                             .as_ref()
                             .is_none_or(|enabled| enabled.contains(&spec.name))
@@ -3192,17 +3227,30 @@ impl SubagentRunner for ProviderSubagentRunner {
                 .collect();
             let executor = parent_executor.with_allowed_tools(allowed);
             let definitions = executor.definitions().map_err(|error| error.to_string())?;
+            let mut messages = vec![ModelMessage::System {
+                content: self.system_prompt.clone(),
+            }];
+            if let Some(prompt_id) = settings.system_prompt_id.as_deref() {
+                let prompt = crate::builtin_agents::system_prompt(prompt_id).ok_or_else(|| {
+                    format!(
+                        "agent `{}` references unsupported system prompt `{prompt_id}`",
+                        context.agent.name
+                    )
+                })?;
+                messages.push(ModelMessage::System {
+                    content: prompt.to_owned(),
+                });
+            }
             let input = ProviderInput {
                 turn_id: Some(format!("{}-turn", context.child_session_id)),
-                messages: vec![ModelMessage::System {
-                    content: self.system_prompt.clone(),
-                }],
+                model_override: settings.model,
+                messages,
                 stream: true,
                 images: Vec::new(),
                 tools: definitions,
                 tool_choice: None,
-                thinking: false,
-                reasoning_effort: None,
+                thinking: settings.thinking.unwrap_or(false),
+                reasoning_effort: settings.reasoning_effort,
                 headers: BTreeMap::new(),
                 limits: RequestLimits {
                     max_tokens: 4096,
@@ -3244,26 +3292,6 @@ impl SubagentRunner for ProviderSubagentRunner {
                 .unwrap_or_else(|| "Subagent completed without a text response".to_owned()))
         })
     }
-}
-
-fn agent_tool_override(
-    agent: &AgentProfile,
-    key: &str,
-) -> Result<Option<BTreeSet<String>>, String> {
-    let Some(value) = agent.overrides.get(key) else {
-        return Ok(None);
-    };
-    let values = value
-        .as_array()
-        .ok_or_else(|| format!("agent `{}` {key} must be an array", agent.name))?;
-    let mut names = BTreeSet::new();
-    for value in values {
-        let name = value
-            .as_str()
-            .ok_or_else(|| format!("agent `{}` {key} entries must be strings", agent.name))?;
-        names.insert(name.to_owned());
-    }
-    Ok(Some(names))
 }
 
 impl TurnDriver for LiveTurnDriver {
@@ -4065,6 +4093,7 @@ mod tests {
             enabled_tools: vec!["read".to_owned()],
             disabled_tools: vec!["shell".to_owned()],
             mcp_servers: Vec::new(),
+            model: None,
             max_turns: Some(4),
             max_tokens: Some(1000),
             max_price_micros: Some(500),

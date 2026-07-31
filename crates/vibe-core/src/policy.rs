@@ -195,6 +195,20 @@ impl PermissionStore {
         state.revision = state.revision.saturating_add(1);
     }
 
+    pub fn try_replace_rules_with_rationale_prefix(
+        &self,
+        rationale_prefix: &str,
+        rules: Vec<PermissionRule>,
+    ) -> Result<(), PolicyError> {
+        let mut state = self.state.try_write().map_err(|_| PolicyError::Busy)?;
+        state
+            .rules
+            .retain(|rule| !rule.rationale.starts_with(rationale_prefix));
+        state.rules.extend(rules);
+        state.revision = state.revision.saturating_add(1);
+        Ok(())
+    }
+
     pub async fn set_trust(
         &self,
         path: impl AsRef<Path>,

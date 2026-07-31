@@ -1,9 +1,16 @@
+pub mod clipboard;
+pub mod commands;
 pub mod controls;
 pub mod input;
+pub mod interaction;
+pub mod pickers;
 pub mod render;
 pub mod setup;
+mod shell;
+mod shortcuts;
 pub mod state;
 pub mod terminal;
+mod workflow;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -29,13 +36,14 @@ use vibe_app_server::release3::{Release3Paths, Release3Service};
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
 
+use self::commands::CommandId;
 use self::controls::{
     ApprovalScope, CallbackChoice, CallbackKind, CallbackOption, CallbackQuestion, ControlState,
     PendingCallback, UserInputChoice,
 };
 use self::input::{
     CompletionAction, CompletionEngine, ExternalEditorPort, PromptEditor, SystemExternalEditor,
-    normalize_pasted_text, prepare_submission,
+    normalize_pasted_text,
 };
 use self::render::{BannerContext, TokenState, UiContext, draw};
 use self::setup::{
@@ -43,10 +51,16 @@ use self::setup::{
     ResolvedTheme, SetupCompletion, SetupFlow, SetupProgress, TerminalThemeDetector, Theme,
     resolve_theme,
 };
+use self::shell::{ActiveShell, finish_shell, interrupt_shell, start_shell};
+use self::shortcuts::{copy_prompt_selection, resume_paused_queue};
 use self::state::{
     ApplyResult, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiSnapshot, TuiState,
 };
 use self::terminal::{CrosstermOps, TerminalGuard};
+use self::workflow::{
+    CommandAction, RuntimeCommand, apply_thinking, cycle_agent, dispatch_command,
+    handle_overlay_key, is_user_skill, show_rewind, start_next_queued_prompt, start_prompt,
+};
 use crate::{
     Arguments, CliError, CliTelemetryObserver, price_per_million_micros, telemetry_event_observer,
     validate_arguments,
@@ -93,6 +107,14 @@ struct ActiveTurn {
     task: JoinHandle<(TurnReservation, Result<PublicTurnOutcome, DriverError>)>,
 }
 
+#[derive(Debug, Clone)]
+struct RuntimeSkill {
+    name: String,
+    description: String,
+    body: String,
+    path: Option<String>,
+}
+
 struct InteractiveRuntime {
     service: HeadlessService<LiveTurnDriver>,
     session_id: String,
@@ -105,6 +127,8 @@ struct InteractiveRuntime {
     context_window: u64,
     auto_approve: bool,
     clear_context_after_turn: bool,
+    skills: BTreeMap<String, RuntimeSkill>,
+    shell: Option<ActiveShell>,
     cloud: CloudWorkflowState,
     telemetry: Option<Arc<CliTelemetryObserver>>,
 }
@@ -205,6 +229,14 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     }
     let mut editor = PromptEditor::default();
     let mut completion = CompletionEngine::default();
+    if let Some(runtime) = runtime.as_ref() {
+        completion.set_user_skills(
+            runtime
+                .skills
+                .values()
+                .map(|skill| (skill.name.as_str(), skill.description.as_str())),
+        );
+    }
     let mut setup_flow = arguments.setup.then(|| new_setup_flow(&arguments));
     let mut secret_input = false;
     if let Some(setup) = &setup_flow {
@@ -235,6 +267,15 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
             drain_updates(&mut state, runtime.as_mut(), active.as_mut(), &mut controls);
             drain_callback_requests(runtime.as_mut(), &mut state, &mut controls);
             finish_active(&mut state, &mut controls, &mut runtime, &mut active).await?;
+            finish_shell(runtime.as_mut(), &mut state).await;
+            start_next_queued_prompt(
+                &working_directory,
+                &mut runtime,
+                &mut active,
+                &mut state,
+                &mut controls,
+            )
+            .await?;
             if let Err(error) = completion.poll() {
                 completion.cancel();
                 state.push_diagnostic(error.to_string());
@@ -299,6 +340,10 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                             active.cancel_requested = true;
                             state.push_diagnostic("SIGINT requested turn cancellation");
                         }
+                    } else if let Some(runtime) = runtime.as_mut()
+                        && runtime.shell.is_some()
+                    {
+                        interrupt_shell(runtime, &mut state).await;
                     } else {
                         exit = true;
                     }
@@ -340,6 +385,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                 _ = ticker.tick() => {}
                 _ = loop_ticker.tick() => {
                     if active.is_none()
+                        && runtime.as_ref().is_none_or(|runtime| runtime.shell.is_none())
                         && let Some(runtime) = runtime.as_mut()
                         && let Some(scheduled) = runtime
                             .service
@@ -394,6 +440,22 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
             let _ = active.task.await;
         }
     }
+    if let Some(runtime) = runtime.as_mut() {
+        interrupt_shell(runtime, &mut state).await;
+        finish_shell(Some(runtime), &mut state).await;
+    }
+    let mut cleanup_error = None;
+    for path in state.take_transient_paths() {
+        if let Err(error) = std::fs::remove_file(&path)
+            && cleanup_error.is_none()
+        {
+            cleanup_error = Some(CliError::Terminal(format!(
+                "clipboard image cleanup failed for `{}`: {error}",
+                path.display()
+            )));
+        }
+    }
+    let cleanup_result = cleanup_error.map_or(Ok(()), Err);
     let telemetry = runtime
         .as_ref()
         .and_then(|runtime| runtime.telemetry.clone());
@@ -412,6 +474,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     let result = event_loop
         .and(restoration)
         .and(interrupt_result)
+        .and(cleanup_result)
         .and(close_result)
         .and(shutdown_result);
     if let Some(telemetry) = telemetry {
@@ -671,6 +734,13 @@ async fn handle_key(
     terminal_guard: &mut TerminalGuard<CrosstermOps<std::io::Stdout>>,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<bool, CliError> {
+    if handle_overlay_key(key, runtime, state, controls, editor, theme) {
+        completion.cancel();
+        return Ok(false);
+    }
+    if key.code != KeyCode::Esc {
+        state.rewind_confirmation.cancel();
+    }
     if !*secret_input && completion.view().is_some() {
         match key.code {
             KeyCode::Esc => {
@@ -702,23 +772,82 @@ async fn handle_key(
             _ => {}
         }
     }
+    if key.code == KeyCode::BackTab
+        || (key.code == KeyCode::Tab && key.modifiers.contains(KeyModifiers::SHIFT))
+    {
+        completion.cancel();
+        cycle_agent(runtime, state);
+        return Ok(false);
+    }
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         completion.cancel();
         match key.code {
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                copy_prompt_selection(editor, state);
+                return Ok(false);
+            }
             KeyCode::Char('c') => {
-                if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_mut()) {
-                    if active.cancel_requested {
-                        return Ok(true);
-                    }
-                    let _ = controls.interrupt();
-                    runtime
-                        .service
-                        .interrupt(&runtime.session_id, &active.turn_id)?;
-                    active.cancel_requested = true;
-                    state.push_diagnostic("Turn cancellation requested");
+                if !editor.text().is_empty() {
+                    editor.set_text("");
+                    state.quit_confirmation.cancel();
                     return Ok(false);
                 }
-                return Ok(true);
+                if let Some(cancelled) = state.prompt_queue.cancel_last() {
+                    state.push_diagnostic(format!(
+                        "Removed queued prompt: {}",
+                        cancelled.lines().next().unwrap_or_default()
+                    ));
+                    return Ok(false);
+                }
+                if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_mut()) {
+                    if !active.cancel_requested {
+                        let _ = controls.interrupt();
+                        runtime
+                            .service
+                            .interrupt(&runtime.session_id, &active.turn_id)?;
+                        active.cancel_requested = true;
+                        state.prompt_queue.pause();
+                        state.push_diagnostic("Turn cancellation requested; queued prompts paused");
+                    }
+                    return Ok(false);
+                }
+                if let Some(runtime) = runtime.as_mut()
+                    && runtime.shell.is_some()
+                {
+                    interrupt_shell(runtime, state).await;
+                    state.prompt_queue.pause();
+                    return Ok(false);
+                }
+                if state.quit_confirmation.request("Ctrl+C", unix_millis()) {
+                    return Ok(true);
+                }
+                state.push_diagnostic("Press Ctrl+C again within one second to quit");
+                return Ok(false);
+            }
+            KeyCode::Char('d') => {
+                if !editor.text().is_empty() {
+                    editor.delete_forward();
+                    refresh_completion(completion, editor, working_directory, *secret_input, state);
+                    return Ok(false);
+                }
+                if state.quit_confirmation.request("Ctrl+D", unix_millis()) {
+                    return Ok(true);
+                }
+                state.push_diagnostic("Press Ctrl+D again within one second to quit");
+                return Ok(false);
+            }
+            KeyCode::Char('o') => {
+                state.tools_collapsed = !state.tools_collapsed;
+                state.push_diagnostic(if state.tools_collapsed {
+                    "Tool output collapsed"
+                } else {
+                    "Tool output expanded"
+                });
+                return Ok(false);
+            }
+            KeyCode::Char('y') => {
+                copy_prompt_selection(editor, state);
+                return Ok(false);
             }
             KeyCode::Char('g') => {
                 if *secret_input {
@@ -753,18 +882,38 @@ async fn handle_key(
     }
     match key.code {
         KeyCode::Esc => {
-            if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_ref()) {
+            if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_mut()) {
                 let _ = controls.interrupt();
                 runtime
                     .service
                     .interrupt(&runtime.session_id, &active.turn_id)?;
+                active.cancel_requested = true;
+                state.prompt_queue.pause();
                 state.push_diagnostic("Turn cancellation requested");
-            } else {
+            } else if let Some(runtime) = runtime.as_mut()
+                && runtime.shell.is_some()
+            {
+                interrupt_shell(runtime, state).await;
+                state.prompt_queue.pause();
+            } else if !state.prompt_queue.is_empty() {
+                state.prompt_queue.pause();
+                state.push_diagnostic(
+                    "Queued prompts paused; press Enter on an empty prompt to resume",
+                );
+            } else if !editor.text().is_empty() {
                 editor.set_text("");
+                state.rewind_confirmation.cancel();
+            } else if state.rewind_confirmation.request("Esc", unix_millis())
+                && let Some(runtime) = runtime.as_mut()
+            {
+                show_rewind(runtime, state);
             }
         }
         KeyCode::Enter if key.modifiers.contains(KeyModifiers::SHIFT) => editor.insert("\n"),
         KeyCode::Enter => {
+            if resume_paused_queue(editor, state) {
+                return Ok(false);
+            }
             let submitted = if setup_flow.is_some() || *secret_input {
                 editor.take_unrecorded()
             } else {
@@ -785,9 +934,9 @@ async fn handle_key(
                         *secret_input = next_secret_input;
                         push_local_notice(state, &prompt, EntryStatus::Completed);
                     }
-                    Ok(SetupProgress::Complete(completion)) => {
+                    Ok(SetupProgress::Complete(setup_completion)) => {
                         *secret_input = false;
-                        persist_setup(arguments, working_directory, &completion)?;
+                        persist_setup(arguments, working_directory, &setup_completion)?;
                         if arguments.setup {
                             push_local_notice(
                                 state,
@@ -802,7 +951,7 @@ async fn handle_key(
                             previous.service.shutdown()?;
                         }
                         let credential = credential_store
-                            .get(&completion.resources.credential_handle)
+                            .get(&setup_completion.resources.credential_handle)
                             .map_err(|error| CliError::Terminal(error.to_string()))?
                             .ok_or_else(|| {
                                 CliError::Terminal(
@@ -810,17 +959,28 @@ async fn handle_key(
                                 )
                             })?;
                         let mut configured = arguments.clone();
-                        configured.provider_style = completion.resources.provider.clone();
-                        configured.model = completion.resources.model.clone();
-                        configured.trust = completion.resources.workspace_trusted;
+                        configured.provider_style = setup_completion.resources.provider.clone();
+                        configured.model = setup_completion.resources.model.clone();
+                        configured.trust = setup_completion.resources.workspace_trusted;
                         *runtime = Some(start_runtime(&configured, working_directory, credential)?);
-                        let hydrated = runtime
+                        if let Some(runtime) = runtime.as_ref() {
+                            completion.set_user_skills(
+                                runtime
+                                    .skills
+                                    .values()
+                                    .map(|skill| (skill.name.as_str(), skill.description.as_str())),
+                            );
+                        }
+                        let mut hydrated = runtime
                             .as_mut()
                             .map(|runtime| {
                                 hydrate_initial_state(runtime, &configured, working_directory)
                             })
                             .transpose()?
                             .unwrap_or_else(|| TuiState::new(""));
+                        for path in state.take_transient_paths() {
+                            hydrated.track_transient_path(path);
+                        }
                         let session_id = hydrated.session_id.clone();
                         *state = hydrated;
                         *controls = ControlState::new(session_id);
@@ -828,7 +988,7 @@ async fn handle_key(
                             sync_active_callbacks(runtime, state, controls);
                         }
                         *theme = resolve_theme(
-                            completion.preferences.theme,
+                            setup_completion.preferences.theme,
                             EnvironmentThemeDetector.detect(),
                             std::env::var_os("NO_COLOR").is_some(),
                         );
@@ -866,9 +1026,25 @@ async fn handle_key(
                 }
                 return Ok(false);
             }
-            match submitted.as_str() {
-                command if is_exit_command(command) => return Ok(true),
-                "/setup" => {
+            if is_exit_command(&submitted) {
+                return Ok(true);
+            }
+            match dispatch_command(
+                &submitted,
+                arguments,
+                working_directory,
+                runtime,
+                state,
+                controls,
+                editor,
+                completion,
+                theme,
+                active.is_some(),
+            )
+            .await?
+            {
+                CommandAction::Exit => return Ok(true),
+                CommandAction::Setup => {
                     if active.is_some() {
                         state.push_diagnostic(
                             "Finish or interrupt the active turn before starting setup",
@@ -876,25 +1052,14 @@ async fn handle_key(
                         return Ok(false);
                     }
                     let setup = new_setup_flow(arguments);
-                    push_local_notice(
-                        state,
-                        &setup.prompt(),
-                        EntryStatus::Completed,
-                    );
+                    push_local_notice(state, &setup.prompt(), EntryStatus::Completed);
                     *setup_flow = Some(setup);
                     *secret_input = false;
                 }
-                "/help" => push_local_notice(
-                    state,
-                    "/help /setup /close /exit, Tab complete, Shift+Enter newline, Ctrl+G editor, Escape interrupt",
-                    EntryStatus::Completed,
-                ),
-                "/voice" => state.push_diagnostic(
-                    "No audio device is available through this terminal; typed input remains active",
-                ),
-                command if command.starts_with('/') => {
+                CommandAction::Handled => {}
+                CommandAction::Runtime(command) => {
                     if handle_runtime_command(
-                        command,
+                        &command,
                         working_directory,
                         runtime,
                         state,
@@ -906,43 +1071,72 @@ async fn handle_key(
                     {
                         return Ok(false);
                     }
-                    editor.set_text(command);
-                    state.push_diagnostic(format!("Unknown command `{command}`"));
+                    state.push_diagnostic("The command is not available in this runtime");
                 }
-                prompt if active.is_some() => {
-                    editor.set_text(prompt);
-                    state.push_diagnostic("A turn is already active; input was preserved");
-                }
-                prompt => {
-                    let Some(runtime) = runtime.as_mut() else {
-                        editor.set_text(prompt);
-                        state.push_diagnostic(
-                            "Setup is required before starting a session. Enter /setup.",
-                        );
-                        return Ok(false);
-                    };
-                    let prepared = match prepare_submission(working_directory, prompt) {
-                        Ok(prepared) => prepared,
-                        Err(error) => {
-                            editor.set_text(prompt);
-                            state.push_diagnostic(error.to_string());
-                            return Ok(false);
+                CommandAction::Unhandled if submitted.starts_with('/') => {
+                    if is_user_skill(runtime.as_ref(), &submitted) {
+                        if active.is_some()
+                            || runtime
+                                .as_ref()
+                                .is_some_and(|runtime| runtime.shell.is_some())
+                        {
+                            state.prompt_queue.push(submitted);
+                            state.prompt_queue.resume();
+                            state.push_diagnostic(format!(
+                                "Skill queued ({} pending)",
+                                state.prompt_queue.len()
+                            ));
+                        } else if !start_prompt(
+                            working_directory,
+                            submitted.clone(),
+                            runtime,
+                            active,
+                            state,
+                            controls,
+                        )
+                        .await?
+                        {
+                            editor.set_text(submitted);
                         }
-                    };
-                    let reservation = runtime
-                        .service
-                        .reserve_prompt(&runtime.session_id, &prepared.turn)
-                        .await?;
-                    controls
-                        .begin_turn(&reservation.turn_id)
-                        .map_err(|error| CliError::Terminal(error.to_string()))?;
-                    *active = Some(start_active_turn(
-                        &runtime.service,
-                        reservation,
-                        None,
-                        state.watermark,
-                    )?);
-                    state.waiting = true;
+                    } else {
+                        editor.set_text(&submitted);
+                        state.push_diagnostic(format!("Unknown command `{submitted}`"));
+                    }
+                }
+                CommandAction::Unhandled if submitted.trim() == "!" => {
+                    state.push_diagnostic("No command provided after '!'");
+                }
+                CommandAction::Unhandled
+                    if active.is_some()
+                        || runtime
+                            .as_ref()
+                            .is_some_and(|runtime| runtime.shell.is_some()) =>
+                {
+                    state.prompt_queue.push(submitted);
+                    state.prompt_queue.resume();
+                    state.push_diagnostic(format!(
+                        "Input queued ({} pending)",
+                        state.prompt_queue.len()
+                    ));
+                }
+                CommandAction::Unhandled if submitted.trim_start().starts_with('!') => {
+                    if !start_shell(&submitted, runtime, state).await? {
+                        editor.set_text(submitted);
+                    }
+                }
+                CommandAction::Unhandled => {
+                    if !start_prompt(
+                        working_directory,
+                        submitted.clone(),
+                        runtime,
+                        active,
+                        state,
+                        controls,
+                    )
+                    .await?
+                    {
+                        editor.set_text(submitted);
+                    }
                 }
             }
         }
@@ -998,7 +1192,7 @@ fn refresh_completion(
 }
 
 async fn handle_runtime_command(
-    command: &str,
+    command: &RuntimeCommand,
     working_directory: &Path,
     runtime: &mut Option<InteractiveRuntime>,
     state: &mut TuiState,
@@ -1006,49 +1200,22 @@ async fn handle_runtime_command(
     theme: &mut ResolvedTheme,
     turn_active: bool,
 ) -> bool {
-    let verb = command.split_whitespace().next().unwrap_or_default();
-    let recognized = matches!(
-        verb,
-        "/approve"
-            | "/clear"
-            | "/compact"
-            | "/continue"
-            | "/fork"
-            | "/history"
-            | "/loop"
-            | "/remote-project"
-            | "/resume"
-            | "/rewind"
-            | "/settings"
-            | "/teleport"
-            | "/theme"
-            | "/title"
-            | "/trust"
-            | "/update"
-            | "/deny"
-    );
-    if !recognized {
-        return false;
-    }
+    let command_id = command.id;
+    let command_arguments = command.arguments.as_str();
     let Some(runtime) = runtime.as_mut() else {
         state.push_diagnostic("Setup is required before using session commands");
         return true;
     };
-    if turn_active
-        && matches!(
-            verb,
-            "/clear" | "/compact" | "/continue" | "/fork" | "/resume" | "/rewind"
-        )
-    {
+    if turn_active && command_id.changes_session_projection() {
         state.push_diagnostic(
             "Finish or interrupt the active turn before changing the session projection",
         );
         return true;
     }
 
-    match verb {
-        "/approve" => {
-            let scope = match command.split_whitespace().nth(1) {
+    match command_id {
+        CommandId::Approve => {
+            let scope = match command_arguments.split_whitespace().next() {
                 None | Some("once") => ApprovalScope::Once,
                 Some("always" | "session") => ApprovalScope::Session,
                 Some("permanent") => ApprovalScope::Permanent,
@@ -1066,7 +1233,7 @@ async fn handle_runtime_command(
                 state.push_diagnostic("No approval is pending");
             }
         }
-        "/deny" => {
+        CommandId::Deny => {
             let choice = CallbackChoice::Deny {
                 scope: ApprovalScope::Once,
             };
@@ -1076,7 +1243,7 @@ async fn handle_runtime_command(
                 state.push_diagnostic("No approval is pending");
             }
         }
-        "/clear" => {
+        CommandId::Clear => {
             if call_runtime(
                 runtime,
                 "session/history/clear",
@@ -1095,11 +1262,8 @@ async fn handle_runtime_command(
                 }
             }
         }
-        "/compact" => {
-            let instructions = command
-                .strip_prefix("/compact")
-                .map(str::trim)
-                .unwrap_or_default();
+        CommandId::Compact => {
+            let instructions = command_arguments.trim();
             let session_id = runtime.session_id.clone();
             match runtime.service.compact(&session_id, instructions).await {
                 Ok(result) => {
@@ -1135,10 +1299,10 @@ async fn handle_runtime_command(
                 Err(error) => state.push_diagnostic(error.to_string()),
             }
         }
-        "/rewind" => {
-            let keep_messages = command
+        CommandId::Rewind => {
+            let keep_messages = command_arguments
                 .split_whitespace()
-                .nth(1)
+                .next()
                 .map(str::parse::<usize>)
                 .transpose();
             match keep_messages {
@@ -1168,7 +1332,7 @@ async fn handle_runtime_command(
                 Err(_) => state.push_diagnostic("Usage: /rewind [message-count]"),
             }
         }
-        "/fork" => {
+        CommandId::Fork => {
             if let Some(result) = call_runtime(
                 runtime,
                 "session/fork",
@@ -1180,8 +1344,8 @@ async fn handle_runtime_command(
                 push_local_notice(state, "Forked session", EntryStatus::Completed);
             }
         }
-        "/resume" => {
-            let Some(session_id) = command.split_whitespace().nth(1) else {
+        CommandId::Resume => {
+            let Some(session_id) = command_arguments.split_whitespace().next() else {
                 state.push_diagnostic("Usage: /resume <session-id>");
                 return true;
             };
@@ -1196,7 +1360,7 @@ async fn handle_runtime_command(
                 push_local_notice(state, "Resumed session", EntryStatus::Completed);
             }
         }
-        "/continue" => {
+        CommandId::Continue => {
             if let Some(result) = call_runtime(
                 runtime,
                 "session/continue",
@@ -1208,11 +1372,8 @@ async fn handle_runtime_command(
                 push_local_notice(state, "Continued latest session", EntryStatus::Completed);
             }
         }
-        "/title" => {
-            let title = command
-                .strip_prefix("/title")
-                .map(str::trim)
-                .unwrap_or_default();
+        CommandId::Rename => {
+            let title = command_arguments.trim();
             if title.is_empty() {
                 state.push_diagnostic("Usage: /title <new title>");
             } else if call_runtime(
@@ -1226,7 +1387,7 @@ async fn handle_runtime_command(
                 push_local_notice(state, "Session title updated", EntryStatus::Completed);
             }
         }
-        "/history" => {
+        CommandId::History => {
             if let Some(result) = call_runtime(
                 runtime,
                 "session/list",
@@ -1236,8 +1397,8 @@ async fn handle_runtime_command(
                 push_json_notice(state, "Saved sessions", result.get("sessions"));
             }
         }
-        "/settings" => {
-            let arguments = command.split_whitespace().skip(1).collect::<Vec<_>>();
+        CommandId::Settings => {
+            let arguments = command_arguments.split_whitespace().collect::<Vec<_>>();
             match arguments.as_slice() {
                 [] => {
                     if let Some(result) =
@@ -1263,30 +1424,7 @@ async fn handle_runtime_command(
                     }
                 }
                 ["thinking", value @ ("off" | "low" | "medium" | "high" | "max")] => {
-                    if persist_user_setting(runtime, &["thinking"], json!(value), false, state) {
-                        let mut params = serde_json::Map::from_iter([
-                            ("sessionId".to_owned(), json!(runtime.session_id)),
-                            ("thinking".to_owned(), json!(*value != "off")),
-                        ]);
-                        if *value != "off" {
-                            params.insert("reasoningEffort".to_owned(), json!(value));
-                        }
-                        if call_runtime(
-                            runtime,
-                            "session/settings/update",
-                            Value::Object(params),
-                            state,
-                        )
-                        .is_some()
-                        {
-                            runtime.thinking = (*value).to_owned();
-                            push_local_notice(
-                                state,
-                                "Thinking preference and active session updated",
-                                EntryStatus::Completed,
-                            );
-                        }
-                    }
+                    apply_thinking(runtime, value, state);
                 }
                 ["model", value] if !value.trim().is_empty() => {
                     if persist_user_setting(
@@ -1295,11 +1433,18 @@ async fn handle_runtime_command(
                         json!(value),
                         false,
                         state,
-                    ) {
+                    ) && call_runtime(
+                        runtime,
+                        "session/settings/update",
+                        json!({"sessionId": runtime.session_id, "model": value}),
+                        state,
+                    )
+                    .is_some()
+                    {
                         runtime.model = (*value).to_owned();
                         push_local_notice(
                             state,
-                            "Model preference saved for new sessions",
+                            "Model updated for this session and future sessions",
                             EntryStatus::Completed,
                         );
                     }
@@ -1313,7 +1458,7 @@ async fn handle_runtime_command(
                     )
                     .is_some()
                     {
-                        runtime.agent_name = (*value).to_owned();
+                        sync_runtime_intent(runtime, Some(value));
                         push_local_notice(state, "Session agent updated", EntryStatus::Completed);
                     }
                 }
@@ -1400,11 +1545,14 @@ async fn handle_runtime_command(
                 ),
             }
         }
-        "/theme" => {
-            let value = command.split_whitespace().nth(1).unwrap_or_default();
+        CommandId::Theme => {
+            let value = command_arguments
+                .split_whitespace()
+                .next()
+                .unwrap_or_default();
             update_theme(runtime, value, state, theme);
         }
-        "/update" => push_local_notice(
+        CommandId::Update => push_local_notice(
             state,
             &format!(
                 "Mistral Vibe {} is installed. Update discovery is unavailable in this build; the current session remains usable.",
@@ -1412,7 +1560,7 @@ async fn handle_runtime_command(
             ),
             EntryStatus::Completed,
         ),
-        "/trust" => {
+        CommandId::Trust => {
             if call_runtime_async(
                 runtime,
                 "workspace/trust/decision",
@@ -1433,11 +1581,13 @@ async fn handle_runtime_command(
                 );
             }
         }
-        "/loop" => handle_loop_command(command, runtime, state),
-        "/remote-project" => {
-            handle_project_command(command, working_directory, runtime, state).await
+        CommandId::Loop => handle_loop_command(command_arguments, runtime, state),
+        CommandId::RemoteProject => {
+            handle_project_command(command_arguments, working_directory, runtime, state).await
         }
-        "/teleport" => handle_teleport_command(command, working_directory, runtime, state).await,
+        CommandId::Teleport => {
+            handle_teleport_command(command_arguments, working_directory, runtime, state).await
+        }
         _ => return false,
     }
     true
@@ -1614,12 +1764,40 @@ fn adopt_hydrated_session(
             return false;
         }
     };
+    for path in state.take_transient_paths() {
+        replacement.track_transient_path(path);
+    }
     replacement.resize(state.viewport.0, state.viewport.1);
     runtime.session_id.clone_from(&session_id);
+    sync_runtime_intent(runtime, None);
     *state = replacement;
     *controls = ControlState::new(session_id);
     sync_active_callbacks(runtime, state, controls);
     true
+}
+
+fn sync_runtime_intent(runtime: &mut InteractiveRuntime, agent_name: Option<&str>) {
+    if let Some(agent_name) = agent_name {
+        runtime.agent_name = agent_name.to_owned();
+    }
+    if let Ok(session) = runtime.service.session(&runtime.session_id) {
+        if agent_name.is_none()
+            && let Some(agent_name) = session.intent.agent
+        {
+            runtime.agent_name = agent_name;
+        }
+        if let Some(model) = session.intent.model {
+            runtime.model = model;
+        }
+        runtime.thinking = session
+            .intent
+            .reasoning_effort
+            .unwrap_or_else(|| "off".to_owned());
+        if let Some(mode) = session.intent.mode {
+            runtime.mode = mode;
+        }
+        runtime.auto_approve = session.intent.auto_approve;
+    }
 }
 
 fn metadata_session_id(result: &BTreeMap<String, Value>) -> Option<String> {
@@ -1635,8 +1813,8 @@ fn metadata_session_id(result: &BTreeMap<String, Value>) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-fn handle_loop_command(command: &str, runtime: &mut InteractiveRuntime, state: &mut TuiState) {
-    let arguments = command.split_whitespace().skip(1).collect::<Vec<_>>();
+fn handle_loop_command(arguments: &str, runtime: &mut InteractiveRuntime, state: &mut TuiState) {
+    let arguments = arguments.split_whitespace().collect::<Vec<_>>();
     match arguments.as_slice() {
         [] | ["list"] | ["ls"] => {
             if let Some(result) = call_runtime(
@@ -1682,12 +1860,12 @@ fn handle_loop_command(command: &str, runtime: &mut InteractiveRuntime, state: &
 }
 
 async fn handle_project_command(
-    command: &str,
+    command_arguments: &str,
     working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    let arguments = command.split_whitespace().skip(1).collect::<Vec<_>>();
+    let arguments = command_arguments.split_whitespace().collect::<Vec<_>>();
     match arguments.as_slice() {
         [] | ["open"] => {
             if let Some(result) = call_runtime_async(
@@ -1835,12 +2013,12 @@ async fn handle_project_command(
 }
 
 async fn handle_teleport_command(
-    command: &str,
+    command_arguments: &str,
     working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    let arguments = command.split_whitespace().skip(1).collect::<Vec<_>>();
+    let arguments = command_arguments.split_whitespace().collect::<Vec<_>>();
     if let Some(action) = arguments.first()
         && matches!(*action, "approve" | "deny" | "cancel")
     {
@@ -1919,6 +2097,13 @@ fn unix_seconds() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs())
+}
+
+fn unix_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
+        .unwrap_or_default()
 }
 
 fn is_exit_command(command: &str) -> bool {
@@ -2271,6 +2456,7 @@ fn start_runtime(
 ) -> Result<InteractiveRuntime, CliError> {
     let release3 = release3_service(arguments, working_directory)?;
     let mut banner = banner_metrics_from_release3(&release3, arguments, working_directory);
+    let skills = runtime_skills(&release3);
     let preferences = startup_preferences(arguments, &release3)?;
     let release4 = Release4Service::production(
         VibeCodeCloudConfig::from_credential(credential.clone())
@@ -2304,6 +2490,7 @@ fn start_runtime(
         enabled_tools: arguments.enabled_tools.clone(),
         disabled_tools: arguments.disabled_tools.clone(),
         mcp_servers: Vec::new(),
+        model: Some(preferences.model.clone()),
         max_turns: arguments.max_turns,
         max_tokens: arguments.max_tokens,
         max_price_micros: arguments
@@ -2318,29 +2505,80 @@ fn start_runtime(
     })?;
     refresh_server_banner_metrics(&mut service, &mut banner);
     let session = service.session(&session_id)?;
+    let agent_name = session
+        .intent
+        .agent
+        .clone()
+        .unwrap_or_else(|| "default".to_owned());
     Ok(InteractiveRuntime {
         service,
         session_id,
-        model: preferences.model,
-        thinking: preferences
+        model: session.intent.model.unwrap_or(preferences.model),
+        thinking: session
+            .intent
             .reasoning_effort
             .unwrap_or_else(|| "off".to_owned()),
         mode: session
             .intent
             .mode
             .unwrap_or_else(|| preferences.mode.clone()),
-        agent_name: arguments
-            .agent
-            .clone()
-            .unwrap_or_else(|| "default".to_owned()),
+        agent_name,
         banner,
         context_tokens: 0,
         context_window: arguments.max_tokens.unwrap_or(DEFAULT_CONTEXT_WINDOW),
         auto_approve: session.intent.auto_approve,
         clear_context_after_turn: false,
+        skills,
+        shell: None,
         cloud: CloudWorkflowState::default(),
         telemetry,
     })
+}
+
+fn runtime_skills(release3: &Release3Service) -> BTreeMap<String, RuntimeSkill> {
+    release3
+        .dispatch("skills/list", &BTreeMap::new())
+        .ok()
+        .and_then(|dispatch| dispatch.result.get("skills").cloned())
+        .map_or_else(BTreeMap::new, |skills| parse_runtime_skills(Some(&skills)))
+}
+
+fn parse_runtime_skills(skills: Option<&Value>) -> BTreeMap<String, RuntimeSkill> {
+    skills
+        .and_then(Value::as_array)
+        .cloned()
+        .into_iter()
+        .flatten()
+        .filter(|skill| {
+            skill
+                .get("userInvocable")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        })
+        .filter_map(|skill| {
+            let name = skill.get("name").and_then(Value::as_str)?.to_owned();
+            Some((
+                name.clone(),
+                RuntimeSkill {
+                    name,
+                    description: skill
+                        .get("description")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned(),
+                    body: skill
+                        .get("body")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned(),
+                    path: skill
+                        .get("path")
+                        .and_then(Value::as_str)
+                        .map(ToOwned::to_owned),
+                },
+            ))
+        })
+        .collect()
 }
 
 fn local_banner_metrics(arguments: &Arguments, working_directory: &Path) -> BannerMetrics {
@@ -2453,6 +2691,7 @@ fn release3_service(
         toml::Table::new(),
         arguments.trust,
     )
+    .map(Release3Service::with_runtime_session_persistence)
     .map_err(|error| CliError::Terminal(error.to_string()))
 }
 
@@ -3235,6 +3474,7 @@ mod tests {
                 enabled_tools: Vec::new(),
                 disabled_tools: Vec::new(),
                 mcp_servers: Vec::new(),
+                model: Some("test-model".to_owned()),
                 max_turns: None,
                 max_tokens: None,
                 max_price_micros: None,
@@ -3258,6 +3498,8 @@ mod tests {
             context_window: DEFAULT_CONTEXT_WINDOW,
             auto_approve: true,
             clear_context_after_turn: false,
+            skills: BTreeMap::new(),
+            shell: None,
             cloud: CloudWorkflowState::default(),
             telemetry: None,
         }

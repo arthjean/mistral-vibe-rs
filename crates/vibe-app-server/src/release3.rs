@@ -1,15 +1,17 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::builtin_agents;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use thiserror::Error;
 use toml::{Table, Value as TomlValue};
 use vibe_core::config::{ConfigMutation, ConfigPaths, ConfigTarget, ConfigWrite, LayeredConfig};
 use vibe_core::continuity::SessionContinuity;
+use vibe_core::events::ModelMessage;
 use vibe_core::extensions::{
     AgentKind, AgentProfile, AgentRegistry, DiscoveryRoots, ExtensionCatalog, ExtensionSource,
     SkillDefinition, discover_extensions,
@@ -61,6 +63,7 @@ pub struct RuntimeAttachment {
     pub working_directory: String,
     pub parent_session_id: Option<String>,
     pub agent: Option<String>,
+    pub agent_profile: Option<AgentProfile>,
     pub hydrated: HydratedSession,
 }
 
@@ -93,7 +96,6 @@ pub struct Release3Service {
     project_trusted: bool,
     allowed_roots: Vec<PathBuf>,
     agents: Arc<Mutex<AgentRegistry>>,
-    active_agents: Arc<Mutex<BTreeMap<String, String>>>,
     next_session: Arc<AtomicU64>,
     persist_runtime_sessions: bool,
 }
@@ -131,16 +133,17 @@ impl Release3Service {
     }
 
     fn build(paths: Release3Paths, defaults: Table, project_trusted: bool) -> Self {
-        let default_agent = AgentProfile {
-            name: "default".to_owned(),
-            display_name: "Default".to_owned(),
-            description: "Default coding agent".to_owned(),
-            kind: AgentKind::Agent,
-            safety: "neutral".to_owned(),
-            overrides: Table::new(),
-            source: ExtensionSource::Builtin,
-            path: None,
-        };
+        let config = LayeredConfig::new(
+            ConfigPaths {
+                vibe_home: paths.vibe_home.clone(),
+                working_directory: paths.working_directory.clone(),
+            },
+            defaults.clone(),
+        )
+        .with_environment(
+            std::env::vars().filter(|(key, _)| key != "VIBE_HOME" && key.starts_with("VIBE_")),
+        )
+        .with_project_trusted(project_trusted);
         let user_extensions = paths.vibe_home.join("extensions");
         let discovery_roots = DiscoveryRoots {
             configured: Vec::new(),
@@ -148,20 +151,16 @@ impl Release3Service {
             user: vec![user_extensions.clone()],
             project_trusted,
         };
-        let registry = AgentRegistry::with_initial(default_agent, user_extensions.join("agents"));
+        let mut registry = AgentRegistry::with_initial(
+            builtin_agents::default_profile(),
+            user_extensions.join("agents"),
+        );
+        for profile in builtin_agents::profiles(&paths.vibe_home) {
+            registry.register_builtin(profile);
+        }
         let store = SessionStore::new(&paths.session_root);
         Self {
-            config: LayeredConfig::new(
-                ConfigPaths {
-                    vibe_home: paths.vibe_home.clone(),
-                    working_directory: paths.working_directory.clone(),
-                },
-                defaults.clone(),
-            )
-            .with_environment(
-                std::env::vars().filter(|(key, _)| key != "VIBE_HOME" && key.starts_with("VIBE_")),
-            )
-            .with_project_trusted(project_trusted),
+            config,
             store: store.clone(),
             continuity: SessionContinuity::new(store),
             defaults,
@@ -170,7 +169,6 @@ impl Release3Service {
             allowed_roots: vec![paths.working_directory.clone()],
             paths,
             agents: Arc::new(Mutex::new(registry)),
-            active_agents: Arc::new(Mutex::new(BTreeMap::new())),
             next_session: Arc::new(AtomicU64::new(1)),
             persist_runtime_sessions: false,
         }
@@ -253,6 +251,72 @@ impl Release3Service {
             .refresh(hydrated.clone())
             .map_err(|error| Release3Error::Storage(error.to_string()))?;
         Ok(hydrated)
+    }
+
+    pub fn update_runtime_agent(
+        &self,
+        session_id: &str,
+        name: &str,
+    ) -> Result<Option<HydratedSession>, Release3Error> {
+        if !self.persist_runtime_sessions {
+            return Ok(None);
+        }
+        self.set_session_agent(session_id, name)
+            .map(|(_, hydrated)| Some(hydrated))
+    }
+
+    pub(crate) fn agent_profile(&self, name: &str) -> Result<AgentProfile, Release3Error> {
+        if name == "lean" && !self.installed_agent_names()?.contains(name) {
+            return Err(Release3Error::InvalidParams(
+                "agent `lean` must be installed with /leanstall first".to_owned(),
+            ));
+        }
+        let profile = self.catalog().agents.remove(name).map_or_else(
+            || {
+                if self.persist_runtime_sessions {
+                    Err(Release3Error::Extension(format!(
+                        "agent `{name}` was not found"
+                    )))
+                } else {
+                    Ok(AgentProfile {
+                        name: name.to_owned(),
+                        display_name: name.to_owned(),
+                        description: "Externally supplied agent profile".to_owned(),
+                        kind: AgentKind::Agent,
+                        safety: "neutral".to_owned(),
+                        overrides: Table::new(),
+                        source: ExtensionSource::Configured,
+                        path: None,
+                    })
+                }
+            },
+            Ok,
+        )?;
+        if profile.kind != AgentKind::Agent {
+            return Err(Release3Error::Extension(format!(
+                "subagent `{name}` cannot be selected as the primary agent"
+            )));
+        }
+        if let Some(prompt_id) = profile.runtime_settings().system_prompt_id
+            && builtin_agents::system_prompt(&prompt_id).is_none()
+        {
+            return Err(Release3Error::InvalidParams(format!(
+                "agent `{name}` references unsupported system prompt `{prompt_id}`"
+            )));
+        }
+        Ok(profile)
+    }
+
+    pub(crate) fn default_agent_name(&self) -> Result<String, Release3Error> {
+        Ok(self
+            .config
+            .load()
+            .map_err(config_error)?
+            .effective
+            .get("default_agent")
+            .and_then(TomlValue::as_str)
+            .unwrap_or("default")
+            .to_owned())
     }
 
     #[must_use]
@@ -576,22 +640,105 @@ impl Release3Service {
     }
 
     fn rewind(&self, params: &BTreeMap<String, Value>) -> Result<Release3Dispatch, Release3Error> {
-        let hydrated = self
-            .store
-            .rewind(
-                required_string(params, "sessionId")?,
-                usize_param(params, "keepMessages", 0)?,
-                statistics_map(params.get("statistics"))?,
-                now_millis(),
-            )
-            .map_err(storage_error)?;
+        let session_id = required_string(params, "sessionId")?;
+        let message_index = params
+            .get("messageIndex")
+            .map(|value| {
+                value
+                    .as_u64()
+                    .and_then(|value| usize::try_from(value).ok())
+                    .ok_or_else(|| {
+                        Release3Error::InvalidParams(
+                            "messageIndex must be a non-negative integer".to_owned(),
+                        )
+                    })
+            })
+            .transpose()?;
+        let restore_files = params
+            .get("restoreFiles")
+            .map(|value| {
+                value.as_bool().ok_or_else(|| {
+                    Release3Error::InvalidParams("restoreFiles must be a boolean".to_owned())
+                })
+            })
+            .transpose()?
+            .unwrap_or(false);
+        if restore_files {
+            return Err(Release3Error::InvalidParams(
+                "this session has no restorable file checkpoint".to_owned(),
+            ));
+        }
+        let inplace = params
+            .get("inplace")
+            .map(|value| {
+                value.as_bool().ok_or_else(|| {
+                    Release3Error::InvalidParams("inplace must be a boolean".to_owned())
+                })
+            })
+            .transpose()?
+            .unwrap_or(false);
+        let source = self.store.load(session_id).map_err(storage_error)?;
+        let message = message_index
+            .map(|index| {
+                source
+                    .messages
+                    .get(index)
+                    .and_then(|message| match message {
+                        ModelMessage::User { content } => Some(content.clone()),
+                        _ => None,
+                    })
+                    .ok_or_else(|| {
+                        Release3Error::InvalidParams(
+                            "messageIndex must identify a stored user message".to_owned(),
+                        )
+                    })
+            })
+            .transpose()?;
+        let keep_messages = match message_index {
+            Some(index) => index,
+            None => usize_param(params, "keepMessages", 0)?,
+        };
+        let requested_statistics = statistics_map(params.get("statistics"))?;
+        let rewind_statistics = if requested_statistics.is_empty() {
+            source.metadata.statistics.clone()
+        } else {
+            requested_statistics
+        };
+        let timestamp = now_millis();
+        let hydrated = if message_index.is_some() && !inplace {
+            let new_id = format!(
+                "session-{}-{}",
+                timestamp,
+                self.next_session.fetch_add(1, Ordering::Relaxed)
+            );
+            self.store
+                .fork_rewound(
+                    session_id,
+                    &new_id,
+                    keep_messages,
+                    rewind_statistics,
+                    timestamp,
+                )
+                .map_err(storage_error)?
+        } else {
+            self.store
+                .rewind(session_id, keep_messages, rewind_statistics, timestamp)
+                .map_err(storage_error)?
+        };
         self.continuity
             .refresh(hydrated.clone())
             .map_err(|error| Release3Error::Storage(error.to_string()))?;
-        Ok(hydrated_result(
-            &hydrated,
-            Some(runtime_attachment(&hydrated)),
-        ))
+        let mut dispatch = hydrated_result(&hydrated, Some(runtime_attachment(&hydrated)));
+        dispatch
+            .result
+            .insert("message".to_owned(), json!(message.unwrap_or_default()));
+        dispatch
+            .result
+            .insert("restoreErrors".to_owned(), json!([]));
+        dispatch
+            .result
+            .insert("restoredPaths".to_owned(), json!([]));
+        Ok(dispatch)
     }
 
     fn rewind_read(
@@ -602,9 +749,23 @@ impl Release3Service {
             .store
             .load(required_string(params, "sessionId")?)
             .map_err(storage_error)?;
+        let messages = hydrated
+            .messages
+            .iter()
+            .enumerate()
+            .filter_map(|(index, message)| match message {
+                ModelMessage::User { content } => Some(json!({
+                    "messageIndex": index,
+                    "message": content,
+                })),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         Ok(Release3Dispatch::result([
             ("messageCount", json!(hydrated.messages.len())),
             ("statistics", json!(hydrated.metadata.statistics)),
+            ("messages", json!(messages)),
+            ("restoreSupported", json!(false)),
         ]))
     }
 
@@ -631,13 +792,12 @@ impl Release3Service {
     }
 
     fn agents_list(&self) -> Result<Release3Dispatch, Release3Error> {
+        let installed = self.installed_agent_names()?;
         let agents = self
+            .catalog()
             .agents
-            .lock()
-            .map_err(|_| Release3Error::StatePoisoned)?
-            .list()
-            .into_iter()
-            .cloned()
+            .into_values()
+            .filter(|profile| profile.name != "lean" || installed.contains("lean"))
             .collect::<Vec<_>>();
         Ok(Release3Dispatch::result([(
             "agents",
@@ -649,6 +809,10 @@ impl Release3Service {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<Release3Dispatch, Release3Error> {
+        if let Some(name) = params.get("agentName").and_then(Value::as_str) {
+            self.set_builtin_agent_installed(name, true)?;
+            return self.agents_list();
+        }
         let source = self.authorized_existing_path(Path::new(required_string(params, "path")?))?;
         let profile = self
             .agents
@@ -666,6 +830,29 @@ impl Release3Service {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<Release3Dispatch, Release3Error> {
+        if let Some(name) = params.get("agentName").and_then(Value::as_str) {
+            self.set_builtin_agent_installed(name, false)?;
+            let mut dispatch = self.agents_list()?;
+            if let Some(session_id) = params.get("sessionId").and_then(Value::as_str)
+                && self
+                    .store
+                    .load(session_id)
+                    .map_err(storage_error)?
+                    .metadata
+                    .agent_profile
+                    .as_ref()
+                    .and_then(|profile| profile.get("name"))
+                    .and_then(Value::as_str)
+                    == Some(name)
+            {
+                let (profile, hydrated) = self.set_session_agent(session_id, "default")?;
+                dispatch
+                    .result
+                    .insert("agent".to_owned(), serde_json::to_value(profile)?);
+                dispatch.attachment = Some(runtime_attachment(&hydrated));
+            }
+            return Ok(dispatch);
+        }
         self.agents
             .lock()
             .map_err(|_| Release3Error::StatePoisoned)?
@@ -674,39 +861,91 @@ impl Release3Service {
         Ok(Release3Dispatch::result([("removed", json!(true))]))
     }
 
+    fn set_builtin_agent_installed(&self, name: &str, install: bool) -> Result<(), Release3Error> {
+        if name != "lean" {
+            return Err(Release3Error::InvalidParams(format!(
+                "unknown installable built-in agent `{name}`"
+            )));
+        }
+        let snapshot = self.config.load().map_err(config_error)?;
+        let mut installed = snapshot
+            .effective
+            .get("installed_agents")
+            .and_then(TomlValue::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(TomlValue::as_str)
+            .map(ToOwned::to_owned)
+            .collect::<BTreeSet<_>>();
+        if install {
+            installed.insert(name.to_owned());
+        } else {
+            installed.remove(name);
+        }
+        let expected_fingerprint = snapshot
+            .fingerprints
+            .get(&snapshot.selected_target)
+            .cloned()
+            .flatten();
+        self.config
+            .batch_write(&[ConfigWrite {
+                target: snapshot.selected_target,
+                expected_fingerprint,
+                mutations: vec![ConfigMutation::set(
+                    ["installed_agents"],
+                    TomlValue::Array(installed.iter().cloned().map(TomlValue::String).collect()),
+                )],
+            }])
+            .map_err(config_error)?;
+        Ok(())
+    }
+
+    fn installed_agent_names(&self) -> Result<BTreeSet<String>, Release3Error> {
+        Ok(self
+            .config
+            .load()
+            .map_err(config_error)?
+            .effective
+            .get("installed_agents")
+            .and_then(TomlValue::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(TomlValue::as_str)
+            .map(ToOwned::to_owned)
+            .collect())
+    }
+
+    fn set_session_agent(
+        &self,
+        session_id: &str,
+        name: &str,
+    ) -> Result<(AgentProfile, HydratedSession), Release3Error> {
+        let profile = self.agent_profile(name)?;
+        let mut metadata = self.store.load(session_id).map_err(storage_error)?.metadata;
+        metadata.agent_profile = Some(serde_json::to_value(&profile)?);
+        self.store
+            .update_metadata(&metadata)
+            .map_err(storage_error)?;
+        let hydrated = self.store.load(session_id).map_err(storage_error)?;
+        self.continuity
+            .refresh(hydrated.clone())
+            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+        Ok((profile, hydrated))
+    }
+
     fn agent_update(
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<Release3Dispatch, Release3Error> {
         let session_id = required_string(params, "sessionId")?;
         let name = required_string(params, "name")?;
-        let profile = self
-            .agents
-            .lock()
-            .map_err(|_| Release3Error::StatePoisoned)?
-            .set_active(name)
-            .map_err(|error| Release3Error::Extension(error.to_string()))?
-            .clone();
-        self.active_agents
-            .lock()
-            .map_err(|_| Release3Error::StatePoisoned)?
-            .insert(session_id.to_owned(), name.to_owned());
-        let mut metadata = self.store.load(session_id).map_err(storage_error)?.metadata;
-        metadata.agent_profile = Some(serde_json::to_value(&profile)?);
-        metadata.config.extend(
-            profile
-                .overrides
-                .iter()
-                .map(|(key, value)| Ok((key.clone(), toml_json(Some(value.clone()))?)))
-                .collect::<Result<BTreeMap<_, _>, Release3Error>>()?,
-        );
-        self.store
-            .update_metadata(&metadata)
-            .map_err(storage_error)?;
-        Ok(Release3Dispatch::result([(
-            "agent",
-            serde_json::to_value(profile)?,
-        )]))
+        let (profile, hydrated) = self.set_session_agent(session_id, name)?;
+        Ok(Release3Dispatch {
+            result: [("agent".to_owned(), serde_json::to_value(profile)?)]
+                .into_iter()
+                .collect(),
+            attachment: Some(runtime_attachment(&hydrated)),
+        })
     }
 
     fn skills_list(&self) -> Result<Release3Dispatch, Release3Error> {
@@ -844,6 +1083,7 @@ impl Release3Service {
                 agents
                     .list()
                     .into_iter()
+                    .filter(|agent| agent.source == ExtensionSource::Builtin)
                     .map(|agent| (agent.name.clone(), agent.clone()))
                     .collect()
             })
@@ -1018,17 +1258,28 @@ fn hydrated_result(
 }
 
 fn runtime_attachment(hydrated: &HydratedSession) -> RuntimeAttachment {
+    let agent_profile: Option<AgentProfile> = hydrated
+        .metadata
+        .agent_profile
+        .as_ref()
+        .and_then(|profile| serde_json::from_value(profile.clone()).ok());
     RuntimeAttachment {
         id: hydrated.metadata.id.clone(),
         working_directory: hydrated.metadata.working_directory.clone(),
         parent_session_id: hydrated.metadata.parent_session_id.clone(),
-        agent: hydrated
-            .metadata
-            .agent_profile
+        agent: agent_profile
             .as_ref()
-            .and_then(|profile| profile.get("name"))
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned),
+            .map(|profile| profile.name.clone())
+            .or_else(|| {
+                hydrated
+                    .metadata
+                    .agent_profile
+                    .as_ref()
+                    .and_then(|profile| profile.get("name"))
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned)
+            }),
+        agent_profile,
         hydrated: hydrated.clone(),
     }
 }
@@ -1044,14 +1295,6 @@ fn config_map(value: Option<&Value>) -> Result<BTreeMap<String, Value>, Release3
 
 fn statistics_map(value: Option<&Value>) -> Result<BTreeMap<String, Value>, Release3Error> {
     config_map(value)
-}
-
-fn toml_json(value: Option<TomlValue>) -> Result<Value, Release3Error> {
-    value
-        .map(serde_json::to_value)
-        .transpose()
-        .map_err(Release3Error::Json)
-        .map(|value| value.unwrap_or(Value::Null))
 }
 
 fn required_string<'a>(
@@ -1193,6 +1436,280 @@ mod tests {
                 .expect("proxy read")
                 .result["proxy"],
             json!("[redacted]")
+        );
+    }
+
+    #[test]
+    fn configured_default_agent_is_resolved_from_the_live_config_snapshot() {
+        let (_temporary, service) = service();
+        service
+            .dispatch(
+                "config/batchWrite",
+                &BTreeMap::from([(
+                    "writes".to_owned(),
+                    json!([{
+                        "target": "user",
+                        "expectedFingerprint": null,
+                        "mutations": [{"path": ["default_agent"], "value": "plan"}]
+                    }]),
+                )]),
+            )
+            .expect("default agent config");
+
+        assert_eq!(
+            service.default_agent_name().expect("configured agent"),
+            "plan"
+        );
+    }
+
+    #[test]
+    fn discovered_user_agent_remains_selectable_after_service_restart() {
+        let temporary = tempdir().expect("tempdir");
+        let workspace = temporary.path().join("workspace");
+        let vibe_home = temporary.path().join("home");
+        let agents = vibe_home.join("extensions/agents");
+        fs::create_dir_all(&workspace).expect("workspace");
+        fs::create_dir_all(&agents).expect("agent directory");
+        fs::write(
+            agents.join("reviewer.toml"),
+            "display_name = \"Reviewer\"\ndescription = \"Custom reviewer\"\nagent_type = \"agent\"\n",
+        )
+        .expect("custom agent");
+
+        let service = Release3Service::new(
+            Release3Paths {
+                session_root: temporary.path().join("sessions"),
+                vibe_home,
+                working_directory: workspace,
+            },
+            Table::new(),
+            true,
+        )
+        .expect("restarted service");
+
+        assert_eq!(
+            service
+                .agent_profile("reviewer")
+                .expect("discovered profile")
+                .display_name,
+            "Reviewer"
+        );
+        fs::write(
+            agents.join("reviewer.toml"),
+            "display_name = \"Reloaded Reviewer\"\ndescription = \"Custom reviewer\"\nagent_type = \"agent\"\n",
+        )
+        .expect("updated custom agent");
+        assert_eq!(
+            service
+                .agent_profile("reviewer")
+                .expect("reloaded profile")
+                .display_name,
+            "Reloaded Reviewer"
+        );
+        assert!(
+            service
+                .dispatch("agents/list", &BTreeMap::new())
+                .expect("agents list")
+                .result["agents"]
+                .as_array()
+                .is_some_and(|agents| agents.iter().any(|agent| agent["name"] == "reviewer"))
+        );
+    }
+
+    #[test]
+    fn builtin_lean_agent_installation_is_persisted_and_reflected_in_agent_listing() {
+        let (_temporary, service) = service();
+        let before = service
+            .dispatch("agents/list", &BTreeMap::new())
+            .expect("agents list");
+        assert!(
+            before.result["agents"]
+                .as_array()
+                .is_some_and(|agents| agents.iter().all(|agent| agent["name"] != "lean"))
+        );
+
+        service
+            .dispatch(
+                "agents/install",
+                &BTreeMap::from([("agentName".to_owned(), json!("lean"))]),
+            )
+            .expect("lean install");
+        let installed = service
+            .dispatch("agents/list", &BTreeMap::new())
+            .expect("installed agents list");
+        assert!(
+            installed.result["agents"]
+                .as_array()
+                .is_some_and(|agents| agents.iter().any(|agent| agent["name"] == "lean"))
+        );
+        let config = service
+            .dispatch("config/read", &BTreeMap::new())
+            .expect("config after install");
+        assert_eq!(
+            config.result["snapshot"]["config"]["installed_agents"],
+            json!(["lean"])
+        );
+
+        service
+            .dispatch(
+                "agents/uninstall",
+                &BTreeMap::from([("agentName".to_owned(), json!("lean"))]),
+            )
+            .expect("lean uninstall");
+        let after = service
+            .dispatch("agents/list", &BTreeMap::new())
+            .expect("agents after uninstall");
+        assert!(
+            after.result["agents"]
+                .as_array()
+                .is_some_and(|agents| agents.iter().all(|agent| agent["name"] != "lean"))
+        );
+    }
+
+    #[test]
+    fn switching_away_from_auto_approve_removes_its_permission_override() {
+        let (_temporary, service) = service();
+        let session_id = "agent-switch";
+        let working_directory = service
+            .paths
+            .working_directory
+            .to_string_lossy()
+            .into_owned();
+        service
+            .create_runtime_session(session_id, &working_directory, 1)
+            .expect("session");
+        let mut metadata = service.store.load(session_id).expect("metadata").metadata;
+        metadata
+            .config
+            .insert("active_model".to_owned(), json!("base-model"));
+        service
+            .store
+            .update_metadata(&metadata)
+            .expect("base session config");
+
+        for name in ["auto-approve", "default"] {
+            let update = service
+                .dispatch(
+                    "session/agent/update",
+                    &BTreeMap::from([
+                        ("sessionId".to_owned(), json!(session_id)),
+                        ("name".to_owned(), json!(name)),
+                    ]),
+                )
+                .expect("agent update");
+            assert_eq!(
+                update
+                    .attachment
+                    .as_ref()
+                    .and_then(|attachment| attachment.agent.as_deref()),
+                Some(name)
+            );
+        }
+
+        let metadata = service.store.load(session_id).expect("metadata").metadata;
+        assert_eq!(
+            metadata
+                .agent_profile
+                .as_ref()
+                .and_then(|profile| profile.get("name")),
+            Some(&json!("default"))
+        );
+        assert!(
+            !metadata.config.contains_key("bypass_tool_permissions"),
+            "the prior auto-approve override must not survive"
+        );
+        assert_eq!(
+            metadata.config.get("active_model"),
+            Some(&json!("base-model")),
+            "agent overlays must not destroy the underlying session config"
+        );
+    }
+
+    #[test]
+    fn rewind_lists_user_messages_and_forks_before_the_selected_message() {
+        let (_temporary, service) = service();
+        let session_id = "rewind-source";
+        let working_directory = service
+            .paths
+            .working_directory
+            .to_string_lossy()
+            .into_owned();
+        let mut hydrated = service
+            .create_runtime_session(session_id, &working_directory, 1)
+            .expect("session");
+        for (offset, message) in [
+            ModelMessage::User {
+                content: "first question".to_owned(),
+            },
+            ModelMessage::Assistant {
+                content: "first answer".to_owned(),
+                reasoning: None,
+                reasoning_signature: None,
+                reasoning_state: Vec::new(),
+                tool_calls: Vec::new(),
+            },
+            ModelMessage::User {
+                content: "edit this question".to_owned(),
+            },
+            ModelMessage::Assistant {
+                content: "second answer".to_owned(),
+                reasoning: None,
+                reasoning_signature: None,
+                reasoning_state: Vec::new(),
+                tool_calls: Vec::new(),
+            },
+        ]
+        .iter()
+        .enumerate()
+        {
+            service
+                .store
+                .append_message(
+                    &mut hydrated.metadata,
+                    message,
+                    u64::try_from(offset).unwrap_or_default().saturating_add(2),
+                )
+                .expect("append message");
+        }
+
+        let preview = service
+            .dispatch(
+                "session/rewind/read",
+                &BTreeMap::from([("sessionId".to_owned(), json!(session_id))]),
+            )
+            .expect("rewind preview");
+        assert_eq!(
+            preview.result["messages"],
+            json!([
+                {"messageIndex": 0, "message": "first question"},
+                {"messageIndex": 2, "message": "edit this question"},
+            ])
+        );
+
+        let rewind = service
+            .dispatch(
+                "session/rewind",
+                &BTreeMap::from([
+                    ("sessionId".to_owned(), json!(session_id)),
+                    ("messageIndex".to_owned(), json!(2)),
+                    ("restoreFiles".to_owned(), json!(false)),
+                    ("statistics".to_owned(), json!({"tokens": 17})),
+                ]),
+            )
+            .expect("rewind");
+        let child = rewind.attachment.expect("child attachment");
+        assert_eq!(child.parent_session_id.as_deref(), Some(session_id));
+        assert_eq!(rewind.result["message"], json!("edit this question"));
+        assert_eq!(child.hydrated.messages.len(), 2);
+        assert_eq!(child.hydrated.metadata.statistics["tokens"], 17);
+        assert_eq!(
+            service
+                .store
+                .load(session_id)
+                .expect("source remains")
+                .messages
+                .len(),
+            4
         );
     }
 

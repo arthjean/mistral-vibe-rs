@@ -5,7 +5,7 @@ use std::fs::OpenOptions;
 use std::ops::Range;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -17,38 +17,14 @@ use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
 use vibe_app_server::client::{PublicContentBlock, TurnRequest};
 
+use super::commands::{command_aliases, command_description};
+
 pub const MAX_PASTE_BYTES: usize = 256 * 1024;
 pub const MAX_RESOURCE_BYTES: u64 = 8 * 1024 * 1024;
 pub const MAX_COMPLETION_CANDIDATES: usize = 64;
 pub const MAX_VISIBLE_COMPLETIONS: usize = 10;
 const MAX_COMPLETION_SCAN_ENTRIES: usize = 4_096;
 const IMAGE_EXTENSIONS: &[&str] = &["gif", "jpeg", "jpg", "png", "webp"];
-const SLASH_COMMANDS: &[(&str, &str)] = &[
-    ("/approve", "Approve the pending action"),
-    ("/clear", "Clear the current conversation"),
-    ("/close", "Close the current session"),
-    ("/compact", "Compact the current context"),
-    ("/continue", "Continue the latest session"),
-    ("/deny", "Deny the pending action"),
-    ("/exit", "Exit Vibe"),
-    ("/fork", "Fork the current session"),
-    ("/help", "Show commands and shortcuts"),
-    ("/history", "Browse saved history"),
-    ("/loop", "Manage scheduled loops"),
-    ("/quit", "Exit Vibe"),
-    ("/remote-project", "Manage Vibe Code projects"),
-    ("/resume", "Resume a saved session"),
-    ("/rewind", "Rewind the conversation"),
-    ("/setup", "Configure credentials and preferences"),
-    ("/settings", "Update session settings"),
-    ("/teleport", "Move work to another environment"),
-    ("/theme", "Change the terminal theme"),
-    ("/title", "Rename the session"),
-    ("/trust", "Trust the current workspace"),
-    ("/update", "Check for updates"),
-    ("/voice", "Start voice input"),
-];
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PromptEditor {
     text: String,
@@ -74,6 +50,14 @@ impl PromptEditor {
     #[must_use]
     pub fn selection(&self) -> Option<Range<usize>> {
         self.selection.clone()
+    }
+
+    #[must_use]
+    pub fn selected_text(&self) -> Option<String> {
+        let selection = self.selection.as_ref()?;
+        let start = grapheme_byte(&self.text, selection.start);
+        let end = grapheme_byte(&self.text, selection.end);
+        (start < end).then(|| self.text[start..end].to_owned())
     }
 
     pub fn set_text(&mut self, text: impl Into<String>) {
@@ -278,6 +262,7 @@ pub struct CompletionEngine {
     generation: u64,
     active: Option<ActiveCompletion>,
     worker: Option<CompletionWorker>,
+    user_skills: Vec<CompletionCandidate>,
 }
 
 #[derive(Debug, Clone)]
@@ -408,6 +393,22 @@ pub struct CompletionView<'a> {
 }
 
 impl CompletionEngine {
+    pub fn set_user_skills<'a>(&mut self, skills: impl IntoIterator<Item = (&'a str, &'a str)>) {
+        self.user_skills = skills
+            .into_iter()
+            .map(|(name, _description)| {
+                let command = format!("/{name}");
+                CompletionCandidate {
+                    id: format!("skill:{name}"),
+                    kind: CompletionKind::Skill,
+                    label: command.clone(),
+                    insertion: command,
+                }
+            })
+            .collect();
+        self.cancel();
+    }
+
     pub fn complete(
         &mut self,
         query: &str,
@@ -427,7 +428,7 @@ impl CompletionEngine {
             self.cancel();
             return Ok(false);
         };
-        let candidates = prompt_candidates(workspace, &query)?;
+        let candidates = self.prompt_candidates(workspace, &query)?;
         let result = self.complete(&query, candidates);
         if result.candidates.is_empty() {
             return Ok(false);
@@ -445,7 +446,7 @@ impl CompletionEngine {
         self.generation = self.generation.saturating_add(1);
         self.active = None;
         if query.starts_with('/') {
-            let candidates = prompt_candidates(workspace, &query)?;
+            let candidates = self.prompt_candidates(workspace, &query)?;
             self.install_completion(self.generation, token_range, &query, candidates);
             return Ok(());
         }
@@ -467,14 +468,23 @@ impl CompletionEngine {
         Ok(())
     }
 
+    fn prompt_candidates(
+        &self,
+        workspace: &Path,
+        query: &str,
+    ) -> Result<Vec<CompletionCandidate>, InputError> {
+        let mut candidates = prompt_candidates(workspace, query)?;
+        if query.starts_with('/') {
+            candidates.extend(self.user_skills.iter().cloned());
+        }
+        Ok(candidates)
+    }
+
     pub fn poll(&mut self) -> Result<bool, InputError> {
         let mut responses = Vec::new();
         if let Some(worker) = &self.worker {
-            loop {
-                match worker.results.try_recv() {
-                    Ok(response) => responses.push(response),
-                    Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
-                }
+            while let Ok(response) = worker.results.try_recv() {
+                responses.push(response);
             }
         }
         let mut changed = false;
@@ -704,13 +714,12 @@ fn prompt_candidates(
     query: &str,
 ) -> Result<Vec<CompletionCandidate>, InputError> {
     if query.starts_with('/') {
-        return Ok(SLASH_COMMANDS
-            .iter()
-            .map(|(command, _)| CompletionCandidate {
+        return Ok(command_aliases()
+            .map(|command| CompletionCandidate {
                 id: format!("command:{command}"),
                 kind: CompletionKind::SlashCommand,
-                label: (*command).to_owned(),
-                insertion: (*command).to_owned(),
+                label: command.to_owned(),
+                insertion: command.to_owned(),
             })
             .collect());
     }
@@ -743,7 +752,7 @@ fn directory_candidates(
     let Ok(canonical_directory) = fs::canonicalize(directory) else {
         return Ok(Vec::new());
     };
-    if !canonical_directory.starts_with(&canonical_workspace) || !canonical_directory.is_dir() {
+    if !canonical_directory.starts_with(canonical_workspace) || !canonical_directory.is_dir() {
         return Ok(Vec::new());
     }
 
@@ -847,10 +856,7 @@ fn mention_candidate(path: String, is_directory: bool) -> CompletionCandidate {
 
 #[must_use]
 pub fn completion_description(label: &str) -> &'static str {
-    SLASH_COMMANDS
-        .iter()
-        .find_map(|(command, description)| (*command == label).then_some(*description))
-        .unwrap_or_default()
+    command_description(label)
 }
 
 #[must_use]
@@ -950,6 +956,7 @@ pub struct MentionMetric {
 pub struct PreparedSubmission {
     pub turn: TurnRequest,
     pub metrics: Vec<MentionMetric>,
+    pub cleanup_paths: Vec<PathBuf>,
 }
 
 pub fn prepare_submission(
@@ -962,6 +969,7 @@ pub fn prepare_submission(
         text: prompt.to_owned(),
     }];
     let mut metrics = Vec::new();
+    let mut cleanup_paths = Vec::new();
     for (token, raw) in mention_tokens(prompt) {
         if raw.is_empty() {
             continue;
@@ -1009,6 +1017,9 @@ pub fn prepare_submission(
                     "data": BASE64_STANDARD.encode(&bytes),
                 }),
             });
+            if is_ephemeral_clipboard_image(&canonical_workspace, &canonical) {
+                cleanup_paths.push(canonical.clone());
+            }
             metrics.push(MentionMetric {
                 token: token.to_owned(),
                 kind: "image".to_owned(),
@@ -1042,7 +1053,19 @@ pub fn prepare_submission(
         user_display_content: Some(json!({"type": "text", "text": prompt})),
         mention_stats: Some(serde_json::to_value(&metrics).map_err(InputError::Json)?),
     };
-    Ok(PreparedSubmission { turn, metrics })
+    Ok(PreparedSubmission {
+        turn,
+        metrics,
+        cleanup_paths,
+    })
+}
+
+fn is_ephemeral_clipboard_image(workspace: &Path, path: &Path) -> bool {
+    path.parent() == Some(workspace)
+        && path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with(".vibe-clipboard-") && name.ends_with(".png"))
 }
 
 fn mention_tokens(prompt: &str) -> Vec<(String, String)> {
@@ -1495,6 +1518,22 @@ mod tests {
             normalize_pasted_text(temporary.path(), &text.to_string_lossy()),
             text.to_string_lossy()
         );
+    }
+
+    #[test]
+    fn clipboard_images_are_marked_for_cleanup_after_their_bytes_are_embedded() {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        let image = temporary.path().join(".vibe-clipboard-1.png");
+        fs::write(&image, b"image").expect("clipboard image");
+
+        let prepared = prepare_submission(temporary.path(), "inspect @'.vibe-clipboard-1.png'")
+            .expect("clipboard image prepares");
+
+        assert_eq!(prepared.cleanup_paths, [image]);
+        assert!(matches!(
+            prepared.turn.input.get(1),
+            Some(PublicContentBlock::Image { .. })
+        ));
     }
 
     #[test]

@@ -20,13 +20,14 @@ use vibe_core::events::{
     PublicEntryMetadata, PublicError, PublicHistoryEntry, PublicMessageRole, PublicMessageSource,
     PublicTurn, PublicTurnStatus,
 };
+use vibe_core::extensions::{AgentApproval, AgentProfile};
 use vibe_core::integrations::redact;
 use vibe_core::mcp::McpServerConfig;
 pub use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionRequirement,
     PolicyError,
 };
-use vibe_core::policy::{PermissionStore, TrustDecision, TrustRootKind};
+use vibe_core::policy::{PermissionRule, PermissionStore, TrustDecision, TrustRootKind};
 use vibe_core::storage::HydratedSession;
 pub use vibe_core::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolInvocation,
@@ -110,6 +111,33 @@ impl ApprovalAgent for ApproveOnce {
 
 pub trait ApprovalAgentFactory: Send + Sync {
     fn for_session(&self, session_id: &str, auto_approve: bool) -> Arc<dyn ApprovalAgent>;
+
+    fn for_agent(
+        &self,
+        session_id: &str,
+        approval: AgentApproval,
+        auto_approve: bool,
+    ) -> Arc<dyn ApprovalAgent> {
+        let fallback = self.for_session(session_id, auto_approve || approval == AgentApproval::All);
+        match approval {
+            AgentApproval::Edits => Arc::new(ApproveEdits { fallback }),
+            AgentApproval::Prompt | AgentApproval::All => fallback,
+        }
+    }
+}
+
+struct ApproveEdits {
+    fallback: Arc<dyn ApprovalAgent>,
+}
+
+impl ApprovalAgent for ApproveEdits {
+    fn request<'a>(&'a self, request: ApprovalRequest) -> ApprovalFuture<'a> {
+        if matches!(request.tool.as_str(), "edit" | "write" | "write_file") {
+            Box::pin(async { Ok(ApprovalDecision::ApproveOnce) })
+        } else {
+            self.fallback.request(request)
+        }
+    }
 }
 
 pub trait SessionToolFactory: Send + Sync {
@@ -1254,12 +1282,33 @@ impl AppServer {
         if let Some(session) = sessions.get_mut(&attachment.id) {
             session.attachments = session.attachments.saturating_add(1);
             session.persisted = Some(attachment.hydrated.clone());
-            apply_persisted_session_settings(&mut session.intent, &attachment.hydrated);
+            recompose_agent_profile_settings(
+                &mut session.intent,
+                &attachment.hydrated,
+                attachment.agent_profile.as_ref(),
+            );
             session.updated_at = now_millis();
-            return Ok(());
+            let session_id = session.id.clone();
+            drop(sessions);
+            return self.refresh_session_workspace_tools(&session_id);
         }
         let policy = PermissionStore::default();
         let tools = ToolRegistry::default();
+        let mut intent = SessionIntent {
+            agent: attachment.agent.clone(),
+            resume: Some(attachment.id.clone()),
+            ..SessionIntent::default()
+        };
+        apply_persisted_session_settings(&mut intent, &attachment.hydrated);
+        if let Some(profile) = &attachment.agent_profile {
+            apply_agent_profile_settings(&mut intent, profile);
+        }
+        policy
+            .try_replace_rules_with_rationale_prefix(
+                "agent-profile:",
+                intent.agent_permission_rules.clone(),
+            )
+            .map_err(|error| ServerError::Resource(error.to_string()))?;
         if let Ok(workspace) = Workspace::open(&attachment.working_directory) {
             let workspace = Arc::new(workspace);
             let review = Arc::new(ReviewManager::new(workspace.clone()));
@@ -1267,7 +1316,11 @@ impl AppServer {
                 .register(
                     &tools,
                     policy.clone(),
-                    self.approval_factory.for_session(&attachment.id, false),
+                    self.approval_factory.for_agent(
+                        &attachment.id,
+                        intent.approval,
+                        intent.auto_approve,
+                    ),
                 )
                 .map_err(|error| ServerError::Resource(error.to_string()))?;
         }
@@ -1275,12 +1328,6 @@ impl AppServer {
             .register(&attachment.id, &tools)
             .map_err(ServerError::Resource)?;
         let timestamp = now_millis();
-        let mut intent = SessionIntent {
-            agent: attachment.agent.clone(),
-            resume: Some(attachment.id.clone()),
-            ..SessionIntent::default()
-        };
-        apply_persisted_session_settings(&mut intent, &attachment.hydrated);
         sessions.insert(
             attachment.id.clone(),
             SessionRuntime {
@@ -1343,14 +1390,50 @@ impl AppServer {
             .ok_or_else(|| ServerError::SessionNotFound(attachment.id.clone()))?;
         session.persisted = Some(attachment.hydrated.clone());
         session.intent.agent = attachment.agent.clone();
-        apply_persisted_session_settings(&mut session.intent, &attachment.hydrated);
+        recompose_agent_profile_settings(
+            &mut session.intent,
+            &attachment.hydrated,
+            attachment.agent_profile.as_ref(),
+        );
         session.updated_at = now_millis();
+        drop(sessions);
+        self.refresh_session_workspace_tools(&attachment.id)
+    }
+
+    fn refresh_session_workspace_tools(&self, session_id: &str) -> Result<(), ServerError> {
+        let sessions = self.lock_sessions()?;
+        let session = sessions
+            .get(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        let workspace_directory = session.working_directory.clone();
+        let policy = session.policy.clone();
+        let tools = session.tools.clone();
+        let permission_rules = session.intent.agent_permission_rules.clone();
+        let approval = self.approval_factory.for_agent(
+            session_id,
+            session.intent.approval,
+            session.intent.auto_approve,
+        );
+        drop(sessions);
+        policy
+            .try_replace_rules_with_rationale_prefix("agent-profile:", permission_rules)
+            .map_err(|error| ServerError::Resource(error.to_string()))?;
+        if let Ok(workspace) = Workspace::open(&workspace_directory) {
+            let workspace = Arc::new(workspace);
+            let review = Arc::new(ReviewManager::new(workspace.clone()));
+            WorkspaceTools::new(workspace, review)
+                .register(&tools, policy, approval)
+                .map_err(|error| ServerError::Resource(error.to_string()))?;
+        }
         Ok(())
     }
 }
 
 fn apply_persisted_session_settings(intent: &mut SessionIntent, hydrated: &HydratedSession) {
     let config = &hydrated.metadata.config;
+    if let Some(value) = config.get("active_model").and_then(Value::as_str) {
+        intent.model = Some(value.to_owned());
+    }
     if let Some(value) = config.get("maxTurns").and_then(Value::as_u64)
         && let Ok(value) = u32::try_from(value)
     {
@@ -1374,6 +1457,62 @@ fn apply_persisted_session_settings(intent: &mut SessionIntent, hydrated: &Hydra
     }
     if let Some(value) = config.get("autoApprove").and_then(Value::as_bool) {
         intent.auto_approve = value;
+    }
+}
+
+fn apply_agent_profile_settings(intent: &mut SessionIntent, profile: &AgentProfile) {
+    let settings = profile.runtime_settings();
+    intent.enabled_tools = if settings.enabled_tools.is_empty() {
+        intent.requested_enabled_tools.clone()
+    } else {
+        settings.enabled_tools
+    };
+    intent
+        .disabled_tools
+        .clone_from(&intent.requested_disabled_tools);
+    intent.disabled_tools.extend(settings.disabled_tools);
+    intent.disabled_tools.sort();
+    intent.disabled_tools.dedup();
+    intent.agent_permission_rules = settings.permission_rules;
+    intent.approval = settings.approval;
+    intent.auto_approve = intent.requested_auto_approve || settings.approval == AgentApproval::All;
+    intent.system_prompt_id = settings.system_prompt_id;
+    if let Some(model) = settings.model {
+        intent.model = Some(model);
+    }
+    if let Some(thinking) = settings.thinking {
+        intent.thinking = thinking;
+    }
+    if settings.reasoning_effort.is_some() {
+        intent.reasoning_effort = settings.reasoning_effort;
+    }
+    if settings.mode.is_some() {
+        intent.mode = settings.mode;
+    }
+}
+
+fn recompose_agent_profile_settings(
+    intent: &mut SessionIntent,
+    hydrated: &HydratedSession,
+    profile: Option<&AgentProfile>,
+) {
+    intent
+        .enabled_tools
+        .clone_from(&intent.requested_enabled_tools);
+    intent
+        .disabled_tools
+        .clone_from(&intent.requested_disabled_tools);
+    intent.model = None;
+    intent.mode = None;
+    intent.thinking = false;
+    intent.reasoning_effort = None;
+    intent.auto_approve = intent.requested_auto_approve;
+    intent.approval = AgentApproval::Prompt;
+    intent.agent_permission_rules.clear();
+    intent.system_prompt_id = None;
+    apply_persisted_session_settings(intent, hydrated);
+    if let Some(profile) = profile {
+        apply_agent_profile_settings(intent, profile);
     }
 }
 
@@ -1842,10 +1981,75 @@ impl ServerConnection {
             Ok(configs) => configs,
             Err(error) => return release3_error_batch(request.id, error),
         };
+        let selected_agent = match params.agent.clone().or(attachment_agent) {
+            Some(agent) => agent,
+            None => match self.server.release3.default_agent_name() {
+                Ok(agent) => agent,
+                Err(error) => return release3_error_batch(request.id, error),
+            },
+        };
+        let agent_profile = if params.agent.is_none() {
+            attachment
+                .as_ref()
+                .and_then(|attachment| attachment.agent_profile.clone())
+                .map_or_else(|| self.server.release3.agent_profile(&selected_agent), Ok)
+        } else {
+            self.server.release3.agent_profile(&selected_agent)
+        };
+        let agent_profile = match agent_profile {
+            Ok(profile) => profile,
+            Err(error) => return release3_error_batch(request.id, error),
+        };
+        let should_persist_agent = attachment.is_none() || params.agent.is_some();
+        let mut intent = SessionIntent {
+            add_directories: params.add_directories,
+            trusted: params.trusted,
+            agent: Some(selected_agent),
+            tool_filters: params.tool_filters,
+            enabled_tools: params.enabled_tools.unwrap_or_default(),
+            disabled_tools: params.disabled_tools,
+            requested_enabled_tools: Vec::new(),
+            requested_disabled_tools: Vec::new(),
+            agent_permission_rules: Vec::new(),
+            mcp_servers: params.mcp_servers,
+            model: params.model,
+            max_turns: params.max_turns,
+            max_tokens: params.max_tokens,
+            max_price_micros,
+            mode: params.mode,
+            thinking: params.thinking,
+            reasoning_effort: params.reasoning_effort,
+            auto_approve: params.auto_approve,
+            requested_auto_approve: params.auto_approve,
+            approval: AgentApproval::Prompt,
+            system_prompt_id: None,
+            resume: attachment
+                .as_ref()
+                .map(|attachment| attachment.id.clone())
+                .or(params.resume),
+            continue_session: params.continue_session && attachment.is_none(),
+        };
+        intent
+            .requested_enabled_tools
+            .clone_from(&intent.enabled_tools);
+        intent
+            .requested_disabled_tools
+            .clone_from(&intent.disabled_tools);
+        apply_agent_profile_settings(&mut intent, &agent_profile);
         let permission_store = PermissionStore::default();
         let tools = ToolRegistry::default();
+        if let Err(error) = permission_store.try_replace_rules_with_rationale_prefix(
+            "agent-profile:",
+            intent.agent_permission_rules.clone(),
+        ) {
+            return error_batch(
+                request.id,
+                ProtocolErrorCode::InternalError,
+                &error.to_string(),
+            );
+        }
         if let Ok(workspace) = Workspace::open(&working_directory) {
-            if params.trusted
+            if intent.trusted
                 && let Err(error) = permission_store.try_set_trust(
                     &working_directory,
                     TrustDecision::SessionTrusted,
@@ -1863,9 +2067,11 @@ impl ServerConnection {
             if let Err(error) = WorkspaceTools::new(workspace, review).register(
                 &tools,
                 permission_store.clone(),
-                self.server
-                    .approval_factory
-                    .for_session(&session_id, params.auto_approve),
+                self.server.approval_factory.for_agent(
+                    &session_id,
+                    intent.approval,
+                    intent.auto_approve,
+                ),
             ) {
                 return error_batch(
                     request.id,
@@ -1891,6 +2097,17 @@ impl ServerConnection {
                 Err(error) => return release3_error_batch(request.id, error),
             }
         }
+        if should_persist_agent {
+            match self
+                .server
+                .release3
+                .update_runtime_agent(&session_id, &agent_profile.name)
+            {
+                Ok(Some(hydrated)) => persisted = Some(hydrated),
+                Ok(None) => {}
+                Err(error) => return release3_error_batch(request.id, error),
+            }
+        }
         let mut sessions = match self.server.lock_sessions() {
             Ok(sessions) => sessions,
             Err(error) => return internal_error_batch(request.id, &error),
@@ -1907,27 +2124,7 @@ impl ServerConnection {
             SessionRuntime {
                 id: session_id.clone(),
                 working_directory,
-                intent: SessionIntent {
-                    add_directories: params.add_directories,
-                    trusted: params.trusted,
-                    agent: params.agent.or(attachment_agent),
-                    tool_filters: params.tool_filters,
-                    enabled_tools: params.enabled_tools.unwrap_or_default(),
-                    disabled_tools: params.disabled_tools,
-                    mcp_servers: params.mcp_servers,
-                    max_turns: params.max_turns,
-                    max_tokens: params.max_tokens,
-                    max_price_micros,
-                    mode: params.mode,
-                    thinking: params.thinking,
-                    reasoning_effort: params.reasoning_effort,
-                    auto_approve: params.auto_approve,
-                    resume: attachment
-                        .as_ref()
-                        .map(|attachment| attachment.id.clone())
-                        .or(params.resume),
-                    continue_session: params.continue_session && attachment.is_none(),
-                },
+                intent,
                 status: SessionStatus::Idle,
                 active_turn: None,
                 active_turn_started_at: None,
@@ -2117,7 +2314,7 @@ impl ServerConnection {
             .map(ToOwned::to_owned);
         if matches!(
             request.method.as_str(),
-            "session/fork" | "session/history/clear" | "session/rewind"
+            "session/agent/update" | "session/fork" | "session/history/clear" | "session/rewind"
         ) && let Some(session_id) = &target_session_id
         {
             let mut sessions = match self.server.lock_sessions() {
@@ -2130,7 +2327,7 @@ impl ServerConnection {
                 return error_batch(
                     request.id,
                     ProtocolErrorCode::Conflict,
-                    "Session history can only change while the session is idle",
+                    "Session agent and history can only change while the session is idle",
                 );
             }
         }
@@ -2183,6 +2380,7 @@ impl ServerConnection {
             }
         };
         if params.max_turns.is_none()
+            && params.model.is_none()
             && params.max_tokens.is_none()
             && params.mode.is_none()
             && params.thinking.is_none()
@@ -2232,9 +2430,20 @@ impl ServerConnection {
                     "Session was not found",
                 );
             };
+            if params.auto_approve.is_some() && session.active_turn.is_some() {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::Conflict,
+                    "autoApprove can only change while the session is idle",
+                );
+            }
             session.id.clone()
         };
+        let approval_changed = params.auto_approve.is_some();
         let mut persisted_settings = BTreeMap::new();
+        if let Some(value) = &params.model {
+            persisted_settings.insert("active_model".to_owned(), json!(value));
+        }
         if let Some(value) = params.max_turns {
             persisted_settings.insert("maxTurns".to_owned(), json!(value));
         }
@@ -2272,6 +2481,9 @@ impl ServerConnection {
                 "Session was not found",
             );
         };
+        if let Some(model) = params.model {
+            session.intent.model = Some(model);
+        }
         if let Some(max_turns) = params.max_turns {
             session.intent.max_turns = Some(max_turns);
         }
@@ -2289,11 +2501,20 @@ impl ServerConnection {
         }
         if let Some(auto_approve) = params.auto_approve {
             session.intent.auto_approve = auto_approve;
+            session.intent.requested_auto_approve = auto_approve;
         }
         if let Some(persisted) = persisted {
             session.persisted = Some(persisted);
         }
         session.updated_at = now_millis();
+        drop(sessions);
+        if approval_changed
+            && let Err(error) = self
+                .server
+                .refresh_session_workspace_tools(&canonical_session_id)
+        {
+            return internal_error_batch(request.id, &error);
+        }
         success_batch(request.id, BTreeMap::new())
     }
 
@@ -3276,6 +3497,8 @@ struct SessionStartParams {
     #[serde(default)]
     mcp_servers: Vec<Value>,
     #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
     max_turns: Option<u32>,
     #[serde(default, rename = "maxSessionTokens", alias = "maxTokens")]
     max_tokens: Option<u64>,
@@ -3310,7 +3533,14 @@ pub struct SessionIntent {
     pub tool_filters: Vec<String>,
     pub enabled_tools: Vec<String>,
     pub disabled_tools: Vec<String>,
+    #[serde(skip)]
+    pub requested_enabled_tools: Vec<String>,
+    #[serde(skip)]
+    pub requested_disabled_tools: Vec<String>,
+    #[serde(skip)]
+    pub agent_permission_rules: Vec<PermissionRule>,
     pub mcp_servers: Vec<Value>,
+    pub model: Option<String>,
     pub max_turns: Option<u32>,
     pub max_tokens: Option<u64>,
     pub max_price_micros: Option<u64>,
@@ -3318,6 +3548,12 @@ pub struct SessionIntent {
     pub thinking: bool,
     pub reasoning_effort: Option<String>,
     pub auto_approve: bool,
+    #[serde(skip)]
+    pub requested_auto_approve: bool,
+    #[serde(skip)]
+    pub approval: AgentApproval,
+    #[serde(default)]
+    pub system_prompt_id: Option<String>,
     pub resume: Option<String>,
     #[serde(rename = "continue")]
     pub continue_session: bool,
@@ -3333,6 +3569,8 @@ struct SessionParams {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct SessionSettingsUpdateParams {
     session_id: String,
+    #[serde(default)]
+    model: Option<String>,
     #[serde(default)]
     max_turns: Option<u32>,
     #[serde(default)]
@@ -4233,6 +4471,7 @@ fn now_millis() -> u64 {
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::PathBuf;
     use toml::Table;
 
     #[derive(Default)]
@@ -4351,6 +4590,62 @@ mod tests {
             json!({"sessionId": "session-1", "workingDirectory": "/workspace"}),
         ));
         assert_eq!(batch.outbound.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn accept_edits_profile_auto_approves_only_mutating_file_tools() {
+        let factory = DefaultApprovalFactory;
+        let approval = factory.for_agent("session", AgentApproval::Edits, false);
+        let edit = approval
+            .request(ApprovalRequest {
+                tool: "edit".to_owned(),
+                requirements: vec![PermissionRequirement::Write {
+                    path: PathBuf::from("/workspace/file.rs"),
+                }],
+                rationale: "edit file".to_owned(),
+            })
+            .await
+            .expect("edit decision");
+        let read = approval
+            .request(ApprovalRequest {
+                tool: "read".to_owned(),
+                requirements: vec![PermissionRequirement::Read {
+                    path: PathBuf::from("/workspace/file.rs"),
+                }],
+                rationale: "read file".to_owned(),
+            })
+            .await
+            .expect("read decision");
+
+        assert_eq!(edit, ApprovalDecision::ApproveOnce);
+        assert_eq!(read, ApprovalDecision::Deny);
+    }
+
+    #[test]
+    fn agent_profile_keeps_requested_denials_and_explicit_auto_approval() {
+        let temporary = tempfile::tempdir().expect("temporary profile root");
+        let profile = crate::builtin_agents::profiles(temporary.path())
+            .into_iter()
+            .find(|profile| profile.name == "plan")
+            .expect("plan profile");
+        let mut intent = SessionIntent {
+            disabled_tools: vec!["shell".to_owned()],
+            requested_disabled_tools: vec!["shell".to_owned()],
+            auto_approve: true,
+            requested_auto_approve: true,
+            ..SessionIntent::default()
+        };
+
+        apply_agent_profile_settings(&mut intent, &profile);
+
+        assert_eq!(intent.disabled_tools, ["shell"]);
+        assert!(intent.agent_permission_rules.iter().any(|rule| {
+            rule.tool == "edit"
+                && rule.scope.ends_with("/plans *")
+                && rule.mode == vibe_core::policy::PermissionMode::Always
+        }));
+        assert!(intent.auto_approve);
+        assert_eq!(intent.mode.as_deref(), Some("plan"));
     }
 
     fn message_entry(
@@ -4484,12 +4779,18 @@ mod tests {
         let update = connection.dispatch(&request(
             4,
             "session/settings/update",
-            json!({"sessionId": "session-1", "maxTurns": 0, "maxTokens": 64}),
+            json!({
+                "sessionId": "session-1",
+                "model": "next-model",
+                "maxTurns": 0,
+                "maxTokens": 64
+            }),
         ));
         assert_eq!(update.outbound.len(), 1);
         let session = server.session("session-1").expect("session");
         assert_eq!(session.intent.max_turns, Some(0));
         assert_eq!(session.intent.max_tokens, Some(64));
+        assert_eq!(session.intent.model.as_deref(), Some("next-model"));
         assert_eq!(session.active_turn.as_deref(), Some("turn-1"));
 
         for (id, params) in [
@@ -4518,6 +4819,36 @@ mod tests {
                 })
             ));
         }
+        let active_approval = connection.dispatch(&request(
+            9,
+            "session/settings/update",
+            json!({"sessionId": "session-1", "autoApprove": true}),
+        ));
+        assert!(matches!(
+            decode_frame(&active_approval.outbound[0]).expect("active approval response"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::Conflict,
+                    ..
+                },
+                ..
+            })
+        ));
+        let active_agent = connection.dispatch(&request(
+            10,
+            "session/agent/update",
+            json!({"sessionId": "session-1", "name": "plan"}),
+        ));
+        assert!(matches!(
+            decode_frame(&active_agent.outbound[0]).expect("active agent response"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::Conflict,
+                    ..
+                },
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -6053,6 +6384,60 @@ tool_timeout_sec = 2
                 .invoke_tool("session-1", "read", invocation())
                 .await
                 .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn auto_approve_update_rebinds_existing_workspace_tool_handlers() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let file = workspace.path().join("editable.txt");
+        std::fs::write(&file, "before\n").expect("fixture");
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        let started = connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({
+                "sessionId": "session-1",
+                "workingDirectory": workspace.path()
+            }),
+        ));
+        assert_eq!(started.outbound.len(), 1);
+        let invocation = |call_id: &str| ToolInvocation {
+            call_id: call_id.to_owned(),
+            arguments: json!({
+                "path": "editable.txt",
+                "oldText": "before",
+                "newText": "after",
+                "replaceAll": false
+            }),
+        };
+
+        assert!(
+            server
+                .invoke_tool("session-1", "edit", invocation("edit-denied"))
+                .await
+                .is_err()
+        );
+        let updated = connection.dispatch(&request(
+            3,
+            "session/settings/update",
+            json!({"sessionId": "session-1", "autoApprove": true}),
+        ));
+        assert!(matches!(
+            decode_frame(&updated.outbound[0]).expect("settings response"),
+            Envelope::Success(_)
+        ));
+        let rebound = server
+            .invoke_tool("session-1", "edit", invocation("edit-approved"))
+            .await
+            .expect_err("edit still requires an active review turn");
+        assert!(
+            rebound
+                .to_string()
+                .contains("mutation requires an active turn"),
+            "updated approval must reach the rebound edit handler: {rebound}"
         );
     }
 

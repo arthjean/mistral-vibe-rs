@@ -1,9 +1,12 @@
 use std::collections::{BTreeMap, VecDeque};
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{mpsc, watch};
+
+use super::interaction::{Overlay, PromptQueue, QuitConfirmation};
 
 const MAX_DIAGNOSTICS: usize = 100;
 
@@ -105,10 +108,17 @@ pub struct TuiState {
     pub resync_required: bool,
     pub scroll_offset: usize,
     pub viewport: (u16, u16),
+    pub overlay: Option<Overlay>,
+    pub prompt_queue: PromptQueue,
+    pub quit_confirmation: QuitConfirmation,
+    pub rewind_confirmation: QuitConfirmation,
+    pub tools_collapsed: bool,
+    pub show_reasoning: bool,
     scroll_line_limit: usize,
     diagnostics: VecDeque<String>,
     entry_indexes: BTreeMap<String, usize>,
     local_sequence: u64,
+    transient_paths: Vec<PathBuf>,
 }
 
 impl TuiState {
@@ -126,11 +136,32 @@ impl TuiState {
             resync_required: false,
             scroll_offset: 0,
             viewport: (80, 24),
+            overlay: None,
+            prompt_queue: PromptQueue::default(),
+            quit_confirmation: QuitConfirmation::default(),
+            rewind_confirmation: QuitConfirmation::default(),
+            tools_collapsed: false,
+            show_reasoning: true,
             scroll_line_limit: 0,
             diagnostics: VecDeque::new(),
             entry_indexes: BTreeMap::new(),
             local_sequence: 0,
+            transient_paths: Vec::new(),
         }
+    }
+
+    pub fn track_transient_path(&mut self, path: PathBuf) {
+        if !self.transient_paths.contains(&path) {
+            self.transient_paths.push(path);
+        }
+    }
+
+    pub fn release_transient_path(&mut self, path: &Path) {
+        self.transient_paths.retain(|candidate| candidate != path);
+    }
+
+    pub fn take_transient_paths(&mut self) -> Vec<PathBuf> {
+        std::mem::take(&mut self.transient_paths)
     }
 
     pub fn apply(&mut self, event: ServerEvent) -> Result<ApplyResult, StateError> {
@@ -282,6 +313,11 @@ impl TuiState {
             return Err(StateError::ForeignSession(replacement.session_id));
         }
         replacement.viewport = self.viewport;
+        replacement.overlay = self.overlay.take();
+        replacement.prompt_queue = std::mem::take(&mut self.prompt_queue);
+        replacement.quit_confirmation = std::mem::take(&mut self.quit_confirmation);
+        replacement.tools_collapsed = self.tools_collapsed;
+        replacement.show_reasoning = self.show_reasoning;
         replacement.diagnostics = self.diagnostics.clone();
         replacement.local_sequence = self.local_sequence;
         *self = replacement;
