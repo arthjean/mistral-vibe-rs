@@ -1,6 +1,7 @@
 pub mod chat_input;
 pub mod clipboard;
 pub mod commands;
+pub mod completion;
 pub mod controls;
 pub mod history;
 pub mod input;
@@ -40,7 +41,8 @@ use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
 
 use self::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName, Modifier};
-use self::commands::CommandId;
+use self::commands::{CommandContext, CommandId};
+use self::completion::CompletionResolution;
 use self::controls::{
     ApprovalScope, CallbackChoice, CallbackKind, CallbackOption, CallbackQuestion, ControlState,
     PendingCallback, UserInputChoice,
@@ -211,13 +213,13 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     };
     if let Some(error) = keyring_error {
         state.push_diagnostic(format!(
-            "Native credential lookup failed: {error}. Run /setup after repairing keyring access"
+            "Native credential lookup failed: {error}. Restart with --setup after repairing keyring access"
         ));
     }
     if runtime.is_none() {
         push_local_notice(
             &mut state,
-            "Setup is required before starting a session. Enter /setup to store an API key in the native keyring.",
+            "Setup is required before starting a session. Restart with --setup to store an API key in the native keyring.",
             EntryStatus::Completed,
         );
     }
@@ -236,7 +238,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     let mut input = ChatInputState::new();
     input.replace_history(history_load.entries);
     input.set_viewport_width(state.viewport.0);
-    input.set_teleport_available(teleport_available(runtime.as_ref()));
+    input.set_command_context(CommandContext::new(teleport_available(runtime.as_ref())));
     if let Some(diagnostic) = history_load.diagnostic {
         state.push_diagnostic(diagnostic);
     }
@@ -290,19 +292,13 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                 &mut controls,
             )
             .await?;
-            if let Err(error) = input.poll_completion() {
-                let generation = input.completion().generation();
-                let effects = input.apply(InputEvent::CompletionFailed {
-                    generation,
-                    reason: error.to_string(),
-                });
-                apply_composer_effects(
-                    &mut input,
-                    effects,
-                    &working_directory,
-                    &mut state,
-                );
-            }
+            let effects = input.poll_completion();
+            apply_composer_effects(
+                &mut input,
+                effects,
+                &working_directory,
+                &mut state,
+            );
             let runtime_view = runtime.as_ref();
             let agent_name =
                 runtime_view.map_or("default", |runtime| runtime.agent_name.as_str());
@@ -623,18 +619,15 @@ fn apply_composer_effects(
     let mut application_effects = Vec::new();
     while let Some(effect) = pending.pop_front() {
         match effect {
-            InputEffect::RequestCompletion {
-                generation,
-                query,
-                range,
-            } => {
-                if let Err(error) =
-                    input.dispatch_completion_request(generation, query, range, working_directory)
-                {
-                    pending.extend(input.apply(InputEvent::CompletionFailed {
-                        generation,
-                        reason: error.to_string(),
-                    }));
+            InputEffect::RequestCompletion { request } => {
+                match input.dispatch_completion_request(request.clone(), working_directory) {
+                    Ok(Some(resolution)) => {
+                        pending.extend(input.apply(InputEvent::CompletionResolved { resolution }))
+                    }
+                    Ok(None) => {}
+                    Err(error) => pending.extend(input.apply(InputEvent::CompletionResolved {
+                        resolution: CompletionResolution::failed(request, &error),
+                    })),
                 }
             }
             InputEffect::NormalizePastedPath { text } => {
@@ -2275,7 +2268,7 @@ fn unix_millis() -> u64 {
 }
 
 fn is_exit_command(command: &str) -> bool {
-    matches!(command.trim(), "/close" | "/exit" | "/quit")
+    command.trim() == "/exit"
 }
 
 fn new_setup_flow(arguments: &Arguments) -> SetupFlow {
@@ -3773,10 +3766,10 @@ mod tests {
     }
 
     #[test]
-    fn close_is_a_canonical_exit_alias() {
-        assert!(is_exit_command("/close"));
+    fn only_the_reference_slash_exit_alias_bypasses_dispatch() {
         assert!(is_exit_command("/exit"));
-        assert!(is_exit_command("/quit"));
+        assert!(!is_exit_command("/close"));
+        assert!(!is_exit_command("/quit"));
         assert!(!is_exit_command("/close now"));
     }
 

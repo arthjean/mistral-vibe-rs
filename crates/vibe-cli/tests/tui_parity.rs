@@ -3,8 +3,11 @@ use ratatui::backend::TestBackend;
 use std::path::Path;
 use vibe_cli::tui::chat_input::InputMode;
 use vibe_cli::tui::clipboard::{SystemClipboard, SystemClipboardPort, osc52_sequence};
-use vibe_cli::tui::commands::{CommandId, command_aliases, parse_command};
-use vibe_cli::tui::input::{CompletionEngine, PromptEditor};
+use vibe_cli::tui::commands::{
+    CommandContext, CommandId, command_aliases, command_aliases_in, parse_command, parse_command_in,
+};
+use vibe_cli::tui::completion::CompletionEngine;
+use vibe_cli::tui::input::PromptEditor;
 use vibe_cli::tui::interaction::{
     Overlay, OverlayItem, OverlayKind, PromptQueue, QuitConfirmation,
 };
@@ -17,47 +20,39 @@ use vibe_cli::tui::state::{EntryStatus, TranscriptEntry, TranscriptKind};
 #[test]
 fn official_textual_commands_are_all_registered_with_their_aliases() {
     let aliases = command_aliases().collect::<Vec<_>>();
-
-    for expected in [
-        "/help",
-        "/config",
-        "/model",
-        "/thinking",
-        "/reload",
+    let mut expected = vec![
         "/clear",
-        "/new",
-        "/copy",
-        "/log",
-        "/debug",
         "/compact",
-        "/exit",
-        "/status",
-        "/teleport",
-        "/remote-project",
-        "/proxy-setup",
-        "/resume",
-        "/continue",
-        "/rename",
-        "/mcp",
+        "/config",
         "/connectors",
-        "/voice",
-        "/leanstall",
-        "/unleanstall",
-        "/rewind",
-        "/loop",
+        "/continue",
+        "/copy",
         "/data-retention",
+        "/debug",
+        "/exit",
+        "/help",
+        "/leanstall",
+        "/log",
+        "/loop",
+        "/mcp",
+        "/model",
+        "/new",
+        "/proxy-setup",
+        "/reload",
+        "/rename",
+        "/resume",
+        "/rewind",
+        "/status",
         "/theme",
-    ] {
-        assert!(
-            aliases.contains(&expected),
-            "missing official alias {expected}"
-        );
+        "/thinking",
+        "/unleanstall",
+        "/voice",
+    ];
+    if cfg!(target_os = "macos") {
+        expected.push("/paste-image");
+        expected.sort_unstable();
     }
-    assert_eq!(
-        aliases.contains(&"/paste-image"),
-        cfg!(target_os = "macos"),
-        "clipboard image command visibility must match platform support"
-    );
+    assert_eq!(aliases, expected);
 
     assert_eq!(
         parse_command("/new").map(|command| command.id),
@@ -77,8 +72,42 @@ fn official_textual_commands_are_all_registered_with_their_aliases() {
     );
     assert_eq!(
         parse_command("/continue").map(|command| command.id),
-        Some(CommandId::Continue)
+        Some(CommandId::Resume)
     );
+
+    for rust_only in [
+        "/close",
+        "/quit",
+        "/title",
+        "/approve",
+        "/deny",
+        "/fork",
+        "/history",
+        "/setup",
+        "/settings",
+        "/trust",
+        "/update",
+    ] {
+        assert!(parse_command(rust_only).is_none(), "parsed {rust_only}");
+    }
+}
+
+#[test]
+fn command_availability_tracks_capabilities_exclusions_and_platform_support() {
+    let context = CommandContext::new(true).with_excluded(["voice"]);
+    let aliases = command_aliases_in(&context).collect::<Vec<_>>();
+    assert!(aliases.contains(&"/teleport"));
+    assert!(aliases.contains(&"/remote-project"));
+    assert!(!aliases.contains(&"/voice"));
+    assert!(parse_command_in("/voice", &context).is_none());
+    assert_eq!(
+        parse_command_in("/continue", &context).map(|command| command.id),
+        Some(CommandId::Resume)
+    );
+    let macos = CommandContext::default().with_clipboard_image_supported(true);
+    let non_macos = CommandContext::default().with_clipboard_image_supported(false);
+    assert!(command_aliases_in(&macos).any(|alias| alias == "/paste-image"));
+    assert!(!command_aliases_in(&non_macos).any(|alias| alias == "/paste-image"));
 }
 
 #[test]

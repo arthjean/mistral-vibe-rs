@@ -17,10 +17,13 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::input::{
+use super::commands::{CommandContext, CommandId};
+use super::completion::{
     CompletionCandidate, CompletionEngine, CompletionKey, CompletionKeyOutcome, CompletionKind,
-    InputError, PromptEditor, active_token, completion_description, composer_content_width,
-    visual_cursor_cell, visual_text_lines,
+    CompletionRequest, CompletionResolution, active_token,
+};
+use super::input::{
+    InputError, PromptEditor, composer_content_width, visual_cursor_cell, visual_text_lines,
 };
 
 /// Composer input mode, mirroring the reference prefix characters.
@@ -133,18 +136,9 @@ pub enum InputEvent {
         #[serde(default)]
         extend_selection: bool,
     },
-    /// Raw candidates produced for a completion request.
-    ///
-    /// Ranking, the mention cap and the empty-result rule are applied by
-    /// [`CompletionEngine`], so an adapter only has to perform the lookup.
-    CompletionResults {
-        generation: u64,
-        candidates: Vec<CompletionCandidate>,
-    },
-    /// A completion request that could not be served.
-    CompletionFailed {
-        generation: u64,
-        reason: String,
+    /// Result produced by either the live worker or a deterministic adapter.
+    CompletionResolved {
+        resolution: CompletionResolution,
     },
     /// Result of the external editor effect; `None` when it was cancelled.
     ExternalEditor {
@@ -191,9 +185,7 @@ pub enum InputEffect {
     HistoryReset,
     CompletionReset,
     RequestCompletion {
-        generation: u64,
-        query: String,
-        range: [usize; 2],
+        request: CompletionRequest,
     },
     NormalizePastedPath {
         text: String,
@@ -270,7 +262,11 @@ pub struct StateObservation {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderObservation {
+    pub border_classes: Vec<String>,
+    pub border_title: String,
     pub cursor_cell: [usize; 2],
+    pub popup_rows: Vec<String>,
+    pub popup_visible: bool,
     pub prompt: char,
     pub visual_lines: Vec<String>,
     pub wrap_width: usize,
@@ -290,7 +286,6 @@ pub struct ChatInputState {
     switching: bool,
     secret_input: bool,
     history_navigating: bool,
-    teleport_available: bool,
     content_width: usize,
     last_paste: Option<Range<usize>>,
 }
@@ -305,7 +300,6 @@ impl Default for ChatInputState {
             switching: false,
             secret_input: false,
             history_navigating: false,
-            teleport_available: false,
             content_width: 71,
             last_paste: None,
         }
@@ -327,10 +321,22 @@ impl ChatInputState {
     }
 
     pub fn set_teleport_available(&mut self, available: bool) {
-        self.teleport_available = available;
-        if !available && self.mode == InputMode::Teleport {
+        self.completion.set_vibe_code_enabled(available);
+        if !self.teleport_available() && self.mode == InputMode::Teleport {
             self.mode = InputMode::Prompt;
         }
+    }
+
+    pub fn set_command_context(&mut self, context: CommandContext) {
+        self.completion.set_command_context(context);
+        if !self.teleport_available() && self.mode == InputMode::Teleport {
+            self.mode = InputMode::Prompt;
+        }
+    }
+
+    #[must_use]
+    pub fn command_context(&self) -> &CommandContext {
+        self.completion.command_context()
     }
 
     pub fn set_user_skills<'a>(&mut self, skills: impl IntoIterator<Item = (&'a str, &'a str)>) {
@@ -352,19 +358,21 @@ impl ChatInputState {
         self.mode
     }
 
-    pub(crate) fn poll_completion(&mut self) -> Result<bool, InputError> {
-        self.completion.poll()
+    pub(crate) fn poll_completion(&mut self) -> Vec<InputEffect> {
+        let resolutions = self.completion.poll();
+        let mut effects = Vec::new();
+        for resolution in resolutions {
+            effects.extend(self.apply(InputEvent::CompletionResolved { resolution }));
+        }
+        effects
     }
 
     pub(crate) fn dispatch_completion_request(
         &mut self,
-        generation: u64,
-        query: String,
-        range: [usize; 2],
+        request: CompletionRequest,
         workspace: &Path,
-    ) -> Result<(), InputError> {
-        self.completion
-            .dispatch_request(generation, range[0]..range[1], query, workspace)
+    ) -> Result<Option<CompletionResolution>, InputError> {
+        self.completion.dispatch_request(request, workspace)
     }
 
     pub(crate) fn refresh_after_adapter_mutation(&mut self) -> Vec<InputEffect> {
@@ -385,7 +393,7 @@ impl ChatInputState {
 
     pub fn replace_text(&mut self, text: impl Into<String>) {
         self.editor.set_text(text);
-        self.mode = mode_from_text(self.editor.text(), self.teleport_available);
+        self.mode = mode_from_text(self.editor.text(), self.teleport_available());
     }
 
     pub fn replace_history(&mut self, entries: Vec<String>) {
@@ -416,22 +424,8 @@ impl ChatInputState {
                 self.apply_key(key, char, &mods, &mut effects);
             }
             InputEvent::Paste { text } => self.apply_paste(&text, &mut effects),
-            InputEvent::CompletionResults {
-                generation,
-                candidates,
-            } => self.apply_completion_results(generation, candidates, &mut effects),
-            InputEvent::CompletionFailed { generation, reason } => {
-                if generation == self.completion.generation() {
-                    self.reset_completion(&mut effects);
-                    effects.push(InputEffect::Notify {
-                        message: format!("Path completion is unavailable: {reason}"),
-                        severity: Severity::Warning,
-                    });
-                } else {
-                    effects.push(InputEffect::Rejected {
-                        reason: "stale completion generation".to_owned(),
-                    });
-                }
+            InputEvent::CompletionResolved { resolution } => {
+                self.completion.apply_resolution(&self.editor, resolution);
             }
             InputEvent::ExternalEditor { text } => {
                 // A cancelled edit leaves the prompt exactly as it was.
@@ -497,15 +491,15 @@ impl ChatInputState {
         if !self.secret_input
             && let Some(completion_key) = popup_key(key, mods)
         {
-            let was_open = self.completion.view().is_some();
             let outcome = self.completion.handle_key(completion_key, &mut self.editor);
-            if was_open && self.completion.view().is_none() {
-                effects.push(InputEffect::CompletionReset);
-            }
             match outcome {
                 Ok(CompletionKeyOutcome::Consumed) => return,
                 Ok(CompletionKeyOutcome::Submit) => {
                     self.submit(effects);
+                    return;
+                }
+                Ok(CompletionKeyOutcome::Refresh) => {
+                    self.refresh_completion(effects);
                     return;
                 }
                 Ok(CompletionKeyOutcome::Ignored) => {}
@@ -613,7 +607,9 @@ impl ChatInputState {
             }
         }
         self.finish_user_edit(&before, effects);
-        self.refresh_completion(effects);
+        if self.editor.text() != before {
+            self.refresh_completion(effects);
+        }
     }
 
     fn apply_paste(&mut self, text: &str, effects: &mut Vec<InputEffect>) {
@@ -639,28 +635,6 @@ impl ChatInputState {
             });
         }
         self.refresh_completion(effects);
-    }
-
-    fn apply_completion_results(
-        &mut self,
-        generation: u64,
-        candidates: Vec<CompletionCandidate>,
-        effects: &mut Vec<InputEffect>,
-    ) {
-        if generation != self.completion.generation() {
-            effects.push(InputEffect::Rejected {
-                reason: "stale completion generation".to_owned(),
-            });
-            return;
-        }
-        // The generation matches, so the prompt has not changed since the
-        // request and the token under the cursor is still the one queried.
-        let Some((token_range, query)) = active_token(&self.editor) else {
-            self.reset_completion(effects);
-            return;
-        };
-        self.completion
-            .install(generation, token_range, &query, candidates);
     }
 
     fn submit(&mut self, effects: &mut Vec<InputEffect>) {
@@ -705,24 +679,15 @@ impl ChatInputState {
     }
 
     fn refresh_completion(&mut self, effects: &mut Vec<InputEffect>) {
-        let was_open = self.completion.view().is_some();
         self.completion.cancel();
         if self.secret_input {
-            if was_open {
-                effects.push(InputEffect::CompletionReset);
-            }
             return;
         }
         let Some((range, query)) = active_token(&self.editor) else {
-            if was_open {
-                effects.push(InputEffect::CompletionReset);
-            }
             return;
         };
         effects.push(InputEffect::RequestCompletion {
-            generation: self.completion.generation(),
-            query,
-            range: [range.start, range.end],
+            request: CompletionRequest::new(self.completion.generation(), range, query),
         });
     }
 
@@ -735,7 +700,7 @@ impl ChatInputState {
     }
 
     fn sync_mode(&mut self, effects: &mut Vec<InputEffect>) {
-        let mode = mode_from_text(self.editor.text(), self.teleport_available);
+        let mode = mode_from_text(self.editor.text(), self.teleport_available());
         if mode != self.mode {
             self.mode = mode;
             effects.push(InputEffect::ModeChanged { mode });
@@ -746,9 +711,13 @@ impl ChatInputState {
         match character {
             '!' => Some(InputMode::Shell),
             '/' => Some(InputMode::Command),
-            '&' if self.teleport_available => Some(InputMode::Teleport),
+            '&' if self.teleport_available() => Some(InputMode::Teleport),
             _ => None,
         }
+    }
+
+    fn teleport_available(&self) -> bool {
+        self.command_context().is_available(CommandId::Teleport)
     }
 
     fn mode_prefix(&self) -> usize {
@@ -815,7 +784,7 @@ impl ChatInputState {
                     .iter()
                     .map(|candidate| CompletionItemObservation {
                         label: candidate.label.clone(),
-                        description: completion_description(&candidate.label).to_owned(),
+                        description: candidate.description.clone(),
                     })
                     .collect(),
             },
@@ -847,7 +816,8 @@ impl ChatInputState {
         }
     }
 
-    /// Projects the same composer geometry used by production rendering.
+    /// Projects the normalized composer render contract recorded by the oracle.
+    /// Terminal-cell clipping and popup layout are verified at the renderer boundary.
     #[must_use]
     pub fn observe_render(&self) -> RenderObservation {
         let prefix = self.mode.prefix_len();
@@ -858,7 +828,16 @@ impl ChatInputState {
             prefix,
         );
         RenderObservation {
+            border_classes: Vec::new(),
+            border_title: String::new(),
             cursor_cell: [row, column],
+            popup_rows: self.completion.view().map_or_else(Vec::new, |view| {
+                view.candidates
+                    .iter()
+                    .map(|candidate| candidate.label.clone())
+                    .collect()
+            }),
+            popup_visible: self.completion.view().is_some(),
             prompt: self.mode.symbol(),
             visual_lines: visual_text_lines(self.editor.text(), self.content_width, prefix),
             wrap_width: self.content_width,

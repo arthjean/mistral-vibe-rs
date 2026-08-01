@@ -8,7 +8,7 @@ mod mcp;
 
 use super::chat_input::ChatInputState;
 use super::clipboard::{SystemClipboard, SystemClipboardPort};
-use super::commands::{CommandId, parse_command};
+use super::commands::{CommandId, parse_command_in};
 use super::controls::ControlState;
 use super::input::prepare_submission;
 use super::interaction::{Overlay, OverlayKind};
@@ -69,7 +69,8 @@ pub(super) async fn dispatch_command(
     _theme: &mut ResolvedTheme,
     turn_active: bool,
 ) -> Result<CommandAction, CliError> {
-    let Some(parsed) = parse_command(command_line) else {
+    let command_context = composer.command_context().clone();
+    let Some(parsed) = parse_command_in(command_line, &command_context) else {
         return Ok(CommandAction::Unhandled);
     };
     let command_id = parsed.id;
@@ -78,7 +79,7 @@ pub(super) async fn dispatch_command(
         CommandId::Exit => return Ok(CommandAction::Exit),
         CommandId::Setup => return Ok(CommandAction::Setup),
         CommandId::Help => {
-            state.overlay = Some(help_overlay());
+            state.overlay = Some(help_overlay(&command_context));
             return Ok(CommandAction::Handled);
         }
         CommandId::Copy => {
@@ -410,7 +411,7 @@ pub(super) async fn start_prompt(
     controls: &mut ControlState,
 ) -> Result<bool, CliError> {
     let Some(runtime) = runtime.as_mut() else {
-        state.push_diagnostic("Setup is required before starting a session. Enter /setup.");
+        state.push_diagnostic("Setup is required before starting a session. Restart with --setup.");
         return Ok(false);
     };
     let mut prepared = match prepare_submission(working_directory, &prompt) {

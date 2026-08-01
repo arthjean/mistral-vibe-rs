@@ -29,17 +29,19 @@ fn complete(
     value: &str,
     candidates: Vec<CompletionCandidate>,
 ) -> Vec<InputEffect> {
-    let generation = type_text(state, value)
+    let request = type_text(state, value)
         .into_iter()
         .rev()
         .find_map(|effect| match effect {
-            InputEffect::RequestCompletion { generation, .. } => Some(generation),
+            InputEffect::RequestCompletion { request } => Some(request),
             _ => None,
         })
         .expect("typing a token requests a completion");
-    state.apply(InputEvent::CompletionResults {
-        generation,
-        candidates,
+    state.apply(InputEvent::CompletionResolved {
+        resolution: CompletionResolution::Results {
+            request,
+            candidates,
+        },
     })
 }
 
@@ -49,6 +51,7 @@ fn mention(label: &str) -> CompletionCandidate {
         kind: CompletionKind::Mention,
         label: label.to_owned(),
         insertion: label.to_owned(),
+        description: String::new(),
     }
 }
 
@@ -75,7 +78,7 @@ fn filesystem_work_is_requested_as_an_effect() {
     let effects = type_text(&mut state, "@src");
     assert!(effects.iter().any(|effect| matches!(
         effect,
-        InputEffect::RequestCompletion { query, .. } if query == "@src"
+        InputEffect::RequestCompletion { request } if request.query == "@src"
     )));
     assert!(
         effects
@@ -129,20 +132,107 @@ fn external_editing_preserves_the_current_mode_during_follow_up_typing() {
 }
 
 #[test]
-fn stale_completion_results_are_rejected_without_panicking() {
+fn stale_completion_results_are_ignored_without_panicking() {
     let mut state = ChatInputState::new();
     type_text(&mut state, "@s");
-    let effects = state.apply(InputEvent::CompletionResults {
-        generation: 0,
-        candidates: vec![mention("@src/")],
+    let effects = state.apply(InputEvent::CompletionResolved {
+        resolution: CompletionResolution::Results {
+            request: CompletionRequest {
+                generation: 0,
+                query: "@s".to_owned(),
+                range: [0, 2],
+            },
+            candidates: vec![mention("@src/")],
+        },
     });
-    assert_eq!(
-        effects,
-        vec![InputEffect::Rejected {
-            reason: "stale completion generation".to_owned()
-        }]
-    );
+    assert_eq!(effects, Vec::new());
     assert!(!state.observe().completion.open);
+}
+
+#[test]
+fn completion_results_require_the_current_query_range() {
+    let mut state = ChatInputState::new();
+    let mut request = type_text(&mut state, "see(@src")
+        .into_iter()
+        .rev()
+        .find_map(|effect| match effect {
+            InputEffect::RequestCompletion { request } => Some(request),
+            _ => None,
+        })
+        .expect("path request");
+    request.range = [0, request.range[1]];
+    let effects = state.apply(InputEvent::CompletionResolved {
+        resolution: CompletionResolution::Results {
+            request,
+            candidates: vec![mention("@src/")],
+        },
+    });
+    assert_eq!(effects, Vec::new());
+    assert!(!state.observe().completion.open);
+}
+
+#[test]
+fn current_completion_failure_is_silent_and_keeps_the_prompt_editable() {
+    let mut state = ChatInputState::new();
+    let request = type_text(&mut state, "@src")
+        .into_iter()
+        .rev()
+        .find_map(|effect| match effect {
+            InputEffect::RequestCompletion { request } => Some(request),
+            _ => None,
+        })
+        .expect("path request");
+    assert_eq!(
+        state.apply(InputEvent::CompletionResolved {
+            resolution: CompletionResolution::Failed {
+                request,
+                reason: "scan failed".to_owned(),
+            },
+        }),
+        Vec::new()
+    );
+    state.apply(character('x'));
+    assert_eq!(state.observe().text, "@srcx");
+    assert!(!state.observe().completion.open);
+}
+
+#[test]
+fn out_of_order_completion_results_keep_the_newest_popup() {
+    let mut state = ChatInputState::new();
+    let older = type_text(&mut state, "@")
+        .into_iter()
+        .find_map(|effect| match effect {
+            InputEffect::RequestCompletion { request } => Some(request),
+            _ => None,
+        })
+        .expect("first path request");
+    let newer = type_text(&mut state, "s")
+        .into_iter()
+        .find_map(|effect| match effect {
+            InputEffect::RequestCompletion { request } => Some(request),
+            _ => None,
+        })
+        .expect("second path request");
+
+    state.apply(InputEvent::CompletionResolved {
+        resolution: CompletionResolution::Results {
+            request: newer,
+            candidates: vec![mention("@src/")],
+        },
+    });
+    let current = state.observe().completion;
+    assert!(current.open);
+
+    assert_eq!(
+        state.apply(InputEvent::CompletionResolved {
+            resolution: CompletionResolution::Results {
+                request: older,
+                candidates: vec![mention("@stale/")],
+            },
+        }),
+        Vec::new()
+    );
+    assert_eq!(state.observe().completion, current);
 }
 
 #[test]
@@ -206,10 +296,8 @@ fn navigation_inside_the_popup_does_not_report_a_reset() {
     );
     assert_eq!(state.apply(key(KeyName::Down)), Vec::new());
     assert!(state.observe().completion.open);
-    assert_eq!(
-        state.apply(key(KeyName::Escape)),
-        vec![InputEffect::CompletionReset]
-    );
+    assert_eq!(state.apply(key(KeyName::Escape)), Vec::new());
+    assert!(state.observe().completion.open);
 }
 
 #[test]

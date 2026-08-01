@@ -22,7 +22,9 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use vibe_cli::tui::chat_input::{ChatInputState, InputEffect, InputEvent};
-use vibe_cli::tui::input::{CompletionCandidate, CompletionKind, normalize_pasted_text};
+use vibe_cli::tui::commands::CommandContext;
+use vibe_cli::tui::completion::CompletionRequest;
+use vibe_cli::tui::input::normalize_pasted_text;
 
 const SCHEMA_VERSION: u32 = 1;
 const MAX_EFFECT_ROUNDS: usize = 8;
@@ -41,15 +43,6 @@ const WORKSPACE_PLACEHOLDER: &str = "__WORKSPACE__";
 /// entry is removed when that story lands, turning the field into a real
 /// assertion.
 const UNMODELLED_STATE_PATHS: &[(&str, &str)] = &[];
-/// EP-002 mode traces open slash completion, but the candidate registry and
-/// ranking are owned by US-008/US-009. Keep only that nested field deferred in
-/// those traces so mode state can certify independently of EP-003.
-const MODE_TRACES_WITH_DEFERRED_COMMAND_CANDIDATES: &[&str] = &[
-    "external-editor-refreshes-completion",
-    "mode-backspace-keeps-text",
-    "mode-backspace-resets",
-    "modes-slash-prefix",
-];
 const OBSERVABLE_EFFECTS: &[&str] = &[
     "submitRequested",
     "submit",
@@ -343,24 +336,23 @@ impl Divergence {
 struct Replay {
     state: ChatInputState,
     workspace: PathBuf,
-    skills: Vec<CompletionCandidate>,
 }
 
 impl Replay {
-    fn new(workspace: PathBuf, setup: &Value) -> Self {
+    fn new(workspace: PathBuf, setup: &Value) -> Result<Self, String> {
         let skills = setup
             .get("skills")
             .and_then(Value::as_array)
             .map(|values| {
                 values
                     .iter()
-                    .filter_map(|entry| entry.get("command").and_then(Value::as_str))
-                    .map(|command| CompletionCandidate {
-                        id: format!("skill:{command}"),
-                        kind: CompletionKind::Skill,
-                        label: command.to_owned(),
-                        insertion: command.to_owned(),
+                    .filter_map(|entry| {
+                        Some((
+                            entry.get("command")?.as_str()?,
+                            entry.get("description")?.as_str()?,
+                        ))
                     })
+                    .map(|(command, description)| (command.to_owned(), description.to_owned()))
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
@@ -370,18 +362,37 @@ impl Replay {
         {
             state.set_viewport_width(width);
         }
-        state.set_teleport_available(
-            setup
-                .pointer("/commands/vibeCodeEnabled")
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
+        let vibe_code_enabled = setup
+            .pointer("/commands/vibeCodeEnabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let excluded = setup
+            .pointer("/commands/excluded")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>();
+        state.set_command_context(
+            CommandContext::new(vibe_code_enabled).with_excluded(excluded.iter().copied()),
         );
-        state.replace_history(setup_history(setup));
-        Self {
-            state,
-            workspace,
-            skills,
+        state.set_user_skills(
+            skills
+                .iter()
+                .map(|(command, description)| (command.as_str(), description.as_str())),
+        );
+        let history = setup_history(setup);
+        if !history.is_empty() {
+            let contents = history
+                .iter()
+                .filter_map(|entry| serde_json::to_string(entry).ok())
+                .collect::<Vec<_>>()
+                .join("\n");
+            std::fs::write(workspace.join("vibehistory"), contents)
+                .map_err(|error| format!("history workspace fixture: {error}"))?;
         }
+        state.replace_history(history);
+        Ok(Self { state, workspace })
     }
 
     /// Applies one trace event and settles every effect it triggers.
@@ -409,10 +420,8 @@ impl Replay {
                     observable.push(encoded);
                 }
                 match effect {
-                    InputEffect::RequestCompletion {
-                        generation, query, ..
-                    } => {
-                        follow_up.push(self.resolve_completion(generation, &query));
+                    InputEffect::RequestCompletion { request } => {
+                        follow_up.push(self.resolve_completion(request));
                     }
                     InputEffect::NormalizePastedPath { text } => {
                         let normalized = normalize_pasted_text(&self.workspace, &text);
@@ -430,25 +439,13 @@ impl Replay {
         Ok(observable)
     }
 
-    /// Performs the lookup the boundary asked for, and nothing else.
-    ///
-    /// Ranking and the mention cap belong to `CompletionEngine`; an adapter
-    /// that ranked candidates itself would be testing its own ordering.
-    fn resolve_completion(&self, generation: u64, query: &str) -> InputEvent {
-        match vibe_cli::tui::input::prompt_candidates(&self.workspace, query) {
-            Ok(mut candidates) => {
-                if query.starts_with('/') {
-                    candidates.extend(self.skills.iter().cloned());
-                }
-                InputEvent::CompletionResults {
-                    generation,
-                    candidates,
-                }
-            }
-            Err(error) => InputEvent::CompletionFailed {
-                generation,
-                reason: error.to_string(),
-            },
+    /// Resolves the boundary request through the same engine as the live TUI.
+    fn resolve_completion(&self, request: CompletionRequest) -> InputEvent {
+        InputEvent::CompletionResolved {
+            resolution: self
+                .state
+                .completion()
+                .resolve_request(request, &self.workspace),
         }
     }
 }
@@ -535,18 +532,17 @@ fn strip_unmodelled_state(state: &mut Value) {
     }
 }
 
-fn strip_trace_deferred_state(trace_id: &str, state: &mut Value) {
-    if MODE_TRACES_WITH_DEFERRED_COMMAND_CANDIDATES.contains(&trace_id)
-        && let Some(completion) = state.get_mut("completion").and_then(Value::as_object_mut)
-    {
-        completion.remove("items");
-    }
-}
-
 fn is_ep002_story(trace: &Map<String, Value>) -> bool {
     matches!(
         trace.get("story").and_then(Value::as_str),
         Some("US-004" | "US-005" | "US-006" | "US-007")
+    )
+}
+
+fn is_ep003_story(trace: &Map<String, Value>) -> bool {
+    matches!(
+        trace.get("story").and_then(Value::as_str),
+        Some("US-008" | "US-009" | "US-010" | "US-011")
     )
 }
 
@@ -743,7 +739,7 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
             .get(&entry.id)
             .ok_or_else(|| format!("trace `{}` has no expectation entry", entry.id))?;
 
-        let mut replay = Replay::new(workspace, setup);
+        let mut replay = Replay::new(workspace, setup)?;
         let mut observed: BTreeMap<&'static str, Option<Divergence>> = BTreeMap::new();
 
         let events = object
@@ -766,13 +762,11 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
         for (index, (raw_event, observation)) in events.iter().zip(observations).enumerate() {
             let event = decode_event(raw_event)?;
             let effects = replay.step(event)?;
-            let mut state = serde_json::to_value(replay.state.observe())
+            let state = serde_json::to_value(replay.state.observe())
                 .map_err(|error| format!("state does not serialize: {error}"))?;
 
             let mut expected_state = observation.get("state").cloned().unwrap_or(Value::Null);
             strip_unmodelled_state(&mut expected_state);
-            strip_trace_deferred_state(&entry.id, &mut expected_state);
-            strip_trace_deferred_state(&entry.id, &mut state);
             if observed.get("state").is_none_or(Option::is_none)
                 && let Some(divergence) = compare("state", Some(index), &expected_state, &state)
             {
@@ -812,10 +806,23 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
                 let expected_render = composer_render_projection(expected_render);
                 let actual_render = serde_json::to_value(replay.state.observe_render())
                     .map_err(|error| format!("render observation does not serialize: {error}"))?;
+                let actual_render = composer_render_projection(&actual_render);
                 observed.entry("render").or_insert(None);
                 if observed.get("render").is_none_or(Option::is_none)
                     && let Some(divergence) =
                         compare("render", Some(index), &expected_render, &actual_render)
+                {
+                    observed.insert("render", Some(divergence));
+                }
+            } else if is_ep003_story(object)
+                && let Some(expected_render) = observation.get("render")
+            {
+                let actual_render = serde_json::to_value(replay.state.observe_render())
+                    .map_err(|error| format!("render observation does not serialize: {error}"))?;
+                observed.entry("render").or_insert(None);
+                if observed.get("render").is_none_or(Option::is_none)
+                    && let Some(divergence) =
+                        compare("render", Some(index), expected_render, &actual_render)
                 {
                     observed.insert("render", Some(divergence));
                 }
@@ -988,24 +995,6 @@ fn modelled_state_fields_are_not_dropped() {
             }
         })
     );
-}
-
-#[test]
-fn mode_traces_defer_only_ep003_command_candidates() {
-    let mut mode_state = json!({
-        "text": "/",
-        "mode": "/",
-        "completion": {"open": true, "kind": "slash", "items": [{"label": "/help"}]}
-    });
-    strip_trace_deferred_state("modes-slash-prefix", &mut mode_state);
-    assert_eq!(
-        mode_state,
-        json!({"text": "/", "mode": "/", "completion": {"open": true, "kind": "slash"}})
-    );
-
-    let mut ranking_state = json!({"completion": {"items": [{"label": "/help"}]}});
-    strip_trace_deferred_state("slash-ranking-empty-boosts", &mut ranking_state);
-    assert!(ranking_state.pointer("/completion/items").is_some());
 }
 
 /// The composer must answer for every state field the runner still compares.

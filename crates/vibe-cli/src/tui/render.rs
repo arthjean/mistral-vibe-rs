@@ -8,13 +8,12 @@ use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+mod completion_popup;
 mod markdown;
 
 use super::chat_input::InputMode;
-use super::input::{
-    CompletionEngine, PromptEditor, completion_description, composer_content_width,
-    visual_cursor_cell, visual_lines,
-};
+use super::completion::CompletionEngine;
+use super::input::{PromptEditor, composer_content_width, visual_cursor_cell, visual_lines};
 use super::setup::{ResolvedTheme, Theme};
 use super::state::{EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
 use markdown::markdown_lines;
@@ -25,7 +24,6 @@ const MAX_RENDER_LINES: usize = 4 * 1024;
 const COMPOSER_MIN_BODY_HEIGHT: u16 = 3;
 const COMPOSER_CHROME_HEIGHT: u16 = 2;
 const COMPOSER_PROMPT_WIDTH: u16 = 2;
-const COMPLETION_MAX_HEIGHT: u16 = 12;
 const MISTRAL_ORANGE: Color = Color::Rgb(255, 130, 5);
 const PETIT_CHAT: [&str; 3] = ["  ⡠⣒⠄  ⡔⢄⠔⡄", " ⢸⠸⣀⡔⢉⠱⣃⡢⣂⡣", "  ⠉⠒⠣⠤⠵⠤⠬⠮⠆"];
 
@@ -83,12 +81,7 @@ pub fn draw(
     theme: ResolvedTheme,
     context: UiContext<'_>,
 ) {
-    let requested_completion_height = completion.view().map_or(0, |view| {
-        u16::try_from(view.candidates.len())
-            .unwrap_or(u16::MAX)
-            .saturating_add(2)
-            .min(COMPLETION_MAX_HEIGHT)
-    });
+    let requested_completion_height = completion_popup::requested_height(completion);
     let activity_height = u16::from(activity_text(state).is_some());
     let input_height = composer_height(editor, frame.area(), context.secret_input, input_mode);
     let completion_height = requested_completion_height.min(
@@ -115,7 +108,7 @@ pub fn draw(
     .areas(frame.area());
     draw_transcript(frame, transcript_area, state, theme, context.banner);
     draw_activity(frame, activity_area, state, theme);
-    draw_completion(frame, completion_area, completion, theme);
+    completion_popup::draw(frame, completion_area, completion, theme);
     draw_input(frame, input_area, editor, input_mode, theme, context);
     draw_footer(frame, footer_area, context.cwd, context.tokens, theme);
     if let Some(overlay) = &state.overlay {
@@ -416,68 +409,6 @@ fn draw_activity(frame: &mut Frame<'_>, area: Rect, state: &TuiState, theme: Res
         } else {
             orange_style(theme)
         }),
-        area,
-    );
-}
-
-fn draw_completion(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    completion: &CompletionEngine,
-    theme: ResolvedTheme,
-) {
-    let Some(view) = completion.view() else {
-        return;
-    };
-    let label_width = view
-        .candidates
-        .iter()
-        .map(|candidate| UnicodeWidthStr::width(candidate.label.trim_start_matches('@')))
-        .max()
-        .unwrap_or_default()
-        .min(usize::from(area.width.saturating_mul(3) / 10));
-    let visible_rows = usize::from(area.height.saturating_sub(2)).max(1);
-    let first_visible = view.selected.saturating_add(1).saturating_sub(visible_rows);
-    let lines = view
-        .candidates
-        .iter()
-        .enumerate()
-        .skip(first_visible)
-        .take(visible_rows)
-        .map(|(index, candidate)| {
-            let label = candidate.label.trim_start_matches('@');
-            let description = completion_description(&candidate.label);
-            let selected = index == view.selected;
-            let command_style = if selected {
-                base_style(theme)
-                    .add_modifier(Modifier::BOLD)
-                    .add_modifier(Modifier::REVERSED)
-            } else {
-                base_style(theme).add_modifier(Modifier::BOLD)
-            };
-            let description_style = if selected {
-                base_style(theme).add_modifier(Modifier::ITALIC)
-            } else {
-                muted_style(theme)
-            };
-            if description.is_empty() {
-                Line::from(Span::styled(label.to_owned(), command_style))
-            } else {
-                Line::from(vec![
-                    Span::styled(format!("{label:label_width$}"), command_style),
-                    Span::raw("  "),
-                    Span::styled(description, description_style),
-                ])
-            }
-        })
-        .collect::<Vec<_>>();
-    frame.render_widget(
-        Paragraph::new(lines).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .padding(Padding::horizontal(1))
-                .border_style(muted_style(theme)),
-        ),
         area,
     );
 }
@@ -1351,6 +1282,163 @@ mod tests {
     }
 
     #[test]
+    fn completion_popup_renders_reference_widths_and_scroll_bounds() {
+        let visible = [
+            "/help",
+            "/config",
+            "/clear",
+            "/compact",
+            "/connectors",
+            "/continue",
+            "/copy",
+            "/data-retention",
+            "/debug",
+            "/exit",
+        ];
+        for width in [40, 80, 120] {
+            let backend = TestBackend::new(width, 24);
+            let mut terminal = Terminal::new(backend).expect("test terminal");
+            let mut state = TuiState::new("session");
+            let mut editor = PromptEditor::default();
+            editor.set_text("/");
+            let mut completion = CompletionEngine::default();
+            completion
+                .refresh(&editor, Path::new("/workspace"))
+                .expect("slash completion");
+
+            terminal
+                .draw(|frame| {
+                    draw(
+                        frame,
+                        &mut state,
+                        &editor,
+                        &completion,
+                        InputMode::Command,
+                        theme(false),
+                        test_context(false),
+                    );
+                })
+                .expect("completion snapshot");
+            let rows = terminal
+                .backend()
+                .buffer()
+                .content
+                .chunks(usize::from(width))
+                .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+                .collect::<Vec<_>>();
+            for label in visible {
+                let displayed = if width == 40 && label == "/data-retention" {
+                    "/data-reten…"
+                } else {
+                    label
+                };
+                assert!(
+                    rows.iter().any(|row| row.contains(displayed)),
+                    "{displayed} missing at {width} columns"
+                );
+            }
+            assert!(!rows.iter().any(|row| row.contains("/leanstall")));
+
+            let last = completion
+                .view()
+                .expect("completion view")
+                .candidates
+                .len()
+                .saturating_sub(1);
+            for _ in 0..last {
+                completion.move_selection(1);
+            }
+            terminal
+                .draw(|frame| {
+                    draw(
+                        frame,
+                        &mut state,
+                        &editor,
+                        &completion,
+                        InputMode::Command,
+                        theme(false),
+                        test_context(false),
+                    );
+                })
+                .expect("scrolled completion snapshot");
+            let scrolled = terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect::<String>();
+            assert!(scrolled.contains("/voice"));
+            assert!(!scrolled.contains("Show help message"));
+        }
+    }
+
+    #[test]
+    fn skill_descriptions_render_while_empty_loading_and_dismissed_popups_stay_hidden() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut state = TuiState::new("session");
+        let mut editor = PromptEditor::default();
+        editor.set_text("/rev");
+        let mut completion = CompletionEngine::default();
+        completion.set_user_skills([("review", "Review the working tree")]);
+        completion
+            .refresh(&editor, Path::new("/workspace"))
+            .expect("skill completion");
+        terminal
+            .draw(|frame| {
+                draw(
+                    frame,
+                    &mut state,
+                    &editor,
+                    &completion,
+                    InputMode::Command,
+                    theme(false),
+                    test_context(false),
+                );
+            })
+            .expect("skill popup");
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains("Review the working tree"));
+
+        completion.cancel();
+        terminal
+            .draw(|frame| {
+                draw(
+                    frame,
+                    &mut state,
+                    &editor,
+                    &completion,
+                    InputMode::Command,
+                    theme(false),
+                    test_context(false),
+                );
+            })
+            .expect("dismissed popup");
+        let dismissed = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(!dismissed.contains("Review the working tree"));
+
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        editor.set_text("@");
+        completion
+            .refresh(&editor, temporary.path())
+            .expect("loading path request");
+        assert!(completion.view().is_none());
+    }
+
+    #[test]
     fn context_progress_uses_the_official_compact_format() {
         assert_eq!(
             format_context_progress(TokenState {
@@ -1443,7 +1531,7 @@ mod tests {
         let backend = TestBackend::new(80, 8);
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut state = TuiState::new("session");
-        state.push_diagnostic("Keyring unavailable; run /setup after repairing access");
+        state.push_diagnostic("Keyring unavailable; restart with --setup after repairing access");
         terminal
             .draw(|frame| draw_test(frame, &mut state, &PromptEditor::default(), false))
             .expect("diagnostic renders");

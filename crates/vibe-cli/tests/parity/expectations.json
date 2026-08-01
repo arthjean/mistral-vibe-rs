@@ -1,20 +1,20 @@
 {
   "traces": {
     "async-cancelled-by-space": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "async-generation-supersedes": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "async-history-recall-closes": {
-      "effects": "gap",
+      "effects": "parity",
       "history": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "clipboard-explicit-ctrl-v": {
       "state": "unavailable"
@@ -31,43 +31,43 @@
     },
     "commands-excluded": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "commands-full-surface": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "commands-unknown-alias": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "commands-vibe-code-enabled": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "corpus-dot-query": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "corpus-gitignore": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "corpus-hidden-files": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "corpus-nested-ranking": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "dnd-absolute-image": {
       "effects": "gap",
@@ -189,24 +189,24 @@
       "state": "gap"
     },
     "mention-directory-submission": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
-      "state": "gap"
+      "state": "parity"
     },
     "mention-external-path-submission": {
       "effects": "parity",
       "render": "deferred",
-      "state": "gap"
+      "state": "parity"
     },
     "mention-missing-path-submission": {
       "effects": "parity",
       "render": "deferred",
-      "state": "gap"
+      "state": "parity"
     },
     "mention-text-file-submission": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
-      "state": "gap"
+      "state": "parity"
     },
     "mode-backspace-keeps-text": {
       "effects": "parity",
@@ -284,64 +284,64 @@
       "state": "parity"
     },
     "path-accept-directory": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "path-accept-inserts-space": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "path-mid-token-completion": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "path-trigger-after-punctuation": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "path-trigger-bare-at": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "path-trigger-basic": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "path-trigger-nested": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "path-trigger-space-closes": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "popup-render-120": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "popup-render-40": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "popup-render-80": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "popup-render-path-bound": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "safety-destructive-chrome": {
       "effects": "parity",
@@ -355,58 +355,58 @@
     },
     "slash-no-match": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "slash-popup-arrows": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "slash-popup-enter-submits": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "slash-popup-escape": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "slash-popup-right": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "slash-popup-tab-applies": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "slash-popup-wraps-selection": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "slash-ranking-c": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "slash-ranking-empty-boosts": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "slash-ranking-fuzzy": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "slash-skill-entries": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "submit-empty-composer": {
       "effects": "parity",

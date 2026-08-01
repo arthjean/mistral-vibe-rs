@@ -1,10 +1,10 @@
 use serde_json::Value;
 
-use super::commands::{COMMANDS, command_available};
+use super::commands::{COMMANDS, CommandContext, command_available_in};
 use super::interaction::{Overlay, OverlayItem, OverlayKind};
 
 #[must_use]
-pub fn help_overlay() -> Overlay {
+pub fn help_overlay(context: &CommandContext) -> Overlay {
     let mut items = vec![
         OverlayItem::new("enter", "Enter", "Submit message", true),
         OverlayItem::new("newline", "Ctrl+J / Shift+Enter", "Insert newline", true),
@@ -17,7 +17,7 @@ pub fn help_overlay() -> Overlay {
     items.extend(
         COMMANDS
             .iter()
-            .filter(|command| command_available(command.id))
+            .filter(|command| command_available_in(command, context))
             .filter_map(|command| {
                 let alias = command
                     .aliases
