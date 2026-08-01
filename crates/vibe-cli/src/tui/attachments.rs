@@ -6,7 +6,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use serde_json::json;
 use thiserror::Error;
-use vibe_app_server::client::{PublicContentBlock, TurnRequest};
+use vibe_app_server::client::{PreparedImages, PublicContentBlock, TurnRequest};
 use vibe_core::images::{ImageDigest, ImageReadError, MAX_IMAGES_PER_MESSAGE, read_image};
 use vibe_core::provider::ImageInput;
 
@@ -89,7 +89,7 @@ impl PromptDraft {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreparedSubmission {
     pub turn: TurnRequest,
-    pub provider_images: Vec<ImageInput>,
+    pub provider_images: PreparedImages,
     pub mention_stats: MentionStats,
     pub cleanup_paths: Vec<PathBuf>,
 }
@@ -186,6 +186,8 @@ pub fn prepare_submission(
         user_display_content: None,
         mention_stats: Some(serde_json::to_value(&mention_stats).map_err(SubmissionError::Json)?),
     };
+    let provider_images = PreparedImages::try_new(provider_images)
+        .map_err(|error| SubmissionError::ProviderImage(error.to_string()))?;
     Ok(PreparedSubmission {
         turn,
         provider_images,
@@ -234,6 +236,8 @@ pub enum SubmissionError {
     ImageChanged { alias: String },
     #[error("mention statistics could not be encoded: {0}")]
     Json(serde_json::Error),
+    #[error("provider image preparation failed: {0}")]
+    ProviderImage(String),
 }
 
 #[cfg(test)]

@@ -28,8 +28,8 @@ use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PolicyError,
 };
 use vibe_core::provider::{
-    HttpTransport, ImageInput, ProviderBackend, ProviderInput, ProviderStyle, RequestLimits,
-    ToolDefinition, Usage,
+    HttpTransport, ProviderBackend, ProviderInput, ProviderStyle, RequestLimits, ToolDefinition,
+    Usage,
 };
 use vibe_core::storage::{HydratedSession, SessionStore};
 use vibe_core::tools::{
@@ -42,6 +42,7 @@ use vibe_protocol::{
     decode_frame,
 };
 
+pub use crate::images::PreparedImages;
 use crate::images::{provider_images, validate_prepared_images};
 use crate::server::{
     AppServer, ApprovalAgentFactory, DeferredWork, ServerConnection, ServerError, SessionIntent,
@@ -174,7 +175,7 @@ pub struct TurnReservation {
     pub input: Vec<PublicContentBlock>,
     /// Stable, provider-ready image snapshots. `None` means the driver must
     /// materialize and validate the public attachment blocks before use.
-    pub prepared_images: Option<Vec<ImageInput>>,
+    pub prepared_images: Option<PreparedImages>,
     pub client_user_message_id: Option<String>,
     pub auto_title: Option<String>,
     pub user_display_content: Option<Value>,
@@ -1875,7 +1876,7 @@ where
         &mut self,
         session_id: &str,
         turn: &TurnRequest,
-        images: Vec<ImageInput>,
+        images: PreparedImages,
     ) -> Result<TurnReservation, ClientError> {
         validate_prepared_images(turn, &images)?;
         self.client.configure_pending_mcp(session_id).await?;
@@ -2885,8 +2886,11 @@ impl LiveTurnDriver {
             }
         }
         input.images = match &reservation.prepared_images {
-            Some(images) => images.clone(),
-            None => provider_images(&reservation.input).await?,
+            Some(images) => images.as_slice().to_vec(),
+            None => provider_images(&reservation.input)
+                .await?
+                .as_slice()
+                .to_vec(),
         };
         let mut pending_context = self
             .pending_context
@@ -3809,7 +3813,7 @@ mod tests {
         Release4Service, TeleportCloud, TeleportStartRequest,
     };
     use vibe_core::events::ModelToolCall;
-    use vibe_core::provider::{AssistantMessage, Usage};
+    use vibe_core::provider::{AssistantMessage, ImageInput, Usage};
     use vibe_core::tools::{
         ToolAvailability, ToolExecutionOutput, ToolPresentationKind, ToolSource, ToolSpec,
         object_schema,
@@ -3846,17 +3850,39 @@ mod tests {
             mention_stats: None,
         };
 
+        for invalid in [
+            ImageInput {
+                media_type: "image/png".to_owned(),
+                data: "not-base64".to_owned(),
+            },
+            ImageInput {
+                media_type: "image/png".to_owned(),
+                data: "A".repeat(
+                    usize::try_from(vibe_core::images::MAX_IMAGE_BYTES)
+                        .expect("image limit fits usize")
+                        .saturating_add(2)
+                        / 3
+                        * 4
+                        + 1,
+                ),
+            },
+        ] {
+            assert!(PreparedImages::try_new(vec![invalid]).is_err());
+        }
+        let no_images = PreparedImages::try_new(Vec::new()).expect("empty prepared image set");
         let error = service
-            .reserve_prepared_prompt(&session_id, &turn, Vec::new())
+            .reserve_prepared_prompt(&session_id, &turn, no_images)
             .await
             .expect_err("mismatched prepared images fail before reservation");
         assert!(error.to_string().contains("provider images"));
+        let prepared_images =
+            PreparedImages::try_new(vec![image.clone()]).expect("valid prepared image");
         let reservation = service
-            .reserve_prepared_prompt(&session_id, &turn, vec![image.clone()])
+            .reserve_prepared_prompt(&session_id, &turn, prepared_images.clone())
             .await
             .expect("prepared prompt reserves without rereading its public file source");
 
-        assert_eq!(reservation.prepared_images, Some(vec![image]));
+        assert_eq!(reservation.prepared_images, Some(prepared_images));
         service
             .fail_reserved(&reservation, "test cleanup")
             .expect("reservation cleanup");

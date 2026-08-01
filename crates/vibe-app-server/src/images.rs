@@ -8,10 +8,28 @@ use vibe_core::provider::ImageInput;
 
 use crate::client::{DriverError, PublicContentBlock, TurnRequest};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedImages(Vec<ImageInput>);
+
+impl PreparedImages {
+    pub fn try_new(images: Vec<ImageInput>) -> Result<Self, DriverError> {
+        for image in &images {
+            validate_inline_image(&image.media_type, &image.data)?;
+        }
+        Ok(Self(images))
+    }
+
+    #[must_use]
+    pub fn as_slice(&self) -> &[ImageInput] {
+        &self.0
+    }
+}
+
 pub(crate) fn validate_prepared_images(
     turn: &TurnRequest,
-    images: &[ImageInput],
+    images: &PreparedImages,
 ) -> Result<(), DriverError> {
+    let images = images.as_slice();
     let attachments = turn
         .input
         .iter()
@@ -41,14 +59,14 @@ pub(crate) fn validate_prepared_images(
 
 pub(crate) async fn provider_images(
     input: &[PublicContentBlock],
-) -> Result<Vec<ImageInput>, DriverError> {
+) -> Result<PreparedImages, DriverError> {
     let mut images = Vec::new();
     for block in input {
         if let PublicContentBlock::Image { attachment } = block {
             images.push(provider_image_input(attachment).await?);
         }
     }
-    Ok(images)
+    Ok(PreparedImages(images))
 }
 
 async fn provider_image_input(attachment: &Value) -> Result<ImageInput, DriverError> {
@@ -117,6 +135,11 @@ fn attachment_media_type(attachment: &Value) -> Result<&str, DriverError> {
 }
 
 fn validated_inline_image(media_type: &str, data: &str) -> Result<String, DriverError> {
+    validate_inline_image(media_type, data)?;
+    Ok(data.to_owned())
+}
+
+fn validate_inline_image(media_type: &str, data: &str) -> Result<(), DriverError> {
     if ImageFormat::from_media_type(media_type).is_none() {
         return Err(DriverError::ImageAttachment(format!(
             "unsupported image MIME type `{media_type}`"
@@ -137,7 +160,7 @@ fn validated_inline_image(media_type: &str, data: &str) -> Result<String, Driver
         .map_err(|error| DriverError::ImageAttachment(error.to_string()))?;
     validate_image_size(bytes.len())
         .map_err(|error| DriverError::ImageAttachment(error.to_string()))?;
-    Ok(data.to_owned())
+    Ok(())
 }
 
 #[cfg(test)]
