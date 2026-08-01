@@ -1,6 +1,6 @@
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use vibe_cli::tui::attachments::PromptDraft;
 use vibe_cli::tui::chat_input::InputMode;
 use vibe_cli::tui::clipboard::{SystemClipboard, SystemClipboardPort, osc52_sequence};
@@ -156,7 +156,7 @@ fn failed_queue_submission_can_be_restored_at_the_front_without_reordering() {
 }
 
 fn prompt_draft(text: &str) -> PromptDraft {
-    PromptDraft::new(Path::new("."), text, std::iter::empty::<&PathBuf>())
+    PromptDraft::text_only(text)
 }
 
 #[test]

@@ -488,3 +488,13 @@ fn secret_input_closes_and_suppresses_completion() {
         "{effects:?}"
     );
 }
+
+#[test]
+fn image_mentions_use_spacing_at_the_actual_insertion_point() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "body");
+    state.apply(key(KeyName::Home));
+
+    assert!(state.insert_image_mention(Path::new("/tmp/image one.png")));
+    assert_eq!(state.observe().text, "@'/tmp/image one.png' body");
+}

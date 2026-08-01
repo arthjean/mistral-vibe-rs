@@ -2,10 +2,36 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 pub const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
 pub const MAX_IMAGES_PER_MESSAGE: usize = 8;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ImageDigest([u8; 32]);
+
+impl ImageDigest {
+    #[must_use]
+    pub fn of(bytes: &[u8]) -> Self {
+        Self(Sha256::digest(bytes).into())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[error("image contains {actual} bytes; limit is {maximum}")]
+pub struct ImageSizeError {
+    pub actual: usize,
+    pub maximum: usize,
+}
+
+pub fn validate_image_size(actual: usize) -> Result<(), ImageSizeError> {
+    let maximum = usize::try_from(MAX_IMAGE_BYTES).unwrap_or(usize::MAX);
+    if actual > maximum {
+        return Err(ImageSizeError { actual, maximum });
+    }
+    Ok(())
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageFormat {
@@ -47,6 +73,7 @@ impl ImageFormat {
 pub struct ImageData {
     pub bytes: Vec<u8>,
     pub format: ImageFormat,
+    pub digest: ImageDigest,
 }
 
 pub fn read_image(path: &Path) -> Result<ImageData, ImageReadError> {
@@ -71,14 +98,19 @@ pub fn read_image(path: &Path) -> Result<ImageData, ImageReadError> {
             path: path.to_path_buf(),
             source,
         })?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_IMAGE_BYTES {
+    if let Err(error) = validate_image_size(bytes.len()) {
         return Err(ImageReadError::TooLarge {
             path: path.to_path_buf(),
-            actual: bytes.len(),
-            maximum: usize::try_from(MAX_IMAGE_BYTES).unwrap_or(usize::MAX),
+            actual: error.actual,
+            maximum: error.maximum,
         });
     }
-    Ok(ImageData { bytes, format })
+    let digest = ImageDigest::of(&bytes);
+    Ok(ImageData {
+        bytes,
+        format,
+        digest,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -113,5 +145,13 @@ mod tests {
         );
         assert_eq!(ImageFormat::Jpeg.media_type(), "image/jpeg");
         assert_eq!(ImageFormat::from_path(Path::new("notes.txt")), None);
+        assert_eq!(ImageDigest::of(b"same"), ImageDigest::of(b"same"));
+        assert_ne!(ImageDigest::of(b"same"), ImageDigest::of(b"other"));
+        assert_eq!(
+            validate_image_size(
+                usize::try_from(MAX_IMAGE_BYTES).expect("10 MiB fits supported targets")
+            ),
+            Ok(())
+        );
     }
 }

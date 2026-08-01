@@ -9,6 +9,8 @@ pub mod controls;
 pub mod history;
 pub mod input;
 pub mod interaction;
+mod path_mentions;
+mod path_resources;
 pub mod pickers;
 pub mod render;
 pub mod setup;

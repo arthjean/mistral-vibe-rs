@@ -8,7 +8,12 @@ use vibe_core::images::MAX_IMAGE_BYTES;
 use super::*;
 
 fn draft(workspace: &Path, text: impl Into<String>, transient: &[PathBuf]) -> PromptDraft {
-    PromptDraft::new(workspace, text, transient)
+    let tracked = transient
+        .iter()
+        .cloned()
+        .map(|path| (path, ImageDigest::of(b"image")))
+        .collect();
+    PromptDraft::with_transient_images(workspace, text, &tracked)
 }
 
 #[test]
@@ -66,22 +71,16 @@ fn only_supported_images_become_attachments() {
     let PublicContentBlock::Image { attachment } = &prepared.turn.input[1] else {
         panic!("second content block should be an image");
     };
-    assert_eq!(attachment["mediaType"], "image/png");
+    assert_eq!(attachment["alias"], "image.png");
+    assert_eq!(attachment["mimeType"], "image/png");
+    assert_eq!(attachment["source"]["kind"], "inline");
     assert_eq!(
         BASE64_STANDARD
-            .decode(attachment["data"].as_str().unwrap_or_default())
+            .decode(attachment["source"]["data"].as_str().unwrap_or_default())
             .expect("canonical image data"),
         b"image"
     );
-    assert_eq!(
-        prepared
-            .turn
-            .user_display_content
-            .as_ref()
-            .and_then(|value| value.get("text"))
-            .and_then(serde_json::Value::as_str),
-        Some("inspect @notes.txt @src/ @binary @missing and @image.png")
-    );
+    assert_eq!(prepared.turn.user_display_content, None);
 }
 
 #[test]
@@ -147,14 +146,20 @@ fn prompt_drafts_own_only_exact_transient_mentions() {
         format!("plain {}.backup", image.to_string_lossy()),
         std::slice::from_ref(&image),
     );
-    assert!(unrelated.transient_images().is_empty());
+    assert_eq!(unrelated.transient_image_paths().count(), 0);
 
     let attached = draft(
         temporary.path(),
         "inspect @'clipboard-1.png'",
         std::slice::from_ref(&image),
     );
-    assert_eq!(attached.transient_images(), [image]);
+    assert_eq!(
+        attached
+            .transient_image_paths()
+            .cloned()
+            .collect::<Vec<_>>(),
+        [image]
+    );
 }
 
 #[test]
@@ -180,23 +185,25 @@ fn clipboard_images_are_marked_for_cleanup_after_their_bytes_are_embedded() {
 }
 
 #[test]
-fn a_transient_image_that_changes_before_submission_is_recoverable() {
+fn a_transient_image_replaced_by_another_file_before_submission_is_recoverable() {
     let temporary = tempfile::tempdir().expect("temporary workspace");
     let image = temporary.path().join("clipboard-1.png");
     fs::write(&image, b"image").expect("clipboard image");
     let image = fs::canonicalize(image).expect("canonical image");
-    fs::remove_file(&image).expect("remove captured image");
-    fs::create_dir(&image).expect("replace image with a directory");
     let prompt = draft(
         temporary.path(),
         "inspect @'clipboard-1.png'",
         std::slice::from_ref(&image),
     );
+    fs::write(&image, b"other").expect("replace captured image contents");
 
-    assert!(matches!(
-        prepare_submission(temporary.path(), &prompt, "test-model", true),
-        Err(SubmissionError::TransientImageChanged { .. })
-    ));
+    let error = prepare_submission(temporary.path(), &prompt, "test-model", true)
+        .expect_err("replacement must fail");
+    assert!(matches!(&error, SubmissionError::ImageChanged { .. }));
+    assert_eq!(
+        error.to_string(),
+        "Failed to attach image clipboard-1.png: Image changed before it could be read"
+    );
     assert_eq!(prompt.text(), "inspect @'clipboard-1.png'");
 }
 
@@ -215,18 +222,30 @@ fn external_images_attach_but_unsupported_models_and_oversize_files_fail_atomica
     let prepared = prepare_submission(temporary.path(), &prompt, "test-model", true)
         .expect("external image prepares");
     assert_eq!(prepared.turn.input.len(), 2);
+    let unsupported = prepare_submission(temporary.path(), &prompt, "test-model", false)
+        .expect_err("unsupported model must fail");
     assert!(matches!(
-        prepare_submission(temporary.path(), &prompt, "test-model", false),
-        Err(SubmissionError::ImagesUnsupported { .. })
+        &unsupported,
+        SubmissionError::ImagesUnsupported { .. }
     ));
+    assert_eq!(
+        unsupported.to_string(),
+        "Model `test-model` does not support images. Switch with /model or remove the attachment."
+    );
 
     let oversized = temporary.path().join("oversized.png");
     let file = fs::File::create(&oversized).expect("oversized image");
     file.set_len(MAX_IMAGE_BYTES + 1)
         .expect("extend oversized image");
     let oversized = draft(temporary.path(), "@oversized.png", &[]);
-    assert!(matches!(
-        prepare_submission(temporary.path(), &oversized, "test-model", true),
-        Err(SubmissionError::ImageTooLarge { .. })
-    ));
+    let error = prepare_submission(temporary.path(), &oversized, "test-model", true)
+        .expect_err("oversized image must fail");
+    assert!(matches!(&error, SubmissionError::ImageAttachment { .. }));
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "Failed to attach image oversized.png: Image is too large: {} > {MAX_IMAGE_BYTES}",
+            MAX_IMAGE_BYTES + 1
+        )
+    );
 }

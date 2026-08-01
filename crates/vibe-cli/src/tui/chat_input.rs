@@ -382,8 +382,40 @@ impl ChatInputState {
         effects
     }
 
-    pub(crate) fn insert_adapter_text(&mut self, text: &str) {
-        self.editor.insert(text);
+    pub(crate) fn insert_image_mention(&mut self, path: &Path) -> bool {
+        if self.secret_input {
+            return false;
+        }
+        let previous = self
+            .editor
+            .cursor()
+            .checked_sub(1)
+            .and_then(|index| self.editor.text().graphemes(true).nth(index));
+        let prefix = if previous.is_none_or(|grapheme| grapheme.chars().all(char::is_whitespace)) {
+            ""
+        } else {
+            " "
+        };
+        let path = path.to_string_lossy();
+        let token = if path.contains(' ') {
+            format!("{prefix}@'{path}' ")
+        } else {
+            format!("{prefix}@{path} ")
+        };
+        self.editor.insert(&token);
+        true
+    }
+
+    pub(crate) fn normalize_text_at_end(&mut self, normalize: impl FnOnce(&str) -> String) -> bool {
+        if self.editor.cursor() != self.editor.text().graphemes(true).count() {
+            return false;
+        }
+        let normalized = normalize(self.editor.text());
+        if normalized == self.editor.text() {
+            return false;
+        }
+        self.replace_text(normalized);
+        true
     }
 
     pub(crate) fn take_unrecorded(&mut self) -> Option<String> {

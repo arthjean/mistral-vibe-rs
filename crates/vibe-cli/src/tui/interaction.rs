@@ -1,4 +1,5 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
+use std::path::PathBuf;
 
 use super::attachments::PromptDraft;
 
@@ -216,10 +217,10 @@ impl PromptQueue {
         self.paused
     }
 
-    pub fn transient_images(&self) -> std::collections::HashSet<std::path::PathBuf> {
+    pub fn transient_images(&self) -> HashSet<PathBuf> {
         self.prompts
             .iter()
-            .flat_map(PromptDraft::transient_images)
+            .flat_map(PromptDraft::transient_image_paths)
             .cloned()
             .collect()
     }

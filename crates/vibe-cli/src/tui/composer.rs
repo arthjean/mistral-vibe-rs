@@ -14,8 +14,21 @@ pub(super) fn apply_event(
     working_directory: &Path,
     state: &mut TuiState,
 ) -> Vec<InputEffect> {
+    let may_be_unbracketed_paste = matches!(
+        &event,
+        InputEvent::Key {
+            key: KeyName::Char,
+            mods,
+            ..
+        } if !mods.iter().any(|modifier| matches!(modifier, Modifier::Ctrl | Modifier::Alt | Modifier::Meta))
+    );
     let effects = input.apply(event);
-    apply_effects(input, effects, working_directory, state)
+    let mut application_effects = apply_effects(input, effects, working_directory, state);
+    if may_be_unbracketed_paste && input.normalize_text_at_end(normalize_pasted_text) {
+        let effects = input.refresh_after_adapter_mutation();
+        application_effects.extend(apply_effects(input, effects, working_directory, state));
+    }
+    application_effects
 }
 
 pub(super) fn apply_effects(
@@ -89,4 +102,39 @@ pub(super) fn normalized_key_event(key: KeyEvent) -> Option<InputEvent> {
         char: character,
         mods,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+
+    #[test]
+    fn unbracketed_drag_and_drop_characters_become_an_image_mention() {
+        let workspace = tempfile::tempdir().expect("temporary workspace");
+        let image = workspace.path().join("dropped image.png");
+        fs::write(&image, b"image").expect("image fixture");
+        let dropped = image.to_string_lossy().replace(' ', "\\ ");
+        let mut input = ChatInputState::new();
+        let mut state = TuiState::new("session");
+
+        for character in dropped.chars() {
+            let _ = apply_event(
+                &mut input,
+                InputEvent::Key {
+                    key: KeyName::Char,
+                    char: Some(character),
+                    mods: Vec::new(),
+                },
+                workspace.path(),
+                &mut state,
+            );
+        }
+
+        assert_eq!(
+            input.editor().text(),
+            format!("@'{}'", image.to_string_lossy())
+        );
+    }
 }

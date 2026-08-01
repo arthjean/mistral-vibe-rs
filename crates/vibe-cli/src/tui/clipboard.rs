@@ -11,7 +11,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use thiserror::Error;
+#[cfg(test)]
 use vibe_core::images::MAX_IMAGE_BYTES;
+use vibe_core::images::{ImageDigest, validate_image_size};
 
 #[cfg(target_os = "macos")]
 const CLIPBOARD_TIMEOUT: Duration = Duration::from_secs(5);
@@ -81,6 +83,7 @@ impl SystemClipboardPort for SystemClipboard {
 pub(crate) struct CapturedClipboardImage {
     pub path: PathBuf,
     pub bytes: usize,
+    pub digest: ImageDigest,
 }
 
 pub(crate) fn capture_clipboard_image(
@@ -95,18 +98,14 @@ pub(crate) fn capture_clipboard_image(
     if !bytes.starts_with(PNG_MAGIC) {
         return Ok(None);
     }
-    let maximum = usize::try_from(MAX_IMAGE_BYTES).unwrap_or(usize::MAX);
-    if bytes.len() > maximum {
-        return Err(ClipboardError::ImageTooLarge {
-            actual: bytes.len(),
-            maximum,
-        });
-    }
+    let bytes = bounded_image(bytes)?;
+    let digest = ImageDigest::of(&bytes);
     let path =
         write_clipboard_image(&bytes).map_err(|error| ClipboardError::Save(error.to_string()))?;
     Ok(Some(CapturedClipboardImage {
         path,
         bytes: bytes.len(),
+        digest,
     }))
 }
 
@@ -302,15 +301,11 @@ fn convert_tiff_to_png(
     read_nonempty(&target)
 }
 
-#[cfg(any(target_os = "macos", test))]
 fn bounded_image(bytes: Vec<u8>) -> Result<Vec<u8>, ClipboardError> {
-    let maximum = usize::try_from(MAX_IMAGE_BYTES).unwrap_or(usize::MAX);
-    if bytes.len() > maximum {
-        return Err(ClipboardError::ImageTooLarge {
-            actual: bytes.len(),
-            maximum,
-        });
-    }
+    validate_image_size(bytes.len()).map_err(|error| ClipboardError::ImageTooLarge {
+        actual: error.actual,
+        maximum: error.maximum,
+    })?;
     Ok(bytes)
 }
 

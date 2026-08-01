@@ -415,7 +415,7 @@ pub(super) async fn start_prompt(
     clipboard_images: &mut ClipboardImageManager,
 ) -> Result<bool, CliError> {
     let mut protected = state.prompt_queue.transient_images();
-    protected.extend(prompt.transient_images().iter().cloned());
+    protected.extend(prompt.transient_image_paths().cloned());
     clipboard_images
         .discard_unreferenced(&protected, state)
         .await;

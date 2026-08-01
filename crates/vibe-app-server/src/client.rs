@@ -2856,18 +2856,9 @@ impl LiveTurnDriver {
         }
         for block in &reservation.input {
             if let PublicContentBlock::Image { attachment } = block
-                && let (Some(media_type), Some(data)) = (
-                    attachment
-                        .get("mediaType")
-                        .or_else(|| attachment.get("mimeType"))
-                        .and_then(Value::as_str),
-                    attachment.get("data").and_then(Value::as_str),
-                )
+                && let Some(image) = provider_image_input(attachment)
             {
-                input.images.push(ImageInput {
-                    media_type: media_type.to_owned(),
-                    data: data.to_owned(),
-                });
+                input.images.push(image);
             }
         }
         let mut pending_context = self
@@ -3125,6 +3116,23 @@ impl LiveTurnDriver {
             .map(drop)
             .map_err(|error| DriverError::Tool(error.to_string()))
     }
+}
+
+fn provider_image_input(attachment: &Value) -> Option<ImageInput> {
+    let media_type = attachment
+        .get("mimeType")
+        .or_else(|| attachment.get("mediaType"))
+        .and_then(Value::as_str)?;
+    let data = attachment
+        .get("source")
+        .filter(|source| source.get("kind").and_then(Value::as_str) == Some("inline"))
+        .and_then(|source| source.get("data"))
+        .or_else(|| attachment.get("data"))
+        .and_then(Value::as_str)?;
+    Some(ImageInput {
+        media_type: media_type.to_owned(),
+        data: data.to_owned(),
+    })
 }
 
 fn resource_contexts(reservation: &TurnReservation) -> Vec<String> {
@@ -3796,6 +3804,36 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn provider_image_input_accepts_canonical_inline_attachments() {
+        let image = provider_image_input(&json!({
+            "source": {"kind": "inline", "data": "aW1hZ2U="},
+            "alias": "image.png",
+            "mimeType": "image/png",
+        }))
+        .expect("canonical image input");
+
+        assert_eq!(
+            image,
+            ImageInput {
+                media_type: "image/png".to_owned(),
+                data: "aW1hZ2U=".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn provider_image_input_keeps_legacy_attachment_compatibility() {
+        let image = provider_image_input(&json!({
+            "data": "aW1hZ2U=",
+            "mediaType": "image/png",
+        }))
+        .expect("legacy image input");
+
+        assert_eq!(image.media_type, "image/png");
+        assert_eq!(image.data, "aW1hZ2U=");
+    }
 
     struct ProgrammaticProjects;
 

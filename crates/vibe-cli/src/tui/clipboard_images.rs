@@ -1,8 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use tokio::task::JoinSet;
-use unicode_segmentation::UnicodeSegmentation;
+use vibe_core::images::ImageDigest;
 
 use super::attachments::PromptDraft;
 use super::chat_input::{ChatInputState, InputEffect};
@@ -48,7 +48,7 @@ pub(super) enum ClipboardImageCompletion {
 #[derive(Default)]
 pub(super) struct ClipboardImageManager {
     tasks: JoinSet<ClipboardImageCompletion>,
-    files: BTreeSet<PathBuf>,
+    files: BTreeMap<PathBuf, ImageDigest>,
 }
 
 impl ClipboardImageManager {
@@ -126,38 +126,30 @@ impl ClipboardImageManager {
         match result {
             Ok(Some(captured)) if model.is_none_or(|model| !model.supports_images) => {
                 if let Err(error) = remove_file(&captured.path).await {
-                    self.files.insert(captured.path);
+                    self.files.insert(captured.path, captured.digest);
                     state
                         .push_diagnostic(format!("Unused clipboard image cleanup failed: {error}"));
                 }
                 state.push_diagnostic(image_model_warning(model));
             }
             Ok(Some(captured)) => {
-                let previous = input
-                    .editor()
-                    .text()
-                    .graphemes(true)
-                    .nth(input.editor().cursor().saturating_sub(1));
-                let prefix =
-                    if previous.is_none_or(|grapheme| grapheme.chars().all(char::is_whitespace)) {
-                        ""
-                    } else {
-                        " "
-                    };
-                let path = captured.path.to_string_lossy();
-                let token = if path.contains(' ') {
-                    format!("{prefix}@'{path}' ")
-                } else {
-                    format!("{prefix}@{path} ")
-                };
                 let name = captured
                     .path
                     .file_name()
                     .and_then(|name| name.to_str())
                     .unwrap_or("clipboard image")
                     .to_owned();
-                self.files.insert(captured.path);
-                input.insert_adapter_text(&token);
+                if !input.insert_image_mention(&captured.path) {
+                    if let Err(error) = remove_file(&captured.path).await {
+                        self.files.insert(captured.path, captured.digest);
+                        state.push_diagnostic(format!(
+                            "Unused clipboard image cleanup failed: {error}"
+                        ));
+                    }
+                    state.push_diagnostic("Failed to paste image into prompt.");
+                    return;
+                }
+                self.files.insert(captured.path, captured.digest);
                 push_local_notice(
                     state,
                     &format!(
@@ -191,7 +183,7 @@ impl ClipboardImageManager {
 
     #[must_use]
     pub fn draft(&self, workspace: &Path, text: impl Into<String>) -> PromptDraft {
-        PromptDraft::new(workspace, text, &self.files)
+        PromptDraft::with_transient_images(workspace, text, &self.files)
     }
 
     pub async fn consume(
@@ -212,7 +204,7 @@ impl ClipboardImageManager {
     ) {
         let discarded = self
             .files
-            .iter()
+            .keys()
             .filter(|path| !protected.contains(*path))
             .cloned()
             .collect::<Vec<_>>();
@@ -249,7 +241,7 @@ impl ClipboardImageManager {
                 ));
             }
         }
-        for path in std::mem::take(&mut self.files) {
+        for path in std::mem::take(&mut self.files).into_keys() {
             if let Err(error) = remove_file(&path).await
                 && cleanup_error.is_none()
             {
@@ -264,7 +256,7 @@ impl ClipboardImageManager {
 
     #[cfg(test)]
     fn tracked_paths(&self) -> Vec<PathBuf> {
-        self.files.iter().cloned().collect()
+        self.files.keys().cloned().collect()
     }
 }
 
@@ -310,7 +302,11 @@ mod tests {
     use super::*;
 
     fn captured(path: PathBuf) -> CapturedClipboardImage {
-        CapturedClipboardImage { path, bytes: 5 }
+        CapturedClipboardImage {
+            path,
+            bytes: 5,
+            digest: ImageDigest::of(b"image"),
+        }
     }
 
     #[tokio::test]
@@ -368,6 +364,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn insertion_failure_removes_the_unused_image_and_warns() {
+        let temporary = tempfile::tempdir().expect("isolated clipboard fixture");
+        let image = temporary.path().join("clipboard.png");
+        std::fs::write(&image, b"image").expect("clipboard fixture");
+        let mut manager = ClipboardImageManager::default();
+        let mut input = ChatInputState::new();
+        input.set_secret_input(true);
+        let mut state = TuiState::new("session");
+
+        manager
+            .apply_capture(
+                Ok(Some(captured(image.clone()))),
+                true,
+                Some(ImageModel {
+                    alias: "test-model",
+                    supports_images: true,
+                }),
+                &mut input,
+                &mut state,
+            )
+            .await;
+
+        assert!(!image.exists());
+        assert!(manager.tracked_paths().is_empty());
+        assert_eq!(
+            state.diagnostics().collect::<Vec<_>>(),
+            ["Failed to paste image into prompt."]
+        );
+    }
+
+    #[tokio::test]
     async fn shutdown_waits_for_capture_and_removes_unconsumed_file() {
         let temporary = tempfile::tempdir().expect("isolated clipboard fixture");
         let image = temporary.path().join("clipboard.png");
@@ -393,7 +420,10 @@ mod tests {
         std::fs::write(&discarded, b"image").expect("discarded fixture");
         std::fs::write(&retained, b"image").expect("retained fixture");
         let mut manager = ClipboardImageManager::default();
-        manager.files.extend([discarded.clone(), retained.clone()]);
+        manager.files.extend([
+            (discarded.clone(), ImageDigest::of(b"image")),
+            (retained.clone(), ImageDigest::of(b"image")),
+        ]);
         let protected = HashSet::from([retained.clone()]);
         let mut state = TuiState::new("session");
 
