@@ -134,6 +134,15 @@ def paste(value: str) -> dict[str, Any]:
     return {"type": "paste", "text": value}
 
 
+def mouse(x: int, y: int, *, extend_selection: bool = False) -> dict[str, Any]:
+    return {
+        "type": "mouse",
+        "x": x,
+        "y": y,
+        "extendSelection": extend_selection,
+    }
+
+
 SKILLS = [
     {"command": "/review", "description": "Review the working tree"},
     {"command": "/changelog", "description": "Draft a changelog entry"},
@@ -161,6 +170,7 @@ SCENARIOS: list[dict[str, Any]] = [
         "gap": "GAP-01",
         "story": "US-004",
         "title": "Ampersand switches to teleport mode when the command exists",
+        "commands": {"vibeCodeEnabled": True},
         "events": [char("&"), text("target")],
     },
     {
@@ -270,6 +280,27 @@ SCENARIOS: list[dict[str, Any]] = [
         "title": "Home and End on a wrapped multiline prompt",
         "events": [text("first line"), key("enter", "shift"), text("second line"), key("home"), key("end")],
     },
+    {
+        "id": "mouse-click-wide-character",
+        "gap": "GAP-04",
+        "story": "US-005",
+        "title": "A mouse click maps terminal cells across a wide character",
+        "events": [text("a界b"), mouse(2, 0)],
+    },
+    {
+        "id": "mouse-shift-selection",
+        "gap": "GAP-04",
+        "story": "US-005",
+        "title": "A shifted mouse click extends the current selection",
+        "events": [text("select me"), mouse(2, 0), mouse(7, 0, extend_selection=True)],
+    },
+    {
+        "id": "mouse-out-of-bounds",
+        "gap": "GAP-04",
+        "story": "US-005",
+        "title": "An out-of-bounds mouse target leaves the prompt unchanged",
+        "events": [text("stable"), mouse(999, 999)],
+    },
     # -- GAP-05: external editor -------------------------------------------
     {
         "id": "external-editor-replaces-text",
@@ -284,6 +315,13 @@ SCENARIOS: list[dict[str, Any]] = [
         "story": "US-005",
         "title": "Unchanged external editor output preserves the prompt",
         "events": [text("draft"), {"type": "externalEditor", "text": "draft"}],
+    },
+    {
+        "id": "external-editor-refreshes-completion",
+        "gap": "GAP-05",
+        "story": "US-005",
+        "title": "External editor output refreshes completion for its new token",
+        "events": [text("draft"), {"type": "externalEditor", "text": "/c"}],
     },
     # -- GAP-06: persistent history ----------------------------------------
     {

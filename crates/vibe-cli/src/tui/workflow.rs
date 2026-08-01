@@ -6,10 +6,11 @@ use serde_json::{Value, json};
 mod config;
 mod mcp;
 
+use super::chat_input::ChatInputState;
 use super::clipboard::{SystemClipboard, SystemClipboardPort};
 use super::commands::{CommandId, parse_command};
 use super::controls::ControlState;
-use super::input::{CompletionEngine, PromptEditor, prepare_submission};
+use super::input::prepare_submission;
 use super::interaction::{Overlay, OverlayKind};
 use super::pickers::{
     config_overlay, debug_overlay, help_overlay, model_overlay, proxy_overlay, rewind_overlay,
@@ -58,18 +59,17 @@ impl RuntimeCommand {
 
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn dispatch_command(
-    input: &str,
+    command_line: &str,
     arguments: &Arguments,
     working_directory: &Path,
     runtime: &mut Option<InteractiveRuntime>,
     state: &mut TuiState,
     _controls: &mut ControlState,
-    editor: &mut PromptEditor,
-    completion: &mut CompletionEngine,
+    composer: &mut ChatInputState,
     _theme: &mut ResolvedTheme,
     turn_active: bool,
 ) -> Result<CommandAction, CliError> {
-    let Some(parsed) = parse_command(input) else {
+    let Some(parsed) = parse_command(command_line) else {
         return Ok(CommandAction::Unhandled);
     };
     let command_id = parsed.id;
@@ -86,7 +86,7 @@ pub(super) async fn dispatch_command(
             return Ok(CommandAction::Handled);
         }
         CommandId::PasteImage => {
-            paste_clipboard_image(working_directory, editor, state);
+            paste_clipboard_image(working_directory, composer, state);
             return Ok(CommandAction::Handled);
         }
         CommandId::DataRetention => {
@@ -152,7 +152,7 @@ pub(super) async fn dispatch_command(
             if call_runtime(runtime, "config/reload", json!({}), state).is_some() {
                 if let Some(result) = call_runtime(runtime, "skills/list", json!({}), state) {
                     runtime.skills = parse_runtime_skills(result.get("skills"));
-                    completion.set_user_skills(
+                    composer.set_user_skills(
                         runtime
                             .skills
                             .values()
@@ -299,7 +299,7 @@ pub(super) fn handle_overlay_key(
     runtime: &mut Option<InteractiveRuntime>,
     state: &mut TuiState,
     controls: &mut ControlState,
-    editor: &mut PromptEditor,
+    composer: &mut ChatInputState,
     theme: &mut ResolvedTheme,
 ) -> bool {
     let Some(kind) = state.overlay.as_ref().map(|overlay| overlay.kind) else {
@@ -347,7 +347,7 @@ pub(super) fn handle_overlay_key(
                         | OverlayKind::DataRetention
                 ) =>
         {
-            select_overlay_item(runtime, state, controls, editor, theme);
+            select_overlay_item(runtime, state, controls, composer, theme);
         }
         KeyCode::Char(character) if key.modifiers.is_empty() => {
             if let Some(overlay) = state.overlay.as_mut() {
@@ -534,7 +534,7 @@ fn select_overlay_item(
     runtime: &mut Option<InteractiveRuntime>,
     state: &mut TuiState,
     controls: &mut ControlState,
-    editor: &mut PromptEditor,
+    composer: &mut ChatInputState,
     theme: &mut ResolvedTheme,
 ) {
     let Some((kind, item)) = state.overlay.as_ref().and_then(|overlay| {
@@ -571,7 +571,7 @@ fn select_overlay_item(
             }
             key => {
                 let target = selected_config_target(runtime).unwrap_or_else(|| "user".to_owned());
-                editor.set_text(format!("/settings set --target {target} {key} "));
+                composer.replace_text(format!("/settings set --target {target} {key} "));
                 state.overlay = None;
             }
         },
@@ -648,7 +648,7 @@ fn select_overlay_item(
             } else {
                 "/settings proxy "
             };
-            editor.set_text(command);
+            composer.replace_text(command);
             state.overlay = None;
         }
         OverlayKind::Rewind => {
@@ -674,7 +674,7 @@ fn select_overlay_item(
                 if let Some(session_id) = metadata_session_id(&result)
                     && adopt_hydrated_session(runtime, state, controls, session_id)
                 {
-                    editor.set_text(message);
+                    composer.replace_text(message);
                     state.overlay = None;
                     push_local_notice(
                         state,
@@ -914,13 +914,14 @@ fn copy_last_agent_message(state: &mut TuiState) {
 
 fn paste_clipboard_image(
     working_directory: &Path,
-    editor: &mut PromptEditor,
+    composer: &mut ChatInputState,
     state: &mut TuiState,
 ) {
     match SystemClipboard.paste_image(working_directory) {
         Ok(Some(path)) => {
-            let prefix = if editor.text().is_empty()
-                || editor
+            let prefix = if composer.editor().text().is_empty()
+                || composer
+                    .editor()
                     .text()
                     .chars()
                     .last()
@@ -938,7 +939,7 @@ fn paste_clipboard_image(
                 .unwrap_or(&path)
                 .to_string_lossy();
             let token = format!("{prefix}@'{path}' ");
-            editor.insert(&token);
+            composer.insert_adapter_text(&token);
             push_local_notice(
                 state,
                 "Clipboard image added to prompt",

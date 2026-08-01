@@ -1,0 +1,387 @@
+use super::*;
+
+fn key(name: KeyName) -> InputEvent {
+    InputEvent::Key {
+        key: name,
+        char: None,
+        mods: Vec::new(),
+    }
+}
+
+fn character(value: char) -> InputEvent {
+    InputEvent::Key {
+        key: KeyName::Char,
+        char: Some(value),
+        mods: Vec::new(),
+    }
+}
+
+fn type_text(state: &mut ChatInputState, value: &str) -> Vec<InputEffect> {
+    value
+        .chars()
+        .flat_map(|character_value| state.apply(character(character_value)))
+        .collect()
+}
+
+/// Types `value`, then answers the completion request it produced.
+fn complete(
+    state: &mut ChatInputState,
+    value: &str,
+    candidates: Vec<CompletionCandidate>,
+) -> Vec<InputEffect> {
+    let generation = type_text(state, value)
+        .into_iter()
+        .rev()
+        .find_map(|effect| match effect {
+            InputEffect::RequestCompletion { generation, .. } => Some(generation),
+            _ => None,
+        })
+        .expect("typing a token requests a completion");
+    state.apply(InputEvent::CompletionResults {
+        generation,
+        candidates,
+    })
+}
+
+fn mention(label: &str) -> CompletionCandidate {
+    CompletionCandidate {
+        id: format!("mention:{label}"),
+        kind: CompletionKind::Mention,
+        label: label.to_owned(),
+        insertion: label.to_owned(),
+    }
+}
+
+#[test]
+fn transitions_are_deterministic_and_serializable() {
+    let mut left = ChatInputState::new();
+    let mut right = ChatInputState::new();
+    for character_value in "abc".chars() {
+        assert_eq!(
+            left.apply(character(character_value)),
+            right.apply(character(character_value))
+        );
+    }
+    assert_eq!(left.observe(), right.observe());
+    let encoded = serde_json::to_string(&left.observe()).expect("observation serializes");
+    let decoded: StateObservation =
+        serde_json::from_str(&encoded).expect("observation round-trips");
+    assert_eq!(decoded, left.observe());
+}
+
+#[test]
+fn filesystem_work_is_requested_as_an_effect() {
+    let mut state = ChatInputState::new();
+    let effects = type_text(&mut state, "@src");
+    assert!(effects.iter().any(|effect| matches!(
+        effect,
+        InputEffect::RequestCompletion { query, .. } if query == "@src"
+    )));
+    assert!(
+        effects
+            .iter()
+            .all(|effect| !matches!(effect, InputEffect::Submit { .. }))
+    );
+}
+
+#[test]
+fn external_editor_and_clipboard_leave_the_boundary_as_effects() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "draft");
+    let effects = state.apply(InputEvent::Key {
+        key: KeyName::Char,
+        char: Some('g'),
+        mods: vec![Modifier::Ctrl],
+    });
+    assert!(effects.iter().any(|effect| matches!(
+        effect,
+        InputEffect::OpenExternalEditor { text } if text == "draft"
+    )));
+    let effects = state.apply(InputEvent::Paste {
+        text: String::new(),
+    });
+    assert_eq!(
+        effects,
+        vec![InputEffect::ClipboardImageRequested {
+            notify_when_empty: false
+        }]
+    );
+}
+
+#[test]
+fn a_cancelled_external_edit_keeps_the_prompt() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "draft");
+    let effects = state.apply(InputEvent::ExternalEditor { text: None });
+    assert_eq!(effects, Vec::new());
+    assert_eq!(state.observe().text, "draft");
+}
+
+#[test]
+fn external_editing_preserves_the_current_mode_during_follow_up_typing() {
+    let mut state = ChatInputState::new();
+    state.apply(InputEvent::ExternalEditor {
+        text: Some("/c".to_owned()),
+    });
+    state.apply(character('o'));
+    assert_eq!(state.observe().mode, InputMode::Prompt);
+    assert_eq!(state.observe().text, "/co");
+}
+
+#[test]
+fn stale_completion_results_are_rejected_without_panicking() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "@s");
+    let effects = state.apply(InputEvent::CompletionResults {
+        generation: 0,
+        candidates: vec![mention("@src/")],
+    });
+    assert_eq!(
+        effects,
+        vec![InputEffect::Rejected {
+            reason: "stale completion generation".to_owned()
+        }]
+    );
+    assert!(!state.observe().completion.open);
+}
+
+#[test]
+fn invalid_events_keep_state_valid() {
+    let mut state = ChatInputState::new();
+    let effects = state.apply(InputEvent::Key {
+        key: KeyName::Char,
+        char: None,
+        mods: Vec::new(),
+    });
+    assert_eq!(
+        effects,
+        vec![InputEffect::Rejected {
+            reason: "character key without a character".to_owned()
+        }]
+    );
+    let effects = state.apply(InputEvent::PasteNormalized {
+        text: "@image.png".to_owned(),
+    });
+    assert_eq!(
+        effects,
+        vec![InputEffect::Rejected {
+            reason: "no paste to normalize".to_owned()
+        }]
+    );
+    assert_eq!(state.observe().text, "");
+    assert_eq!(state.observe().cursor, 0);
+}
+
+#[test]
+fn completion_selection_and_acceptance_stay_in_bounds() {
+    let mut state = ChatInputState::new();
+    complete(
+        &mut state,
+        "@sr",
+        vec![mention("@src/"), mention("@srv.rs")],
+    );
+    let observation = state.observe();
+    assert!(observation.completion.open);
+    assert_eq!(observation.completion.items.len(), 2);
+    assert_eq!(observation.completion.selected, 0);
+
+    state.apply(key(KeyName::Up));
+    assert_eq!(state.observe().completion.selected, 1);
+    state.apply(key(KeyName::Down));
+    assert_eq!(state.observe().completion.selected, 0);
+
+    let accepted = state.observe().completion.items[0].label.clone();
+    state.apply(key(KeyName::Tab));
+    assert_eq!(state.observe().text, accepted);
+    assert!(!state.observe().completion.open);
+}
+
+#[test]
+fn navigation_inside_the_popup_does_not_report_a_reset() {
+    let mut state = ChatInputState::new();
+    complete(
+        &mut state,
+        "@sr",
+        vec![mention("@src/"), mention("@srv.rs")],
+    );
+    assert_eq!(state.apply(key(KeyName::Down)), Vec::new());
+    assert!(state.observe().completion.open);
+    assert_eq!(
+        state.apply(key(KeyName::Escape)),
+        vec![InputEffect::CompletionReset]
+    );
+}
+
+#[test]
+fn a_closed_popup_never_reports_a_reset() {
+    let mut state = ChatInputState::new();
+    let effects = type_text(&mut state, "plain");
+    assert!(
+        effects
+            .iter()
+            .all(|effect| !matches!(effect, InputEffect::CompletionReset)),
+        "{effects:?}"
+    );
+}
+
+#[test]
+fn submission_reports_the_payload_and_history_entry() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, " spaced ");
+    let effects = state.apply(key(KeyName::Enter));
+    assert!(effects.iter().any(|effect| matches!(
+        effect,
+        InputEffect::SubmitRequested { text } if text == "spaced"
+    )));
+    assert!(effects.iter().any(|effect| matches!(
+        effect,
+        InputEffect::RecordHistory { entry } if entry == "spaced"
+    )));
+    assert_eq!(state.observe().text, "");
+}
+
+#[test]
+fn an_empty_submission_is_observed_but_does_not_clear_or_record_a_turn() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "   ");
+    let effects = state.apply(key(KeyName::Enter));
+    assert_eq!(
+        effects,
+        vec![
+            InputEffect::SubmitRequested {
+                text: String::new()
+            },
+            InputEffect::Submit {
+                text: String::new()
+            }
+        ]
+    );
+    assert_eq!(state.observe().text, "   ");
+    assert!(state.history_entries().is_empty());
+}
+
+#[test]
+fn switching_blocks_submission_and_keeps_the_prompt() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "queued");
+    state.apply(InputEvent::Switching { active: true });
+    let effects = state.apply(key(KeyName::Enter));
+    assert_eq!(
+        effects,
+        vec![InputEffect::SubmitRequested {
+            text: "queued".to_owned()
+        }]
+    );
+    assert_eq!(state.observe().text, "queued");
+}
+
+#[test]
+fn history_navigation_is_observed_from_the_editor() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "first");
+    state.apply(key(KeyName::Enter));
+    assert!(!state.observe().history.navigating);
+    state.apply(key(KeyName::Up));
+    assert!(!state.observe().history.navigating);
+    assert!(state.observe().history.loaded_entry);
+    assert_eq!(state.observe().text, "first");
+    state.apply(key(KeyName::Down));
+    assert!(!state.observe().history.navigating);
+}
+
+#[test]
+fn teleport_mode_is_capability_gated_and_resets_without_losing_follow_up_text() {
+    let mut unavailable = ChatInputState::new();
+    unavailable.apply(character('&'));
+    assert_eq!(unavailable.observe().mode, InputMode::Prompt);
+    assert_eq!(unavailable.observe().text, "&");
+
+    let mut available = ChatInputState::new();
+    available.set_teleport_available(true);
+    assert_eq!(
+        available.apply(character('&')),
+        vec![InputEffect::ModeChanged {
+            mode: InputMode::Teleport
+        }]
+    );
+    assert_eq!(available.observe().mode, InputMode::Teleport);
+    available.apply(key(KeyName::Backspace));
+    available.apply(character('x'));
+    assert_eq!(available.observe().mode, InputMode::Prompt);
+    assert_eq!(available.observe().text, "x");
+}
+
+#[test]
+fn mode_prefix_is_not_editable_while_body_text_remains() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "/body");
+    state.apply(key(KeyName::Home));
+    assert_eq!(state.observe().cursor, 1);
+    state.apply(key(KeyName::Backspace));
+    assert_eq!(state.observe().text, "/body");
+    assert_eq!(state.observe().mode, InputMode::Command);
+    state.apply(InputEvent::Key {
+        key: KeyName::Left,
+        char: None,
+        mods: vec![Modifier::Shift],
+    });
+    assert_eq!(state.observe().selection, None);
+}
+
+#[test]
+fn mouse_selection_is_bounded_and_out_of_bounds_events_are_inert() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "select me");
+    state.apply(InputEvent::Mouse {
+        x: 0,
+        y: 0,
+        extend_selection: false,
+    });
+    state.apply(InputEvent::Mouse {
+        x: 3,
+        y: 0,
+        extend_selection: true,
+    });
+    assert_eq!(state.observe().selection, Some([0, 3]));
+    let before = state.observe();
+    state.apply(InputEvent::Mouse {
+        x: 0,
+        y: 99,
+        extend_selection: false,
+    });
+    assert_eq!(state.observe(), before);
+}
+
+#[test]
+fn mouse_selection_field_uses_the_canonical_camel_case_schema() {
+    let event: InputEvent = serde_json::from_value(serde_json::json!({
+        "type": "mouse",
+        "x": 7,
+        "y": 1,
+        "extendSelection": true
+    }))
+    .expect("mouse event decodes");
+    assert!(matches!(
+        event,
+        InputEvent::Mouse {
+            extend_selection: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn secret_input_closes_and_suppresses_completion() {
+    let mut state = ChatInputState::new();
+    complete(&mut state, "@sr", vec![mention("@src/")]);
+    assert!(state.observe().completion.open);
+    state.set_secret_input(true);
+    assert!(!state.observe().completion.open);
+    let effects = type_text(&mut state, "c");
+    assert!(
+        effects
+            .iter()
+            .all(|effect| !matches!(effect, InputEffect::RequestCompletion { .. })),
+        "{effects:?}"
+    );
+}

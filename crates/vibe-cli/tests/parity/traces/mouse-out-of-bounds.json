@@ -4,7 +4,7 @@
   ],
   "events": [
     {
-      "char": "&",
+      "char": "s",
       "key": "char",
       "mods": [],
       "type": "key"
@@ -22,13 +22,13 @@
       "type": "key"
     },
     {
-      "char": "r",
+      "char": "b",
       "key": "char",
       "mods": [],
       "type": "key"
     },
     {
-      "char": "g",
+      "char": "l",
       "key": "char",
       "mods": [],
       "type": "key"
@@ -40,14 +40,14 @@
       "type": "key"
     },
     {
-      "char": "t",
-      "key": "char",
-      "mods": [],
-      "type": "key"
+      "extendSelection": false,
+      "type": "mouse",
+      "x": 999,
+      "y": 999
     }
   ],
-  "gap": "GAP-01",
-  "id": "modes-teleport-available",
+  "gap": "GAP-04",
+  "id": "mouse-out-of-bounds",
   "initial": {
     "effects": [],
     "render": {
@@ -89,12 +89,11 @@
     {
       "effects": [
         {
-          "mode": "&",
-          "type": "modeChanged"
+          "type": "historyReset"
         }
       ],
       "event": {
-        "char": "&",
+        "char": "s",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -105,13 +104,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          0
+          1
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          ""
+          "s"
         ],
         "wrapWidth": 71
       },
@@ -129,10 +128,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&"
+        "text": "s"
       }
     },
     {
@@ -153,13 +152,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          1
+          2
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "t"
+          "st"
         ],
         "wrapWidth": 71
       },
@@ -177,10 +176,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&t"
+        "text": "st"
       }
     },
     {
@@ -201,13 +200,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          2
+          3
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "ta"
+          "sta"
         ],
         "wrapWidth": 71
       },
@@ -225,10 +224,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&ta"
+        "text": "sta"
       }
     },
     {
@@ -238,7 +237,7 @@
         }
       ],
       "event": {
-        "char": "r",
+        "char": "b",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -249,13 +248,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          3
+          4
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "tar"
+          "stab"
         ],
         "wrapWidth": 71
       },
@@ -273,10 +272,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&tar"
+        "text": "stab"
       }
     },
     {
@@ -286,7 +285,7 @@
         }
       ],
       "event": {
-        "char": "g",
+        "char": "l",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -297,13 +296,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          4
+          5
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "targ"
+          "stabl"
         ],
         "wrapWidth": 71
       },
@@ -321,10 +320,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&targ"
+        "text": "stabl"
       }
     },
     {
@@ -345,13 +344,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          5
+          6
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "targe"
+          "stable"
         ],
         "wrapWidth": 71
       },
@@ -369,23 +368,19 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&targe"
+        "text": "stable"
       }
     },
     {
-      "effects": [
-        {
-          "type": "historyReset"
-        }
-      ],
+      "effects": [],
       "event": {
-        "char": "t",
-        "key": "char",
-        "mods": [],
-        "type": "key"
+        "extendSelection": false,
+        "type": "mouse",
+        "x": 999,
+        "y": 999
       },
       "index": 6,
       "render": {
@@ -397,9 +392,9 @@
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "target"
+          "stable"
         ],
         "wrapWidth": 71
       },
@@ -410,17 +405,17 @@
           "open": false,
           "selected": 0
         },
-        "cursor": 7,
+        "cursor": 6,
         "feedbackActive": false,
         "history": {
           "cursorMovedSinceLoad": false,
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&target"
+        "text": "stable"
       }
     }
   ],
@@ -431,9 +426,7 @@
   "schemaVersion": 1,
   "setup": {
     "agentName": "",
-    "commands": {
-      "vibeCodeEnabled": true
-    },
+    "commands": {},
     "history": null,
     "initial": {},
     "safety": "neutral",
@@ -445,6 +438,6 @@
     "voice": null,
     "workspace": "empty"
   },
-  "story": "US-004",
-  "title": "Ampersand switches to teleport mode when the command exists"
+  "story": "US-005",
+  "title": "An out-of-bounds mouse target leaves the prompt unchanged"
 }

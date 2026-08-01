@@ -4,31 +4,7 @@
   ],
   "events": [
     {
-      "char": "&",
-      "key": "char",
-      "mods": [],
-      "type": "key"
-    },
-    {
-      "char": "t",
-      "key": "char",
-      "mods": [],
-      "type": "key"
-    },
-    {
-      "char": "a",
-      "key": "char",
-      "mods": [],
-      "type": "key"
-    },
-    {
-      "char": "r",
-      "key": "char",
-      "mods": [],
-      "type": "key"
-    },
-    {
-      "char": "g",
+      "char": "s",
       "key": "char",
       "mods": [],
       "type": "key"
@@ -40,14 +16,62 @@
       "type": "key"
     },
     {
+      "char": "l",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "e",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "c",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
       "char": "t",
       "key": "char",
       "mods": [],
       "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "m",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "e",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "extendSelection": false,
+      "type": "mouse",
+      "x": 2,
+      "y": 0
+    },
+    {
+      "extendSelection": true,
+      "type": "mouse",
+      "x": 7,
+      "y": 0
     }
   ],
-  "gap": "GAP-01",
-  "id": "modes-teleport-available",
+  "gap": "GAP-04",
+  "id": "mouse-shift-selection",
   "initial": {
     "effects": [],
     "render": {
@@ -89,12 +113,11 @@
     {
       "effects": [
         {
-          "mode": "&",
-          "type": "modeChanged"
+          "type": "historyReset"
         }
       ],
       "event": {
-        "char": "&",
+        "char": "s",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -105,13 +128,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          0
+          1
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          ""
+          "s"
         ],
         "wrapWidth": 71
       },
@@ -129,10 +152,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&"
+        "text": "s"
       }
     },
     {
@@ -142,7 +165,7 @@
         }
       ],
       "event": {
-        "char": "t",
+        "char": "e",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -153,13 +176,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          1
+          2
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "t"
+          "se"
         ],
         "wrapWidth": 71
       },
@@ -177,10 +200,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&t"
+        "text": "se"
       }
     },
     {
@@ -190,7 +213,7 @@
         }
       ],
       "event": {
-        "char": "a",
+        "char": "l",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -201,13 +224,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          2
+          3
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "ta"
+          "sel"
         ],
         "wrapWidth": 71
       },
@@ -225,10 +248,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&ta"
+        "text": "sel"
       }
     },
     {
@@ -238,7 +261,7 @@
         }
       ],
       "event": {
-        "char": "r",
+        "char": "e",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -249,13 +272,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          3
+          4
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "tar"
+          "sele"
         ],
         "wrapWidth": 71
       },
@@ -273,10 +296,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&tar"
+        "text": "sele"
       }
     },
     {
@@ -286,7 +309,7 @@
         }
       ],
       "event": {
-        "char": "g",
+        "char": "c",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -297,13 +320,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          4
+          5
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "targ"
+          "selec"
         ],
         "wrapWidth": 71
       },
@@ -321,10 +344,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&targ"
+        "text": "selec"
       }
     },
     {
@@ -334,7 +357,7 @@
         }
       ],
       "event": {
-        "char": "e",
+        "char": "t",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -345,13 +368,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          5
+          6
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "targe"
+          "select"
         ],
         "wrapWidth": 71
       },
@@ -369,10 +392,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&targe"
+        "text": "select"
       }
     },
     {
@@ -382,7 +405,7 @@
         }
       ],
       "event": {
-        "char": "t",
+        "char": " ",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -393,13 +416,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          6
+          7
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "target"
+          "select "
         ],
         "wrapWidth": 71
       },
@@ -417,10 +440,197 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&target"
+        "text": "select "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "m",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 7,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          8
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "select m"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 8,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "select m"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "e",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 8,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          9
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "select me"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 9,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "select me"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "extendSelection": false,
+        "type": "mouse",
+        "x": 2,
+        "y": 0
+      },
+      "index": 9,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          2
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "select me"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 2,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": "select me"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "extendSelection": true,
+        "type": "mouse",
+        "x": 7,
+        "y": 0
+      },
+      "index": 10,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          7
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "select me"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 7,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": [
+          2,
+          7
+        ],
+        "switching": false,
+        "text": "select me"
       }
     }
   ],
@@ -431,9 +641,7 @@
   "schemaVersion": 1,
   "setup": {
     "agentName": "",
-    "commands": {
-      "vibeCodeEnabled": true
-    },
+    "commands": {},
     "history": null,
     "initial": {},
     "safety": "neutral",
@@ -445,6 +653,6 @@
     "voice": null,
     "workspace": "empty"
   },
-  "story": "US-004",
-  "title": "Ampersand switches to teleport mode when the command exists"
+  "story": "US-005",
+  "title": "A shifted mouse click extends the current selection"
 }

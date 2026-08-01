@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use vibe_app_server::client::{PublicContentBlock, TurnRequest};
 
 use super::commands::{command_aliases, command_description};
@@ -23,8 +24,19 @@ pub const MAX_PASTE_BYTES: usize = 256 * 1024;
 pub const MAX_RESOURCE_BYTES: u64 = 8 * 1024 * 1024;
 pub const MAX_COMPLETION_CANDIDATES: usize = 64;
 pub const MAX_VISIBLE_COMPLETIONS: usize = 10;
+pub(crate) const COMPOSER_HORIZONTAL_OVERHEAD: u16 = 9;
 const MAX_COMPLETION_SCAN_ENTRIES: usize = 4_096;
 const IMAGE_EXTENSIONS: &[&str] = &["gif", "jpeg", "jpg", "png", "webp"];
+
+#[must_use]
+pub(crate) fn composer_content_width(viewport_width: u16) -> usize {
+    usize::from(
+        viewport_width
+            .saturating_sub(COMPOSER_HORIZONTAL_OVERHEAD)
+            .max(1),
+    )
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PromptEditor {
     text: String,
@@ -34,6 +46,9 @@ pub struct PromptEditor {
     history: Vec<String>,
     history_index: Option<usize>,
     draft: String,
+    history_loaded: bool,
+    cursor_moved_since_history_load: bool,
+    discard_joined_character: bool,
 }
 
 impl PromptEditor {
@@ -65,7 +80,8 @@ impl PromptEditor {
         self.cursor = grapheme_count(&self.text);
         self.selection = None;
         self.selection_anchor = None;
-        self.history_index = None;
+        self.reset_history_navigation();
+        self.discard_joined_character = false;
     }
 
     pub fn select(&mut self, range: Range<usize>) {
@@ -74,6 +90,7 @@ impl PromptEditor {
         let target = range.end.min(end);
         self.selection_anchor = Some(start);
         self.selection = Some(start.min(target)..start.max(target));
+        self.mark_history_cursor_moved(target);
         self.cursor = target;
     }
 
@@ -82,6 +99,25 @@ impl PromptEditor {
         let byte = grapheme_byte(&self.text, self.cursor);
         self.text.insert_str(byte, text);
         self.cursor = self.cursor.saturating_add(grapheme_count(text));
+        self.finish_edit();
+    }
+
+    /// Inserts one terminal key character using Textual-compatible filtering.
+    ///
+    /// Combining/control-width scalar events are ignored by the reference
+    /// widget. A ZWJ also causes the following scalar to be ignored because
+    /// Textual receives that attempted sequence as one unsupported key.
+    pub fn insert_key_character(&mut self, character: char) -> bool {
+        if self.discard_joined_character {
+            self.discard_joined_character = false;
+            return false;
+        }
+        if UnicodeWidthChar::width(character).is_none_or(|width| width == 0) {
+            self.discard_joined_character = character == '\u{200d}';
+            return false;
+        }
+        self.insert(&character.to_string());
+        true
     }
 
     pub fn paste(&mut self, text: &str) -> Result<(), InputError> {
@@ -96,7 +132,11 @@ impl PromptEditor {
     }
 
     pub fn move_left(&mut self, extend_selection: bool) {
-        self.move_cursor(self.cursor.saturating_sub(1), extend_selection);
+        self.move_left_bounded(extend_selection, 0);
+    }
+
+    pub fn move_left_bounded(&mut self, extend_selection: bool, floor: usize) {
+        self.move_cursor(self.cursor.saturating_sub(1).max(floor), extend_selection);
     }
 
     pub fn move_right(&mut self, extend_selection: bool) {
@@ -109,78 +149,187 @@ impl PromptEditor {
     }
 
     pub fn move_home(&mut self, extend_selection: bool) {
-        self.move_cursor(0, extend_selection);
+        self.move_home_bounded(extend_selection, 0);
+    }
+
+    pub fn move_home_bounded(&mut self, extend_selection: bool, floor: usize) {
+        let start = self
+            .text
+            .graphemes(true)
+            .enumerate()
+            .take(self.cursor)
+            .filter_map(|(index, grapheme)| (grapheme == "\n").then_some(index))
+            .last()
+            .map_or(0, |index| index.saturating_add(1));
+        self.move_cursor(start.max(floor), extend_selection);
     }
 
     pub fn move_end(&mut self, extend_selection: bool) {
-        self.move_cursor(grapheme_count(&self.text), extend_selection);
+        let end = self
+            .text
+            .graphemes(true)
+            .enumerate()
+            .skip(self.cursor)
+            .find_map(|(index, grapheme)| (grapheme == "\n").then_some(index))
+            .unwrap_or_else(|| grapheme_count(&self.text));
+        self.move_cursor(end, extend_selection);
+    }
+
+    pub fn move_word_left(&mut self) {
+        self.move_word_left_bounded(0);
+    }
+
+    pub fn move_word_left_bounded(&mut self, floor: usize) {
+        let graphemes = self.text.graphemes(true).collect::<Vec<_>>();
+        let mut target = self.cursor.min(graphemes.len());
+        while target > floor && !is_word_grapheme(graphemes[target - 1]) {
+            target -= 1;
+        }
+        while target > floor && is_word_grapheme(graphemes[target - 1]) {
+            target -= 1;
+        }
+        self.move_cursor(target, false);
+    }
+
+    pub fn move_word_right(&mut self) {
+        let graphemes = self.text.graphemes(true).collect::<Vec<_>>();
+        let mut target = self.cursor.min(graphemes.len());
+        while target < graphemes.len() && !is_word_grapheme(graphemes[target]) {
+            target += 1;
+        }
+        while target < graphemes.len() && is_word_grapheme(graphemes[target]) {
+            target += 1;
+        }
+        self.move_cursor(target, false);
+    }
+
+    /// Moves by a rendered visual line, preserving the current cell column.
+    pub fn move_visual_up(&mut self, width: usize, prefix: usize) -> bool {
+        self.move_visual_line(width, prefix, true)
+    }
+
+    /// Moves by a rendered visual line, preserving the current cell column.
+    pub fn move_visual_down(&mut self, width: usize, prefix: usize) -> bool {
+        self.move_visual_line(width, prefix, false)
+    }
+
+    /// Places the cursor at a visual cell. Coordinates are relative to the
+    /// editor body; out-of-bounds positions are rejected without mutation.
+    pub fn move_to_visual_cell(
+        &mut self,
+        row: usize,
+        column: usize,
+        width: usize,
+        prefix: usize,
+        extend_selection: bool,
+    ) -> bool {
+        let lines = visual_lines(&self.text, width.max(1), prefix);
+        let Some(line) = lines.get(row) else {
+            return false;
+        };
+        let target = cursor_at_cell(&self.text, line.clone(), column);
+        self.move_cursor(target, extend_selection);
+        true
     }
 
     pub fn delete_backward(&mut self) {
-        if self.delete_selection() || self.cursor == 0 {
+        self.delete_backward_bounded(0);
+    }
+
+    pub fn delete_backward_bounded(&mut self, floor: usize) {
+        if self.delete_selection() {
+            self.finish_edit();
+            return;
+        }
+        if self.cursor <= floor {
             return;
         }
         let start = grapheme_byte(&self.text, self.cursor - 1);
         let end = grapheme_byte(&self.text, self.cursor);
         self.text.replace_range(start..end, "");
         self.cursor -= 1;
+        self.finish_edit();
     }
 
     pub fn delete_forward(&mut self) {
-        if self.delete_selection() || self.cursor == grapheme_count(&self.text) {
+        if self.delete_selection() {
+            self.finish_edit();
+            return;
+        }
+        if self.cursor == grapheme_count(&self.text) {
             return;
         }
         let start = grapheme_byte(&self.text, self.cursor);
         let end = grapheme_byte(&self.text, self.cursor + 1);
         self.text.replace_range(start..end, "");
+        self.finish_edit();
     }
 
-    pub fn history_previous(&mut self) {
+    pub fn replace_history(&mut self, entries: Vec<String>) {
+        self.history = entries
+            .into_iter()
+            .rev()
+            .take(100)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        self.reset_history_navigation();
+    }
+
+    #[must_use]
+    pub fn history_entries(&self) -> &[String] {
+        &self.history
+    }
+
+    pub fn history_previous(&mut self) -> bool {
         if self.history.is_empty() {
-            return;
+            return false;
         }
         let index = match self.history_index {
-            Some(index) => index.saturating_sub(1),
+            Some(0) => return false,
+            Some(index) => index - 1,
             None => {
                 self.draft.clone_from(&self.text);
                 self.history.len() - 1
             }
         };
         self.history_index = Some(index);
-        self.text.clone_from(&self.history[index]);
-        self.cursor = grapheme_count(&self.text);
-        self.selection = None;
-        self.selection_anchor = None;
+        let entry = self.history[index].clone();
+        self.load_history_text(entry);
+        true
     }
 
-    pub fn history_next(&mut self) {
+    pub fn history_next(&mut self) -> bool {
         let Some(index) = self.history_index else {
-            return;
+            return false;
         };
         if index + 1 < self.history.len() {
             self.history_index = Some(index + 1);
-            self.text.clone_from(&self.history[index + 1]);
+            let entry = self.history[index + 1].clone();
+            self.load_history_text(entry);
         } else {
             self.history_index = None;
-            self.text.clone_from(&self.draft);
+            self.load_history_text(self.draft.clone());
         }
-        self.cursor = grapheme_count(&self.text);
-        self.selection = None;
-        self.selection_anchor = None;
+        true
     }
 
     pub fn submit(&mut self) -> Option<String> {
-        let submitted = std::mem::take(&mut self.text);
+        let submitted = self.text.trim().to_owned();
+        if submitted.is_empty() {
+            return None;
+        }
+        self.text.clear();
         self.cursor = 0;
         self.selection = None;
         self.selection_anchor = None;
-        self.history_index = None;
-        self.draft.clear();
-        if submitted.trim().is_empty() {
-            return None;
-        }
+        self.reset_history_navigation();
         if self.history.last() != Some(&submitted) {
             self.history.push(submitted.clone());
+            if self.history.len() > 100 {
+                self.history.remove(0);
+            }
         }
         Some(submitted)
     }
@@ -190,8 +339,7 @@ impl PromptEditor {
         self.cursor = 0;
         self.selection = None;
         self.selection_anchor = None;
-        self.history_index = None;
-        self.draft.clear();
+        self.reset_history_navigation();
         (!submitted.trim().is_empty()).then_some(submitted)
     }
 
@@ -201,14 +349,70 @@ impl PromptEditor {
         self.history_index.is_some()
     }
 
+    #[must_use]
+    pub fn history_loaded(&self) -> bool {
+        self.history_loaded
+    }
+
+    #[must_use]
+    pub fn cursor_moved_since_history_load(&self) -> bool {
+        self.cursor_moved_since_history_load
+    }
+
+    pub fn reset_history_navigation(&mut self) {
+        self.history_index = None;
+        self.draft.clear();
+        self.history_loaded = false;
+        self.cursor_moved_since_history_load = false;
+    }
+
+    fn load_history_text(&mut self, text: String) {
+        self.text = text;
+        self.cursor = self
+            .text
+            .graphemes(true)
+            .position(|grapheme| grapheme == "\n")
+            .unwrap_or_else(|| grapheme_count(&self.text));
+        self.selection = None;
+        self.selection_anchor = None;
+        self.history_loaded = true;
+        self.cursor_moved_since_history_load = false;
+        self.discard_joined_character = false;
+    }
+
+    fn move_visual_line(&mut self, width: usize, prefix: usize, up: bool) -> bool {
+        let lines = visual_lines(&self.text, width.max(1), prefix);
+        let Some(line_index) = lines
+            .iter()
+            .rposition(|line| line.start <= self.cursor && self.cursor <= line.end)
+        else {
+            return false;
+        };
+        let target_index = if up {
+            line_index.checked_sub(1)
+        } else if line_index + 1 < lines.len() {
+            Some(line_index + 1)
+        } else {
+            None
+        };
+        let Some(target_index) = target_index else {
+            return false;
+        };
+        let column = visual_cell_width(&self.text, lines[line_index].start..self.cursor);
+        let target = cursor_at_cell(&self.text, lines[target_index].clone(), column);
+        self.move_cursor(target, false);
+        true
+    }
+
     fn move_cursor(&mut self, target: usize, extend_selection: bool) {
         if extend_selection {
             let anchor = *self.selection_anchor.get_or_insert(self.cursor);
-            self.selection = Some(anchor.min(target)..anchor.max(target));
+            self.selection = (anchor != target).then_some(anchor.min(target)..anchor.max(target));
         } else {
             self.selection = None;
             self.selection_anchor = None;
         }
+        self.mark_history_cursor_moved(target);
         self.cursor = target;
     }
 
@@ -226,6 +430,17 @@ impl PromptEditor {
         self.cursor = selection.start;
         true
     }
+
+    fn finish_edit(&mut self) {
+        self.reset_history_navigation();
+        self.discard_joined_character = false;
+    }
+
+    fn mark_history_cursor_moved(&mut self, target: usize) {
+        if self.history_loaded && target != self.cursor {
+            self.cursor_moved_since_history_load = true;
+        }
+    }
 }
 
 fn grapheme_count(text: &str) -> usize {
@@ -236,6 +451,118 @@ fn grapheme_byte(text: &str, index: usize) -> usize {
     text.grapheme_indices(true)
         .nth(index)
         .map_or(text.len(), |(byte, _)| byte)
+}
+
+fn is_word_grapheme(grapheme: &str) -> bool {
+    grapheme
+        .chars()
+        .all(|character| character == '_' || character.is_alphanumeric())
+}
+
+pub(crate) fn visual_cell_width(text: &str, range: Range<usize>) -> usize {
+    text.graphemes(true)
+        .enumerate()
+        .filter(|(index, _)| range.contains(index))
+        .map(|(_, grapheme)| UnicodeWidthStr::width(grapheme).max(1))
+        .sum()
+}
+
+fn cursor_at_cell(text: &str, line: Range<usize>, column: usize) -> usize {
+    let graphemes = text.graphemes(true).collect::<Vec<_>>();
+    let mut cursor = line.start;
+    let mut cells = 0usize;
+    while cursor < line.end {
+        let width = UnicodeWidthStr::width(graphemes[cursor]).max(1);
+        if cells.saturating_add(width) > column {
+            break;
+        }
+        cells = cells.saturating_add(width);
+        cursor += 1;
+    }
+    cursor
+}
+
+/// Grapheme ranges for Textual-style word wrapping. A soft wrap starts after
+/// the latest whitespace that fits; hard newlines always start a new range.
+pub(crate) fn visual_lines(text: &str, width: usize, prefix: usize) -> Vec<Range<usize>> {
+    let graphemes = text.graphemes(true).collect::<Vec<_>>();
+    let start = prefix.min(graphemes.len());
+    let mut starts = vec![start];
+    let mut line_start = start;
+    let mut line_width = 0usize;
+    let mut last_break = None;
+    let mut index = start;
+    while index < graphemes.len() {
+        let grapheme = graphemes[index];
+        if grapheme == "\n" {
+            let next = index.saturating_add(1);
+            starts.push(next);
+            line_start = next;
+            line_width = 0;
+            last_break = None;
+            index = next;
+            continue;
+        }
+        let grapheme_width = UnicodeWidthStr::width(grapheme).max(1);
+        if line_width.saturating_add(grapheme_width) > width {
+            let next = last_break
+                .filter(|candidate| *candidate > line_start)
+                .unwrap_or(index);
+            if starts.last().copied() != Some(next) {
+                starts.push(next);
+            }
+            line_start = next;
+            line_width = visual_cell_width(text, next..index);
+            last_break = (next..index)
+                .rev()
+                .find(|candidate| graphemes[*candidate].chars().all(char::is_whitespace))
+                .map(|candidate| candidate.saturating_add(1));
+        }
+        line_width = line_width.saturating_add(grapheme_width);
+        if grapheme.chars().all(char::is_whitespace) {
+            last_break = Some(index.saturating_add(1));
+        }
+        index += 1;
+    }
+    let end = graphemes.len();
+    starts
+        .iter()
+        .enumerate()
+        .map(|(index, start)| {
+            let mut line_end = starts.get(index + 1).copied().unwrap_or(end);
+            if line_end > *start && graphemes.get(line_end - 1) == Some(&"\n") {
+                line_end -= 1;
+            }
+            *start..line_end
+        })
+        .collect()
+}
+
+#[must_use]
+pub(crate) fn visual_cursor_cell(
+    text: &str,
+    cursor: usize,
+    width: usize,
+    prefix: usize,
+) -> (usize, usize) {
+    let lines = visual_lines(text, width.max(1), prefix);
+    let row = lines
+        .iter()
+        .rposition(|line| line.start <= cursor && cursor <= line.end)
+        .unwrap_or_default();
+    let column = lines
+        .get(row)
+        .map_or(0, |line| visual_cell_width(text, line.start..cursor));
+    (row, column)
+}
+
+#[must_use]
+pub(crate) fn visual_text_lines(text: &str, width: usize, prefix: usize) -> Vec<String> {
+    let graphemes = text.graphemes(true).collect::<Vec<_>>();
+    visual_lines(text, width.max(1), prefix)
+        .into_iter()
+        .map(|line| graphemes[line].concat())
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -493,6 +820,43 @@ impl CompletionEngine {
             workspace: workspace.to_path_buf(),
         })?;
         Ok(())
+    }
+
+    /// Dispatches lookup work requested by the deterministic input reducer.
+    ///
+    /// Slash candidates are in-memory and install immediately. Filesystem path
+    /// lookup stays on the existing worker so the terminal event path never
+    /// blocks on I/O.
+    pub(crate) fn dispatch_request(
+        &mut self,
+        generation: u64,
+        token_range: Range<usize>,
+        query: String,
+        workspace: &Path,
+    ) -> Result<(), InputError> {
+        if generation != self.generation {
+            return Err(InputError::StaleCompletion);
+        }
+        if query.starts_with('/') {
+            let candidates = self.prompt_candidates(workspace, &query)?;
+            self.install(generation, token_range, &query, candidates);
+            return Ok(());
+        }
+        let worker = match self.worker.as_ref() {
+            Some(worker) => worker,
+            None => {
+                self.worker = Some(CompletionWorker::spawn()?);
+                self.worker.as_ref().ok_or_else(|| {
+                    InputError::CompletionWorker("worker is unavailable".to_owned())
+                })?
+            }
+        };
+        worker.submit(CompletionRequest {
+            generation,
+            token_range,
+            query,
+            workspace: workspace.to_path_buf(),
+        })
     }
 
     fn prompt_candidates(
@@ -1539,7 +1903,7 @@ mod tests {
         editor.move_left(true);
         assert_eq!(editor.selection(), Some(2..3));
         editor.move_right(true);
-        assert_eq!(editor.selection(), Some(3..3));
+        assert_eq!(editor.selection(), None);
         editor.move_right(true);
         assert_eq!(editor.selection(), Some(3..4));
     }

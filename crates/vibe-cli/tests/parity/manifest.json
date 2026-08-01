@@ -273,6 +273,15 @@
       ]
     },
     {
+      "id": "external-editor-refreshes-completion",
+      "gap": "GAP-05",
+      "story": "US-005",
+      "file": "traces/external-editor-refreshes-completion.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
       "id": "external-editor-replaces-text",
       "gap": "GAP-05",
       "story": "US-005",
@@ -529,6 +538,33 @@
       "gap": "GAP-01",
       "story": "US-004",
       "file": "traces/modes-teleport-available.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "mouse-click-wide-character",
+      "gap": "GAP-04",
+      "story": "US-005",
+      "file": "traces/mouse-click-wide-character.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "mouse-out-of-bounds",
+      "gap": "GAP-04",
+      "story": "US-005",
+      "file": "traces/mouse-out-of-bounds.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "mouse-shift-selection",
+      "gap": "GAP-04",
+      "story": "US-005",
+      "file": "traces/mouse-shift-selection.json",
       "capabilities": [
         "core"
       ]

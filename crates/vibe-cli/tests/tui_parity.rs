@@ -1,6 +1,7 @@
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use std::path::Path;
+use vibe_cli::tui::chat_input::InputMode;
 use vibe_cli::tui::clipboard::{SystemClipboard, SystemClipboardPort, osc52_sequence};
 use vibe_cli::tui::commands::{CommandId, command_aliases, parse_command};
 use vibe_cli::tui::input::{CompletionEngine, PromptEditor};
@@ -169,6 +170,7 @@ fn picker_overlay_is_rendered_above_the_transcript_with_keyboard_help() {
                 &mut state,
                 &editor,
                 &completion,
+                InputMode::Prompt,
                 resolve_theme(Theme::Dark, DetectedTheme::Dark, true),
                 UiContext {
                     cwd: Path::new("/workspace"),
@@ -249,6 +251,7 @@ fn assistant_markdown_is_rendered_semantically_instead_of_literally() {
                 &mut state,
                 &PromptEditor::default(),
                 &CompletionEngine::default(),
+                InputMode::Prompt,
                 resolve_theme(Theme::Dark, DetectedTheme::Dark, true),
                 UiContext {
                     cwd: Path::new("/workspace"),
@@ -409,6 +412,7 @@ fn overlay_rendering_survives_a_tiny_terminal_and_wide_unicode_labels() {
                 &mut state,
                 &PromptEditor::default(),
                 &CompletionEngine::default(),
+                InputMode::Prompt,
                 resolve_theme(Theme::Dark, DetectedTheme::Dark, true),
                 UiContext {
                     cwd: Path::new("/w"),

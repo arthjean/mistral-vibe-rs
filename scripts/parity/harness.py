@@ -299,6 +299,48 @@ class ScenarioRunner:
             widget.post_message(events.Paste(self._expand(event["text"])))
         elif kind == "resize":
             await pilot.resize_terminal(event["width"], event["height"])
+        elif kind == "mouse":
+            content_x = event["x"]
+            content_y = event["y"]
+            x = content_x + widget.gutter_width + widget.gutter.left
+            y = content_y + widget.gutter.top
+            if 0 <= x < widget.region.width and 0 <= y < widget.region.height:
+                mouse_event = (
+                    events.MouseMove
+                    if event.get("extendSelection", False)
+                    else events.MouseDown
+                )(
+                    widget,
+                    x=x,
+                    y=y,
+                    delta_x=0,
+                    delta_y=0,
+                    button=1,
+                    shift=False,
+                    meta=False,
+                    ctrl=False,
+                    screen_x=widget.region.x + x,
+                    screen_y=widget.region.y + y,
+                )
+                if event.get("extendSelection", False):
+                    await widget._on_mouse_move(mouse_event)
+                    await widget._on_mouse_up(
+                        events.MouseUp(
+                            widget,
+                            x=x,
+                            y=y,
+                            delta_x=0,
+                            delta_y=0,
+                            button=1,
+                            shift=False,
+                            meta=False,
+                            ctrl=False,
+                            screen_x=widget.region.x + x,
+                            screen_y=widget.region.y + y,
+                        )
+                    )
+                else:
+                    await widget._on_mouse_down(mouse_event)
         elif kind == "transcript":
             voice = self.app.voice
             if voice is None:

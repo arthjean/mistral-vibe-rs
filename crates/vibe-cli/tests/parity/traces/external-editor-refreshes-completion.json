@@ -4,19 +4,7 @@
   ],
   "events": [
     {
-      "char": "&",
-      "key": "char",
-      "mods": [],
-      "type": "key"
-    },
-    {
-      "char": "t",
-      "key": "char",
-      "mods": [],
-      "type": "key"
-    },
-    {
-      "char": "a",
+      "char": "d",
       "key": "char",
       "mods": [],
       "type": "key"
@@ -28,13 +16,13 @@
       "type": "key"
     },
     {
-      "char": "g",
+      "char": "a",
       "key": "char",
       "mods": [],
       "type": "key"
     },
     {
-      "char": "e",
+      "char": "f",
       "key": "char",
       "mods": [],
       "type": "key"
@@ -44,10 +32,14 @@
       "key": "char",
       "mods": [],
       "type": "key"
+    },
+    {
+      "text": "/c",
+      "type": "externalEditor"
     }
   ],
-  "gap": "GAP-01",
-  "id": "modes-teleport-available",
+  "gap": "GAP-05",
+  "id": "external-editor-refreshes-completion",
   "initial": {
     "effects": [],
     "render": {
@@ -89,12 +81,11 @@
     {
       "effects": [
         {
-          "mode": "&",
-          "type": "modeChanged"
+          "type": "historyReset"
         }
       ],
       "event": {
-        "char": "&",
+        "char": "d",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -105,13 +96,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          0
+          1
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          ""
+          "d"
         ],
         "wrapWidth": 71
       },
@@ -129,10 +120,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&"
+        "text": "d"
       }
     },
     {
@@ -142,7 +133,7 @@
         }
       ],
       "event": {
-        "char": "t",
+        "char": "r",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -153,13 +144,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          1
+          2
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "t"
+          "dr"
         ],
         "wrapWidth": 71
       },
@@ -177,10 +168,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&t"
+        "text": "dr"
       }
     },
     {
@@ -201,13 +192,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          2
+          3
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "ta"
+          "dra"
         ],
         "wrapWidth": 71
       },
@@ -225,10 +216,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&ta"
+        "text": "dra"
       }
     },
     {
@@ -238,7 +229,7 @@
         }
       ],
       "event": {
-        "char": "r",
+        "char": "f",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -249,13 +240,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          3
+          4
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "tar"
+          "draf"
         ],
         "wrapWidth": 71
       },
@@ -273,10 +264,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&tar"
+        "text": "draf"
       }
     },
     {
@@ -286,7 +277,7 @@
         }
       ],
       "event": {
-        "char": "g",
+        "char": "t",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -297,13 +288,13 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          4
+          5
         ],
         "popupRows": [],
         "popupVisible": false,
-        "prompt": "&",
+        "prompt": ">",
         "visualLines": [
-          "targ"
+          "draft"
         ],
         "wrapWidth": 71
       },
@@ -321,10 +312,10 @@
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&targ"
+        "text": "draft"
       }
     },
     {
@@ -334,10 +325,8 @@
         }
       ],
       "event": {
-        "char": "e",
-        "key": "char",
-        "mods": [],
-        "type": "key"
+        "text": "/c",
+        "type": "externalEditor"
       },
       "index": 5,
       "render": {
@@ -345,82 +334,76 @@
         "borderTitle": "",
         "cursorCell": [
           0,
-          5
+          2
         ],
-        "popupRows": [],
-        "popupVisible": false,
-        "prompt": "&",
+        "popupRows": [
+          "/config",
+          "/clear",
+          "/compact",
+          "/connectors",
+          "/continue",
+          "/copy",
+          "/mcp",
+          "/voice"
+        ],
+        "popupVisible": true,
+        "prompt": ">",
         "visualLines": [
-          "targe"
+          "/c"
         ],
         "wrapWidth": 71
       },
       "state": {
         "completion": {
-          "items": [],
-          "kind": null,
-          "open": false,
+          "items": [
+            {
+              "description": "Edit config settings",
+              "label": "/config"
+            },
+            {
+              "description": "Clear conversation history",
+              "label": "/clear"
+            },
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/connectors"
+            },
+            {
+              "description": "Browse, resume, or delete saved sessions",
+              "label": "/continue"
+            },
+            {
+              "description": "Copy the last agent message to the clipboard",
+              "label": "/copy"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            },
+            {
+              "description": "Configure voice settings",
+              "label": "/voice"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
           "selected": 0
         },
-        "cursor": 6,
+        "cursor": 2,
         "feedbackActive": false,
         "history": {
           "cursorMovedSinceLoad": false,
           "loadedEntry": false,
           "navigating": false
         },
-        "mode": "&",
+        "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "&targe"
-      }
-    },
-    {
-      "effects": [
-        {
-          "type": "historyReset"
-        }
-      ],
-      "event": {
-        "char": "t",
-        "key": "char",
-        "mods": [],
-        "type": "key"
-      },
-      "index": 6,
-      "render": {
-        "borderClasses": [],
-        "borderTitle": "",
-        "cursorCell": [
-          0,
-          6
-        ],
-        "popupRows": [],
-        "popupVisible": false,
-        "prompt": "&",
-        "visualLines": [
-          "target"
-        ],
-        "wrapWidth": 71
-      },
-      "state": {
-        "completion": {
-          "items": [],
-          "kind": null,
-          "open": false,
-          "selected": 0
-        },
-        "cursor": 7,
-        "feedbackActive": false,
-        "history": {
-          "cursorMovedSinceLoad": false,
-          "loadedEntry": false,
-          "navigating": false
-        },
-        "mode": "&",
-        "selection": null,
-        "switching": false,
-        "text": "&target"
+        "text": "/c"
       }
     }
   ],
@@ -431,9 +414,7 @@
   "schemaVersion": 1,
   "setup": {
     "agentName": "",
-    "commands": {
-      "vibeCodeEnabled": true
-    },
+    "commands": {},
     "history": null,
     "initial": {},
     "safety": "neutral",
@@ -445,6 +426,6 @@
     "voice": null,
     "workspace": "empty"
   },
-  "story": "US-004",
-  "title": "Ampersand switches to teleport mode when the command exists"
+  "story": "US-005",
+  "title": "External editor output refreshes completion for its new token"
 }

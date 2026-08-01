@@ -12,19 +12,18 @@
 //! `tests/parity`.
 
 use std::ops::Range;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use unicode_segmentation::UnicodeSegmentation;
 
 use super::input::{
     CompletionCandidate, CompletionEngine, CompletionKey, CompletionKeyOutcome, CompletionKind,
-    InputError, PromptEditor, active_token, completion_description,
+    InputError, PromptEditor, active_token, completion_description, composer_content_width,
+    visual_cursor_cell, visual_text_lines,
 };
 
 /// Composer input mode, mirroring the reference prefix characters.
-///
-/// Only [`InputMode::Prompt`] is modelled today; US-004 introduces the prefix
-/// modes, so the corpus reports the others as divergences rather than having
-/// this boundary pretend to support them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum InputMode {
     #[default]
@@ -36,6 +35,26 @@ pub enum InputMode {
     Command,
     #[serde(rename = "&")]
     Teleport,
+}
+
+impl InputMode {
+    #[must_use]
+    pub const fn symbol(self) -> char {
+        match self {
+            Self::Prompt => '>',
+            Self::Shell => '!',
+            Self::Command => '/',
+            Self::Teleport => '&',
+        }
+    }
+
+    #[must_use]
+    pub const fn prefix_len(self) -> usize {
+        match self {
+            Self::Prompt => 0,
+            Self::Shell | Self::Command | Self::Teleport => 1,
+        }
+    }
 }
 
 /// Normalised key identity shared by the oracle traces and the terminal adapter.
@@ -88,7 +107,11 @@ pub enum Severity {
 
 /// Every input the composer can observe, including responses to its effects.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum InputEvent {
     Key {
         key: KeyName,
@@ -103,6 +126,12 @@ pub enum InputEvent {
     Resize {
         width: u16,
         height: u16,
+    },
+    Mouse {
+        x: u16,
+        y: u16,
+        #[serde(default)]
+        extend_selection: bool,
     },
     /// Raw candidates produced for a completion request.
     ///
@@ -216,16 +245,13 @@ pub struct CompletionObservation {
     pub items: Vec<CompletionItemObservation>,
 }
 
-/// Prompt-history position.
-///
-/// Only what the composer actually tracks is reported. The reference also
-/// records a recalled-entry marker and post-recall cursor movement; US-007
-/// adds that state, and until then the runner declares those fields
-/// unmodelled rather than having this boundary answer for them.
+/// Prompt-history position exposed to differential fixtures.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryObservation {
     pub navigating: bool,
+    pub loaded_entry: bool,
+    pub cursor_moved_since_load: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -241,19 +267,49 @@ pub struct StateObservation {
     pub switching: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderObservation {
+    pub cursor_cell: [usize; 2],
+    pub prompt: char,
+    pub visual_lines: Vec<String>,
+    pub wrap_width: usize,
+}
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
 /// Everything the composer owns between two events.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ChatInputState {
     editor: PromptEditor,
     completion: CompletionEngine,
+    mode: InputMode,
     feedback_active: bool,
     switching: bool,
     secret_input: bool,
+    history_navigating: bool,
+    teleport_available: bool,
+    content_width: usize,
     last_paste: Option<Range<usize>>,
+}
+
+impl Default for ChatInputState {
+    fn default() -> Self {
+        Self {
+            editor: PromptEditor::default(),
+            completion: CompletionEngine::default(),
+            mode: InputMode::Prompt,
+            feedback_active: false,
+            switching: false,
+            secret_input: false,
+            history_navigating: false,
+            teleport_available: false,
+            content_width: 71,
+            last_paste: None,
+        }
+    }
 }
 
 impl ChatInputState {
@@ -266,7 +322,87 @@ impl ChatInputState {
         self.secret_input = secret;
         if secret {
             self.completion.cancel();
+            self.mode = InputMode::Prompt;
         }
+    }
+
+    pub fn set_teleport_available(&mut self, available: bool) {
+        self.teleport_available = available;
+        if !available && self.mode == InputMode::Teleport {
+            self.mode = InputMode::Prompt;
+        }
+    }
+
+    pub fn set_user_skills<'a>(&mut self, skills: impl IntoIterator<Item = (&'a str, &'a str)>) {
+        self.completion.set_user_skills(skills);
+    }
+
+    #[must_use]
+    pub fn editor(&self) -> &PromptEditor {
+        &self.editor
+    }
+
+    #[must_use]
+    pub fn completion(&self) -> &CompletionEngine {
+        &self.completion
+    }
+
+    #[must_use]
+    pub fn mode(&self) -> InputMode {
+        self.mode
+    }
+
+    pub(crate) fn poll_completion(&mut self) -> Result<bool, InputError> {
+        self.completion.poll()
+    }
+
+    pub(crate) fn dispatch_completion_request(
+        &mut self,
+        generation: u64,
+        query: String,
+        range: [usize; 2],
+        workspace: &Path,
+    ) -> Result<(), InputError> {
+        self.completion
+            .dispatch_request(generation, range[0]..range[1], query, workspace)
+    }
+
+    pub(crate) fn refresh_after_adapter_mutation(&mut self) -> Vec<InputEffect> {
+        let mut effects = Vec::new();
+        self.refresh_completion(&mut effects);
+        effects
+    }
+
+    pub(crate) fn insert_adapter_text(&mut self, text: &str) {
+        self.editor.insert(text);
+    }
+
+    pub(crate) fn take_unrecorded(&mut self) -> Option<String> {
+        self.completion.cancel();
+        self.mode = InputMode::Prompt;
+        self.editor.take_unrecorded()
+    }
+
+    pub fn replace_text(&mut self, text: impl Into<String>) {
+        self.editor.set_text(text);
+        self.mode = mode_from_text(self.editor.text(), self.teleport_available);
+    }
+
+    pub fn replace_history(&mut self, entries: Vec<String>) {
+        self.editor.replace_history(entries);
+    }
+
+    #[must_use]
+    pub fn history_entries(&self) -> &[String] {
+        self.editor.history_entries()
+    }
+
+    pub fn set_viewport_width(&mut self, width: u16) {
+        self.content_width = composer_content_width(width);
+    }
+
+    pub(crate) fn set_content_width(&mut self, width: usize) {
+        self.content_width = width.max(1);
     }
 
     /// Applies one normalised event and returns the ordered effects it causes.
@@ -299,10 +435,13 @@ impl ChatInputState {
             }
             InputEvent::ExternalEditor { text } => {
                 // A cancelled edit leaves the prompt exactly as it was.
-                if let Some(text) = text {
+                if let Some(text) = text
+                    && text != self.editor.text()
+                {
                     self.editor.set_text(text);
-                    self.reset_completion(&mut effects);
+                    self.history_navigating = false;
                     effects.push(InputEffect::HistoryReset);
+                    self.refresh_completion(&mut effects);
                 }
             }
             InputEvent::PasteNormalized { text } => {
@@ -322,10 +461,24 @@ impl ChatInputState {
             }
             InputEvent::Switching { active } => self.switching = active,
             InputEvent::Feedback { active } => self.feedback_active = active,
+            InputEvent::Mouse {
+                x,
+                y,
+                extend_selection,
+            } => {
+                let _ = self.editor.move_to_visual_cell(
+                    usize::from(y),
+                    usize::from(x),
+                    self.content_width,
+                    self.mode_prefix(),
+                    extend_selection,
+                );
+            }
             // Accepted so a trace stays replayable, but not modelled yet:
             // viewport geometry is US-018 and safety chrome is US-017. Neither
             // reaches an observation, so storing them would be theatre.
-            InputEvent::Resize { .. } | InputEvent::SafetyChanged { .. } => {}
+            InputEvent::Resize { width, .. } => self.set_viewport_width(width),
+            InputEvent::SafetyChanged { .. } => {}
         }
         effects
     }
@@ -339,6 +492,7 @@ impl ChatInputState {
     ) {
         let ctrl = mods.contains(&Modifier::Ctrl);
         let shift = mods.contains(&Modifier::Shift);
+        let alt = mods.contains(&Modifier::Alt);
 
         if !self.secret_input
             && let Some(completion_key) = popup_key(key, mods)
@@ -370,21 +524,48 @@ impl ChatInputState {
         }
 
         if ctrl {
+            let before = self.editor.text().to_owned();
+            let mode_prefix = self.mode_prefix();
             self.reset_completion(effects);
             match character {
-                Some('c') if !shift => self.editor.set_text(""),
+                Some('c') if !shift => {
+                    self.editor.set_text("");
+                    if self.mode != InputMode::Prompt {
+                        self.mode = InputMode::Prompt;
+                        effects.push(InputEffect::ModeChanged {
+                            mode: InputMode::Prompt,
+                        });
+                    }
+                }
                 Some('d') => self.editor.delete_forward(),
                 Some('g') => effects.push(InputEffect::OpenExternalEditor {
                     text: self.editor.text().to_owned(),
                 }),
-                Some('a') => self.editor.move_home(false),
+                Some('a') => self.editor.move_home_bounded(false, mode_prefix),
                 Some('e') => self.editor.move_end(false),
                 Some('j') => self.editor.insert("\n"),
                 _ => {}
             }
+            self.finish_user_edit(&before, effects);
             return;
         }
 
+        if key == KeyName::Backspace
+            && self.mode != InputMode::Prompt
+            && self.editor.text().graphemes(true).count() == 1
+            && self.editor.cursor() == 1
+        {
+            self.editor.set_text("");
+            self.completion.cancel();
+            self.mode = InputMode::Prompt;
+            effects.push(InputEffect::ModeChanged {
+                mode: InputMode::Prompt,
+            });
+            return;
+        }
+
+        let before = self.editor.text().to_owned();
+        let mode_prefix = self.mode_prefix();
         match key {
             KeyName::Escape => self.editor.set_text(""),
             KeyName::Enter if shift => self.editor.insert("\n"),
@@ -392,19 +573,21 @@ impl ChatInputState {
                 self.submit(effects);
                 return;
             }
-            KeyName::Backspace => self.editor.delete_backward(),
+            KeyName::Backspace => self.editor.delete_backward_bounded(mode_prefix),
             KeyName::Delete => self.editor.delete_forward(),
-            KeyName::Left => self.editor.move_left(shift),
+            KeyName::Left if alt => self.editor.move_word_left_bounded(mode_prefix),
+            KeyName::Right if alt => self.editor.move_word_right(),
+            KeyName::Left => self.editor.move_left_bounded(shift, mode_prefix),
             KeyName::Right => self.editor.move_right(shift),
-            KeyName::Home => self.editor.move_home(shift),
+            KeyName::Home => self.editor.move_home_bounded(shift, mode_prefix),
             KeyName::End => self.editor.move_end(shift),
             KeyName::Up => {
-                self.editor.history_previous();
-                effects.push(InputEffect::HistoryPrevious);
+                self.history_up(effects);
+                return;
             }
             KeyName::Down => {
-                self.editor.history_next();
-                effects.push(InputEffect::HistoryNext);
+                self.history_down(effects);
+                return;
             }
             KeyName::PageUp | KeyName::PageDown | KeyName::Backtab | KeyName::Tab => {}
             KeyName::Char => {
@@ -414,9 +597,22 @@ impl ChatInputState {
                     });
                     return;
                 };
-                self.editor.insert(&character.to_string());
+                if self.editor.text().is_empty()
+                    && self.mode == InputMode::Prompt
+                    && let Some(mode) = self.prefix_mode(character)
+                {
+                    self.editor.insert(&character.to_string());
+                    self.mode = mode;
+                    effects.push(InputEffect::ModeChanged { mode });
+                    self.refresh_completion(effects);
+                    return;
+                }
+                if !self.editor.insert_key_character(character) {
+                    return;
+                }
             }
         }
+        self.finish_user_edit(&before, effects);
         self.refresh_completion(effects);
     }
 
@@ -468,15 +664,26 @@ impl ChatInputState {
     }
 
     fn submit(&mut self, effects: &mut Vec<InputEffect>) {
+        let stripped = self.editor.text().trim().to_owned();
         effects.push(InputEffect::SubmitRequested {
-            text: self.editor.text().to_owned(),
+            text: stripped.clone(),
         });
         if self.switching {
             return;
         }
+        if stripped.is_empty() {
+            effects.push(InputEffect::Submit { text: stripped });
+            return;
+        }
         let submitted = self.editor.submit();
-        self.reset_completion(effects);
-        // An all-whitespace prompt requests a submission but emits no turn.
+        self.completion.cancel();
+        if self.mode != InputMode::Prompt {
+            self.mode = InputMode::Prompt;
+            effects.push(InputEffect::ModeChanged {
+                mode: InputMode::Prompt,
+            });
+        }
+        effects.push(InputEffect::CompletionReset);
         if let Some(entry) = submitted {
             effects.push(InputEffect::RecordHistory {
                 entry: entry.clone(),
@@ -498,11 +705,18 @@ impl ChatInputState {
     }
 
     fn refresh_completion(&mut self, effects: &mut Vec<InputEffect>) {
-        self.reset_completion(effects);
+        let was_open = self.completion.view().is_some();
+        self.completion.cancel();
         if self.secret_input {
+            if was_open {
+                effects.push(InputEffect::CompletionReset);
+            }
             return;
         }
         let Some((range, query)) = active_token(&self.editor) else {
+            if was_open {
+                effects.push(InputEffect::CompletionReset);
+            }
             return;
         };
         effects.push(InputEffect::RequestCompletion {
@@ -510,6 +724,82 @@ impl ChatInputState {
             query,
             range: [range.start, range.end],
         });
+    }
+
+    fn finish_user_edit(&mut self, before: &str, effects: &mut Vec<InputEffect>) {
+        if self.editor.text() == before {
+            return;
+        }
+        self.history_navigating = false;
+        effects.push(InputEffect::HistoryReset);
+    }
+
+    fn sync_mode(&mut self, effects: &mut Vec<InputEffect>) {
+        let mode = mode_from_text(self.editor.text(), self.teleport_available);
+        if mode != self.mode {
+            self.mode = mode;
+            effects.push(InputEffect::ModeChanged { mode });
+        }
+    }
+
+    fn prefix_mode(&self, character: char) -> Option<InputMode> {
+        match character {
+            '!' => Some(InputMode::Shell),
+            '/' => Some(InputMode::Command),
+            '&' if self.teleport_available => Some(InputMode::Teleport),
+            _ => None,
+        }
+    }
+
+    fn mode_prefix(&self) -> usize {
+        self.mode.prefix_len()
+    }
+
+    fn history_up(&mut self, effects: &mut Vec<InputEffect>) {
+        let mode_prefix = self.mode_prefix();
+        let loaded_unmoved =
+            self.editor.history_loaded() && !self.editor.cursor_moved_since_history_load();
+        if !loaded_unmoved && self.editor.move_visual_up(self.content_width, mode_prefix) {
+            return;
+        }
+        if !loaded_unmoved && self.editor.cursor() != mode_prefix {
+            self.editor.move_home_bounded(false, mode_prefix);
+            return;
+        }
+        effects.push(InputEffect::HistoryPrevious);
+        if self.editor.history_previous() {
+            self.history_navigating = false;
+            self.sync_mode(effects);
+            self.completion.cancel();
+            effects.push(InputEffect::CompletionReset);
+        } else {
+            self.history_navigating = true;
+        }
+    }
+
+    fn history_down(&mut self, effects: &mut Vec<InputEffect>) {
+        let mode_prefix = self.mode_prefix();
+        let loaded_unmoved =
+            self.editor.history_loaded() && !self.editor.cursor_moved_since_history_load();
+        if !loaded_unmoved
+            && self
+                .editor
+                .move_visual_down(self.content_width, mode_prefix)
+        {
+            return;
+        }
+        if !self.editor.history_loaded() {
+            return;
+        }
+        effects.push(InputEffect::HistoryNext);
+        if self.editor.history_next() {
+            self.history_navigating = false;
+            self.sync_mode(effects);
+            self.completion.cancel();
+            effects.push(InputEffect::CompletionReset);
+        } else {
+            self.history_navigating = true;
+        }
     }
 
     /// Projects the state onto the schema shared with the reference traces.
@@ -538,9 +828,7 @@ impl ChatInputState {
         };
         StateObservation {
             text: self.editor.text().to_owned(),
-            // US-004 introduces the prefix modes; until then the composer is
-            // always in the default mode and the corpus records the gap.
-            mode: InputMode::Prompt,
+            mode: self.mode,
             cursor: char_offset(self.editor.text(), self.editor.cursor()),
             selection: self.editor.selection().map(|range| {
                 [
@@ -550,10 +838,30 @@ impl ChatInputState {
             }),
             completion,
             history: HistoryObservation {
-                navigating: self.editor.history_navigating(),
+                navigating: self.history_navigating,
+                loaded_entry: self.editor.history_loaded(),
+                cursor_moved_since_load: self.editor.cursor_moved_since_history_load(),
             },
             feedback_active: self.feedback_active,
             switching: self.switching,
+        }
+    }
+
+    /// Projects the same composer geometry used by production rendering.
+    #[must_use]
+    pub fn observe_render(&self) -> RenderObservation {
+        let prefix = self.mode.prefix_len();
+        let (row, column) = visual_cursor_cell(
+            self.editor.text(),
+            self.editor.cursor(),
+            self.content_width,
+            prefix,
+        );
+        RenderObservation {
+            cursor_cell: [row, column],
+            prompt: self.mode.symbol(),
+            visual_lines: visual_text_lines(self.editor.text(), self.content_width, prefix),
+            wrap_width: self.content_width,
         }
     }
 }
@@ -580,9 +888,17 @@ fn candidate_kind(candidates: &[CompletionCandidate]) -> String {
     }
 }
 
+fn mode_from_text(text: &str, teleport_available: bool) -> InputMode {
+    match text.chars().next() {
+        Some('!') => InputMode::Shell,
+        Some('/') => InputMode::Command,
+        Some('&') if teleport_available => InputMode::Teleport,
+        _ => InputMode::Prompt,
+    }
+}
+
 /// Converts a grapheme index into the character index the reference reports.
 fn char_offset(text: &str, graphemes: usize) -> usize {
-    use unicode_segmentation::UnicodeSegmentation;
     text.graphemes(true)
         .take(graphemes)
         .map(|grapheme| grapheme.chars().count())
@@ -611,294 +927,5 @@ fn is_path_candidate(text: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn key(name: KeyName) -> InputEvent {
-        InputEvent::Key {
-            key: name,
-            char: None,
-            mods: Vec::new(),
-        }
-    }
-
-    fn character(value: char) -> InputEvent {
-        InputEvent::Key {
-            key: KeyName::Char,
-            char: Some(value),
-            mods: Vec::new(),
-        }
-    }
-
-    fn type_text(state: &mut ChatInputState, value: &str) -> Vec<InputEffect> {
-        value
-            .chars()
-            .flat_map(|character_value| state.apply(character(character_value)))
-            .collect()
-    }
-
-    /// Types `value`, then answers the completion request it produced.
-    fn complete(
-        state: &mut ChatInputState,
-        value: &str,
-        candidates: Vec<CompletionCandidate>,
-    ) -> Vec<InputEffect> {
-        let generation = type_text(state, value)
-            .into_iter()
-            .rev()
-            .find_map(|effect| match effect {
-                InputEffect::RequestCompletion { generation, .. } => Some(generation),
-                _ => None,
-            })
-            .expect("typing a token requests a completion");
-        state.apply(InputEvent::CompletionResults {
-            generation,
-            candidates,
-        })
-    }
-
-    fn mention(label: &str) -> CompletionCandidate {
-        CompletionCandidate {
-            id: format!("mention:{label}"),
-            kind: CompletionKind::Mention,
-            label: label.to_owned(),
-            insertion: label.to_owned(),
-        }
-    }
-
-    #[test]
-    fn transitions_are_deterministic_and_serializable() {
-        let mut left = ChatInputState::new();
-        let mut right = ChatInputState::new();
-        for character_value in "abc".chars() {
-            assert_eq!(
-                left.apply(character(character_value)),
-                right.apply(character(character_value))
-            );
-        }
-        assert_eq!(left.observe(), right.observe());
-        let encoded = serde_json::to_string(&left.observe()).expect("observation serializes");
-        let decoded: StateObservation =
-            serde_json::from_str(&encoded).expect("observation round-trips");
-        assert_eq!(decoded, left.observe());
-    }
-
-    #[test]
-    fn filesystem_work_is_requested_as_an_effect() {
-        let mut state = ChatInputState::new();
-        let effects = type_text(&mut state, "@src");
-        assert!(effects.iter().any(|effect| matches!(
-            effect,
-            InputEffect::RequestCompletion { query, .. } if query == "@src"
-        )));
-        assert!(
-            effects
-                .iter()
-                .all(|effect| !matches!(effect, InputEffect::Submit { .. }))
-        );
-    }
-
-    #[test]
-    fn external_editor_and_clipboard_leave_the_boundary_as_effects() {
-        let mut state = ChatInputState::new();
-        type_text(&mut state, "draft");
-        let effects = state.apply(InputEvent::Key {
-            key: KeyName::Char,
-            char: Some('g'),
-            mods: vec![Modifier::Ctrl],
-        });
-        assert!(effects.iter().any(|effect| matches!(
-            effect,
-            InputEffect::OpenExternalEditor { text } if text == "draft"
-        )));
-        let effects = state.apply(InputEvent::Paste {
-            text: String::new(),
-        });
-        assert_eq!(
-            effects,
-            vec![InputEffect::ClipboardImageRequested {
-                notify_when_empty: false
-            }]
-        );
-    }
-
-    #[test]
-    fn a_cancelled_external_edit_keeps_the_prompt() {
-        let mut state = ChatInputState::new();
-        type_text(&mut state, "draft");
-        let effects = state.apply(InputEvent::ExternalEditor { text: None });
-        assert_eq!(effects, Vec::new());
-        assert_eq!(state.observe().text, "draft");
-    }
-
-    #[test]
-    fn stale_completion_results_are_rejected_without_panicking() {
-        let mut state = ChatInputState::new();
-        type_text(&mut state, "@s");
-        let effects = state.apply(InputEvent::CompletionResults {
-            generation: 0,
-            candidates: vec![mention("@src/")],
-        });
-        assert_eq!(
-            effects,
-            vec![InputEffect::Rejected {
-                reason: "stale completion generation".to_owned()
-            }]
-        );
-        assert!(!state.observe().completion.open);
-    }
-
-    #[test]
-    fn invalid_events_keep_state_valid() {
-        let mut state = ChatInputState::new();
-        let effects = state.apply(InputEvent::Key {
-            key: KeyName::Char,
-            char: None,
-            mods: Vec::new(),
-        });
-        assert_eq!(
-            effects,
-            vec![InputEffect::Rejected {
-                reason: "character key without a character".to_owned()
-            }]
-        );
-        let effects = state.apply(InputEvent::PasteNormalized {
-            text: "@image.png".to_owned(),
-        });
-        assert_eq!(
-            effects,
-            vec![InputEffect::Rejected {
-                reason: "no paste to normalize".to_owned()
-            }]
-        );
-        assert_eq!(state.observe().text, "");
-        assert_eq!(state.observe().cursor, 0);
-    }
-
-    #[test]
-    fn completion_selection_and_acceptance_stay_in_bounds() {
-        let mut state = ChatInputState::new();
-        complete(
-            &mut state,
-            "@sr",
-            vec![mention("@src/"), mention("@srv.rs")],
-        );
-        let observation = state.observe();
-        assert!(observation.completion.open);
-        assert_eq!(observation.completion.items.len(), 2);
-        assert_eq!(observation.completion.selected, 0);
-
-        state.apply(key(KeyName::Up));
-        assert_eq!(state.observe().completion.selected, 1);
-        state.apply(key(KeyName::Down));
-        assert_eq!(state.observe().completion.selected, 0);
-
-        let accepted = state.observe().completion.items[0].label.clone();
-        state.apply(key(KeyName::Tab));
-        assert_eq!(state.observe().text, accepted);
-        assert!(!state.observe().completion.open);
-    }
-
-    #[test]
-    fn navigation_inside_the_popup_does_not_report_a_reset() {
-        let mut state = ChatInputState::new();
-        complete(
-            &mut state,
-            "@sr",
-            vec![mention("@src/"), mention("@srv.rs")],
-        );
-        assert_eq!(state.apply(key(KeyName::Down)), Vec::new());
-        assert!(state.observe().completion.open);
-        assert_eq!(
-            state.apply(key(KeyName::Escape)),
-            vec![InputEffect::CompletionReset]
-        );
-    }
-
-    #[test]
-    fn a_closed_popup_never_reports_a_reset() {
-        let mut state = ChatInputState::new();
-        let effects = type_text(&mut state, "plain");
-        assert!(
-            effects
-                .iter()
-                .all(|effect| !matches!(effect, InputEffect::CompletionReset)),
-            "{effects:?}"
-        );
-    }
-
-    #[test]
-    fn submission_reports_the_payload_and_history_entry() {
-        let mut state = ChatInputState::new();
-        type_text(&mut state, " spaced ");
-        let effects = state.apply(key(KeyName::Enter));
-        assert!(effects.iter().any(|effect| matches!(
-            effect,
-            InputEffect::SubmitRequested { text } if text == " spaced "
-        )));
-        // GAP-02: the reference strips the submitted text. US-004 closes this,
-        // and the assertion below changes with it.
-        assert!(effects.iter().any(|effect| matches!(
-            effect,
-            InputEffect::RecordHistory { entry } if entry == " spaced "
-        )));
-        assert_eq!(state.observe().text, "");
-    }
-
-    #[test]
-    fn an_empty_submission_emits_no_turn() {
-        let mut state = ChatInputState::new();
-        type_text(&mut state, "   ");
-        let effects = state.apply(key(KeyName::Enter));
-        assert_eq!(
-            effects,
-            vec![InputEffect::SubmitRequested {
-                text: "   ".to_owned()
-            }]
-        );
-    }
-
-    #[test]
-    fn switching_blocks_submission_and_keeps_the_prompt() {
-        let mut state = ChatInputState::new();
-        type_text(&mut state, "queued");
-        state.apply(InputEvent::Switching { active: true });
-        let effects = state.apply(key(KeyName::Enter));
-        assert_eq!(
-            effects,
-            vec![InputEffect::SubmitRequested {
-                text: "queued".to_owned()
-            }]
-        );
-        assert_eq!(state.observe().text, "queued");
-    }
-
-    #[test]
-    fn history_navigation_is_observed_from_the_editor() {
-        let mut state = ChatInputState::new();
-        type_text(&mut state, "first");
-        state.apply(key(KeyName::Enter));
-        assert!(!state.observe().history.navigating);
-        state.apply(key(KeyName::Up));
-        assert!(state.observe().history.navigating);
-        assert_eq!(state.observe().text, "first");
-        state.apply(key(KeyName::Down));
-        assert!(!state.observe().history.navigating);
-    }
-
-    #[test]
-    fn secret_input_closes_and_suppresses_completion() {
-        let mut state = ChatInputState::new();
-        complete(&mut state, "@sr", vec![mention("@src/")]);
-        assert!(state.observe().completion.open);
-        state.set_secret_input(true);
-        assert!(!state.observe().completion.open);
-        let effects = type_text(&mut state, "c");
-        assert!(
-            effects
-                .iter()
-                .all(|effect| !matches!(effect, InputEffect::RequestCompletion { .. })),
-            "{effects:?}"
-        );
-    }
-}
+#[path = "chat_input/tests.rs"]
+mod tests;

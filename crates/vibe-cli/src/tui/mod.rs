@@ -2,6 +2,7 @@ pub mod chat_input;
 pub mod clipboard;
 pub mod commands;
 pub mod controls;
+pub mod history;
 pub mod input;
 pub mod interaction;
 pub mod pickers;
@@ -13,17 +14,18 @@ pub mod state;
 pub mod terminal;
 mod workflow;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crossterm::event::{
-    Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind,
+    Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
 };
 use futures_util::StreamExt;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+use ratatui::layout::Rect;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -37,15 +39,14 @@ use vibe_app_server::release3::{Release3Paths, Release3Service};
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
 
+use self::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName, Modifier};
 use self::commands::CommandId;
 use self::controls::{
     ApprovalScope, CallbackChoice, CallbackKind, CallbackOption, CallbackQuestion, ControlState,
     PendingCallback, UserInputChoice,
 };
-use self::input::{
-    CompletionEngine, CompletionKey, CompletionKeyOutcome, ExternalEditorPort, PromptEditor,
-    SystemExternalEditor, normalize_pasted_text,
-};
+use self::history::PromptHistory;
+use self::input::{ExternalEditorPort, SystemExternalEditor, normalize_pasted_text};
 use self::render::{BannerContext, TokenState, UiContext, draw};
 use self::setup::{
     CredentialStore, EnvironmentThemeDetector, NativeCredentialStore, NotificationPreference,
@@ -127,6 +128,7 @@ struct InteractiveRuntime {
     context_tokens: u64,
     context_window: u64,
     auto_approve: bool,
+    vibe_code_enabled: bool,
     clear_context_after_turn: bool,
     skills: BTreeMap<String, RuntimeSkill>,
     shell: Option<ActiveShell>,
@@ -228,10 +230,18 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     if let Some(runtime) = runtime.as_mut() {
         sync_active_callbacks(runtime, &mut state, &mut controls);
     }
-    let mut editor = PromptEditor::default();
-    let mut completion = CompletionEngine::default();
+    let (mut prompt_history, history_load) = PromptHistory::open(
+        vibe_home_directory(&arguments, &working_directory).join("vibehistory"),
+    );
+    let mut input = ChatInputState::new();
+    input.replace_history(history_load.entries);
+    input.set_viewport_width(state.viewport.0);
+    input.set_teleport_available(teleport_available(runtime.as_ref()));
+    if let Some(diagnostic) = history_load.diagnostic {
+        state.push_diagnostic(diagnostic);
+    }
     if let Some(runtime) = runtime.as_ref() {
-        completion.set_user_skills(
+        input.set_user_skills(
             runtime
                 .skills
                 .values()
@@ -265,6 +275,9 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     let event_loop = async {
         let mut exit = false;
         while !exit {
+            for diagnostic in prompt_history.drain_ready().await {
+                state.push_diagnostic(diagnostic);
+            }
             drain_updates(&mut state, runtime.as_mut(), active.as_mut(), &mut controls);
             drain_callback_requests(runtime.as_mut(), &mut state, &mut controls);
             finish_active(&mut state, &mut controls, &mut runtime, &mut active).await?;
@@ -277,9 +290,18 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                 &mut controls,
             )
             .await?;
-            if let Err(error) = completion.poll() {
-                completion.cancel();
-                state.push_diagnostic(error.to_string());
+            if let Err(error) = input.poll_completion() {
+                let generation = input.completion().generation();
+                let effects = input.apply(InputEvent::CompletionFailed {
+                    generation,
+                    reason: error.to_string(),
+                });
+                apply_composer_effects(
+                    &mut input,
+                    effects,
+                    &working_directory,
+                    &mut state,
+                );
             }
             let runtime_view = runtime.as_ref();
             let agent_name =
@@ -304,8 +326,9 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                     draw(
                         frame,
                         &mut state,
-                        &editor,
-                        &completion,
+                        input.editor(),
+                        input.completion(),
+                        input.mode(),
                         theme,
                         UiContext {
                             cwd: &working_directory,
@@ -361,8 +384,8 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                                 &mut active,
                                 &mut state,
                                 &mut controls,
-                                &mut editor,
-                                &mut completion,
+                                &mut prompt_history,
+                                &mut input,
                                 &mut setup_flow,
                                 &mut secret_input,
                                 &mut theme,
@@ -423,6 +446,9 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     let restoration = terminal_guard
         .restore()
         .map_err(|error| CliError::Terminal(error.to_string()));
+    for diagnostic in prompt_history.finish().await {
+        eprintln!("{diagnostic}");
+    }
     let interrupt_result =
         if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_ref()) {
             runtime
@@ -493,8 +519,8 @@ async fn handle_terminal_event(
     active: &mut Option<ActiveTurn>,
     state: &mut TuiState,
     controls: &mut ControlState,
-    editor: &mut PromptEditor,
-    completion: &mut CompletionEngine,
+    prompt_history: &mut PromptHistory,
+    input: &mut ChatInputState,
     setup_flow: &mut Option<SetupFlow>,
     secret_input: &mut bool,
     theme: &mut ResolvedTheme,
@@ -502,13 +528,17 @@ async fn handle_terminal_event(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<bool, CliError> {
     match event {
-        Event::Resize(width, height) => state.resize(width, height),
+        Event::Resize(width, height) => {
+            state.resize(width, height);
+            apply_composer_event(
+                input,
+                InputEvent::Resize { width, height },
+                working_directory,
+                state,
+            );
+        }
         Event::Paste(text) => {
-            let text = normalize_pasted_text(working_directory, &text);
-            if let Err(error) = editor.paste(&text) {
-                state.push_diagnostic(error.to_string());
-            }
-            refresh_completion(completion, editor, working_directory, *secret_input, state);
+            apply_composer_event(input, InputEvent::Paste { text }, working_directory, state);
         }
         Event::Mouse(mouse) => match mouse.kind {
             MouseEventKind::ScrollUp => {
@@ -517,6 +547,30 @@ async fn handle_terminal_event(
             }
             MouseEventKind::ScrollDown => {
                 state.scroll_down(3);
+            }
+            MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Drag(MouseButton::Left) => {
+                let screen = Rect::new(0, 0, state.viewport.0, state.viewport.1);
+                if let Some((row, column, width)) = self::render::editor_mouse_cell(
+                    input.editor(),
+                    screen,
+                    *secret_input,
+                    input.mode(),
+                    mouse.column,
+                    mouse.row,
+                ) {
+                    let extend_selection = matches!(mouse.kind, MouseEventKind::Drag(_));
+                    input.set_content_width(width);
+                    apply_composer_event(
+                        input,
+                        InputEvent::Mouse {
+                            x: u16::try_from(column).unwrap_or(u16::MAX),
+                            y: u16::try_from(row).unwrap_or(u16::MAX),
+                            extend_selection,
+                        },
+                        working_directory,
+                        state,
+                    );
+                }
             }
             _ => {}
         },
@@ -530,8 +584,8 @@ async fn handle_terminal_event(
                 active,
                 state,
                 controls,
-                editor,
-                completion,
+                prompt_history,
+                input,
                 setup_flow,
                 secret_input,
                 theme,
@@ -543,6 +597,93 @@ async fn handle_terminal_event(
         Event::FocusGained | Event::FocusLost | Event::Key(_) => {}
     }
     Ok(false)
+}
+
+fn teleport_available(runtime: Option<&InteractiveRuntime>) -> bool {
+    runtime.is_some_and(|runtime| runtime.vibe_code_enabled)
+}
+
+fn apply_composer_event(
+    input: &mut ChatInputState,
+    event: InputEvent,
+    working_directory: &Path,
+    state: &mut TuiState,
+) -> Vec<InputEffect> {
+    let effects = input.apply(event);
+    apply_composer_effects(input, effects, working_directory, state)
+}
+
+fn apply_composer_effects(
+    input: &mut ChatInputState,
+    effects: Vec<InputEffect>,
+    working_directory: &Path,
+    state: &mut TuiState,
+) -> Vec<InputEffect> {
+    let mut pending = VecDeque::from(effects);
+    let mut application_effects = Vec::new();
+    while let Some(effect) = pending.pop_front() {
+        match effect {
+            InputEffect::RequestCompletion {
+                generation,
+                query,
+                range,
+            } => {
+                if let Err(error) =
+                    input.dispatch_completion_request(generation, query, range, working_directory)
+                {
+                    pending.extend(input.apply(InputEvent::CompletionFailed {
+                        generation,
+                        reason: error.to_string(),
+                    }));
+                }
+            }
+            InputEffect::NormalizePastedPath { text } => {
+                let text = normalize_pasted_text(working_directory, &text);
+                pending.extend(input.apply(InputEvent::PasteNormalized { text }));
+            }
+            InputEffect::Notify { message, .. } | InputEffect::Rejected { reason: message } => {
+                state.push_diagnostic(message);
+            }
+            effect => application_effects.push(effect),
+        }
+    }
+    application_effects
+}
+
+fn normalized_input_event(key: KeyEvent) -> Option<InputEvent> {
+    let (key_name, character) = match key.code {
+        KeyCode::Esc => (KeyName::Escape, None),
+        KeyCode::Enter => (KeyName::Enter, None),
+        KeyCode::Backspace => (KeyName::Backspace, None),
+        KeyCode::Delete => (KeyName::Delete, None),
+        KeyCode::Left => (KeyName::Left, None),
+        KeyCode::Right => (KeyName::Right, None),
+        KeyCode::Up => (KeyName::Up, None),
+        KeyCode::Down => (KeyName::Down, None),
+        KeyCode::Home => (KeyName::Home, None),
+        KeyCode::End => (KeyName::End, None),
+        KeyCode::PageUp => (KeyName::PageUp, None),
+        KeyCode::PageDown => (KeyName::PageDown, None),
+        KeyCode::Tab => (KeyName::Tab, None),
+        KeyCode::BackTab => (KeyName::Backtab, None),
+        KeyCode::Char(character) => (KeyName::Char, Some(character)),
+        _ => return None,
+    };
+    let mut mods = Vec::new();
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        mods.push(Modifier::Ctrl);
+    }
+    if key.modifiers.contains(KeyModifiers::SHIFT) {
+        mods.push(Modifier::Shift);
+    }
+    if key.modifiers.contains(KeyModifiers::ALT) {
+        mods.push(Modifier::Alt);
+    }
+    Some(InputEvent::Key {
+        key: key_name,
+        char: character,
+        mods,
+    })
 }
 
 fn start_active_turn(
@@ -726,50 +867,44 @@ async fn handle_key(
     active: &mut Option<ActiveTurn>,
     state: &mut TuiState,
     controls: &mut ControlState,
-    editor: &mut PromptEditor,
-    completion: &mut CompletionEngine,
+    prompt_history: &mut PromptHistory,
+    input: &mut ChatInputState,
     setup_flow: &mut Option<SetupFlow>,
     secret_input: &mut bool,
     theme: &mut ResolvedTheme,
     terminal_guard: &mut TerminalGuard<CrosstermOps<std::io::Stdout>>,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<bool, CliError> {
-    if handle_overlay_key(key, runtime, state, controls, editor, theme) {
-        completion.cancel();
+    input.set_secret_input(*secret_input);
+    input.set_teleport_available(teleport_available(runtime.as_ref()));
+    if handle_overlay_key(key, runtime, state, controls, input, theme) {
+        let effects = input.refresh_after_adapter_mutation();
+        apply_composer_effects(input, effects, working_directory, state);
         return Ok(false);
     }
     if key.code != KeyCode::Esc {
         state.rewind_confirmation.cancel();
     }
-    if !*secret_input && let Some(completion_key) = completion_key(key) {
-        match completion.handle_key(completion_key, editor) {
-            // `Submit` falls through to the Enter arm below, which owns
-            // dispatching the accepted command.
-            Ok(CompletionKeyOutcome::Submit | CompletionKeyOutcome::Ignored) => {}
-            Ok(CompletionKeyOutcome::Consumed) => return Ok(false),
-            Err(error) => {
-                state.push_diagnostic(error.to_string());
-                return Ok(false);
-            }
-        }
-    }
     if key.code == KeyCode::BackTab
         || (key.code == KeyCode::Tab && key.modifiers.contains(KeyModifiers::SHIFT))
     {
-        completion.cancel();
+        if let Some(event) = normalized_input_event(key) {
+            apply_composer_event(input, event, working_directory, state);
+        }
         cycle_agent(runtime, state);
         return Ok(false);
     }
     if key.modifiers.contains(KeyModifiers::CONTROL) {
-        completion.cancel();
         match key.code {
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                copy_prompt_selection(editor, state);
+                copy_prompt_selection(input.editor(), state);
                 return Ok(false);
             }
             KeyCode::Char('c') => {
-                if !editor.text().is_empty() {
-                    editor.set_text("");
+                if !input.editor().text().is_empty() {
+                    if let Some(event) = normalized_input_event(key) {
+                        apply_composer_event(input, event, working_directory, state);
+                    }
                     state.quit_confirmation.cancel();
                     return Ok(false);
                 }
@@ -806,9 +941,10 @@ async fn handle_key(
                 return Ok(false);
             }
             KeyCode::Char('d') => {
-                if !editor.text().is_empty() {
-                    editor.delete_forward();
-                    refresh_completion(completion, editor, working_directory, *secret_input, state);
+                if !input.editor().text().is_empty() {
+                    if let Some(event) = normalized_input_event(key) {
+                        apply_composer_event(input, event, working_directory, state);
+                    }
                     return Ok(false);
                 }
                 if state.quit_confirmation.request("Ctrl+D", unix_millis()) {
@@ -827,7 +963,7 @@ async fn handle_key(
                 return Ok(false);
             }
             KeyCode::Char('y') => {
-                copy_prompt_selection(editor, state);
+                copy_prompt_selection(input.editor(), state);
                 return Ok(false);
             }
             KeyCode::Char('g') => {
@@ -835,11 +971,21 @@ async fn handle_key(
                     state.push_diagnostic("External editing is disabled while entering a secret");
                     return Ok(false);
                 }
+                let Some(event) = normalized_input_event(key) else {
+                    return Ok(false);
+                };
+                let effects = apply_composer_event(input, event, working_directory, state);
+                let Some(text) = effects.into_iter().find_map(|effect| match effect {
+                    InputEffect::OpenExternalEditor { text } => Some(text),
+                    _ => None,
+                }) else {
+                    return Ok(false);
+                };
                 terminal_guard
                     .restore()
                     .map_err(|error| CliError::Terminal(error.to_string()))?;
                 let mut external = SystemExternalEditor::from_environment();
-                let edited = ExternalEditorPort::edit(&mut external, editor.text());
+                let edited = ExternalEditorPort::edit(&mut external, &text);
                 terminal_guard
                     .resume()
                     .map_err(|error| CliError::Terminal(error.to_string()))?;
@@ -847,18 +993,25 @@ async fn handle_key(
                     .clear()
                     .map_err(|error| CliError::Terminal(error.to_string()))?;
                 match edited {
-                    Ok(edited) => editor.set_text(edited),
+                    Ok(edited) => {
+                        apply_composer_event(
+                            input,
+                            InputEvent::ExternalEditor { text: Some(edited) },
+                            working_directory,
+                            state,
+                        );
+                    }
                     Err(error) => state.push_diagnostic(error),
                 }
-                refresh_completion(completion, editor, working_directory, *secret_input, state);
                 return Ok(false);
             }
-            KeyCode::Char('a') => editor.move_home(false),
-            KeyCode::Char('e') => editor.move_end(false),
-            KeyCode::Char('j') => editor.insert("\n"),
+            KeyCode::Char('a' | 'e' | 'j') => {
+                if let Some(event) = normalized_input_event(key) {
+                    apply_composer_event(input, event, working_directory, state);
+                }
+            }
             _ => {}
         }
-        refresh_completion(completion, editor, working_directory, *secret_input, state);
         return Ok(false);
     }
     match key.code {
@@ -881,8 +1034,10 @@ async fn handle_key(
                 state.push_diagnostic(
                     "Queued prompts paused; press Enter on an empty prompt to resume",
                 );
-            } else if !editor.text().is_empty() {
-                editor.set_text("");
+            } else if !input.editor().text().is_empty() {
+                if let Some(event) = normalized_input_event(key) {
+                    apply_composer_event(input, event, working_directory, state);
+                }
                 state.rewind_confirmation.cancel();
             } else if state.rewind_confirmation.request("Esc", unix_millis())
                 && let Some(runtime) = runtime.as_mut()
@@ -890,19 +1045,41 @@ async fn handle_key(
                 show_rewind(runtime, state);
             }
         }
-        KeyCode::Enter if key.modifiers.contains(KeyModifiers::SHIFT) => editor.insert("\n"),
+        KeyCode::Enter if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            if let Some(event) = normalized_input_event(key) {
+                apply_composer_event(input, event, working_directory, state);
+            }
+        }
         KeyCode::Enter => {
-            if resume_paused_queue(editor, state) {
+            if resume_paused_queue(input.editor(), state) {
                 return Ok(false);
             }
+            let record_history = setup_flow.is_none() && !*secret_input;
             let submitted = if setup_flow.is_some() || *secret_input {
-                editor.take_unrecorded()
+                let submitted = input.take_unrecorded();
+                let effects = input.refresh_after_adapter_mutation();
+                apply_composer_effects(input, effects, working_directory, state);
+                submitted
             } else {
-                editor.submit()
+                let Some(event) = normalized_input_event(key) else {
+                    return Ok(false);
+                };
+                let effects = apply_composer_event(input, event, working_directory, state);
+                for entry in effects.iter().filter_map(|effect| match effect {
+                    InputEffect::RecordHistory { entry } => Some(entry),
+                    _ => None,
+                }) {
+                    prompt_history.persist(entry.clone());
+                }
+                effects.into_iter().find_map(|effect| match effect {
+                    InputEffect::Submit { text } if !text.is_empty() => Some(text),
+                    _ => None,
+                })
             };
             let Some(submitted) = submitted else {
                 return Ok(false);
             };
+            debug_assert!(!record_history || input.editor().text().is_empty());
             if let Some(setup) = setup_flow.as_mut() {
                 match setup
                     .submit(submitted.as_str(), credential_store)
@@ -913,10 +1090,12 @@ async fn handle_key(
                         secret_input: next_secret_input,
                     }) => {
                         *secret_input = next_secret_input;
+                        input.set_secret_input(next_secret_input);
                         push_local_notice(state, &prompt, EntryStatus::Completed);
                     }
                     Ok(SetupProgress::Complete(setup_completion)) => {
                         *secret_input = false;
+                        input.set_secret_input(false);
                         persist_setup(arguments, working_directory, &setup_completion)?;
                         if arguments.setup {
                             push_local_notice(
@@ -945,7 +1124,8 @@ async fn handle_key(
                         configured.trust = setup_completion.resources.workspace_trusted;
                         *runtime = Some(start_runtime(&configured, working_directory, credential)?);
                         if let Some(runtime) = runtime.as_ref() {
-                            completion.set_user_skills(
+                            input.set_teleport_available(teleport_available(Some(runtime)));
+                            input.set_user_skills(
                                 runtime
                                     .skills
                                     .values()
@@ -1001,7 +1181,9 @@ async fn handle_key(
                         respond_to_pending_callback(runtime, controls, &pending, choice, state);
                     }
                     Err(error) => {
-                        editor.set_text(submitted);
+                        input.replace_text(submitted);
+                        let effects = input.refresh_after_adapter_mutation();
+                        apply_composer_effects(input, effects, working_directory, state);
                         state.push_diagnostic(error);
                     }
                 }
@@ -1010,20 +1192,21 @@ async fn handle_key(
             if is_exit_command(&submitted) {
                 return Ok(true);
             }
-            match dispatch_command(
+            let command_action = dispatch_command(
                 &submitted,
                 arguments,
                 working_directory,
                 runtime,
                 state,
                 controls,
-                editor,
-                completion,
+                input,
                 theme,
                 active.is_some(),
             )
-            .await?
-            {
+            .await?;
+            let effects = input.refresh_after_adapter_mutation();
+            apply_composer_effects(input, effects, working_directory, state);
+            match command_action {
                 CommandAction::Exit => return Ok(true),
                 CommandAction::Setup => {
                     if active.is_some() {
@@ -1036,6 +1219,7 @@ async fn handle_key(
                     push_local_notice(state, &setup.prompt(), EntryStatus::Completed);
                     *setup_flow = Some(setup);
                     *secret_input = false;
+                    input.set_secret_input(false);
                 }
                 CommandAction::Handled => {}
                 CommandAction::Runtime(command) => {
@@ -1077,15 +1261,32 @@ async fn handle_key(
                         )
                         .await?
                         {
-                            editor.set_text(submitted);
+                            input.replace_text(submitted);
+                            let effects = input.refresh_after_adapter_mutation();
+                            apply_composer_effects(input, effects, working_directory, state);
                         }
                     } else {
-                        editor.set_text(&submitted);
+                        input.replace_text(&submitted);
+                        let effects = input.refresh_after_adapter_mutation();
+                        apply_composer_effects(input, effects, working_directory, state);
                         state.push_diagnostic(format!("Unknown command `{submitted}`"));
                     }
                 }
                 CommandAction::Unhandled if submitted.trim() == "!" => {
                     state.push_diagnostic("No command provided after '!'");
+                }
+                CommandAction::Unhandled
+                    if submitted.starts_with('&') && teleport_available(runtime.as_ref()) =>
+                {
+                    if let Some(runtime) = runtime.as_mut() {
+                        handle_teleport_command(
+                            submitted.trim_start_matches('&').trim(),
+                            working_directory,
+                            runtime,
+                            state,
+                        )
+                        .await;
+                    }
                 }
                 CommandAction::Unhandled
                     if active.is_some()
@@ -1102,7 +1303,9 @@ async fn handle_key(
                 }
                 CommandAction::Unhandled if submitted.trim_start().starts_with('!') => {
                     if !start_shell(&submitted, runtime, state).await? {
-                        editor.set_text(submitted);
+                        input.replace_text(submitted);
+                        let effects = input.refresh_after_adapter_mutation();
+                        apply_composer_effects(input, effects, working_directory, state);
                     }
                 }
                 CommandAction::Unhandled => {
@@ -1116,19 +1319,13 @@ async fn handle_key(
                     )
                     .await?
                     {
-                        editor.set_text(submitted);
+                        input.replace_text(submitted);
+                        let effects = input.refresh_after_adapter_mutation();
+                        apply_composer_effects(input, effects, working_directory, state);
                     }
                 }
             }
         }
-        KeyCode::Backspace => editor.delete_backward(),
-        KeyCode::Delete => editor.delete_forward(),
-        KeyCode::Left => editor.move_left(key.modifiers.contains(KeyModifiers::SHIFT)),
-        KeyCode::Right => editor.move_right(key.modifiers.contains(KeyModifiers::SHIFT)),
-        KeyCode::Home => editor.move_home(key.modifiers.contains(KeyModifiers::SHIFT)),
-        KeyCode::End => editor.move_end(key.modifiers.contains(KeyModifiers::SHIFT)),
-        KeyCode::Up => editor.history_previous(),
-        KeyCode::Down => editor.history_next(),
         KeyCode::PageUp => {
             state.scroll_up(10);
             page_older_history(runtime.as_mut(), state);
@@ -1137,54 +1334,29 @@ async fn handle_key(
             state.scroll_down(10);
         }
         KeyCode::Tab if !*secret_input => {
-            refresh_completion(completion, editor, working_directory, false, state);
-            if completion.view().is_some()
-                && let Err(error) = completion.accept(editor)
-            {
-                completion.cancel();
-                state.push_diagnostic(error.to_string());
+            if let Some(event) = normalized_input_event(key) {
+                apply_composer_event(input, event, working_directory, state);
             }
         }
         KeyCode::Tab => {
             state.push_diagnostic("Completion is disabled while entering a secret");
         }
-        KeyCode::Char(character) => editor.insert(&character.to_string()),
+        KeyCode::Backspace
+        | KeyCode::Delete
+        | KeyCode::Left
+        | KeyCode::Right
+        | KeyCode::Home
+        | KeyCode::End
+        | KeyCode::Up
+        | KeyCode::Down
+        | KeyCode::Char(_) => {
+            if let Some(event) = normalized_input_event(key) {
+                apply_composer_event(input, event, working_directory, state);
+            }
+        }
         _ => {}
     }
-    refresh_completion(completion, editor, working_directory, *secret_input, state);
     Ok(false)
-}
-
-/// Maps a terminal key onto the popup vocabulary, honouring the modifier rules.
-///
-/// Escape dismisses whatever the modifiers are; the navigation and acceptance
-/// keys only reach the popup unmodified.
-fn completion_key(key: KeyEvent) -> Option<CompletionKey> {
-    match key.code {
-        KeyCode::Esc => Some(CompletionKey::Escape),
-        KeyCode::Up if key.modifiers.is_empty() => Some(CompletionKey::Up),
-        KeyCode::Down if key.modifiers.is_empty() => Some(CompletionKey::Down),
-        KeyCode::Tab if key.modifiers.is_empty() => Some(CompletionKey::Tab),
-        KeyCode::Enter if key.modifiers.is_empty() => Some(CompletionKey::Enter),
-        _ => None,
-    }
-}
-
-fn refresh_completion(
-    completion: &mut CompletionEngine,
-    editor: &PromptEditor,
-    working_directory: &Path,
-    secret_input: bool,
-    state: &mut TuiState,
-) {
-    if secret_input {
-        completion.cancel();
-        return;
-    }
-    if let Err(error) = completion.refresh(editor, working_directory) {
-        completion.cancel();
-        state.push_diagnostic(error.to_string());
-    }
 }
 
 async fn handle_runtime_command(
@@ -2523,6 +2695,7 @@ fn start_runtime(
         context_tokens: 0,
         context_window: arguments.max_tokens.unwrap_or(DEFAULT_CONTEXT_WINDOW),
         auto_approve: session.intent.auto_approve,
+        vibe_code_enabled: preferences.vibe_code_enabled,
         clear_context_after_turn: false,
         skills,
         shell: None,
@@ -2656,24 +2829,14 @@ struct StartupPreferences {
     mode: String,
     thinking: bool,
     reasoning_effort: Option<String>,
+    vibe_code_enabled: bool,
 }
 
 fn release3_service(
     arguments: &Arguments,
     working_directory: &Path,
 ) -> Result<Release3Service, CliError> {
-    let vibe_home = arguments
-        .session_root
-        .as_deref()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .or_else(|| std::env::var_os("VIBE_HOME").map(Into::into))
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(std::path::PathBuf::from)
-                .map(|path| path.join(".vibe"))
-        })
-        .unwrap_or_else(|| working_directory.join(".vibe"));
+    let vibe_home = vibe_home_directory(arguments, working_directory);
     let session_root = arguments
         .session_root
         .clone()
@@ -2689,6 +2852,21 @@ fn release3_service(
     )
     .map(Release3Service::with_runtime_session_persistence)
     .map_err(|error| CliError::Terminal(error.to_string()))
+}
+
+fn vibe_home_directory(arguments: &Arguments, working_directory: &Path) -> std::path::PathBuf {
+    arguments
+        .session_root
+        .as_deref()
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+        .or_else(|| std::env::var_os("VIBE_HOME").map(Into::into))
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(std::path::PathBuf::from)
+                .map(|path| path.join(".vibe"))
+        })
+        .unwrap_or_else(|| working_directory.join(".vibe"))
 }
 
 fn startup_preferences(
@@ -2730,6 +2908,14 @@ fn startup_preferences(
         mode,
         thinking: reasoning_effort.is_some(),
         reasoning_effort,
+        vibe_code_enabled: config
+            .and_then(|config| {
+                config
+                    .get("vibe_code_enabled")
+                    .or_else(|| config.get("vibeCodeEnabled"))
+            })
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
     })
 }
 
@@ -3493,12 +3679,69 @@ mod tests {
             context_tokens: 0,
             context_window: DEFAULT_CONTEXT_WINDOW,
             auto_approve: true,
+            vibe_code_enabled: true,
             clear_context_after_turn: false,
             skills: BTreeMap::new(),
             shell: None,
             cloud: CloudWorkflowState::default(),
             telemetry: None,
         }
+    }
+
+    #[test]
+    fn production_adapter_routes_keys_completion_and_mouse_through_chat_input_state() {
+        let temporary = tempfile::tempdir().expect("workspace");
+        let mut state = TuiState::new("session");
+        let mut input = ChatInputState::new();
+
+        for character in "select me".chars() {
+            let event =
+                normalized_input_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE))
+                    .expect("character is normalised");
+            apply_composer_event(&mut input, event, temporary.path(), &mut state);
+        }
+        apply_composer_event(
+            &mut input,
+            InputEvent::Mouse {
+                x: 2,
+                y: 0,
+                extend_selection: false,
+            },
+            temporary.path(),
+            &mut state,
+        );
+        apply_composer_event(
+            &mut input,
+            InputEvent::Mouse {
+                x: 7,
+                y: 0,
+                extend_selection: true,
+            },
+            temporary.path(),
+            &mut state,
+        );
+        assert_eq!(input.observe().selection, Some([2, 7]));
+
+        let mut external = ChatInputState::new();
+        apply_composer_event(
+            &mut external,
+            InputEvent::ExternalEditor {
+                text: Some("/c".to_owned()),
+            },
+            temporary.path(),
+            &mut state,
+        );
+        assert_eq!(external.mode(), chat_input::InputMode::Prompt);
+        assert!(external.completion().view().is_some());
+    }
+
+    #[test]
+    fn teleport_mode_uses_runtime_capability_instead_of_runtime_presence() {
+        let mut runtime = interactive_test_runtime("teleport-capability-session");
+        assert!(teleport_available(Some(&runtime)));
+        runtime.vibe_code_enabled = false;
+        assert!(!teleport_available(Some(&runtime)));
+        assert!(!teleport_available(None));
     }
 
     #[test]

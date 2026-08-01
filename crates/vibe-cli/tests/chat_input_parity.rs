@@ -27,10 +27,10 @@ use vibe_cli::tui::input::{CompletionCandidate, CompletionKind, normalize_pasted
 const SCHEMA_VERSION: u32 = 1;
 const MAX_EFFECT_ROUNDS: usize = 8;
 /// Recorded in the corpus but not compared yet, with the story that closes it.
-const DEFERRED_DIMENSIONS: &[(&str, &str)] = &[
-    ("render", "US-018 renders the composer viewport"),
-    ("history", "US-006 persists prompt history"),
-];
+const DEFERRED_DIMENSIONS: &[(&str, &str)] = &[(
+    "render",
+    "US-018 closes non-composer viewport rendering after EP-002",
+)];
 /// Placeholder the oracle substitutes for the recording workspace path.
 const WORKSPACE_PLACEHOLDER: &str = "__WORKSPACE__";
 /// Fields the reference records inside `state` that Rust does not model yet.
@@ -40,15 +40,15 @@ const WORKSPACE_PLACEHOLDER: &str = "__WORKSPACE__";
 /// corpus. Each entry names the story that supplies the missing state; the
 /// entry is removed when that story lands, turning the field into a real
 /// assertion.
-const UNMODELLED_STATE_PATHS: &[(&str, &str)] = &[
-    (
-        "history.loadedEntry",
-        "US-007 tracks the recalled-entry marker",
-    ),
-    (
-        "history.cursorMovedSinceLoad",
-        "US-007 tracks post-recall cursor movement",
-    ),
+const UNMODELLED_STATE_PATHS: &[(&str, &str)] = &[];
+/// EP-002 mode traces open slash completion, but the candidate registry and
+/// ranking are owned by US-008/US-009. Keep only that nested field deferred in
+/// those traces so mode state can certify independently of EP-003.
+const MODE_TRACES_WITH_DEFERRED_COMMAND_CANDIDATES: &[&str] = &[
+    "external-editor-refreshes-completion",
+    "mode-backspace-keeps-text",
+    "mode-backspace-resets",
+    "modes-slash-prefix",
 ];
 const OBSERVABLE_EFFECTS: &[&str] = &[
     "submitRequested",
@@ -364,8 +364,21 @@ impl Replay {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
+        let mut state = ChatInputState::new();
+        if let Some(width) = setup.pointer("/viewport/width").and_then(Value::as_u64)
+            && let Ok(width) = u16::try_from(width)
+        {
+            state.set_viewport_width(width);
+        }
+        state.set_teleport_available(
+            setup
+                .pointer("/commands/vibeCodeEnabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        );
+        state.replace_history(setup_history(setup));
         Self {
-            state: ChatInputState::new(),
+            state,
             workspace,
             skills,
         }
@@ -440,13 +453,35 @@ impl Replay {
     }
 }
 
+fn setup_history(setup: &Value) -> Vec<String> {
+    if let Some(entries) = setup.pointer("/history/entries").and_then(Value::as_array) {
+        return entries
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect();
+    }
+    setup
+        .pointer("/history/raw")
+        .and_then(Value::as_str)
+        .map(|raw| {
+            raw.lines()
+                .filter(|line| !line.is_empty())
+                .map(|line| {
+                    serde_json::from_str::<String>(line).unwrap_or_else(|_| line.to_owned())
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn decode_event(raw: &Value) -> Result<InputEvent, String> {
     let kind = raw
         .get("type")
         .and_then(Value::as_str)
         .ok_or_else(|| format!("event without a type: {raw}"))?;
     match kind {
-        "key" | "paste" | "resize" | "transcript" | "switching" | "feedback" => {
+        "key" | "paste" | "resize" | "mouse" | "transcript" | "switching" | "feedback" => {
             serde_json::from_value(rename_event(raw, kind)).map_err(|error| {
                 format!("event `{kind}` cannot be decoded by this runner: {error} ({raw})")
             })
@@ -498,6 +533,31 @@ fn strip_unmodelled_state(state: &mut Value) {
             cursor = next;
         }
     }
+}
+
+fn strip_trace_deferred_state(trace_id: &str, state: &mut Value) {
+    if MODE_TRACES_WITH_DEFERRED_COMMAND_CANDIDATES.contains(&trace_id)
+        && let Some(completion) = state.get_mut("completion").and_then(Value::as_object_mut)
+    {
+        completion.remove("items");
+    }
+}
+
+fn is_ep002_story(trace: &Map<String, Value>) -> bool {
+    matches!(
+        trace.get("story").and_then(Value::as_str),
+        Some("US-004" | "US-005" | "US-006" | "US-007")
+    )
+}
+
+fn composer_render_projection(render: &Value) -> Value {
+    let mut projection = Map::new();
+    for field in ["cursorCell", "prompt", "visualLines", "wrapWidth"] {
+        if let Some(value) = render.get(field) {
+            projection.insert(field.to_owned(), value.clone());
+        }
+    }
+    Value::Object(projection)
 }
 
 /// Rewrites the recorded workspace placeholder to this run's temporary path.
@@ -553,11 +613,7 @@ fn first_difference(
         }
         (Value::Array(expected_items), Value::Array(actual_items)) => {
             if expected_items.len() != actual_items.len() {
-                return Some((
-                    format!("{path}.length"),
-                    json!(expected_items.len()),
-                    json!(actual_items.len()),
-                ));
+                return Some((path.to_owned(), expected.clone(), actual.clone()));
             }
             for (index, (expected_item, actual_item)) in
                 expected_items.iter().zip(actual_items).enumerate()
@@ -710,11 +766,13 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
         for (index, (raw_event, observation)) in events.iter().zip(observations).enumerate() {
             let event = decode_event(raw_event)?;
             let effects = replay.step(event)?;
-            let state = serde_json::to_value(replay.state.observe())
+            let mut state = serde_json::to_value(replay.state.observe())
                 .map_err(|error| format!("state does not serialize: {error}"))?;
 
             let mut expected_state = observation.get("state").cloned().unwrap_or(Value::Null);
             strip_unmodelled_state(&mut expected_state);
+            strip_trace_deferred_state(&entry.id, &mut expected_state);
+            strip_trace_deferred_state(&entry.id, &mut state);
             if observed.get("state").is_none_or(Option::is_none)
                 && let Some(divergence) = compare("state", Some(index), &expected_state, &state)
             {
@@ -735,6 +793,33 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
             {
                 observed.insert("effects", Some(divergence));
             }
+
+            if observation.get("history").is_some()
+                && observed.get("history").is_none_or(Option::is_none)
+                && let Some(divergence) = compare(
+                    "history",
+                    Some(index),
+                    observation.get("history").unwrap_or(&Value::Null),
+                    &json!(replay.state.history_entries()),
+                )
+            {
+                observed.insert("history", Some(divergence));
+            }
+
+            if is_ep002_story(object)
+                && let Some(expected_render) = observation.get("render")
+            {
+                let expected_render = composer_render_projection(expected_render);
+                let actual_render = serde_json::to_value(replay.state.observe_render())
+                    .map_err(|error| format!("render observation does not serialize: {error}"))?;
+                observed.entry("render").or_insert(None);
+                if observed.get("render").is_none_or(Option::is_none)
+                    && let Some(divergence) =
+                        compare("render", Some(index), &expected_render, &actual_render)
+                {
+                    observed.insert("render", Some(divergence));
+                }
+            }
         }
 
         if calibrating {
@@ -744,6 +829,7 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
                 // observation for it, so it has nothing to calibrate against.
                 if let Some(status) = declared.get(*dimension)
                     && status == "deferred"
+                    && !observed.contains_key(dimension)
                 {
                     dimensions.insert((*dimension).to_owned(), status.clone());
                     continue;
@@ -848,7 +934,7 @@ fn schema_version_mismatch_fails_the_trace() {
 
 #[test]
 fn unsupported_events_fail_instead_of_being_skipped() {
-    let error = decode_event(&json!({"type": "mouse", "x": 1, "y": 2}))
+    let error = decode_event(&json!({"type": "gesture", "x": 1, "y": 2}))
         .expect_err("an unreplayable event must fail");
     assert!(error.contains("cannot replay"), "{error}");
     let error = decode_event(&json!({"type": "key", "key": "f13", "mods": []}))
@@ -885,7 +971,7 @@ fn the_workspace_placeholder_is_substituted_on_both_sides() {
 }
 
 #[test]
-fn unmodelled_state_fields_are_dropped_without_touching_the_rest() {
+fn modelled_state_fields_are_not_dropped() {
     let mut state = json!({
         "text": "draft",
         "history": {"navigating": true, "loadedEntry": true, "cursorMovedSinceLoad": false},
@@ -893,8 +979,33 @@ fn unmodelled_state_fields_are_dropped_without_touching_the_rest() {
     strip_unmodelled_state(&mut state);
     assert_eq!(
         state,
-        json!({"text": "draft", "history": {"navigating": true}})
+        json!({
+            "text": "draft",
+            "history": {
+                "navigating": true,
+                "loadedEntry": true,
+                "cursorMovedSinceLoad": false
+            }
+        })
     );
+}
+
+#[test]
+fn mode_traces_defer_only_ep003_command_candidates() {
+    let mut mode_state = json!({
+        "text": "/",
+        "mode": "/",
+        "completion": {"open": true, "kind": "slash", "items": [{"label": "/help"}]}
+    });
+    strip_trace_deferred_state("modes-slash-prefix", &mut mode_state);
+    assert_eq!(
+        mode_state,
+        json!({"text": "/", "mode": "/", "completion": {"open": true, "kind": "slash"}})
+    );
+
+    let mut ranking_state = json!({"completion": {"items": [{"label": "/help"}]}});
+    strip_trace_deferred_state("slash-ranking-empty-boosts", &mut ranking_state);
+    assert!(ranking_state.pointer("/completion/items").is_some());
 }
 
 /// The composer must answer for every state field the runner still compares.

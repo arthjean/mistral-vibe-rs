@@ -10,7 +10,11 @@ use unicode_width::UnicodeWidthStr;
 
 mod markdown;
 
-use super::input::{CompletionEngine, PromptEditor, completion_description};
+use super::chat_input::InputMode;
+use super::input::{
+    CompletionEngine, PromptEditor, completion_description, composer_content_width,
+    visual_cursor_cell, visual_lines,
+};
 use super::setup::{ResolvedTheme, Theme};
 use super::state::{EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
 use markdown::markdown_lines;
@@ -75,6 +79,7 @@ pub fn draw(
     state: &mut TuiState,
     editor: &PromptEditor,
     completion: &CompletionEngine,
+    input_mode: InputMode,
     theme: ResolvedTheme,
     context: UiContext<'_>,
 ) {
@@ -85,7 +90,7 @@ pub fn draw(
             .min(COMPLETION_MAX_HEIGHT)
     });
     let activity_height = u16::from(activity_text(state).is_some());
-    let input_height = composer_height(editor, frame.area(), context.secret_input);
+    let input_height = composer_height(editor, frame.area(), context.secret_input, input_mode);
     let completion_height = requested_completion_height.min(
         frame
             .area()
@@ -111,7 +116,7 @@ pub fn draw(
     draw_transcript(frame, transcript_area, state, theme, context.banner);
     draw_activity(frame, activity_area, state, theme);
     draw_completion(frame, completion_area, completion, theme);
-    draw_input(frame, input_area, editor, theme, context);
+    draw_input(frame, input_area, editor, input_mode, theme, context);
     draw_footer(frame, footer_area, context.cwd, context.tokens, theme);
     if let Some(overlay) = &state.overlay {
         draw_overlay(frame, overlay, theme);
@@ -209,41 +214,26 @@ fn draw_overlay(
     );
 }
 
-fn composer_height(editor: &PromptEditor, area: Rect, secret_input: bool) -> u16 {
-    let input_width = area.width.saturating_sub(COMPOSER_PROMPT_WIDTH).max(1);
-    let body_height = editor_visual_height(editor, secret_input, input_width)
+fn composer_height(
+    editor: &PromptEditor,
+    area: Rect,
+    secret_input: bool,
+    input_mode: InputMode,
+) -> u16 {
+    let input_width = composer_content_width(area.width);
+    let body_height = editor_visual_height(editor, secret_input, input_mode, input_width)
         .max(COMPOSER_MIN_BODY_HEIGHT)
         .min(area.height.saturating_div(2).max(COMPOSER_MIN_BODY_HEIGHT));
     body_height.saturating_add(COMPOSER_CHROME_HEIGHT)
 }
 
-fn editor_visual_height(editor: &PromptEditor, secret_input: bool, width: u16) -> u16 {
-    let (_, prefix) = editor_mode(editor, secret_input);
-    let mut rows = 1usize;
-    let mut column = 0usize;
-    let width = usize::from(width.max(1));
-    for grapheme in editor.text().graphemes(true).skip(prefix) {
-        if grapheme == "\n" {
-            rows = rows.saturating_add(1);
-            column = 0;
-            continue;
-        }
-        let visible = if secret_input {
-            "•".to_owned()
-        } else {
-            sanitize_inline(grapheme)
-        };
-        let grapheme_width = UnicodeWidthStr::width(visible.as_str()).max(1);
-        if column.saturating_add(grapheme_width) > width {
-            rows = rows.saturating_add(1);
-            column = 0;
-        }
-        column = column.saturating_add(grapheme_width);
-        if column >= width {
-            rows = rows.saturating_add(column / width);
-            column %= width;
-        }
-    }
+fn editor_visual_height(
+    editor: &PromptEditor,
+    _secret_input: bool,
+    input_mode: InputMode,
+    width: usize,
+) -> u16 {
+    let rows = visual_lines(editor.text(), width.max(1), input_mode.prefix_len()).len();
     u16::try_from(rows).unwrap_or(u16::MAX)
 }
 
@@ -574,11 +564,12 @@ fn draw_input(
     frame: &mut Frame<'_>,
     area: Rect,
     editor: &PromptEditor,
+    input_mode: InputMode,
     theme: ResolvedTheme,
     context: UiContext<'_>,
 ) {
-    let text = editor_text(editor, context.secret_input);
-    let (mode, _) = editor_mode(editor, context.secret_input);
+    let input_width = composer_content_width(area.width);
+    let text = editor_text(editor, context.secret_input, input_mode, input_width);
     let title = if context.secret_input {
         " API key (stored in native keyring) "
     } else if context.agent_name.is_empty() {
@@ -599,21 +590,21 @@ fn draw_input(
         area.width,
         area.height.saturating_sub(COMPOSER_CHROME_HEIGHT),
     );
-    let [prompt_area, input_area] = Layout::horizontal([
+    let [prompt_area, input_area, _trailing_area] = Layout::horizontal([
         Constraint::Length(COMPOSER_PROMPT_WIDTH),
-        Constraint::Min(1),
+        Constraint::Length(u16::try_from(input_width).unwrap_or(u16::MAX)),
+        Constraint::Min(0),
     ])
     .areas(body);
-    let (cursor_row, cursor_column) = editor_cursor(editor, context.secret_input, input_area.width);
+    let (cursor_row, cursor_column) = editor_cursor(editor, input_mode, input_width);
     let scroll = cursor_row.saturating_sub(input_area.height.saturating_sub(1));
     frame.render_widget(
-        Paragraph::new(mode.to_string()).style(orange_style(theme)),
+        Paragraph::new(input_mode.symbol().to_string()).style(orange_style(theme)),
         prompt_area,
     );
     frame.render_widget(
         Paragraph::new(text)
             .style(base_style(theme))
-            .wrap(Wrap { trim: false })
             .scroll((scroll, 0)),
         input_area,
     );
@@ -627,90 +618,97 @@ fn draw_input(
     ));
 }
 
-fn editor_text(editor: &PromptEditor, secret_input: bool) -> Text<'static> {
-    let (_, prefix) = editor_mode(editor, secret_input);
+/// Maps an absolute terminal coordinate into the scrolled editor body.
+/// Coordinates outside the visible composer return `None` without inventing
+/// a nearest selection target.
+pub(crate) fn editor_mouse_cell(
+    editor: &PromptEditor,
+    screen: Rect,
+    secret_input: bool,
+    input_mode: InputMode,
+    x: u16,
+    y: u16,
+) -> Option<(usize, usize, usize)> {
+    let input_height = composer_height(editor, screen, secret_input, input_mode);
+    let input_y = screen
+        .y
+        .saturating_add(screen.height)
+        .saturating_sub(1)
+        .saturating_sub(input_height);
+    let body_y = input_y.saturating_add(1);
+    let body_height = input_height.saturating_sub(COMPOSER_CHROME_HEIGHT);
+    let input_x = screen.x.saturating_add(COMPOSER_PROMPT_WIDTH);
+    let input_width = u16::try_from(composer_content_width(screen.width)).unwrap_or(u16::MAX);
+    if x < input_x
+        || x >= input_x.saturating_add(input_width)
+        || y < body_y
+        || y >= body_y.saturating_add(body_height)
+    {
+        return None;
+    }
+    let (cursor_row, _) = editor_cursor(editor, input_mode, usize::from(input_width));
+    let scroll = cursor_row.saturating_sub(body_height.saturating_sub(1));
+    Some((
+        usize::from(y.saturating_sub(body_y).saturating_add(scroll)),
+        usize::from(x.saturating_sub(input_x)),
+        usize::from(input_width),
+    ))
+}
+
+fn editor_text(
+    editor: &PromptEditor,
+    secret_input: bool,
+    input_mode: InputMode,
+    width: usize,
+) -> Text<'static> {
+    let prefix = input_mode.prefix_len();
     let selection = editor.selection();
-    let mut lines = vec![Vec::<Span<'static>>::new()];
+    let graphemes = editor.text().graphemes(true).collect::<Vec<_>>();
+    let ranges = visual_lines(editor.text(), width.max(1), prefix);
+    let mut lines = Vec::with_capacity(ranges.len());
     let mut rendered = 0usize;
-    for (index, grapheme) in editor.text().graphemes(true).enumerate().skip(prefix) {
-        if rendered >= MAX_RENDER_CHARS {
-            if let Some(line) = lines.last_mut() {
+    for range in ranges {
+        let mut line = Vec::new();
+        for index in range {
+            if rendered >= MAX_RENDER_CHARS {
                 line.push(Span::raw("…"));
+                break;
             }
+            let grapheme = graphemes[index];
+            let visible = if secret_input {
+                "•".to_owned()
+            } else {
+                sanitize_inline(grapheme)
+            };
+            rendered = rendered.saturating_add(visible.chars().count());
+            let selected = selection
+                .as_ref()
+                .is_some_and(|selection| selection.contains(&index));
+            line.push(if selected {
+                Span::styled(visible, Style::default().add_modifier(Modifier::REVERSED))
+            } else {
+                Span::raw(visible)
+            });
+        }
+        lines.push(line);
+        if rendered >= MAX_RENDER_CHARS {
             break;
-        }
-        if grapheme == "\n" {
-            lines.push(Vec::new());
-            rendered = rendered.saturating_add(1);
-            continue;
-        }
-        let visible = if secret_input {
-            "•".to_owned()
-        } else {
-            sanitize_inline(grapheme)
-        };
-        rendered = rendered.saturating_add(visible.chars().count());
-        let selected = selection
-            .as_ref()
-            .is_some_and(|range| range.contains(&index));
-        let span = if selected {
-            Span::styled(visible, Style::default().add_modifier(Modifier::REVERSED))
-        } else {
-            Span::raw(visible)
-        };
-        if let Some(line) = lines.last_mut() {
-            line.push(span);
         }
     }
     Text::from(lines.into_iter().map(Line::from).collect::<Vec<_>>())
 }
 
-fn editor_cursor(editor: &PromptEditor, secret_input: bool, width: u16) -> (u16, u16) {
-    let (_, prefix) = editor_mode(editor, secret_input);
-    let width = usize::from(width.max(1));
-    let mut row = 0usize;
-    let mut column = 0usize;
-    for grapheme in editor
-        .text()
-        .graphemes(true)
-        .skip(prefix)
-        .take(editor.cursor().saturating_sub(prefix))
-    {
-        if grapheme == "\n" {
-            row = row.saturating_add(1);
-            column = 0;
-            continue;
-        }
-        let visible = if secret_input {
-            "•".to_owned()
-        } else {
-            sanitize_inline(grapheme)
-        };
-        let grapheme_width = UnicodeWidthStr::width(visible.as_str()).max(1);
-        if column.saturating_add(grapheme_width) > width {
-            row = row.saturating_add(1);
-            column = 0;
-        }
-        column = column.saturating_add(grapheme_width);
-        if column >= width {
-            row = row.saturating_add(column / width);
-            column %= width;
-        }
-    }
+fn editor_cursor(editor: &PromptEditor, input_mode: InputMode, width: usize) -> (u16, u16) {
+    let (row, column) = visual_cursor_cell(
+        editor.text(),
+        editor.cursor(),
+        width,
+        input_mode.prefix_len(),
+    );
     (
         u16::try_from(row).unwrap_or(u16::MAX),
         u16::try_from(column).unwrap_or(u16::MAX),
     )
-}
-
-fn editor_mode(editor: &PromptEditor, secret_input: bool) -> (char, usize) {
-    if secret_input {
-        return ('>', 0);
-    }
-    match editor.text().chars().next() {
-        Some('/') => ('/', 1),
-        _ => ('>', 0),
-    }
 }
 
 fn semantic_lines(entry: &TranscriptEntry, width: u16, theme: ResolvedTheme) -> Vec<Line<'static>> {
@@ -1161,8 +1159,26 @@ mod tests {
             state,
             editor,
             &CompletionEngine::default(),
+            InputMode::Prompt,
             theme(false),
             test_context(secret_input),
+        );
+    }
+
+    fn draw_test_mode(
+        frame: &mut Frame<'_>,
+        state: &mut TuiState,
+        editor: &PromptEditor,
+        mode: InputMode,
+    ) {
+        draw(
+            frame,
+            state,
+            editor,
+            &CompletionEngine::default(),
+            mode,
+            theme(false),
+            test_context(false),
         );
     }
 
@@ -1296,6 +1312,7 @@ mod tests {
                     &mut state,
                     &editor,
                     &completion,
+                    InputMode::Command,
                     theme(true),
                     test_context(false),
                 );
@@ -1352,14 +1369,73 @@ mod tests {
     }
 
     #[test]
-    fn composer_only_promotes_modes_supported_by_the_rust_dispatcher() {
+    fn composer_renders_all_supported_input_modes_as_prefix_chrome() {
+        assert_eq!(InputMode::Prompt.symbol(), '>');
+        assert_eq!(InputMode::Shell.symbol(), '!');
+        assert_eq!(InputMode::Command.symbol(), '/');
+        assert_eq!(InputMode::Teleport.symbol(), '&');
+        assert_eq!(InputMode::Prompt.prefix_len(), 0);
+        assert_eq!(InputMode::Teleport.prefix_len(), 1);
+    }
+
+    #[test]
+    fn mode_prefix_and_unicode_cursor_render_at_fixed_reference_widths() {
+        for width in [40, 80, 120] {
+            let backend = TestBackend::new(width, 12);
+            let mut terminal = Terminal::new(backend).expect("test terminal");
+            let mut state = TuiState::new("session");
+            let mut editor = PromptEditor::default();
+            editor.set_text("/界");
+
+            terminal
+                .draw(|frame| {
+                    draw_test_mode(frame, &mut state, &editor, InputMode::Command);
+                })
+                .expect("mode composer renders");
+
+            let input_height = composer_height(
+                &editor,
+                Rect::new(0, 0, width, 12),
+                false,
+                InputMode::Command,
+            );
+            let body_y = 12_u16.saturating_sub(input_height);
+            let buffer = terminal.backend().buffer();
+            assert_eq!(
+                buffer.cell((0, body_y)).map(|cell| cell.symbol()),
+                Some("/")
+            );
+            assert_eq!(
+                buffer.cell((2, body_y)).map(|cell| cell.symbol()),
+                Some("界")
+            );
+            assert_eq!(
+                terminal
+                    .get_cursor_position()
+                    .expect("rendered cursor position"),
+                ratatui::layout::Position::new(4, body_y)
+            );
+        }
+    }
+
+    #[test]
+    fn composer_mouse_coordinates_reject_chrome_and_map_visible_cells() {
         let mut editor = PromptEditor::default();
-        editor.set_text("/help");
-        assert_eq!(editor_mode(&editor, false), ('/', 1));
-        editor.set_text("!pwd");
-        assert_eq!(editor_mode(&editor, false), ('>', 0));
-        editor.set_text("&remote");
-        assert_eq!(editor_mode(&editor, false), ('>', 0));
+        editor.set_text("alpha\nbeta");
+        let screen = Rect::new(0, 0, 40, 10);
+        let body_y = 5;
+        assert_eq!(
+            editor_mouse_cell(&editor, screen, false, InputMode::Prompt, 4, body_y),
+            Some((0, 2, 31))
+        );
+        assert_eq!(
+            editor_mouse_cell(&editor, screen, false, InputMode::Prompt, 1, body_y),
+            None
+        );
+        assert_eq!(
+            editor_mouse_cell(&editor, screen, false, InputMode::Prompt, 4, 0),
+            None
+        );
     }
 
     #[test]
