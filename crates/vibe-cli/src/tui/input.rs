@@ -1,23 +1,14 @@
 use std::fs;
 use std::fs::OpenOptions;
 use std::ops::Range;
-use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
-use vibe_app_server::client::{PublicContentBlock, TurnRequest};
 
-pub const MAX_PASTE_BYTES: usize = 256 * 1024;
-pub const MAX_RESOURCE_BYTES: u64 = 8 * 1024 * 1024;
 pub(crate) const COMPOSER_HORIZONTAL_OVERHEAD: u16 = 9;
-const IMAGE_EXTENSIONS: &[&str] = &["gif", "jpeg", "jpg", "png", "webp"];
 
 #[must_use]
 pub(crate) fn composer_content_width(viewport_width: u16) -> usize {
@@ -111,15 +102,8 @@ impl PromptEditor {
         true
     }
 
-    pub fn paste(&mut self, text: &str) -> Result<(), InputError> {
-        if text.len() > MAX_PASTE_BYTES {
-            return Err(InputError::PasteTooLarge {
-                bytes: text.len(),
-                limit: MAX_PASTE_BYTES,
-            });
-        }
+    pub fn paste(&mut self, text: &str) {
         self.insert(text);
-        Ok(())
     }
 
     pub fn move_left(&mut self, extend_selection: bool) {
@@ -556,274 +540,6 @@ pub(crate) fn visual_text_lines(text: &str, width: usize, prefix: usize) -> Vec<
         .collect()
 }
 
-#[must_use]
-pub fn normalize_pasted_text(workspace: &Path, pasted: &str) -> String {
-    let trimmed = pasted.trim();
-    if trimmed.is_empty()
-        || trimmed.contains('\n')
-        || trimmed.contains('\r')
-        || trimmed.starts_with('@')
-        || (trimmed.contains('\'') && !has_matched_quotes(trimmed, '\''))
-        || (trimmed.contains('"') && !has_matched_quotes(trimmed, '"'))
-    {
-        return pasted.to_owned();
-    }
-    let unquoted = if has_matched_quotes(trimmed, '\'') || has_matched_quotes(trimmed, '"') {
-        &trimmed[1..trimmed.len().saturating_sub(1)]
-    } else {
-        trimmed
-    };
-    let candidate = unquoted.replace("\\ ", " ");
-    let path = expand_tilde_path(&candidate);
-    let extension = path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if !path.is_absolute() || !IMAGE_EXTENSIONS.contains(&extension.as_str()) || !path.is_file() {
-        return pasted.to_owned();
-    }
-    let Ok(workspace) = fs::canonicalize(workspace) else {
-        return pasted.to_owned();
-    };
-    let Ok(path) = fs::canonicalize(path) else {
-        return pasted.to_owned();
-    };
-    let Ok(relative) = path.strip_prefix(workspace) else {
-        return pasted.to_owned();
-    };
-    let display = relative
-        .components()
-        .map(|component| component.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/");
-    if display.contains('\'') {
-        return pasted.to_owned();
-    }
-    if display.chars().any(char::is_whitespace) {
-        format!("@'{display}'")
-    } else {
-        format!("@{display}")
-    }
-}
-
-fn has_matched_quotes(value: &str, quote: char) -> bool {
-    value.len() >= 2 && value.starts_with(quote) && value.ends_with(quote)
-}
-
-fn expand_tilde_path(value: &str) -> PathBuf {
-    let path = Path::new(value);
-    let mut components = path.components();
-    if !matches!(components.next(), Some(Component::Normal(first)) if first == "~") {
-        return path.to_path_buf();
-    }
-    let Some(mut home) = user_home_directory() else {
-        return path.to_path_buf();
-    };
-    home.extend(components);
-    home
-}
-
-fn user_home_directory() -> Option<PathBuf> {
-    #[cfg(windows)]
-    {
-        std::env::var_os("USERPROFILE")
-            .map(PathBuf::from)
-            .or_else(|| {
-                let mut home = PathBuf::from(std::env::var_os("HOMEDRIVE")?);
-                home.push(std::env::var_os("HOMEPATH")?);
-                Some(home)
-            })
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var_os("HOME").map(PathBuf::from)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MentionMetric {
-    pub token: String,
-    pub kind: String,
-    pub bytes: u64,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PreparedSubmission {
-    pub turn: TurnRequest,
-    pub metrics: Vec<MentionMetric>,
-    pub cleanup_paths: Vec<PathBuf>,
-}
-
-pub fn prepare_submission(
-    workspace: &Path,
-    prompt: &str,
-) -> Result<PreparedSubmission, InputError> {
-    let canonical_workspace =
-        fs::canonicalize(workspace).map_err(|error| InputError::Workspace(error.to_string()))?;
-    let mut input = vec![PublicContentBlock::Text {
-        text: prompt.to_owned(),
-    }];
-    let mut metrics = Vec::new();
-    let mut cleanup_paths = Vec::new();
-    for (token, raw) in mention_tokens(prompt) {
-        if raw.is_empty() {
-            continue;
-        }
-        let relative = safe_relative_path(&raw)?;
-        let path = canonical_workspace.join(relative);
-        let canonical =
-            fs::canonicalize(&path).map_err(|_| InputError::MissingMention(raw.clone()))?;
-        if !canonical.starts_with(&canonical_workspace) {
-            return Err(InputError::MentionOutsideWorkspace(raw));
-        }
-        let metadata =
-            fs::metadata(&canonical).map_err(|error| InputError::Resource(error.to_string()))?;
-        if !metadata.is_file() {
-            return Err(InputError::InvalidMention(raw));
-        }
-        if metadata.len() > MAX_RESOURCE_BYTES {
-            return Err(InputError::ResourceTooLarge {
-                path: raw,
-                bytes: metadata.len(),
-                limit: MAX_RESOURCE_BYTES,
-            });
-        }
-        let bytes =
-            fs::read(&canonical).map_err(|error| InputError::Resource(error.to_string()))?;
-        let extension = canonical
-            .extension()
-            .and_then(|value| value.to_str())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        let uri = format!("file://{}", canonical.to_string_lossy());
-        if matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp") {
-            let media_type = match extension.as_str() {
-                "jpg" | "jpeg" => "image/jpeg",
-                "gif" => "image/gif",
-                "webp" => "image/webp",
-                _ => "image/png",
-            };
-            input.push(PublicContentBlock::Image {
-                attachment: json!({
-                    "uri": uri,
-                    "name": &raw,
-                    "bytes": metadata.len(),
-                    "mediaType": media_type,
-                    "data": BASE64_STANDARD.encode(&bytes),
-                }),
-            });
-            if is_ephemeral_clipboard_image(&canonical_workspace, &canonical) {
-                cleanup_paths.push(canonical.clone());
-            }
-            metrics.push(MentionMetric {
-                token: token.to_owned(),
-                kind: "image".to_owned(),
-                bytes: metadata.len(),
-            });
-        } else {
-            if bytes.contains(&0) {
-                return Err(InputError::BinaryMention(raw.to_owned()));
-            }
-            let text = String::from_utf8(bytes)
-                .map_err(|_| InputError::InvalidUnicodeMention(raw.to_owned()))?;
-            input.push(PublicContentBlock::Resource {
-                resource: json!({
-                    "uri": uri,
-                    "name": &raw,
-                    "text": text,
-                }),
-            });
-            metrics.push(MentionMetric {
-                token: token.to_owned(),
-                kind: "file".to_owned(),
-                bytes: metadata.len(),
-            });
-        }
-    }
-    let turn = TurnRequest {
-        prompt: prompt.to_owned(),
-        input,
-        client_user_message_id: None,
-        auto_title: None,
-        user_display_content: Some(json!({"type": "text", "text": prompt})),
-        mention_stats: Some(serde_json::to_value(&metrics).map_err(InputError::Json)?),
-    };
-    Ok(PreparedSubmission {
-        turn,
-        metrics,
-        cleanup_paths,
-    })
-}
-
-fn is_ephemeral_clipboard_image(workspace: &Path, path: &Path) -> bool {
-    path.parent() == Some(workspace)
-        && path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with(".vibe-clipboard-") && name.ends_with(".png"))
-}
-
-fn mention_tokens(prompt: &str) -> Vec<(String, String)> {
-    let mut tokens = Vec::new();
-    let mut cursor = 0usize;
-    while cursor < prompt.len() {
-        let Some(relative_start) = prompt[cursor..].find('@') else {
-            break;
-        };
-        let start = cursor.saturating_add(relative_start);
-        let boundary = prompt[..start].chars().next_back();
-        if boundary
-            .is_some_and(|character| !character.is_whitespace() && !"(<[".contains(character))
-        {
-            cursor = start.saturating_add(1);
-            continue;
-        }
-        let value_start = start.saturating_add(1);
-        let Some(first) = prompt[value_start..].chars().next() else {
-            break;
-        };
-        let (raw, end) = if matches!(first, '\'' | '"') {
-            let content_start = value_start.saturating_add(first.len_utf8());
-            let Some(relative_end) = prompt[content_start..].find(first) else {
-                break;
-            };
-            let content_end = content_start.saturating_add(relative_end);
-            (
-                prompt[content_start..content_end].to_owned(),
-                content_end.saturating_add(first.len_utf8()),
-            )
-        } else {
-            let relative_end = prompt[value_start..]
-                .find(char::is_whitespace)
-                .unwrap_or(prompt.len().saturating_sub(value_start));
-            let end = value_start.saturating_add(relative_end);
-            (
-                prompt[value_start..end]
-                    .trim_matches(|character: char| ",.;:!?)]}".contains(character))
-                    .to_owned(),
-                end,
-            )
-        };
-        tokens.push((prompt[start..end].to_owned(), raw));
-        cursor = end;
-    }
-    tokens
-}
-
-fn safe_relative_path(raw: &str) -> Result<PathBuf, InputError> {
-    let path = Path::new(raw);
-    if path.is_absolute()
-        || path
-            .components()
-            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
-    {
-        return Err(InputError::MentionOutsideWorkspace(raw.to_owned()));
-    }
-    Ok(path.to_path_buf())
-}
-
 pub trait ClipboardPort {
     fn read_text(&mut self) -> Result<String, String>;
     fn write_text(&mut self, value: &str) -> Result<(), String>;
@@ -901,8 +617,6 @@ impl ExternalEditorPort for SystemExternalEditor {
 
 #[derive(Debug, Error)]
 pub enum InputError {
-    #[error("paste contains {bytes} bytes; limit is {limit}")]
-    PasteTooLarge { bytes: usize, limit: usize },
     #[error("completion result is stale")]
     StaleCompletion,
     #[error("selected completion does not exist")]
@@ -911,26 +625,6 @@ pub enum InputError {
     CompletionWorker(String),
     #[error("workspace is unavailable: {0}")]
     Workspace(String),
-    #[error("mentioned path `{0}` does not exist")]
-    MissingMention(String),
-    #[error("mentioned path `{0}` is outside the workspace")]
-    MentionOutsideWorkspace(String),
-    #[error("mentioned path `{0}` is not a regular file")]
-    InvalidMention(String),
-    #[error("mentioned file `{path}` contains {bytes} bytes; limit is {limit}")]
-    ResourceTooLarge {
-        path: String,
-        bytes: u64,
-        limit: u64,
-    },
-    #[error("mentioned file `{0}` is binary")]
-    BinaryMention(String),
-    #[error("mentioned file `{0}` is not valid UTF-8")]
-    InvalidUnicodeMention(String),
-    #[error("resource could not be read: {0}")]
-    Resource(String),
-    #[error("mention metrics could not be encoded: {0}")]
-    Json(#[from] serde_json::Error),
 }
 
 #[cfg(test)]

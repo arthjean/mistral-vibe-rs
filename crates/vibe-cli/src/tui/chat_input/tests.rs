@@ -109,6 +109,21 @@ fn external_editor_and_clipboard_leave_the_boundary_as_effects() {
             notify_when_empty: false
         }]
     );
+
+    state.set_command_context(CommandContext::default().with_clipboard_image_supported(true));
+    for modifier in [Modifier::Ctrl, Modifier::Meta] {
+        let effects = state.apply(InputEvent::Key {
+            key: KeyName::Char,
+            char: Some('v'),
+            mods: vec![modifier],
+        });
+        assert_eq!(
+            effects,
+            vec![InputEffect::ClipboardImageRequested {
+                notify_when_empty: true
+            }]
+        );
+    }
 }
 
 #[test]

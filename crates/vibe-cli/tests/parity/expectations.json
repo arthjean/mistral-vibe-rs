@@ -25,9 +25,9 @@
       "state": "parity"
     },
     "clipboard-whitespace-paste": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
-      "state": "gap"
+      "state": "parity"
     },
     "commands-excluded": {
       "effects": "parity",
@@ -70,19 +70,19 @@
       "state": "parity"
     },
     "dnd-absolute-image": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
-      "state": "gap"
+      "state": "parity"
     },
     "dnd-escaped-image": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
-      "state": "gap"
+      "state": "parity"
     },
     "dnd-text-path-untouched": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
-      "state": "gap"
+      "state": "parity"
     },
     "external-editor-refreshes-completion": {
       "effects": "parity",
@@ -169,22 +169,22 @@
       "state": "parity"
     },
     "long-prompt-resize": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
       "state": "gap"
     },
     "long-prompt-unicode": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
       "state": "parity"
     },
     "long-prompt-viewport-40": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
       "state": "gap"
     },
     "long-prompt-viewport-80": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
       "state": "gap"
     },
@@ -259,7 +259,7 @@
       "state": "parity"
     },
     "paste-control-characters": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
       "state": "parity"
     },
@@ -269,17 +269,17 @@
       "state": "parity"
     },
     "paste-large-payload": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
-      "state": "gap"
+      "state": "parity"
     },
     "paste-mode-characters": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
       "state": "parity"
     },
     "paste-multiline-atomic": {
-      "effects": "gap",
+      "effects": "parity",
       "render": "deferred",
       "state": "parity"
     },

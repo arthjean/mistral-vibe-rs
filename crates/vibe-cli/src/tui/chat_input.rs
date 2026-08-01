@@ -89,6 +89,7 @@ pub enum Modifier {
     Shift,
     Ctrl,
     Alt,
+    Meta,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -487,6 +488,18 @@ impl ChatInputState {
         let ctrl = mods.contains(&Modifier::Ctrl);
         let shift = mods.contains(&Modifier::Shift);
         let alt = mods.contains(&Modifier::Alt);
+        let meta = mods.contains(&Modifier::Meta);
+
+        if key == KeyName::Char
+            && character == Some('v')
+            && (ctrl || meta)
+            && self.command_context().is_available(CommandId::PasteImage)
+        {
+            effects.push(InputEffect::ClipboardImageRequested {
+                notify_when_empty: true,
+            });
+            return;
+        }
 
         if !self.secret_input
             && let Some(completion_key) = popup_key(key, mods)
@@ -617,22 +630,21 @@ impl ChatInputState {
             effects.push(InputEffect::ClipboardImageRequested {
                 notify_when_empty: false,
             });
-            return;
+            if text.is_empty() {
+                return;
+            }
         }
+        let before = self.editor.text().to_owned();
         let start = self.editor.cursor();
-        if let Err(error) = self.editor.paste(text) {
-            effects.push(InputEffect::Notify {
-                message: error.to_string(),
-                severity: Severity::Warning,
-            });
-            debug_assert!(matches!(error, InputError::PasteTooLarge { .. }));
-            return;
-        }
-        self.last_paste = Some(start..self.editor.cursor());
+        self.editor.paste(text);
+        self.finish_user_edit(&before, effects);
         if is_path_candidate(text) {
+            self.last_paste = Some(start..self.editor.cursor());
             effects.push(InputEffect::NormalizePastedPath {
                 text: text.to_owned(),
             });
+        } else {
+            self.last_paste = None;
         }
         self.refresh_completion(effects);
     }
@@ -889,20 +901,7 @@ fn char_offset(text: &str, graphemes: usize) -> usize {
 /// The decision is deliberately free of filesystem access: resolving the path
 /// is the adapter's job, requested through [`InputEffect::NormalizePastedPath`].
 fn is_path_candidate(text: &str) -> bool {
-    let trimmed = text.trim();
-    if trimmed.is_empty() || trimmed.contains(['\n', '\r']) || trimmed.starts_with('@') {
-        return false;
-    }
-    let unquoted = trimmed
-        .strip_prefix('\'')
-        .and_then(|value| value.strip_suffix('\''))
-        .or_else(|| {
-            trimmed
-                .strip_prefix('"')
-                .and_then(|value| value.strip_suffix('"'))
-        })
-        .unwrap_or(trimmed);
-    unquoted.starts_with('/') || unquoted.starts_with('~')
+    text.contains(['/', '~', '\'', '"'])
 }
 
 #[cfg(test)]

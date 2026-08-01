@@ -7,6 +7,7 @@ pub mod engine;
 pub mod events;
 pub mod extensions;
 pub mod fakes;
+pub mod images;
 pub mod integrations;
 pub mod mcp;
 pub mod platform;

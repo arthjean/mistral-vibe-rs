@@ -1,7 +1,10 @@
+pub mod attachments;
 pub mod chat_input;
 pub mod clipboard;
+mod clipboard_images;
 pub mod commands;
 pub mod completion;
+mod composer;
 pub mod controls;
 pub mod history;
 pub mod input;
@@ -15,7 +18,7 @@ pub mod state;
 pub mod terminal;
 mod workflow;
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -40,15 +43,19 @@ use vibe_app_server::release3::{Release3Paths, Release3Service};
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
 
-use self::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName, Modifier};
+use self::chat_input::{ChatInputState, InputEffect, InputEvent};
+use self::clipboard_images::{ClipboardImageManager, ImageModel, ImageModels};
 use self::commands::{CommandContext, CommandId};
-use self::completion::CompletionResolution;
+use self::composer::{
+    apply_effects as apply_composer_effects, apply_event as apply_composer_event,
+    normalized_key_event as normalized_input_event,
+};
 use self::controls::{
     ApprovalScope, CallbackChoice, CallbackKind, CallbackOption, CallbackQuestion, ControlState,
     PendingCallback, UserInputChoice,
 };
 use self::history::PromptHistory;
-use self::input::{ExternalEditorPort, SystemExternalEditor, normalize_pasted_text};
+use self::input::{ExternalEditorPort, SystemExternalEditor};
 use self::render::{BannerContext, TokenState, UiContext, draw};
 use self::setup::{
     CredentialStore, EnvironmentThemeDetector, NativeCredentialStore, NotificationPreference,
@@ -123,6 +130,7 @@ struct InteractiveRuntime {
     service: HeadlessService<LiveTurnDriver>,
     session_id: String,
     model: String,
+    image_models: ImageModels,
     thinking: String,
     mode: String,
     agent_name: String,
@@ -136,6 +144,16 @@ struct InteractiveRuntime {
     shell: Option<ActiveShell>,
     cloud: CloudWorkflowState,
     telemetry: Option<Arc<CliTelemetryObserver>>,
+}
+
+impl InteractiveRuntime {
+    fn image_model(&self) -> ImageModel<'_> {
+        self.image_models.get(&self.model)
+    }
+
+    fn supports_images(&self) -> bool {
+        self.image_model().supports_images
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -273,6 +291,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     let mut loop_ticker = tokio::time::interval(Duration::from_secs(1));
     loop_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut active: Option<ActiveTurn> = None;
+    let mut clipboard_images = ClipboardImageManager::default();
 
     let event_loop = async {
         let mut exit = false;
@@ -290,6 +309,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                 &mut active,
                 &mut state,
                 &mut controls,
+                &mut clipboard_images,
             )
             .await?;
             let effects = input.poll_completion();
@@ -387,6 +407,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                                 &mut theme,
                                 &mut terminal_guard,
                                 &mut terminal,
+                                &mut clipboard_images,
                             ).await?;
                         }
                         Some(Err(error)) => {
@@ -400,6 +421,16 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                             )).map_err(|error| CliError::Terminal(error.to_string()))?;
                             exit = true;
                         }
+                    }
+                }
+                completion = clipboard_images.next_completion(), if clipboard_images.has_pending_capture() => {
+                    if let Some(completion) = completion {
+                        clipboard_images.apply_completion(
+                            completion,
+                            runtime.as_ref().map(InteractiveRuntime::image_model),
+                            &mut input,
+                            &mut state,
+                        ).await;
                     }
                 }
                 _ = ticker.tick() => {}
@@ -466,18 +497,10 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
         interrupt_shell(runtime, &mut state).await;
         finish_shell(Some(runtime), &mut state).await;
     }
-    let mut cleanup_error = None;
-    for path in state.take_transient_paths() {
-        if let Err(error) = std::fs::remove_file(&path)
-            && cleanup_error.is_none()
-        {
-            cleanup_error = Some(CliError::Terminal(format!(
-                "clipboard image cleanup failed for `{}`: {error}",
-                path.display()
-            )));
-        }
-    }
-    let cleanup_result = cleanup_error.map_or(Ok(()), Err);
+    let cleanup_result = clipboard_images
+        .shutdown()
+        .await
+        .map_err(CliError::Terminal);
     let telemetry = runtime
         .as_ref()
         .and_then(|runtime| runtime.telemetry.clone());
@@ -522,6 +545,7 @@ async fn handle_terminal_event(
     theme: &mut ResolvedTheme,
     terminal_guard: &mut TerminalGuard<CrosstermOps<std::io::Stdout>>,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    clipboard_images: &mut ClipboardImageManager,
 ) -> Result<bool, CliError> {
     match event {
         Event::Resize(width, height) => {
@@ -534,7 +558,9 @@ async fn handle_terminal_event(
             );
         }
         Event::Paste(text) => {
-            apply_composer_event(input, InputEvent::Paste { text }, working_directory, state);
+            let effects =
+                apply_composer_event(input, InputEvent::Paste { text }, working_directory, state);
+            clipboard_images.schedule_effects(&effects);
         }
         Event::Mouse(mouse) => match mouse.kind {
             MouseEventKind::ScrollUp => {
@@ -587,6 +613,7 @@ async fn handle_terminal_event(
                 theme,
                 terminal_guard,
                 terminal,
+                clipboard_images,
             )
             .await;
         }
@@ -597,86 +624,6 @@ async fn handle_terminal_event(
 
 fn teleport_available(runtime: Option<&InteractiveRuntime>) -> bool {
     runtime.is_some_and(|runtime| runtime.vibe_code_enabled)
-}
-
-fn apply_composer_event(
-    input: &mut ChatInputState,
-    event: InputEvent,
-    working_directory: &Path,
-    state: &mut TuiState,
-) -> Vec<InputEffect> {
-    let effects = input.apply(event);
-    apply_composer_effects(input, effects, working_directory, state)
-}
-
-fn apply_composer_effects(
-    input: &mut ChatInputState,
-    effects: Vec<InputEffect>,
-    working_directory: &Path,
-    state: &mut TuiState,
-) -> Vec<InputEffect> {
-    let mut pending = VecDeque::from(effects);
-    let mut application_effects = Vec::new();
-    while let Some(effect) = pending.pop_front() {
-        match effect {
-            InputEffect::RequestCompletion { request } => {
-                match input.dispatch_completion_request(request.clone(), working_directory) {
-                    Ok(Some(resolution)) => {
-                        pending.extend(input.apply(InputEvent::CompletionResolved { resolution }))
-                    }
-                    Ok(None) => {}
-                    Err(error) => pending.extend(input.apply(InputEvent::CompletionResolved {
-                        resolution: CompletionResolution::failed(request, &error),
-                    })),
-                }
-            }
-            InputEffect::NormalizePastedPath { text } => {
-                let text = normalize_pasted_text(working_directory, &text);
-                pending.extend(input.apply(InputEvent::PasteNormalized { text }));
-            }
-            InputEffect::Notify { message, .. } | InputEffect::Rejected { reason: message } => {
-                state.push_diagnostic(message);
-            }
-            effect => application_effects.push(effect),
-        }
-    }
-    application_effects
-}
-
-fn normalized_input_event(key: KeyEvent) -> Option<InputEvent> {
-    let (key_name, character) = match key.code {
-        KeyCode::Esc => (KeyName::Escape, None),
-        KeyCode::Enter => (KeyName::Enter, None),
-        KeyCode::Backspace => (KeyName::Backspace, None),
-        KeyCode::Delete => (KeyName::Delete, None),
-        KeyCode::Left => (KeyName::Left, None),
-        KeyCode::Right => (KeyName::Right, None),
-        KeyCode::Up => (KeyName::Up, None),
-        KeyCode::Down => (KeyName::Down, None),
-        KeyCode::Home => (KeyName::Home, None),
-        KeyCode::End => (KeyName::End, None),
-        KeyCode::PageUp => (KeyName::PageUp, None),
-        KeyCode::PageDown => (KeyName::PageDown, None),
-        KeyCode::Tab => (KeyName::Tab, None),
-        KeyCode::BackTab => (KeyName::Backtab, None),
-        KeyCode::Char(character) => (KeyName::Char, Some(character)),
-        _ => return None,
-    };
-    let mut mods = Vec::new();
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        mods.push(Modifier::Ctrl);
-    }
-    if key.modifiers.contains(KeyModifiers::SHIFT) {
-        mods.push(Modifier::Shift);
-    }
-    if key.modifiers.contains(KeyModifiers::ALT) {
-        mods.push(Modifier::Alt);
-    }
-    Some(InputEvent::Key {
-        key: key_name,
-        char: character,
-        mods,
-    })
 }
 
 fn start_active_turn(
@@ -867,6 +814,7 @@ async fn handle_key(
     theme: &mut ResolvedTheme,
     terminal_guard: &mut TerminalGuard<CrosstermOps<std::io::Stdout>>,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    clipboard_images: &mut ClipboardImageManager,
 ) -> Result<bool, CliError> {
     input.set_secret_input(*secret_input);
     input.set_teleport_available(teleport_available(runtime.as_ref()));
@@ -877,6 +825,17 @@ async fn handle_key(
     }
     if key.code != KeyCode::Esc {
         state.rewind_confirmation.cancel();
+    }
+    if key.code == KeyCode::Char('v')
+        && key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::SUPER)
+    {
+        if let Some(event) = normalized_input_event(key) {
+            let effects = apply_composer_event(input, event, working_directory, state);
+            clipboard_images.schedule_effects(&effects);
+        }
+        return Ok(false);
     }
     if key.code == KeyCode::BackTab
         || (key.code == KeyCode::Tab && key.modifiers.contains(KeyModifiers::SHIFT))
@@ -898,14 +857,22 @@ async fn handle_key(
                     if let Some(event) = normalized_input_event(key) {
                         apply_composer_event(input, event, working_directory, state);
                     }
+                    let protected = state.prompt_queue.transient_images();
+                    clipboard_images
+                        .discard_unreferenced(&protected, state)
+                        .await;
                     state.quit_confirmation.cancel();
                     return Ok(false);
                 }
                 if let Some(cancelled) = state.prompt_queue.cancel_last() {
                     state.push_diagnostic(format!(
                         "Removed queued prompt: {}",
-                        cancelled.lines().next().unwrap_or_default()
+                        cancelled.text().lines().next().unwrap_or_default()
                     ));
+                    let protected = state.prompt_queue.transient_images();
+                    clipboard_images
+                        .discard_unreferenced(&protected, state)
+                        .await;
                     return Ok(false);
                 }
                 if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_mut()) {
@@ -1031,6 +998,10 @@ async fn handle_key(
                 if let Some(event) = normalized_input_event(key) {
                     apply_composer_event(input, event, working_directory, state);
                 }
+                let protected = state.prompt_queue.transient_images();
+                clipboard_images
+                    .discard_unreferenced(&protected, state)
+                    .await;
                 state.rewind_confirmation.cancel();
             } else if state.rewind_confirmation.request("Esc", unix_millis())
                 && let Some(runtime) = runtime.as_mut()
@@ -1125,16 +1096,13 @@ async fn handle_key(
                                     .map(|skill| (skill.name.as_str(), skill.description.as_str())),
                             );
                         }
-                        let mut hydrated = runtime
+                        let hydrated = runtime
                             .as_mut()
                             .map(|runtime| {
                                 hydrate_initial_state(runtime, &configured, working_directory)
                             })
                             .transpose()?
                             .unwrap_or_else(|| TuiState::new(""));
-                        for path in state.take_transient_paths() {
-                            hydrated.track_transient_path(path);
-                        }
                         let session_id = hydrated.session_id.clone();
                         *state = hydrated;
                         *controls = ControlState::new(session_id);
@@ -1214,6 +1182,9 @@ async fn handle_key(
                     *secret_input = false;
                     input.set_secret_input(false);
                 }
+                CommandAction::ClipboardImageRequested => {
+                    clipboard_images.schedule(true);
+                }
                 CommandAction::Handled => {}
                 CommandAction::Runtime(command) => {
                     if handle_runtime_command(
@@ -1238,25 +1209,31 @@ async fn handle_key(
                                 .as_ref()
                                 .is_some_and(|runtime| runtime.shell.is_some())
                         {
-                            state.prompt_queue.push(submitted);
+                            state
+                                .prompt_queue
+                                .push(clipboard_images.draft(working_directory, submitted));
                             state.prompt_queue.resume();
                             state.push_diagnostic(format!(
                                 "Skill queued ({} pending)",
                                 state.prompt_queue.len()
                             ));
-                        } else if !start_prompt(
-                            working_directory,
-                            submitted.clone(),
-                            runtime,
-                            active,
-                            state,
-                            controls,
-                        )
-                        .await?
-                        {
-                            input.replace_text(submitted);
-                            let effects = input.refresh_after_adapter_mutation();
-                            apply_composer_effects(input, effects, working_directory, state);
+                        } else {
+                            let draft = clipboard_images.draft(working_directory, submitted);
+                            if !start_prompt(
+                                working_directory,
+                                &draft,
+                                runtime,
+                                active,
+                                state,
+                                controls,
+                                clipboard_images,
+                            )
+                            .await?
+                            {
+                                input.replace_text(draft.into_text());
+                                let effects = input.refresh_after_adapter_mutation();
+                                apply_composer_effects(input, effects, working_directory, state);
+                            }
                         }
                     } else {
                         input.replace_text(&submitted);
@@ -1287,7 +1264,9 @@ async fn handle_key(
                             .as_ref()
                             .is_some_and(|runtime| runtime.shell.is_some()) =>
                 {
-                    state.prompt_queue.push(submitted);
+                    state
+                        .prompt_queue
+                        .push(clipboard_images.draft(working_directory, submitted));
                     state.prompt_queue.resume();
                     state.push_diagnostic(format!(
                         "Input queued ({} pending)",
@@ -1302,17 +1281,19 @@ async fn handle_key(
                     }
                 }
                 CommandAction::Unhandled => {
+                    let draft = clipboard_images.draft(working_directory, submitted);
                     if !start_prompt(
                         working_directory,
-                        submitted.clone(),
+                        &draft,
                         runtime,
                         active,
                         state,
                         controls,
+                        clipboard_images,
                     )
                     .await?
                     {
-                        input.replace_text(submitted);
+                        input.replace_text(draft.into_text());
                         let effects = input.refresh_after_adapter_mutation();
                         apply_composer_effects(input, effects, working_directory, state);
                     }
@@ -1925,9 +1906,6 @@ fn adopt_hydrated_session(
             return false;
         }
     };
-    for path in state.take_transient_paths() {
-        replacement.track_transient_path(path);
-    }
     replacement.resize(state.viewport.0, state.viewport.1);
     runtime.session_id.clone_from(&session_id);
     sync_runtime_intent(runtime, None);
@@ -2675,6 +2653,7 @@ fn start_runtime(
         service,
         session_id,
         model: session.intent.model.unwrap_or(preferences.model),
+        image_models: preferences.image_models,
         thinking: session
             .intent
             .reasoning_effort
@@ -2819,6 +2798,7 @@ fn json_usize(value: Option<&Value>) -> usize {
 
 struct StartupPreferences {
     model: String,
+    image_models: ImageModels,
     mode: String,
     thinking: bool,
     reasoning_effort: Option<String>,
@@ -2881,6 +2861,25 @@ fn startup_preferences(
     } else {
         arguments.model.clone()
     };
+    let mut image_models = ImageModels::default();
+    image_models.insert(DEFAULT_MODEL, true);
+    if let Some(models) = config
+        .and_then(|config| config.get("models"))
+        .and_then(Value::as_array)
+    {
+        for configured in models {
+            let supports_images = configured
+                .get("supports_images")
+                .or_else(|| configured.get("supportsImages"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            for key in ["name", "alias"] {
+                if let Some(value) = configured.get(key).and_then(Value::as_str) {
+                    image_models.insert(value, supports_images);
+                }
+            }
+        }
+    }
     let reasoning_effort = config
         .and_then(|config| config.get("thinking"))
         .and_then(Value::as_str)
@@ -2898,6 +2897,7 @@ fn startup_preferences(
     };
     Ok(StartupPreferences {
         model,
+        image_models,
         mode,
         thinking: reasoning_effort.is_some(),
         reasoning_effort,
@@ -3665,6 +3665,11 @@ mod tests {
             service,
             session_id,
             model: "test-model".to_owned(),
+            image_models: {
+                let mut models = ImageModels::default();
+                models.insert("test-model", true);
+                models
+            },
             thinking: "off".to_owned(),
             mode: "code".to_owned(),
             agent_name: "default".to_owned(),

@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
 
+use super::attachments::PromptDraft;
+
 const QUIT_CONFIRMATION_WINDOW_MS: u64 = 1_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,24 +167,24 @@ impl Overlay {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PromptQueue {
-    prompts: VecDeque<String>,
+    prompts: VecDeque<PromptDraft>,
     paused: bool,
 }
 
 impl PromptQueue {
-    pub fn push(&mut self, prompt: impl Into<String>) {
-        self.prompts.push_back(prompt.into());
+    pub fn push(&mut self, prompt: PromptDraft) {
+        self.prompts.push_back(prompt);
     }
 
-    pub fn push_front(&mut self, prompt: impl Into<String>) {
-        self.prompts.push_front(prompt.into());
+    pub fn push_front(&mut self, prompt: PromptDraft) {
+        self.prompts.push_front(prompt);
     }
 
-    pub fn pop_next(&mut self) -> Option<String> {
+    pub fn pop_next(&mut self) -> Option<PromptDraft> {
         (!self.paused).then(|| self.prompts.pop_front()).flatten()
     }
 
-    pub fn cancel_last(&mut self) -> Option<String> {
+    pub fn cancel_last(&mut self) -> Option<PromptDraft> {
         self.prompts.pop_back()
     }
 
@@ -212,6 +214,14 @@ impl PromptQueue {
     #[must_use]
     pub fn is_paused(&self) -> bool {
         self.paused
+    }
+
+    pub fn transient_images(&self) -> std::collections::HashSet<std::path::PathBuf> {
+        self.prompts
+            .iter()
+            .flat_map(PromptDraft::transient_images)
+            .cloned()
+            .collect()
     }
 }
 

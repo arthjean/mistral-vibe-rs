@@ -6,11 +6,12 @@ use serde_json::{Value, json};
 mod config;
 mod mcp;
 
+use super::attachments::{PromptDraft, prepare_submission};
 use super::chat_input::ChatInputState;
 use super::clipboard::{SystemClipboard, SystemClipboardPort};
+use super::clipboard_images::ClipboardImageManager;
 use super::commands::{CommandId, parse_command_in};
 use super::controls::ControlState;
-use super::input::prepare_submission;
 use super::interaction::{Overlay, OverlayKind};
 use super::pickers::{
     config_overlay, debug_overlay, help_overlay, model_overlay, proxy_overlay, rewind_overlay,
@@ -41,6 +42,7 @@ Manage your data settings [here](https://chat.mistral.ai/work?profile_dialog=pri
 pub(super) enum CommandAction {
     Unhandled,
     Handled,
+    ClipboardImageRequested,
     Exit,
     Setup,
     Runtime(RuntimeCommand),
@@ -87,8 +89,7 @@ pub(super) async fn dispatch_command(
             return Ok(CommandAction::Handled);
         }
         CommandId::PasteImage => {
-            paste_clipboard_image(working_directory, composer, state);
-            return Ok(CommandAction::Handled);
+            return Ok(CommandAction::ClipboardImageRequested);
         }
         CommandId::DataRetention => {
             push_local_notice(state, DATA_RETENTION_MESSAGE, EntryStatus::Completed);
@@ -366,6 +367,7 @@ pub(super) async fn start_next_queued_prompt(
     active: &mut Option<ActiveTurn>,
     state: &mut TuiState,
     controls: &mut ControlState,
+    clipboard_images: &mut ClipboardImageManager,
 ) -> Result<(), CliError> {
     if active.is_some()
         || runtime
@@ -376,8 +378,8 @@ pub(super) async fn start_next_queued_prompt(
         return Ok(());
     }
     if let Some(prompt) = state.prompt_queue.pop_next() {
-        if prompt.trim_start().starts_with('!') {
-            if start_shell(&prompt, runtime, state).await? {
+        if prompt.text().trim_start().starts_with('!') {
+            if start_shell(prompt.text(), runtime, state).await? {
                 return Ok(());
             }
             state.prompt_queue.push_front(prompt);
@@ -386,11 +388,12 @@ pub(super) async fn start_next_queued_prompt(
         }
         if start_prompt(
             working_directory,
-            prompt.clone(),
+            &prompt,
             runtime,
             active,
             state,
             controls,
+            clipboard_images,
         )
         .await?
         {
@@ -404,36 +407,47 @@ pub(super) async fn start_next_queued_prompt(
 
 pub(super) async fn start_prompt(
     working_directory: &Path,
-    prompt: String,
+    prompt: &PromptDraft,
     runtime: &mut Option<InteractiveRuntime>,
     active: &mut Option<ActiveTurn>,
     state: &mut TuiState,
     controls: &mut ControlState,
+    clipboard_images: &mut ClipboardImageManager,
 ) -> Result<bool, CliError> {
+    let mut protected = state.prompt_queue.transient_images();
+    protected.extend(prompt.transient_images().iter().cloned());
+    clipboard_images
+        .discard_unreferenced(&protected, state)
+        .await;
     let Some(runtime) = runtime.as_mut() else {
         state.push_diagnostic("Setup is required before starting a session. Restart with --setup.");
         return Ok(false);
     };
-    let mut prepared = match prepare_submission(working_directory, &prompt) {
-        Ok(prepared) => prepared,
-        Err(error) => {
+    let preparation_workspace = working_directory.to_path_buf();
+    let preparation_prompt = prompt.clone();
+    let active_model = runtime.model.clone();
+    let supports_images = runtime.supports_images();
+    let preparation = tokio::task::spawn_blocking(move || {
+        prepare_submission(
+            &preparation_workspace,
+            &preparation_prompt,
+            &active_model,
+            supports_images,
+        )
+    })
+    .await;
+    let mut prepared = match preparation {
+        Ok(Ok(prepared)) => prepared,
+        Ok(Err(error)) => {
             state.push_diagnostic(error.to_string());
             return Ok(false);
         }
-    };
-    for path in prepared.cleanup_paths.drain(..) {
-        match std::fs::remove_file(&path) {
-            Ok(()) => state.release_transient_path(&path),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                state.release_transient_path(&path);
-            }
-            Err(error) => state.push_diagnostic(format!(
-                "Clipboard image cleanup failed for `{}`: {error}",
-                path.display()
-            )),
+        Err(error) => {
+            state.push_diagnostic(format!("Image preparation task failed: {error}"));
+            return Ok(false);
         }
-    }
-    if let Some(skill) = invoked_skill(runtime, &prompt) {
+    };
+    if let Some(skill) = invoked_skill(runtime, prompt.text()) {
         prepared
             .turn
             .input
@@ -451,6 +465,10 @@ pub(super) async fn start_prompt(
         .service
         .reserve_prompt(&runtime.session_id, &prepared.turn)
         .await?;
+    let protected = state.prompt_queue.transient_images();
+    clipboard_images
+        .consume(&prepared.cleanup_paths, &protected, state)
+        .await;
     controls
         .begin_turn(&reservation.turn_id)
         .map_err(|error| CliError::Terminal(error.to_string()))?;
@@ -910,45 +928,6 @@ fn copy_last_agent_message(state: &mut TuiState) {
             EntryStatus::Completed,
         ),
         Err(_) => state.push_diagnostic("Failed to copy: clipboard not available"),
-    }
-}
-
-fn paste_clipboard_image(
-    working_directory: &Path,
-    composer: &mut ChatInputState,
-    state: &mut TuiState,
-) {
-    match SystemClipboard.paste_image(working_directory) {
-        Ok(Some(path)) => {
-            let prefix = if composer.editor().text().is_empty()
-                || composer
-                    .editor()
-                    .text()
-                    .chars()
-                    .last()
-                    .is_some_and(char::is_whitespace)
-            {
-                ""
-            } else {
-                " "
-            };
-            state.track_transient_path(path.clone());
-            let canonical_workspace = std::fs::canonicalize(working_directory)
-                .unwrap_or_else(|_| working_directory.to_path_buf());
-            let path = path
-                .strip_prefix(&canonical_workspace)
-                .unwrap_or(&path)
-                .to_string_lossy();
-            let token = format!("{prefix}@'{path}' ");
-            composer.insert_adapter_text(&token);
-            push_local_notice(
-                state,
-                "Clipboard image added to prompt",
-                EntryStatus::Completed,
-            );
-        }
-        Ok(None) => state.push_diagnostic("No image found on the clipboard"),
-        Err(error) => state.push_diagnostic(error.to_string()),
     }
 }
 

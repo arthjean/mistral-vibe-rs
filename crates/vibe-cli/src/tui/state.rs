@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, VecDeque};
-use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -118,7 +117,6 @@ pub struct TuiState {
     diagnostics: VecDeque<String>,
     entry_indexes: BTreeMap<String, usize>,
     local_sequence: u64,
-    transient_paths: Vec<PathBuf>,
 }
 
 impl TuiState {
@@ -146,22 +144,7 @@ impl TuiState {
             diagnostics: VecDeque::new(),
             entry_indexes: BTreeMap::new(),
             local_sequence: 0,
-            transient_paths: Vec::new(),
         }
-    }
-
-    pub fn track_transient_path(&mut self, path: PathBuf) {
-        if !self.transient_paths.contains(&path) {
-            self.transient_paths.push(path);
-        }
-    }
-
-    pub fn release_transient_path(&mut self, path: &Path) {
-        self.transient_paths.retain(|candidate| candidate != path);
-    }
-
-    pub fn take_transient_paths(&mut self) -> Vec<PathBuf> {
-        std::mem::take(&mut self.transient_paths)
     }
 
     pub fn apply(&mut self, event: ServerEvent) -> Result<ApplyResult, StateError> {

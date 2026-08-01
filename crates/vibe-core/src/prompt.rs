@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
+use crate::images::{ImageFormat, MAX_IMAGE_BYTES, MAX_IMAGES_PER_MESSAGE};
+
 const MAX_TEXT_RESOURCE_BYTES: u64 = 2 * 1024 * 1024;
-const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
-const MAX_IMAGES: usize = 8;
 const AGENTS_FILE: &str = "AGENTS.md";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -422,10 +422,10 @@ pub fn prepare_user_resources(
         .iter()
         .filter(|resource| resource.kind == UserResourceKind::Image)
         .count();
-    if image_count > MAX_IMAGES {
+    if image_count > MAX_IMAGES_PER_MESSAGE {
         return Err(PromptError::TooManyImages {
             actual: image_count,
-            maximum: MAX_IMAGES,
+            maximum: MAX_IMAGES_PER_MESSAGE,
         });
     }
 
@@ -468,7 +468,11 @@ pub fn prepare_user_resources(
                 let mime_type = resource
                     .mime_type
                     .clone()
-                    .or_else(|| image_mime(&path).map(str::to_owned))
+                    .or_else(|| {
+                        ImageFormat::from_path(&path)
+                            .map(ImageFormat::media_type)
+                            .map(str::to_owned)
+                    })
                     .ok_or_else(|| PromptError::UnsupportedImage(path.clone()))?;
                 ModelContent::Image { path, mime_type }
             }
@@ -598,21 +602,6 @@ fn canonical_existing(path: &Path) -> Result<PathBuf, PromptError> {
         path: path.to_path_buf(),
         source,
     })
-}
-
-fn image_mime(path: &Path) -> Option<&'static str> {
-    match path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .map(str::to_ascii_lowercase)
-        .as_deref()
-    {
-        Some("png") => Some("image/png"),
-        Some("jpg" | "jpeg") => Some("image/jpeg"),
-        Some("gif") => Some("image/gif"),
-        Some("webp") => Some("image/webp"),
-        _ => None,
-    }
 }
 
 #[derive(Debug, Error)]

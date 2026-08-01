@@ -33,10 +33,10 @@
     {
       "id": "EP-004",
       "title": "Paste, Mentions, and Images",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3
     },
     {
       "id": "EP-005",
@@ -207,44 +207,44 @@
       "id": "US-012",
       "title": "Align text paste and drag-and-drop normalization",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-002"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-01",
+      "completed_at": "2026-08-01",
+      "reviewed_at": "2026-08-01"
     },
     {
       "id": "US-013",
       "title": "Align mention and attachment submission semantics",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-012"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-01",
+      "completed_at": "2026-08-01",
+      "reviewed_at": "2026-08-01"
     },
     {
       "id": "US-014",
       "title": "Align clipboard-image behavior and lifecycle",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-012",
         "US-013"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-01",
+      "completed_at": "2026-08-01",
+      "reviewed_at": "2026-08-01"
     },
     {
       "id": "US-015",

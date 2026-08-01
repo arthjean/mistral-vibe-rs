@@ -21,10 +21,10 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
+use vibe_cli::tui::attachments::normalize_pasted_text;
 use vibe_cli::tui::chat_input::{ChatInputState, InputEffect, InputEvent};
 use vibe_cli::tui::commands::CommandContext;
 use vibe_cli::tui::completion::CompletionRequest;
-use vibe_cli::tui::input::normalize_pasted_text;
 
 const SCHEMA_VERSION: u32 = 1;
 const MAX_EFFECT_ROUNDS: usize = 8;
@@ -424,7 +424,7 @@ impl Replay {
                         follow_up.push(self.resolve_completion(request));
                     }
                     InputEffect::NormalizePastedPath { text } => {
-                        let normalized = normalize_pasted_text(&self.workspace, &text);
+                        let normalized = normalize_pasted_text(&text);
                         if normalized != text {
                             follow_up.push(InputEvent::PasteNormalized { text: normalized });
                         }
@@ -573,11 +573,52 @@ fn substitute_workspace(value: &mut Value, workspace: &str) {
             }
         }
         Value::Object(map) => {
+            if let Some(text) = map.get("text").and_then(Value::as_str).map(str::to_owned) {
+                if let Some(cursor) = map.get_mut("cursor")
+                    && let Some(offset) = cursor.as_u64()
+                {
+                    *cursor = json!(workspace_adjusted_offset(&text, offset, workspace));
+                }
+                if let Some(selection) = map.get_mut("selection").and_then(Value::as_array_mut) {
+                    for offset in selection {
+                        if let Some(value) = offset.as_u64() {
+                            *offset = json!(workspace_adjusted_offset(&text, value, workspace));
+                        }
+                    }
+                }
+            }
             for item in map.values_mut() {
                 substitute_workspace(item, workspace);
             }
         }
         _ => {}
+    }
+}
+
+fn workspace_adjusted_offset(text: &str, offset: u64, workspace: &str) -> u64 {
+    let offset = usize::try_from(offset).unwrap_or(usize::MAX);
+    if offset >= text.chars().count() {
+        return u64::try_from(
+            text.replace(WORKSPACE_PLACEHOLDER, workspace)
+                .chars()
+                .count(),
+        )
+        .unwrap_or(u64::MAX);
+    }
+    let prefix = text.chars().take(offset).collect::<String>();
+    let occurrences = prefix.matches(WORKSPACE_PLACEHOLDER).count();
+    let placeholder_chars = WORKSPACE_PLACEHOLDER.chars().count();
+    let workspace_chars = workspace.chars().count();
+    if workspace_chars >= placeholder_chars {
+        u64::try_from(
+            offset.saturating_add(occurrences.saturating_mul(workspace_chars - placeholder_chars)),
+        )
+        .unwrap_or(u64::MAX)
+    } else {
+        u64::try_from(
+            offset.saturating_sub(occurrences.saturating_mul(placeholder_chars - workspace_chars)),
+        )
+        .unwrap_or_default()
     }
 }
 

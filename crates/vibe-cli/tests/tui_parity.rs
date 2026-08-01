@@ -1,6 +1,7 @@
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use vibe_cli::tui::attachments::PromptDraft;
 use vibe_cli::tui::chat_input::InputMode;
 use vibe_cli::tui::clipboard::{SystemClipboard, SystemClipboardPort, osc52_sequence};
 use vibe_cli::tui::commands::{
@@ -113,21 +114,30 @@ fn command_availability_tracks_capabilities_exclusions_and_platform_support() {
 #[test]
 fn prompts_submitted_during_a_turn_are_queued_fifo_and_can_be_cancelled_lifo() {
     let mut queue = PromptQueue::default();
-    queue.push("first");
-    queue.push("second");
-    queue.push("third");
+    queue.push(prompt_draft("first"));
+    queue.push(prompt_draft("second"));
+    queue.push(prompt_draft("third"));
 
-    assert_eq!(queue.cancel_last().as_deref(), Some("third"));
-    assert_eq!(queue.pop_next().as_deref(), Some("first"));
-    assert_eq!(queue.pop_next().as_deref(), Some("second"));
+    assert_eq!(
+        queue.cancel_last().map(PromptDraft::into_text).as_deref(),
+        Some("third")
+    );
+    assert_eq!(
+        queue.pop_next().map(PromptDraft::into_text).as_deref(),
+        Some("first")
+    );
+    assert_eq!(
+        queue.pop_next().map(PromptDraft::into_text).as_deref(),
+        Some("second")
+    );
     assert!(queue.is_empty());
 }
 
 #[test]
 fn failed_queue_submission_can_be_restored_at_the_front_without_reordering() {
     let mut queue = PromptQueue::default();
-    queue.push("first");
-    queue.push("second");
+    queue.push(prompt_draft("first"));
+    queue.push(prompt_draft("second"));
     let first = queue.pop_next().expect("first prompt");
     queue.push_front(first);
     queue.pause();
@@ -135,8 +145,18 @@ fn failed_queue_submission_can_be_restored_at_the_front_without_reordering() {
     assert_eq!(queue.len(), 2);
     assert!(queue.pop_next().is_none());
     queue.resume();
-    assert_eq!(queue.pop_next().as_deref(), Some("first"));
-    assert_eq!(queue.pop_next().as_deref(), Some("second"));
+    assert_eq!(
+        queue.pop_next().map(PromptDraft::into_text).as_deref(),
+        Some("first")
+    );
+    assert_eq!(
+        queue.pop_next().map(PromptDraft::into_text).as_deref(),
+        Some("second")
+    );
+}
+
+fn prompt_draft(text: &str) -> PromptDraft {
+    PromptDraft::new(Path::new("."), text, std::iter::empty::<&PathBuf>())
 }
 
 #[test]

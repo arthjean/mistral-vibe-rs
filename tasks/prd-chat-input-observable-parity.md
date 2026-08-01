@@ -350,9 +350,9 @@ Match atomic text paste, drag-and-drop normalization, mention submission, attach
 
 **Acceptance Criteria:**
 
-- [ ] Given bracketed paste containing newlines, tabs, escape bytes, control-like text, or shortcut characters, when it is received, then it is inserted atomically and no contained character dispatches a key binding.
-- [ ] Given a single pasted absolute or terminal-escaped image path, including an external path or an embedded path inside a recognized drag-and-drop form, when normalization runs, then Python-compatible `@` rewriting and spacing are applied.
-- [ ] Given empty paste, invalid UTF-8 from a clipboard adapter, an unrecognized path, or content at and above the reference boundary, when paste runs, then existing text is preserved and the result or warning matches the oracle without a Rust-only 256 KiB rejection.
+- [x] Given bracketed paste containing newlines, tabs, escape bytes, control-like text, or shortcut characters, when it is received, then it is inserted atomically and no contained character dispatches a key binding.
+- [x] Given a single pasted absolute or terminal-escaped image path, including an external path or an embedded path inside a recognized drag-and-drop form, when normalization runs, then Python-compatible `@` rewriting and spacing are applied.
+- [x] Given empty paste, invalid UTF-8 from a clipboard adapter, an unrecognized path, or content at and above the reference boundary, when paste runs, then existing text is preserved and the result or warning matches the oracle without a Rust-only 256 KiB rejection.
 
 #### US-013: Align mention and attachment submission semantics
 
@@ -368,9 +368,9 @@ Match atomic text paste, drag-and-drop normalization, mention submission, attach
 
 **Acceptance Criteria:**
 
-- [ ] Given mentions of text files, directories, non-image binaries, missing paths, and external paths, when a prompt is submitted, then they remain prompt text with the same normalization as Python and are not rejected or injected as text resources.
-- [ ] Given a supported native image mention, when the active model accepts images and validation succeeds, then only that image becomes an attachment and the visible prompt text and request payload match the oracle.
-- [ ] Given an unsupported image type, oversized image, unreadable image, unsupported model, or path that changes during submission, when conversion runs, then no partial turn is sent, the prompt remains recoverable, and the user receives the reference-equivalent error.
+- [x] Given mentions of text files, directories, non-image binaries, missing paths, and external paths, when a prompt is submitted, then they remain prompt text with the same normalization as Python and are not rejected or injected as text resources.
+- [x] Given a supported native image mention, when the active model accepts images and validation succeeds, then only that image becomes an attachment and the visible prompt text and request payload match the oracle.
+- [x] Given an unsupported image type, oversized image, unreadable image, unsupported model, or path that changes during submission, when conversion runs, then no partial turn is sent, the prompt remains recoverable, and the user receives the reference-equivalent error.
 
 #### US-014: Align clipboard-image behavior and lifecycle
 
@@ -386,9 +386,9 @@ Match atomic text paste, drag-and-drop normalization, mention submission, attach
 
 **Acceptance Criteria:**
 
-- [ ] Given macOS with a PNG or TIFF clipboard image, when Command+V, Ctrl+V, an empty bracketed paste, or `/paste-image` triggers the capability, then capture completes off the UI path within 5 seconds and inserts the temporary absolute `@` path with reference spacing and notification.
-- [ ] Given image size, model capability, temporary-file permissions, and cleanup, when capture succeeds or the prompt is discarded, then the 10 MiB guard, private file mode, attachment conversion, and unused-file cleanup match Python.
-- [ ] Given unsupported OS, denied clipboard access, text-only or empty clipboard, subprocess timeout, invalid image bytes, or insertion failure, when paste is explicit or implicit, then warning versus silence matches Python and no orphan file or blocked event loop remains.
+- [x] Given macOS with a PNG or TIFF clipboard image, when Command+V, Ctrl+V, an empty bracketed paste, or `/paste-image` triggers the capability, then capture completes off the UI path within 5 seconds and inserts the temporary absolute `@` path with reference spacing and notification.
+- [x] Given image size, model capability, temporary-file permissions, and cleanup, when capture succeeds or the prompt is discarded, then the 10 MiB guard, private file mode, attachment conversion, and unused-file cleanup match Python.
+- [x] Given unsupported OS, denied clipboard access, text-only or empty clipboard, subprocess timeout, invalid image bytes, or insertion failure, when paste is explicit or implicit, then warning versus silence matches Python and no orphan file or blocked event loop remains.
 
 ---
 
