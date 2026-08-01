@@ -62,7 +62,7 @@ Key findings that informed this PRD:
 ### Competitive Context
 
 - **Python Textual reference:** The focused widget owns multiline editing, selection, paste normalization, history interception, completion control, feedback, and voice key handling. Parent widgets add safety, switching, and recording presentation. Primary anchors: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/text_area.py:32`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/body.py:40`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/container.py:19`.
-- **Current Rust port:** Editing and completion state live in `crates/vibe-cli/src/tui/input.rs:22`, event interpretation in `crates/vibe-cli/src/tui/mod.rs:720`, presentation in `crates/vibe-cli/src/tui/render.rs:73`, commands in `crates/vibe-cli/src/tui/commands.rs:64`, and clipboard effects in `crates/vibe-cli/src/tui/clipboard.rs:26`.
+- **Current Rust port:** Editing lives in `crates/vibe-cli/src/tui/input.rs:32`, completion in `crates/vibe-cli/src/tui/completion.rs:50`, the deterministic event boundary in `crates/vibe-cli/src/tui/chat_input.rs:118`, presentation in `crates/vibe-cli/src/tui/render.rs:75`, commands in `crates/vibe-cli/src/tui/commands.rs`, and clipboard effects in `crates/vibe-cli/src/tui/clipboard.rs`.
 - **Observed gap clusters:** Python persists 100 prompt-history entries while Rust keeps an in-memory vector (`/home/arthur/dev/mistral-vibe/vibe/cli/history_manager.py:14`, `crates/vibe-cli/src/tui/input.rs:34`); Python recognizes four modes while Rust visually promotes slash only (`/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/text_area.py:32`, `crates/vibe-cli/src/tui/render.rs:73`); Rust caps paste, scan, and completion candidates (`crates/vibe-cli/src/tui/input.rs:22`) where the reference behavior differs; Rust command availability is only platform-gated for image paste (`crates/vibe-cli/src/tui/commands.rs:230`).
 - **Market gap:** The relevant differentiator is not another terminal editor implementation. It is a port whose behavior is provably interchangeable with its reference across event sequences and platforms.
 
@@ -70,7 +70,7 @@ Key findings that informed this PRD:
 
 - Model parity at the event, state, effect, and render boundary. Textual resolves bindings through the focused widget and ancestors, while Ratatui only renders application-owned state. Sources: [Textual input and bindings](https://textual.textualize.io/guide/input/), [Textual TextArea](https://textual.textualize.io/widgets/text_area/), [Ratatui user-input example](https://ratatui.rs/examples/apps/user_input/).
 - Treat bracketed paste as an atomic event and filter key event kinds so pasted control characters and release events cannot execute shortcuts. Source: [Crossterm event API](https://docs.rs/crossterm/latest/crossterm/event/).
-- Keep asynchronous completion generation-aware and apply results only through the event loop. The current Rust engine already rejects stale generations at `crates/vibe-cli/src/tui/input.rs:483`; this behavior becomes part of the explicit contract.
+- Keep asynchronous completion generation-aware and apply results only through the event loop. The Rust engine rejects stale generations and token ranges in `crates/vibe-cli/src/tui/completion.rs:412`; this behavior is part of the explicit contract.
 - Separate grapheme positions from terminal cell width. The current editor is grapheme-aware at `crates/vibe-cli/src/tui/input.rs:225`; parity fixtures must additionally cover wide characters, combining marks, wrapped visual lines, and mouse coordinates.
 - Use deterministic widget buffers and PTY tests for presentation and terminal lifecycle. Sources: [Ratatui snapshot testing](https://ratatui.rs/recipes/testing/snapshots/), [Textual Pilot](https://textual.textualize.io/api/pilot/).
 
@@ -270,9 +270,9 @@ Make command discovery, slash ranking, skill metadata, path search, popup contro
 
 **Acceptance Criteria:**
 
-- [ ] Given every Python command and alias, when commands are listed or parsed, then Rust matches canonical name, aliases, description, argument handling, and `/continue` semantics.
-- [ ] Given capability, configuration, platform, and exclusion states, when command availability is evaluated, then Vibe Code commands, paste-image, and excluded commands are shown or hidden exactly as in Python.
-- [ ] Given Rust-only aliases or commands such as `/close`, `/quit`, `/title`, `/approve`, `/deny`, `/fork`, `/history`, `/setup`, `/settings`, `/trust`, or `/update`, when they are absent from the pinned Python oracle, then they are not discoverable or executable through the parity surface.
+- [x] Given every Python command and alias, when commands are listed or parsed, then Rust matches canonical name, aliases, description, argument handling, and `/continue` semantics.
+- [x] Given capability, configuration, platform, and exclusion states, when command availability is evaluated, then Vibe Code commands, paste-image, and excluded commands are shown or hidden exactly as in Python.
+- [x] Given Rust-only aliases or commands such as `/close`, `/quit`, `/title`, `/approve`, `/deny`, `/fork`, `/history`, `/setup`, `/settings`, `/trust`, or `/update`, when they are absent from the pinned Python oracle, then they are not discoverable or executable through the parity surface.
 
 #### US-009: Align slash ranking, skill metadata, acceptance, and dismissal
 
@@ -288,9 +288,9 @@ Make command discovery, slash ranking, skill metadata, path search, popup contro
 
 **Acceptance Criteria:**
 
-- [ ] Given `/`, `/c`, and other partial queries, when suggestions appear, then priority boosts, fuzzy ranking, candidate count, descriptions, and skill descriptions match Python, including `/c` selecting config rather than clear.
-- [ ] Given an open slash popup, when Up, Down, Tab, Enter, Right, Escape, or an unrelated editing key is pressed, then selection, acceptance, submission, and dismissal match the oracle.
-- [ ] Given more than 64 matching commands and skills, duplicate aliases, or a selected item removed by a refresh, when the popup updates, then the reference-visible candidate set is preserved, selection is valid, and no index panic occurs.
+- [x] Given `/`, `/c`, and other partial queries, when suggestions appear, then priority boosts, fuzzy ranking, candidate count, descriptions, and skill descriptions match Python, including `/c` selecting config rather than clear.
+- [x] Given an open slash popup, when Up, Down, Tab, Enter, Right, Escape, or an unrelated editing key is pressed, then selection, acceptance, submission, and dismissal match the oracle.
+- [x] Given more than 64 matching commands and skills, duplicate aliases, or a selected item removed by a refresh, when the popup updates, then the reference-visible candidate set is preserved, selection is valid, and no index panic occurs.
 
 #### US-010: Align path triggers, search semantics, and indexed corpus
 
@@ -306,9 +306,9 @@ Make command discovery, slash ranking, skill metadata, path search, popup contro
 
 **Acceptance Criteria:**
 
-- [ ] Given the last active `@` anywhere before the cursor, including after punctuation and within a partial nested path, when completion runs, then trigger range, query, global matching, ranking, and insertion match Python.
-- [ ] Given `.gitignore`, Python default ignores, hidden files, symlinks, nested directories, and up to 32,000 indexed entries, when a workspace is scanned, then the candidate corpus and deterministic order match the oracle.
-- [ ] Given unreadable directories, symlink cycles, paths disappearing during scan, or a corpus above the reference bound, when indexing runs, then the UI remains responsive, traversal terminates, and the resulting diagnostic or truncation matches the fixture.
+- [x] Given the last active `@` anywhere before the cursor, including after punctuation and within a partial nested path, when completion runs, then trigger range, query, global matching, ranking, and insertion match Python.
+- [x] Given `.gitignore`, Python default ignores, hidden files, symlinks, nested directories, and up to 32,000 indexed entries, when a workspace is scanned, then the candidate corpus and deterministic order match the oracle.
+- [x] Given unreadable directories, symlink cycles, paths disappearing during scan, or a corpus above the reference bound, when indexing runs, then the UI remains responsive, traversal terminates, and the resulting diagnostic or truncation matches the fixture.
 
 #### US-011: Preserve async completion state and popup rendering
 
@@ -324,9 +324,9 @@ Make command discovery, slash ranking, skill metadata, path search, popup contro
 
 **Acceptance Criteria:**
 
-- [ ] Given overlapping completion generations, when results arrive out of order, then only the current generation and token range can update candidates, selection, or rendering.
-- [ ] Given command, path, skill, empty, loading, and dismissed states at 40, 80, and 120 columns, when the popup renders, then item count, maximum height, descriptions, selection, clipping, and cursor-relative placement match Python.
-- [ ] Given worker startup failure, scan failure, history recall, secret input, or cancellation, when completion refreshes, then no stale popup appears, the prompt remains editable, and one bounded diagnostic is emitted where the oracle exposes one.
+- [x] Given overlapping completion generations, when results arrive out of order, then only the current generation and token range can update candidates, selection, or rendering.
+- [x] Given command, path, skill, empty, loading, and dismissed states at 40, 80, and 120 columns, when the popup renders, then item count, maximum height, descriptions, selection, clipping, and cursor-relative placement match Python.
+- [x] Given worker startup failure, scan failure, history recall, secret input, or cancellation, when completion refreshes, then no stale popup appears, the prompt remains editable, and one bounded diagnostic is emitted where the oracle exposes one.
 
 ---
 
