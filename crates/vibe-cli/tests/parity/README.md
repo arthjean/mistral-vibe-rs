@@ -47,7 +47,9 @@ story closes:
   compared when the composer viewport lands.
 - `history` (compared): the persisted prompt-history entries after each event.
 - `submission` (compared): the canonical text and image content blocks,
-  attachment payload, mention statistics, and display-content metadata.
+  attachment payload, mention statistics, and display-content metadata. Image
+  observations run the pinned reference's `prepare_prompt` implementation and
+  serialize its actual `TurnStartParams` wire model.
 
 `expectations.json` declares one status per trace and per dimension:
 

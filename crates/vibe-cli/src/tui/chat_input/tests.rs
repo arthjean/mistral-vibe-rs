@@ -265,7 +265,11 @@ fn invalid_events_keep_state_valid() {
         }]
     );
     let effects = state.apply(InputEvent::PasteNormalized {
-        document: String::new(),
+        snapshot: EditorSnapshot {
+            text: String::new(),
+            cursor: 0,
+            selection: None,
+        },
         text: "@image.png".to_owned(),
     });
     assert_eq!(
@@ -503,15 +507,44 @@ fn image_mentions_use_spacing_at_the_actual_insertion_point() {
 #[test]
 fn stale_path_normalization_cannot_replace_newer_input() {
     let mut state = ChatInputState::new();
-    type_text(&mut state, "/tmp/old.png");
+    let effects = type_text(&mut state, "/tmp/old.png");
+    let snapshot = effects
+        .into_iter()
+        .find_map(|effect| match effect {
+            InputEffect::NormalizeCurrentText { snapshot } => Some(snapshot),
+            _ => None,
+        })
+        .expect("path normalization snapshot");
     state.replace_text("newer input");
 
     assert_eq!(
         state.apply(InputEvent::TextNormalized {
-            original: "/tmp/old.png".to_owned(),
+            snapshot,
             text: "@/tmp/old.png".to_owned(),
         }),
         Vec::new()
     );
     assert_eq!(state.observe().text, "newer input");
+}
+
+#[test]
+fn path_normalization_requires_the_original_cursor_snapshot() {
+    let mut state = ChatInputState::new();
+    let effects = type_text(&mut state, "/tmp/old.png");
+    let snapshot = effects
+        .into_iter()
+        .find_map(|effect| match effect {
+            InputEffect::NormalizeCurrentText { snapshot } => Some(snapshot),
+            _ => None,
+        })
+        .expect("path normalization snapshot");
+    state.apply(key(KeyName::Left));
+
+    state.apply(InputEvent::TextNormalized {
+        snapshot,
+        text: "@/tmp/old.png".to_owned(),
+    });
+
+    assert_eq!(state.observe().text, "/tmp/old.png");
+    assert_eq!(state.observe().cursor, 11);
 }

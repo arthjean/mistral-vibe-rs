@@ -73,12 +73,14 @@ fn only_supported_images_become_attachments() {
     };
     assert_eq!(attachment["alias"], "image.png");
     assert_eq!(attachment["mimeType"], "image/png");
-    assert_eq!(attachment["source"]["kind"], "inline");
+    assert_eq!(attachment["source"]["kind"], "file");
     assert_eq!(
-        BASE64_STANDARD
-            .decode(attachment["source"]["data"].as_str().unwrap_or_default())
-            .expect("canonical image data"),
-        b"image"
+        attachment["source"]["path"],
+        temporary
+            .path()
+            .join("image.png")
+            .to_string_lossy()
+            .as_ref()
     );
     assert_eq!(prepared.turn.user_display_content, None);
 }
@@ -182,6 +184,16 @@ fn clipboard_images_are_marked_for_cleanup_after_their_bytes_are_embedded() {
         prepared.turn.input.get(1),
         Some(PublicContentBlock::Image { .. })
     ));
+    let Some(PublicContentBlock::Image { attachment }) = prepared.turn.input.get(1) else {
+        unreachable!("image content block was asserted above")
+    };
+    assert_eq!(attachment["source"]["kind"], "inline");
+    assert_eq!(
+        BASE64_STANDARD
+            .decode(attachment["source"]["data"].as_str().unwrap_or_default())
+            .expect("canonical image data"),
+        b"image"
+    );
 }
 
 #[test]

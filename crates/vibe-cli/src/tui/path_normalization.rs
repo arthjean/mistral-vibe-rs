@@ -1,14 +1,14 @@
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 
-use tokio::sync::mpsc::{self, UnboundedReceiver};
+use tokio::sync::mpsc::{self, Receiver};
 
 use super::attachments::normalize_pasted_text;
-use super::chat_input::{InputEffect, InputEvent};
+use super::chat_input::{EditorSnapshot, InputEffect, InputEvent};
 
 pub(super) struct PathNormalizationManager {
     state: Arc<(Mutex<WorkerState>, Condvar)>,
-    results: UnboundedReceiver<NormalizationResult>,
+    results: Receiver<NormalizationResult>,
     worker: Option<JoinHandle<()>>,
     generation: u64,
     settled_generation: u64,
@@ -24,7 +24,7 @@ impl PathNormalizationManager {
     pub fn new() -> Result<Self, String> {
         let state = Arc::new((Mutex::new(WorkerState::default()), Condvar::new()));
         let thread_state = Arc::clone(&state);
-        let (results_tx, results) = mpsc::unbounded_channel();
+        let (results_tx, results) = mpsc::channel(1);
         let worker = std::thread::Builder::new()
             .name("vibe-path-normalization".to_owned())
             .spawn(move || worker_loop(&thread_state, &results_tx))
@@ -40,21 +40,24 @@ impl PathNormalizationManager {
 
     pub fn schedule_effects(&mut self, effects: &[InputEffect]) -> Result<(), String> {
         let request = effects.iter().rev().find_map(|effect| match effect {
-            InputEffect::NormalizePastedPath { text, document } => {
+            InputEffect::NormalizePastedPath { text, snapshot } => {
                 Some(NormalizationRequest::Paste {
                     text: text.clone(),
-                    document: document.clone(),
+                    snapshot: snapshot.clone(),
                 })
             }
-            InputEffect::NormalizeCurrentText { text } => {
-                Some(NormalizationRequest::Current { text: text.clone() })
-            }
+            InputEffect::NormalizeCurrentText { snapshot } => Some(NormalizationRequest::Current {
+                snapshot: snapshot.clone(),
+            }),
             _ => None,
         });
         let Some(request) = request else {
             return Ok(());
         };
-        self.generation = self.generation.saturating_add(1);
+        self.generation = self
+            .generation
+            .checked_add(1)
+            .ok_or_else(|| "path normalization generation exhausted".to_owned())?;
         let work = NormalizationWork {
             generation: self.generation,
             request,
@@ -74,21 +77,34 @@ impl PathNormalizationManager {
     }
 
     pub async fn next_event(&mut self) -> Option<InputEvent> {
-        let result = self.results.recv().await?;
-        self.settled_generation = self.settled_generation.max(result.generation);
+        loop {
+            let result = self.results.recv().await?;
+            if let Some(event) = self.accept_result(result) {
+                return Some(event);
+            }
+        }
+    }
+
+    fn accept_result(&mut self, result: NormalizationResult) -> Option<InputEvent> {
+        if result.generation != self.generation {
+            return None;
+        }
+        self.settled_generation = result.generation;
         Some(result.event)
     }
 
     pub fn shutdown(&mut self) {
+        self.results.close();
         let (state, ready) = self.state.as_ref();
         if let Ok(mut state) = state.lock() {
             state.shutdown = true;
             state.pending = None;
             ready.notify_one();
         }
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
-        }
+        // Filesystem metadata calls can block indefinitely on remote or FUSE
+        // mounts. Dropping the handle detaches the worker so TUI shutdown stays
+        // bounded; the shared shutdown flag lets it exit if the call returns.
+        drop(self.worker.take());
     }
 }
 
@@ -99,8 +115,13 @@ impl Drop for PathNormalizationManager {
 }
 
 enum NormalizationRequest {
-    Paste { text: String, document: String },
-    Current { text: String },
+    Paste {
+        text: String,
+        snapshot: EditorSnapshot,
+    },
+    Current {
+        snapshot: EditorSnapshot,
+    },
 }
 
 struct NormalizationWork {
@@ -116,21 +137,21 @@ struct NormalizationResult {
 impl NormalizationRequest {
     fn resolve(self) -> InputEvent {
         match self {
-            Self::Paste { text, document } => InputEvent::PasteNormalized {
-                document,
+            Self::Paste { text, snapshot } => InputEvent::PasteNormalized {
+                snapshot,
                 text: normalize_pasted_text(&text),
             },
-            Self::Current { text } => InputEvent::TextNormalized {
-                original: text.clone(),
-                text: normalize_pasted_text(&text),
-            },
+            Self::Current { snapshot } => {
+                let text = normalize_pasted_text(&snapshot.text);
+                InputEvent::TextNormalized { snapshot, text }
+            }
         }
     }
 }
 
 fn worker_loop(
     shared: &Arc<(Mutex<WorkerState>, Condvar)>,
-    results: &mpsc::UnboundedSender<NormalizationResult>,
+    results: &mpsc::Sender<NormalizationResult>,
 ) {
     loop {
         let work = {
@@ -156,8 +177,45 @@ fn worker_loop(
             generation: work.generation,
             event: work.request.resolve(),
         };
-        if results.send(result).is_err() {
+        if results.blocking_send(result).is_err() {
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn snapshot(text: &str) -> EditorSnapshot {
+        EditorSnapshot {
+            text: text.to_owned(),
+            cursor: text.chars().count(),
+            selection: None,
+        }
+    }
+
+    #[test]
+    fn only_the_current_generation_can_settle_normalization() {
+        let (_sender, results) = mpsc::channel(1);
+        let mut manager = PathNormalizationManager {
+            state: Arc::new((Mutex::new(WorkerState::default()), Condvar::new())),
+            results,
+            worker: None,
+            generation: 2,
+            settled_generation: 0,
+        };
+        let event = |generation| NormalizationResult {
+            generation,
+            event: InputEvent::TextNormalized {
+                snapshot: snapshot("/tmp/image.png"),
+                text: "@/tmp/image.png".to_owned(),
+            },
+        };
+
+        assert!(manager.accept_result(event(1)).is_none());
+        assert!(manager.has_pending());
+        assert!(manager.accept_result(event(2)).is_some());
+        assert!(!manager.has_pending());
     }
 }

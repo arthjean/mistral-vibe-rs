@@ -432,20 +432,20 @@ impl Replay {
                     InputEffect::RequestCompletion { request } => {
                         follow_up.push(self.resolve_completion(request));
                     }
-                    InputEffect::NormalizePastedPath { text, document } => {
+                    InputEffect::NormalizePastedPath { text, snapshot } => {
                         let normalized = normalize_pasted_text(&text);
                         if normalized != text {
                             follow_up.push(InputEvent::PasteNormalized {
-                                document,
+                                snapshot,
                                 text: normalized,
                             });
                         }
                     }
-                    InputEffect::NormalizeCurrentText { text } => {
-                        let normalized = normalize_pasted_text(&text);
-                        if normalized != text {
+                    InputEffect::NormalizeCurrentText { snapshot } => {
+                        let normalized = normalize_pasted_text(&snapshot.text);
+                        if normalized != snapshot.text {
                             follow_up.push(InputEvent::TextNormalized {
-                                original: text,
+                                snapshot,
                                 text: normalized,
                             });
                         }

@@ -40,6 +40,14 @@ pub enum InputMode {
     Teleport,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorSnapshot {
+    pub text: String,
+    pub cursor: usize,
+    pub selection: Option<[usize; 2]>,
+}
+
 impl InputMode {
     #[must_use]
     pub const fn symbol(self) -> char {
@@ -148,12 +156,12 @@ pub enum InputEvent {
     },
     /// Normalised replacement for the most recent paste.
     PasteNormalized {
-        document: String,
+        snapshot: EditorSnapshot,
         text: String,
     },
     /// Normalised replacement for a full editor snapshot.
     TextNormalized {
-        original: String,
+        snapshot: EditorSnapshot,
         text: String,
     },
     Transcript {
@@ -196,10 +204,10 @@ pub enum InputEffect {
     },
     NormalizePastedPath {
         text: String,
-        document: String,
+        snapshot: EditorSnapshot,
     },
     NormalizeCurrentText {
-        text: String,
+        snapshot: EditorSnapshot,
     },
     OpenExternalEditor {
         text: String,
@@ -416,9 +424,24 @@ impl ChatInputState {
         true
     }
 
-    fn apply_normalized_text(&mut self, original: &str, normalized: String) {
-        if self.editor.text() != original
-            || self.editor.cursor() != self.editor.text().graphemes(true).count()
+    fn editor_snapshot(&self) -> EditorSnapshot {
+        EditorSnapshot {
+            text: self.editor.text().to_owned(),
+            cursor: self.editor.cursor(),
+            selection: self
+                .editor
+                .selection()
+                .map(|selection| [selection.start, selection.end]),
+        }
+    }
+
+    fn matches_snapshot(&self, snapshot: &EditorSnapshot) -> bool {
+        self.editor_snapshot() == *snapshot
+    }
+
+    fn apply_normalized_text(&mut self, snapshot: &EditorSnapshot, normalized: String) {
+        if !self.matches_snapshot(snapshot)
+            || snapshot.cursor != snapshot.text.graphemes(true).count()
         {
             return;
         }
@@ -481,8 +504,8 @@ impl ChatInputState {
                     self.refresh_completion(&mut effects);
                 }
             }
-            InputEvent::PasteNormalized { document, text } => {
-                if self.editor.text() != document {
+            InputEvent::PasteNormalized { snapshot, text } => {
+                if !self.matches_snapshot(&snapshot) {
                     return effects;
                 }
                 let Some(range) = self.last_paste.take() else {
@@ -495,9 +518,9 @@ impl ChatInputState {
                 self.editor.insert(&text);
                 self.refresh_completion(&mut effects);
             }
-            InputEvent::TextNormalized { original, text } => {
+            InputEvent::TextNormalized { snapshot, text } => {
                 let before = self.editor.text().to_owned();
-                self.apply_normalized_text(&original, text);
+                self.apply_normalized_text(&snapshot, text);
                 if self.editor.text() != before {
                     self.refresh_completion(&mut effects);
                 }
@@ -682,7 +705,7 @@ impl ChatInputState {
                 && is_path_candidate(self.editor.text())
             {
                 effects.push(InputEffect::NormalizeCurrentText {
-                    text: self.editor.text().to_owned(),
+                    snapshot: self.editor_snapshot(),
                 });
             }
             self.refresh_completion(effects);
@@ -706,7 +729,7 @@ impl ChatInputState {
             self.last_paste = Some(start..self.editor.cursor());
             effects.push(InputEffect::NormalizePastedPath {
                 text: text.to_owned(),
-                document: self.editor.text().to_owned(),
+                snapshot: self.editor_snapshot(),
             });
         } else {
             self.last_paste = None;

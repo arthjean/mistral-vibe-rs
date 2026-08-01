@@ -297,6 +297,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     let mut active: Option<ActiveTurn> = None;
     let mut clipboard_images = ClipboardImageManager::default();
     let mut path_normalization = PathNormalizationManager::new().map_err(CliError::Terminal)?;
+    let mut deferred_enter = None;
 
     let event_loop = async {
         let mut exit = false;
@@ -324,6 +325,32 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                 &working_directory,
                 &mut state,
             );
+            if !path_normalization.has_pending()
+                && let Some(key) = deferred_enter.take()
+            {
+                exit = handle_terminal_event(
+                    Event::Key(key),
+                    &arguments,
+                    &working_directory,
+                    &credential_store,
+                    &mut runtime,
+                    &mut active,
+                    &mut state,
+                    &mut controls,
+                    &mut prompt_history,
+                    &mut input,
+                    &mut setup_flow,
+                    &mut secret_input,
+                    &mut theme,
+                    &mut terminal_guard,
+                    &mut terminal,
+                    &mut clipboard_images,
+                    &mut path_normalization,
+                    &mut deferred_enter,
+                )
+                .await?;
+                continue;
+            }
             let runtime_view = runtime.as_ref();
             let agent_name =
                 runtime_view.map_or("default", |runtime| runtime.agent_name.as_str());
@@ -393,7 +420,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                         exit = true;
                     }
                 }
-                event = events.next() => {
+                event = events.next(), if deferred_enter.is_none() => {
                     match event {
                         Some(Ok(event)) => {
                             exit = handle_terminal_event(
@@ -414,6 +441,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                                 &mut terminal,
                                 &mut clipboard_images,
                                 &mut path_normalization,
+                                &mut deferred_enter,
                             ).await?;
                         }
                         Some(Err(error)) => {
@@ -443,15 +471,13 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                     let event = event.ok_or_else(|| {
                         CliError::Terminal("path normalization worker stopped".to_owned())
                     })?;
-                    let effects = apply_composer_event(
+                    apply_path_normalization_event(
+                        &mut path_normalization,
                         &mut input,
                         event,
                         &working_directory,
                         &mut state,
-                    );
-                    path_normalization
-                        .schedule_effects(&effects)
-                        .map_err(CliError::Terminal)?;
+                    )?;
                 }
                 _ = ticker.tick() => {}
                 _ = loop_ticker.tick() => {
@@ -568,6 +594,7 @@ async fn handle_terminal_event(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     clipboard_images: &mut ClipboardImageManager,
     path_normalization: &mut PathNormalizationManager,
+    deferred_enter: &mut Option<KeyEvent>,
 ) -> Result<bool, CliError> {
     match event {
         Event::Resize(width, height) => {
@@ -622,6 +649,10 @@ async fn handle_terminal_event(
             _ => {}
         },
         Event::Key(key) if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) => {
+            if should_defer_submission(key, path_normalization.has_pending()) {
+                *deferred_enter = Some(key);
+                return Ok(false);
+            }
             return handle_key(
                 key,
                 arguments,
@@ -646,6 +677,10 @@ async fn handle_terminal_event(
         Event::FocusGained | Event::FocusLost | Event::Key(_) => {}
     }
     Ok(false)
+}
+
+fn should_defer_submission(key: KeyEvent, normalization_pending: bool) -> bool {
+    normalization_pending && key.code == KeyCode::Enter && key.modifiers.is_empty()
 }
 
 fn teleport_available(runtime: Option<&InteractiveRuntime>) -> bool {
@@ -845,9 +880,6 @@ async fn handle_key(
 ) -> Result<bool, CliError> {
     input.set_secret_input(*secret_input);
     input.set_teleport_available(teleport_available(runtime.as_ref()));
-    if key.code == KeyCode::Enter {
-        settle_path_normalization(path_normalization, input, working_directory, state).await?;
-    }
     if handle_overlay_key(key, runtime, state, controls, input, theme) {
         let effects = input.refresh_after_adapter_mutation();
         apply_composer_effects(input, effects, working_directory, state);
@@ -1366,23 +1398,17 @@ async fn handle_key(
     Ok(false)
 }
 
-async fn settle_path_normalization(
+fn apply_path_normalization_event(
     path_normalization: &mut PathNormalizationManager,
     input: &mut ChatInputState,
+    event: InputEvent,
     working_directory: &Path,
     state: &mut TuiState,
 ) -> Result<(), CliError> {
-    while path_normalization.has_pending() {
-        let event = path_normalization
-            .next_event()
-            .await
-            .ok_or_else(|| CliError::Terminal("path normalization worker stopped".to_owned()))?;
-        let effects = apply_composer_event(input, event, working_directory, state);
-        path_normalization
-            .schedule_effects(&effects)
-            .map_err(CliError::Terminal)?;
-    }
-    Ok(())
+    let effects = apply_composer_event(input, event, working_directory, state);
+    path_normalization
+        .schedule_effects(&effects)
+        .map_err(CliError::Terminal)
 }
 
 async fn handle_runtime_command(
@@ -3783,6 +3809,22 @@ mod tests {
         );
         assert_eq!(external.mode(), chat_input::InputMode::Prompt);
         assert!(external.completion().view().is_some());
+    }
+
+    #[test]
+    fn only_plain_submission_waits_for_path_normalization() {
+        assert!(should_defer_submission(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            true,
+        ));
+        assert!(!should_defer_submission(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT),
+            true,
+        ));
+        assert!(!should_defer_submission(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            false,
+        ));
     }
 
     #[test]

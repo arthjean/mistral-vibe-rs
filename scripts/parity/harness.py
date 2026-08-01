@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import mimetypes
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from textual import events
@@ -616,36 +616,35 @@ def read_history(path: Path) -> list[str]:
 
 
 def capture_submission(message: str, workspace: Path) -> dict[str, Any]:
-    """Project a submitted image through the pinned reference's wire models."""
+    """Run the pinned reference prompt preparation and turn/start wire model."""
 
-    from vibe.app_server._workspace import _mention_stats
-    from vibe.app_server.models import ImageAttachment
-    from vibe.core.autocompletion.path_prompt import build_path_prompt_payload
-    from vibe.core.autocompletion.path_prompt_adapter import extract_image_resources
-    from vibe.core.session.image_snapshot import snapshot_image_bytes
+    from vibe.app_server._workspace import prepare_prompt
+    from vibe.app_server.protocol import TurnStartParams
+    from vibe.app_server.session import _content_blocks
 
-    payload = build_path_prompt_payload(message, base_dir=workspace)
-    content: list[dict[str, Any]] = [{"type": "text", "text": message}]
-    for resource in extract_image_resources(payload):
-        mime_type = mimetypes.guess_type(resource.path.name)[0] or "application/octet-stream"
-        snapshot = snapshot_image_bytes(
-            resource.path.read_bytes(),
-            alias=resource.alias,
-            mime_type=mime_type,
-            session_dir=None,
-        )
-        attachment = ImageAttachment.model_validate(
-            snapshot.model_dump(mode="json")
-        ).model_dump(mode="json")
-        content.append({"type": "image", "attachment": attachment})
-    return {
-        "prompt": message,
-        "input": content,
-        "clientUserMessageId": None,
-        "autoTitle": None,
-        "userDisplayContent": None,
-        "mentionStats": _mention_stats(payload).model_dump(mode="json"),
-    }
+    agent_loop = SimpleNamespace(
+        cwd=workspace,
+        config=SimpleNamespace(
+            get_active_model=lambda: SimpleNamespace(
+                alias="oracle-model", supports_images=True
+            )
+        ),
+        session_logger=SimpleNamespace(
+            session_dir=None, needs_initial_auto_title=lambda: False
+        ),
+    )
+    prepared = prepare_prompt(agent_loop, message)
+    request = TurnStartParams(
+        session_id="oracle-session",
+        input=_content_blocks(prepared.prompt_text, prepared.images),
+        client_user_message_id=None,
+        auto_title=prepared.auto_title,
+        user_display_content=None,
+        mention_stats=prepared.mentions,
+    )
+    wire = request.model_dump(mode="json")
+    wire.pop("sessionId")
+    return {"prompt": prepared.prompt_text, **wire}
 
 
 __all__ = ["ScenarioRunner"]

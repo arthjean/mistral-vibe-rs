@@ -6,6 +6,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -2856,7 +2858,7 @@ impl LiveTurnDriver {
         }
         for block in &reservation.input {
             if let PublicContentBlock::Image { attachment } = block
-                && let Some(image) = provider_image_input(attachment)
+                && let Some(image) = provider_image_input(attachment).await
             {
                 input.images.push(image);
             }
@@ -3118,20 +3120,26 @@ impl LiveTurnDriver {
     }
 }
 
-fn provider_image_input(attachment: &Value) -> Option<ImageInput> {
+async fn provider_image_input(attachment: &Value) -> Option<ImageInput> {
     let media_type = attachment
         .get("mimeType")
         .or_else(|| attachment.get("mediaType"))
         .and_then(Value::as_str)?;
-    let data = attachment
-        .get("source")
-        .filter(|source| source.get("kind").and_then(Value::as_str) == Some("inline"))
-        .and_then(|source| source.get("data"))
-        .or_else(|| attachment.get("data"))
-        .and_then(Value::as_str)?;
+    let source = attachment.get("source");
+    let data = match source
+        .and_then(|source| source.get("kind"))
+        .and_then(Value::as_str)
+    {
+        Some("file") => {
+            let path = source?.get("path")?.as_str()?;
+            BASE64_STANDARD.encode(tokio::fs::read(path).await.ok()?)
+        }
+        Some("inline") => source?.get("data")?.as_str()?.to_owned(),
+        _ => attachment.get("data")?.as_str()?.to_owned(),
+    };
     Some(ImageInput {
         media_type: media_type.to_owned(),
-        data: data.to_owned(),
+        data,
     })
 }
 
@@ -3805,13 +3813,14 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn provider_image_input_accepts_canonical_inline_attachments() {
+    #[tokio::test]
+    async fn provider_image_input_accepts_canonical_inline_attachments() {
         let image = provider_image_input(&json!({
             "source": {"kind": "inline", "data": "aW1hZ2U="},
             "alias": "image.png",
             "mimeType": "image/png",
         }))
+        .await
         .expect("canonical image input");
 
         assert_eq!(
@@ -3823,16 +3832,39 @@ mod tests {
         );
     }
 
-    #[test]
-    fn provider_image_input_keeps_legacy_attachment_compatibility() {
+    #[tokio::test]
+    async fn provider_image_input_keeps_legacy_attachment_compatibility() {
         let image = provider_image_input(&json!({
             "data": "aW1hZ2U=",
             "mediaType": "image/png",
         }))
+        .await
         .expect("legacy image input");
 
         assert_eq!(image.media_type, "image/png");
         assert_eq!(image.data, "aW1hZ2U=");
+    }
+
+    #[tokio::test]
+    async fn provider_image_input_reads_canonical_file_attachments() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("image.png");
+        std::fs::write(&path, b"image").expect("image fixture");
+        let image = provider_image_input(&json!({
+            "source": {"kind": "file", "path": path},
+            "alias": "image.png",
+            "mimeType": "image/png",
+        }))
+        .await
+        .expect("canonical file image input");
+
+        assert_eq!(image.media_type, "image/png");
+        assert_eq!(
+            BASE64_STANDARD
+                .decode(image.data)
+                .expect("base64 provider data"),
+            b"image"
+        );
     }
 
     struct ProgrammaticProjects;

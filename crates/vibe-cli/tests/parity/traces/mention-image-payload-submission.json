@@ -175,8 +175,8 @@
             "type": "image",
             "attachment": {
               "source": {
-                "kind": "inline",
-                "data": "wolQTkcNChoK"
+                "kind": "file",
+                "path": "__WORKSPACE__/image one.png"
               },
               "alias": "__WORKSPACE__/image one.png",
               "mimeType": "image/png"

@@ -137,11 +137,11 @@ pub fn prepare_submission(
     for resource in images {
         let image =
             read_image(&resource.path).map_err(|error| attachment_error(&resource.alias, error))?;
-        if let Some(transient) = draft
+        let transient = draft
             .transient_images
             .iter()
-            .find(|transient| transient.path == resource.path)
-        {
+            .find(|transient| transient.path == resource.path);
+        if let Some(transient) = transient {
             if image.digest != transient.digest {
                 return Err(SubmissionError::ImageChanged {
                     alias: transient.alias.clone(),
@@ -149,12 +149,23 @@ pub fn prepare_submission(
             }
             cleanup_paths.push(resource.path.clone());
         }
-        input.push(PublicContentBlock::Image {
-            attachment: json!({
-                "source": {
+        let source = transient.map_or_else(
+            || {
+                json!({
+                    "kind": "file",
+                    "path": resource.path,
+                })
+            },
+            |_| {
+                json!({
                     "kind": "inline",
                     "data": BASE64_STANDARD.encode(&image.bytes),
-                },
+                })
+            },
+        );
+        input.push(PublicContentBlock::Image {
+            attachment: json!({
+                "source": source,
                 "alias": resource.alias,
                 "mimeType": image.format.media_type(),
             }),
