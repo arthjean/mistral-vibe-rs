@@ -3,7 +3,6 @@ use std::path::Path;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::attachments::normalize_pasted_text;
 use super::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName, Modifier};
 use super::completion::CompletionResolution;
 use super::state::TuiState;
@@ -14,21 +13,8 @@ pub(super) fn apply_event(
     working_directory: &Path,
     state: &mut TuiState,
 ) -> Vec<InputEffect> {
-    let may_be_unbracketed_paste = matches!(
-        &event,
-        InputEvent::Key {
-            key: KeyName::Char,
-            mods,
-            ..
-        } if !mods.iter().any(|modifier| matches!(modifier, Modifier::Ctrl | Modifier::Alt | Modifier::Meta))
-    );
     let effects = input.apply(event);
-    let mut application_effects = apply_effects(input, effects, working_directory, state);
-    if may_be_unbracketed_paste && input.normalize_text_at_end(normalize_pasted_text) {
-        let effects = input.refresh_after_adapter_mutation();
-        application_effects.extend(apply_effects(input, effects, working_directory, state));
-    }
-    application_effects
+    apply_effects(input, effects, working_directory, state)
 }
 
 pub(super) fn apply_effects(
@@ -51,10 +37,6 @@ pub(super) fn apply_effects(
                         resolution: CompletionResolution::failed(request, &error),
                     })),
                 }
-            }
-            InputEffect::NormalizePastedPath { text } => {
-                let text = normalize_pasted_text(&text);
-                pending.extend(input.apply(InputEvent::PasteNormalized { text }));
             }
             InputEffect::Notify { message, .. } | InputEffect::Rejected { reason: message } => {
                 state.push_diagnostic(message);
@@ -109,18 +91,20 @@ mod tests {
     use std::fs;
 
     use super::*;
+    use crate::tui::path_normalization::PathNormalizationManager;
 
-    #[test]
-    fn unbracketed_drag_and_drop_characters_become_an_image_mention() {
+    #[tokio::test]
+    async fn unbracketed_drag_and_drop_characters_become_an_image_mention() {
         let workspace = tempfile::tempdir().expect("temporary workspace");
         let image = workspace.path().join("dropped image.png");
         fs::write(&image, b"image").expect("image fixture");
         let dropped = image.to_string_lossy().replace(' ', "\\ ");
         let mut input = ChatInputState::new();
         let mut state = TuiState::new("session");
+        let mut normalization = PathNormalizationManager::new().expect("normalization worker");
 
         for character in dropped.chars() {
-            let _ = apply_event(
+            let effects = apply_event(
                 &mut input,
                 InputEvent::Key {
                     key: KeyName::Char,
@@ -130,7 +114,24 @@ mod tests {
                 workspace.path(),
                 &mut state,
             );
+            normalization
+                .schedule_effects(&effects)
+                .expect("normalization request");
         }
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while normalization.has_pending() {
+                let event = normalization
+                    .next_event()
+                    .await
+                    .expect("normalization event");
+                let effects = apply_event(&mut input, event, workspace.path(), &mut state);
+                normalization
+                    .schedule_effects(&effects)
+                    .expect("follow-up effects");
+            }
+        })
+        .await
+        .expect("normalization completes");
 
         assert_eq!(
             input.editor().text(),

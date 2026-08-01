@@ -462,6 +462,15 @@
       ]
     },
     {
+      "id": "mention-image-payload-submission",
+      "gap": "GAP-17",
+      "story": "US-013",
+      "file": "traces/mention-image-payload-submission.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
       "id": "mention-missing-path-submission",
       "gap": "GAP-17",
       "story": "US-013",

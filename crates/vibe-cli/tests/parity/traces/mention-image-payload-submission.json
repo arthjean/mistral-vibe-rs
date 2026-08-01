@@ -1,0 +1,211 @@
+{
+  "id": "mention-image-payload-submission",
+  "gap": "GAP-17",
+  "story": "US-013",
+  "title": "A supported image produces the canonical submission payload",
+  "capabilities": [
+    "core"
+  ],
+  "setup": {
+    "workspace": "sample",
+    "viewport": {
+      "width": 80,
+      "height": 24
+    },
+    "safety": "neutral",
+    "agentName": "",
+    "commands": {},
+    "skills": [],
+    "voice": null,
+    "history": null,
+    "initial": {}
+  },
+  "initial": {
+    "state": {
+      "text": "",
+      "mode": ">",
+      "cursor": 0,
+      "selection": null,
+      "completion": {
+        "open": false,
+        "kind": null,
+        "selected": 0,
+        "items": []
+      },
+      "history": {
+        "navigating": false,
+        "loadedEntry": false,
+        "cursorMovedSinceLoad": false
+      },
+      "feedbackActive": false,
+      "switching": false
+    },
+    "effects": [],
+    "render": {
+      "visualLines": [
+        ""
+      ],
+      "wrapWidth": 71,
+      "cursorCell": [
+        0,
+        0
+      ],
+      "prompt": ">",
+      "popupVisible": false,
+      "popupRows": [],
+      "borderTitle": "",
+      "borderClasses": []
+    }
+  },
+  "events": [
+    {
+      "type": "paste",
+      "text": "inspect @'__WORKSPACE__/image one.png'"
+    },
+    {
+      "type": "key",
+      "key": "enter",
+      "char": null,
+      "mods": []
+    }
+  ],
+  "observations": [
+    {
+      "state": {
+        "text": "inspect @'__WORKSPACE__/image one.png'",
+        "mode": ">",
+        "cursor": 50,
+        "selection": null,
+        "completion": {
+          "open": false,
+          "kind": null,
+          "selected": 0,
+          "items": []
+        },
+        "history": {
+          "navigating": false,
+          "loadedEntry": false,
+          "cursorMovedSinceLoad": false
+        },
+        "feedbackActive": false,
+        "switching": false
+      },
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "render": {
+        "visualLines": [
+          "inspect @'__WORKSPACE__/image one.png'"
+        ],
+        "wrapWidth": 71,
+        "cursorCell": [
+          0,
+          50
+        ],
+        "prompt": ">",
+        "popupVisible": false,
+        "popupRows": [],
+        "borderTitle": "",
+        "borderClasses": []
+      },
+      "index": 0,
+      "event": {
+        "type": "paste",
+        "text": "inspect @'__WORKSPACE__/image one.png'"
+      }
+    },
+    {
+      "state": {
+        "text": "",
+        "mode": ">",
+        "cursor": 0,
+        "selection": null,
+        "completion": {
+          "open": false,
+          "kind": null,
+          "selected": 0,
+          "items": []
+        },
+        "history": {
+          "navigating": false,
+          "loadedEntry": false,
+          "cursorMovedSinceLoad": false
+        },
+        "feedbackActive": false,
+        "switching": false
+      },
+      "effects": [
+        {
+          "type": "submitRequested",
+          "text": "inspect @'__WORKSPACE__/image one.png'"
+        },
+        {
+          "type": "completionReset"
+        },
+        {
+          "type": "submit",
+          "text": "inspect @'__WORKSPACE__/image one.png'"
+        }
+      ],
+      "render": {
+        "visualLines": [
+          ""
+        ],
+        "wrapWidth": 71,
+        "cursorCell": [
+          0,
+          0
+        ],
+        "prompt": ">",
+        "popupVisible": false,
+        "popupRows": [],
+        "borderTitle": "",
+        "borderClasses": []
+      },
+      "submission": {
+        "prompt": "inspect @'__WORKSPACE__/image one.png'",
+        "input": [
+          {
+            "type": "text",
+            "text": "inspect @'__WORKSPACE__/image one.png'"
+          },
+          {
+            "type": "image",
+            "attachment": {
+              "source": {
+                "kind": "inline",
+                "data": "wolQTkcNChoK"
+              },
+              "alias": "__WORKSPACE__/image one.png",
+              "mimeType": "image/png"
+            }
+          }
+        ],
+        "clientUserMessageId": null,
+        "autoTitle": null,
+        "userDisplayContent": null,
+        "mentionStats": {
+          "count": 1,
+          "contextTypes": {
+            "image": 1
+          },
+          "fileExtensions": {}
+        }
+      },
+      "index": 1,
+      "event": {
+        "type": "key",
+        "key": "enter",
+        "char": null,
+        "mods": []
+      }
+    }
+  ],
+  "schemaVersion": 1,
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "version": "2.23.2"
+  }
+}

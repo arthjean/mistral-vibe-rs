@@ -198,6 +198,12 @@
       "render": "deferred",
       "state": "parity"
     },
+    "mention-image-payload-submission": {
+      "effects": "parity",
+      "render": "deferred",
+      "state": "parity",
+      "submission": "parity"
+    },
     "mention-missing-path-submission": {
       "effects": "parity",
       "render": "deferred",

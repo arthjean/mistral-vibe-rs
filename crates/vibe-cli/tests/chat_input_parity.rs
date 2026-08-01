@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
-use vibe_cli::tui::attachments::normalize_pasted_text;
+use vibe_cli::tui::attachments::{PromptDraft, normalize_pasted_text, prepare_submission};
 use vibe_cli::tui::chat_input::{ChatInputState, InputEffect, InputEvent};
 use vibe_cli::tui::commands::CommandContext;
 use vibe_cli::tui::completion::CompletionRequest;
@@ -73,7 +73,7 @@ const TRACE_KEYS: &[&str] = &[
     "schemaVersion",
     "reference",
 ];
-const DIMENSIONS: &[&str] = &["state", "effects", "render", "history"];
+const DIMENSIONS: &[&str] = &["state", "effects", "render", "history", "submission"];
 const STATUSES: &[&str] = &["parity", "gap", "deferred", "unavailable"];
 
 // ---------------------------------------------------------------------------
@@ -338,6 +338,11 @@ struct Replay {
     workspace: PathBuf,
 }
 
+struct StepObservation {
+    effects: Vec<Value>,
+    submission: Option<Value>,
+}
+
 impl Replay {
     fn new(workspace: PathBuf, setup: &Value) -> Result<Self, String> {
         let skills = setup
@@ -396,8 +401,9 @@ impl Replay {
     }
 
     /// Applies one trace event and settles every effect it triggers.
-    fn step(&mut self, event: InputEvent) -> Result<Vec<Value>, String> {
+    fn step(&mut self, event: InputEvent) -> Result<StepObservation, String> {
         let mut observable = Vec::new();
+        let mut submitted = None;
         let mut pending = self.state.apply(event);
         let mut rounds = 0usize;
         while !pending.is_empty() {
@@ -410,6 +416,9 @@ impl Replay {
             }
             let mut follow_up = Vec::new();
             for effect in std::mem::take(&mut pending) {
+                if let InputEffect::Submit { text } = &effect {
+                    submitted = Some(text.clone());
+                }
                 let encoded = serde_json::to_value(&effect)
                     .map_err(|error| format!("effect does not serialize: {error}"))?;
                 if encoded
@@ -423,10 +432,22 @@ impl Replay {
                     InputEffect::RequestCompletion { request } => {
                         follow_up.push(self.resolve_completion(request));
                     }
-                    InputEffect::NormalizePastedPath { text } => {
+                    InputEffect::NormalizePastedPath { text, document } => {
                         let normalized = normalize_pasted_text(&text);
                         if normalized != text {
-                            follow_up.push(InputEvent::PasteNormalized { text: normalized });
+                            follow_up.push(InputEvent::PasteNormalized {
+                                document,
+                                text: normalized,
+                            });
+                        }
+                    }
+                    InputEffect::NormalizeCurrentText { text } => {
+                        let normalized = normalize_pasted_text(&text);
+                        if normalized != text {
+                            follow_up.push(InputEvent::TextNormalized {
+                                original: text,
+                                text: normalized,
+                            });
                         }
                     }
                     _ => {}
@@ -436,7 +457,25 @@ impl Replay {
                 pending.extend(self.state.apply(event));
             }
         }
-        Ok(observable)
+        let submission = submitted
+            .map(|text| {
+                prepare_submission(
+                    &self.workspace,
+                    &PromptDraft::text_only(text),
+                    "oracle-model",
+                    true,
+                )
+                .map_err(|error| format!("submission preparation failed: {error}"))
+                .and_then(|prepared| {
+                    serde_json::to_value(prepared.turn)
+                        .map_err(|error| format!("submission does not serialize: {error}"))
+                })
+            })
+            .transpose()?;
+        Ok(StepObservation {
+            effects: observable,
+            submission,
+        })
     }
 
     /// Resolves the boundary request through the same engine as the live TUI.
@@ -802,7 +841,7 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
 
         for (index, (raw_event, observation)) in events.iter().zip(observations).enumerate() {
             let event = decode_event(raw_event)?;
-            let effects = replay.step(event)?;
+            let step = replay.step(event)?;
             let state = serde_json::to_value(replay.state.observe())
                 .map_err(|error| format!("state does not serialize: {error}"))?;
 
@@ -823,7 +862,7 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
                     "effects",
                     Some(index),
                     &expected_effects,
-                    &Value::Array(effects),
+                    &Value::Array(step.effects),
                 )
             {
                 observed.insert("effects", Some(divergence));
@@ -839,6 +878,20 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
                 )
             {
                 observed.insert("history", Some(divergence));
+            }
+
+            if let Some(expected_submission) = observation.get("submission") {
+                observed.entry("submission").or_insert(None);
+                if observed.get("submission").is_none_or(Option::is_none)
+                    && let Some(divergence) = compare(
+                        "submission",
+                        Some(index),
+                        expected_submission,
+                        step.submission.as_ref().unwrap_or(&Value::Null),
+                    )
+                {
+                    observed.insert("submission", Some(divergence));
+                }
             }
 
             if is_ep002_story(object)

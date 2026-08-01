@@ -771,6 +771,15 @@ SCENARIOS: list[dict[str, Any]] = [
         "workspace": "sample",
         "events": [text("compare @/etc/hostname"), key("enter")],
     },
+    {
+        "id": "mention-image-payload-submission",
+        "gap": "GAP-17",
+        "story": "US-013",
+        "title": "A supported image produces the canonical submission payload",
+        "workspace": "sample",
+        "captureSubmission": True,
+        "events": [paste("inspect @'__WORKSPACE__/image one.png'"), key("enter")],
+    },
     # -- GAP-18: clipboard image -------------------------------------------
     {
         "id": "clipboard-implicit-empty-paste",

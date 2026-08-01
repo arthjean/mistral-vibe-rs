@@ -148,6 +148,12 @@ pub enum InputEvent {
     },
     /// Normalised replacement for the most recent paste.
     PasteNormalized {
+        document: String,
+        text: String,
+    },
+    /// Normalised replacement for a full editor snapshot.
+    TextNormalized {
+        original: String,
         text: String,
     },
     Transcript {
@@ -189,6 +195,10 @@ pub enum InputEffect {
         request: CompletionRequest,
     },
     NormalizePastedPath {
+        text: String,
+        document: String,
+    },
+    NormalizeCurrentText {
         text: String,
     },
     OpenExternalEditor {
@@ -406,16 +416,16 @@ impl ChatInputState {
         true
     }
 
-    pub(crate) fn normalize_text_at_end(&mut self, normalize: impl FnOnce(&str) -> String) -> bool {
-        if self.editor.cursor() != self.editor.text().graphemes(true).count() {
-            return false;
+    fn apply_normalized_text(&mut self, original: &str, normalized: String) {
+        if self.editor.text() != original
+            || self.editor.cursor() != self.editor.text().graphemes(true).count()
+        {
+            return;
         }
-        let normalized = normalize(self.editor.text());
         if normalized == self.editor.text() {
-            return false;
+            return;
         }
         self.replace_text(normalized);
-        true
     }
 
     pub(crate) fn take_unrecorded(&mut self) -> Option<String> {
@@ -471,7 +481,10 @@ impl ChatInputState {
                     self.refresh_completion(&mut effects);
                 }
             }
-            InputEvent::PasteNormalized { text } => {
+            InputEvent::PasteNormalized { document, text } => {
+                if self.editor.text() != document {
+                    return effects;
+                }
                 let Some(range) = self.last_paste.take() else {
                     effects.push(InputEffect::Rejected {
                         reason: "no paste to normalize".to_owned(),
@@ -481,6 +494,13 @@ impl ChatInputState {
                 self.editor.select(range);
                 self.editor.insert(&text);
                 self.refresh_completion(&mut effects);
+            }
+            InputEvent::TextNormalized { original, text } => {
+                let before = self.editor.text().to_owned();
+                self.apply_normalized_text(&original, text);
+                if self.editor.text() != before {
+                    self.refresh_completion(&mut effects);
+                }
             }
             InputEvent::Transcript { text } => {
                 self.editor.insert(&text);
@@ -653,6 +673,18 @@ impl ChatInputState {
         }
         self.finish_user_edit(&before, effects);
         if self.editor.text() != before {
+            if key == KeyName::Char
+                && !self.secret_input
+                && !ctrl
+                && !alt
+                && !meta
+                && self.editor.cursor() == self.editor.text().graphemes(true).count()
+                && is_path_candidate(self.editor.text())
+            {
+                effects.push(InputEffect::NormalizeCurrentText {
+                    text: self.editor.text().to_owned(),
+                });
+            }
             self.refresh_completion(effects);
         }
     }
@@ -674,6 +706,7 @@ impl ChatInputState {
             self.last_paste = Some(start..self.editor.cursor());
             effects.push(InputEffect::NormalizePastedPath {
                 text: text.to_owned(),
+                document: self.editor.text().to_owned(),
             });
         } else {
             self.last_paste = None;

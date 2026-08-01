@@ -32,8 +32,8 @@ cargo test -p vibe-cli --test chat_input_parity
 ```
 
 The runner replays every trace through `tui::chat_input`. The oracle records
-four dimensions; the runner compares the two the Rust composer can answer for
-today:
+five dimensions; the runner compares each dimension as soon as its owning
+story closes:
 
 - `state` (compared): text, mode, cursor, selection, completion candidates,
   history position.
@@ -45,8 +45,9 @@ today:
 - `render` (deferred to US-018): composer prompt symbol, visual lines, cursor
   cell, popup rows and border chrome. Recorded now so the fixtures are ready,
   compared when the composer viewport lands.
-- `history` (deferred to US-006): the persisted prompt-history file contents.
-  Rust keeps history in memory only, so there is nothing to compare yet.
+- `history` (compared): the persisted prompt-history entries after each event.
+- `submission` (compared): the canonical text and image content blocks,
+  attachment payload, mention statistics, and display-content metadata.
 
 `expectations.json` declares one status per trace and per dimension:
 

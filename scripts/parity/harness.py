@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import mimetypes
 from pathlib import Path
 from typing import Any
 
@@ -378,6 +379,16 @@ class ScenarioRunner:
             "effects": effects,
             "render": capture_render(container, widget),
         }
+        submitted = next(
+            (
+                effect["text"]
+                for effect in effects
+                if effect.get("type") == "submit"
+            ),
+            None,
+        )
+        if submitted is not None and self.scenario.get("captureSubmission", False):
+            observation["submission"] = capture_submission(submitted, self.workspace)
         if self.app.history_file is not None:
             observation["history"] = read_history(self.app.history_file)
         return normalise(observation, str(self.workspace))
@@ -602,6 +613,39 @@ def read_history(path: Path) -> list[str]:
             entry = line
         entries.append(entry if isinstance(entry, str) else str(entry))
     return entries
+
+
+def capture_submission(message: str, workspace: Path) -> dict[str, Any]:
+    """Project a submitted image through the pinned reference's wire models."""
+
+    from vibe.app_server._workspace import _mention_stats
+    from vibe.app_server.models import ImageAttachment
+    from vibe.core.autocompletion.path_prompt import build_path_prompt_payload
+    from vibe.core.autocompletion.path_prompt_adapter import extract_image_resources
+    from vibe.core.session.image_snapshot import snapshot_image_bytes
+
+    payload = build_path_prompt_payload(message, base_dir=workspace)
+    content: list[dict[str, Any]] = [{"type": "text", "text": message}]
+    for resource in extract_image_resources(payload):
+        mime_type = mimetypes.guess_type(resource.path.name)[0] or "application/octet-stream"
+        snapshot = snapshot_image_bytes(
+            resource.path.read_bytes(),
+            alias=resource.alias,
+            mime_type=mime_type,
+            session_dir=None,
+        )
+        attachment = ImageAttachment.model_validate(
+            snapshot.model_dump(mode="json")
+        ).model_dump(mode="json")
+        content.append({"type": "image", "attachment": attachment})
+    return {
+        "prompt": message,
+        "input": content,
+        "clientUserMessageId": None,
+        "autoTitle": None,
+        "userDisplayContent": None,
+        "mentionStats": _mention_stats(payload).model_dump(mode="json"),
+    }
 
 
 __all__ = ["ScenarioRunner"]

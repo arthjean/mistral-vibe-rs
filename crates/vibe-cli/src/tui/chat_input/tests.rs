@@ -265,6 +265,7 @@ fn invalid_events_keep_state_valid() {
         }]
     );
     let effects = state.apply(InputEvent::PasteNormalized {
+        document: String::new(),
         text: "@image.png".to_owned(),
     });
     assert_eq!(
@@ -497,4 +498,20 @@ fn image_mentions_use_spacing_at_the_actual_insertion_point() {
 
     assert!(state.insert_image_mention(Path::new("/tmp/image one.png")));
     assert_eq!(state.observe().text, "@'/tmp/image one.png' body");
+}
+
+#[test]
+fn stale_path_normalization_cannot_replace_newer_input() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "/tmp/old.png");
+    state.replace_text("newer input");
+
+    assert_eq!(
+        state.apply(InputEvent::TextNormalized {
+            original: "/tmp/old.png".to_owned(),
+            text: "@/tmp/old.png".to_owned(),
+        }),
+        Vec::new()
+    );
+    assert_eq!(state.observe().text, "newer input");
 }

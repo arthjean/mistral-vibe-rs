@@ -10,6 +10,7 @@ pub mod history;
 pub mod input;
 pub mod interaction;
 mod path_mentions;
+mod path_normalization;
 mod path_resources;
 pub mod pickers;
 pub mod render;
@@ -58,6 +59,7 @@ use self::controls::{
 };
 use self::history::PromptHistory;
 use self::input::{ExternalEditorPort, SystemExternalEditor};
+use self::path_normalization::PathNormalizationManager;
 use self::render::{BannerContext, TokenState, UiContext, draw};
 use self::setup::{
     CredentialStore, EnvironmentThemeDetector, NativeCredentialStore, NotificationPreference,
@@ -294,6 +296,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     loop_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut active: Option<ActiveTurn> = None;
     let mut clipboard_images = ClipboardImageManager::default();
+    let mut path_normalization = PathNormalizationManager::new().map_err(CliError::Terminal)?;
 
     let event_loop = async {
         let mut exit = false;
@@ -410,6 +413,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                                 &mut terminal_guard,
                                 &mut terminal,
                                 &mut clipboard_images,
+                                &mut path_normalization,
                             ).await?;
                         }
                         Some(Err(error)) => {
@@ -434,6 +438,20 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                             &mut state,
                         ).await;
                     }
+                }
+                event = path_normalization.next_event(), if path_normalization.has_pending() => {
+                    let event = event.ok_or_else(|| {
+                        CliError::Terminal("path normalization worker stopped".to_owned())
+                    })?;
+                    let effects = apply_composer_event(
+                        &mut input,
+                        event,
+                        &working_directory,
+                        &mut state,
+                    );
+                    path_normalization
+                        .schedule_effects(&effects)
+                        .map_err(CliError::Terminal)?;
                 }
                 _ = ticker.tick() => {}
                 _ = loop_ticker.tick() => {
@@ -503,6 +521,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
         .shutdown()
         .await
         .map_err(CliError::Terminal);
+    path_normalization.shutdown();
     let telemetry = runtime
         .as_ref()
         .and_then(|runtime| runtime.telemetry.clone());
@@ -548,6 +567,7 @@ async fn handle_terminal_event(
     terminal_guard: &mut TerminalGuard<CrosstermOps<std::io::Stdout>>,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     clipboard_images: &mut ClipboardImageManager,
+    path_normalization: &mut PathNormalizationManager,
 ) -> Result<bool, CliError> {
     match event {
         Event::Resize(width, height) => {
@@ -563,6 +583,9 @@ async fn handle_terminal_event(
             let effects =
                 apply_composer_event(input, InputEvent::Paste { text }, working_directory, state);
             clipboard_images.schedule_effects(&effects);
+            path_normalization
+                .schedule_effects(&effects)
+                .map_err(CliError::Terminal)?;
         }
         Event::Mouse(mouse) => match mouse.kind {
             MouseEventKind::ScrollUp => {
@@ -616,6 +639,7 @@ async fn handle_terminal_event(
                 terminal_guard,
                 terminal,
                 clipboard_images,
+                path_normalization,
             )
             .await;
         }
@@ -817,9 +841,13 @@ async fn handle_key(
     terminal_guard: &mut TerminalGuard<CrosstermOps<std::io::Stdout>>,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     clipboard_images: &mut ClipboardImageManager,
+    path_normalization: &mut PathNormalizationManager,
 ) -> Result<bool, CliError> {
     input.set_secret_input(*secret_input);
     input.set_teleport_available(teleport_available(runtime.as_ref()));
+    if key.code == KeyCode::Enter {
+        settle_path_normalization(path_normalization, input, working_directory, state).await?;
+    }
     if handle_overlay_key(key, runtime, state, controls, input, theme) {
         let effects = input.refresh_after_adapter_mutation();
         apply_composer_effects(input, effects, working_directory, state);
@@ -1327,12 +1355,34 @@ async fn handle_key(
         | KeyCode::Down
         | KeyCode::Char(_) => {
             if let Some(event) = normalized_input_event(key) {
-                apply_composer_event(input, event, working_directory, state);
+                let effects = apply_composer_event(input, event, working_directory, state);
+                path_normalization
+                    .schedule_effects(&effects)
+                    .map_err(CliError::Terminal)?;
             }
         }
         _ => {}
     }
     Ok(false)
+}
+
+async fn settle_path_normalization(
+    path_normalization: &mut PathNormalizationManager,
+    input: &mut ChatInputState,
+    working_directory: &Path,
+    state: &mut TuiState,
+) -> Result<(), CliError> {
+    while path_normalization.has_pending() {
+        let event = path_normalization
+            .next_event()
+            .await
+            .ok_or_else(|| CliError::Terminal("path normalization worker stopped".to_owned()))?;
+        let effects = apply_composer_event(input, event, working_directory, state);
+        path_normalization
+            .schedule_effects(&effects)
+            .map_err(CliError::Terminal)?;
+    }
+    Ok(())
 }
 
 async fn handle_runtime_command(

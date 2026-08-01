@@ -125,11 +125,7 @@ impl ClipboardImageManager {
     ) {
         match result {
             Ok(Some(captured)) if model.is_none_or(|model| !model.supports_images) => {
-                if let Err(error) = remove_file(&captured.path).await {
-                    self.files.insert(captured.path, captured.digest);
-                    state
-                        .push_diagnostic(format!("Unused clipboard image cleanup failed: {error}"));
-                }
+                self.discard_capture(captured, state).await;
                 state.push_diagnostic(image_model_warning(model));
             }
             Ok(Some(captured)) => {
@@ -140,12 +136,7 @@ impl ClipboardImageManager {
                     .unwrap_or("clipboard image")
                     .to_owned();
                 if !input.insert_image_mention(&captured.path) {
-                    if let Err(error) = remove_file(&captured.path).await {
-                        self.files.insert(captured.path, captured.digest);
-                        state.push_diagnostic(format!(
-                            "Unused clipboard image cleanup failed: {error}"
-                        ));
-                    }
+                    self.discard_capture(captured, state).await;
                     state.push_diagnostic("Failed to paste image into prompt.");
                     return;
                 }
@@ -178,6 +169,13 @@ impl ClipboardImageManager {
             }
             Err(ClipboardError::Timeout) => {}
             Err(error) => state.push_diagnostic(error.to_string()),
+        }
+    }
+
+    async fn discard_capture(&mut self, captured: CapturedClipboardImage, state: &mut TuiState) {
+        if let Err(error) = remove_file(&captured.path).await {
+            self.files.insert(captured.path, captured.digest);
+            state.push_diagnostic(format!("Unused clipboard image cleanup failed: {error}"));
         }
     }
 
