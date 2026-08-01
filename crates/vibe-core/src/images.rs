@@ -59,6 +59,17 @@ impl ImageFormat {
     }
 
     #[must_use]
+    pub fn from_media_type(media_type: &str) -> Option<Self> {
+        match media_type {
+            "image/gif" => Some(Self::Gif),
+            "image/jpeg" => Some(Self::Jpeg),
+            "image/png" => Some(Self::Png),
+            "image/webp" => Some(Self::Webp),
+            _ => None,
+        }
+    }
+
+    #[must_use]
     pub const fn media_type(self) -> &'static str {
         match self {
             Self::Gif => "image/gif",
@@ -144,6 +155,11 @@ mod tests {
             Some(ImageFormat::Jpeg)
         );
         assert_eq!(ImageFormat::Jpeg.media_type(), "image/jpeg");
+        assert_eq!(
+            ImageFormat::from_media_type("image/jpeg"),
+            Some(ImageFormat::Jpeg)
+        );
+        assert_eq!(ImageFormat::from_media_type("image/svg+xml"), None);
         assert_eq!(ImageFormat::from_path(Path::new("notes.txt")), None);
         assert_eq!(ImageDigest::of(b"same"), ImageDigest::of(b"same"));
         assert_ne!(ImageDigest::of(b"same"), ImageDigest::of(b"other"));

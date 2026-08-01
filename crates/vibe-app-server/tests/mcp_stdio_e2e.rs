@@ -201,6 +201,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
             input: vec![PublicContentBlock::Text {
                 text: "use the fixture".to_owned(),
             }],
+            prepared_images: None,
             client_user_message_id: None,
             auto_title: None,
             user_display_content: None,

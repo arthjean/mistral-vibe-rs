@@ -463,7 +463,11 @@ pub(super) async fn start_prompt(
     }
     let reservation = runtime
         .service
-        .reserve_prompt(&runtime.session_id, &prepared.turn)
+        .reserve_prepared_prompt(
+            &runtime.session_id,
+            &prepared.turn,
+            prepared.provider_images,
+        )
         .await?;
     let protected = state.prompt_queue.transient_images();
     clipboard_images

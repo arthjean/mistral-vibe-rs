@@ -8,6 +8,7 @@ use serde_json::json;
 use thiserror::Error;
 use vibe_app_server::client::{PublicContentBlock, TurnRequest};
 use vibe_core::images::{ImageDigest, ImageReadError, MAX_IMAGES_PER_MESSAGE, read_image};
+use vibe_core::provider::ImageInput;
 
 pub use super::path_mentions::normalize_pasted_text;
 use super::path_mentions::{mention_values, resolve_owned_candidate};
@@ -88,6 +89,7 @@ impl PromptDraft {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreparedSubmission {
     pub turn: TurnRequest,
+    pub provider_images: Vec<ImageInput>,
     pub mention_stats: MentionStats,
     pub cleanup_paths: Vec<PathBuf>,
 }
@@ -133,6 +135,7 @@ pub fn prepare_submission(
     input.push(PublicContentBlock::Text {
         text: draft.text().to_owned(),
     });
+    let mut provider_images = Vec::with_capacity(images.len());
     let mut cleanup_paths = Vec::new();
     for resource in images {
         let image =
@@ -149,25 +152,28 @@ pub fn prepare_submission(
             }
             cleanup_paths.push(resource.path.clone());
         }
-        let source = transient.map_or_else(
-            || {
-                json!({
-                    "kind": "file",
-                    "path": resource.path,
-                })
-            },
-            |_| {
-                json!({
-                    "kind": "inline",
-                    "data": BASE64_STANDARD.encode(&image.bytes),
-                })
-            },
-        );
+        let media_type = image.format.media_type();
+        let encoded = BASE64_STANDARD.encode(&image.bytes);
+        provider_images.push(ImageInput {
+            media_type: media_type.to_owned(),
+            data: encoded.clone(),
+        });
+        let source = if transient.is_some() {
+            json!({
+                "kind": "inline",
+                "data": encoded,
+            })
+        } else {
+            json!({
+                "kind": "file",
+                "path": resource.path,
+            })
+        };
         input.push(PublicContentBlock::Image {
             attachment: json!({
                 "source": source,
                 "alias": resource.alias,
-                "mimeType": image.format.media_type(),
+                "mimeType": media_type,
             }),
         });
     }
@@ -182,6 +188,7 @@ pub fn prepare_submission(
     };
     Ok(PreparedSubmission {
         turn,
+        provider_images,
         mention_stats,
         cleanup_paths,
     })

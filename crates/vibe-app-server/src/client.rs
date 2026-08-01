@@ -6,8 +6,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -44,6 +42,7 @@ use vibe_protocol::{
     decode_frame,
 };
 
+use crate::images::{provider_images, validate_prepared_images};
 use crate::server::{
     AppServer, ApprovalAgentFactory, DeferredWork, ServerConnection, ServerError, SessionIntent,
     SessionToolFactory, SessionView,
@@ -173,6 +172,9 @@ pub struct TurnReservation {
     pub turn_id: String,
     pub prompt: String,
     pub input: Vec<PublicContentBlock>,
+    /// Stable, provider-ready image snapshots. `None` means the driver must
+    /// materialize and validate the public attachment blocks before use.
+    pub prepared_images: Option<Vec<ImageInput>>,
     pub client_user_message_id: Option<String>,
     pub auto_title: Option<String>,
     pub user_display_content: Option<Value>,
@@ -743,6 +745,7 @@ impl InProcessClient {
             turn_id,
             prompt: turn.prompt.clone(),
             input: turn.input.clone(),
+            prepared_images: None,
             client_user_message_id: turn.client_user_message_id.clone(),
             auto_title: turn.auto_title.clone(),
             user_display_content: turn.user_display_content.clone(),
@@ -785,6 +788,7 @@ impl InProcessClient {
                 turn_id,
                 prompt,
                 input,
+                prepared_images: None,
                 client_user_message_id,
                 auto_title,
                 user_display_content,
@@ -1863,8 +1867,21 @@ where
         session_id: &str,
         turn: &TurnRequest,
     ) -> Result<TurnReservation, ClientError> {
+        let images = provider_images(&turn.input).await?;
+        self.reserve_prepared_prompt(session_id, turn, images).await
+    }
+
+    pub async fn reserve_prepared_prompt(
+        &mut self,
+        session_id: &str,
+        turn: &TurnRequest,
+        images: Vec<ImageInput>,
+    ) -> Result<TurnReservation, ClientError> {
+        validate_prepared_images(turn, &images)?;
         self.client.configure_pending_mcp(session_id).await?;
-        self.client.reserve_turn_request(session_id, turn)
+        let mut reservation = self.client.reserve_turn_request(session_id, turn)?;
+        reservation.prepared_images = Some(images);
+        Ok(reservation)
     }
 
     pub async fn reserve_due_loop(
@@ -1873,7 +1890,18 @@ where
         now_seconds: u64,
     ) -> Result<Option<ScheduledTurn>, ClientError> {
         self.client.configure_pending_mcp(session_id).await?;
-        self.client.reserve_due_loop(session_id, now_seconds)
+        let Some(mut scheduled) = self.client.reserve_due_loop(session_id, now_seconds)? else {
+            return Ok(None);
+        };
+        match provider_images(&scheduled.reservation.input).await {
+            Ok(images) => scheduled.reservation.prepared_images = Some(images),
+            Err(error) => {
+                self.client
+                    .fail_turn(&scheduled.reservation, &error.to_string())?;
+                return Err(ClientError::Driver(error));
+            }
+        }
+        Ok(Some(scheduled))
     }
 
     pub fn finish_scheduled_loop(
@@ -2856,13 +2884,10 @@ impl LiveTurnDriver {
                 input.metadata.insert(key.to_owned(), value.to_string());
             }
         }
-        for block in &reservation.input {
-            if let PublicContentBlock::Image { attachment } = block
-                && let Some(image) = provider_image_input(attachment).await
-            {
-                input.images.push(image);
-            }
-        }
+        input.images = match &reservation.prepared_images {
+            Some(images) => images.clone(),
+            None => provider_images(&reservation.input).await?,
+        };
         let mut pending_context = self
             .pending_context
             .lock()
@@ -3118,29 +3143,6 @@ impl LiveTurnDriver {
             .map(drop)
             .map_err(|error| DriverError::Tool(error.to_string()))
     }
-}
-
-async fn provider_image_input(attachment: &Value) -> Option<ImageInput> {
-    let media_type = attachment
-        .get("mimeType")
-        .or_else(|| attachment.get("mediaType"))
-        .and_then(Value::as_str)?;
-    let source = attachment.get("source");
-    let data = match source
-        .and_then(|source| source.get("kind"))
-        .and_then(Value::as_str)
-    {
-        Some("file") => {
-            let path = source?.get("path")?.as_str()?;
-            BASE64_STANDARD.encode(tokio::fs::read(path).await.ok()?)
-        }
-        Some("inline") => source?.get("data")?.as_str()?.to_owned(),
-        _ => attachment.get("data")?.as_str()?.to_owned(),
-    };
-    Some(ImageInput {
-        media_type: media_type.to_owned(),
-        data,
-    })
 }
 
 fn resource_contexts(reservation: &TurnReservation) -> Vec<String> {
@@ -3633,6 +3635,8 @@ pub enum DriverError {
     StatePoisoned,
     #[error("turn driver does not support `{0}`")]
     UnsupportedControl(&'static str),
+    #[error("image attachment is invalid: {0}")]
+    ImageAttachment(String),
     #[error("event observer failed: {0}")]
     Observation(String),
     #[error("compaction failed: {0}")]
@@ -3814,57 +3818,48 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn provider_image_input_accepts_canonical_inline_attachments() {
-        let image = provider_image_input(&json!({
-            "source": {"kind": "inline", "data": "aW1hZ2U="},
-            "alias": "image.png",
-            "mimeType": "image/png",
-        }))
-        .await
-        .expect("canonical image input");
+    async fn prepared_prompt_reserves_already_validated_images() {
+        let mut service = HeadlessService::new_shared(Arc::new(EchoTurnDriver::new("unused")))
+            .expect("service starts");
+        let session_id = service.start_session(&options()).expect("session starts");
+        let image = ImageInput {
+            media_type: "image/png".to_owned(),
+            data: "aW1hZ2U=".to_owned(),
+        };
+        let turn = TurnRequest {
+            prompt: "inspect @image.png".to_owned(),
+            input: vec![
+                PublicContentBlock::Text {
+                    text: "inspect @image.png".to_owned(),
+                },
+                PublicContentBlock::Image {
+                    attachment: json!({
+                        "source": {"kind": "file", "path": "/missing/image.png"},
+                        "alias": "image.png",
+                        "mimeType": "image/png",
+                    }),
+                },
+            ],
+            client_user_message_id: None,
+            auto_title: None,
+            user_display_content: None,
+            mention_stats: None,
+        };
 
-        assert_eq!(
-            image,
-            ImageInput {
-                media_type: "image/png".to_owned(),
-                data: "aW1hZ2U=".to_owned(),
-            }
-        );
-    }
+        let error = service
+            .reserve_prepared_prompt(&session_id, &turn, Vec::new())
+            .await
+            .expect_err("mismatched prepared images fail before reservation");
+        assert!(error.to_string().contains("provider images"));
+        let reservation = service
+            .reserve_prepared_prompt(&session_id, &turn, vec![image.clone()])
+            .await
+            .expect("prepared prompt reserves without rereading its public file source");
 
-    #[tokio::test]
-    async fn provider_image_input_keeps_legacy_attachment_compatibility() {
-        let image = provider_image_input(&json!({
-            "data": "aW1hZ2U=",
-            "mediaType": "image/png",
-        }))
-        .await
-        .expect("legacy image input");
-
-        assert_eq!(image.media_type, "image/png");
-        assert_eq!(image.data, "aW1hZ2U=");
-    }
-
-    #[tokio::test]
-    async fn provider_image_input_reads_canonical_file_attachments() {
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let path = directory.path().join("image.png");
-        std::fs::write(&path, b"image").expect("image fixture");
-        let image = provider_image_input(&json!({
-            "source": {"kind": "file", "path": path},
-            "alias": "image.png",
-            "mimeType": "image/png",
-        }))
-        .await
-        .expect("canonical file image input");
-
-        assert_eq!(image.media_type, "image/png");
-        assert_eq!(
-            BASE64_STANDARD
-                .decode(image.data)
-                .expect("base64 provider data"),
-            b"image"
-        );
+        assert_eq!(reservation.prepared_images, Some(vec![image]));
+        service
+            .fail_reserved(&reservation, "test cleanup")
+            .expect("reservation cleanup");
     }
 
     struct ProgrammaticProjects;
@@ -4381,6 +4376,7 @@ mod tests {
                 input: vec![PublicContentBlock::Text {
                     text: "delegate".to_owned(),
                 }],
+                prepared_images: None,
                 client_user_message_id: None,
                 auto_title: None,
                 user_display_content: None,
@@ -4514,6 +4510,7 @@ mod tests {
                 input: vec![PublicContentBlock::Text {
                     text: "new question".to_owned(),
                 }],
+                prepared_images: None,
                 client_user_message_id: None,
                 auto_title: None,
                 user_display_content: None,
@@ -4670,6 +4667,7 @@ mod tests {
                 input: vec![PublicContentBlock::Text {
                     text: "use MCP".to_owned(),
                 }],
+                prepared_images: None,
                 client_user_message_id: None,
                 auto_title: None,
                 user_display_content: None,

@@ -234,6 +234,13 @@ fn external_images_attach_but_unsupported_models_and_oversize_files_fail_atomica
     let prepared = prepare_submission(temporary.path(), &prompt, "test-model", true)
         .expect("external image prepares");
     assert_eq!(prepared.turn.input.len(), 2);
+    fs::write(&image, b"replaced").expect("replace source after preparation");
+    assert_eq!(
+        BASE64_STANDARD
+            .decode(&prepared.provider_images[0].data)
+            .expect("stable provider image"),
+        b"image"
+    );
     let unsupported = prepare_submission(temporary.path(), &prompt, "test-model", false)
         .expect_err("unsupported model must fail");
     assert!(matches!(

@@ -248,6 +248,7 @@ where
                                 turn_id: turn_id.clone(),
                                 prompt,
                                 input,
+                                prepared_images: None,
                                 client_user_message_id,
                                 auto_title,
                                 user_display_content,

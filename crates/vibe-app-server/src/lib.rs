@@ -2,6 +2,7 @@
 
 mod builtin_agents;
 pub mod client;
+mod images;
 pub mod release3;
 pub mod release4;
 pub mod resources;
