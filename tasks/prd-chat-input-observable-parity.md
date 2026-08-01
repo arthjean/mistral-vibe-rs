@@ -7,6 +7,7 @@
 |---------|------|--------|---------|
 | 1.0 | 2026-07-31 | Arthur Jean | Initial draft based on the Python to Rust parity audit |
 | 1.1 | 2026-08-01 | Arthur Jean | Track latest stable Rust and dependencies instead of pinning 1.85 / Ratatui 0.29 / Crossterm 0.28; quality gates run on `stable` |
+| 1.2 | 2026-08-01 | Arthur Jean | Add official Mistral Vibe source navigation to every user story and identify this document as phase A of the 27-gap TUI parity program |
 
 ## Problem Statement
 
@@ -20,6 +21,8 @@
 ## Overview
 
 This initiative makes the Rust chat input observably equivalent to the Python reference for the audited surface. Parity is defined as equivalent state, effects, submissions, notifications, and rendered terminal output for the same initial conditions and normalized event sequence. Python remains the behavioral oracle. Rust structure and idioms may differ.
+
+This document is phase A of the 27-gap TUI parity program. Phase B is specified in `tasks/prd-tui-runtime-observable-parity.md`; its audit coverage matrix assigns every gap to one or more globally numbered stories across both documents.
 
 Implementation will center the existing `PromptEditor`, completion engine, command registry, clipboard port, event loop, and renderer around a deterministic `ChatInputState + InputEvent -> InputEffect` transition boundary inside `vibe-cli`. Operating-system and asynchronous work remains behind effects and adapters. No new cross-crate protocol, app-server capability, or dependency is assumed. Voice is gated by a validation story because its existing public boundary is the only high-risk architectural assumption.
 
@@ -119,6 +122,10 @@ Create the executable oracle and deterministic Rust boundary required to measure
 **Size:** M (3 pts)
 **Dependencies:** None
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui`, `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion`, `/home/arthur/dev/mistral-vibe/tests/cli/textual_ui`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/app.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/text_area.py`, `/home/arthur/dev/mistral-vibe/tests/cli/textual_ui/test_chat_input_keybindings.py`
+
 **Acceptance Criteria:**
 
 - [ ] Given the 21 audited gaps, when the oracle corpus is generated, then every gap maps to at least one versioned trace containing initial state, normalized events, state observations, effects, and render assertions.
@@ -133,6 +140,10 @@ Create the executable oracle and deterministic Rust boundary required to measure
 **Size:** L (5 pts)
 **Dependencies:** Blocked by US-001
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`, `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/text_area.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/body.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/completion_manager.py`
+
 **Acceptance Criteria:**
 
 - [ ] Given a `ChatInputState` and normalized `InputEvent`, when the transition function runs, then its next state and ordered effects are deterministic and serializable for differential comparison.
@@ -146,6 +157,10 @@ Create the executable oracle and deterministic Rust boundary required to measure
 **Priority:** P0
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-001, US-002
+
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/tests/cli/textual_ui`, `/home/arthur/dev/mistral-vibe/tests/autocompletion`
+- Files: `/home/arthur/dev/mistral-vibe/tests/cli/textual_ui/test_chat_input_keybindings.py`, `/home/arthur/dev/mistral-vibe/tests/autocompletion/test_ui_chat_autocompletion.py`, `/home/arthur/dev/mistral-vibe/tests/autocompletion/test_path_completion_controller.py`
 
 **Acceptance Criteria:**
 
@@ -169,11 +184,15 @@ Restore Python-compatible keyboard, mouse, multiline, mode, submission, and hist
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-002
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/text_area.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/body.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/input_kinds.py`
+
 **Acceptance Criteria:**
 
-- [ ] Given an empty composer, when its first character is `>`, `!`, `/`, or an available `&`, then the mode, prefix rendering, completion source, backspace behavior, and submitted input kind match Python.
-- [ ] Given leading or trailing whitespace around a non-empty submission, when Enter submits, then the emitted text is stripped exactly as in Python and an all-whitespace prompt emits no turn.
-- [ ] Given `&` when teleport is unavailable or a mode prefix removed back to the default state, when the user continues editing, then no unavailable action runs and the remaining text is preserved.
+- [x] Given an empty composer, when its first character is `>`, `!`, `/`, or an available `&`, then the mode, prefix rendering, completion source, backspace behavior, and submitted input kind match Python.
+- [x] Given leading or trailing whitespace around a non-empty submission, when Enter submits, then the emitted text is stripped exactly as in Python and an all-whitespace prompt emits no turn.
+- [x] Given `&` when teleport is unavailable or a mode prefix removed back to the default state, when the user continues editing, then no unavailable action runs and the remaining text is preserved.
 
 #### US-005: Restore cursor, selection, word, mouse, and external-editor behavior
 
@@ -183,11 +202,15 @@ Restore Python-compatible keyboard, mouse, multiline, mode, submission, and hist
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-002
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/text_area.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/word_selection.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/external_editor.py`
+
 **Acceptance Criteria:**
 
-- [ ] Given ASCII, combining marks, emoji sequences, and double-width characters, when character, word, line, Home, End, Shift-selection, deletion, and mouse-selection actions run, then text, grapheme selection, and visible cursor match the oracle.
-- [ ] Given external-editor output different from the input, when the effect returns, then content, cursor, selection, history-navigation state, and completion state match Python.
-- [ ] Given unchanged external-editor output, an out-of-bounds mouse coordinate, or unsupported mouse capture, when the result is handled, then the prompt and cursor are not reset and no panic or synthetic selection occurs.
+- [x] Given ASCII, combining marks, emoji sequences, and double-width characters, when character, word, line, Home, End, Shift-selection, deletion, and mouse-selection actions run, then text, grapheme selection, and visible cursor match the oracle.
+- [x] Given external-editor output different from the input, when the effect returns, then content, cursor, selection, history-navigation state, and completion state match Python.
+- [x] Given unchanged external-editor output, an out-of-bounds mouse coordinate, or unsupported mouse capture, when the result is handled, then the prompt and cursor are not reset and no panic or synthetic selection occurs.
 
 #### US-006: Persist bounded compatible prompt history
 
@@ -197,11 +220,15 @@ Restore Python-compatible keyboard, mouse, multiline, mode, submission, and hist
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-002
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/history_manager.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/body.py`, `/home/arthur/dev/mistral-vibe/tests/cli/textual_ui/test_chat_input_keybindings.py`
+
 **Acceptance Criteria:**
 
-- [ ] Given successful non-empty submissions, when history is persisted, then `VIBE_HOME/vibehistory` contains JSONL compatible records with consecutive duplicates suppressed and only the latest 100 entries retained.
-- [ ] Given a restart, when the composer initializes, then valid entries are loaded in reference order and navigation begins from the current draft.
-- [ ] Given missing permissions, corrupt lines, interrupted replacement, or concurrent writers, when history is read or written, then valid existing entries remain recoverable, prompt submission still succeeds, and a diagnostic contains no prompt content.
+- [x] Given successful non-empty submissions, when history is persisted, then `VIBE_HOME/vibehistory` contains JSONL compatible records with consecutive duplicates suppressed and only the latest 100 entries retained.
+- [x] Given a restart, when the composer initializes, then valid entries are loaded in reference order and navigation begins from the current draft.
+- [x] Given missing permissions, corrupt lines, interrupted replacement, or concurrent writers, when history is read or written, then valid existing entries remain recoverable, prompt submission still succeeds, and a diagnostic contains no prompt content.
 
 #### US-007: Match visual-line history navigation and draft restoration
 
@@ -211,11 +238,15 @@ Restore Python-compatible keyboard, mouse, multiline, mode, submission, and hist
 **Size:** L (5 pts)
 **Dependencies:** Blocked by US-005, US-006
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`, `/home/arthur/dev/mistral-vibe/tests/cli/textual_ui`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/text_area.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/body.py`, `/home/arthur/dev/mistral-vibe/tests/cli/textual_ui/test_chat_input_keybindings.py`
+
 **Acceptance Criteria:**
 
-- [ ] Given hard or visually wrapped multiline text, when Up/Down can move to another visual line, then the cursor moves within the prompt and history is not recalled.
-- [ ] Given the cursor at a reference history boundary, when Up/Down recalls entries, then cursor placement, draft restoration, boundary clamping, and edit-after-recall reset behavior match Python.
-- [ ] Given history recall or an edit to a recalled entry, when the state changes, then completion stays closed until a subsequent qualifying user edit and stale history indices cannot overwrite the current draft.
+- [x] Given hard or visually wrapped multiline text, when Up/Down can move to another visual line, then the cursor moves within the prompt and history is not recalled.
+- [x] Given the cursor at a reference history boundary, when Up/Down recalls entries, then cursor placement, draft restoration, boundary clamping, and edit-after-recall reset behavior match Python.
+- [x] Given history recall or an edit to a recalled entry, when the state changes, then completion stays closed until a subsequent qualifying user edit and stale history indices cannot overwrite the current draft.
 
 ---
 
@@ -233,6 +264,10 @@ Make command discovery, slash ranking, skill metadata, path search, popup contro
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-002
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/commands.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/app.py`, `/home/arthur/dev/mistral-vibe/tests/autocompletion/test_ui_chat_autocompletion.py`
+
 **Acceptance Criteria:**
 
 - [ ] Given every Python command and alias, when commands are listed or parsed, then Rust matches canonical name, aliases, description, argument handling, and `/continue` semantics.
@@ -246,6 +281,10 @@ Make command discovery, slash ranking, skill metadata, path search, popup contro
 **Priority:** P0
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-008
+
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion/completers.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion/slash_command.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/completion_manager.py`
 
 **Acceptance Criteria:**
 
@@ -261,6 +300,10 @@ Make command discovery, slash ranking, skill metadata, path search, popup contro
 **Size:** L (5 pts)
 **Dependencies:** Blocked by US-002
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion`, `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion/file_indexer`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion/path_completion.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion/file_indexer/indexer.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion/file_indexer/ignore_rules.py`
+
 **Acceptance Criteria:**
 
 - [ ] Given the last active `@` anywhere before the cursor, including after punctuation and within a partial nested path, when completion runs, then trigger range, query, global matching, ranking, and insertion match Python.
@@ -274,6 +317,10 @@ Make command discovery, slash ranking, skill metadata, path search, popup contro
 **Priority:** P0
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-009, US-010
+
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion/path_completion.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/autocompletion/slash_command.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/completion_popup.py`
 
 **Acceptance Criteria:**
 
@@ -297,6 +344,10 @@ Match atomic text paste, drag-and-drop normalization, mention submission, attach
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-002
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/paste_path.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/text_area.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/vscode_compat.py`
+
 **Acceptance Criteria:**
 
 - [ ] Given bracketed paste containing newlines, tabs, escape bytes, control-like text, or shortcut characters, when it is received, then it is inserted atomically and no contained character dispatches a key binding.
@@ -311,6 +362,10 @@ Match atomic text paste, drag-and-drop normalization, mention submission, attach
 **Size:** L (5 pts)
 **Dependencies:** Blocked by US-012
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/core/autocompletion`, `/home/arthur/dev/mistral-vibe/vibe/app_server`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/core/autocompletion/path_prompt.py`, `/home/arthur/dev/mistral-vibe/vibe/core/autocompletion/path_prompt_adapter.py`, `/home/arthur/dev/mistral-vibe/vibe/app_server/_workspace.py`
+
 **Acceptance Criteria:**
 
 - [ ] Given mentions of text files, directories, non-image binaries, missing paths, and external paths, when a prompt is submitted, then they remain prompt text with the same normalization as Python and are not rejected or injected as text resources.
@@ -324,6 +379,10 @@ Match atomic text paste, drag-and-drop normalization, mention submission, attach
 **Priority:** P0
 **Size:** L (5 pts)
 **Dependencies:** Blocked by US-012, US-013
+
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`, `/home/arthur/dev/mistral-vibe/vibe/app_server`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/paste_image.py`, `/home/arthur/dev/mistral-vibe/vibe/app_server/_workspace.py`, `/home/arthur/dev/mistral-vibe/tests/cli/textual_ui/test_paste_image.py`
 
 **Acceptance Criteria:**
 
@@ -347,6 +406,10 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 **Size:** S (2 pts)
 **Dependencies:** Blocked by US-001
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/voice_manager`, `/home/arthur/dev/mistral-vibe/vibe/cli/audio_recorder`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/voice_manager/voice_manager_port.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/audio_recorder/audio_recorder_port.py`, `/home/arthur/dev/mistral-vibe/tests/voice_manager/test_voice_manager.py`
+
 **Acceptance Criteria:**
 
 - [ ] Given the Python voice state machine and Rust public ports, when the spike maps start, stop, cancel, transcription, device, error, and transcript effects, then each required observation has a concrete `vibe-cli` integration point.
@@ -361,6 +424,10 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 **Size:** L (5 pts)
 **Dependencies:** Blocked by US-002, US-015
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/voice_manager`, `/home/arthur/dev/mistral-vibe/vibe/cli/audio_recorder`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/recording`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/voice_app.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/recording/recording_indicator.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/app.py`
+
 **Acceptance Criteria:**
 
 - [ ] Given voice is enabled and idle, when Ctrl+R is pressed, then recording starts and the composer presents the same recording state and instructions as Python.
@@ -374,6 +441,10 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 **Priority:** P1
 **Size:** L (5 pts)
 **Dependencies:** Blocked by US-002
+
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/feedback_bar.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/container.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/app.py`
 
 **Acceptance Criteria:**
 
@@ -390,6 +461,10 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-002, US-005
 
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui`
+- Files: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/text_area.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input/container.py`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/app.tcss`
+
 **Acceptance Criteria:**
 
 - [ ] Given prompts from 64 KiB through 1 MiB, when editing and rendering at 40, 80, and 120 columns, then no text is discarded, the viewport contains the cursor, and movement can reach both ends.
@@ -403,6 +478,10 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 **Priority:** P0
 **Size:** L (5 pts)
 **Dependencies:** Blocked by US-003, US-004, US-005, US-006, US-007, US-008, US-009, US-010, US-011, US-012, US-013, US-014, US-015, US-016, US-017, US-018
+
+**Official Mistral Vibe reference navigation:**
+- Directories: `/home/arthur/dev/mistral-vibe/tests/cli/textual_ui`, `/home/arthur/dev/mistral-vibe/tests/autocompletion`, `/home/arthur/dev/mistral-vibe/tests/snapshots`
+- Files: `/home/arthur/dev/mistral-vibe/tests/cli/textual_ui/test_terminal_input_filter.py`, `/home/arthur/dev/mistral-vibe/tests/cli/textual_ui/test_chat_input_keybindings.py`, `/home/arthur/dev/mistral-vibe/tests/autocompletion/test_path_completion_controller.py`
 
 **Acceptance Criteria:**
 

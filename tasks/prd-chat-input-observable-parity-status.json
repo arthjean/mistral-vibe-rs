@@ -17,10 +17,10 @@
     {
       "id": "EP-002",
       "title": "Editing, Modes, and Prompt History",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 4
     },
     {
       "id": "EP-003",
@@ -93,58 +93,58 @@
       "id": "US-004",
       "title": "Restore input modes and submission semantics",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-002"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-01",
+      "completed_at": "2026-08-01",
+      "reviewed_at": "2026-08-01"
     },
     {
       "id": "US-005",
       "title": "Restore cursor, selection, word, mouse, and external-editor behavior",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-002"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-01",
+      "completed_at": "2026-08-01",
+      "reviewed_at": "2026-08-01"
     },
     {
       "id": "US-006",
       "title": "Persist bounded compatible prompt history",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-002"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-01",
+      "completed_at": "2026-08-01",
+      "reviewed_at": "2026-08-01"
     },
     {
       "id": "US-007",
       "title": "Match visual-line history navigation and draft restoration",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-005",
         "US-006"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-01",
+      "completed_at": "2026-08-01",
+      "reviewed_at": "2026-08-01"
     },
     {
       "id": "US-008",
