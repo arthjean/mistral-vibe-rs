@@ -24,7 +24,9 @@ async fn main() -> ExitCode {
             }
             match vibe_cli::tui::run_interactive(invocation).await {
                 Ok(exit) => {
-                    if exit.session_started
+                    let session_started = exit.session_started;
+                    let initialization_error = exit.initialization_error;
+                    if session_started
                         && let Some(worktree) = worktree
                         && let Err(error) = worktree.cleanup_terminal()
                     {
@@ -32,6 +34,9 @@ async fn main() -> ExitCode {
                             std::io::stderr().lock(),
                             "Could not clean up worktree: {error}"
                         );
+                    }
+                    if let Some(error) = initialization_error {
+                        eprintln!("Startup closed after initialization failure: {error}");
                     }
                     ExitCode::SUCCESS
                 }

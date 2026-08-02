@@ -2,6 +2,7 @@ pub mod attachments;
 pub mod chat_input;
 pub mod clipboard;
 mod clipboard_images;
+mod cloud_workflow;
 pub mod commands;
 pub mod completion;
 mod composer;
@@ -27,14 +28,16 @@ mod voice;
 mod workflow;
 
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crossterm::event::{
     Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
 };
-use futures_util::StreamExt;
+use futures_util::{FutureExt, Stream, StreamExt};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
@@ -53,6 +56,7 @@ use vibe_app_server::server::AppServer;
 
 use self::chat_input::{ChatInputState, InputEffect, InputEvent, Safety};
 use self::clipboard_images::{ClipboardImageManager, ImageModel, ImageModels};
+use self::cloud_workflow::{CloudWorkflowState, ProjectSelection};
 use self::commands::{CommandContext, CommandId};
 use self::composer::{
     apply_effects as apply_composer_effects, apply_event as apply_composer_event,
@@ -196,44 +200,57 @@ impl Default for BannerMetrics {
     }
 }
 
-#[derive(Default)]
-enum CloudWorkflowState {
-    #[default]
-    Idle,
-    ConfiguringProject {
-        picker_id: String,
-    },
-    SelectingTeleportProject {
-        picker_id: String,
-        prompt: Option<String>,
-    },
-    Teleporting {
-        operation_id: String,
-    },
-}
-
-impl CloudWorkflowState {
-    fn picker_id(&self) -> Option<&str> {
-        match self {
-            Self::ConfiguringProject { picker_id }
-            | Self::SelectingTeleportProject { picker_id, .. } => Some(picker_id),
-            Self::Idle | Self::Teleporting { .. } => None,
-        }
-    }
-
-    fn teleport_operation_id(&self) -> Option<&str> {
-        match self {
-            Self::Teleporting { operation_id } => Some(operation_id),
-            Self::Idle
-            | Self::ConfiguringProject { .. }
-            | Self::SelectingTeleportProject { .. } => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct InteractiveExit {
     pub session_started: bool,
+    pub initialization_error: Option<CliError>,
+}
+
+const MAX_FATAL_INPUT_DRAIN: usize = 256;
+const MAX_READY_INTERRUPTS_TO_DRAIN: usize = 32;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReadyInputDrain {
+    Empty,
+    Saturated,
+    Closed,
+}
+
+fn drain_ready_terminal_events<S, E>(events: &mut S) -> Result<ReadyInputDrain, CliError>
+where
+    S: Stream<Item = Result<Event, E>> + Unpin,
+    E: std::fmt::Display,
+{
+    for _ in 0..MAX_FATAL_INPUT_DRAIN {
+        match events.next().now_or_never() {
+            Some(Some(Ok(_))) => {}
+            Some(Some(Err(error))) => return Err(CliError::Terminal(error.to_string())),
+            Some(None) => return Ok(ReadyInputDrain::Closed),
+            None => return Ok(ReadyInputDrain::Empty),
+        }
+    }
+    Ok(ReadyInputDrain::Saturated)
+}
+
+fn drain_ready_interrupts<F, E, R>(
+    interrupt: &mut Pin<Box<F>>,
+    mut recreate: R,
+) -> Result<usize, CliError>
+where
+    F: Future<Output = Result<(), E>>,
+    E: std::fmt::Display,
+    R: FnMut() -> F,
+{
+    let mut drained = 0;
+    while drained < MAX_READY_INTERRUPTS_TO_DRAIN {
+        let Some(signal) = interrupt.as_mut().now_or_never() else {
+            return Ok(drained);
+        };
+        signal.map_err(|error| CliError::Terminal(error.to_string()))?;
+        drained += 1;
+        interrupt.set(recreate());
+    }
+    Ok(drained)
 }
 
 pub async fn run_interactive(
@@ -254,6 +271,13 @@ pub async fn run_interactive(
     if trust.cancelled {
         return Ok(InteractiveExit {
             session_started: false,
+            initialization_error: None,
+        });
+    }
+    if !startup::resolve_location_safety(trust.dangerous_warning.as_deref())? {
+        return Ok(InteractiveExit {
+            session_started: false,
+            initialization_error: None,
         });
     }
     match startup::resolve_bare_resume(&arguments, &startup_host)? {
@@ -266,6 +290,7 @@ pub async fn run_interactive(
         startup::ResumeResolution::Abort => {
             return Ok(InteractiveExit {
                 session_started: false,
+                initialization_error: None,
             });
         }
     }
@@ -308,9 +333,6 @@ pub async fn run_interactive(
             state
         }
     };
-    if let Some(warning) = trust.dangerous_warning {
-        push_local_notice(&mut state, &warning, EntryStatus::Completed);
-    }
     if let Some(error) = keyring_error {
         state.push_diagnostic(format!(
             "Native credential lookup failed: {error}. Restart with --setup after repairing keyring access"
@@ -373,6 +395,8 @@ pub async fn run_interactive(
     let mut terminal =
         Terminal::new(backend).map_err(|error| CliError::Terminal(error.to_string()))?;
     let mut events = EventStream::new();
+    let mut interrupt = Box::pin(tokio::signal::ctrl_c());
+    let _ = drain_ready_interrupts(&mut interrupt, tokio::signal::ctrl_c)?;
     let mut ticker = tokio::time::interval(FRAME_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut voice_ticker = tokio::time::interval(Duration::from_millis(100));
@@ -513,6 +537,20 @@ pub async fn run_interactive(
                     );
                 })
                 .map_err(|error| CliError::Terminal(error.to_string()))?;
+            if mounted_startup.needs_fatal_render() {
+                match drain_ready_terminal_events(&mut events)? {
+                    ReadyInputDrain::Empty => {
+                        let _ =
+                            drain_ready_interrupts(&mut interrupt, tokio::signal::ctrl_c)?;
+                        mounted_startup.arm_fatal_acknowledgement();
+                    }
+                    ReadyInputDrain::Saturated => continue,
+                    ReadyInputDrain::Closed => {
+                        exit = true;
+                        continue;
+                    }
+                }
+            }
             startup::complete_mounted_startup(
                 &mut mounted_startup,
                 &working_directory,
@@ -524,10 +562,17 @@ pub async fn run_interactive(
                 &mut clipboard_images,
             )
             .await?;
+            if mounted_startup.needs_fatal_render() {
+                continue;
+            }
             tokio::select! {
-                signal = tokio::signal::ctrl_c() => {
+                signal = interrupt.as_mut() => {
                     signal.map_err(|error| CliError::Terminal(error.to_string()))?;
-                    if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_mut()) {
+                    interrupt.set(tokio::signal::ctrl_c());
+                    let _ = drain_ready_interrupts(&mut interrupt, tokio::signal::ctrl_c)?;
+                    if mounted_startup.is_fatal() {
+                        exit = true;
+                    } else if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_mut()) {
                         if active.cancel_requested {
                             exit = true;
                         } else {
@@ -546,7 +591,7 @@ pub async fn run_interactive(
                 }
                 event = events.next(), if deferred_enter.is_none() => {
                     match event {
-                        Some(Ok(Event::Key(key))) if mounted_startup.is_fatal()
+                        Some(Ok(Event::Key(key))) if mounted_startup.is_awaiting_fatal_key()
                             && matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) =>
                         {
                             exit = true;
@@ -708,6 +753,7 @@ pub async fn run_interactive(
     } else {
         (Ok(()), Ok(()))
     };
+    let initialization_error = mounted_startup.into_initialization_error();
     let result = event_loop
         .and(restoration)
         .and(interrupt_result)
@@ -717,7 +763,10 @@ pub async fn run_interactive(
     if let Some(telemetry) = telemetry {
         telemetry.flush().await;
     }
-    result.map(|()| InteractiveExit { session_started })
+    result.map(|()| InteractiveExit {
+        session_started,
+        initialization_error,
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2282,6 +2331,10 @@ async fn handle_project_command(
     let arguments = command_arguments.split_whitespace().collect::<Vec<_>>();
     match arguments.as_slice() {
         [] | ["open"] => {
+            if let Err(message) = runtime.cloud.ensure_idle() {
+                state.push_diagnostic(message);
+                return;
+            }
             if let Some(result) = call_runtime_async(
                 runtime,
                 "vibeCode/projects/open",
@@ -2303,7 +2356,10 @@ async fn handle_project_command(
                     state.push_diagnostic("Remote project picker omitted its identity");
                     return;
                 };
-                runtime.cloud = CloudWorkflowState::ConfiguringProject { picker_id };
+                if let Err(message) = runtime.cloud.configure_project(picker_id) {
+                    state.push_diagnostic(message);
+                    return;
+                }
                 push_json_notice(
                     state,
                     "Remote projects",
@@ -2338,7 +2394,6 @@ async fn handle_project_command(
                     EntryStatus::Completed,
                 );
                 complete_project_selection(
-                    picker_id,
                     (*project_id).to_owned(),
                     working_directory,
                     runtime,
@@ -2404,14 +2459,7 @@ async fn handle_project_command(
                     state.push_diagnostic("Created remote project omitted its identity");
                     return;
                 };
-                complete_project_selection(
-                    picker_id,
-                    project_id,
-                    working_directory,
-                    runtime,
-                    state,
-                )
-                .await;
+                complete_project_selection(project_id, working_directory, runtime, state).await;
             }
         }
         ["unlink"] | ["cancel"] => {
@@ -2433,7 +2481,7 @@ async fn handle_project_command(
             .await
             .is_some()
             {
-                runtime.cloud = CloudWorkflowState::Idle;
+                runtime.cloud.cancel_project_selection();
                 push_local_notice(
                     state,
                     "Remote project selection cleared",
@@ -2480,7 +2528,12 @@ async fn handle_teleport_command(
                 }),
             )
         };
-        let _ = call_runtime_async(runtime, method, params, state).await;
+        if call_runtime_async(runtime, method, params, state)
+            .await
+            .is_some()
+        {
+            runtime.cloud.complete_teleport();
+        }
         return;
     }
     let prompt = (!arguments.is_empty()).then(|| arguments.join(" "));
@@ -2493,16 +2546,21 @@ async fn start_teleport(
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    runtime.cloud = CloudWorkflowState::Idle;
+    if let Err(message) = runtime.cloud.ensure_idle() {
+        state.push_diagnostic(message);
+        return;
+    }
     let Some(result) = call_runtime_async(
         runtime,
         "vibeCode/projects/open",
-        json!({
-            "sessionId": runtime.session_id,
-            "workingDirectory": working_directory,
-            "purpose": "teleport",
-            "prompt": prompt,
-        }),
+        with_optional_prompt(
+            json!({
+                "sessionId": runtime.session_id,
+                "workingDirectory": working_directory,
+                "purpose": "teleport",
+            }),
+            prompt,
+        ),
         state,
     )
     .await
@@ -2525,10 +2583,13 @@ async fn start_teleport(
         .and_then(Value::as_str)
         .map(ToOwned::to_owned);
     let Some(project_id) = project_id else {
-        runtime.cloud = CloudWorkflowState::SelectingTeleportProject {
-            picker_id,
-            prompt: prompt.map(ToOwned::to_owned),
-        };
+        if let Err(message) = runtime
+            .cloud
+            .select_teleport_project(picker_id, prompt.map(ToOwned::to_owned))
+        {
+            state.push_diagnostic(message);
+            return;
+        }
         push_json_notice(
             state,
             "Select a remote project for Teleport",
@@ -2551,14 +2612,13 @@ async fn start_teleport(
 }
 
 async fn complete_project_selection(
-    picker_id: String,
     project_id: String,
     working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    match std::mem::take(&mut runtime.cloud) {
-        CloudWorkflowState::SelectingTeleportProject { prompt, .. } => {
+    match runtime.cloud.complete_project_selection() {
+        Some(ProjectSelection::StartTeleport { picker_id, prompt }) => {
             begin_teleport(
                 picker_id,
                 project_id,
@@ -2569,8 +2629,8 @@ async fn complete_project_selection(
             )
             .await;
         }
-        CloudWorkflowState::ConfiguringProject { .. } => {}
-        CloudWorkflowState::Idle | CloudWorkflowState::Teleporting { .. } => {
+        Some(ProjectSelection::Configured) => {}
+        None => {
             state.push_diagnostic("Remote project selection completed without an active picker");
         }
     }
@@ -2590,24 +2650,48 @@ async fn begin_teleport(
             .duration_since(UNIX_EPOCH)
             .map_or(0, |duration| duration.as_millis())
     );
-    if call_runtime_async(
+    if let Some(dispatch) = call_runtime_async(
         runtime,
         "vibeCode/teleport/start",
-        json!({
-            "sessionId": runtime.session_id,
-            "operationId": operation_id,
-            "pickerId": picker_id,
-            "projectId": project_id,
-            "workingDirectory": working_directory,
-            "prompt": prompt,
-        }),
+        with_optional_prompt(
+            json!({
+                "sessionId": runtime.session_id,
+                "operationId": operation_id,
+                "pickerId": picker_id,
+                "projectId": project_id,
+                "workingDirectory": working_directory,
+            }),
+            prompt,
+        ),
         state,
     )
     .await
-    .is_some()
+        && !teleport_dispatch_is_terminal(&dispatch)
+        && let Err(message) = runtime.cloud.start_teleport(operation_id)
     {
-        runtime.cloud = CloudWorkflowState::Teleporting { operation_id };
+        state.push_diagnostic(message);
     }
+}
+
+fn teleport_dispatch_is_terminal(dispatch: &PublicDispatch) -> bool {
+    dispatch.notifications.iter().rev().any(|notification| {
+        notification.method == "vibeCode/teleport/event"
+            && notification
+                .params
+                .get("event")
+                .and_then(|event| event.get("kind"))
+                .and_then(Value::as_str)
+                .is_some_and(|kind| matches!(kind, "complete" | "failed" | "cancelled"))
+    })
+}
+
+fn with_optional_prompt(mut params: Value, prompt: Option<&str>) -> Value {
+    if let Some(prompt) = prompt
+        && let Some(params) = params.as_object_mut()
+    {
+        params.insert("prompt".to_owned(), json!(prompt));
+    }
+    params
 }
 
 fn push_json_notice(state: &mut TuiState, label: &str, value: Option<&Value>) {
@@ -3209,13 +3293,10 @@ fn release3_service(
     arguments: &Arguments,
     working_directory: &Path,
 ) -> Result<Release3Service, CliError> {
-    Release3Service::new(
-        startup::release3_paths(arguments, working_directory),
-        toml::Table::new(),
-        arguments.trust,
-    )
-    .map(Release3Service::with_runtime_session_persistence)
-    .map_err(|error| CliError::Terminal(error.to_string()))
+    startup::startup_host(arguments, working_directory)
+        .into_release3(arguments.trust)
+        .map_err(startup::StartupError::from)
+        .map_err(CliError::from)
 }
 
 fn startup_preferences(
@@ -3997,10 +4078,102 @@ fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
+    use std::task::{Context, Poll};
+
     use super::*;
     use vibe_app_server::client::TurnRequest;
+    use vibe_app_server::release4::{
+        CloudError, GitProbe, GitSnapshot, Project, ProjectCloud, ProjectGitSnapshot, ProjectPage,
+        ProjectRepository, TeleportCloud, TeleportStartRequest,
+    };
+
+    struct PanicAfterCompletionInterrupt {
+        ready: bool,
+        completed: bool,
+    }
+
+    impl Future for PanicAfterCompletionInterrupt {
+        type Output = Result<(), std::io::Error>;
+
+        fn poll(mut self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<Self::Output> {
+            assert!(!self.completed, "completed interrupt was polled again");
+            if self.ready {
+                self.completed = true;
+                Poll::Ready(Ok(()))
+            } else {
+                Poll::Pending
+            }
+        }
+    }
+
+    #[test]
+    fn stale_inputs_are_drained_before_fatal_acknowledgement_arms() {
+        let queued = Arc::new(Mutex::new(VecDeque::from([Ok::<_, std::io::Error>(
+            Event::Key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)),
+        )])));
+        let polled = Arc::clone(&queued);
+        let mut events = futures_util::stream::poll_fn(move |_| {
+            polled
+                .lock()
+                .expect("event queue lock")
+                .pop_front()
+                .map_or(Poll::Pending, |event| Poll::Ready(Some(event)))
+        });
+        let mut startup = startup::MountedStartup::FatalPendingRender(CliError::Terminal(
+            "initialization failed".to_owned(),
+        ));
+
+        assert_eq!(
+            drain_ready_terminal_events(&mut events).expect("stale input drains"),
+            ReadyInputDrain::Empty
+        );
+        let mut stale_interrupt = Box::pin(PanicAfterCompletionInterrupt {
+            ready: true,
+            completed: false,
+        });
+        let mut replacements = VecDeque::from([true, false]);
+        assert_eq!(
+            drain_ready_interrupts(&mut stale_interrupt, || {
+                PanicAfterCompletionInterrupt {
+                    ready: replacements.pop_front().expect("bounded replacement"),
+                    completed: false,
+                }
+            })
+            .expect("stale interrupt drains"),
+            2
+        );
+        assert!(stale_interrupt.as_mut().now_or_never().is_none());
+        assert!(!startup.is_awaiting_fatal_key());
+        startup.arm_fatal_acknowledgement();
+        assert!(startup.is_awaiting_fatal_key());
+        assert!(events.next().now_or_never().is_none());
+
+        queued
+            .lock()
+            .expect("event queue lock")
+            .push_back(Ok(Event::Key(KeyEvent::new(
+                KeyCode::Char('n'),
+                KeyModifiers::NONE,
+            ))));
+        assert!(matches!(
+            events.next().now_or_never(),
+            Some(Some(Ok(Event::Key(KeyEvent {
+                code: KeyCode::Char('n'),
+                ..
+            }))))
+        ));
+    }
 
     fn interactive_test_runtime(session_id: &str) -> InteractiveRuntime {
+        interactive_test_runtime_with_server(session_id, AppServer::default())
+    }
+
+    fn interactive_test_runtime_with_server(
+        session_id: &str,
+        server: AppServer,
+    ) -> InteractiveRuntime {
         let driver = Arc::new(
             LiveTurnDriver::from_credential(
                 LiveDriverConfig {
@@ -4017,9 +4190,8 @@ mod tests {
             )
             .expect("test driver"),
         );
-        let mut service =
-            HeadlessService::new_interactive_shared_with_server(driver, AppServer::default())
-                .expect("test service");
+        let mut service = HeadlessService::new_interactive_shared_with_server(driver, server)
+            .expect("test service");
         let session_id = service
             .start_session(&SessionOptions {
                 working_directory: "/workspace".to_owned(),
@@ -4074,6 +4246,193 @@ mod tests {
             )
             .expect("test voice manager"),
         }
+    }
+
+    struct StartupProjects;
+
+    impl ProjectCloud for StartupProjects {
+        fn create(
+            &self,
+            name: &str,
+            repo_url: &str,
+            default_branch: &str,
+        ) -> Result<Project, CloudError> {
+            Ok(Project {
+                project_id: "startup-project".to_owned(),
+                name: name.to_owned(),
+                repositories: vec![ProjectRepository {
+                    repo_url: repo_url.to_owned(),
+                    default_branch: Some(default_branch.to_owned()),
+                }],
+                is_read_only: false,
+            })
+        }
+
+        fn list(&self, _cursor: Option<&str>) -> Result<ProjectPage, CloudError> {
+            Ok(ProjectPage {
+                projects: vec![Project {
+                    project_id: "startup-project".to_owned(),
+                    name: "startup".to_owned(),
+                    repositories: vec![ProjectRepository {
+                        repo_url: "https://github.com/example/startup.git".to_owned(),
+                        default_branch: Some("main".to_owned()),
+                    }],
+                    is_read_only: false,
+                }],
+                next_cursor: None,
+            })
+        }
+    }
+
+    struct StartupGit;
+
+    impl GitProbe for StartupGit {
+        fn inspect(&self, _working_directory: &Path) -> Result<GitSnapshot, CloudError> {
+            Ok(GitSnapshot {
+                repository: "https://github.com/example/startup.git".to_owned(),
+                dirty: false,
+                unpushed: false,
+            })
+        }
+
+        fn inspect_project(
+            &self,
+            working_directory: &Path,
+        ) -> Result<ProjectGitSnapshot, CloudError> {
+            Ok(ProjectGitSnapshot {
+                snapshot: self.inspect(working_directory)?,
+                repo_root: working_directory.to_string_lossy().into_owned(),
+                remote_name: "origin".to_owned(),
+                branch: Some("main".to_owned()),
+            })
+        }
+
+        fn push(&self, _working_directory: &Path) -> Result<(), CloudError> {
+            Ok(())
+        }
+    }
+
+    struct CapturingStartupTeleport {
+        requests: Arc<Mutex<Vec<TeleportStartRequest>>>,
+    }
+
+    impl TeleportCloud for CapturingStartupTeleport {
+        fn start(&self, request: &TeleportStartRequest) -> Result<String, CloudError> {
+            self.requests
+                .lock()
+                .map_err(|_| CloudError::Unavailable("fixture lock was poisoned".to_owned()))?
+                .push(request.clone());
+            Ok("https://cloud.example/teleport/startup".to_owned())
+        }
+    }
+
+    #[tokio::test]
+    async fn mounted_startup_teleport_executes_once_without_an_agent_turn() {
+        for prompt in [None, Some("deployment context".to_owned())] {
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let release4 = Release4Service::with_backends(
+                Arc::new(StartupProjects),
+                Arc::new(CapturingStartupTeleport {
+                    requests: requests.clone(),
+                }),
+                Arc::new(StartupGit),
+            );
+            let server = AppServer::with_release4_service(release4);
+            let mut runtime = Some(interactive_test_runtime_with_server(
+                "startup-teleport",
+                server,
+            ));
+            let mut mounted = startup::MountedStartup::new(Some(
+                startup::PostMountAction::Teleport(prompt.clone()),
+            ));
+            let mut active = None;
+            let mut state = TuiState::new("startup-teleport");
+            let mut controls = ControlState::new("startup-teleport");
+            let mut input = ChatInputState::default();
+            let mut clipboard_images = ClipboardImageManager::default();
+
+            startup::complete_mounted_startup(
+                &mut mounted,
+                Path::new("/workspace"),
+                &mut runtime,
+                &mut active,
+                &mut state,
+                &mut controls,
+                &mut input,
+                &mut clipboard_images,
+            )
+            .await
+            .expect("mounted Teleport startup");
+            startup::complete_mounted_startup(
+                &mut mounted,
+                Path::new("/workspace"),
+                &mut runtime,
+                &mut active,
+                &mut state,
+                &mut controls,
+                &mut input,
+                &mut clipboard_images,
+            )
+            .await
+            .expect("mounted startup is consumed once");
+
+            assert!(
+                active.is_none(),
+                "Teleport startup must not start an agent turn"
+            );
+            let requests = requests.lock().expect("captured Teleport requests");
+            assert_eq!(
+                requests.len(),
+                1,
+                "workflow: {:?}; diagnostics: {:?}; entries: {:?}",
+                runtime.as_ref().map(|runtime| &runtime.cloud),
+                state.diagnostics().collect::<Vec<_>>(),
+                state
+                    .entries
+                    .iter()
+                    .map(|entry| entry.text.as_str())
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(
+                requests[0].summary,
+                prompt.unwrap_or_else(|| "Continue this session in Vibe Code".to_owned())
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn unavailable_startup_teleport_stays_visible_and_has_no_remote_effect() {
+        let mut runtime = interactive_test_runtime("startup-teleport-unavailable");
+        runtime.vibe_code_enabled = false;
+        let mut runtime = Some(runtime);
+        let mut mounted = startup::MountedStartup::new(Some(startup::PostMountAction::Teleport(
+            Some("do not submit".to_owned()),
+        )));
+        let mut active = None;
+        let mut state = TuiState::new("startup-teleport-unavailable");
+        let mut controls = ControlState::new("startup-teleport-unavailable");
+        let mut input = ChatInputState::default();
+        let mut clipboard_images = ClipboardImageManager::default();
+
+        startup::complete_mounted_startup(
+            &mut mounted,
+            Path::new("/workspace"),
+            &mut runtime,
+            &mut active,
+            &mut state,
+            &mut controls,
+            &mut input,
+            &mut clipboard_images,
+        )
+        .await
+        .expect("unavailable startup Teleport is recoverable");
+
+        assert!(active.is_none());
+        assert!(
+            state
+                .diagnostics()
+                .any(|diagnostic| { diagnostic.contains("Startup Teleport is unavailable") })
+        );
     }
 
     #[tokio::test]

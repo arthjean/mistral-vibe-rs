@@ -14,7 +14,8 @@ use super::PostMountAction;
 pub(in crate::tui) enum MountedStartup {
     Pending(Option<PostMountAction>),
     Ready,
-    Fatal,
+    FatalPendingRender(CliError),
+    FatalAwaitingKey(CliError),
 }
 
 impl MountedStartup {
@@ -23,7 +24,33 @@ impl MountedStartup {
     }
 
     pub(in crate::tui) const fn is_fatal(&self) -> bool {
-        matches!(self, Self::Fatal)
+        matches!(
+            self,
+            Self::FatalPendingRender(_) | Self::FatalAwaitingKey(_)
+        )
+    }
+
+    pub(in crate::tui) const fn is_awaiting_fatal_key(&self) -> bool {
+        matches!(self, Self::FatalAwaitingKey(_))
+    }
+
+    pub(in crate::tui) const fn needs_fatal_render(&self) -> bool {
+        matches!(self, Self::FatalPendingRender(_))
+    }
+
+    pub(in crate::tui) fn arm_fatal_acknowledgement(&mut self) {
+        let current = std::mem::replace(self, Self::Ready);
+        *self = match current {
+            Self::FatalPendingRender(error) => Self::FatalAwaitingKey(error),
+            current => current,
+        };
+    }
+
+    pub(in crate::tui) fn into_initialization_error(self) -> Option<CliError> {
+        match self {
+            Self::FatalPendingRender(error) | Self::FatalAwaitingKey(error) => Some(error),
+            Self::Pending(_) | Self::Ready => None,
+        }
     }
 }
 
@@ -40,7 +67,9 @@ pub(in crate::tui) async fn complete_mounted_startup(
 ) -> Result<(), CliError> {
     let action = match std::mem::replace(startup, MountedStartup::Ready) {
         MountedStartup::Pending(action) => action,
-        current @ (MountedStartup::Ready | MountedStartup::Fatal) => {
+        current @ (MountedStartup::Ready
+        | MountedStartup::FatalPendingRender(_)
+        | MountedStartup::FatalAwaitingKey(_)) => {
             *startup = current;
             return Ok(());
         }
@@ -57,26 +86,8 @@ pub(in crate::tui) async fn complete_mounted_startup(
         Ok(Vec::new())
     };
     state.waiting = false;
-    match initialization {
-        Ok(diagnostics) => {
-            for diagnostic in diagnostics {
-                push_local_notice(
-                    state,
-                    &format!("MCP server failed to connect: {diagnostic}"),
-                    EntryStatus::Failed,
-                );
-            }
-        }
-        Err(error) => {
-            push_local_notice(
-                state,
-                &format!("Background initialization failed: {error}"),
-                EntryStatus::Failed,
-            );
-            push_local_notice(state, "Press any key to exit", EntryStatus::Completed);
-            *startup = MountedStartup::Fatal;
-            return Ok(());
-        }
+    if !record_initialization(startup, state, initialization) {
+        return Ok(());
     }
 
     match action {
@@ -111,6 +122,35 @@ pub(in crate::tui) async fn complete_mounted_startup(
         None => {}
     }
     Ok(())
+}
+
+fn record_initialization(
+    startup: &mut MountedStartup,
+    state: &mut TuiState,
+    initialization: Result<Vec<String>, CliError>,
+) -> bool {
+    match initialization {
+        Ok(diagnostics) => {
+            for diagnostic in diagnostics {
+                push_local_notice(
+                    state,
+                    &format!("MCP server failed to connect: {diagnostic}"),
+                    EntryStatus::Failed,
+                );
+            }
+            true
+        }
+        Err(error) => {
+            push_local_notice(
+                state,
+                &format!("Background initialization failed: {error}"),
+                EntryStatus::Failed,
+            );
+            push_local_notice(state, "Press any key to exit", EntryStatus::Completed);
+            *startup = MountedStartup::FatalPendingRender(error);
+            false
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -150,4 +190,38 @@ async fn dispatch_initial_prompt(
         state.push_diagnostic("Initial prompt submission failed");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fatal_initialization_remains_typed_after_visible_failure() {
+        let mut startup = MountedStartup::new(None);
+        let mut state = TuiState::new("fatal-startup");
+        assert!(!record_initialization(
+            &mut startup,
+            &mut state,
+            Err(CliError::Terminal("host initialization failed".to_owned())),
+        ));
+        assert!(startup.is_fatal());
+        assert!(!startup.is_awaiting_fatal_key());
+        assert!(state.entries.iter().any(|entry| {
+            entry.text.contains("Background initialization failed")
+                && entry.status == EntryStatus::Failed
+        }));
+        assert!(
+            state
+                .entries
+                .iter()
+                .any(|entry| entry.text == "Press any key to exit")
+        );
+        startup.arm_fatal_acknowledgement();
+        assert!(startup.is_awaiting_fatal_key());
+        assert!(matches!(
+            startup.into_initialization_error(),
+            Some(CliError::Terminal(_))
+        ));
+    }
 }

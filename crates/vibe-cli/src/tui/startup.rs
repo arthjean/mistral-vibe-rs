@@ -19,7 +19,9 @@ pub use invocation::{
 };
 pub(super) use mounted::{MountedStartup, complete_mounted_startup};
 pub use session::{ResumeResolution, resolve_bare_resume};
-pub use trust::{TrustResolution, dangerous_directory_warning, resolve_workspace_trust};
+pub use trust::{
+    TrustResolution, dangerous_directory_warning, resolve_location_safety, resolve_workspace_trust,
+};
 pub use worktree::{CleanupOutcome, LaunchWorkspace, PreparedWorktree, WorktreeCleanupState};
 
 #[derive(Debug, Error)]

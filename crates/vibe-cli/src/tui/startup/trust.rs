@@ -6,7 +6,7 @@ use vibe_app_server::startup::StartupHost;
 use crate::Arguments;
 
 use super::StartupError;
-use super::dialog::run_trust_dialog;
+use super::dialog::{run_location_warning_dialog, run_trust_dialog};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrustResolution {
@@ -62,6 +62,10 @@ pub fn resolve_workspace_trust(
         cancelled: false,
         dangerous_warning,
     })
+}
+
+pub fn resolve_location_safety(warning: Option<&str>) -> Result<bool, StartupError> {
+    warning.map_or(Ok(true), run_location_warning_dialog)
 }
 
 #[must_use]

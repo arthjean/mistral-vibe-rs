@@ -15,7 +15,9 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use nix::pty::{Winsize, openpty};
+use nix::sys::signal::{Signal, kill};
 use nix::sys::termios::{LocalFlags, tcgetattr};
+use nix::unistd::Pid;
 use vibe_core::events::ModelMessage;
 use vibe_core::storage::SessionStore;
 
@@ -23,6 +25,10 @@ use vibe_core::storage::SessionStore;
 #[allow(clippy::unwrap_in_result)]
 fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<(), String> {
     let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
     let pty = openpty(
         Some(&Winsize {
             ws_row: 30,
@@ -39,10 +45,10 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
     let terminal_probe = slave.try_clone().expect("PTY probe clones");
     let baseline_termios = tcgetattr(&terminal_probe).expect("PTY attributes read");
     let mut child = Command::new(env!("CARGO_BIN_EXE_vibe"))
-        .current_dir(temporary.path())
+        .current_dir(&workspace)
         .arg("--trust")
-        .env("HOME", temporary.path())
-        .env("VIBE_HOME", temporary.path().join(".vibe"))
+        .env("HOME", &home)
+        .env("VIBE_HOME", home.join(".vibe"))
         .env("MISTRAL_API_KEY", "fixture")
         .env("NO_COLOR", "1")
         .env("TERM", "xterm-256color")
@@ -225,6 +231,27 @@ struct PtyProcess {
 
 impl PtyProcess {
     fn spawn(working_directory: &Path, vibe_home: &Path, arguments: &[&str]) -> Self {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_vibe"));
+        command.args(arguments);
+        Self::spawn_command(working_directory, vibe_home, command)
+    }
+
+    fn spawn_piped_prompt(working_directory: &Path, vibe_home: &Path, prompt: &str) -> Self {
+        let mut command = Command::new("setsid");
+        command
+            .args([
+                "--ctty",
+                "--wait",
+                "sh",
+                "-c",
+                "printf '%s\\n' \"$VIBE_TEST_PROMPT\" | \"$VIBE_TEST_BIN\" --trust --api-base http://127.0.0.1:9",
+            ])
+            .env("VIBE_TEST_PROMPT", prompt)
+            .env("VIBE_TEST_BIN", env!("CARGO_BIN_EXE_vibe"));
+        Self::spawn_command(working_directory, vibe_home, command)
+    }
+
+    fn spawn_command(working_directory: &Path, vibe_home: &Path, mut command: Command) -> Self {
         let pty = openpty(
             Some(&Winsize {
                 ws_row: 30,
@@ -238,9 +265,8 @@ impl PtyProcess {
         let master = File::from(pty.master);
         let mut reader = master.try_clone().expect("PTY reader clones");
         let slave = File::from(pty.slave);
-        let child = Command::new(env!("CARGO_BIN_EXE_vibe"))
+        let child = command
             .current_dir(working_directory)
-            .args(arguments)
             .env("HOME", vibe_home)
             .env("VIBE_HOME", vibe_home.join(".vibe"))
             .env("MISTRAL_API_KEY", "fixture")
@@ -312,6 +338,11 @@ impl PtyProcess {
         self.master.flush().expect("PTY input flushes");
     }
 
+    fn interrupt(&self) {
+        let pid = i32::try_from(self.child.id()).expect("child pid fits platform pid");
+        kill(Pid::from_raw(pid), Signal::SIGINT).expect("SIGINT reaches TUI");
+    }
+
     fn wait(mut self, timeout: Duration) -> (ExitStatus, Vec<u8>) {
         let deadline = Instant::now() + timeout;
         let status = loop {
@@ -368,6 +399,34 @@ fn seed_session(vibe_home: &Path, workspace: &Path, id: &str, marker: &str, time
 }
 
 #[test]
+fn sigint_after_mount_restores_terminal() {
+    let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
+    let mut process = PtyProcess::spawn(&workspace, &home, &["--trust"]);
+    process.wait_for(b"default", Duration::from_secs(3));
+    process.interrupt();
+    let (status, transcript) = process.wait(Duration::from_secs(3));
+
+    assert!(status.success(), "SIGINT shutdown exited with {status}");
+    for (sequence, capability) in [
+        (b"\x1b[?1049l".as_slice(), "primary screen"),
+        (b"\x1b[?25h".as_slice(), "visible cursor"),
+        (b"\x1b[?2004l".as_slice(), "disabled bracketed paste"),
+    ] {
+        assert!(
+            transcript
+                .windows(sequence.len())
+                .any(|window| window == sequence),
+            "SIGINT did not restore {capability}: {}",
+            String::from_utf8_lossy(&transcript)
+        );
+    }
+}
+
+#[test]
 fn trust_abort_restores_terminal_without_starting_session_discovery() {
     let temporary = tempfile::tempdir().expect("temporary TUI home");
     let workspace = temporary.path().join("workspace");
@@ -397,11 +456,37 @@ fn trust_abort_restores_terminal_without_starting_session_discovery() {
 }
 
 #[test]
+fn sensitive_location_abort_precedes_session_discovery_and_restores_terminal() {
+    let home = tempfile::tempdir().expect("sensitive home");
+    let mut process = PtyProcess::spawn(home.path(), home.path(), &[]);
+    process.wait_for(b"WARNING:", Duration::from_secs(3));
+    assert!(!home.path().join(".vibe/sessions").exists());
+    process.write(b"\x03");
+    let (status, transcript) = process.wait(Duration::from_secs(3));
+
+    assert!(
+        status.success(),
+        "location cancellation exited with {status}"
+    );
+    assert!(!home.path().join(".vibe/sessions").exists());
+    assert!(
+        transcript
+            .windows(b"\x1b[?1049l".len())
+            .any(|window| window == b"\x1b[?1049l"),
+        "location dialog did not restore the terminal"
+    );
+}
+
+#[test]
 fn positional_prompt_mounts_the_tui_before_dispatch() {
     let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
     let mut process = PtyProcess::spawn(
-        temporary.path(),
-        temporary.path(),
+        &workspace,
+        &home,
         &[
             "--trust",
             "--api-base",
@@ -422,6 +507,36 @@ fn positional_prompt_mounts_the_tui_before_dispatch() {
     assert!(
         mounted < submitted,
         "prompt appeared before the TUI mounted"
+    );
+}
+
+#[test]
+fn piped_prompt_mounts_before_dispatch_and_keeps_the_tty_interactive() {
+    let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
+    let mut process = PtyProcess::spawn_piped_prompt(&workspace, &home, "hello from piped stdin");
+    let output = process.wait_for(b"hello from piped stdin", Duration::from_secs(5));
+    let mounted = output
+        .windows(b"\x1b[?1049h".len())
+        .position(|window| window == b"\x1b[?1049h")
+        .expect("TUI mounted");
+    let submitted = output
+        .windows(b"hello from piped stdin".len())
+        .position(|window| window == b"hello from piped stdin")
+        .expect("piped prompt rendered");
+    assert!(mounted < submitted, "piped prompt preceded TUI mount");
+
+    process.write(b"/exit\r");
+    let (status, transcript) = process.wait(Duration::from_secs(3));
+    assert!(status.success(), "piped TUI exited with {status}");
+    assert!(
+        transcript
+            .windows(b"\x1b[?1049l".len())
+            .any(|window| window == b"\x1b[?1049l"),
+        "piped TUI did not restore the terminal"
     );
 }
 

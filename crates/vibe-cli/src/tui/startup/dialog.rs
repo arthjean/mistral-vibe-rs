@@ -24,8 +24,16 @@ pub(super) fn run_trust_dialog(
     let mut dialog = StartupDialog::Trust { prompt, selected };
     match run_dialog(&mut dialog)? {
         DialogResult::Trust(decision) => Ok(Some(decision)),
-        DialogResult::Abort | DialogResult::StartNew | DialogResult::Resume(_) => Ok(None),
+        DialogResult::Abort
+        | DialogResult::Continue
+        | DialogResult::StartNew
+        | DialogResult::Resume(_) => Ok(None),
     }
+}
+
+pub(super) fn run_location_warning_dialog(warning: &str) -> Result<bool, StartupError> {
+    let mut dialog = StartupDialog::LocationWarning { warning };
+    Ok(matches!(run_dialog(&mut dialog)?, DialogResult::Continue))
 }
 
 pub(super) fn run_resume_dialog(
@@ -40,7 +48,9 @@ pub(super) fn run_resume_dialog(
     match run_dialog(&mut dialog)? {
         DialogResult::Resume(id) => Ok(ResumeResolution::Resume(id)),
         DialogResult::StartNew => Ok(ResumeResolution::StartNew),
-        DialogResult::Abort | DialogResult::Trust(_) => Ok(ResumeResolution::Abort),
+        DialogResult::Abort | DialogResult::Continue | DialogResult::Trust(_) => {
+            Ok(ResumeResolution::Abort)
+        }
     }
 }
 
@@ -55,6 +65,9 @@ enum StartupDialog<'a> {
         sessions: &'a [SavedSessionSummary],
         selected: usize,
     },
+    LocationWarning {
+        warning: &'a str,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +75,7 @@ enum DialogResult {
     Trust(WorkspaceTrustDecision),
     Resume(String),
     StartNew,
+    Continue,
     Abort,
 }
 
@@ -138,6 +152,11 @@ fn reduce_dialog(dialog: &mut StartupDialog<'_>, key: KeyEvent) -> Option<Dialog
                 .get(*selected)
                 .map(|session| DialogResult::Resume(session.id.clone())),
             KeyCode::Esc | KeyCode::Char('n') => Some(DialogResult::StartNew),
+            _ => None,
+        },
+        StartupDialog::LocationWarning { .. } => match key.code {
+            KeyCode::Enter | KeyCode::Char('y') => Some(DialogResult::Continue),
+            KeyCode::Esc | KeyCode::Char('n') => Some(DialogResult::Abort),
             _ => None,
         },
     }
@@ -230,6 +249,15 @@ fn draw_startup_dialog(frame: &mut ratatui::Frame<'_>, dialog: &StartupDialog<'_
                 "Up/Down navigate  Enter resume  n/Esc start new  Ctrl+C abort",
             )
         }
+        StartupDialog::LocationWarning { warning } => (
+            " Sensitive location warning ",
+            vec![
+                Line::from(warning.to_string()),
+                Line::from(""),
+                Line::from("Continue startup from this location?"),
+            ],
+            "Enter/y continue  n/Esc/Ctrl+C abort",
+        ),
     };
     frame.render_widget(
         Paragraph::new(Text::from(lines))
@@ -302,6 +330,9 @@ mod tests {
                     sessions: &sessions,
                     selected: 0,
                 },
+                StartupDialog::LocationWarning {
+                    warning: "WARNING: sensitive location",
+                },
             ] {
                 let backend = TestBackend::new(width, 24);
                 let mut terminal = Terminal::new(backend).expect("terminal");
@@ -315,7 +346,9 @@ mod tests {
                     .iter()
                     .map(|cell| cell.symbol())
                     .collect::<String>();
-                assert!(text.contains("Trust") || text.contains("Resume"));
+                assert!(
+                    text.contains("Trust") || text.contains("Resume") || text.contains("Sensitive")
+                );
             }
         }
     }
@@ -337,6 +370,24 @@ mod tests {
                 &mut dialog,
                 KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)
             ),
+            Some(DialogResult::Abort)
+        );
+    }
+
+    #[test]
+    fn location_warning_requires_an_explicit_continue() {
+        let mut dialog = StartupDialog::LocationWarning {
+            warning: "WARNING: sensitive location",
+        };
+        assert_eq!(
+            reduce_dialog(
+                &mut dialog,
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)
+            ),
+            Some(DialogResult::Continue)
+        );
+        assert_eq!(
+            reduce_dialog(&mut dialog, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
             Some(DialogResult::Abort)
         );
     }
