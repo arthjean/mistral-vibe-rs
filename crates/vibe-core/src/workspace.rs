@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::future::Future;
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
@@ -19,6 +19,10 @@ use crate::tools::{
     ToolHandler, ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource,
     ToolSpec, object_schema,
 };
+
+mod review;
+
+pub use review::{RestoreTransaction, ReviewManager};
 
 pub const DEFAULT_MAX_READ_BYTES: usize = 1_048_576;
 pub const DEFAULT_MAX_LINES: usize = 2_000;
@@ -454,6 +458,35 @@ impl Workspace {
             })
     }
 
+    fn read_raw_bounded(
+        &self,
+        relative: &Path,
+        max_bytes: usize,
+    ) -> Result<Vec<u8>, WorkspaceError> {
+        let metadata = self
+            .directory
+            .metadata(relative)
+            .map_err(|source| WorkspaceError::Io {
+                path: relative.to_path_buf(),
+                source,
+            })?;
+        let actual = usize::try_from(metadata.len()).unwrap_or(usize::MAX);
+        if actual > max_bytes {
+            return Err(WorkspaceError::ReviewSnapshotLimit {
+                actual,
+                limit: max_bytes,
+            });
+        }
+        let bytes = self.read_raw(relative)?;
+        if bytes.len() > max_bytes {
+            return Err(WorkspaceError::ReviewSnapshotLimit {
+                actual: bytes.len(),
+                limit: max_bytes,
+            });
+        }
+        Ok(bytes)
+    }
+
     fn exists(&self, relative: &Path) -> bool {
         self.directory.metadata(relative).is_ok()
     }
@@ -523,202 +556,6 @@ impl Workspace {
             );
         }
         ignores
-    }
-}
-
-#[derive(Default)]
-struct ReviewState {
-    active_turn: Option<String>,
-    baseline: BTreeMap<PathBuf, Option<Vec<u8>>>,
-    checkpoints: Vec<Checkpoint>,
-}
-
-pub struct ReviewManager {
-    workspace: Arc<Workspace>,
-    state: Mutex<ReviewState>,
-}
-
-impl ReviewManager {
-    #[must_use]
-    pub fn new(workspace: Arc<Workspace>) -> Self {
-        Self {
-            workspace,
-            state: Mutex::new(ReviewState::default()),
-        }
-    }
-
-    pub fn begin_turn(&self, turn_id: impl Into<String>) -> Result<(), WorkspaceError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::LockPoisoned { surface: "review" })?;
-        if state.active_turn.is_some() {
-            return Err(WorkspaceError::ReviewBusy);
-        }
-        state.active_turn = Some(turn_id.into());
-        Ok(())
-    }
-
-    pub fn write(
-        &self,
-        path: impl AsRef<Path>,
-        content: impl AsRef<[u8]>,
-    ) -> Result<MutationResult, WorkspaceError> {
-        let relative = self.workspace.confined(path.as_ref(), false)?;
-        self.capture_baseline(&relative)?;
-        self.workspace.write_new(&relative, content.as_ref())
-    }
-
-    pub fn edit(
-        &self,
-        path: impl AsRef<Path>,
-        operations: &[EditOperation],
-    ) -> Result<MutationResult, WorkspaceError> {
-        let relative = self.workspace.confined(path.as_ref(), true)?;
-        self.capture_baseline(&relative)?;
-        let original = self.workspace.read_raw(&relative)?;
-        let original_text = String::from_utf8(original.clone())
-            .map_err(|_| WorkspaceError::InvalidEncoding(relative.clone()))?;
-        let mut updated = original_text.clone();
-        for operation in operations {
-            let matches = updated.matches(&operation.old_text).count();
-            if matches == 0 {
-                return Err(WorkspaceError::StaleEdit {
-                    path: relative.clone(),
-                    needle: operation.old_text.clone(),
-                });
-            }
-            if matches > 1 && !operation.replace_all {
-                return Err(WorkspaceError::AmbiguousEdit {
-                    path: relative.clone(),
-                    matches,
-                });
-            }
-            updated = if operation.replace_all {
-                updated.replace(&operation.old_text, &operation.new_text)
-            } else {
-                updated.replacen(&operation.old_text, &operation.new_text, 1)
-            };
-        }
-        self.workspace
-            .atomic_replace(&relative, updated.as_bytes())?;
-        Ok(MutationResult {
-            path: path_display(&relative),
-            bytes_written: updated.len(),
-            files_changed: 1,
-            diff: unified_diff(&original_text, &updated),
-        })
-    }
-
-    pub fn seal_turn(&self) -> Result<Checkpoint, WorkspaceError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::LockPoisoned { surface: "review" })?;
-        let turn_id = state
-            .active_turn
-            .take()
-            .ok_or(WorkspaceError::NoActiveTurn)?;
-        let hunks = reconcile_hunks(&self.workspace, &state.baseline)?;
-        let checkpoint = Checkpoint { turn_id, hunks };
-        state.checkpoints.push(checkpoint.clone());
-        Ok(checkpoint)
-    }
-
-    pub fn view(&self) -> Result<ReviewView, WorkspaceError> {
-        let state = self
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::LockPoisoned { surface: "review" })?;
-        Ok(ReviewView {
-            active_turn: state.active_turn.clone(),
-            checkpoints: state.checkpoints.clone(),
-            pending_hunks: reconcile_hunks(&self.workspace, &state.baseline)?,
-        })
-    }
-
-    pub fn approve(&self) -> Result<ReviewView, WorkspaceError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::LockPoisoned { surface: "review" })?;
-        if state.active_turn.is_some() {
-            return Err(WorkspaceError::ReviewBusy);
-        }
-        state.baseline.clear();
-        state.checkpoints.clear();
-        drop(state);
-        self.view()
-    }
-
-    pub fn revert(&self) -> Result<ReviewView, WorkspaceError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::LockPoisoned { surface: "review" })?;
-        if state.active_turn.is_some() {
-            return Err(WorkspaceError::ReviewBusy);
-        }
-        let current = state
-            .baseline
-            .keys()
-            .map(|path| {
-                let value = self
-                    .workspace
-                    .exists(path)
-                    .then(|| self.workspace.read_raw(path))
-                    .transpose()?;
-                Ok((path.clone(), value))
-            })
-            .collect::<Result<BTreeMap<_, _>, WorkspaceError>>()?;
-        let mut restored: Vec<PathBuf> = Vec::new();
-        for (path, baseline) in &state.baseline {
-            let result = match baseline {
-                Some(bytes) => self.workspace.atomic_replace(path, bytes),
-                None if self.workspace.exists(path) => self.workspace.remove(path),
-                None => Ok(()),
-            };
-            if let Err(error) = result {
-                for restored_path in restored.into_iter().rev() {
-                    if let Some(previous) = current.get(&restored_path) {
-                        match previous {
-                            Some(bytes) => {
-                                let _ = self.workspace.atomic_replace(&restored_path, bytes);
-                            }
-                            None if self.workspace.exists(&restored_path) => {
-                                let _ = self.workspace.remove(&restored_path);
-                            }
-                            None => {}
-                        }
-                    }
-                }
-                return Err(error);
-            }
-            restored.push(path.clone());
-        }
-        state.baseline.clear();
-        state.checkpoints.clear();
-        drop(state);
-        self.view()
-    }
-
-    fn capture_baseline(&self, relative: &Path) -> Result<(), WorkspaceError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::LockPoisoned { surface: "review" })?;
-        if state.active_turn.is_none() {
-            return Err(WorkspaceError::NoActiveTurn);
-        }
-        if !state.baseline.contains_key(relative) {
-            let baseline = self
-                .workspace
-                .exists(relative)
-                .then(|| self.workspace.read_raw(relative))
-                .transpose()?;
-            state.baseline.insert(relative.to_path_buf(), baseline);
-        }
-        Ok(())
     }
 }
 
@@ -910,6 +747,10 @@ pub enum WorkspaceError {
     ReviewBusy,
     #[error("mutation requires an active turn")]
     NoActiveTurn,
+    #[error("workspace restoration failed: {cause}; rollback: {rollback}")]
+    RestoreRollback { cause: String, rollback: String },
+    #[error("review snapshots are {actual} bytes, exceeding the {limit}-byte limit")]
+    ReviewSnapshotLimit { actual: usize, limit: usize },
     #[error("{surface} lock is poisoned")]
     LockPoisoned { surface: &'static str },
     #[error("numeric limit cannot be represented on this platform")]
@@ -979,43 +820,6 @@ fn edit_spec() -> ToolSpec {
         source: ToolSource::BuiltIn,
         selection_priority: 100,
     }
-}
-
-fn reconcile_hunks(
-    workspace: &Workspace,
-    baseline: &BTreeMap<PathBuf, Option<Vec<u8>>>,
-) -> Result<Vec<ReviewHunk>, WorkspaceError> {
-    baseline
-        .iter()
-        .filter_map(|(path, before)| {
-            let after = workspace
-                .exists(path)
-                .then(|| workspace.read_raw(path))
-                .transpose();
-            match after {
-                Err(error) => Some(Err(error)),
-                Ok(after) if &after == before => None,
-                Ok(after) => {
-                    let before = before
-                        .as_deref()
-                        .map(String::from_utf8_lossy)
-                        .unwrap_or_default();
-                    let after = after
-                        .as_deref()
-                        .map(String::from_utf8_lossy)
-                        .unwrap_or_default();
-                    let removed = before.lines().count();
-                    let added = after.lines().count();
-                    Some(Ok(ReviewHunk {
-                        path: path_display(path),
-                        added,
-                        removed,
-                        diff: unified_diff(&before, &after),
-                    }))
-                }
-            }
-        })
-        .collect()
 }
 
 fn unified_diff(before: &str, after: &str) -> String {
@@ -1180,6 +984,78 @@ mod tests {
         review.seal_turn().expect("seal");
         let view = review.view().expect("view");
         assert!(view.pending_hunks[0].diff.contains("+manual"));
+    }
+
+    #[test]
+    fn rewind_restoration_is_target_specific_transactional_and_forkable() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("main.txt"), "zero\n").expect("main fixture");
+        std::fs::create_dir(directory.path().join("generated")).expect("generated directory");
+        let workspace = Arc::new(Workspace::open(directory.path()).expect("workspace"));
+        let review = ReviewManager::new(workspace);
+
+        review.begin_turn_at("turn-1", 2).expect("first turn");
+        review
+            .write("generated/first.txt", b"first\n")
+            .expect("first write");
+        review.seal_turn().expect("first checkpoint");
+        review.begin_turn_at("turn-2", 4).expect("second turn");
+        review
+            .edit(
+                "main.txt",
+                &[EditOperation {
+                    old_text: "zero".to_owned(),
+                    new_text: "two".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("second edit");
+        review
+            .write("generated/later.txt", b"later\n")
+            .expect("later write");
+        review.seal_turn().expect("second checkpoint");
+
+        assert_eq!(
+            review.restorable_paths_at(4).expect("latest paths"),
+            vec!["generated/later.txt", "main.txt"]
+        );
+        assert_eq!(
+            review.restorable_paths_at(2).expect("earlier paths"),
+            vec!["generated/first.txt", "generated/later.txt", "main.txt"]
+        );
+
+        let staged = review
+            .stage_restore_to_message(4)
+            .expect("staged restoration");
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("main.txt")).expect("staged main"),
+            "zero\n"
+        );
+        assert!(!directory.path().join("generated/later.txt").exists());
+        assert!(directory.path().join("generated/first.txt").exists());
+        staged.rollback().expect("explicit rollback");
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("main.txt")).expect("rolled back main"),
+            "two\n"
+        );
+        assert!(directory.path().join("generated/later.txt").exists());
+
+        let fork = review.fork_at(4).expect("checkpoint fork");
+        assert_eq!(fork.view().expect("fork view").checkpoints.len(), 1);
+        let restored = review
+            .stage_restore_to_message(2)
+            .expect("earlier restoration")
+            .commit();
+        assert_eq!(
+            restored,
+            vec!["generated/first.txt", "generated/later.txt", "main.txt"]
+        );
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("main.txt")).expect("restored main"),
+            "zero\n"
+        );
+        assert!(!directory.path().join("generated/first.txt").exists());
+        assert!(!directory.path().join("generated/later.txt").exists());
     }
 
     #[tokio::test]
