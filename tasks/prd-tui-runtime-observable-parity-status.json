@@ -1,0 +1,38 @@
+{
+  "prd": {
+    "file": "tasks/prd-tui-runtime-observable-parity.md",
+    "title": "TUI Runtime Observable Parity",
+    "created_at": "2026-08-02",
+    "status": "IN_PROGRESS"
+  },
+  "epics": [
+    { "id": "EP-006", "title": "Secure Startup and Invocation", "status": "DONE", "priority": "P0", "stories_total": 4, "stories_done": 4 },
+    { "id": "EP-007", "title": "Callback and Active-Turn Control", "status": "TODO", "priority": "P0", "stories_total": 5, "stories_done": 0 },
+    { "id": "EP-008", "title": "Reversible Session Management", "status": "TODO", "priority": "P0", "stories_total": 2, "stories_done": 0 },
+    { "id": "EP-009", "title": "Configuration and External Integrations", "status": "TODO", "priority": "P0", "stories_total": 3, "stories_done": 0 },
+    { "id": "EP-010", "title": "Semantic Transcript and Observability", "status": "TODO", "priority": "P0", "stories_total": 3, "stories_done": 0 },
+    { "id": "EP-011", "title": "Terminal Services and Lifecycle", "status": "TODO", "priority": "P1", "stories_total": 3, "stories_done": 0 }
+  ],
+  "stories": [
+    { "id": "US-020", "title": "Gate startup on workspace trust and location safety", "epic": "EP-006", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-003"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },
+    { "id": "US-021", "title": "Execute sessions inside the requested worktree", "epic": "EP-006", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-020"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },
+    { "id": "US-022", "title": "Match interactive prompt and startup action routing", "epic": "EP-006", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-020", "US-021"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },
+    { "id": "US-023", "title": "Match resume intent and visible initialization", "epic": "EP-006", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-020"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },
+    { "id": "US-024", "title": "Implement informed approval interactions", "epic": "EP-007", "status": "TODO", "priority": "P0", "size": "L", "blocked_by": ["US-023"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-025", "title": "Implement structured questions and FIFO callback ownership", "epic": "EP-007", "status": "TODO", "priority": "P0", "size": "L", "blocked_by": ["US-024"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-026", "title": "Preserve live plan-review state and editor actions", "epic": "EP-007", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-025"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-027", "title": "Match typed queue, grouping, presentation, and command gating", "epic": "EP-007", "status": "TODO", "priority": "P0", "size": "L", "blocked_by": ["US-025", "US-013"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-028", "title": "Finalize cancellation and stream local shell output", "epic": "EP-007", "status": "TODO", "priority": "P0", "size": "L", "blocked_by": ["US-027"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-029", "title": "Match rewind navigation and file restoration choice", "epic": "EP-008", "status": "TODO", "priority": "P0", "size": "L", "blocked_by": ["US-028"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-030", "title": "Require confirmed and recoverable session deletion", "epic": "EP-008", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-023"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-031", "title": "Implement typed configuration, layers, and complete proxy settings", "epic": "EP-009", "status": "TODO", "priority": "P0", "size": "L", "blocked_by": ["US-020", "US-023"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-032", "title": "Implement MCP and connector lifecycle with authentication", "epic": "EP-009", "status": "TODO", "priority": "P0", "size": "L", "blocked_by": ["US-020", "US-031"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-033", "title": "Match Vibe Code, Teleport, and scheduled-loop workflows", "epic": "EP-009", "status": "TODO", "priority": "P1", "size": "L", "blocked_by": ["US-025", "US-031"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-034", "title": "Render semantic history and authoritative terminal statuses", "epic": "EP-010", "status": "TODO", "priority": "P0", "size": "L", "blocked_by": ["US-028"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-035", "title": "Render actionable errors, live activity, and live context usage", "epic": "EP-010", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-034"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-036", "title": "Match transcript interaction and live debug diagnostics", "epic": "EP-010", "status": "TODO", "priority": "P1", "size": "L", "blocked_by": ["US-034", "US-005"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-037", "title": "Implement update discovery and What's New behavior", "epic": "EP-011", "status": "TODO", "priority": "P1", "size": "M", "blocked_by": ["US-023", "US-034"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-038", "title": "Implement focus-aware notifications and narrator lifecycle", "epic": "EP-011", "status": "TODO", "priority": "P1", "size": "L", "blocked_by": ["US-028", "US-034"], "started_at": null, "completed_at": null, "reviewed_at": null },
+    { "id": "US-039", "title": "Match themes, suspend, exit confirmation, and session summary", "epic": "EP-011", "status": "TODO", "priority": "P2", "size": "L", "blocked_by": ["US-031", "US-038"], "started_at": null, "completed_at": null, "reviewed_at": null }
+  ]
+}
