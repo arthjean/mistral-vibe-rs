@@ -820,6 +820,11 @@ impl SessionStore {
         sync_directory(&self.root)
     }
 
+    pub fn select_for_continue(&self, selector: &str) -> Result<(), StorageError> {
+        let metadata = self.resolve(selector)?;
+        self.write_pointer(&metadata.id)
+    }
+
     pub fn recover_interrupted_deletes(&self) -> Result<usize, StorageError> {
         let entries = match fs::read_dir(&self.root) {
             Ok(entries) => entries,

@@ -3,6 +3,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod session_management;
+
 use crate::release3::{RELEASE3_METHODS, Release3Error, Release3Service, RuntimeAttachment};
 use crate::release4::{
     LoopFire, RELEASE4_METHODS, Release4Dispatch, Release4Error, Release4Service,
@@ -479,6 +481,12 @@ impl AppServer {
         }
         let turn_sequence = self.next_turn.fetch_add(1, Ordering::Relaxed);
         let turn_id = format!("turn-{turn_sequence}");
+        if let Some(review) = &session.review {
+            let message_index = review_message_index(&self.release3, session)?;
+            review
+                .begin_turn_at(&turn_id, message_index)
+                .map_err(|error| ServerError::Resource(error.to_string()))?;
+        }
         let started_at = now_millis();
         session.active_turn = Some(turn_id.clone());
         session.active_turn_started_at = Some(started_at);
@@ -598,6 +606,11 @@ impl AppServer {
                 .finish_loop_fire(loop_id, completed_at / 1_000)
                 .map_err(|error| ServerError::Release4(error.to_string()))?;
         }
+        if let Some(review) = &session.review {
+            review
+                .seal_turn()
+                .map_err(|error| ServerError::Resource(error.to_string()))?;
+        }
         let turn = PublicTurn {
             id: turn_id.to_owned(),
             session_id: target_session_id.clone(),
@@ -669,6 +682,11 @@ impl AppServer {
             self.release4
                 .finish_loop_fire(loop_id, now_millis() / 1_000)
                 .map_err(|error| ServerError::Release4(error.to_string()))?;
+        }
+        if let Some(review) = &session.review {
+            review
+                .seal_turn()
+                .map_err(|error| ServerError::Resource(error.to_string()))?;
         }
         session.active_turn = None;
         session.active_turn_started_at = None;
@@ -1277,7 +1295,11 @@ impl AppServer {
         self.sessions.lock().map_err(|_| ServerError::StatePoisoned)
     }
 
-    fn attach_release3_runtime(&self, attachment: &RuntimeAttachment) -> Result<(), ServerError> {
+    fn attach_release3_runtime(
+        &self,
+        attachment: &RuntimeAttachment,
+        review_override: Option<Arc<ReviewManager>>,
+    ) -> Result<(), ServerError> {
         let mut sessions = self.lock_sessions()?;
         if let Some(session) = sessions.get_mut(&attachment.id) {
             session.attachments = session.attachments.saturating_add(1);
@@ -1287,6 +1309,9 @@ impl AppServer {
                 &attachment.hydrated,
                 attachment.agent_profile.as_ref(),
             );
+            if review_override.is_some() {
+                session.review = review_override;
+            }
             session.updated_at = now_millis();
             let session_id = session.id.clone();
             drop(sessions);
@@ -1309,10 +1334,11 @@ impl AppServer {
                 intent.agent_permission_rules.clone(),
             )
             .map_err(|error| ServerError::Resource(error.to_string()))?;
-        if let Ok(workspace) = Workspace::open(&attachment.working_directory) {
+        let review = if let Ok(workspace) = Workspace::open(&attachment.working_directory) {
             let workspace = Arc::new(workspace);
-            let review = Arc::new(ReviewManager::new(workspace.clone()));
-            WorkspaceTools::new(workspace, review)
+            let review =
+                review_override.unwrap_or_else(|| Arc::new(ReviewManager::new(workspace.clone())));
+            WorkspaceTools::new(workspace, review.clone())
                 .register(
                     &tools,
                     policy.clone(),
@@ -1323,7 +1349,10 @@ impl AppServer {
                     ),
                 )
                 .map_err(|error| ServerError::Resource(error.to_string()))?;
-        }
+            Some(review)
+        } else {
+            None
+        };
         self.session_tool_factory
             .register(&attachment.id, &tools)
             .map_err(ServerError::Resource)?;
@@ -1354,6 +1383,7 @@ impl AppServer {
                 policy: policy.clone(),
                 tools: tools.clone(),
                 persisted: Some(attachment.hydrated.clone()),
+                review,
             },
         );
         if let Err(error) = self
@@ -1383,11 +1413,16 @@ impl AppServer {
         Ok(())
     }
 
-    fn refresh_release3_runtime(&self, attachment: &RuntimeAttachment) -> Result<(), ServerError> {
+    fn refresh_release3_runtime(
+        &self,
+        attachment: &RuntimeAttachment,
+        review_override: Option<Arc<ReviewManager>>,
+    ) -> Result<(), ServerError> {
         let mut sessions = self.lock_sessions()?;
         let session = sessions
             .get_mut(&attachment.id)
             .ok_or_else(|| ServerError::SessionNotFound(attachment.id.clone()))?;
+        let previous = session.clone();
         session.persisted = Some(attachment.hydrated.clone());
         session.intent.agent = attachment.agent.clone();
         recompose_agent_profile_settings(
@@ -1395,15 +1430,28 @@ impl AppServer {
             &attachment.hydrated,
             attachment.agent_profile.as_ref(),
         );
+        if review_override.is_some() {
+            session.review = review_override;
+        }
         session.updated_at = now_millis();
         drop(sessions);
-        self.refresh_session_workspace_tools(&attachment.id)
+        if let Err(error) = self.refresh_session_workspace_tools(&attachment.id) {
+            self.lock_sessions()?
+                .insert(attachment.id.clone(), previous);
+            if let Err(rollback) = self.refresh_session_workspace_tools(&attachment.id) {
+                return Err(ServerError::Resource(format!(
+                    "{error}; runtime rollback failed ({rollback})"
+                )));
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     fn refresh_session_workspace_tools(&self, session_id: &str) -> Result<(), ServerError> {
-        let sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions()?;
         let session = sessions
-            .get(session_id)
+            .get_mut(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         let workspace_directory = session.working_directory.clone();
         let policy = session.policy.clone();
@@ -1414,13 +1462,20 @@ impl AppServer {
             session.intent.approval,
             session.intent.auto_approve,
         );
+        let review = session.review.clone().or_else(|| {
+            Workspace::open(&workspace_directory)
+                .ok()
+                .map(Arc::new)
+                .map(ReviewManager::new)
+                .map(Arc::new)
+        });
+        session.review.clone_from(&review);
         drop(sessions);
         policy
             .try_replace_rules_with_rationale_prefix("agent-profile:", permission_rules)
             .map_err(|error| ServerError::Resource(error.to_string()))?;
-        if let Ok(workspace) = Workspace::open(&workspace_directory) {
+        if let (Ok(workspace), Some(review)) = (Workspace::open(&workspace_directory), review) {
             let workspace = Arc::new(workspace);
-            let review = Arc::new(ReviewManager::new(workspace.clone()));
             WorkspaceTools::new(workspace, review)
                 .register(&tools, policy, approval)
                 .map_err(|error| ServerError::Resource(error.to_string()))?;
@@ -2048,7 +2103,7 @@ impl ServerConnection {
                 &error.to_string(),
             );
         }
-        if let Ok(workspace) = Workspace::open(&working_directory) {
+        let review = if let Ok(workspace) = Workspace::open(&working_directory) {
             if intent.trusted
                 && let Err(error) = permission_store.try_set_trust(
                     &working_directory,
@@ -2064,7 +2119,7 @@ impl ServerConnection {
             }
             let workspace = Arc::new(workspace);
             let review = Arc::new(ReviewManager::new(workspace.clone()));
-            if let Err(error) = WorkspaceTools::new(workspace, review).register(
+            if let Err(error) = WorkspaceTools::new(workspace, review.clone()).register(
                 &tools,
                 permission_store.clone(),
                 self.server.approval_factory.for_agent(
@@ -2079,7 +2134,10 @@ impl ServerConnection {
                     &error.to_string(),
                 );
             }
-        }
+            Some(review)
+        } else {
+            None
+        };
         if let Err(error) = self
             .server
             .session_tool_factory
@@ -2145,6 +2203,7 @@ impl ServerConnection {
                 policy: permission_store.clone(),
                 tools: tools.clone(),
                 persisted,
+                review,
             },
         );
         let resource_result = self
@@ -2301,75 +2360,7 @@ impl ServerConnection {
     }
 
     fn release3_request(&mut self, request: ServerRequest) -> DispatchBatch {
-        let target_session_id = request
-            .params
-            .get("sessionId")
-            .and_then(Value::as_str)
-            .or_else(|| {
-                request
-                    .params
-                    .get("sourceSessionId")
-                    .and_then(Value::as_str)
-            })
-            .map(ToOwned::to_owned);
-        if matches!(
-            request.method.as_str(),
-            "session/agent/update" | "session/fork" | "session/history/clear" | "session/rewind"
-        ) && let Some(session_id) = &target_session_id
-        {
-            let mut sessions = match self.server.lock_sessions() {
-                Ok(sessions) => sessions,
-                Err(error) => return internal_error_batch(request.id, &error),
-            };
-            if session_mut_by_id_or_alias(&mut sessions, session_id)
-                .is_some_and(|session| session.active_turn.is_some())
-            {
-                return error_batch(
-                    request.id,
-                    ProtocolErrorCode::Conflict,
-                    "Session agent and history can only change while the session is idle",
-                );
-            }
-        }
-        match self
-            .server
-            .release3
-            .dispatch(&request.method, &request.params)
-        {
-            Ok(dispatch) => {
-                if request.method == "session/delete"
-                    && let Some(session_id) = target_session_id.as_deref()
-                    && let Err(error) = self.server.release4.remove_session(session_id)
-                {
-                    return release4_error_batch(request.id, error);
-                }
-                if let Some(attachment) = &dispatch.attachment {
-                    if self.attached_sessions.contains(&attachment.id) {
-                        if let Err(error) = self.server.refresh_release3_runtime(attachment) {
-                            return internal_error_batch(request.id, &error);
-                        }
-                    } else {
-                        if let Err(error) = self.server.attach_release3_runtime(attachment) {
-                            return internal_error_batch(request.id, &error);
-                        }
-                        self.attached_sessions.insert(attachment.id.clone());
-                    }
-                }
-                if request.method == "session/agent/update"
-                    && let (Some(session_id), Some(agent)) = (
-                        request.params.get("sessionId").and_then(Value::as_str),
-                        request.params.get("name").and_then(Value::as_str),
-                    )
-                    && let Ok(mut sessions) = self.server.lock_sessions()
-                    && let Some(session) = session_mut_by_id_or_alias(&mut sessions, session_id)
-                {
-                    session.intent.agent = Some(agent.to_owned());
-                    session.updated_at = now_millis();
-                }
-                success_batch(request.id, dispatch.result)
-            }
-            Err(error) => release3_error_batch(request.id, error),
-        }
+        session_management::dispatch(self, request)
     }
 
     fn session_settings_update(&mut self, request: ServerRequest) -> DispatchBatch {
@@ -2701,6 +2692,15 @@ impl ServerConnection {
         }
         let turn_sequence = self.server.next_turn.fetch_add(1, Ordering::Relaxed);
         let turn_id = format!("turn-{turn_sequence}");
+        if let Some(review) = &session.review {
+            let message_index = match review_message_index(&self.server.release3, session) {
+                Ok(message_index) => message_index,
+                Err(error) => return internal_error_batch(request.id, &error),
+            };
+            if let Err(error) = review.begin_turn_at(&turn_id, message_index) {
+                return internal_error_batch(request.id, &ServerError::Resource(error.to_string()));
+            }
+        }
         session.active_turn = Some(turn_id.clone());
         let started_at = now_millis();
         session.active_turn_started_at = Some(started_at);
@@ -2891,6 +2891,11 @@ impl ServerConnection {
                 .finish_loop_fire(loop_id, completed_at / 1_000)
         {
             return release4_error_batch(request.id, error);
+        }
+        if let Some(review) = &session.review
+            && let Err(error) = review.seal_turn()
+        {
+            return internal_error_batch(request.id, &ServerError::Resource(error.to_string()));
         }
         let started_at = session.active_turn_started_at.unwrap_or_default();
         let canonical_session_id = session.id.clone();
@@ -3244,6 +3249,7 @@ struct SessionRuntime {
     policy: PermissionStore,
     tools: ToolRegistry,
     persisted: Option<HydratedSession>,
+    review: Option<Arc<ReviewManager>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4200,6 +4206,24 @@ fn price_dollars_to_micros(price: f64) -> Option<u64> {
         .then(|| (price * 1_000_000.0).round() as u64)
 }
 
+fn review_message_index(
+    release3: &Release3Service,
+    session: &SessionRuntime,
+) -> Result<usize, ServerError> {
+    release3
+        .message_count(&session.id)
+        .map_err(|error| ServerError::Resource(error.to_string()))
+        .map(|message_count| {
+            message_count.unwrap_or_else(|| {
+                session
+                    .persisted
+                    .as_ref()
+                    .map(|persisted| persisted.messages.len())
+                    .unwrap_or_default()
+            })
+        })
+}
+
 const fn default_history_limit() -> u16 {
     200
 }
@@ -4495,6 +4519,18 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use toml::Table;
+
+    struct RejectForkTools;
+
+    impl SessionToolFactory for RejectForkTools {
+        fn register(&self, session_id: &str, _tools: &ToolRegistry) -> Result<(), String> {
+            if session_id == "source-session" {
+                Ok(())
+            } else {
+                Err("injected fork attachment failure".to_owned())
+            }
+        }
+    }
 
     #[derive(Default)]
     struct RecordingResourceBackend {
@@ -5066,6 +5102,355 @@ mod tests {
             )
             .expect("reloaded loops");
         assert_eq!(listed.result["loops"].as_array().map(Vec::len), Some(0));
+    }
+
+    #[test]
+    fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
+        let temporary = tempfile::tempdir().expect("rewind stores");
+        let session_root = temporary.path().join("sessions");
+        let working_directory = temporary.path().join("workspace");
+        fs::create_dir_all(&working_directory).expect("workspace");
+        fs::write(working_directory.join("main.txt"), "before\n").expect("workspace fixture");
+        let store = vibe_core::storage::SessionStore::new(&session_root);
+        let mut metadata = store
+            .create(
+                "source-session",
+                &working_directory.to_string_lossy(),
+                None,
+                1,
+            )
+            .expect("source session");
+        for (timestamp, content) in [(2, "first"), (3, "restore target"), (4, "latest")] {
+            store
+                .append_message(
+                    &mut metadata,
+                    &ModelMessage::User {
+                        content: content.to_owned(),
+                    },
+                    timestamp,
+                )
+                .expect("user message");
+        }
+        let release3 = Release3Service::for_runtime_session_root(
+            session_root.clone(),
+            working_directory.clone(),
+        );
+        let server = AppServer::with_release3_service(release3);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        let started = connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({"sessionId": "source-session", "resume": "source-session"}),
+        ));
+        assert!(matches!(
+            decode_frame(&started.outbound[0]).expect("start response"),
+            Envelope::Success(_)
+        ));
+
+        let review = server
+            .lock_sessions()
+            .expect("runtime sessions")
+            .get("source-session")
+            .and_then(|session| session.review.clone())
+            .expect("live review manager");
+        let first_turn = connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({
+                "sessionId": "source-session",
+                "input": [{"type": "text", "text": "prior live turn"}]
+            }),
+        ));
+        let first_turn_id = first_turn.deferred.iter().find_map(|work| match work {
+            DeferredWork::RunTurn { turn_id, .. } => Some(turn_id.clone()),
+            _ => None,
+        });
+        assert!(first_turn_id.is_some(), "first turn is reserved");
+        let Some(first_turn_id) = first_turn_id else {
+            return;
+        };
+        store
+            .append_message(
+                &mut metadata,
+                &ModelMessage::User {
+                    content: "prior live turn".to_owned(),
+                },
+                5,
+            )
+            .expect("persist first live user message");
+        store
+            .append_message(
+                &mut metadata,
+                &ModelMessage::Assistant {
+                    content: "prior answer".to_owned(),
+                    reasoning: None,
+                    reasoning_signature: None,
+                    reasoning_state: Vec::new(),
+                    tool_calls: Vec::new(),
+                },
+                6,
+            )
+            .expect("persist first live assistant message");
+        server
+            .fail_turn("source-session", &first_turn_id, "completed fixture turn")
+            .expect("first turn seals");
+
+        let checkpoint_turn = connection.dispatch(&request(
+            4,
+            "turn/start",
+            json!({
+                "sessionId": "source-session",
+                "input": [{"type": "text", "text": "restore live target"}]
+            }),
+        ));
+        let checkpoint_turn_id = checkpoint_turn.deferred.iter().find_map(|work| match work {
+            DeferredWork::RunTurn { turn_id, .. } => Some(turn_id.clone()),
+            _ => None,
+        });
+        assert!(checkpoint_turn_id.is_some(), "checkpoint turn is reserved");
+        let Some(checkpoint_turn_id) = checkpoint_turn_id else {
+            return;
+        };
+        review
+            .edit(
+                "main.txt",
+                &[vibe_core::workspace::EditOperation {
+                    old_text: "before".to_owned(),
+                    new_text: "after".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("checkpoint edit");
+        store
+            .append_message(
+                &mut metadata,
+                &ModelMessage::User {
+                    content: "restore live target".to_owned(),
+                },
+                7,
+            )
+            .expect("persist checkpoint user message");
+        server
+            .fail_turn(
+                "source-session",
+                &checkpoint_turn_id,
+                "completed checkpoint fixture",
+            )
+            .expect("checkpoint seals");
+
+        let read = connection.dispatch(&request(
+            5,
+            "session/rewind/read",
+            json!({"sessionId": "source-session"}),
+        ));
+        let decoded = decode_frame(&read.outbound[0]).expect("rewind read response");
+        assert!(matches!(decoded, Envelope::Success(_)));
+        let Envelope::Success(SuccessResponse { result, .. }) = decoded else {
+            return;
+        };
+        let messages = result["messages"].as_array().expect("rewind targets");
+        let live_target = messages
+            .iter()
+            .find(|message| message["messageIndex"] == 5)
+            .expect("live target");
+        assert_eq!(live_target["hasFileChanges"], true);
+        assert_eq!(live_target["restorablePaths"], json!(["main.txt"]));
+
+        let rejected = connection.dispatch(&request(
+            6,
+            "session/rewind",
+            json!({
+                "sessionId": "source-session",
+                "messageIndex": 5,
+                "restoreFiles": true,
+                "inplace": "invalid"
+            }),
+        ));
+        assert!(matches!(
+            decode_frame(&rejected.outbound[0]).expect("rejected rewind"),
+            Envelope::Error(_)
+        ));
+        assert_eq!(
+            fs::read_to_string(working_directory.join("main.txt")).expect("rolled back workspace"),
+            "after\n"
+        );
+
+        let rewound = connection.dispatch(&request(
+            7,
+            "session/rewind",
+            json!({
+                "sessionId": "source-session",
+                "messageIndex": 5,
+                "restoreFiles": true
+            }),
+        ));
+        let decoded = decode_frame(&rewound.outbound[0]).expect("rewind response");
+        assert!(matches!(decoded, Envelope::Success(_)));
+        let Envelope::Success(SuccessResponse { result, .. }) = decoded else {
+            return;
+        };
+        let child_id = result["metadata"]["session_id"]
+            .as_str()
+            .expect("branch id");
+        assert_ne!(child_id, "source-session");
+        assert_eq!(result["restoredPaths"], json!(["main.txt"]));
+        assert_eq!(result["restoreErrors"], json!([]));
+        assert_eq!(
+            fs::read_to_string(working_directory.join("main.txt")).expect("restored workspace"),
+            "before\n"
+        );
+        assert!(store.load("source-session").is_ok());
+        assert!(server.session("source-session").is_ok());
+        assert!(server.session(child_id).is_ok());
+    }
+
+    #[test]
+    fn failed_rewind_attachment_rolls_back_session_and_workspace() {
+        let temporary = tempfile::tempdir().expect("rewind rollback stores");
+        let session_root = temporary.path().join("sessions");
+        let working_directory = temporary.path().join("workspace");
+        fs::create_dir_all(&working_directory).expect("workspace");
+        fs::write(working_directory.join("main.txt"), "before\n").expect("workspace fixture");
+        let store = vibe_core::storage::SessionStore::new(&session_root);
+        let mut metadata = store
+            .create(
+                "source-session",
+                &working_directory.to_string_lossy(),
+                None,
+                1,
+            )
+            .expect("source session");
+        store
+            .append_message(
+                &mut metadata,
+                &ModelMessage::User {
+                    content: "restore target".to_owned(),
+                },
+                2,
+            )
+            .expect("user message");
+        let release3 = Release3Service::for_runtime_session_root(
+            session_root.clone(),
+            working_directory.clone(),
+        );
+        let server = AppServer::with_release3_service(release3)
+            .using_session_tool_factory(Arc::new(RejectForkTools));
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({"sessionId": "source-session", "resume": "source-session"}),
+        ));
+        let review = server
+            .lock_sessions()
+            .expect("runtime sessions")
+            .get("source-session")
+            .and_then(|session| session.review.clone())
+            .expect("review manager");
+        review.begin_turn_at("checkpoint", 0).expect("begin turn");
+        review
+            .edit(
+                "main.txt",
+                &[vibe_core::workspace::EditOperation {
+                    old_text: "before".to_owned(),
+                    new_text: "after".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("edit");
+        review.seal_turn().expect("seal turn");
+
+        let rewound = connection.dispatch(&request(
+            3,
+            "session/rewind",
+            json!({
+                "sessionId": "source-session",
+                "messageIndex": 0,
+                "restoreFiles": true
+            }),
+        ));
+
+        assert!(matches!(
+            decode_frame(&rewound.outbound[0]).expect("rewind failure"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::InternalError,
+                    ..
+                },
+                ..
+            })
+        ));
+        assert_eq!(
+            fs::read_to_string(working_directory.join("main.txt")).expect("rolled back workspace"),
+            "after\n"
+        );
+        let saved = store.list(None, 0, 100).expect("saved sessions").sessions;
+        assert_eq!(
+            saved
+                .iter()
+                .map(|session| session.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["source-session"]
+        );
+        assert!(server.session("source-session").is_ok());
+    }
+
+    #[test]
+    fn failed_durable_session_delete_keeps_the_saved_session() {
+        let temporary = tempfile::tempdir().expect("delete rollback stores");
+        let session_root = temporary.path().join("sessions");
+        let working_directory = temporary.path().join("workspace");
+        let loop_path = temporary.path().join("loops.json");
+        fs::create_dir_all(&working_directory).expect("workspace");
+        let store = vibe_core::storage::SessionStore::new(&session_root);
+        store
+            .create(
+                "retained-session",
+                &working_directory.to_string_lossy(),
+                None,
+                1,
+            )
+            .expect("saved session");
+        let release3 =
+            Release3Service::for_runtime_session_root(session_root, working_directory.clone());
+        let release4 = Release4Service::default()
+            .with_loop_store(loop_path.clone())
+            .expect("loop store");
+        release4
+            .dispatch(
+                "loops/create",
+                &BTreeMap::from([
+                    ("sessionId".to_owned(), json!("retained-session")),
+                    ("interval".to_owned(), json!("30s")),
+                    ("prompt".to_owned(), json!("retain on failure")),
+                    ("nowSeconds".to_owned(), json!(10)),
+                ]),
+            )
+            .expect("owned loop");
+        fs::remove_file(&loop_path).expect("remove loop file");
+        fs::create_dir(&loop_path).expect("block loop persistence");
+        let server = AppServer::with_release3_service(release3).using_release4_service(release4);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+
+        let deleted = connection.dispatch(&request(
+            2,
+            "session/delete",
+            json!({"sessionId": "retained-session"}),
+        ));
+        assert!(matches!(
+            decode_frame(&deleted.outbound[0]).expect("delete failure"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::InternalError,
+                    ..
+                },
+                ..
+            })
+        ));
+        assert!(store.load("retained-session").is_ok());
     }
 
     #[test]

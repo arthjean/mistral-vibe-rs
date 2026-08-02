@@ -9,6 +9,8 @@ use vibe_core::events::ModelMessage;
 use vibe_core::storage::{SessionStore, StorageError};
 
 use crate::release3::{Release3Error, Release3Paths, Release3Service};
+use crate::release4::{Release4Error, Release4Service};
+use crate::session_lifecycle::{DeleteSessionError, delete_session_transactionally};
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -116,6 +118,25 @@ impl StartupHost {
             .collect())
     }
 
+    pub fn delete_session(&self, session_id: &str) -> Result<(), StartupHostError> {
+        let store = SessionStore::new(&self.paths.session_root);
+        let release4 = Release4Service::default()
+            .with_loop_store(self.paths.vibe_home.join("scheduled-loops.json"))?;
+        match delete_session_transactionally(&release4, session_id, || {
+            match store.delete(session_id) {
+                Ok(()) | Err(StorageError::SessionNotFound(_)) => Ok(()),
+                Err(error) => Err(error),
+            }
+        }) {
+            Ok(()) => Ok(()),
+            Err(DeleteSessionError::Prepare(error)) => Err(error.into()),
+            Err(DeleteSessionError::Delete(error)) => Err(error.into()),
+            Err(DeleteSessionError::Rollback { delete, rollback }) => {
+                Err(StartupHostError::DeleteRollback { delete, rollback })
+            }
+        }
+    }
+
     pub fn into_release3(self, project_trusted: bool) -> Result<Release3Service, StartupHostError> {
         Release3Service::new(self.paths, toml::Table::new(), project_trusted)
             .map(Release3Service::with_runtime_session_persistence)
@@ -139,6 +160,13 @@ pub enum StartupHostError {
     Storage(#[from] StorageError),
     #[error(transparent)]
     Release3(Release3Error),
+    #[error(transparent)]
+    Release4(#[from] Release4Error),
+    #[error("session deletion failed ({delete}); scheduled-loop rollback failed ({rollback})")]
+    DeleteRollback {
+        delete: StorageError,
+        rollback: Release4Error,
+    },
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -495,5 +523,53 @@ mod tests {
             .expect("saved sessions");
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].preview, "first request");
+    }
+
+    #[test]
+    fn startup_deletion_removes_owned_scheduled_loops() {
+        let root = tempfile::tempdir().expect("workspace");
+        let paths = paths(root.path());
+        let store = SessionStore::new(&paths.session_root);
+        let metadata = store
+            .create("delete", &root.path().to_string_lossy(), None, 1)
+            .expect("session");
+        let loop_path = paths.vibe_home.join("scheduled-loops.json");
+        let release4 = Release4Service::default()
+            .with_loop_store(loop_path.clone())
+            .expect("loop store");
+        release4
+            .dispatch(
+                "loops/create",
+                &serde_json::from_value(serde_json::json!({
+                    "sessionId": metadata.id,
+                    "prompt": "review",
+                    "interval": "30s",
+                    "nowSeconds": 10
+                }))
+                .expect("loop params"),
+            )
+            .expect("create loop");
+
+        StartupHost::new(paths)
+            .delete_session(&metadata.id)
+            .expect("delete session");
+
+        assert!(matches!(
+            store.load(&metadata.id),
+            Err(StorageError::SessionNotFound(_))
+        ));
+        let release4 = Release4Service::default()
+            .with_loop_store(loop_path)
+            .expect("reload loop store");
+        let listed = release4
+            .dispatch(
+                "loops/list",
+                &serde_json::from_value(serde_json::json!({
+                    "sessionId": metadata.id
+                }))
+                .expect("list params"),
+            )
+            .expect("list loops");
+        assert_eq!(listed.result["loops"].as_array().map(Vec::len), Some(0));
     }
 }

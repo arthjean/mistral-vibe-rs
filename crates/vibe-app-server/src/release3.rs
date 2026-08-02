@@ -207,6 +207,70 @@ impl Release3Service {
         self.persist_runtime_sessions
     }
 
+    pub(crate) fn message_count(&self, session_id: &str) -> Result<Option<usize>, Release3Error> {
+        match self.store.load(session_id) {
+            Ok(hydrated) => Ok(Some(hydrated.messages.len())),
+            Err(StorageError::SessionNotFound(_)) => Ok(None),
+            Err(error) => Err(storage_error(error)),
+        }
+    }
+
+    pub(crate) fn snapshot_session(
+        &self,
+        session_id: &str,
+    ) -> Result<HydratedSession, Release3Error> {
+        self.store.load(session_id).map_err(storage_error)
+    }
+
+    pub(crate) fn rollback_rewind(
+        &self,
+        source: HydratedSession,
+        result_session_id: &str,
+    ) -> Result<(), Release3Error> {
+        let mut failures = Vec::new();
+        if result_session_id == source.metadata.id {
+            let mut metadata = source.metadata.clone();
+            match self.store.replace_messages(
+                &mut metadata,
+                &source.messages,
+                source.metadata.updated_at_ms,
+            ) {
+                Ok(()) => {
+                    if let Err(error) = self.store.update_metadata(&source.metadata) {
+                        failures.push(error.to_string());
+                    }
+                }
+                Err(error) => failures.push(error.to_string()),
+            }
+        } else {
+            match self.store.delete(result_session_id) {
+                Ok(()) | Err(StorageError::SessionNotFound(_)) => {}
+                Err(error) => failures.push(error.to_string()),
+            }
+            if let Err(error) = self.continuity.remove(result_session_id) {
+                failures.push(error.to_string());
+            }
+        }
+        if let Err(error) = self.store.select_for_continue(&source.metadata.id) {
+            failures.push(error.to_string());
+        }
+        if let Err(error) = self.continuity.refresh(source) {
+            failures.push(error.to_string());
+        }
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(Release3Error::Storage(failures.join("; ")))
+        }
+    }
+
+    pub(crate) fn rewind_after_workspace_restore(
+        &self,
+        params: &BTreeMap<String, Value>,
+    ) -> Result<Release3Dispatch, Release3Error> {
+        self.rewind_impl(params, true)
+    }
+
     pub fn update_runtime_settings(
         &self,
         session_id: &str,
@@ -632,14 +696,40 @@ impl Release3Service {
     }
 
     fn delete(&self, params: &BTreeMap<String, Value>) -> Result<Release3Dispatch, Release3Error> {
-        match self.store.delete(required_string(params, "sessionId")?) {
-            Ok(()) | Err(StorageError::SessionNotFound(_)) => {}
+        let session_id = required_string(params, "sessionId")?;
+        let snapshot = match self.store.load(session_id) {
+            Ok(snapshot) => Some(snapshot),
+            Err(StorageError::SessionNotFound(_)) => None,
             Err(error) => return Err(storage_error(error)),
+        };
+        self.continuity
+            .remove(session_id)
+            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+        match self.store.delete(session_id) {
+            Ok(()) | Err(StorageError::SessionNotFound(_)) => {}
+            Err(error) => {
+                if let Some(snapshot) = snapshot
+                    && let Err(rollback) = self.continuity.refresh(snapshot)
+                {
+                    return Err(Release3Error::Storage(format!(
+                        "session delete failed ({error}); continuity rollback failed ({rollback})"
+                    )));
+                }
+                return Err(storage_error(error));
+            }
         }
         Ok(Release3Dispatch::result([("deleted", json!(true))]))
     }
 
     fn rewind(&self, params: &BTreeMap<String, Value>) -> Result<Release3Dispatch, Release3Error> {
+        self.rewind_impl(params, false)
+    }
+
+    fn rewind_impl(
+        &self,
+        params: &BTreeMap<String, Value>,
+        workspace_restore_handled: bool,
+    ) -> Result<Release3Dispatch, Release3Error> {
         let session_id = required_string(params, "sessionId")?;
         let message_index = params
             .get("messageIndex")
@@ -663,7 +753,7 @@ impl Release3Service {
             })
             .transpose()?
             .unwrap_or(false);
-        if restore_files {
+        if restore_files && !workspace_restore_handled {
             return Err(Release3Error::InvalidParams(
                 "this session has no restorable file checkpoint".to_owned(),
             ));
@@ -725,9 +815,14 @@ impl Release3Service {
                 .rewind(session_id, keep_messages, rewind_statistics, timestamp)
                 .map_err(storage_error)?
         };
-        self.continuity
-            .refresh(hydrated.clone())
-            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+        if let Err(error) = self.continuity.refresh(hydrated.clone()) {
+            if let Err(rollback) = self.rollback_rewind(source, &hydrated.metadata.id) {
+                return Err(Release3Error::Storage(format!(
+                    "continuity refresh failed ({error}); rewind rollback failed ({rollback})"
+                )));
+            }
+            return Err(Release3Error::Storage(error.to_string()));
+        }
         let mut dispatch = hydrated_result(&hydrated, Some(runtime_attachment(&hydrated)));
         dispatch
             .result

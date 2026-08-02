@@ -7,6 +7,7 @@ pub mod release3;
 pub mod release4;
 pub mod resources;
 pub mod server;
+mod session_lifecycle;
 pub mod startup;
 pub mod transport;
 

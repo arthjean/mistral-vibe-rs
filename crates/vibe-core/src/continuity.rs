@@ -134,6 +134,15 @@ impl SessionContinuity {
         Ok(incoming)
     }
 
+    pub fn remove(&self, selector: &str) -> Result<bool, ContinuityError> {
+        let mut sessions = self.lock_sessions()?;
+        let Some(key) = state_key(&sessions, selector) else {
+            return Ok(false);
+        };
+        sessions.remove(&key);
+        Ok(true)
+    }
+
     pub fn reconnect(&self, selector: &str) -> Result<ContinuitySnapshot, ContinuityError> {
         if let Some(snapshot) = self.find_snapshot(selector)? {
             return Ok(snapshot);
