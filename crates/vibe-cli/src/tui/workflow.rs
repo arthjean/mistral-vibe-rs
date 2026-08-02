@@ -6,10 +6,8 @@ use serde_json::{Value, json};
 mod config;
 mod mcp;
 
-use super::attachments::{PromptDraft, prepare_submission};
 use super::chat_input::ChatInputState;
 use super::clipboard::{SystemClipboard, SystemClipboardPort};
-use super::clipboard_images::ClipboardImageManager;
 use super::commands::{CommandId, parse_command_in};
 use super::controls::ControlState;
 use super::interaction::{Overlay, OverlayKind};
@@ -21,10 +19,9 @@ use super::setup::ResolvedTheme;
 use super::state::{EntryStatus, TranscriptKind, TuiState};
 use super::switching::{self, SwitchRequest};
 use super::{
-    ActiveTurn, Arguments, CliError, InteractiveRuntime, RuntimeSkill, adopt_hydrated_session,
-    call_runtime, metadata_session_id, parse_runtime_skills, persist_user_setting,
-    push_local_notice, refresh_server_banner_metrics, start_active_turn, start_shell,
-    sync_runtime_intent, update_theme,
+    Arguments, CliError, InteractiveRuntime, adopt_hydrated_session, call_runtime,
+    metadata_session_id, parse_runtime_skills, persist_user_setting, push_local_notice,
+    refresh_server_banner_metrics, sync_runtime_intent, update_theme,
 };
 pub(super) use config::apply_thinking;
 use config::{
@@ -43,6 +40,7 @@ Manage your data settings [here](https://chat.mistral.ai/work?profile_dialog=pri
 pub(super) enum CommandAction {
     Unhandled,
     Handled,
+    RejectedBusy,
     ClipboardImageRequested,
     Exit,
     Setup,
@@ -70,7 +68,7 @@ pub(super) async fn dispatch_command(
     _controls: &mut ControlState,
     composer: &mut ChatInputState,
     _theme: &mut ResolvedTheme,
-    turn_active: bool,
+    runtime_busy: bool,
 ) -> Result<CommandAction, CliError> {
     let command_context = composer.command_context().clone();
     let Some(parsed) = parse_command_in(command_line, &command_context) else {
@@ -78,6 +76,10 @@ pub(super) async fn dispatch_command(
     };
     let command_id = parsed.id;
     let command_arguments = parsed.arguments.to_owned();
+    if runtime_busy {
+        state.push_diagnostic("Slash commands cannot be queued while the runtime is busy");
+        return Ok(CommandAction::RejectedBusy);
+    }
     match command_id {
         CommandId::Exit => return Ok(CommandAction::Exit),
         CommandId::Setup => return Ok(CommandAction::Setup),
@@ -103,13 +105,6 @@ pub(super) async fn dispatch_command(
         state.push_diagnostic("Setup is required before using this command");
         return Ok(CommandAction::Handled);
     };
-    if turn_active && command_id.changes_session_projection() {
-        state.push_diagnostic(
-            "Finish or interrupt the active turn before changing the session projection",
-        );
-        return Ok(CommandAction::Handled);
-    }
-
     match command_id {
         CommandId::Config => {
             show_config(runtime, state);
@@ -363,147 +358,6 @@ pub(super) fn handle_overlay_key(
         _ => {}
     }
     true
-}
-
-pub(super) async fn start_next_queued_prompt(
-    working_directory: &Path,
-    runtime: &mut Option<InteractiveRuntime>,
-    active: &mut Option<ActiveTurn>,
-    state: &mut TuiState,
-    controls: &mut ControlState,
-    clipboard_images: &mut ClipboardImageManager,
-) -> Result<(), CliError> {
-    if active.is_some()
-        || runtime
-            .as_ref()
-            .is_some_and(|runtime| runtime.shell.is_some())
-        || controls.pending_callback().is_some()
-    {
-        return Ok(());
-    }
-    if let Some(prompt) = state.prompt_queue.pop_next() {
-        if prompt.text().trim_start().starts_with('!') {
-            if start_shell(prompt.text(), runtime, state).await? {
-                return Ok(());
-            }
-            state.prompt_queue.push_front(prompt);
-            state.prompt_queue.pause();
-            return Ok(());
-        }
-        if start_prompt(
-            working_directory,
-            &prompt,
-            runtime,
-            active,
-            state,
-            controls,
-            clipboard_images,
-        )
-        .await?
-        {
-            return Ok(());
-        }
-        state.prompt_queue.push_front(prompt);
-        state.prompt_queue.pause();
-    }
-    Ok(())
-}
-
-pub(super) async fn start_prompt(
-    working_directory: &Path,
-    prompt: &PromptDraft,
-    runtime: &mut Option<InteractiveRuntime>,
-    active: &mut Option<ActiveTurn>,
-    state: &mut TuiState,
-    controls: &mut ControlState,
-    clipboard_images: &mut ClipboardImageManager,
-) -> Result<bool, CliError> {
-    let mut protected = state.prompt_queue.transient_images();
-    protected.extend(prompt.transient_image_paths().cloned());
-    clipboard_images
-        .discard_unreferenced(&protected, state)
-        .await;
-    let Some(runtime) = runtime.as_mut() else {
-        state.push_diagnostic("Setup is required before starting a session. Restart with --setup.");
-        return Ok(false);
-    };
-    let preparation_workspace = working_directory.to_path_buf();
-    let preparation_prompt = prompt.clone();
-    let active_model = runtime.model.clone();
-    let supports_images = runtime.supports_images();
-    let preparation = tokio::task::spawn_blocking(move || {
-        prepare_submission(
-            &preparation_workspace,
-            &preparation_prompt,
-            &active_model,
-            supports_images,
-        )
-    })
-    .await;
-    let mut prepared = match preparation {
-        Ok(Ok(prepared)) => prepared,
-        Ok(Err(error)) => {
-            state.push_diagnostic(error.to_string());
-            return Ok(false);
-        }
-        Err(error) => {
-            state.push_diagnostic(format!("Image preparation task failed: {error}"));
-            return Ok(false);
-        }
-    };
-    if let Some(skill) = invoked_skill(runtime, prompt.text()) {
-        prepared
-            .turn
-            .input
-            .push(vibe_app_server::client::PublicContentBlock::Resource {
-                resource: json!({
-                    "resource": {
-                        "uri": skill.path.as_deref().unwrap_or("skill://invoked"),
-                        "name": skill.name,
-                        "text": skill.body,
-                    }
-                }),
-            });
-    }
-    let reservation = runtime
-        .service
-        .reserve_prepared_prompt(
-            &runtime.session_id,
-            &prepared.turn,
-            prepared.provider_images,
-        )
-        .await?;
-    let protected = state.prompt_queue.transient_images();
-    clipboard_images
-        .consume(&prepared.cleanup_paths, &protected, state)
-        .await;
-    controls
-        .begin_turn(&reservation.turn_id)
-        .map_err(|error| CliError::Terminal(error.to_string()))?;
-    *active = Some(start_active_turn(
-        &runtime.service,
-        reservation,
-        None,
-        state.watermark,
-    )?);
-    state.waiting = true;
-    Ok(true)
-}
-
-pub(super) fn is_user_skill(runtime: Option<&InteractiveRuntime>, input: &str) -> bool {
-    runtime
-        .and_then(|runtime| invoked_skill(runtime, input))
-        .is_some()
-}
-
-fn invoked_skill<'a>(runtime: &'a InteractiveRuntime, input: &str) -> Option<&'a RuntimeSkill> {
-    let name = input
-        .trim()
-        .strip_prefix('/')?
-        .split_whitespace()
-        .next()?
-        .to_ascii_lowercase();
-    runtime.skills.get(&name)
 }
 
 pub(super) fn cycle_agent(

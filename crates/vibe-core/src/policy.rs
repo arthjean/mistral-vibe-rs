@@ -5,6 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 use url::Url;
@@ -64,6 +65,22 @@ impl PermissionRequirement {
         }
     }
 
+    #[must_use]
+    pub fn label(&self) -> String {
+        match self {
+            Self::Read { path } | Self::Write { path } => {
+                format!("outside workdir ({})", path.display())
+            }
+            Self::Shell { command } => command.clone(),
+            Self::Network { url } => format!(
+                "fetching from {}",
+                url.host_str().unwrap_or_else(|| url.as_str())
+            ),
+            Self::Mcp { server, tool } => format!("MCP tool ({server}/{tool})"),
+            Self::Destructive { action } => action.clone(),
+        }
+    }
+
     fn path(&self) -> Option<&Path> {
         match self {
             Self::Read { path } | Self::Write { path } => Some(path),
@@ -92,6 +109,7 @@ pub struct PolicyResolution {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApprovalRequest {
     pub tool: String,
+    pub input: Value,
     pub requirements: Vec<PermissionRequirement>,
     pub rationale: String,
 }
@@ -154,7 +172,12 @@ impl ToolHandler for PolicyGuardedTool {
         let future: OwnedToolHandlerFuture = Box::pin(async move {
             let requirements = requirements(&invocation)?;
             let lease = store
-                .authorize(&name, requirements, approval.as_ref())
+                .authorize(
+                    &name,
+                    invocation.arguments.clone(),
+                    requirements,
+                    approval.as_ref(),
+                )
                 .await
                 .map_err(|error| ToolError::Execution(error.to_string()))?;
             let state = store.state.read().await;
@@ -312,6 +335,7 @@ impl PermissionStore {
     pub async fn authorize(
         &self,
         tool: &str,
+        input: Value,
         requirements: Vec<PermissionRequirement>,
         approval: &dyn ApprovalAgent,
     ) -> Result<PolicyLease, PolicyError> {
@@ -343,6 +367,7 @@ impl PermissionStore {
                 let decision = approval
                     .request(ApprovalRequest {
                         tool: tool.to_owned(),
+                        input,
                         requirements: requirements.clone(),
                         rationale: resolution.rationale,
                     })
@@ -698,6 +723,7 @@ mod tests {
             first_store
                 .authorize(
                     "network",
+                    Value::Null,
                     vec![PermissionRequirement::Network {
                         url: Url::parse("https://one.example").expect("url"),
                     }],
@@ -725,6 +751,7 @@ mod tests {
             second_store
                 .authorize(
                     "network",
+                    Value::Null,
                     vec![PermissionRequirement::Network {
                         url: Url::parse("https://two.example").expect("url"),
                     }],
@@ -755,6 +782,7 @@ mod tests {
         let lease = store
             .authorize(
                 "write",
+                Value::Null,
                 vec![PermissionRequirement::Write {
                     path: directory.path().join("file.txt"),
                 }],

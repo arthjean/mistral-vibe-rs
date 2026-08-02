@@ -1,4 +1,5 @@
 pub mod attachments;
+mod callback;
 pub mod chat_input;
 pub mod clipboard;
 mod clipboard_images;
@@ -16,7 +17,12 @@ mod path_mentions;
 mod path_normalization;
 mod path_resources;
 pub mod pickers;
+mod plan_review;
+mod prompt;
+mod queue;
 pub mod render;
+#[cfg(test)]
+mod runtime_parity_tests;
 pub mod setup;
 mod shell;
 mod shortcuts;
@@ -30,6 +36,8 @@ mod workflow;
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::Path;
+#[cfg(test)]
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -46,14 +54,23 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tokio::task::JoinHandle;
 use vibe_app_server::client::{
-    DriverError, HeadlessService, LiveDriverConfig, LiveTurnDriver, ProgrammaticUpdate,
-    PublicCallbackState, PublicContentBlock, PublicDispatch, PublicHistoryEntry, PublicMessageRole,
+    DriverError, HeadlessService, InterruptOutcome, LiveDriverConfig, LiveTurnDriver,
+    ProgrammaticUpdate, PublicContentBlock, PublicDispatch, PublicHistoryEntry, PublicMessageRole,
     PublicTurnOutcome, SessionOptions, TurnDriver, TurnReservation,
 };
 use vibe_app_server::release3::Release3Service;
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
 
+use self::callback::{
+    cancel_open_callback_notices, drain_callback_requests, fail_open_callback_notices,
+    respond_to_pending_callback, sync_active_callbacks, sync_callback_presentation,
+};
+#[cfg(test)]
+use self::callback::{
+    fail_inactive_callback_notices, pending_callback_from_entry, plan_approval_error,
+    recover_from_callback_response_error,
+};
 use self::chat_input::{ChatInputState, InputEffect, InputEvent, Safety};
 use self::clipboard_images::{ClipboardImageManager, ImageModel, ImageModels};
 use self::cloud_workflow::{CloudWorkflowState, ProjectSelection};
@@ -62,13 +79,15 @@ use self::composer::{
     apply_effects as apply_composer_effects, apply_event as apply_composer_event,
     normalized_key_event as normalized_input_event,
 };
-use self::controls::{
-    ApprovalScope, CallbackChoice, CallbackKind, CallbackOption, CallbackQuestion, ControlState,
-    PendingCallback, UserInputChoice,
-};
+use self::controls::{ApprovalScope, CallbackChoice, CallbackRequest, ControlState};
+#[cfg(test)]
+use self::controls::{CallbackEffect, PendingCallback};
 use self::history::PromptHistory;
 use self::input::{ExternalEditorPort, SystemExternalEditor};
 use self::path_normalization::PathNormalizationManager;
+use self::plan_review::PlanReviewMonitor;
+use self::prompt::{PromptContext, enqueue_prompt, is_user_skill, start_prompt};
+use self::queue::start_next_queued_prompt;
 use self::render::{BannerContext, TokenState, UiContext, draw};
 use self::setup::{
     CredentialStore, EnvironmentThemeDetector, NativeCredentialStore, NotificationPreference,
@@ -77,6 +96,8 @@ use self::setup::{
 };
 use self::shell::{ActiveShell, finish_shell, interrupt_shell, start_shell};
 use self::shortcuts::{copy_prompt_selection, resume_paused_queue};
+#[cfg(test)]
+use self::state::PlanReviewState;
 use self::state::{
     ApplyResult, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiSnapshot, TuiState,
 };
@@ -84,7 +105,7 @@ use self::terminal::{CrosstermOps, TerminalGuard};
 use self::voice::VoiceManager;
 use self::workflow::{
     CommandAction, RuntimeCommand, apply_thinking, cycle_agent, dispatch_command,
-    handle_overlay_key, is_user_skill, show_rewind, start_next_queued_prompt, start_prompt,
+    handle_overlay_key, show_rewind,
 };
 use crate::{
     Arguments, CliError, CliTelemetryObserver, price_per_million_micros, telemetry_event_observer,
@@ -94,10 +115,6 @@ use crate::{
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const INITIAL_HISTORY_LIMIT: usize = 200;
 const DEFAULT_MODEL: &str = "mistral-medium-3.5";
-const MAX_CALLBACK_DETAIL_BYTES: usize = 64 * 1024;
-const MAX_CALLBACK_QUESTIONS: usize = 16;
-const MAX_CALLBACK_OPTIONS: usize = 32;
-const MAX_CALLBACK_TEXT_BYTES: usize = 8 * 1024;
 const DEFAULT_CONTEXT_WINDOW: u64 = 200_000;
 
 #[derive(Debug, Deserialize)]
@@ -124,10 +141,17 @@ enum PersistedMessage {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CancellationPhase {
+    Active,
+    DriverOnly,
+    Complete,
+}
+
 struct ActiveTurn {
     turn_id: String,
     scheduled_loop_id: Option<String>,
-    cancel_requested: bool,
+    cancellation: CancellationPhase,
     updates: tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
     task: JoinHandle<(TurnReservation, Result<PublicTurnOutcome, DriverError>)>,
 }
@@ -409,6 +433,7 @@ pub async fn run_interactive(
     let mut deferred_enter = None;
     let mut session_started = runtime.is_some();
     let mut mounted_startup = startup::MountedStartup::new(post_mount_action);
+    let mut plan_review_monitor = PlanReviewMonitor::default();
     state.waiting |= runtime.is_some();
 
     let event_loop = async {
@@ -439,14 +464,14 @@ pub async fn run_interactive(
             )
             .await?;
             finish_shell(runtime.as_mut(), &mut state).await;
-            start_next_queued_prompt(
+            start_next_queued_prompt(PromptContext::new(
                 &working_directory,
                 &mut runtime,
                 &mut active,
                 &mut state,
                 &mut controls,
                 &mut clipboard_images,
-            )
+            ))
             .await?;
             let effects = input.poll_completion();
             apply_composer_effects(
@@ -455,6 +480,15 @@ pub async fn run_interactive(
                 &working_directory,
                 &mut state,
             );
+            let now_ms = unix_millis();
+            let plan_path = controls
+                .pending_callback()
+                .and_then(|pending| match &pending.request {
+                    CallbackRequest::PlanReview { plan_path, .. } => Some(plan_path.clone()),
+                    CallbackRequest::Approval { .. } | CallbackRequest::UserInput { .. } => None,
+                });
+            plan_review_monitor.sync(plan_path, &mut state).await;
+            sync_callback_presentation(&controls, &mut state, now_ms);
             if !path_normalization.has_pending()
                 && let Some(key) = deferred_enter.take()
             {
@@ -572,14 +606,19 @@ pub async fn run_interactive(
                     let _ = drain_ready_interrupts(&mut interrupt, tokio::signal::ctrl_c)?;
                     if mounted_startup.is_fatal() {
                         exit = true;
-                    } else if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_mut()) {
-                        if active.cancel_requested {
+                    } else if active.is_some() && runtime.is_some() {
+                        if active
+                            .as_ref()
+                            .is_some_and(|active| active.cancellation != CancellationPhase::Active)
+                        {
                             exit = true;
                         } else {
-                            let _ = controls.interrupt();
-                            runtime.service.interrupt(&runtime.session_id, &active.turn_id)?;
-                            active.cancel_requested = true;
-                            state.push_diagnostic("SIGINT requested turn cancellation");
+                            request_active_turn_interrupt(
+                                &mut runtime,
+                                &mut active,
+                                &mut controls,
+                                &mut state,
+                            );
                         }
                     } else if let Some(runtime) = runtime.as_mut()
                         && runtime.shell.is_some()
@@ -686,16 +725,30 @@ pub async fn run_interactive(
                             .and_then(Value::as_str)
                             .unwrap_or("Scheduled loop fired");
                         push_local_notice(&mut state, message, EntryStatus::Completed);
-                        controls
-                            .begin_turn(&scheduled.reservation.turn_id)
-                            .map_err(|error| CliError::Terminal(error.to_string()))?;
-                        active = Some(start_active_turn(
+                        match start_active_turn(
                             &runtime.service,
                             scheduled.reservation,
                             Some(scheduled.loop_id),
                             state.watermark,
-                        )?);
-                        state.waiting = true;
+                            &mut controls,
+                        ) {
+                            Ok(started) => {
+                                active = Some(started);
+                                state.waiting = true;
+                            }
+                            Err(failure) => {
+                                let (reservation, error) = *failure;
+                                let failure = format!(
+                                    "Reserved scheduled turn could not start locally: {error}"
+                                );
+                                settle_unstarted_reservation(
+                                    runtime,
+                                    &mut state,
+                                    &reservation,
+                                    &failure,
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -716,6 +769,7 @@ pub async fn run_interactive(
             runtime
                 .service
                 .interrupt(&runtime.session_id, &active.turn_id)
+                .map(|_| ())
                 .map_err(CliError::from)
         } else {
             Ok(())
@@ -889,12 +943,26 @@ fn start_active_turn(
     reservation: TurnReservation,
     scheduled_loop_id: Option<String>,
     event_id: u64,
-) -> Result<ActiveTurn, CliError> {
-    let (observer, updates) = service.interactive_update_channel_after(
+    controls: &mut ControlState,
+) -> Result<ActiveTurn, Box<(TurnReservation, CliError)>> {
+    if let Err(error) = controls.begin_turn(&reservation.turn_id) {
+        return Err(Box::new((
+            reservation,
+            CliError::Terminal(error.to_string()),
+        )));
+    }
+    let (observer, updates) = match service.interactive_update_channel_after(
         &reservation.session_id,
         &reservation.turn_id,
         event_id,
-    )?;
+    ) {
+        Ok(channel) => channel,
+        Err(error) => {
+            let turn_id = reservation.turn_id.clone();
+            controls.complete_turn(&turn_id, "Reserved turn failed before local execution");
+            return Err(Box::new((reservation, error.into())));
+        }
+    };
     let driver = service.driver();
     let turn_id = reservation.turn_id.clone();
     let task = tokio::spawn(async move {
@@ -904,155 +972,94 @@ fn start_active_turn(
     Ok(ActiveTurn {
         turn_id,
         scheduled_loop_id,
-        cancel_requested: false,
+        cancellation: CancellationPhase::Active,
         updates,
         task,
     })
 }
 
-fn drain_callback_requests(
-    runtime: Option<&mut InteractiveRuntime>,
+fn settle_unstarted_reservation(
+    runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
-    controls: &mut ControlState,
-) {
-    let Some(runtime) = runtime else {
-        return;
-    };
-    let entries = match runtime.service.drain_callbacks() {
-        Ok(entries) => entries,
-        Err(error) => {
-            state.push_diagnostic(format!("Interactive callbacks are unavailable: {error}"));
-            return;
+    reservation: &TurnReservation,
+    failure: &str,
+) -> bool {
+    match runtime.service.fail_reserved(reservation, failure) {
+        Ok(()) => {
+            state.push_diagnostic(failure);
+            true
         }
-    };
-    if entries.is_empty() {
-        return;
-    }
-    resync_current_projection(runtime, state);
-    for entry in entries {
-        let pending = match pending_callback_from_entry(&entry) {
-            Ok(Some(pending)) => pending,
-            Ok(None) => continue,
-            Err(error) => {
-                state.push_diagnostic(format!("Interactive callback is invalid: {error}"));
-                continue;
-            }
-        };
-        if controls.contains_callback(&pending.callback_id) {
-            continue;
-        }
-        if controls.active_turn_id.is_none()
-            && let Err(error) = controls.begin_turn(&pending.turn_id)
+        Err(server_error) => match runtime
+            .service
+            .interrupt(&reservation.session_id, &reservation.turn_id)
         {
-            state.push_diagnostic(error.to_string());
-            continue;
-        }
-        if let Err(error) = controls.present_callback(pending.clone()) {
-            state.push_diagnostic(error.to_string());
-            continue;
-        }
-        let suffix = if pending.kind == CallbackKind::Approval {
-            " Use /approve [once|always|permanent] or /deny."
-        } else {
-            ""
-        };
-        push_local_notice(
-            state,
-            &format!("{}{suffix}", pending.prompt),
-            EntryStatus::Streaming,
-        );
-        if pending.kind == CallbackKind::PlanReview && runtime.mode != "plan" {
-            state.push_diagnostic("Rejected exit-plan callback outside plan mode");
-            respond_to_pending_callback(runtime, controls, &pending, CallbackChoice::Cancel, state);
-        }
+            Ok(InterruptOutcome::Complete) => {
+                state.push_diagnostic(format!(
+                    "{failure}; failure settlement failed ({server_error}), so the reserved turn \
+                     was interrupted"
+                ));
+                true
+            }
+            Ok(InterruptOutcome::DriverOnly { canonical_error }) => {
+                state.push_diagnostic(format!(
+                    "{failure}; failure settlement failed: {server_error}; the driver stopped but \
+                     canonical interruption failed: {canonical_error}"
+                ));
+                false
+            }
+            Err(interrupt_error) => {
+                state.push_diagnostic(format!(
+                    "{failure}; failure settlement failed: {server_error}; interruption fallback \
+                     failed: {interrupt_error}"
+                ));
+                false
+            }
+        },
     }
 }
 
-fn respond_to_pending_callback(
-    runtime: &mut InteractiveRuntime,
+fn request_active_turn_interrupt(
+    runtime: &mut Option<InteractiveRuntime>,
+    active: &mut Option<ActiveTurn>,
     controls: &mut ControlState,
-    pending: &PendingCallback,
-    choice: CallbackChoice,
     state: &mut TuiState,
-) {
-    if pending.kind == CallbackKind::PlanReview
-        && runtime.mode != "plan"
-        && choice != CallbackChoice::Cancel
-    {
-        state.push_diagnostic("Exit plan mode is only valid while the session is in plan mode");
-        return;
-    }
-    let plan_transition = (pending.kind == CallbackKind::PlanReview)
-        .then(|| plan_transition(&choice))
-        .flatten();
-    let dispatch = match controls.prepare_answer(&pending.turn_id, &pending.callback_id, &choice) {
-        Ok(dispatch) => dispatch,
-        Err(error) => {
-            state.push_diagnostic(error.to_string());
-            return;
-        }
+) -> bool {
+    let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_mut()) else {
+        return false;
     };
-    match runtime.service.respond_callback(dispatch.params.clone()) {
-        Ok(_) => {
-            if let Err(error) =
-                controls.accept_answer(&pending.turn_id, &pending.callback_id, choice, &dispatch)
-            {
-                state.push_diagnostic(format!(
-                    "Server accepted the callback, but the local control state diverged: {error}"
-                ));
+    if active.cancellation == CancellationPhase::Active {
+        let interrupt = match runtime
+            .service
+            .interrupt(&runtime.session_id, &active.turn_id)
+        {
+            Ok(interrupt) => interrupt,
+            Err(error) => {
+                state.push_diagnostic(format!("Turn cancellation was rejected: {error}"));
                 resync_current_projection(runtime, state);
                 sync_active_callbacks(runtime, state, controls);
-                return;
+                return true;
             }
-            if let Some((clear_context, auto_approve)) = plan_transition {
-                let settings = runtime.service.public_call(
-                    "session/settings/update",
-                    json!({
-                        "sessionId": runtime.session_id,
-                        "mode": "code",
-                        "autoApprove": auto_approve,
-                    }),
-                );
-                if let Err(error) = settings {
-                    state.push_diagnostic(format!(
-                        "Plan response was accepted, but the session transition failed: {error}"
-                    ));
-                } else {
-                    runtime.mode = "code".to_owned();
-                    runtime.auto_approve = auto_approve;
-                    runtime.clear_context_after_turn |= clear_context;
-                }
+        };
+        let _ = controls.interrupt();
+        cancel_open_callback_notices(state);
+        let diagnostic = match interrupt {
+            InterruptOutcome::Complete => {
+                active.cancellation = CancellationPhase::Complete;
+                "Turn cancellation requested; queued prompts paused".to_owned()
             }
-            push_local_notice(state, "Callback response accepted", EntryStatus::Completed);
-            resync_current_projection(runtime, state);
-            sync_active_callbacks(runtime, state, controls);
-        }
-        Err(error) => {
-            recover_from_callback_response_error(runtime, controls, state, error);
-        }
+            InterruptOutcome::DriverOnly { canonical_error } => {
+                active.cancellation = CancellationPhase::DriverOnly;
+                format!(
+                    "The driver is cancelling, but canonical interruption must be retried: \
+                     {canonical_error}"
+                )
+            }
+        };
+        state.prompt_queue.pause();
+        push_local_notice(state, "Interrupted", EntryStatus::Cancelled);
+        state.push_diagnostic(diagnostic);
     }
-}
-
-fn recover_from_callback_response_error(
-    runtime: &mut InteractiveRuntime,
-    controls: &mut ControlState,
-    state: &mut TuiState,
-    error: impl std::fmt::Display,
-) {
-    state.push_diagnostic(format!("Callback response was rejected: {error}"));
-    // The driver can fail after the server commits the response. Canonical state
-    // decides whether the callback is still actionable.
-    resync_current_projection(runtime, state);
-    sync_active_callbacks(runtime, state, controls);
-}
-
-fn plan_transition(choice: &CallbackChoice) -> Option<(bool, bool)> {
-    match choice {
-        CallbackChoice::Option { id } if id == "clear_auto" => Some((true, true)),
-        CallbackChoice::Option { id } if id == "auto" => Some((false, true)),
-        CallbackChoice::Option { id } if id == "manual" => Some((false, false)),
-        _ => None,
-    }
+    true
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1077,6 +1084,17 @@ async fn handle_key(
 ) -> Result<bool, CliError> {
     input.set_secret_input(*secret_input);
     input.set_teleport_available(teleport_available(runtime.as_ref()));
+    if callback::handle_key(
+        key,
+        runtime,
+        active,
+        state,
+        controls,
+        terminal_guard,
+        terminal,
+    )? {
+        return Ok(false);
+    }
     if handle_overlay_key(key, runtime, state, controls, input, theme) {
         let effects = input.refresh_after_adapter_mutation();
         apply_composer_effects(input, effects, working_directory, state);
@@ -1134,6 +1152,16 @@ async fn handle_key(
                 return Ok(false);
             }
             KeyCode::Char('c') => {
+                if request_active_turn_interrupt(runtime, active, controls, state) {
+                    return Ok(false);
+                }
+                if let Some(runtime) = runtime.as_mut()
+                    && runtime.shell.is_some()
+                {
+                    interrupt_shell(runtime, state).await;
+                    state.prompt_queue.pause();
+                    return Ok(false);
+                }
                 if !input.editor().text().is_empty() {
                     if let Some(event) = normalized_input_event(key) {
                         apply_composer_event(input, event, working_directory, state);
@@ -1154,25 +1182,6 @@ async fn handle_key(
                     clipboard_images
                         .discard_unreferenced(&protected, state)
                         .await;
-                    return Ok(false);
-                }
-                if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_mut()) {
-                    if !active.cancel_requested {
-                        let _ = controls.interrupt();
-                        runtime
-                            .service
-                            .interrupt(&runtime.session_id, &active.turn_id)?;
-                        active.cancel_requested = true;
-                        state.prompt_queue.pause();
-                        state.push_diagnostic("Turn cancellation requested; queued prompts paused");
-                    }
-                    return Ok(false);
-                }
-                if let Some(runtime) = runtime.as_mut()
-                    && runtime.shell.is_some()
-                {
-                    interrupt_shell(runtime, state).await;
-                    state.prompt_queue.pause();
                     return Ok(false);
                 }
                 if state.quit_confirmation.request("Ctrl+C", unix_millis()) {
@@ -1257,25 +1266,18 @@ async fn handle_key(
     }
     match key.code {
         KeyCode::Esc => {
-            if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_mut()) {
-                let _ = controls.interrupt();
-                runtime
-                    .service
-                    .interrupt(&runtime.session_id, &active.turn_id)?;
-                active.cancel_requested = true;
-                state.prompt_queue.pause();
-                state.push_diagnostic("Turn cancellation requested");
-            } else if let Some(runtime) = runtime.as_mut()
+            if !request_active_turn_interrupt(runtime, active, controls, state)
+                && let Some(runtime) = runtime.as_mut()
                 && runtime.shell.is_some()
             {
                 interrupt_shell(runtime, state).await;
                 state.prompt_queue.pause();
-            } else if !state.prompt_queue.is_empty() {
+            } else if active.is_none() && !state.prompt_queue.is_empty() {
                 state.prompt_queue.pause();
                 state.push_diagnostic(
                     "Queued prompts paused; press Enter on an empty prompt to resume",
                 );
-            } else if !input.editor().text().is_empty() {
+            } else if active.is_none() && !input.editor().text().is_empty() {
                 if let Some(event) = normalized_input_event(key) {
                     apply_composer_event(input, event, working_directory, state);
                 }
@@ -1284,7 +1286,8 @@ async fn handle_key(
                     .discard_unreferenced(&protected, state)
                     .await;
                 state.rewind_confirmation.cancel();
-            } else if state.rewind_confirmation.request("Esc", unix_millis())
+            } else if active.is_none()
+                && state.rewind_confirmation.request("Esc", unix_millis())
                 && let Some(runtime) = runtime.as_mut()
             {
                 show_rewind(runtime, state);
@@ -1417,29 +1420,12 @@ async fn handle_key(
                 }
                 return Ok(false);
             }
-            if !submitted.starts_with('/')
-                && let Some(pending) = controls.pending_callback().cloned()
-            {
-                match callback_choice_from_input(&pending, &submitted) {
-                    Ok(choice) => {
-                        let Some(runtime) = runtime.as_mut() else {
-                            state.push_diagnostic(
-                                "The callback is no longer attached to an interactive session",
-                            );
-                            return Ok(false);
-                        };
-                        respond_to_pending_callback(runtime, controls, &pending, choice, state);
-                    }
-                    Err(error) => {
-                        input.replace_text(submitted);
-                        let effects = input.refresh_after_adapter_mutation();
-                        apply_composer_effects(input, effects, working_directory, state);
-                        state.push_diagnostic(error);
-                    }
-                }
-                return Ok(false);
-            }
-            if is_exit_command(&submitted) {
+            let runtime_busy = active.is_some()
+                || runtime
+                    .as_ref()
+                    .is_some_and(|runtime| runtime.shell.is_some())
+                || state.prompt_queue.is_paused();
+            if !runtime_busy && is_exit_command(&submitted) {
                 return Ok(true);
             }
             let command_action = dispatch_command(
@@ -1451,7 +1437,7 @@ async fn handle_key(
                 controls,
                 input,
                 theme,
-                active.is_some(),
+                runtime_busy,
             )
             .await?;
             let effects = input.refresh_after_adapter_mutation();
@@ -1474,6 +1460,11 @@ async fn handle_key(
                 CommandAction::ClipboardImageRequested => {
                     clipboard_images.schedule(true);
                 }
+                CommandAction::RejectedBusy => {
+                    input.replace_text(&submitted);
+                    let effects = input.refresh_after_adapter_mutation();
+                    apply_composer_effects(input, effects, working_directory, state);
+                }
                 CommandAction::Handled => {}
                 CommandAction::Runtime(command) => {
                     if handle_runtime_command(
@@ -1492,48 +1483,58 @@ async fn handle_key(
                     }
                     state.push_diagnostic("The command is not available in this runtime");
                 }
-                CommandAction::Unhandled if submitted.starts_with('/') => {
-                    if is_user_skill(runtime.as_ref(), &submitted) {
-                        if active.is_some()
-                            || runtime
-                                .as_ref()
-                                .is_some_and(|runtime| runtime.shell.is_some())
-                        {
-                            state
-                                .prompt_queue
-                                .push(clipboard_images.draft(working_directory, submitted));
-                            state.prompt_queue.resume();
+                CommandAction::Unhandled
+                    if submitted.starts_with('/')
+                        && is_user_skill(runtime.as_ref(), &submitted) =>
+                {
+                    if runtime_busy {
+                        let draft = clipboard_images.draft(working_directory, submitted);
+                        if enqueue_prompt(working_directory, &draft, runtime, state).await? {
                             state.push_diagnostic(format!(
                                 "Skill queued ({} pending)",
                                 state.prompt_queue.len()
                             ));
                         } else {
-                            let draft = clipboard_images.draft(working_directory, submitted);
-                            if !start_prompt(
+                            input.replace_text(draft.into_text());
+                            let effects = input.refresh_after_adapter_mutation();
+                            apply_composer_effects(input, effects, working_directory, state);
+                        }
+                    } else {
+                        let draft = clipboard_images.draft(working_directory, submitted);
+                        if !start_prompt(
+                            PromptContext::new(
                                 working_directory,
-                                &draft,
                                 runtime,
                                 active,
                                 state,
                                 controls,
                                 clipboard_images,
-                            )
-                            .await?
-                            {
-                                input.replace_text(draft.into_text());
-                                let effects = input.refresh_after_adapter_mutation();
-                                apply_composer_effects(input, effects, working_directory, state);
-                            }
+                            ),
+                            &draft,
+                        )
+                        .await?
+                        {
+                            input.replace_text(draft.into_text());
+                            let effects = input.refresh_after_adapter_mutation();
+                            apply_composer_effects(input, effects, working_directory, state);
                         }
-                    } else {
-                        input.replace_text(&submitted);
-                        let effects = input.refresh_after_adapter_mutation();
-                        apply_composer_effects(input, effects, working_directory, state);
-                        state.push_diagnostic(format!("Unknown command `{submitted}`"));
                     }
                 }
                 CommandAction::Unhandled if submitted.trim() == "!" => {
                     state.push_diagnostic("No command provided after '!'");
+                    if runtime_busy {
+                        state.prompt_queue.resume();
+                    }
+                }
+                CommandAction::Unhandled
+                    if runtime_busy
+                        && submitted.starts_with('&')
+                        && teleport_available(runtime.as_ref()) =>
+                {
+                    input.replace_text(&submitted);
+                    let effects = input.refresh_after_adapter_mutation();
+                    apply_composer_effects(input, effects, working_directory, state);
+                    state.push_diagnostic("Teleport cannot be queued while the runtime is busy");
                 }
                 CommandAction::Unhandled
                     if submitted.starts_with('&') && teleport_available(runtime.as_ref()) =>
@@ -1549,10 +1550,7 @@ async fn handle_key(
                     }
                 }
                 CommandAction::Unhandled
-                    if active.is_some()
-                        || runtime
-                            .as_ref()
-                            .is_some_and(|runtime| runtime.shell.is_some()) =>
+                    if runtime_busy && submitted.trim_start().starts_with('!') =>
                 {
                     state
                         .prompt_queue
@@ -1562,6 +1560,19 @@ async fn handle_key(
                         "Input queued ({} pending)",
                         state.prompt_queue.len()
                     ));
+                }
+                CommandAction::Unhandled if runtime_busy => {
+                    let draft = clipboard_images.draft(working_directory, submitted);
+                    if enqueue_prompt(working_directory, &draft, runtime, state).await? {
+                        state.push_diagnostic(format!(
+                            "Input queued ({} pending)",
+                            state.prompt_queue.len()
+                        ));
+                    } else {
+                        input.replace_text(draft.into_text());
+                        let effects = input.refresh_after_adapter_mutation();
+                        apply_composer_effects(input, effects, working_directory, state);
+                    }
                 }
                 CommandAction::Unhandled if submitted.trim_start().starts_with('!') => {
                     if !start_shell(&submitted, runtime, state).await? {
@@ -1573,13 +1584,15 @@ async fn handle_key(
                 CommandAction::Unhandled => {
                     let draft = clipboard_images.draft(working_directory, submitted);
                     if !start_prompt(
-                        working_directory,
+                        PromptContext::new(
+                            working_directory,
+                            runtime,
+                            active,
+                            state,
+                            controls,
+                            clipboard_images,
+                        ),
                         &draft,
-                        runtime,
-                        active,
-                        state,
-                        controls,
-                        clipboard_images,
                     )
                     .await?
                     {
@@ -1589,6 +1602,12 @@ async fn handle_key(
                     }
                 }
             }
+        }
+        KeyCode::PageUp if key.modifiers.contains(KeyModifiers::ALT) => {
+            state.prompt_queue.scroll(-5);
+        }
+        KeyCode::PageDown if key.modifiers.contains(KeyModifiers::ALT) => {
+            state.prompt_queue.scroll(5);
         }
         KeyCode::PageUp => {
             state.scroll_up(10);
@@ -3459,75 +3478,6 @@ fn resync_current_projection(runtime: &mut InteractiveRuntime, state: &mut TuiSt
     }
 }
 
-fn sync_active_callbacks(
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-    controls: &mut ControlState,
-) {
-    let result = match runtime
-        .service
-        .public_call("session/read", json!({"sessionId": runtime.session_id}))
-    {
-        Ok(result) => result,
-        Err(error) => {
-            state.push_diagnostic(format!("Active callbacks are unavailable: {error}"));
-            return;
-        }
-    };
-    let active = result
-        .get("state")
-        .and_then(|state| state.get("activeCallbacks"))
-        .cloned()
-        .unwrap_or_else(|| json!([]));
-    let entries = match serde_json::from_value::<Vec<PublicHistoryEntry>>(active) {
-        Ok(entries) if entries.len() <= 1 => entries,
-        Ok(_) => {
-            state.push_diagnostic("Server projected more than one active callback");
-            return;
-        }
-        Err(error) => {
-            state.push_diagnostic(format!("Active callback projection is invalid: {error}"));
-            return;
-        }
-    };
-    let pending_callbacks = entries
-        .into_iter()
-        .filter_map(|entry| match pending_callback_from_entry(&entry) {
-            Ok(pending) => pending,
-            Err(error) => {
-                state.push_diagnostic(format!("Active callback is invalid: {error}"));
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-    let active_callback_ids = pending_callbacks
-        .iter()
-        .map(|pending| pending.callback_id.as_str())
-        .collect::<Vec<_>>();
-    controls.reconcile_active_callbacks(&active_callback_ids);
-
-    for pending in pending_callbacks {
-        if controls.contains_callback(&pending.callback_id) {
-            continue;
-        }
-        if controls.active_turn_id.is_none()
-            && let Err(error) = controls.begin_turn(&pending.turn_id)
-        {
-            state.push_diagnostic(error.to_string());
-            continue;
-        }
-        if let Err(error) = controls.present_callback(pending.clone()) {
-            state.push_diagnostic(error.to_string());
-            continue;
-        }
-        push_local_notice(state, &pending.prompt, EntryStatus::Streaming);
-        if pending.kind == CallbackKind::PlanReview && runtime.mode != "plan" {
-            state.push_diagnostic("Rejected exit-plan callback outside plan mode");
-            respond_to_pending_callback(runtime, controls, &pending, CallbackChoice::Cancel, state);
-        }
-    }
-}
-
 async fn finish_active(
     state: &mut TuiState,
     controls: &mut ControlState,
@@ -3547,7 +3497,7 @@ async fn finish_active(
     let ActiveTurn {
         turn_id,
         scheduled_loop_id,
-        cancel_requested: _,
+        cancellation,
         mut updates,
         task,
     } = active_turn;
@@ -3558,22 +3508,32 @@ async fn finish_active(
     let runtime = runtime
         .as_mut()
         .ok_or_else(|| CliError::Terminal("interactive runtime disappeared".to_owned()))?;
-    let turn_completed = match outcome {
-        Ok(outcome) => {
-            runtime.context_tokens = outcome.context_tokens;
-            runtime.service.finish_reserved(&reservation, outcome)?;
-            controls.complete_turn(&turn_id, "Turn complete");
-            state.waiting = false;
-            true
-        }
-        Err(error) => {
-            runtime
-                .service
-                .fail_reserved(&reservation, &error.to_string())?;
-            controls.complete_turn(&turn_id, "Turn failed");
-            state.waiting = false;
-            state.push_diagnostic(error.to_string());
-            false
+    let turn_completed = if cancellation != CancellationPhase::Active {
+        cancel_open_callback_notices(state);
+        settle_cancelled_reservation(runtime, state, &reservation, cancellation)?;
+        controls.complete_turn(&turn_id, "Turn cancelled");
+        state.waiting = false;
+        false
+    } else {
+        match outcome {
+            Ok(outcome) => {
+                fail_open_callback_notices(state);
+                runtime.context_tokens = outcome.context_tokens;
+                runtime.service.finish_reserved(&reservation, outcome)?;
+                controls.complete_turn(&turn_id, "Turn complete");
+                state.waiting = false;
+                true
+            }
+            Err(error) => {
+                fail_open_callback_notices(state);
+                runtime
+                    .service
+                    .fail_reserved(&reservation, &error.to_string())?;
+                controls.complete_turn(&turn_id, "Turn failed");
+                state.waiting = false;
+                state.push_diagnostic(error.to_string());
+                false
+            }
         }
     };
     resync_current_projection(runtime, state);
@@ -3610,343 +3570,44 @@ async fn finish_active(
     Ok(())
 }
 
-fn pending_callback_from_entry(
-    entry: &PublicHistoryEntry,
-) -> Result<Option<PendingCallback>, String> {
-    let PublicHistoryEntry::Callback {
-        metadata,
-        callback_id,
-        title,
-        detail,
-        state: PublicCallbackState::Open,
-    } = entry
-    else {
-        return Ok(None);
-    };
-    if serde_json::to_vec(detail)
-        .map_err(|error| error.to_string())?
-        .len()
-        > MAX_CALLBACK_DETAIL_BYTES
-    {
-        return Err("callback detail exceeds the interactive safety limit".to_owned());
-    }
-    required_callback_text(title, "callback title")?;
-    let turn_id = metadata
-        .turn_id
-        .clone()
-        .ok_or_else(|| "active callback omitted its turn ID".to_owned())?;
-    match detail.get("kind").and_then(Value::as_str) {
-        Some("approval") => Ok(Some(PendingCallback {
-            callback_id: callback_id.clone(),
-            session_id: metadata.session_id.clone(),
-            turn_id,
-            kind: CallbackKind::Approval,
-            prompt: title.clone(),
-            options: approval_options(detail)?,
-            allows_free_text: false,
-            multi_select: false,
-            questions: Vec::new(),
-        })),
-        Some("user_input") => {
-            let questions = callback_questions(detail)?;
-            let plan_review = detail
-                .get("planReview")
-                .or_else(|| detail.pointer("/request/planReview"))
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
-            let options = if questions.len() == 1 {
-                questions[0].options.clone()
-            } else {
-                Vec::new()
-            };
-            let allows_free_text = questions.len() == 1 && questions[0].allows_free_text;
-            let multi_select = questions.len() == 1 && questions[0].multi_select;
-            Ok(Some(PendingCallback {
-                callback_id: callback_id.clone(),
-                session_id: metadata.session_id.clone(),
-                turn_id,
-                kind: if plan_review {
-                    CallbackKind::PlanReview
-                } else {
-                    CallbackKind::UserInput
-                },
-                prompt: callback_prompt(title, &questions, detail),
-                options,
-                allows_free_text,
-                multi_select,
-                questions,
-            }))
+fn settle_cancelled_reservation(
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+    reservation: &TurnReservation,
+    cancellation: CancellationPhase,
+) -> Result<(), CliError> {
+    match cancellation {
+        CancellationPhase::Complete => return Ok(()),
+        CancellationPhase::DriverOnly => {}
+        CancellationPhase::Active => {
+            debug_assert!(false, "active turn cannot require cancellation settlement");
+            return Ok(());
         }
-        Some(other) => Err(format!("unsupported callback kind `{other}`")),
-        None => Err("callback detail omitted its kind".to_owned()),
     }
-}
-
-fn approval_options(detail: &Value) -> Result<Vec<CallbackOption>, String> {
-    let choices = detail
-        .get("choices")
-        .and_then(Value::as_array)
-        .ok_or_else(|| "approval callback omitted its choices".to_owned())?;
-    if choices.is_empty() || choices.len() > MAX_CALLBACK_OPTIONS {
-        return Err("approval callback has an invalid choice count".to_owned());
-    }
-    choices
-        .iter()
-        .map(|choice| {
-            let id = choice
-                .as_str()
-                .ok_or_else(|| "approval choice must be a string".to_owned())?;
-            let (label, description) = match id {
-                "approve" => ("Allow once", "Approve this invocation"),
-                "approve_for_session" => (
-                    "Allow for session",
-                    "Approve matching requests for this session",
-                ),
-                "approve_permanently" => ("Always allow", "Persist approval for matching requests"),
-                "deny" => ("Deny", "Reject this invocation"),
-                "cancel_turn" => ("Cancel turn", "Reject and interrupt the turn"),
-                _ => return Err(format!("unsupported approval decision `{id}`")),
-            };
-            Ok(CallbackOption {
-                id: id.to_owned(),
-                label: label.to_owned(),
-                description: description.to_owned(),
-            })
-        })
-        .collect()
-}
-
-fn callback_questions(detail: &Value) -> Result<Vec<CallbackQuestion>, String> {
-    let questions = detail
-        .pointer("/request/questions")
-        .and_then(Value::as_array)
-        .ok_or_else(|| "user-input callback omitted its questions".to_owned())?;
-    if questions.is_empty() || questions.len() > MAX_CALLBACK_QUESTIONS {
-        return Err("user-input callback has an invalid question count".to_owned());
-    }
-    questions
-        .iter()
-        .enumerate()
-        .map(|(question_index, question)| {
-            let question_text = question
-                .get("question")
-                .and_then(Value::as_str)
-                .ok_or_else(|| "callback question omitted its text".to_owned())?;
-            required_callback_text(question_text, "callback question")?;
-            let header = question
-                .get("header")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            bounded_callback_text(header, "callback question header")?;
-            let raw_options = question
-                .get("options")
-                .and_then(Value::as_array)
-                .ok_or_else(|| "callback question omitted its options".to_owned())?;
-            if raw_options.len() < 2 || raw_options.len() > MAX_CALLBACK_OPTIONS {
-                return Err("callback question has an invalid option count".to_owned());
-            }
-            let options = raw_options
-                .iter()
-                .enumerate()
-                .map(|(option_index, option)| {
-                    let label = option
-                        .get("label")
-                        .and_then(Value::as_str)
-                        .ok_or_else(|| "callback option omitted its label".to_owned())?;
-                    let description = option
-                        .get("description")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default();
-                    required_callback_text(label, "callback option label")?;
-                    bounded_callback_text(description, "callback option description")?;
-                    let id = option
-                        .get("id")
-                        .and_then(Value::as_str)
-                        .map(ToOwned::to_owned)
-                        .unwrap_or_else(|| {
-                            plan_option_id(label).map_or_else(
-                                || format!("q{question_index}-o{option_index}"),
-                                ToOwned::to_owned,
-                            )
-                        });
-                    Ok(CallbackOption {
-                        id,
-                        label: label.to_owned(),
-                        description: description.to_owned(),
-                    })
-                })
-                .collect::<Result<Vec<_>, String>>()?;
-            if options.iter().enumerate().any(|(index, option)| {
-                options[..index]
-                    .iter()
-                    .any(|previous| previous.id == option.id)
-            }) {
-                return Err("callback question contains duplicate option IDs".to_owned());
-            }
-            Ok(CallbackQuestion {
-                header: header.to_owned(),
-                question: question_text.to_owned(),
-                options,
-                allows_free_text: !question
-                    .get("hideOther")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false),
-                multi_select: question
-                    .get("multiSelect")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false),
-            })
-        })
-        .collect()
-}
-
-fn callback_prompt(title: &str, questions: &[CallbackQuestion], detail: &Value) -> String {
-    let mut prompt = title.to_owned();
-    for (index, question) in questions.iter().enumerate() {
-        prompt.push_str(&format!(
-            "\n{}. {}{}",
-            index + 1,
-            if question.header.is_empty() {
-                String::new()
-            } else {
-                format!("{}: ", question.header)
-            },
-            question.question
-        ));
-        for (option_index, option) in question.options.iter().enumerate() {
-            prompt.push_str(&format!(
-                "\n   {}. {}{}",
-                option_index + 1,
-                option.label,
-                if option.description.is_empty() {
-                    String::new()
-                } else {
-                    format!(": {}", option.description)
-                }
+    match runtime
+        .service
+        .interrupt(&reservation.session_id, &reservation.turn_id)
+    {
+        Ok(InterruptOutcome::Complete) => Ok(()),
+        Ok(InterruptOutcome::DriverOnly { canonical_error }) => {
+            state.push_diagnostic(format!(
+                "Canonical cancellation retry failed: {canonical_error}"
             ));
+            runtime
+                .service
+                .fail_reserved(reservation, "turn cancelled before canonical settlement")?;
+            Ok(())
         }
-        if question.allows_free_text {
-            prompt.push_str("\n   Other: enter free text");
+        Err(interrupt_error) => {
+            state.push_diagnostic(format!(
+                "Cancellation retry was rejected: {interrupt_error}"
+            ));
+            runtime
+                .service
+                .fail_reserved(reservation, "turn cancellation could not reach the driver")?;
+            Ok(())
         }
     }
-    if let Some(footer) = detail
-        .pointer("/request/footerNote")
-        .and_then(Value::as_str)
-        .filter(|footer| !footer.is_empty())
-    {
-        prompt.push('\n');
-        prompt.push_str(footer);
-    }
-    prompt
-}
-
-fn bounded_callback_text(value: &str, label: &str) -> Result<(), String> {
-    if value.len() > MAX_CALLBACK_TEXT_BYTES {
-        return Err(format!("{label} exceeds the safety limit"));
-    }
-    Ok(())
-}
-
-fn required_callback_text(value: &str, label: &str) -> Result<(), String> {
-    bounded_callback_text(value, label)?;
-    if value.trim().is_empty() {
-        return Err(format!("{label} is empty"));
-    }
-    Ok(())
-}
-
-fn plan_option_id(label: &str) -> Option<&'static str> {
-    match label {
-        "Yes, clear context and auto approve edits" => Some("clear_auto"),
-        "Yes, and auto approve edits" => Some("auto"),
-        "Yes, and request approval for edits" => Some("manual"),
-        "No" => Some("no"),
-        _ => None,
-    }
-}
-
-fn callback_choice_from_input(
-    pending: &PendingCallback,
-    input: &str,
-) -> Result<CallbackChoice, String> {
-    if pending.kind == CallbackKind::Approval {
-        return Err("Use /approve [once|always|permanent] or /deny".to_owned());
-    }
-    let answer_texts = if pending.questions.len() == 1 {
-        vec![input.trim().to_owned()]
-    } else if let Ok(values) = serde_json::from_str::<Vec<String>>(input) {
-        values
-    } else {
-        input
-            .split('|')
-            .map(str::trim)
-            .map(ToOwned::to_owned)
-            .collect()
-    };
-    if answer_texts.len() != pending.questions.len() {
-        return Err(format!(
-            "This callback requires {} atomic answers. Enter a JSON string array or separate answers with `|`",
-            pending.questions.len()
-        ));
-    }
-    let answers = pending
-        .questions
-        .iter()
-        .zip(answer_texts)
-        .map(|(question, answer)| question_choice(question, &answer))
-        .collect::<Result<Vec<_>, _>>()?;
-    if answers.len() == 1 {
-        let answer = match answers.into_iter().next() {
-            Some(answer) => answer,
-            None => return Err("Callback answer disappeared during validation".to_owned()),
-        };
-        return Ok(match answer {
-            UserInputChoice::Option { id } => CallbackChoice::Option { id },
-            UserInputChoice::Options { ids } => CallbackChoice::Options { ids },
-            UserInputChoice::FreeText { value } => CallbackChoice::FreeText { value },
-        });
-    }
-    Ok(CallbackChoice::UserInput { answers })
-}
-
-fn question_choice(question: &CallbackQuestion, input: &str) -> Result<UserInputChoice, String> {
-    let input = input.trim();
-    if input.is_empty() {
-        return Err("Callback answers cannot be empty".to_owned());
-    }
-    if question.multi_select {
-        let selected = input
-            .split(',')
-            .map(str::trim)
-            .map(|value| callback_option_id(&question.options, value))
-            .collect::<Option<Vec<_>>>();
-        if let Some(ids) = selected.filter(|ids| !ids.is_empty()) {
-            return Ok(UserInputChoice::Options { ids });
-        }
-    } else if let Some(id) = callback_option_id(&question.options, input) {
-        return Ok(UserInputChoice::Option { id });
-    }
-    if question.allows_free_text {
-        bounded_callback_text(input, "callback answer")?;
-        return Ok(UserInputChoice::FreeText {
-            value: input.to_owned(),
-        });
-    }
-    Err("Answer with an option number or label shown in the callback".to_owned())
-}
-
-fn callback_option_id(options: &[CallbackOption], input: &str) -> Option<String> {
-    input
-        .parse::<usize>()
-        .ok()
-        .and_then(|index| index.checked_sub(1))
-        .and_then(|index| options.get(index))
-        .or_else(|| {
-            options.iter().find(|option| {
-                option.id.eq_ignore_ascii_case(input) || option.label.eq_ignore_ascii_case(input)
-            })
-        })
-        .map(|option| option.id.clone())
 }
 
 fn history_entry(entry: PublicHistoryEntry) -> TranscriptEntry {
@@ -4064,7 +3725,7 @@ fn content_text(content: &[PublicContentBlock]) -> String {
         .join("\n")
 }
 
-fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) {
+fn append_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) -> String {
     let entry = TranscriptEntry {
         id: String::new(),
         revision: 1,
@@ -4073,7 +3734,11 @@ fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) {
         status,
         details: json!({"source": "tui"}),
     };
-    state.append_local(entry);
+    state.append_local(entry)
+}
+
+fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) {
+    append_local_notice(state, message, status);
 }
 
 #[cfg(test)]
@@ -4616,6 +4281,23 @@ mod tests {
     }
 
     #[test]
+    fn callback_absence_fails_an_unsettled_notice_closed() {
+        let mut state = TuiState::new("session");
+        state.append_local(TranscriptEntry {
+            id: String::new(),
+            revision: 1,
+            kind: TranscriptKind::Notice,
+            text: "approval pending".to_owned(),
+            status: EntryStatus::Streaming,
+            details: json!({"callbackId": "callback"}),
+        });
+
+        fail_inactive_callback_notices(&mut state, None);
+
+        assert_eq!(state.entries[0].status, EntryStatus::Failed);
+    }
+
+    #[test]
     fn only_the_reference_slash_exit_alias_bypasses_dispatch() {
         assert!(is_exit_command("/exit"));
         assert!(!is_exit_command("/close"));
@@ -4726,7 +4408,7 @@ mod tests {
     }
 
     #[test]
-    fn canonical_multi_question_callbacks_preserve_structure_and_atomic_answers() {
+    fn canonical_multi_question_callbacks_preserve_structure() {
         let entry = serde_json::from_value::<PublicHistoryEntry>(json!({
             "type": "callback",
             "id": "callback-entry",
@@ -4771,50 +4453,95 @@ mod tests {
         let pending = pending_callback_from_entry(&entry)
             .expect("callback is valid")
             .expect("callback is active");
-        assert_eq!(pending.questions.len(), 2);
-        assert!(pending.questions[0].multi_select);
+        let CallbackRequest::UserInput { questions, .. } = &pending.request else {
+            panic!("expected user-input callback");
+        };
+        assert_eq!(questions.len(), 2);
+        assert!(questions[0].multi_select);
         assert!(
             pending
                 .prompt
                 .contains("All answers are submitted together.")
         );
-
-        let choice = callback_choice_from_input(&pending, r#"["1, 2", "No network \u2713"]"#)
-            .expect("atomic answers parse");
-        let CallbackChoice::UserInput { answers } = choice else {
-            panic!("multi-question callback must stay atomic");
-        };
-        assert_eq!(answers.len(), 2);
-        assert!(matches!(
-            &answers[0],
-            UserInputChoice::Options { ids } if ids.len() == 2
-        ));
-        assert!(matches!(
-            &answers[1],
-            UserInputChoice::FreeText { value } if value == "No network \u{2713}"
-        ));
     }
 
     #[test]
-    fn plan_review_choices_and_callback_bounds_are_exact() {
-        assert_eq!(
-            plan_option_id("Yes, clear context and auto approve edits"),
-            Some("clear_auto")
+    fn plan_approval_fails_closed_until_the_live_file_is_readable_and_nonempty() {
+        let mut state = TuiState::new("session");
+        assert!(plan_approval_error(&state).is_some());
+        state.plan_review = Some(PlanReviewState {
+            path: PathBuf::from("plan.md"),
+            content: String::new(),
+            error: Some("missing".to_owned()),
+        });
+        assert!(plan_approval_error(&state).is_some());
+        state.plan_review = Some(PlanReviewState {
+            path: PathBuf::from("plan.md"),
+            content: "# Ready".to_owned(),
+            error: None,
+        });
+        assert_eq!(plan_approval_error(&state), None);
+    }
+
+    #[tokio::test]
+    async fn plan_callback_stays_open_when_code_mode_cannot_be_committed() {
+        let mut runtime = interactive_test_runtime("plan-settings-failure");
+        runtime.mode = "plan".to_owned();
+        let session_id = runtime.session_id.clone();
+        runtime
+            .service
+            .close_session(&session_id)
+            .await
+            .expect("session closes");
+        let mut state = TuiState::new(&session_id);
+        state.plan_review = Some(PlanReviewState {
+            path: PathBuf::from("plan.md"),
+            content: "# Ready".to_owned(),
+            error: None,
+        });
+        let mut controls = ControlState::new(&session_id);
+        controls.begin_turn("turn").expect("turn begins");
+        let pending = PendingCallback {
+            callback_id: "plan-callback".to_owned(),
+            session_id,
+            turn_id: "turn".to_owned(),
+            prompt: "Approve plan?".to_owned(),
+            request: CallbackRequest::PlanReview {
+                questions: vec![controls::CallbackQuestion {
+                    header: "Plan".to_owned(),
+                    question: "Approve?".to_owned(),
+                    options: vec![controls::CallbackOption {
+                        id: "manual".to_owned(),
+                        label: "Yes, and request approval for edits".to_owned(),
+                        description: String::new(),
+                    }],
+                    allows_free_text: true,
+                    multi_select: false,
+                }],
+                footer_note: None,
+                plan_path: PathBuf::from("plan.md"),
+            },
+        };
+        controls
+            .present_callback(pending.clone())
+            .expect("plan callback presents");
+
+        respond_to_pending_callback(
+            &mut runtime,
+            &mut controls,
+            &pending,
+            CallbackChoice::Option {
+                id: "manual".to_owned(),
+            },
+            &mut state,
         );
-        assert_eq!(
-            plan_transition(&CallbackChoice::Option {
-                id: "manual".to_owned()
-            }),
-            Some((false, false))
-        );
-        assert_eq!(
-            plan_transition(&CallbackChoice::FreeText {
-                value: "Revise it".to_owned()
-            }),
-            None
-        );
+
+        assert_eq!(runtime.mode, "plan");
+        assert!(controls.contains_callback("plan-callback"));
         assert!(
-            required_callback_text(&"x".repeat(MAX_CALLBACK_TEXT_BYTES + 1), "callback").is_err()
+            state
+                .diagnostics()
+                .any(|message| message.contains("Cannot approve the plan"))
         );
     }
 
@@ -4831,12 +4558,16 @@ mod tests {
                 callback_id: "committed-callback".to_owned(),
                 session_id,
                 turn_id: "turn".to_owned(),
-                kind: CallbackKind::Approval,
                 prompt: "Approve?".to_owned(),
-                options: Vec::new(),
-                allows_free_text: false,
-                multi_select: false,
-                questions: Vec::new(),
+                request: CallbackRequest::Approval {
+                    options: Vec::new(),
+                    effect: CallbackEffect {
+                        tool_name: "test".to_owned(),
+                        summary: String::new(),
+                        content: String::new(),
+                        permissions: Vec::new(),
+                    },
+                },
             })
             .expect("local callback presents");
         assert_eq!(controls.focus, controls::ControlFocus::Callback);
@@ -4845,6 +4576,7 @@ mod tests {
             &mut runtime,
             &mut controls,
             &mut state,
+            "committed-callback",
             "driver failed after commit",
         );
 
@@ -4887,7 +4619,7 @@ mod tests {
             let mut active = Some(ActiveTurn {
                 turn_id,
                 scheduled_loop_id: None,
-                cancel_requested: false,
+                cancellation: CancellationPhase::Active,
                 updates,
                 task,
             });
@@ -4923,6 +4655,100 @@ mod tests {
             state
                 .diagnostics()
                 .all(|diagnostic| { !diagnostic.contains("Live update continuity was lost") })
+        );
+    }
+
+    #[tokio::test]
+    async fn completed_cancellation_dominates_a_late_successful_driver_result() {
+        let mut runtime = Some(interactive_test_runtime("cancelled-late-success"));
+        let session_id = runtime.as_ref().expect("runtime").session_id.clone();
+        let mut state =
+            canonical_session_projection(runtime.as_mut().expect("runtime"), &session_id, false)
+                .expect("initial projection");
+        let mut controls = ControlState::new(&session_id);
+        let reservation = runtime
+            .as_mut()
+            .expect("runtime")
+            .service
+            .reserve_prompt(&session_id, &TurnRequest::text("cancel me"))
+            .await
+            .expect("turn reserves");
+        let turn_id = reservation.turn_id.clone();
+        controls.begin_turn(&turn_id).expect("turn begins");
+        let cancellation = match runtime
+            .as_mut()
+            .expect("runtime")
+            .service
+            .interrupt(&session_id, &turn_id)
+            .expect("interrupt is accepted")
+        {
+            InterruptOutcome::Complete => CancellationPhase::Complete,
+            InterruptOutcome::DriverOnly { canonical_error } => {
+                panic!("canonical cancellation failed: {canonical_error}")
+            }
+        };
+        let outcome = PublicTurnOutcome {
+            session_id: session_id.clone(),
+            events: Vec::new(),
+            snapshot: vibe_core::events::ProjectionReducer::for_turn(&session_id, &turn_id)
+                .state()
+                .clone(),
+            messages: Vec::new(),
+            usage: vibe_core::provider::Usage::default(),
+            context_tokens: 0,
+            price_micros: 0,
+            steps: 0,
+            checkpoints: 0,
+            stop_reason: vibe_core::engine::TurnStopReason::Complete,
+        };
+        let (updates_sender, updates) = tokio::sync::mpsc::channel(1);
+        drop(updates_sender);
+        let task = tokio::spawn(async move { (reservation, Ok(outcome)) });
+        let mut active = Some(ActiveTurn {
+            turn_id,
+            scheduled_loop_id: None,
+            cancellation,
+            updates,
+            task,
+        });
+        while !active
+            .as_ref()
+            .is_some_and(|active| active.task.is_finished())
+        {
+            tokio::task::yield_now().await;
+        }
+
+        finish_active(
+            &mut state,
+            &mut controls,
+            &mut runtime,
+            &mut active,
+            &mut ChatInputState::default(),
+        )
+        .await
+        .expect("cancelled turn ignores late success");
+
+        assert_eq!(
+            controls.notifications.last().map(String::as_str),
+            Some("Turn cancelled")
+        );
+        let canonical = runtime
+            .as_mut()
+            .expect("runtime")
+            .service
+            .public_call("session/read", json!({"sessionId": session_id}))
+            .expect("canonical session remains readable");
+        assert_eq!(
+            canonical["state"]
+                .pointer("/session/status/type")
+                .and_then(Value::as_str),
+            Some("idle")
+        );
+        assert_eq!(
+            canonical["state"]
+                .pointer("/latestTurn/status")
+                .and_then(Value::as_str),
+            Some("interrupted")
         );
     }
 }

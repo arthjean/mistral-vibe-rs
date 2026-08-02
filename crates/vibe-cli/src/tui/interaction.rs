@@ -1,7 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 
-use super::attachments::PromptDraft;
+use super::attachments::{PreparedSubmission, PromptDraft};
 
 const QUIT_CONFIRMATION_WINDOW_MS: u64 = 1_000;
 
@@ -166,32 +166,110 @@ impl Overlay {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueuedIntentKind {
+    Prompt,
+    Shell,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueuedIntent {
+    pub id: String,
+    pub kind: QueuedIntentKind,
+    pub draft: PromptDraft,
+    pub prepared: Option<PreparedSubmission>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptQueue {
-    prompts: VecDeque<PromptDraft>,
+    items: VecDeque<QueuedIntent>,
     paused: bool,
+    next_id: u64,
+    scroll_offset: usize,
+}
+
+impl Default for PromptQueue {
+    fn default() -> Self {
+        Self {
+            items: VecDeque::new(),
+            paused: false,
+            next_id: 1,
+            scroll_offset: 0,
+        }
+    }
 }
 
 impl PromptQueue {
     pub fn push(&mut self, prompt: PromptDraft) {
-        self.prompts.push_back(prompt);
+        self.push_item(prompt, None);
     }
 
-    pub fn push_front(&mut self, prompt: PromptDraft) {
-        self.prompts.push_front(prompt);
+    pub fn push_prepared(&mut self, prompt: PromptDraft, prepared: PreparedSubmission) {
+        self.push_item(prompt, Some(prepared));
     }
 
-    pub fn pop_next(&mut self) -> Option<PromptDraft> {
-        (!self.paused).then(|| self.prompts.pop_front()).flatten()
+    fn push_item(&mut self, prompt: PromptDraft, prepared: Option<PreparedSubmission>) {
+        if self.items.is_empty() {
+            self.scroll_offset = 0;
+        }
+        let kind = if prompt.text().trim_start().starts_with('!') {
+            QueuedIntentKind::Shell
+        } else {
+            QueuedIntentKind::Prompt
+        };
+        let id = format!("queued-{}", self.next_id);
+        self.next_id = self.next_id.saturating_add(1);
+        self.items.push_back(QueuedIntent {
+            id,
+            kind,
+            draft: prompt,
+            prepared,
+        });
+    }
+
+    pub fn take_next_batch(&mut self) -> Option<Vec<QueuedIntent>> {
+        if self.paused {
+            return None;
+        }
+        let first = self.items.pop_front()?;
+        let kind = first.kind;
+        let mut items = vec![first];
+        if kind == QueuedIntentKind::Prompt {
+            while self
+                .items
+                .front()
+                .is_some_and(|intent| intent.kind == QueuedIntentKind::Prompt)
+            {
+                if let Some(intent) = self.items.pop_front() {
+                    items.push(intent);
+                }
+            }
+        }
+        self.clamp_scroll();
+        Some(items)
+    }
+
+    pub fn restore_batch_and_pause(&mut self, batch: Vec<QueuedIntent>) {
+        for item in batch.into_iter().rev() {
+            self.items.push_front(item);
+        }
+        self.paused = true;
+        self.scroll_offset = 0;
     }
 
     pub fn cancel_last(&mut self) -> Option<PromptDraft> {
-        self.prompts.pop_back()
+        let cancelled = self.items.pop_back().map(|intent| intent.draft);
+        if self.items.is_empty() {
+            self.paused = false;
+        }
+        self.clamp_scroll();
+        cancelled
     }
 
     pub fn clear(&mut self) {
-        self.prompts.clear();
+        self.items.clear();
         self.paused = false;
+        self.scroll_offset = 0;
     }
 
     pub fn pause(&mut self) {
@@ -202,14 +280,28 @@ impl PromptQueue {
         self.paused = false;
     }
 
+    pub fn scroll(&mut self, delta: isize) {
+        self.scroll_offset = self.scroll_offset.saturating_add_signed(delta);
+        self.clamp_scroll();
+    }
+
+    #[must_use]
+    pub fn scroll_offset(&self) -> usize {
+        self.scroll_offset
+    }
+
+    fn clamp_scroll(&mut self) {
+        self.scroll_offset = self.scroll_offset.min(self.items.len().saturating_sub(1));
+    }
+
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.prompts.is_empty()
+        self.items.is_empty()
     }
 
     #[must_use]
     pub fn len(&self) -> usize {
-        self.prompts.len()
+        self.items.len()
     }
 
     #[must_use]
@@ -217,10 +309,41 @@ impl PromptQueue {
         self.paused
     }
 
+    #[must_use]
+    pub fn next_kind(&self) -> Option<QueuedIntentKind> {
+        self.items.front().map(|item| item.kind)
+    }
+
+    #[must_use]
+    pub fn presentation_lines(&self) -> Vec<String> {
+        if self.items.is_empty() {
+            return Vec::new();
+        }
+        let mut lines = vec![if self.paused {
+            "Queued messages (paused)".to_owned()
+        } else {
+            "Queued messages".to_owned()
+        }];
+        lines.extend(self.items.iter().map(|intent| match intent.kind {
+            QueuedIntentKind::Prompt => format!("› {}", intent.draft.text()),
+            QueuedIntentKind::Shell => format!(
+                    "$ {}",
+                    intent
+                        .draft
+                        .text()
+                        .trim_start()
+                        .strip_prefix('!')
+                        .unwrap_or(intent.draft.text())
+                        .trim_start()
+                ),
+        }));
+        lines
+    }
+
     pub fn transient_images(&self) -> HashSet<PathBuf> {
-        self.prompts
+        self.items
             .iter()
-            .flat_map(PromptDraft::transient_image_paths)
+            .flat_map(|intent| intent.draft.transient_image_paths())
             .cloned()
             .collect()
     }

@@ -2883,11 +2883,33 @@ impl ServerConnection {
         if session.active_turn.as_deref() != Some(&params.expected_turn_id) {
             return error_batch(request.id, ProtocolErrorCode::StaleTurn, "Turn is stale");
         }
-        session.status = SessionStatus::Cancelled;
-        session.updated_at = now_millis();
-        if cancel_pending_callback(session, "Turn was interrupted") {
-            next_event_id(session);
+        let completed_at = now_millis();
+        if let Some(loop_id) = &session.active_scheduled_loop
+            && let Err(error) = self
+                .server
+                .release4
+                .finish_loop_fire(loop_id, completed_at / 1_000)
+        {
+            return release4_error_batch(request.id, error);
         }
+        let started_at = session.active_turn_started_at.unwrap_or_default();
+        let canonical_session_id = session.id.clone();
+        session.active_turn = None;
+        session.active_turn_started_at = None;
+        session.active_scheduled_loop = None;
+        session.status = SessionStatus::Cancelled;
+        session.latest_turn = Some(PublicTurn {
+            id: params.expected_turn_id.clone(),
+            session_id: canonical_session_id,
+            status: PublicTurnStatus::Interrupted,
+            started_at,
+            completed_at: Some(completed_at),
+            error: None,
+            stop_reason: None,
+        });
+        session.updated_at = completed_at;
+        cancel_pending_callback(session, "Turn was interrupted");
+        next_event_id(session);
         DispatchBatch {
             outbound: success_bytes(request.id, result_map([("interrupted", json!(true))]))
                 .into_iter()
@@ -4599,6 +4621,7 @@ mod tests {
         let edit = approval
             .request(ApprovalRequest {
                 tool: "edit".to_owned(),
+                input: Value::Null,
                 requirements: vec![PermissionRequirement::Write {
                     path: PathBuf::from("/workspace/file.rs"),
                 }],
@@ -4609,6 +4632,7 @@ mod tests {
         let read = approval
             .request(ApprovalRequest {
                 tool: "read".to_owned(),
+                input: Value::Null,
                 requirements: vec![PermissionRequirement::Read {
                     path: PathBuf::from("/workspace/file.rs"),
                 }],

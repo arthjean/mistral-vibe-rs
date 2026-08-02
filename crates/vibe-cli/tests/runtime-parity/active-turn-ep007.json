@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 2,
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "version": "2.23.2",
+    "sourceFiles": [
+      "vibe/cli/textual_ui/app.py",
+      "vibe/cli/textual_ui/handlers/event_handler.py",
+      "vibe/cli/textual_ui/message_queue.py",
+      "vibe/cli/textual_ui/widgets/approval_app.py",
+      "vibe/cli/textual_ui/widgets/question_app.py"
+    ]
+  },
+  "traces": [
+    {
+      "id": "approval-effect-permissions-scopes-and-grace",
+      "story": "US-024",
+      "events": [
+        {"kind": "present_approval", "id": "zeta", "at_ms": 1000},
+        {"kind": "input", "input": {"kind": "select"}, "at_ms": 1499},
+        {"kind": "input", "input": {"kind": "select"}, "at_ms": 1500}
+      ],
+      "expected": [
+        "active:zeta:effect=true:permissions=true",
+        "grace_blocked",
+        "submit:approve_once"
+      ]
+    },
+    {
+      "id": "canonical-server-fifo-beats-identifier-order",
+      "story": "US-025",
+      "events": [
+        {"kind": "present_approval", "id": "zeta", "at_ms": 1000},
+        {"kind": "answer_and_present_approval", "id": "alpha", "at_ms": 1500}
+      ],
+      "expected": ["active:zeta:effect=true:permissions=true", "active:alpha"]
+    },
+    {
+      "id": "questions-tabs-multi-select-and-other",
+      "story": "US-025",
+      "events": [
+        {"kind": "present_questions", "at_ms": 0},
+        {"kind": "input", "input": {"kind": "select"}, "at_ms": 500},
+        {"kind": "input", "input": {"kind": "down"}, "at_ms": 500},
+        {"kind": "input", "input": {"kind": "down"}, "at_ms": 500},
+        {"kind": "input", "input": {"kind": "text", "value": "No"}, "at_ms": 500},
+        {"kind": "input", "input": {"kind": "down"}, "at_ms": 500},
+        {"kind": "input", "input": {"kind": "select"}, "at_ms": 500},
+        {"kind": "input", "input": {"kind": "down"}, "at_ms": 500},
+        {"kind": "input", "input": {"kind": "down"}, "at_ms": 500},
+        {"kind": "input", "input": {"kind": "text", "value": "OK"}, "at_ms": 500},
+        {"kind": "input", "input": {"kind": "select"}, "at_ms": 500}
+      ],
+      "expected": [
+        "active:questions",
+        "updated",
+        "updated",
+        "updated",
+        "updated,updated",
+        "updated",
+        "updated",
+        "updated",
+        "updated",
+        "updated,updated",
+        "submit:combined:rust+No|text:OK"
+      ]
+    },
+    {
+      "id": "plan-review-live-file-refresh",
+      "story": "US-026",
+      "events": [
+        {"kind": "plan_review_start"},
+        {"kind": "refresh_plan"},
+        {"kind": "write_plan", "content": "# Initial"},
+        {"kind": "refresh_plan"},
+        {"kind": "remove_plan"},
+        {"kind": "refresh_plan"},
+        {"kind": "write_plan", "content": "# Updated"},
+        {"kind": "refresh_plan"}
+      ],
+      "expected": [
+        "plan:true",
+        "plan:unreadable",
+        "plan:written",
+        "plan:# Initial",
+        "plan:removed",
+        "plan:unreadable",
+        "plan:written",
+        "plan:# Updated"
+      ]
+    },
+    {
+      "id": "typed-queue-rollback-and-shell-boundaries",
+      "story": "US-027",
+      "events": [
+        {"kind": "queue", "text": "first"},
+        {"kind": "queue", "text": "second"},
+        {"kind": "queue", "text": "!pwd"},
+        {"kind": "queue", "text": "third"},
+        {"kind": "drain_unavailable"},
+        {"kind": "resume_queue"},
+        {"kind": "drain_batch"},
+        {"kind": "drain_batch"},
+        {"kind": "drain_batch"}
+      ],
+      "expected": [
+        "queued:first",
+        "queued:second",
+        "queued:!pwd",
+        "queued:third",
+        "queue:paused:4",
+        "queue:resumed:4",
+        "batch:prompt:2",
+        "batch:shell:1",
+        "batch:prompt:1"
+      ]
+    },
+    {
+      "id": "shell-stream-and-identity-cancellation",
+      "story": "US-028",
+      "events": [
+        {"kind": "shell_start"},
+        {"kind": "shell_chunk", "text": "a"},
+        {"kind": "shell_chunk", "text": "b"},
+        {"kind": "shell_cancel"},
+        {"kind": "shell_chunk", "text": "c"}
+      ],
+      "expected": [
+        "shell:streaming:",
+        "shell:streaming:a",
+        "shell:streaming:ab",
+        "shell:cancelled:ab",
+        "shell:cancelled:ab"
+      ]
+    }
+  ],
+  "unavailable": []
+}

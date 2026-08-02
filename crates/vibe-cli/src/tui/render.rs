@@ -86,6 +86,8 @@ pub fn draw(
 ) {
     let requested_completion_height = completion_popup::requested_height(completion);
     let activity_height = u16::from(activity_text(state).is_some());
+    let queue_lines = state.prompt_queue.presentation_lines();
+    let queue_height = u16::try_from(queue_lines.len()).unwrap_or(u16::MAX).min(6);
     let composer = ComposerLayout::for_viewport(
         editor,
         frame.area().width,
@@ -103,12 +105,14 @@ pub fn draw(
     );
     let [
         transcript_area,
+        queue_area,
         activity_area,
         completion_area,
         input_area,
         footer_area,
     ] = Layout::vertical([
         Constraint::Min(1),
+        Constraint::Length(queue_height),
         Constraint::Length(activity_height),
         Constraint::Length(completion_height),
         Constraint::Length(input_height),
@@ -116,6 +120,13 @@ pub fn draw(
     ])
     .areas(frame.area());
     draw_transcript(frame, transcript_area, state, theme, context.banner);
+    draw_queue(
+        frame,
+        queue_area,
+        &queue_lines,
+        state.prompt_queue.scroll_offset(),
+        theme,
+    );
     draw_activity(frame, activity_area, state, theme);
     completion_popup::draw(frame, completion_area, completion, theme);
     draw_input(
@@ -125,6 +136,105 @@ pub fn draw(
     if let Some(overlay) = &state.overlay {
         draw_overlay(frame, overlay, theme);
     }
+    if let Some(callback) = &state.callback {
+        draw_callback_overlay(frame, callback, state.callback_scroll_offset, theme);
+    }
+}
+
+fn draw_queue(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    lines: &[String],
+    scroll_offset: usize,
+    theme: ResolvedTheme,
+) {
+    if area.height == 0 || lines.is_empty() {
+        return;
+    }
+    let width = usize::from(area.width.max(1));
+    let visible_items = usize::from(area.height).saturating_sub(1);
+    let item_count = lines.len().saturating_sub(1);
+    let start = scroll_offset.min(item_count.saturating_sub(visible_items));
+    let mut visible = Vec::with_capacity(usize::from(area.height));
+    let mut header = lines[0].clone();
+    if item_count > visible_items {
+        header.push_str("  Alt+PgUp/PgDn");
+    }
+    visible.push(header);
+    visible.extend(lines.iter().skip(1 + start).take(visible_items).cloned());
+    let rendered = visible
+        .iter()
+        .enumerate()
+        .map(|(index, line)| {
+            Line::styled(
+                truncate_width(&sanitize_inline(line), width),
+                if index == 0 {
+                    warning_style(theme).add_modifier(Modifier::BOLD)
+                } else {
+                    muted_style(theme)
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    frame.render_widget(Paragraph::new(rendered), area);
+}
+
+fn draw_callback_overlay(
+    frame: &mut Frame<'_>,
+    presentation: &super::controls::CallbackPresentation,
+    scroll_offset: isize,
+    theme: ResolvedTheme,
+) {
+    let outer = frame.area();
+    let width = outer.width.saturating_sub(4).clamp(1, 96);
+    let available_height = outer.height.saturating_sub(2).max(1);
+    let inner_width = usize::from(width.saturating_sub(4).max(1));
+    let mut content = Vec::new();
+    let mut focus_line = 0;
+    for (index, line) in presentation.lines.iter().enumerate() {
+        if index == presentation.focus_line {
+            focus_line = content.len();
+        }
+        wrap_visual_line(&sanitize_inline(line), inner_width, &mut content);
+    }
+    let height = u16::try_from(content.len())
+        .unwrap_or(u16::MAX)
+        .saturating_add(2)
+        .min(available_height);
+    let area = Rect::new(
+        outer
+            .x
+            .saturating_add(outer.width.saturating_sub(width) / 2),
+        outer
+            .y
+            .saturating_add(outer.height.saturating_sub(height) / 2),
+        width,
+        height,
+    );
+    let visible_height = usize::from(height.saturating_sub(2).max(1));
+    let target_line = focus_line.saturating_add_signed(scroll_offset);
+    let start = target_line
+        .saturating_sub(visible_height / 2)
+        .min(content.len().saturating_sub(visible_height));
+    let lines = content
+        .iter()
+        .skip(start)
+        .take(visible_height)
+        .map(|line| Line::raw(line.clone()))
+        .collect::<Vec<_>>();
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Action required ")
+                    .padding(Padding::horizontal(1))
+                    .style(base_style(theme)),
+            )
+            .wrap(Wrap { trim: false }),
+        area,
+    );
 }
 
 fn draw_overlay(
@@ -1878,5 +1988,40 @@ mod tests {
                 .expect("tiny terminal cursor");
             assert!(cursor.x < width && cursor.y < height);
         }
+    }
+
+    #[test]
+    fn overflowing_queue_rows_are_keyboard_scrollable() {
+        let backend = TestBackend::new(48, 6);
+        let mut terminal = Terminal::new(backend).expect("queue terminal");
+        let mut lines = vec!["Queued messages".to_owned()];
+        lines.extend((0..10).map(|index| format!("› queued item {index}")));
+
+        terminal
+            .draw(|frame| draw_queue(frame, frame.area(), &lines, 0, theme(true)))
+            .expect("queue start renders");
+        let first = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(first.contains("queued item 0"));
+        assert!(!first.contains("queued item 9"));
+        assert!(first.contains("Alt+PgUp/PgDn"));
+
+        terminal
+            .draw(|frame| draw_queue(frame, frame.area(), &lines, 5, theme(true)))
+            .expect("queue tail renders");
+        let tail = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(!tail.contains("queued item 0"));
+        assert!(tail.contains("queued item 9"));
     }
 }

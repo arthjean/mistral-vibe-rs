@@ -5105,7 +5105,7 @@ mod tests {
         assert!(
             params["toolCall"]["rawInput"]["requiredPermissions"][0]
                 .as_str()
-                .is_some_and(|permission| permission.starts_with("read "))
+                .is_some_and(|permission| permission.starts_with("outside workdir ("))
         );
         agent.disconnect().await.expect("disconnect");
     }

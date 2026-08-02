@@ -6,8 +6,8 @@ use super::super::chat_input::ChatInputState;
 use super::super::clipboard_images::ClipboardImageManager;
 use super::super::composer::apply_effects as apply_composer_effects;
 use super::super::controls::ControlState;
+use super::super::prompt::{PromptContext, start_prompt};
 use super::super::state::{EntryStatus, TuiState};
-use super::super::workflow::start_prompt;
 use super::super::{ActiveTurn, InteractiveRuntime, push_local_notice, start_teleport};
 use super::PostMountAction;
 
@@ -174,13 +174,15 @@ async fn dispatch_initial_prompt(
     }
     let draft = clipboard_images.draft(working_directory, prompt);
     if !start_prompt(
-        working_directory,
+        PromptContext::new(
+            working_directory,
+            runtime,
+            active,
+            state,
+            controls,
+            clipboard_images,
+        ),
         &draft,
-        runtime,
-        active,
-        state,
-        controls,
-        clipboard_images,
     )
     .await?
     {

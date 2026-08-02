@@ -888,6 +888,32 @@ impl SystemExternalEditor {
             .ok_or_else(|| "External editor command is invalid".to_owned())?;
         Ok(parts)
     }
+
+    pub fn edit_file(&mut self, path: &std::path::Path) -> Result<String, String> {
+        let command = self.command_parts()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        if !path.exists() {
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            options.open(path).map_err(|error| error.to_string())?;
+        }
+        let status = Command::new(&command[0])
+            .args(&command[1..])
+            .arg(path)
+            .status()
+            .map_err(|error| format!("External editor could not start: {error}"))?;
+        if !status.success() {
+            return Err(format!("External editor exited with {status}"));
+        }
+        fs::read_to_string(path).map_err(|error| error.to_string())
+    }
 }
 
 impl ExternalEditorPort for SystemExternalEditor {

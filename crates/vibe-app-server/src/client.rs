@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -73,6 +73,10 @@ pub struct SessionCompaction {
 
 pub trait TurnDriver: Send + Sync {
     fn run<'a>(&'a self, reservation: &'a TurnReservation) -> DriverFuture<'a>;
+
+    fn plan_directory(&self) -> Option<PathBuf> {
+        None
+    }
 
     fn run_observed<'a>(
         &'a self,
@@ -192,7 +196,7 @@ pub struct ScheduledTurn {
     pub notice: PublicNotification,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnRequest {
     pub prompt: String,
@@ -259,6 +263,12 @@ pub struct PublicNotification {
 pub struct PublicDispatch {
     pub result: BTreeMap<String, Value>,
     pub notifications: Vec<PublicNotification>,
+}
+
+#[derive(Debug)]
+pub enum InterruptOutcome {
+    Complete,
+    DriverOnly { canonical_error: ClientError },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1316,6 +1326,7 @@ impl ApprovalAgent for InteractiveApprovalAgent {
 
 struct InteractiveSessionToolFactory {
     sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+    plan_directory: Option<PathBuf>,
 }
 
 impl SessionToolFactory for InteractiveSessionToolFactory {
@@ -1336,15 +1347,22 @@ impl SessionToolFactory for InteractiveSessionToolFactory {
             .register(interactive_question_spec(), question_handler)
             .map_err(|error| error.to_string())?;
 
+        let Some(plan_directory) = self.plan_directory.as_deref() else {
+            return Ok(());
+        };
         let plan_sender = self.sender.clone();
         let plan_session_id = session_id.to_owned();
+        let plan_path = plan_file_path(plan_directory, session_id);
         let plan_handler: Arc<dyn ToolHandler> = Arc::new(
             move |_invocation: &ToolInvocation,
                   _output: ToolOutputSink|
                   -> OwnedToolHandlerFuture {
                 let sender = plan_sender.clone();
                 let session_id = plan_session_id.clone();
-                Box::pin(async move { run_interactive_plan_review(sender, session_id).await })
+                let plan_path = plan_path.clone();
+                Box::pin(
+                    async move { run_interactive_plan_review(sender, session_id, plan_path).await },
+                )
             },
         );
         tools
@@ -1474,11 +1492,15 @@ where
         }
         let (sender, receiver) =
             tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(MAX_INTERACTIVE_CALLBACKS);
+        let plan_directory = driver.plan_directory();
         let server = server.using_surface_extension(
             Arc::new(InteractiveApprovalFactory {
                 sender: sender.clone(),
             }),
-            Arc::new(InteractiveSessionToolFactory { sender }),
+            Arc::new(InteractiveSessionToolFactory {
+                sender,
+                plan_directory,
+            }),
         );
         Ok(Self {
             client: InProcessClient::connect_with_server_and_client(
@@ -2051,11 +2073,17 @@ where
         }
     }
 
-    pub fn interrupt(&mut self, session_id: &str, turn_id: &str) -> Result<(), ClientError> {
-        self.client.interrupt(session_id, turn_id)?;
-        self.fail_interactive_callbacks(Some(session_id), Some(turn_id), "turn was interrupted");
+    pub fn interrupt(
+        &mut self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Result<InterruptOutcome, ClientError> {
         self.driver.interrupt(session_id, turn_id)?;
-        Ok(())
+        if let Err(canonical_error) = self.client.interrupt(session_id, turn_id) {
+            return Ok(InterruptOutcome::DriverOnly { canonical_error });
+        }
+        self.fail_interactive_callbacks(Some(session_id), Some(turn_id), "turn was interrupted");
+        Ok(InterruptOutcome::Complete)
     }
 
     pub async fn close_session(&mut self, session_id: &str) -> Result<(), ClientError> {
@@ -2100,7 +2128,7 @@ fn approval_callback_detail(request: &ApprovalRequest) -> Value {
         "effect": {
             "kind": "tool",
             "toolName": request.tool,
-            "input": null,
+            "input": request.input,
             "display": {
                 "summary": request.rationale,
                 "content": null,
@@ -2115,7 +2143,7 @@ fn approval_callback_detail(request: &ApprovalRequest) -> Value {
         "requiredPermissions": request
             .requirements
             .iter()
-            .map(vibe_core::policy::PermissionRequirement::scope)
+            .map(vibe_core::policy::PermissionRequirement::label)
             .collect::<Vec<_>>(),
         "choices": [
             "approve",
@@ -2390,6 +2418,7 @@ fn validate_interactive_answer(
 async fn run_interactive_plan_review(
     sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
     session_id: String,
+    plan_path: PathBuf,
 ) -> Result<ToolExecutionOutput, ToolError> {
     const QUESTION: &str = "Plan is complete. Switch to code mode and start implementing?";
     let detail = json!({
@@ -2405,6 +2434,7 @@ async fn run_interactive_plan_review(
             "footerNote": null,
         },
         "planReview": true,
+        "filePath": plan_path,
         "relatedEntryId": null,
     });
     let output =
@@ -2474,6 +2504,20 @@ async fn run_interactive_plan_review(
         display: json!({"kind": "plan_review", "switched": switched}),
         chunks: Vec::new(),
     })
+}
+
+fn plan_file_path(plan_directory: &Path, session_id: &str) -> PathBuf {
+    let safe_session = session_id
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    plan_directory.join(format!("{safe_session}.md"))
 }
 
 fn user_input_result(output: &Value) -> Result<(&[Value], bool), ToolError> {
@@ -2919,10 +2963,29 @@ impl LiveTurnDriver {
             metadata: BTreeMap::new(),
         };
         if reservation.intent.mode.as_deref() == Some("plan") {
+            let plan_path = self
+                .plan_directory()
+                .map(|directory| plan_file_path(&directory, &reservation.session_id))
+                .ok_or_else(|| DriverError::Tool("plan file root is unavailable".to_owned()))?;
+            if let Some(parent) = plan_path.parent() {
+                tokio::fs::create_dir_all(parent)
+                    .await
+                    .map_err(|error| DriverError::Tool(error.to_string()))?;
+            }
+            tokio::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(&plan_path)
+                .await
+                .map_err(|error| DriverError::Tool(error.to_string()))?;
             input.messages.push(ModelMessage::System {
-                content:
-                    "Plan mode is active. Inspect and reason, but do not execute mutating tools."
-                        .to_owned(),
+                content: format!(
+                    "Plan mode is active. Inspect and reason, but do not mutate the workspace. \
+                     Keep the live plan at {} updated as you plan. That plan file is the only \
+                     file you may write while plan mode is active.",
+                    plan_path.display()
+                ),
             });
         }
         if let Some(profile_prompt) = reservation
@@ -3391,6 +3454,12 @@ impl SubagentRunner for ProviderSubagentRunner {
 }
 
 impl TurnDriver for LiveTurnDriver {
+    fn plan_directory(&self) -> Option<PathBuf> {
+        self.session_root
+            .as_deref()
+            .map(|root| root.parent().unwrap_or(root).join("plans"))
+    }
+
     fn run<'a>(&'a self, reservation: &'a TurnReservation) -> DriverFuture<'a> {
         self.run_observed(reservation, Arc::new(NoopEventObserver))
     }
@@ -3887,6 +3956,7 @@ mod tests {
         CloudError, GitProbe, GitSnapshot, Project, ProjectCloud, ProjectPage, ProjectRepository,
         Release4Service, TeleportCloud, TeleportStartRequest,
     };
+    use crate::server::SessionStatus;
     use vibe_core::events::ModelToolCall;
     use vibe_core::provider::{AssistantMessage, ImageInput, Usage};
     use vibe_core::tools::{
@@ -3895,6 +3965,176 @@ mod tests {
     };
 
     use super::*;
+
+    struct RejectingInterruptDriver;
+
+    impl TurnDriver for RejectingInterruptDriver {
+        fn run<'a>(&'a self, _reservation: &'a TurnReservation) -> DriverFuture<'a> {
+            Box::pin(async { Err(DriverError::Tool("not executed".to_owned())) })
+        }
+
+        fn interrupt(&self, _session_id: &str, _turn_id: &str) -> Result<(), DriverError> {
+            Err(DriverError::Tool("interrupt rejected".to_owned()))
+        }
+    }
+
+    #[tokio::test]
+    async fn driver_rejection_prevents_canonical_interrupt_commit() {
+        let mut service = HeadlessService::new(RejectingInterruptDriver).expect("service starts");
+        let session_id = service.start_session(&options()).expect("session starts");
+        let reservation = service
+            .reserve_prompt(&session_id, &TurnRequest::text("pending"))
+            .await
+            .expect("turn reserves");
+
+        assert!(
+            service
+                .interrupt(&session_id, &reservation.turn_id)
+                .is_err()
+        );
+        let session = service
+            .client
+            .server
+            .session(&session_id)
+            .expect("session remains readable");
+        assert_eq!(
+            session.active_turn.as_deref(),
+            Some(reservation.turn_id.as_str())
+        );
+
+        service
+            .fail_reserved(&reservation, "test cleanup")
+            .expect("reservation settles");
+    }
+
+    #[tokio::test]
+    async fn canonical_interrupt_rejection_is_reported_as_driver_only() {
+        let mut service =
+            HeadlessService::new(EchoTurnDriver::new("unused")).expect("service starts");
+        let session_id = service.start_session(&options()).expect("session starts");
+        let reservation = service
+            .reserve_prompt(&session_id, &TurnRequest::text("pending"))
+            .await
+            .expect("turn reserves");
+
+        assert!(matches!(
+            service.interrupt(&session_id, "wrong-turn"),
+            Ok(InterruptOutcome::DriverOnly { .. })
+        ));
+        let session = service
+            .client
+            .server
+            .session(&session_id)
+            .expect("session remains readable");
+        assert_eq!(
+            session.active_turn.as_deref(),
+            Some(reservation.turn_id.as_str())
+        );
+
+        service
+            .fail_reserved(&reservation, "test cleanup")
+            .expect("reservation settles");
+    }
+
+    #[tokio::test]
+    async fn complete_interrupt_releases_the_canonical_turn_reservation() {
+        let mut service =
+            HeadlessService::new(EchoTurnDriver::new("unused")).expect("service starts");
+        let session_id = service.start_session(&options()).expect("session starts");
+        let reservation = service
+            .reserve_prompt(&session_id, &TurnRequest::text("pending"))
+            .await
+            .expect("turn reserves");
+
+        assert!(matches!(
+            service.interrupt(&session_id, &reservation.turn_id),
+            Ok(InterruptOutcome::Complete)
+        ));
+        let session = service
+            .client
+            .server
+            .session(&session_id)
+            .expect("session remains readable");
+        assert_eq!(session.status, SessionStatus::Cancelled);
+        assert!(session.active_turn.is_none());
+        let state = service
+            .public_call("session/read", json!({"sessionId": session_id}))
+            .expect("public state remains readable");
+        assert_eq!(
+            state["state"]
+                .pointer("/latestTurn/status")
+                .and_then(Value::as_str),
+            Some("interrupted")
+        );
+    }
+
+    #[test]
+    fn plan_file_names_cannot_escape_the_plan_directory() {
+        let path = plan_file_path(Path::new("/runtime/plans"), "session/../../outside");
+        assert_eq!(path, Path::new("/runtime/plans/session_______outside.md"));
+        assert_eq!(
+            path.file_name().and_then(|name| name.to_str()),
+            Some("session_______outside.md")
+        );
+        assert_eq!(
+            path.parent()
+                .and_then(|parent| parent.file_name())
+                .and_then(|name| name.to_str()),
+            Some("plans")
+        );
+    }
+
+    #[tokio::test]
+    async fn plan_review_callback_exposes_the_live_driver_path() {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(1);
+        let plan_path = PathBuf::from("/runtime/plans/session.md");
+        let task = tokio::spawn(run_interactive_plan_review(
+            sender,
+            "session".to_owned(),
+            plan_path.clone(),
+        ));
+        let request = receiver.recv().await.expect("plan review request");
+        assert!(matches!(request, InteractiveCallbackRequest::Tool { .. }));
+        let InteractiveCallbackRequest::Tool {
+            detail, response, ..
+        } = request
+        else {
+            return;
+        };
+        assert_eq!(detail["filePath"], json!(plan_path));
+        response
+            .send(Ok(json!({
+                "type": "user_input",
+                "result": {
+                    "answers": [],
+                    "cancelled": true,
+                },
+            })))
+            .expect("plan review response");
+        task.await
+            .expect("plan review task")
+            .expect("plan review completes");
+    }
+
+    #[test]
+    fn plan_review_tool_is_absent_without_a_canonical_plan_directory() {
+        let (sender, _receiver) = tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(1);
+        let tools = ToolRegistry::default();
+        InteractiveSessionToolFactory {
+            sender,
+            plan_directory: None,
+        }
+        .register("session", &tools)
+        .expect("question tool registers");
+
+        let names = tools
+            .list()
+            .expect("tools list")
+            .into_iter()
+            .map(|spec| spec.name)
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["ask_user_question"]);
+    }
 
     #[tokio::test]
     async fn explicit_session_initialization_reports_mcp_diagnostics_once() {
@@ -5042,15 +5282,16 @@ command = "/must-not-run"
     async fn interactive_approval_callback_returns_the_exact_policy_decision() {
         let (sender, receiver) =
             tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(MAX_INTERACTIVE_CALLBACKS);
+        let driver = Arc::new(EchoTurnDriver::new("unused"));
         let server = AppServer::default().using_surface_extension(
             Arc::new(InteractiveApprovalFactory {
                 sender: sender.clone(),
             }),
             Arc::new(InteractiveSessionToolFactory {
                 sender: sender.clone(),
+                plan_directory: driver.plan_directory(),
             }),
         );
-        let driver = Arc::new(EchoTurnDriver::new("unused"));
         let mut service = HeadlessService {
             client: InProcessClient::connect_with_server_and_client(
                 server,
@@ -5089,6 +5330,7 @@ command = "/must-not-run"
             approval_agent
                 .request(ApprovalRequest {
                     tool: "shell".to_owned(),
+                    input: json!({"command": "cargo test"}),
                     requirements: vec![vibe_core::policy::PermissionRequirement::Shell {
                         command: "cargo test".to_owned(),
                     }],
@@ -5119,7 +5361,8 @@ command = "/must-not-run"
         else {
             return;
         };
-        assert_eq!(detail["requiredPermissions"], json!(["shell cargo test"]));
+        assert_eq!(detail["requiredPermissions"], json!(["cargo test"]));
+        assert_eq!(detail["effect"]["input"], json!({"command": "cargo test"}));
         service
             .respond_callback(json!({
                 "sessionId": session_id,

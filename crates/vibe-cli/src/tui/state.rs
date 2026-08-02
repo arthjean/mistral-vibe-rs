@@ -1,10 +1,12 @@
 use std::collections::{BTreeMap, VecDeque};
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{mpsc, watch};
 
+use super::controls::CallbackPresentation;
 use super::interaction::{Overlay, PromptQueue, QuitConfirmation};
 
 const MAX_DIAGNOSTICS: usize = 100;
@@ -62,6 +64,19 @@ pub struct TuiSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanReviewState {
+    pub path: PathBuf,
+    pub content: String,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LocalEntryPosition {
+    entry_id: String,
+    after_entry_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerEvent {
     Snapshot(TuiSnapshot),
     Watermark {
@@ -113,10 +128,14 @@ pub struct TuiState {
     pub rewind_confirmation: QuitConfirmation,
     pub tools_collapsed: bool,
     pub show_reasoning: bool,
+    pub callback: Option<CallbackPresentation>,
+    pub callback_scroll_offset: isize,
+    pub plan_review: Option<PlanReviewState>,
     scroll_line_limit: usize,
     diagnostics: VecDeque<String>,
     entry_indexes: BTreeMap<String, usize>,
     local_sequence: u64,
+    local_entries: Vec<LocalEntryPosition>,
 }
 
 impl TuiState {
@@ -140,10 +159,14 @@ impl TuiState {
             rewind_confirmation: QuitConfirmation::default(),
             tools_collapsed: false,
             show_reasoning: true,
+            callback: None,
+            callback_scroll_offset: 0,
+            plan_review: None,
             scroll_line_limit: 0,
             diagnostics: VecDeque::new(),
             entry_indexes: BTreeMap::new(),
             local_sequence: 0,
+            local_entries: Vec::new(),
         }
     }
 
@@ -299,10 +322,44 @@ impl TuiState {
         replacement.overlay = self.overlay.take();
         replacement.prompt_queue = std::mem::take(&mut self.prompt_queue);
         replacement.quit_confirmation = std::mem::take(&mut self.quit_confirmation);
+        replacement.rewind_confirmation = std::mem::take(&mut self.rewind_confirmation);
         replacement.tools_collapsed = self.tools_collapsed;
         replacement.show_reasoning = self.show_reasoning;
+        replacement.callback = self.callback.take();
+        replacement.callback_scroll_offset = self.callback_scroll_offset;
+        replacement.plan_review = self.plan_review.take();
         replacement.diagnostics = self.diagnostics.clone();
         replacement.local_sequence = self.local_sequence;
+        replacement.local_entries = self.local_entries.clone();
+        for position in &self.local_entries {
+            let Some(entry) = self
+                .entry_indexes
+                .get(&position.entry_id)
+                .and_then(|index| self.entries.get(*index))
+                .cloned()
+            else {
+                continue;
+            };
+            if replacement
+                .entries
+                .iter()
+                .any(|candidate| candidate.id == entry.id)
+            {
+                return Err(StateError::DuplicateEntry(entry.id));
+            }
+            let insertion_index = position
+                .after_entry_id
+                .as_ref()
+                .and_then(|anchor| {
+                    replacement
+                        .entries
+                        .iter()
+                        .position(|candidate| candidate.id == *anchor)
+                })
+                .map_or(replacement.entries.len(), |index| index.saturating_add(1));
+            replacement.entries.insert(insertion_index, entry);
+        }
+        replacement.reindex();
         *self = replacement;
         Ok(())
     }
@@ -318,13 +375,39 @@ impl TuiState {
         self.diagnostics.push_back(message.into());
     }
 
+    pub fn set_callback_presentation(&mut self, presentation: Option<CallbackPresentation>) {
+        let focus_changed = match (&self.callback, &presentation) {
+            (Some(previous), Some(next)) => {
+                previous.callback_id != next.callback_id || previous.focus_line != next.focus_line
+            }
+            (None, None) => false,
+            _ => true,
+        };
+        if focus_changed {
+            self.callback_scroll_offset = 0;
+        }
+        self.callback = presentation;
+    }
+
+    pub fn scroll_callback(&mut self, delta: isize) {
+        if self.callback.is_none() {
+            return;
+        }
+        self.callback_scroll_offset = self.callback_scroll_offset.saturating_add(delta);
+    }
+
     pub fn append_local(&mut self, mut entry: TranscriptEntry) -> String {
+        let after_entry_id = self.entries.last().map(|entry| entry.id.clone());
         self.local_sequence = self.local_sequence.saturating_add(1);
         entry.id = format!("local-{}", self.local_sequence);
         let id = entry.id.clone();
         self.entry_indexes
             .insert(entry.id.clone(), self.entries.len());
         self.entries.push(entry);
+        self.local_entries.push(LocalEntryPosition {
+            entry_id: id.clone(),
+            after_entry_id,
+        });
         id
     }
 
@@ -337,6 +420,25 @@ impl TuiState {
             return Ok(());
         }
         entry.revision = entry.revision.saturating_add(1);
+        entry.status = status;
+        Ok(())
+    }
+
+    pub fn update_local(
+        &mut self,
+        entry_id: &str,
+        text: String,
+        status: EntryStatus,
+    ) -> Result<(), StateError> {
+        let Some(index) = self.entry_indexes.get(entry_id).copied() else {
+            return Err(StateError::UnknownEntry(entry_id.to_owned()));
+        };
+        let entry = &mut self.entries[index];
+        if entry.status.is_terminal() {
+            return Ok(());
+        }
+        entry.revision = entry.revision.saturating_add(1);
+        entry.text = text;
         entry.status = status;
         Ok(())
     }
@@ -571,6 +673,52 @@ mod tests {
         assert_eq!(
             state.diagnostics().collect::<Vec<_>>(),
             vec!["keep this diagnostic"]
+        );
+    }
+
+    #[test]
+    fn canonical_replacement_restores_local_entries_at_their_explicit_anchors() {
+        let mut state = TuiState::new("session");
+        state
+            .apply(ServerEvent::EntryAdded {
+                event_id: 1,
+                entry: entry("server-one", 1, "one", EntryStatus::Completed),
+            })
+            .expect("first server entry");
+        state.append_local(entry("ignored", 1, "local one", EntryStatus::Completed));
+        state.append_local(entry("ignored", 1, "local two", EntryStatus::Cancelled));
+        state
+            .apply(ServerEvent::EntryAdded {
+                event_id: 2,
+                entry: entry("server-two", 1, "two", EntryStatus::Completed),
+            })
+            .expect("second server entry");
+
+        let mut replacement = TuiState::new("session");
+        replacement
+            .apply(ServerEvent::Snapshot(TuiSnapshot {
+                session_id: "session".to_owned(),
+                event_id: 3,
+                entries: vec![
+                    entry("server-one", 1, "one", EntryStatus::Completed),
+                    entry("server-two", 1, "two", EntryStatus::Completed),
+                ],
+                cursor_before: None,
+                cursor_after: None,
+                waiting: false,
+            }))
+            .expect("canonical snapshot");
+        state
+            .replace_projection_preserving_diagnostics(replacement)
+            .expect("local positions restore");
+
+        assert_eq!(
+            state
+                .entries
+                .iter()
+                .map(|entry| entry.text.as_str())
+                .collect::<Vec<_>>(),
+            vec!["one", "local one", "local two", "two"]
         );
     }
 
