@@ -529,7 +529,7 @@ fn piped_prompt_mounts_before_dispatch_and_keeps_the_tty_interactive() {
         .expect("piped prompt rendered");
     assert!(mounted < submitted, "piped prompt preceded TUI mount");
 
-    process.write(b"/exit\r");
+    process.write(b"\x04\x04");
     let (status, transcript) = process.wait(Duration::from_secs(3));
     assert!(status.success(), "piped TUI exited with {status}");
     assert!(
