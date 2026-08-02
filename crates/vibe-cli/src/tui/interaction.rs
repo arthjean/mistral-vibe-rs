@@ -20,7 +20,6 @@ pub enum OverlayKind {
     Status,
     DataRetention,
     Proxy,
-    Rewind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

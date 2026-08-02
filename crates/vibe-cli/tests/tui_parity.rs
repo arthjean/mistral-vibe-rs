@@ -12,8 +12,9 @@ use vibe_cli::tui::input::PromptEditor;
 use vibe_cli::tui::interaction::{
     Overlay, OverlayItem, OverlayKind, PromptQueue, QuitConfirmation,
 };
-use vibe_cli::tui::pickers::{config_overlay, mcp_overlay, rewind_overlay, sessions_overlay};
+use vibe_cli::tui::pickers::{config_overlay, mcp_overlay, rewind_state, sessions_overlay};
 use vibe_cli::tui::render::{BannerContext, TokenState, UiContext, draw};
+use vibe_cli::tui::rewind::RewindAction;
 use vibe_cli::tui::setup::{DetectedTheme, Theme, resolve_theme};
 use vibe_cli::tui::state::TuiState;
 use vibe_cli::tui::state::{EntryStatus, TranscriptEntry, TranscriptKind};
@@ -447,16 +448,24 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
             .any(|item| item.id == "voice_mode_enabled")
     );
 
-    let rewind = rewind_overlay(&serde_json::json!({
+    let rewind = rewind_state(&serde_json::json!({
         "messages": [
             {"messageIndex": 0, "message": "first prompt"},
-            {"messageIndex": 3, "message": "prompt to edit"}
+            {
+                "messageIndex": 3,
+                "message": "prompt to edit",
+                "hasFileChanges": true
+            }
         ],
-        "restoreSupported": false
-    }));
-    assert_eq!(rewind.kind, OverlayKind::Rewind);
-    assert_eq!(rewind.items[1].id, "3");
-    assert!(rewind.items[1].description.contains("prompt to edit"));
+        "restoreSupported": true
+    }))
+    .expect("rewind targets");
+    assert_eq!(rewind.target().message_index, 3);
+    assert!(rewind.target().message.contains("prompt to edit"));
+    assert_eq!(
+        rewind.actions(),
+        &[RewindAction::RestoreAndEdit, RewindAction::EditOnly]
+    );
 }
 
 #[test]

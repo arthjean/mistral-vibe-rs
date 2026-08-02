@@ -27,6 +27,7 @@ pub fn resolve_bare_resume(
         return Ok(ResumeResolution::StartNew);
     }
     run_resume_dialog(
+        host,
         arguments
             .workdir
             .as_deref()

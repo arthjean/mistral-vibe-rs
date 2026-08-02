@@ -21,8 +21,10 @@ mod plan_review;
 mod prompt;
 mod queue;
 pub mod render;
+pub mod rewind;
 #[cfg(test)]
 mod runtime_parity_tests;
+mod session_picker;
 pub mod setup;
 mod shell;
 mod shortcuts;

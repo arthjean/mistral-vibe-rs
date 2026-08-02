@@ -14,17 +14,22 @@ use super::controls::{
     PendingCallback, UserInputChoice,
 };
 use super::input::PromptEditor;
-use super::interaction::{PromptQueue, QueuedIntentKind};
+use super::interaction::{Overlay, OverlayItem, OverlayKind, PromptQueue, QueuedIntentKind};
 use super::plan_review::PlanReviewMonitor;
 use super::prompt::PromptContext;
 use super::queue::start_next_queued_prompt;
 use super::render::{BannerContext, TokenState, UiContext, draw};
+use super::rewind::{RewindEffect, RewindState, RewindTarget, reduce_key as reduce_rewind_key};
+use super::session_picker::{
+    SessionDeleteState, SessionPickerEffect, reduce_key as reduce_session_picker_key,
+};
 use super::setup::{DetectedTheme, Theme, resolve_theme};
 use super::shell::{ActiveShell, ShellRead, apply_shell_read};
 use super::state::{EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
 use super::{ActiveTurn, InteractiveRuntime};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use serde::Deserialize;
@@ -56,6 +61,231 @@ struct Trace {
     story: String,
     events: Vec<TraceEvent>,
     expected: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Ep008Corpus {
+    schema_version: u32,
+    reference: Reference,
+    traces: Vec<Ep008Trace>,
+    unavailable: Vec<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Ep008Trace {
+    id: String,
+    story: String,
+    events: Vec<Ep008Event>,
+    expected: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum Ep008Event {
+    OpenRewind {
+        targets: Vec<Ep008Target>,
+    },
+    RewindPrevious,
+    RewindNext,
+    RewindActionDown,
+    RewindAccept,
+    RewindFailure,
+    RewindCancel,
+    OpenSessions {
+        sessions: Vec<String>,
+        current: Option<String>,
+    },
+    SelectSession {
+        session_id: String,
+    },
+    DeleteRequest {
+        session_id: String,
+    },
+    DeleteFailure,
+    DeleteSuccess,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Ep008Target {
+    message_index: usize,
+    message: String,
+    has_file_changes: bool,
+}
+
+#[derive(Default)]
+struct Ep008Replay {
+    rewind: Option<RewindState>,
+    delete: Option<SessionDeleteState>,
+    sessions: Option<Overlay>,
+    current: Option<String>,
+    dispatched_delete: Option<String>,
+    delete_calls: usize,
+}
+
+impl Ep008Replay {
+    fn apply(&mut self, event: Ep008Event) -> String {
+        match event {
+            Ep008Event::OpenRewind { targets } => {
+                self.rewind = RewindState::new(
+                    targets
+                        .into_iter()
+                        .map(|target| RewindTarget {
+                            message_index: target.message_index,
+                            message: target.message,
+                            has_file_changes: target.has_file_changes,
+                        })
+                        .collect(),
+                );
+                self.observe_rewind("open")
+            }
+            Ep008Event::RewindPrevious => {
+                self.reduce_rewind(KeyCode::Left);
+                self.observe_rewind("previous")
+            }
+            Ep008Event::RewindNext => {
+                self.reduce_rewind(KeyCode::Right);
+                self.observe_rewind("next")
+            }
+            Ep008Event::RewindActionDown => {
+                self.reduce_rewind(KeyCode::Down);
+                self.observe_rewind("action")
+            }
+            Ep008Event::RewindAccept => match self.reduce_rewind(KeyCode::Enter) {
+                RewindEffect::Accept {
+                    message_index,
+                    restore_files,
+                } => format!("rewind:dispatch:{message_index}:{restore_files}"),
+                effect => panic!("unexpected rewind effect: {effect:?}"),
+            },
+            Ep008Event::RewindFailure => {
+                let rewind = self.rewind.as_mut().expect("rewind is open");
+                rewind.set_error("Rewind failed: injected failure");
+                format!(
+                    "rewind:failure:retained={}:visible={}",
+                    self.rewind.is_some(),
+                    self.rewind.as_ref().and_then(RewindState::error).is_some()
+                )
+            }
+            Ep008Event::RewindCancel => {
+                assert_eq!(self.reduce_rewind(KeyCode::Char('q')), RewindEffect::Cancel);
+                self.rewind = None;
+                "rewind:cancelled".to_owned()
+            }
+            Ep008Event::OpenSessions { sessions, current } => {
+                let count = sessions.len();
+                self.sessions = Some(Overlay::new(
+                    OverlayKind::Sessions,
+                    "Sessions",
+                    sessions
+                        .into_iter()
+                        .map(|session_id| {
+                            OverlayItem::new(session_id.clone(), session_id, "saved session", false)
+                        })
+                        .collect(),
+                ));
+                self.current = current;
+                self.delete = None;
+                self.dispatched_delete = None;
+                format!("sessions:open:{count}")
+            }
+            Ep008Event::SelectSession { session_id } => {
+                let overlay = self.sessions.as_mut().expect("sessions are open");
+                for _ in 0..overlay.items.len() {
+                    if overlay
+                        .selected_item()
+                        .is_some_and(|item| item.id == session_id)
+                    {
+                        break;
+                    }
+                    let effect = reduce_session_picker_key(
+                        overlay,
+                        &mut self.delete,
+                        self.current.as_deref().unwrap_or_default(),
+                        KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
+                    );
+                    assert_eq!(effect, SessionPickerEffect::None);
+                }
+                assert!(
+                    overlay
+                        .selected_item()
+                        .is_some_and(|item| item.id == session_id)
+                );
+                format!("sessions:selected:{session_id}")
+            }
+            Ep008Event::DeleteRequest { session_id } => {
+                let overlay = self.sessions.as_mut().expect("sessions are open");
+                assert_eq!(
+                    overlay.selected_item().map(|item| item.id.as_str()),
+                    Some(session_id.as_str())
+                );
+                match reduce_session_picker_key(
+                    overlay,
+                    &mut self.delete,
+                    self.current.as_deref().unwrap_or_default(),
+                    KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
+                ) {
+                    SessionPickerEffect::None => {
+                        let message = self.delete.as_ref().expect("delete state").message();
+                        if message.contains("current session") {
+                            format!("delete:active-guard:{session_id}")
+                        } else {
+                            format!("delete:confirm:{session_id}")
+                        }
+                    }
+                    SessionPickerEffect::Delete(dispatched) => {
+                        self.delete_calls = self.delete_calls.saturating_add(1);
+                        self.dispatched_delete = Some(dispatched);
+                        format!("delete:dispatch:{}", self.delete_calls)
+                    }
+                    effect => panic!("unexpected session effect: {effect:?}"),
+                }
+            }
+            Ep008Event::DeleteFailure => {
+                let session_id = self
+                    .dispatched_delete
+                    .take()
+                    .expect("delete was dispatched");
+                let retained = self
+                    .sessions
+                    .as_ref()
+                    .is_some_and(|overlay| overlay.items.iter().any(|item| item.id == session_id));
+                self.delete = Some(SessionDeleteState::failure(session_id, "injected failure"));
+                format!("delete:failure:retained={retained}")
+            }
+            Ep008Event::DeleteSuccess => {
+                let session_id = self
+                    .dispatched_delete
+                    .take()
+                    .expect("delete was dispatched");
+                let overlay = self.sessions.as_mut().expect("sessions are open");
+                overlay.items.retain(|item| item.id != session_id);
+                overlay.set_query(overlay.query.clone());
+                self.delete = None;
+                format!("delete:success:remaining={}", overlay.items.len())
+            }
+        }
+    }
+
+    fn reduce_rewind(&mut self, code: KeyCode) -> RewindEffect {
+        reduce_rewind_key(
+            self.rewind.as_mut().expect("rewind is open"),
+            KeyEvent::new(code, KeyModifiers::NONE),
+        )
+    }
+
+    fn observe_rewind(&self, prefix: &str) -> String {
+        let rewind = self.rewind.as_ref().expect("rewind is open");
+        format!(
+            "rewind:{prefix}:target={}:actions={}:selected={:?}",
+            rewind.target().message_index,
+            rewind.actions().len(),
+            rewind.selected_action()
+        )
+        .to_lowercase()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -474,6 +704,38 @@ async fn ep007_corpus_replays_every_event_against_runtime_reducers() {
         for event in &trace.events {
             actual.push(replay.apply(event).await);
         }
+        assert_eq!(actual, trace.expected, "trace {} diverged", trace.id);
+    }
+}
+
+#[test]
+fn ep008_corpus_replays_rewind_and_delete_state_machines() {
+    let corpus: Ep008Corpus = serde_json::from_str(include_str!(
+        "../../tests/runtime-parity/session-management-ep008.json"
+    ))
+    .expect("strict EP-008 corpus");
+    assert_eq!(corpus.schema_version, 2);
+    assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
+    assert!(!corpus.reference.version.is_empty());
+    assert_eq!(corpus.reference.source_files.len(), 4);
+    assert!(corpus.unavailable.is_empty());
+    assert_eq!(
+        corpus
+            .traces
+            .iter()
+            .map(|trace| trace.story.as_str())
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from(["US-029", "US-030"])
+    );
+
+    for trace in corpus.traces {
+        assert!(!trace.id.is_empty());
+        let mut replay = Ep008Replay::default();
+        let actual = trace
+            .events
+            .into_iter()
+            .map(|event| replay.apply(event))
+            .collect::<Vec<_>>();
         assert_eq!(actual, trace.expected, "trace {} diverged", trace.id);
     }
 }

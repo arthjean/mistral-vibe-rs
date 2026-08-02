@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use super::commands::{COMMANDS, CommandContext, command_available_in};
 use super::interaction::{Overlay, OverlayItem, OverlayKind};
+use super::rewind::{RewindState, RewindTarget};
 
 #[must_use]
 pub fn help_overlay(context: &CommandContext) -> Overlay {
@@ -111,35 +112,30 @@ fn config_origin<'a>(snapshot: &'a Value, path: &str, configured: bool) -> &'a s
 }
 
 #[must_use]
-pub fn rewind_overlay(result: &Value) -> Overlay {
-    let items = result
+pub fn rewind_state(result: &Value) -> Option<RewindState> {
+    let targets = result
         .get("messages")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .filter_map(|message| {
-            let index = message.get("messageIndex").and_then(Value::as_u64)?;
-            let content = message.get("message").and_then(Value::as_str)?;
-            let preview = content.lines().next().unwrap_or_default();
-            Some(OverlayItem::new(
-                index.to_string(),
-                format!("Message {}", index.saturating_add(1)),
-                preview,
-                false,
-            ))
+            let message_index = message
+                .get("messageIndex")
+                .and_then(Value::as_u64)
+                .and_then(|index| usize::try_from(index).ok())?;
+            let has_file_changes = message
+                .get("hasFileChanges")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let message = message.get("message").and_then(Value::as_str)?.to_owned();
+            Some(RewindTarget {
+                message_index,
+                message,
+                has_file_changes,
+            })
         })
         .collect();
-    let mut overlay = Overlay::new(OverlayKind::Rewind, "Edit an earlier message", items);
-    if !result
-        .get("restoreSupported")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
-        overlay.notice = Some(
-            "The original session is preserved; no restorable file checkpoint exists.".to_owned(),
-        );
-    }
-    overlay
+    RewindState::new(targets)
 }
 
 #[must_use]
@@ -235,7 +231,7 @@ pub fn sessions_overlay(result: &Value, current_session_id: &str) -> Overlay {
                     "{messages} messages · {ended}{}",
                     if current { " · current" } else { "" }
                 ),
-                current,
+                false,
             ))
         })
         .collect();

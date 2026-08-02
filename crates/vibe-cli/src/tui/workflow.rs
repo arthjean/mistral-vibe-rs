@@ -12,8 +12,12 @@ use super::commands::{CommandId, parse_command_in};
 use super::controls::ControlState;
 use super::interaction::{Overlay, OverlayKind};
 use super::pickers::{
-    config_overlay, debug_overlay, help_overlay, model_overlay, proxy_overlay, rewind_overlay,
+    config_overlay, debug_overlay, help_overlay, model_overlay, proxy_overlay, rewind_state,
     sessions_overlay, status_overlay, theme_overlay, thinking_overlay, voice_overlay,
+};
+use super::rewind::{RewindEffect, reduce_key as reduce_rewind_key};
+use super::session_picker::{
+    SessionDeleteState, SessionPickerEffect, reduce_key as reduce_session_picker_key,
 };
 use super::setup::ResolvedTheme;
 use super::state::{EntryStatus, TranscriptKind, TuiState};
@@ -303,13 +307,38 @@ pub(super) fn handle_overlay_key(
     composer: &mut ChatInputState,
     theme: &mut ResolvedTheme,
 ) -> bool {
+    if state.rewind.is_some() {
+        handle_rewind_key(key, runtime, state, controls, composer);
+        return true;
+    }
     let Some(kind) = state.overlay.as_ref().map(|overlay| overlay.kind) else {
         return false;
     };
-    match key.code {
-        KeyCode::Esc => {
-            state.overlay = None;
+    if kind == OverlayKind::Sessions {
+        let current_session_id = runtime
+            .as_ref()
+            .map_or("", |runtime| runtime.session_id.as_str());
+        let Some(overlay) = state.overlay.as_mut() else {
+            return false;
+        };
+        let effect =
+            reduce_session_picker_key(overlay, &mut state.session_delete, current_session_id, key);
+        match effect {
+            SessionPickerEffect::None => {}
+            SessionPickerEffect::Close => state.overlay = None,
+            SessionPickerEffect::Resume(session_id) => {
+                if let Some(runtime) = runtime.as_mut() {
+                    resume_selected_session(runtime, state, controls, &session_id);
+                }
+            }
+            SessionPickerEffect::Delete(session_id) => {
+                delete_selected_session(runtime, state, &session_id);
+            }
         }
+        return true;
+    }
+    match key.code {
+        KeyCode::Esc => state.overlay = None,
         KeyCode::Up | KeyCode::Char('k') if key.modifiers.is_empty() => {
             if let Some(overlay) = state.overlay.as_mut() {
                 overlay.move_selection(-1);
@@ -324,9 +353,6 @@ pub(super) fn handle_overlay_key(
             if let Some(overlay) = state.overlay.as_mut() {
                 overlay.pop_query();
             }
-        }
-        KeyCode::Delete if kind == OverlayKind::Sessions => {
-            delete_selected_session(runtime, state);
         }
         KeyCode::Char('r')
             if kind == OverlayKind::Mcp && key.modifiers.contains(KeyModifiers::CONTROL) =>
@@ -459,17 +485,7 @@ fn select_overlay_item(
             state.overlay = None;
         }
         OverlayKind::Sessions => {
-            if let Some(result) = call_runtime(
-                runtime,
-                "session/resume",
-                json!({"sessionId": item.id}),
-                state,
-            ) && let Some(session_id) = metadata_session_id(&result)
-                && adopt_hydrated_session(runtime, state, controls, session_id)
-            {
-                state.overlay = None;
-                push_local_notice(state, "Resumed session", EntryStatus::Completed);
-            }
+            resume_selected_session(runtime, state, controls, &item.id);
         }
         OverlayKind::Mcp | OverlayKind::Connectors => {
             let enabled = mcp_source_enabled(runtime, &item.id, state).unwrap_or(true);
@@ -505,39 +521,6 @@ fn select_overlay_item(
             };
             composer.replace_text(command);
             state.overlay = None;
-        }
-        OverlayKind::Rewind => {
-            let Ok(message_index) = item.id.parse::<usize>() else {
-                state.push_diagnostic("The selected rewind point is invalid");
-                return;
-            };
-            if let Some(result) = call_runtime(
-                runtime,
-                "session/rewind",
-                json!({
-                    "sessionId": runtime.session_id,
-                    "messageIndex": message_index,
-                    "restoreFiles": false,
-                }),
-                state,
-            ) {
-                let message = result
-                    .get("message")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned();
-                if let Some(session_id) = metadata_session_id(&result)
-                    && adopt_hydrated_session(runtime, state, controls, session_id)
-                {
-                    composer.replace_text(message);
-                    state.overlay = None;
-                    push_local_notice(
-                        state,
-                        "Rewound into a new branch; the original session was preserved",
-                        EntryStatus::Completed,
-                    );
-                }
-            }
         }
         OverlayKind::Help
         | OverlayKind::Debug
@@ -628,15 +611,16 @@ pub(super) fn show_rewind(runtime: &mut InteractiveRuntime, state: &mut TuiState
     ) else {
         return;
     };
-    let overlay = rewind_overlay(&map_value(result));
-    if overlay.items.is_empty() {
+    let rewind = rewind_state(&map_value(result));
+    if let Some(rewind) = rewind {
+        state.overlay = None;
+        state.rewind = Some(rewind);
+    } else {
         push_local_notice(
             state,
             "There are no user messages to rewind.",
             EntryStatus::Completed,
         );
-    } else {
-        state.overlay = Some(overlay);
     }
 }
 
@@ -775,33 +759,161 @@ fn copy_last_agent_message(state: &mut TuiState) {
     }
 }
 
-fn delete_selected_session(runtime: &mut Option<InteractiveRuntime>, state: &mut TuiState) {
-    let Some(session_id) = state
-        .overlay
-        .as_ref()
-        .and_then(Overlay::selected_item)
-        .map(|item| item.id.clone())
-    else {
+fn resume_selected_session(
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+    controls: &mut ControlState,
+    session_id: &str,
+) {
+    if session_id == runtime.session_id {
+        state.push_diagnostic("This session is already active.");
         return;
-    };
+    }
+    if let Some(result) = call_runtime(
+        runtime,
+        "session/resume",
+        json!({"sessionId": session_id}),
+        state,
+    ) && let Some(session_id) = metadata_session_id(&result)
+        && adopt_hydrated_session(runtime, state, controls, session_id)
+    {
+        state.overlay = None;
+        state.session_delete = None;
+        push_local_notice(state, "Resumed session", EntryStatus::Completed);
+    }
+}
+
+fn delete_selected_session(
+    runtime: &mut Option<InteractiveRuntime>,
+    state: &mut TuiState,
+    session_id: &str,
+) {
     let Some(runtime) = runtime.as_mut() else {
         return;
     };
-    if session_id == runtime.session_id {
-        state.push_diagnostic("Deleting the current session is not supported.");
+    if let Err(error) = runtime
+        .service
+        .public_call("session/delete", json!({"sessionId": session_id}))
+    {
+        state.session_delete = Some(SessionDeleteState::failure(session_id, error.to_string()));
         return;
     }
-    if call_runtime(
-        runtime,
-        "session/delete",
-        json!({"sessionId": session_id}),
-        state,
-    )
-    .is_some()
-        && let Some(overlay) = state.overlay.as_mut()
-    {
+    state.session_delete = None;
+    let remaining = if let Some(overlay) = state.overlay.as_mut() {
         overlay.items.retain(|item| item.id != session_id);
         overlay.set_query(overlay.query.clone());
+        Some(overlay.items.len())
+    } else {
+        None
+    };
+    match remaining {
+        Some(0) => {
+            state.overlay = None;
+            push_local_notice(
+                state,
+                "No saved sessions left for this directory.",
+                EntryStatus::Completed,
+            );
+        }
+        Some(_) => push_local_notice(
+            state,
+            &format!(
+                "Deleted session `{}`.",
+                session_id.chars().take(8).collect::<String>()
+            ),
+            EntryStatus::Completed,
+        ),
+        None => {}
+    }
+}
+
+fn handle_rewind_key(
+    key: KeyEvent,
+    runtime: &mut Option<InteractiveRuntime>,
+    state: &mut TuiState,
+    controls: &mut ControlState,
+    composer: &mut ChatInputState,
+) {
+    let Some(rewind) = state.rewind.as_mut() else {
+        return;
+    };
+    match reduce_rewind_key(rewind, key) {
+        RewindEffect::None => {}
+        RewindEffect::Cancel => state.rewind = None,
+        RewindEffect::Scroll(delta) if delta.is_negative() => {
+            state.scroll_up(delta.unsigned_abs());
+        }
+        RewindEffect::Scroll(delta) => {
+            state.scroll_down(delta.unsigned_abs());
+        }
+        RewindEffect::Accept {
+            message_index,
+            restore_files,
+        } => accept_rewind(
+            runtime,
+            state,
+            controls,
+            composer,
+            message_index,
+            restore_files,
+        ),
+    }
+}
+
+fn accept_rewind(
+    runtime: &mut Option<InteractiveRuntime>,
+    state: &mut TuiState,
+    controls: &mut ControlState,
+    composer: &mut ChatInputState,
+    message_index: usize,
+    restore_files: bool,
+) {
+    let Some(runtime) = runtime.as_mut() else {
+        state.push_diagnostic("The selected rewind point is unavailable");
+        return;
+    };
+    let result = match runtime.service.public_call(
+        "session/rewind",
+        json!({
+            "sessionId": runtime.session_id,
+            "messageIndex": message_index,
+            "restoreFiles": restore_files,
+        }),
+    ) {
+        Ok(result) => result,
+        Err(error) => {
+            if let Some(rewind) = state.rewind.as_mut() {
+                rewind.set_error(format!("Rewind failed: {error}"));
+            }
+            return;
+        }
+    };
+    let message = result
+        .get("message")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let restore_errors = result
+        .get("restoreErrors")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+    if let Some(session_id) = metadata_session_id(&result)
+        && adopt_hydrated_session(runtime, state, controls, session_id)
+    {
+        composer.replace_text(message);
+        for error in restore_errors {
+            state.push_diagnostic(format!("File restoration warning: {error}"));
+        }
+        state.rewind = None;
+        push_local_notice(
+            state,
+            "Rewound into a new branch; the original session was preserved",
+            EntryStatus::Completed,
+        );
     }
 }
 

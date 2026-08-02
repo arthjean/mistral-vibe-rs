@@ -10,14 +10,18 @@ use unicode_width::UnicodeWidthStr;
 
 mod completion_popup;
 mod markdown;
+mod rewind;
 
 use super::chat_input::{InputMode, Safety, VoicePhase};
 use super::completion::CompletionEngine;
 use super::composer_layout::{CHROME_HEIGHT, ComposerLayout, PROMPT_WIDTH};
 use super::input::{PromptEditor, VisualLayout};
+use super::rewind::{RewindAction, RewindState};
+use super::session_picker::SessionDeleteState;
 use super::setup::{ResolvedTheme, Theme};
 use super::state::{EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
 use markdown::markdown_lines;
+use rewind::draw_rewind;
 
 pub const MAX_RENDER_CHARS: usize = 64 * 1024;
 pub const MAX_RENDER_LINE_CHARS: usize = 4 * 1024;
@@ -134,7 +138,10 @@ pub fn draw(
     );
     draw_footer(frame, footer_area, context.cwd, context.tokens, theme);
     if let Some(overlay) = &state.overlay {
-        draw_overlay(frame, overlay, theme);
+        draw_overlay(frame, overlay, state.session_delete.as_ref(), theme);
+    }
+    if let Some(rewind) = &state.rewind {
+        draw_rewind(frame, rewind, theme);
     }
     if let Some(callback) = &state.callback {
         draw_callback_overlay(frame, callback, state.callback_scroll_offset, theme);
@@ -240,6 +247,7 @@ fn draw_callback_overlay(
 fn draw_overlay(
     frame: &mut Frame<'_>,
     overlay: &super::interaction::Overlay,
+    session_delete: Option<&SessionDeleteState>,
     theme: ResolvedTheme,
 ) {
     let outer = frame.area();
@@ -274,6 +282,9 @@ fn draw_overlay(
         lines.push(Line::default());
     }
     for (selected, item) in visible {
+        let description = session_delete
+            .filter(|delete| delete.session_id == item.id)
+            .map_or(item.description.as_str(), SessionDeleteState::message);
         let marker = if selected { "▸ " } else { "  " };
         let style = if item.disabled {
             muted_style(theme)
@@ -288,7 +299,7 @@ fn draw_overlay(
             Span::styled(truncate_width(&item.label, inner_width), style),
             Span::raw("  "),
             Span::styled(
-                truncate_width(&item.description, description_width),
+                truncate_width(description, description_width),
                 muted_style(theme),
             ),
         ]));
@@ -1168,6 +1179,7 @@ mod tests {
 
     use super::*;
     use crate::tui::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName};
+    use crate::tui::pickers::rewind_state;
     use crate::tui::state::{EntryStatus, TranscriptEntry, TranscriptKind};
 
     fn theme(colors_enabled: bool) -> ResolvedTheme {
@@ -1291,6 +1303,44 @@ mod tests {
             .map(|cell| cell.symbol())
             .collect::<String>();
         assert!(rendered.contains("Rate response: 1-3, 0 later, Esc dismisses"));
+    }
+
+    #[test]
+    fn rewind_overlay_preserves_target_actions_and_help_at_fixed_widths() {
+        for width in [40, 80, 120] {
+            let backend = TestBackend::new(width, 18);
+            let mut terminal = Terminal::new(backend).expect("test terminal");
+            let mut state = TuiState::new("session");
+            state.rewind = rewind_state(&json!({
+                "messages": [{
+                    "messageIndex": 4,
+                    "message": "edit the runtime checkpoint behavior",
+                    "hasFileChanges": true
+                }]
+            }));
+            state
+                .rewind
+                .as_mut()
+                .expect("rewind state")
+                .set_error("Rewind failed: injected failure");
+            terminal
+                .draw(|frame| {
+                    draw_test(frame, &mut state, &PromptEditor::default(), false);
+                })
+                .expect("rewind frame");
+            let rendered = terminal
+                .backend()
+                .buffer()
+                .content()
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect::<String>();
+            assert!(rendered.contains("Message 1 of 1"));
+            assert!(rendered.contains("restore files"));
+            assert!(rendered.contains("without restoring"));
+            assert!(rendered.contains("injected failure"));
+            assert!(rendered.contains("accept"));
+        }
     }
 
     #[test]

@@ -8,6 +8,8 @@ use tokio::sync::{mpsc, watch};
 
 use super::controls::CallbackPresentation;
 use super::interaction::{Overlay, PromptQueue, QuitConfirmation};
+use super::rewind::RewindState;
+use super::session_picker::SessionDeleteState;
 
 const MAX_DIAGNOSTICS: usize = 100;
 
@@ -123,6 +125,8 @@ pub struct TuiState {
     pub scroll_offset: usize,
     pub viewport: (u16, u16),
     pub overlay: Option<Overlay>,
+    pub rewind: Option<RewindState>,
+    pub session_delete: Option<SessionDeleteState>,
     pub prompt_queue: PromptQueue,
     pub quit_confirmation: QuitConfirmation,
     pub rewind_confirmation: QuitConfirmation,
@@ -154,6 +158,8 @@ impl TuiState {
             scroll_offset: 0,
             viewport: (80, 24),
             overlay: None,
+            rewind: None,
+            session_delete: None,
             prompt_queue: PromptQueue::default(),
             quit_confirmation: QuitConfirmation::default(),
             rewind_confirmation: QuitConfirmation::default(),
@@ -320,6 +326,8 @@ impl TuiState {
         }
         replacement.viewport = self.viewport;
         replacement.overlay = self.overlay.take();
+        replacement.rewind = self.rewind.take();
+        replacement.session_delete = self.session_delete.take();
         replacement.prompt_queue = std::mem::take(&mut self.prompt_queue);
         replacement.quit_confirmation = std::mem::take(&mut self.quit_confirmation);
         replacement.rewind_confirmation = std::mem::take(&mut self.rewind_confirmation);

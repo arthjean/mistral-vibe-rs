@@ -7,8 +7,11 @@ use ratatui::layout::{Alignment, Constraint, Layout};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
-use vibe_app_server::startup::{SavedSessionSummary, WorkspaceTrustDecision, WorkspaceTrustPrompt};
+use vibe_app_server::startup::{
+    SavedSessionSummary, StartupHost, WorkspaceTrustDecision, WorkspaceTrustPrompt,
+};
 
+use super::super::session_picker::{SessionDeleteDecision, SessionDeleteState};
 use super::super::terminal::{CrosstermOps, TerminalGuard};
 use super::StartupError;
 use super::session::ResumeResolution;
@@ -22,7 +25,7 @@ pub(super) fn run_trust_dialog(
         .position(|decision| *decision == WorkspaceTrustDecision::TrustDirectory)
         .unwrap_or_default();
     let mut dialog = StartupDialog::Trust { prompt, selected };
-    match run_dialog(&mut dialog)? {
+    match run_dialog(&mut dialog, None)? {
         DialogResult::Trust(decision) => Ok(Some(decision)),
         DialogResult::Abort
         | DialogResult::Continue
@@ -33,19 +36,24 @@ pub(super) fn run_trust_dialog(
 
 pub(super) fn run_location_warning_dialog(warning: &str) -> Result<bool, StartupError> {
     let mut dialog = StartupDialog::LocationWarning { warning };
-    Ok(matches!(run_dialog(&mut dialog)?, DialogResult::Continue))
+    Ok(matches!(
+        run_dialog(&mut dialog, None)?,
+        DialogResult::Continue
+    ))
 }
 
 pub(super) fn run_resume_dialog(
+    host: &StartupHost,
     cwd: &Path,
     sessions: &[SavedSessionSummary],
 ) -> Result<ResumeResolution, StartupError> {
     let mut dialog = StartupDialog::Resume {
         cwd,
-        sessions,
+        sessions: sessions.to_vec(),
         selected: 0,
+        delete: None,
     };
-    match run_dialog(&mut dialog)? {
+    match run_dialog(&mut dialog, Some(host))? {
         DialogResult::Resume(id) => Ok(ResumeResolution::Resume(id)),
         DialogResult::StartNew => Ok(ResumeResolution::StartNew),
         DialogResult::Abort | DialogResult::Continue | DialogResult::Trust(_) => {
@@ -62,8 +70,9 @@ enum StartupDialog<'a> {
     },
     Resume {
         cwd: &'a Path,
-        sessions: &'a [SavedSessionSummary],
+        sessions: Vec<SavedSessionSummary>,
         selected: usize,
+        delete: Option<SessionDeleteState>,
     },
     LocationWarning {
         warning: &'a str,
@@ -79,7 +88,16 @@ enum DialogResult {
     Abort,
 }
 
-fn run_dialog(dialog: &mut StartupDialog<'_>) -> Result<DialogResult, StartupError> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DialogStep {
+    Complete(DialogResult),
+    DeleteSession(String),
+}
+
+fn run_dialog(
+    dialog: &mut StartupDialog<'_>,
+    startup_host: Option<&StartupHost>,
+) -> Result<DialogResult, StartupError> {
     let mut guard = TerminalGuard::enter(CrosstermOps::stdout())
         .map_err(|error| StartupError::Terminal(error.to_string()))?;
     let backend = CrosstermBackend::new(std::io::stdout());
@@ -92,9 +110,23 @@ fn run_dialog(dialog: &mut StartupDialog<'_>) -> Result<DialogResult, StartupErr
         let event = event::read().map_err(|error| StartupError::Terminal(error.to_string()))?;
         if let Event::Key(key) = event
             && matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat)
-            && let Some(result) = reduce_dialog(dialog, key)
+            && let Some(step) = reduce_dialog(dialog, key)
         {
-            break result;
+            match step {
+                DialogStep::Complete(result) => break result,
+                DialogStep::DeleteSession(session_id) => {
+                    let result = startup_host.map_or_else(
+                        || Err("startup session deletion is unavailable".to_owned()),
+                        |host| {
+                            host.delete_session(&session_id)
+                                .map_err(|error| error.to_string())
+                        },
+                    );
+                    if apply_session_delete_result(dialog, &session_id, result) {
+                        break DialogResult::StartNew;
+                    }
+                }
+            }
         }
     };
     drop(terminal);
@@ -104,10 +136,10 @@ fn run_dialog(dialog: &mut StartupDialog<'_>) -> Result<DialogResult, StartupErr
     Ok(result)
 }
 
-fn reduce_dialog(dialog: &mut StartupDialog<'_>, key: KeyEvent) -> Option<DialogResult> {
+fn reduce_dialog(dialog: &mut StartupDialog<'_>, key: KeyEvent) -> Option<DialogStep> {
     if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c' | 'q'))
     {
-        return Some(DialogResult::Abort);
+        return Some(DialogStep::Complete(DialogResult::Abort));
     }
     match dialog {
         StartupDialog::Trust { prompt, selected } => match key.code {
@@ -128,37 +160,93 @@ fn reduce_dialog(dialog: &mut StartupDialog<'_>, key: KeyEvent) -> Option<Dialog
                     .get(index)
                     .copied()
                     .map(DialogResult::Trust)
+                    .map(DialogStep::Complete)
             }
             KeyCode::Enter => prompt
                 .decisions
                 .get(*selected)
                 .copied()
-                .map(DialogResult::Trust),
-            KeyCode::Esc => Some(DialogResult::Abort),
+                .map(DialogResult::Trust)
+                .map(DialogStep::Complete),
+            KeyCode::Esc => Some(DialogStep::Complete(DialogResult::Abort)),
             _ => None,
         },
         StartupDialog::Resume {
-            sessions, selected, ..
+            sessions,
+            selected,
+            delete,
+            ..
         } => match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
                 *selected = selected.checked_sub(1).unwrap_or(sessions.len() - 1);
+                *delete = None;
                 None
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 *selected = (*selected + 1) % sessions.len();
+                *delete = None;
                 None
             }
             KeyCode::Enter => sessions
                 .get(*selected)
-                .map(|session| DialogResult::Resume(session.id.clone())),
-            KeyCode::Esc | KeyCode::Char('n') => Some(DialogResult::StartNew),
+                .filter(|session| {
+                    !delete
+                        .as_ref()
+                        .is_some_and(|delete| delete.session_id == session.id)
+                })
+                .map(|session| DialogStep::Complete(DialogResult::Resume(session.id.clone()))),
+            KeyCode::Char('d') => {
+                let session_id = sessions.get(*selected)?.id.clone();
+                match SessionDeleteState::request(delete.as_ref(), &session_id, false) {
+                    SessionDeleteDecision::Show(next) => {
+                        *delete = Some(next);
+                        None
+                    }
+                    SessionDeleteDecision::Delete => Some(DialogStep::DeleteSession(session_id)),
+                }
+            }
+            KeyCode::Esc if delete.is_some() => {
+                *delete = None;
+                None
+            }
+            KeyCode::Esc | KeyCode::Char('n') => Some(DialogStep::Complete(DialogResult::StartNew)),
             _ => None,
         },
         StartupDialog::LocationWarning { .. } => match key.code {
-            KeyCode::Enter | KeyCode::Char('y') => Some(DialogResult::Continue),
-            KeyCode::Esc | KeyCode::Char('n') => Some(DialogResult::Abort),
+            KeyCode::Enter | KeyCode::Char('y') => {
+                Some(DialogStep::Complete(DialogResult::Continue))
+            }
+            KeyCode::Esc | KeyCode::Char('n') => Some(DialogStep::Complete(DialogResult::Abort)),
             _ => None,
         },
+    }
+}
+
+fn apply_session_delete_result(
+    dialog: &mut StartupDialog<'_>,
+    session_id: &str,
+    result: Result<(), String>,
+) -> bool {
+    let StartupDialog::Resume {
+        sessions,
+        selected,
+        delete,
+        ..
+    } = dialog
+    else {
+        return false;
+    };
+    match result {
+        Ok(()) => {
+            sessions.retain(|session| session.id != session_id);
+            *selected = (*selected).min(sessions.len().saturating_sub(1));
+            *delete = None;
+            sessions.is_empty()
+        }
+        Err(error) => {
+            *delete = Some(SessionDeleteState::failure(session_id, error));
+            false
+        }
     }
 }
 
@@ -230,6 +318,7 @@ fn draw_startup_dialog(frame: &mut ratatui::Frame<'_>, dialog: &StartupDialog<'_
             cwd,
             sessions,
             selected,
+            delete,
         } => {
             let mut lines = vec![
                 Line::from(format!("local {}", cwd.display())),
@@ -237,16 +326,20 @@ fn draw_startup_dialog(frame: &mut ratatui::Frame<'_>, dialog: &StartupDialog<'_
             ];
             lines.extend(sessions.iter().enumerate().map(|(index, session)| {
                 let short_id = session.id.chars().take(8).collect::<String>();
+                let preview = delete
+                    .as_ref()
+                    .filter(|delete| delete.session_id == session.id)
+                    .map_or(session.preview.as_str(), SessionDeleteState::message);
                 selected_line(
                     index,
                     *selected,
-                    format!("{:10}  {short_id}  {}", session.end_time, session.preview),
+                    format!("{:10}  {short_id}  {preview}", session.end_time),
                 )
             }));
             (
                 " Resume a saved session ",
                 lines,
-                "Up/Down navigate  Enter resume  n/Esc start new  Ctrl+C abort",
+                "Up/Down navigate  Enter resume  d delete  n/Esc start new  Ctrl+C abort",
             )
         }
         StartupDialog::LocationWarning { warning } => (
@@ -327,8 +420,9 @@ mod tests {
                 },
                 StartupDialog::Resume {
                     cwd: root,
-                    sessions: &sessions,
+                    sessions: sessions.clone(),
                     selected: 0,
+                    delete: None,
                 },
                 StartupDialog::LocationWarning {
                     warning: "WARNING: sensitive location",
@@ -358,20 +452,82 @@ mod tests {
         let sessions = sessions();
         let mut dialog = StartupDialog::Resume {
             cwd: Path::new("/workspace"),
-            sessions: &sessions,
+            sessions,
             selected: 0,
+            delete: None,
         };
         assert_eq!(
             reduce_dialog(&mut dialog, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-            Some(DialogResult::StartNew)
+            Some(DialogStep::Complete(DialogResult::StartNew))
         );
         assert_eq!(
             reduce_dialog(
                 &mut dialog,
                 KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)
             ),
-            Some(DialogResult::Abort)
+            Some(DialogStep::Complete(DialogResult::Abort))
         );
+    }
+
+    #[test]
+    fn resume_delete_requires_confirmation_and_recovers_from_failure() {
+        let mut available = sessions();
+        available.push(SavedSessionSummary {
+            id: "session-2".to_owned(),
+            end_time: "2026-08-02T11:00:00Z".to_owned(),
+            preview: "retain on failure".to_owned(),
+        });
+        let mut dialog = StartupDialog::Resume {
+            cwd: Path::new("/workspace"),
+            sessions: available,
+            selected: 0,
+            delete: None,
+        };
+        let delete = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
+
+        assert_eq!(reduce_dialog(&mut dialog, delete), None);
+        assert_eq!(
+            reduce_dialog(&mut dialog, delete),
+            Some(DialogStep::DeleteSession("session-1".to_owned()))
+        );
+        assert!(!apply_session_delete_result(
+            &mut dialog,
+            "session-1",
+            Err("storage unavailable".to_owned())
+        ));
+        let StartupDialog::Resume {
+            sessions, delete, ..
+        } = &dialog
+        else {
+            unreachable!("resume dialog remains open")
+        };
+        assert_eq!(sessions.len(), 2);
+        assert!(
+            delete
+                .as_ref()
+                .is_some_and(|delete| delete.message().contains("storage unavailable"))
+        );
+    }
+
+    #[test]
+    fn deleting_the_final_startup_session_selects_start_new() {
+        let mut dialog = StartupDialog::Resume {
+            cwd: Path::new("/workspace"),
+            sessions: sessions(),
+            selected: 0,
+            delete: None,
+        };
+        let delete = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
+        assert_eq!(reduce_dialog(&mut dialog, delete), None);
+        assert_eq!(
+            reduce_dialog(&mut dialog, delete),
+            Some(DialogStep::DeleteSession("session-1".to_owned()))
+        );
+        assert!(apply_session_delete_result(
+            &mut dialog,
+            "session-1",
+            Ok(())
+        ));
     }
 
     #[test]
@@ -384,11 +540,11 @@ mod tests {
                 &mut dialog,
                 KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)
             ),
-            Some(DialogResult::Continue)
+            Some(DialogStep::Complete(DialogResult::Continue))
         );
         assert_eq!(
             reduce_dialog(&mut dialog, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-            Some(DialogResult::Abort)
+            Some(DialogStep::Complete(DialogResult::Abort))
         );
     }
 }

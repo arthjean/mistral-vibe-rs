@@ -576,6 +576,42 @@ fn bare_resume_opens_the_directory_scoped_picker_before_starting_new() {
 }
 
 #[test]
+fn bare_resume_deletes_only_after_confirmation_and_final_delete_starts_new() {
+    let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
+    let store = SessionStore::new(home.join(".vibe/sessions"));
+    store
+        .create("saved-session", &workspace.to_string_lossy(), None, 1)
+        .expect("saved session");
+    let mut process = PtyProcess::spawn(
+        &workspace,
+        &home,
+        &["--trust", "--resume", "--api-base", "http://127.0.0.1:9"],
+    );
+    process.wait_for(b"Resume", Duration::from_secs(3));
+
+    process.write(b"d");
+    process.wait_for(b"Press d aga", Duration::from_secs(3));
+    assert!(store.load("saved-session").is_ok());
+
+    process.write(b"d");
+    process.wait_for(b"default", Duration::from_secs(3));
+    assert!(store.load("saved-session").is_err());
+    let transcript = process.kill();
+    assert!(
+        transcript
+            .windows(b"\x1b[?1049h".len())
+            .filter(|window| *window == b"\x1b[?1049h")
+            .count()
+            >= 2,
+        "final deletion did not continue into a new-session TUI"
+    );
+}
+
+#[test]
 fn direct_resume_and_continue_hydrate_the_requested_saved_session() {
     for (arguments, marker) in [
         (
