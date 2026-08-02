@@ -7,6 +7,7 @@ pub mod release3;
 pub mod release4;
 pub mod resources;
 pub mod server;
+pub mod startup;
 pub mod transport;
 
 use vibe_protocol::{Envelope, ProtocolValidationError, decode_frame, encode_frame};
