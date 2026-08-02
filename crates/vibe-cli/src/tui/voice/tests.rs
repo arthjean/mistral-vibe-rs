@@ -4,12 +4,12 @@ use futures_util::{SinkExt, StreamExt};
 use secrecy::SecretString;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, oneshot};
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
 
-use super::realtime::{message_json, run_transcription, session_update};
-use super::recorder::AudioMessage;
+use super::realtime::{message_json, prepare_transcription, session_update};
+use super::recorder::{AudioFailureSignal, enqueue_audio};
 use super::session::send_transcription_result;
 use super::*;
 
@@ -201,6 +201,128 @@ async fn cancelling_while_a_restart_is_queued_drops_the_pending_generation() {
     manager.shutdown().await;
 }
 
+#[test]
+fn saturated_audio_queue_reports_a_recoverable_failure() {
+    let (audio_tx, _audio_rx) = mpsc::channel(1);
+    let (failures, failure_rx) = AudioFailureSignal::channel();
+    enqueue_audio(&audio_tx, &failures, vec![1, 2]);
+    enqueue_audio(&audio_tx, &failures, vec![3, 4]);
+
+    assert_eq!(
+        failure_rx.borrow().as_deref(),
+        Some("Audio input could not keep up; captured audio was lost")
+    );
+}
+
+#[tokio::test]
+async fn transcription_preparation_waits_for_the_remote_session() {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("test listener");
+    let address = listener.local_addr().expect("listener address");
+    let session_gate = Arc::new(Notify::new());
+    let server_gate = session_gate.clone();
+    let (accepted_tx, accepted_rx) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.expect("client connection");
+        let mut socket = accept_async(stream).await.expect("websocket handshake");
+        let _ = accepted_tx.send(());
+        server_gate.notified().await;
+        socket
+            .send(Message::Text(
+                json!({"type": "session.created"}).to_string().into(),
+            ))
+            .await
+            .expect("session created");
+        let update = socket
+            .next()
+            .await
+            .expect("session update")
+            .expect("message");
+        assert_eq!(
+            message_json(&update).expect("update JSON")["type"],
+            "session.update"
+        );
+    });
+    let config =
+        VoiceConfig::from_api_base(&format!("http://{address}")).expect("test voice config");
+    let preparation = tokio::spawn(async move {
+        prepare_transcription(&SecretString::from("test-key".to_owned()), &config).await
+    });
+
+    accepted_rx.await.expect("accepted signal");
+    tokio::task::yield_now().await;
+    assert!(!preparation.is_finished());
+    session_gate.notify_one();
+    let transcription = preparation
+        .await
+        .expect("preparation task")
+        .expect("transcription preparation");
+    server.await.expect("test server");
+
+    let (audio_tx, audio_rx) = mpsc::channel(1);
+    let (_failures, failure_rx) = AudioFailureSignal::channel();
+    let (ready_tx, ready_rx) = oneshot::channel();
+    let (updates_tx, _updates_rx) = mpsc::channel(1);
+    let consumer = tokio::spawn(async move {
+        transcription
+            .run(audio_rx, failure_rx, ready_tx, 8, &updates_tx)
+            .await
+    });
+    ready_rx.await.expect("consumer ready");
+    drop(audio_tx);
+    consumer.abort();
+    let _ = consumer.await;
+}
+
+#[tokio::test]
+async fn saturated_audio_queue_ends_transcription_with_a_recoverable_error() {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("test listener");
+    let address = listener.local_addr().expect("listener address");
+    let server = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.expect("client connection");
+        let mut socket = accept_async(stream).await.expect("websocket handshake");
+        socket
+            .send(Message::Text(
+                json!({"type": "session.created"}).to_string().into(),
+            ))
+            .await
+            .expect("session created");
+        let _ = socket.next().await.expect("session update");
+    });
+    let config =
+        VoiceConfig::from_api_base(&format!("http://{address}")).expect("test voice config");
+    let transcription = prepare_transcription(&SecretString::from("test-key".to_owned()), &config)
+        .await
+        .expect("transcription preparation");
+    server.await.expect("test server");
+    let (audio_tx, audio_rx) = mpsc::channel(1);
+    let (failures, failure_rx) = AudioFailureSignal::channel();
+    enqueue_audio(&audio_tx, &failures, vec![1, 2]);
+    enqueue_audio(&audio_tx, &failures, vec![3, 4]);
+    let (ready_tx, _ready_rx) = oneshot::channel();
+    let (updates_tx, mut updates_rx) = mpsc::channel(1);
+
+    let error = transcription
+        .run(audio_rx, failure_rx, ready_tx, 9, &updates_tx)
+        .await
+        .expect_err("audio loss must fail transcription");
+    assert_eq!(
+        error,
+        "Audio input could not keep up; captured audio was lost"
+    );
+    send_transcription_result(&updates_tx, 9, Ok(Err(error))).await;
+    assert!(matches!(
+        updates_rx.recv().await,
+        Some(InputEvent::VoiceStopResolved {
+            generation: 9,
+            error: Some(_)
+        })
+    ));
+}
+
 #[tokio::test]
 async fn realtime_client_streams_pcm_and_maps_delta_and_done_events() {
     let listener = TcpListener::bind("127.0.0.1:0")
@@ -225,6 +347,7 @@ async fn realtime_client_streams_pcm_and_maps_delta_and_done_events() {
         )
         .expect("update JSON");
         assert_eq!(update["type"], "session.update");
+        assert_eq!(update["session"]["audio_format"]["sample_rate"], 48_000);
         let append = message_json(&socket.next().await.expect("audio append").expect("message"))
             .expect("append JSON");
         assert_eq!(append["type"], "input_audio.append");
@@ -255,22 +378,23 @@ async fn realtime_client_streams_pcm_and_maps_delta_and_done_events() {
     });
     let config =
         VoiceConfig::from_api_base(&format!("http://{address}")).expect("test voice config");
+    assert_eq!(config.requested_sample_rate, 16_000);
+    let config = config.with_sample_rate(48_000);
     let (audio_tx, audio_rx) = mpsc::channel(2);
-    audio_tx
-        .send(AudioMessage::Chunk(vec![1, 2, 3]))
-        .await
-        .expect("audio chunk");
+    audio_tx.send(vec![1, 2, 3]).await.expect("audio chunk");
     drop(audio_tx);
+    let (failures, failure_rx) = AudioFailureSignal::channel();
     let (updates_tx, mut updates_rx) = mpsc::channel(4);
-    run_transcription(
-        audio_rx,
-        &SecretString::from("test-key".to_owned()),
-        &config,
-        7,
-        &updates_tx,
-    )
-    .await
-    .expect("transcription succeeds");
+    let (ready_tx, ready_rx) = oneshot::channel();
+    let transcription = prepare_transcription(&SecretString::from("test-key".to_owned()), &config)
+        .await
+        .expect("transcription preparation");
+    transcription
+        .run(audio_rx, failure_rx, ready_tx, 7, &updates_tx)
+        .await
+        .expect("transcription succeeds");
+    ready_rx.await.expect("consumer ready");
+    drop(failures);
     assert!(matches!(
         updates_rx.recv().await,
         Some(InputEvent::VoiceTranscriptDelta {

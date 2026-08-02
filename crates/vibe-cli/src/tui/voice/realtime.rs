@@ -6,7 +6,7 @@ use base64::Engine as _;
 use futures_util::{SinkExt, StreamExt};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot, watch};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
@@ -15,8 +15,6 @@ use tokio_tungstenite::{WebSocketStream, connect_async};
 use url::Url;
 
 use crate::tui::chat_input::InputEvent;
-
-use super::recorder::AudioMessage;
 
 const DEFAULT_MODEL: &str = "voxtral-mini-transcribe-realtime-2602";
 const DEFAULT_SAMPLE_RATE: u32 = 16_000;
@@ -55,15 +53,23 @@ impl VoiceConfig {
             target_streaming_delay_ms: TARGET_STREAMING_DELAY_MS,
         })
     }
+
+    pub(super) fn with_sample_rate(mut self, sample_rate: u32) -> Self {
+        self.requested_sample_rate = sample_rate;
+        self
+    }
 }
 
-pub(super) async fn run_transcription(
-    mut audio: mpsc::Receiver<AudioMessage>,
+type RealtimeSocket = WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+pub(super) struct PreparedTranscription {
+    websocket: RealtimeSocket,
+}
+
+pub(super) async fn prepare_transcription(
     credential: &SecretString,
     config: &VoiceConfig,
-    generation: u64,
-    updates: &mpsc::Sender<InputEvent>,
-) -> Result<(), String> {
+) -> Result<PreparedTranscription, String> {
     let mut request = config
         .endpoint
         .as_str()
@@ -90,14 +96,33 @@ pub(super) async fn run_transcription(
         ))
         .await
         .map_err(|error| format!("Transcription session setup failed: {error}"))?;
-    let (mut sink, mut source) = websocket.split();
-    let mut ended = false;
-    let mut drain = Box::pin(tokio::time::sleep(DRAIN_TIMEOUT));
+    Ok(PreparedTranscription { websocket })
+}
 
-    loop {
-        tokio::select! {
-            frame = audio.recv(), if !ended => match frame {
-                Some(AudioMessage::Chunk(chunk)) => {
+impl PreparedTranscription {
+    pub(super) async fn run(
+        self,
+        mut audio: mpsc::Receiver<Vec<u8>>,
+        mut failures: watch::Receiver<Option<String>>,
+        ready: oneshot::Sender<()>,
+        generation: u64,
+        updates: &mpsc::Sender<InputEvent>,
+    ) -> Result<(), String> {
+        if let Some(error) = failures.borrow().clone() {
+            return Err(error);
+        }
+        let (mut sink, mut source) = self.websocket.split();
+        let mut ended = false;
+        let mut failures_open = true;
+        let mut drain = Box::pin(tokio::time::sleep(DRAIN_TIMEOUT));
+        ready
+            .send(())
+            .map_err(|()| "Transcription startup was cancelled".to_owned())?;
+
+        loop {
+            tokio::select! {
+                frame = audio.recv(), if !ended => match frame {
+                Some(chunk) => {
                     let payload = json!({
                         "type": "input_audio.append",
                         "audio": base64::engine::general_purpose::STANDARD.encode(chunk),
@@ -106,7 +131,6 @@ pub(super) async fn run_transcription(
                         .await
                         .map_err(|error| format!("Transcription audio send failed: {error}"))?;
                 }
-                Some(AudioMessage::Failure(error)) => return Err(error),
                 None => {
                     sink.send(Message::Text(json!({"type": "input_audio.flush"}).to_string().into()))
                         .await
@@ -117,32 +141,39 @@ pub(super) async fn run_transcription(
                     ended = true;
                     drain.as_mut().reset(tokio::time::Instant::now() + DRAIN_TIMEOUT);
                 }
-            },
-            message = source.next() => {
-                let Some(message) = message else {
-                    return Err("Transcription connection closed before completion".to_owned());
-                };
-                let message = message.map_err(|error| format!("Transcription stream failed: {error}"))?;
-                match realtime_event(&message)? {
-                    RealtimeEvent::TextDelta(text) => {
-                        let _ = updates.send(InputEvent::VoiceTranscriptDelta { text, generation }).await;
+                },
+                changed = failures.changed(), if failures_open => match changed {
+                    Ok(()) => {
+                        if let Some(error) = failures.borrow().clone() {
+                            return Err(error);
+                        }
                     }
-                    RealtimeEvent::Done => return Ok(()),
-                    RealtimeEvent::Error(error) => return Err(error),
-                    RealtimeEvent::Ping(payload) => {
-                        sink.send(Message::Pong(payload))
-                            .await
-                            .map_err(|error| format!("Transcription keepalive failed: {error}"))?;
+                    Err(_) => failures_open = false,
+                },
+                message = source.next() => {
+                    let Some(message) = message else {
+                        return Err("Transcription connection closed before completion".to_owned());
+                    };
+                    let message = message.map_err(|error| format!("Transcription stream failed: {error}"))?;
+                    match realtime_event(&message)? {
+                        RealtimeEvent::TextDelta(text) => {
+                            let _ = updates.send(InputEvent::VoiceTranscriptDelta { text, generation }).await;
+                        }
+                        RealtimeEvent::Done => return Ok(()),
+                        RealtimeEvent::Error(error) => return Err(error),
+                        RealtimeEvent::Ping(payload) => {
+                            sink.send(Message::Pong(payload))
+                                .await
+                                .map_err(|error| format!("Transcription keepalive failed: {error}"))?;
+                        }
+                        RealtimeEvent::Other => {}
                     }
-                    RealtimeEvent::Other => {}
                 }
+                _ = &mut drain, if ended => return Err("Transcription timed out".to_owned()),
             }
-            _ = &mut drain, if ended => return Err("Transcription timed out".to_owned()),
         }
     }
 }
-
-type RealtimeSocket = WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn wait_for_session(websocket: &mut RealtimeSocket) -> Result<(), String> {
     tokio::time::timeout(START_TIMEOUT, async {

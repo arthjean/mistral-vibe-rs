@@ -1,33 +1,86 @@
 //! CPAL microphone capture and PCM conversion.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{
     FromSample, Sample, SampleFormat, SizedSample, Stream, StreamConfig, SupportedStreamConfig,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 use crate::tui::chat_input::InputEvent;
 
-pub(super) enum AudioMessage {
-    Chunk(Vec<u8>),
-    Failure(String),
+const AUDIO_OVERFLOW_ERROR: &str = "Audio input could not keep up; captured audio was lost";
+
+#[derive(Clone)]
+pub(super) struct AudioFailureSignal {
+    sender: watch::Sender<Option<String>>,
+    reported: Arc<AtomicBool>,
+}
+
+impl AudioFailureSignal {
+    pub(super) fn channel() -> (Self, watch::Receiver<Option<String>>) {
+        let (sender, receiver) = watch::channel(None);
+        (
+            Self {
+                sender,
+                reported: Arc::new(AtomicBool::new(false)),
+            },
+            receiver,
+        )
+    }
+
+    fn report(&self, message: impl FnOnce() -> String) {
+        if self
+            .reported
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            self.sender.send_replace(Some(message()));
+        }
+    }
+}
+
+struct CaptureOutput {
+    generation: u64,
+    updates: mpsc::Sender<InputEvent>,
+    audio: mpsc::Sender<Vec<u8>>,
+    failures: AudioFailureSignal,
+}
+
+pub(super) struct PreparedCpalAudioRecorder {
+    stream: Stream,
+    sample_rate: u32,
 }
 
 pub(super) struct CpalAudioRecorder {
     _stream: Stream,
-    sample_rate: u32,
+}
+
+impl PreparedCpalAudioRecorder {
+    pub(super) const fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    pub(super) fn play(self) -> Result<CpalAudioRecorder, String> {
+        self.stream
+            .play()
+            .map_err(|error| format!("Audio input could not start: {error}"))?;
+        Ok(CpalAudioRecorder {
+            _stream: self.stream,
+        })
+    }
 }
 
 impl CpalAudioRecorder {
-    pub(super) fn start(
+    pub(super) fn prepare(
         generation: u64,
         requested_sample_rate: u32,
         updates: mpsc::Sender<InputEvent>,
-        audio: mpsc::Sender<AudioMessage>,
-    ) -> Result<Self, String> {
+        audio: mpsc::Sender<Vec<u8>>,
+        failures: AudioFailureSignal,
+    ) -> Result<PreparedCpalAudioRecorder, String> {
         let host = cpal::default_host();
         let device = host
             .default_input_device()
@@ -36,117 +89,54 @@ impl CpalAudioRecorder {
         let sample_rate = supported.sample_rate();
         let channels = usize::from(supported.channels());
         let stream_config: StreamConfig = supported.into();
-        let error_audio = audio.clone();
+        let error_failures = failures.clone();
         let error_callback = move |error: cpal::Error| {
-            let _ = error_audio.try_send(AudioMessage::Failure(format!(
-                "Audio input failed: {error}"
-            )));
+            error_failures.report(|| format!("Audio input failed: {error}"));
+        };
+        let output = CaptureOutput {
+            generation,
+            updates,
+            audio,
+            failures,
         };
         let stream = match supported.sample_format() {
-            SampleFormat::I8 => build_input_stream::<i8>(
-                &device,
-                &stream_config,
-                channels,
-                generation,
-                updates,
-                audio,
-                error_callback,
-            ),
-            SampleFormat::I16 => build_input_stream::<i16>(
-                &device,
-                &stream_config,
-                channels,
-                generation,
-                updates,
-                audio,
-                error_callback,
-            ),
-            SampleFormat::I32 => build_input_stream::<i32>(
-                &device,
-                &stream_config,
-                channels,
-                generation,
-                updates,
-                audio,
-                error_callback,
-            ),
-            SampleFormat::I64 => build_input_stream::<i64>(
-                &device,
-                &stream_config,
-                channels,
-                generation,
-                updates,
-                audio,
-                error_callback,
-            ),
-            SampleFormat::U8 => build_input_stream::<u8>(
-                &device,
-                &stream_config,
-                channels,
-                generation,
-                updates,
-                audio,
-                error_callback,
-            ),
-            SampleFormat::U16 => build_input_stream::<u16>(
-                &device,
-                &stream_config,
-                channels,
-                generation,
-                updates,
-                audio,
-                error_callback,
-            ),
-            SampleFormat::U32 => build_input_stream::<u32>(
-                &device,
-                &stream_config,
-                channels,
-                generation,
-                updates,
-                audio,
-                error_callback,
-            ),
-            SampleFormat::U64 => build_input_stream::<u64>(
-                &device,
-                &stream_config,
-                channels,
-                generation,
-                updates,
-                audio,
-                error_callback,
-            ),
-            SampleFormat::F32 => build_input_stream::<f32>(
-                &device,
-                &stream_config,
-                channels,
-                generation,
-                updates,
-                audio,
-                error_callback,
-            ),
-            SampleFormat::F64 => build_input_stream::<f64>(
-                &device,
-                &stream_config,
-                channels,
-                generation,
-                updates,
-                audio,
-                error_callback,
-            ),
+            SampleFormat::I8 => {
+                build_input_stream::<i8>(&device, &stream_config, channels, output, error_callback)
+            }
+            SampleFormat::I16 => {
+                build_input_stream::<i16>(&device, &stream_config, channels, output, error_callback)
+            }
+            SampleFormat::I32 => {
+                build_input_stream::<i32>(&device, &stream_config, channels, output, error_callback)
+            }
+            SampleFormat::I64 => {
+                build_input_stream::<i64>(&device, &stream_config, channels, output, error_callback)
+            }
+            SampleFormat::U8 => {
+                build_input_stream::<u8>(&device, &stream_config, channels, output, error_callback)
+            }
+            SampleFormat::U16 => {
+                build_input_stream::<u16>(&device, &stream_config, channels, output, error_callback)
+            }
+            SampleFormat::U32 => {
+                build_input_stream::<u32>(&device, &stream_config, channels, output, error_callback)
+            }
+            SampleFormat::U64 => {
+                build_input_stream::<u64>(&device, &stream_config, channels, output, error_callback)
+            }
+            SampleFormat::F32 => {
+                build_input_stream::<f32>(&device, &stream_config, channels, output, error_callback)
+            }
+            SampleFormat::F64 => {
+                build_input_stream::<f64>(&device, &stream_config, channels, output, error_callback)
+            }
             format => return Err(format!("Audio sample format `{format}` is unsupported")),
         }
         .map_err(|error| format!("Audio input could not start: {error}"))?;
-        stream
-            .play()
-            .map_err(|error| format!("Audio input could not start: {error}"))?;
-        Ok(Self {
-            _stream: stream,
+        Ok(PreparedCpalAudioRecorder {
+            stream,
             sample_rate,
         })
-    }
-
-    pub(super) const fn sample_rate(&self) -> u32 {
-        self.sample_rate
     }
 }
 
@@ -180,9 +170,7 @@ fn build_input_stream<T>(
     device: &cpal::Device,
     config: &StreamConfig,
     channels: usize,
-    generation: u64,
-    updates: mpsc::Sender<InputEvent>,
-    audio: mpsc::Sender<AudioMessage>,
+    output: CaptureOutput,
     error_callback: impl FnMut(cpal::Error) + Send + 'static,
 ) -> Result<Stream, cpal::Error>
 where
@@ -205,14 +193,31 @@ where
                 pcm.extend_from_slice(&mono.to_le_bytes());
             }
             if !pcm.is_empty() {
-                let _ = audio.try_send(AudioMessage::Chunk(pcm));
+                enqueue_audio(&output.audio, &output.failures, pcm);
             }
             let level = u8::try_from((u32::from(peak) * 8 / 32_768).min(7)).unwrap_or(7);
             if last_level.swap(level, Ordering::Relaxed) != level {
-                let _ = updates.try_send(InputEvent::VoicePeak { generation, level });
+                let _ = output.updates.try_send(InputEvent::VoicePeak {
+                    generation: output.generation,
+                    level,
+                });
             }
         },
         error_callback,
         None,
     )
+}
+
+pub(super) fn enqueue_audio(
+    audio: &mpsc::Sender<Vec<u8>>,
+    failures: &AudioFailureSignal,
+    pcm: Vec<u8>,
+) {
+    match audio.try_send(pcm) {
+        Ok(()) => {}
+        Err(mpsc::error::TrySendError::Full(_)) => {
+            failures.report(|| AUDIO_OVERFLOW_ERROR.to_owned());
+        }
+        Err(mpsc::error::TrySendError::Closed(_)) => {}
+    }
 }
