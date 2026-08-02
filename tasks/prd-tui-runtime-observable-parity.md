@@ -341,9 +341,9 @@ Align rewind and session deletion with reference safeguards and recovery paths.
 
 **Acceptance Criteria:**
 
-- [ ] Given editable user messages, when rewind mode opens, then previous and next navigation, preview, scroll, cancel, and selection preserve the original transcript until acceptance.
-- [ ] Given a target with file changes, when options render, then restore-and-edit and edit-without-restore are distinct; without file changes only the applicable edit action appears.
-- [ ] Given acceptance, cancellation, invalid target, server failure, or file-restoration failure, when handled, then the selected restore flag is sent once and failure leaves transcript and workspace unchanged with a visible error.
+- [x] Given editable user messages, when rewind mode opens, then previous and next navigation, preview, scroll, cancel, and selection preserve the original transcript until acceptance.
+- [x] Given a target with file changes, when options render, then restore-and-edit and edit-without-restore are distinct; without file changes only the applicable edit action appears.
+- [x] Given acceptance, cancellation, invalid target, server failure, or file-restoration failure, when handled, then the selected restore flag is sent once and failure leaves transcript and workspace unchanged with a visible error.
 
 #### US-030: Require confirmed and recoverable session deletion
 
@@ -358,9 +358,9 @@ Align rewind and session deletion with reference safeguards and recovery paths.
 
 **Acceptance Criteria:**
 
-- [ ] Given a highlighted non-active session, when delete is requested once, then the row enters confirmation without server mutation; the second matching request sends exactly one delete effect.
-- [ ] Given the active session, changed selection, Escape, or picker cancellation, when confirmation exists, then deletion is blocked or cleared before any broader action.
-- [ ] Given server failure or deletion of the final saved session, when the result returns, then failure restores the row while success removes it and returns the reference start-new result where applicable.
+- [x] Given a highlighted non-active session, when delete is requested once, then the row enters confirmation without server mutation; the second matching request sends exactly one delete effect.
+- [x] Given the active session, changed selection, Escape, or picker cancellation, when confirmation exists, then deletion is blocked or cleared before any broader action.
+- [x] Given server failure or deletion of the final saved session, when the result returns, then failure restores the row while success removes it and returns the reference start-new result where applicable.
 
 ---
 
