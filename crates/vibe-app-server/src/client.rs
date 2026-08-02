@@ -593,6 +593,59 @@ impl EventObserver for ServerProjectionObserver {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct McpUpdatedParams {
+    mcp: McpUpdatedState,
+    #[serde(default)]
+    diagnostics: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct McpUpdatedState {
+    sources: Vec<McpDiagnosticSource>,
+    #[serde(rename = "discoveryErrors")]
+    _discovery_errors: BTreeMap<String, String>,
+}
+
+#[derive(Deserialize)]
+struct McpDiagnosticSource {
+    diagnostic: Option<String>,
+}
+
+fn decode_mcp_update(frame: &[u8]) -> Result<Vec<String>, ClientError> {
+    let notification = match decode_frame(frame)
+        .map_err(|error| ClientError::InvalidResponse(error.to_string()))?
+    {
+        Envelope::Notification(notification) if notification.method == "mcp/updated" => {
+            notification
+        }
+        _ => {
+            return Err(ClientError::InvalidResponse(
+                "MCP initialization returned an unexpected response".to_owned(),
+            ));
+        }
+    };
+    let params = serde_json::from_value::<McpUpdatedParams>(
+        serde_json::to_value(notification.params)
+            .map_err(|error| ClientError::InvalidResponse(error.to_string()))?,
+    )
+    .map_err(|error| ClientError::InvalidResponse(format!("invalid MCP update: {error}")))?;
+    let mut diagnostics = params.diagnostics;
+    for diagnostic in params
+        .mcp
+        .sources
+        .into_iter()
+        .filter_map(|source| source.diagnostic)
+    {
+        if !diagnostics.contains(&diagnostic) {
+            diagnostics.push(diagnostic);
+        }
+    }
+    Ok(diagnostics)
+}
+
 pub struct InProcessClient {
     server: AppServer,
     connection: ServerConnection,
@@ -673,14 +726,26 @@ impl InProcessClient {
     }
 
     pub async fn configure_pending_mcp(&mut self, session_id: &str) -> Result<(), ClientError> {
-        let Some(configs) = self.pending_mcp.remove(session_id) else {
-            return Ok(());
-        };
-        self.server
-            .configure_mcp_servers(session_id, configs)
+        self.configure_pending_mcp_with_diagnostics(session_id)
             .await
             .map(drop)
-            .map_err(ClientError::Server)
+    }
+
+    async fn configure_pending_mcp_with_diagnostics(
+        &mut self,
+        session_id: &str,
+    ) -> Result<Vec<String>, ClientError> {
+        let Some(configs) = self.pending_mcp.get(session_id).cloned() else {
+            return Ok(Vec::new());
+        };
+        let notification = self
+            .server
+            .configure_mcp_servers(session_id, configs)
+            .await
+            .map_err(ClientError::Server)?;
+        let diagnostics = decode_mcp_update(&notification)?;
+        self.pending_mcp.remove(session_id);
+        Ok(diagnostics)
     }
 
     pub fn session(&mut self, session_id: &str) -> Result<SessionView, ClientError> {
@@ -1430,6 +1495,15 @@ where
 
     pub fn start_session(&mut self, options: &SessionOptions) -> Result<String, ClientError> {
         self.client.start_session(options)
+    }
+
+    pub async fn initialize_pending_mcp(
+        &mut self,
+        session_id: &str,
+    ) -> Result<Vec<String>, ClientError> {
+        self.client
+            .configure_pending_mcp_with_diagnostics(session_id)
+            .await
     }
 
     fn fail_interactive_callbacks(
@@ -3808,6 +3882,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
+    use crate::release3::{Release3Paths, Release3Service};
     use crate::release4::{
         CloudError, GitProbe, GitSnapshot, Project, ProjectCloud, ProjectPage, ProjectRepository,
         Release4Service, TeleportCloud, TeleportStartRequest,
@@ -3820,6 +3895,77 @@ mod tests {
     };
 
     use super::*;
+
+    #[tokio::test]
+    async fn explicit_session_initialization_reports_mcp_diagnostics_once() {
+        let temporary = tempfile::tempdir().expect("runtime home");
+        let workspace = temporary.path().join("workspace");
+        std::fs::create_dir_all(workspace.join(".vibe")).expect("project config directory");
+        std::fs::write(
+            workspace.join(".vibe/config.toml"),
+            r#"
+[[mcp_servers]]
+name = "broken"
+transport = "stdio"
+command = "/must-not-run"
+"#,
+        )
+        .expect("project MCP config");
+        let release3 = Release3Service::new(
+            Release3Paths {
+                vibe_home: temporary.path().join("home"),
+                working_directory: workspace.clone(),
+                session_root: temporary.path().join("sessions"),
+            },
+            toml::Table::new(),
+            true,
+        )
+        .expect("release-3 service");
+        let mut service = HeadlessService::new_shared_with_server(
+            Arc::new(EchoTurnDriver::new("unused")),
+            AppServer::with_release3_service(release3),
+        )
+        .expect("service starts");
+        let mut session_options = options();
+        session_options.session_id = Some("mcp-failure".to_owned());
+        session_options.working_directory = workspace.to_string_lossy().into_owned();
+        let session_id = service
+            .start_session(&session_options)
+            .expect("session starts before deferred MCP initialization");
+        let diagnostics = service
+            .initialize_pending_mcp(&session_id)
+            .await
+            .expect("MCP discovery failure is recoverable");
+        assert_eq!(diagnostics.len(), 1);
+        assert!(diagnostics[0].contains("broken"));
+        assert!(
+            service
+                .initialize_pending_mcp(&session_id)
+                .await
+                .expect("initialization is consumed once")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn mcp_initialization_rejects_malformed_diagnostics() {
+        let valid = br#"{"jsonrpc":"2.0","method":"mcp/updated","params":{"mcp":{"sources":[{"diagnostic":"connection failed"}],"discoveryErrors":{}}}}"#;
+        assert_eq!(
+            decode_mcp_update(valid).expect("typed MCP update"),
+            vec!["connection failed"]
+        );
+
+        for malformed in [
+            br#"{"jsonrpc":"2.0","method":"mcp/updated","params":{"diagnostics":[1],"mcp":{"sources":[],"discoveryErrors":{}}}}"#.as_slice(),
+            br#"{"jsonrpc":"2.0","method":"mcp/updated","params":{"mcp":{}}}"#.as_slice(),
+            br#"{"jsonrpc":"2.0","method":"mcp/updated","params":{"mcp":{"sources":[{"diagnostic":7}],"discoveryErrors":{}}}}"#.as_slice(),
+        ] {
+            assert!(matches!(
+                decode_mcp_update(malformed),
+                Err(ClientError::InvalidResponse(_))
+            ));
+        }
+    }
 
     #[tokio::test]
     async fn prepared_prompt_reserves_already_validated_images() {
