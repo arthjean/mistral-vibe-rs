@@ -122,37 +122,43 @@ fn prompts_submitted_during_a_turn_are_queued_fifo_and_can_be_cancelled_lifo() {
         queue.cancel_last().map(PromptDraft::into_text).as_deref(),
         Some("third")
     );
-    assert_eq!(
-        queue.pop_next().map(PromptDraft::into_text).as_deref(),
-        Some("first")
-    );
-    assert_eq!(
-        queue.pop_next().map(PromptDraft::into_text).as_deref(),
-        Some("second")
-    );
+    let batch = queue.take_next_batch().expect("prompt batch");
+    assert_eq!(batch[0].draft.text(), "first");
+    assert_eq!(batch[1].draft.text(), "second");
     assert!(queue.is_empty());
 }
 
 #[test]
-fn failed_queue_submission_can_be_restored_at_the_front_without_reordering() {
+fn failed_queue_batch_can_be_restored_at_the_front_without_reordering() {
     let mut queue = PromptQueue::default();
     queue.push(prompt_draft("first"));
     queue.push(prompt_draft("second"));
-    let first = queue.pop_next().expect("first prompt");
-    queue.push_front(first);
-    queue.pause();
+    let batch = queue.take_next_batch().expect("prompt batch");
+    queue.restore_batch_and_pause(batch);
 
     assert_eq!(queue.len(), 2);
-    assert!(queue.pop_next().is_none());
+    assert!(queue.take_next_batch().is_none());
     queue.resume();
+    let restored = queue.take_next_batch().expect("restored batch");
+    assert_eq!(restored[0].draft.text(), "first");
+    assert_eq!(restored[1].draft.text(), "second");
+}
+
+#[test]
+fn cancelling_the_last_item_resumes_an_empty_queue_and_shell_rows_drop_the_sigil() {
+    let mut queue = PromptQueue::default();
+    queue.push(prompt_draft("!pwd"));
+    queue.pause();
     assert_eq!(
-        queue.pop_next().map(PromptDraft::into_text).as_deref(),
-        Some("first")
+        queue.presentation_lines(),
+        vec!["Queued messages (paused)", "$ pwd"]
     );
+
     assert_eq!(
-        queue.pop_next().map(PromptDraft::into_text).as_deref(),
-        Some("second")
+        queue.cancel_last().map(PromptDraft::into_text).as_deref(),
+        Some("!pwd")
     );
+    assert!(!queue.is_paused());
 }
 
 fn prompt_draft(text: &str) -> PromptDraft {
