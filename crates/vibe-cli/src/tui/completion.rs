@@ -9,7 +9,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use serde::{Deserialize, Serialize};
 
 use super::commands::{CommandContext, command_aliases_in, command_description};
-use super::input::{InputError, PromptEditor, grapheme_byte, grapheme_count};
+use super::input::{InputError, PromptEditor, grapheme_count};
 
 mod fuzzy;
 mod path;
@@ -687,7 +687,7 @@ fn slash_completion_score(candidate: &CompletionCandidate, query: &str) -> Optio
 
 pub(crate) fn active_token(editor: &PromptEditor) -> Option<(Range<usize>, String)> {
     let text = editor.text();
-    let cursor_byte = grapheme_byte(text, editor.cursor());
+    let cursor_byte = editor.cursor_byte();
     if text.starts_with('/') {
         let end_byte = text.find(' ').unwrap_or(text.len());
         let query_end = cursor_byte.min(end_byte);
@@ -695,6 +695,9 @@ pub(crate) fn active_token(editor: &PromptEditor) -> Option<(Range<usize>, Strin
             0..grapheme_count(&text[..query_end]),
             text[..query_end].to_owned(),
         ));
+    }
+    if !editor.has_mention_syntax() {
+        return None;
     }
     let before_cursor = &text[..cursor_byte];
     let start_byte = before_cursor.rfind('@')?;

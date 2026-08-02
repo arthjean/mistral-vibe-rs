@@ -14,7 +14,6 @@
 use std::ops::Range;
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::commands::{CommandContext, CommandId};
@@ -22,274 +21,24 @@ use super::completion::{
     CompletionCandidate, CompletionEngine, CompletionKey, CompletionKeyOutcome, CompletionKind,
     CompletionRequest, CompletionResolution, active_token,
 };
-use super::input::{
-    InputError, PromptEditor, composer_content_width, visual_cursor_cell, visual_text_lines,
+use super::composer_layout::ComposerLayout;
+use super::input::{InputError, PromptEditor, composer_content_width};
+use super::voice::{VoiceCommand, VoiceState, VoiceUpdate, VoiceUpdateOutcome};
+
+pub use super::voice::VoicePhase;
+
+#[path = "chat_input/observation.rs"]
+mod observation;
+#[path = "chat_input/protocol.rs"]
+mod protocol;
+
+pub use observation::{
+    CompletionItemObservation, CompletionObservation, HistoryObservation, RenderObservation,
+    StateObservation,
 };
-
-/// Composer input mode, mirroring the reference prefix characters.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum InputMode {
-    #[default]
-    #[serde(rename = ">")]
-    Prompt,
-    #[serde(rename = "!")]
-    Shell,
-    #[serde(rename = "/")]
-    Command,
-    #[serde(rename = "&")]
-    Teleport,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EditorSnapshot {
-    pub text: String,
-    pub cursor: usize,
-    pub selection: Option<[usize; 2]>,
-}
-
-impl InputMode {
-    #[must_use]
-    pub const fn symbol(self) -> char {
-        match self {
-            Self::Prompt => '>',
-            Self::Shell => '!',
-            Self::Command => '/',
-            Self::Teleport => '&',
-        }
-    }
-
-    #[must_use]
-    pub const fn prefix_len(self) -> usize {
-        match self {
-            Self::Prompt => 0,
-            Self::Shell | Self::Command | Self::Teleport => 1,
-        }
-    }
-}
-
-/// Normalised key identity shared by the oracle traces and the terminal adapter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum KeyName {
-    Char,
-    Enter,
-    Backspace,
-    Delete,
-    Tab,
-    Backtab,
-    Escape,
-    Up,
-    Down,
-    Left,
-    Right,
-    Home,
-    End,
-    #[serde(rename = "pageup")]
-    PageUp,
-    #[serde(rename = "pagedown")]
-    PageDown,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Modifier {
-    Shift,
-    Ctrl,
-    Alt,
-    Meta,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Safety {
-    Neutral,
-    Safe,
-    Destructive,
-    Yolo,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Severity {
-    Information,
-    Warning,
-    Error,
-}
-
-/// Every input the composer can observe, including responses to its effects.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(
-    tag = "type",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum InputEvent {
-    Key {
-        key: KeyName,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        char: Option<char>,
-        #[serde(default)]
-        mods: Vec<Modifier>,
-    },
-    Paste {
-        text: String,
-    },
-    Resize {
-        width: u16,
-        height: u16,
-    },
-    Mouse {
-        x: u16,
-        y: u16,
-        #[serde(default)]
-        extend_selection: bool,
-    },
-    /// Result produced by either the live worker or a deterministic adapter.
-    CompletionResolved {
-        resolution: CompletionResolution,
-    },
-    /// Result of the external editor effect; `None` when it was cancelled.
-    ExternalEditor {
-        #[serde(default)]
-        text: Option<String>,
-    },
-    /// Normalised replacement for the most recent paste.
-    PasteNormalized {
-        snapshot: EditorSnapshot,
-        text: String,
-    },
-    /// Normalised replacement for a full editor snapshot.
-    TextNormalized {
-        snapshot: EditorSnapshot,
-        text: String,
-    },
-    Transcript {
-        text: String,
-    },
-    Switching {
-        active: bool,
-    },
-    Feedback {
-        active: bool,
-    },
-    SafetyChanged {
-        value: Safety,
-    },
-}
-
-/// Work the composer delegates, and decisions it exposes to the application.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(
-    tag = "type",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum InputEffect {
-    SubmitRequested {
-        text: String,
-    },
-    Submit {
-        text: String,
-    },
-    ModeChanged {
-        mode: InputMode,
-    },
-    HistoryPrevious,
-    HistoryNext,
-    HistoryReset,
-    CompletionReset,
-    RequestCompletion {
-        request: CompletionRequest,
-    },
-    NormalizePastedPath {
-        text: String,
-        snapshot: EditorSnapshot,
-    },
-    NormalizeCurrentText {
-        snapshot: EditorSnapshot,
-    },
-    OpenExternalEditor {
-        text: String,
-    },
-    ClipboardImageRequested {
-        notify_when_empty: bool,
-    },
-    RecordHistory {
-        entry: String,
-    },
-    FeedbackRating {
-        rating: u8,
-    },
-    FeedbackSnooze,
-    FeedbackDismissed,
-    RecordingStartRequested,
-    RecordingStopRequested,
-    RecordingCancelRequested,
-    Notify {
-        message: String,
-        severity: Severity,
-    },
-    /// An event the boundary refused; recorded instead of panicking.
-    Rejected {
-        reason: String,
-    },
-}
-
-// ---------------------------------------------------------------------------
-// Observations
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CompletionItemObservation {
-    pub label: String,
-    pub description: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CompletionObservation {
-    pub open: bool,
-    pub kind: Option<String>,
-    pub selected: usize,
-    pub items: Vec<CompletionItemObservation>,
-}
-
-/// Prompt-history position exposed to differential fixtures.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HistoryObservation {
-    pub navigating: bool,
-    pub loaded_entry: bool,
-    pub cursor_moved_since_load: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StateObservation {
-    pub text: String,
-    pub mode: InputMode,
-    pub cursor: usize,
-    pub selection: Option<[usize; 2]>,
-    pub completion: CompletionObservation,
-    pub history: HistoryObservation,
-    pub feedback_active: bool,
-    pub switching: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RenderObservation {
-    pub border_classes: Vec<String>,
-    pub border_title: String,
-    pub cursor_cell: [usize; 2],
-    pub popup_rows: Vec<String>,
-    pub popup_visible: bool,
-    pub prompt: char,
-    pub visual_lines: Vec<String>,
-    pub wrap_width: usize,
-}
+pub use protocol::{
+    EditorSnapshot, InputEffect, InputEvent, InputMode, KeyName, Modifier, Safety, Severity,
+};
 
 // ---------------------------------------------------------------------------
 // State
@@ -303,9 +52,13 @@ pub struct ChatInputState {
     mode: InputMode,
     feedback_active: bool,
     switching: bool,
+    safety: Safety,
+    agent_name: String,
+    voice: VoiceState,
     secret_input: bool,
     history_navigating: bool,
     content_width: usize,
+    viewport_height: u16,
     last_paste: Option<Range<usize>>,
 }
 
@@ -317,9 +70,13 @@ impl Default for ChatInputState {
             mode: InputMode::Prompt,
             feedback_active: false,
             switching: false,
+            safety: Safety::Neutral,
+            agent_name: String::new(),
+            voice: VoiceState::default(),
             secret_input: false,
             history_navigating: false,
             content_width: 71,
+            viewport_height: 24,
             last_paste: None,
         }
     }
@@ -337,6 +94,56 @@ impl ChatInputState {
             self.completion.cancel();
             self.mode = InputMode::Prompt;
         }
+    }
+
+    pub fn set_voice_enabled(&mut self, enabled: bool) {
+        self.voice.set_enabled(enabled);
+    }
+
+    #[must_use]
+    pub const fn voice_phase(&self) -> VoicePhase {
+        self.voice.phase()
+    }
+
+    #[must_use]
+    pub const fn voice_generation(&self) -> u64 {
+        self.voice.generation()
+    }
+
+    #[must_use]
+    pub fn voice_indicator(&self) -> u8 {
+        self.voice.indicator()
+    }
+
+    pub fn set_safety(&mut self, safety: Safety) {
+        self.safety = safety;
+    }
+
+    #[must_use]
+    pub const fn safety(&self) -> Safety {
+        self.safety
+    }
+
+    pub fn set_agent_name(&mut self, name: &str) {
+        if self.agent_name != name {
+            self.agent_name.clear();
+            self.agent_name.push_str(name);
+        }
+    }
+
+    #[must_use]
+    pub fn agent_name(&self) -> &str {
+        &self.agent_name
+    }
+
+    #[must_use]
+    pub const fn switching(&self) -> bool {
+        self.switching
+    }
+
+    #[must_use]
+    pub const fn feedback_active(&self) -> bool {
+        self.feedback_active
     }
 
     pub fn set_teleport_available(&mut self, available: bool) {
@@ -475,8 +282,22 @@ impl ChatInputState {
         self.content_width = composer_content_width(width);
     }
 
-    pub(crate) fn set_content_width(&mut self, width: usize) {
-        self.content_width = width.max(1);
+    pub fn set_viewport(&mut self, width: u16, height: u16) {
+        self.content_width = composer_content_width(width);
+        self.viewport_height = height.max(1);
+    }
+
+    fn effective_content_width(&self) -> usize {
+        self.composer_layout().width()
+    }
+
+    fn composer_layout(&self) -> ComposerLayout {
+        ComposerLayout::for_content_width(
+            &self.editor,
+            self.content_width,
+            self.viewport_height,
+            self.mode.prefix_len(),
+        )
     }
 
     /// Applies one normalised event and returns the ordered effects it causes.
@@ -519,17 +340,45 @@ impl ChatInputState {
                 self.refresh_completion(&mut effects);
             }
             InputEvent::TextNormalized { snapshot, text } => {
-                let before = self.editor.text().to_owned();
+                let before = self.editor.revision();
                 self.apply_normalized_text(&snapshot, text);
-                if self.editor.text() != before {
+                if self.editor.revision() != before {
                     self.refresh_completion(&mut effects);
                 }
             }
-            InputEvent::Transcript { text } => {
-                self.editor.insert(&text);
-                self.refresh_completion(&mut effects);
+            InputEvent::Transcript { text, generation } => {
+                self.apply_voice_update(VoiceUpdate::Transcript { text, generation }, &mut effects);
             }
-            InputEvent::Switching { active } => self.switching = active,
+            InputEvent::VoiceTranscriptDelta { text, generation } => {
+                self.apply_voice_update(VoiceUpdate::Delta { text, generation }, &mut effects);
+            }
+            InputEvent::VoiceDone { generation } => {
+                self.apply_voice_update(VoiceUpdate::Done { generation }, &mut effects);
+            }
+            InputEvent::VoicePeak { generation, level } => {
+                self.apply_voice_update(VoiceUpdate::Peak { generation, level }, &mut effects);
+            }
+            InputEvent::VoiceIndicatorTick => {
+                self.apply_voice_update(VoiceUpdate::IndicatorTick, &mut effects);
+            }
+            InputEvent::VoiceStartResolved { generation, error } => {
+                self.apply_voice_update(
+                    VoiceUpdate::StartResolved { generation, error },
+                    &mut effects,
+                );
+            }
+            InputEvent::VoiceStopResolved { generation, error } => {
+                self.apply_voice_update(
+                    VoiceUpdate::StopResolved { generation, error },
+                    &mut effects,
+                );
+            }
+            InputEvent::Switching { active } => {
+                self.switching = active;
+                if active {
+                    self.completion.cancel();
+                }
+            }
             InputEvent::Feedback { active } => self.feedback_active = active,
             InputEvent::Mouse {
                 x,
@@ -539,16 +388,13 @@ impl ChatInputState {
                 let _ = self.editor.move_to_visual_cell(
                     usize::from(y),
                     usize::from(x),
-                    self.content_width,
+                    self.effective_content_width(),
                     self.mode_prefix(),
                     extend_selection,
                 );
             }
-            // Accepted so a trace stays replayable, but not modelled yet:
-            // viewport geometry is US-018 and safety chrome is US-017. Neither
-            // reaches an observation, so storing them would be theatre.
-            InputEvent::Resize { width, .. } => self.set_viewport_width(width),
-            InputEvent::SafetyChanged { .. } => {}
+            InputEvent::Resize { width, height } => self.set_viewport(width, height),
+            InputEvent::SafetyChanged { value } => self.safety = value,
         }
         effects
     }
@@ -564,6 +410,35 @@ impl ChatInputState {
         let shift = mods.contains(&Modifier::Shift);
         let alt = mods.contains(&Modifier::Alt);
         let meta = mods.contains(&Modifier::Meta);
+
+        if self.apply_voice_key(key, character, ctrl, effects) {
+            return;
+        }
+
+        if self.feedback_active && key == KeyName::Char && !ctrl && !alt && !meta {
+            match character {
+                Some('1'..='3') => {
+                    effects.push(InputEffect::FeedbackRating {
+                        rating: match character {
+                            Some('1') => 1,
+                            Some('2') => 2,
+                            Some('3') => 3,
+                            _ => 0,
+                        },
+                    });
+                    return;
+                }
+                Some('0') => {
+                    effects.push(InputEffect::FeedbackSnooze);
+                    return;
+                }
+                Some(_) => effects.push(InputEffect::FeedbackDismissed),
+                None => {}
+            }
+        } else if self.feedback_active && key == KeyName::Escape {
+            effects.push(InputEffect::FeedbackDismissed);
+            return;
+        }
 
         if key == KeyName::Char
             && character == Some('v')
@@ -606,7 +481,7 @@ impl ChatInputState {
         }
 
         if ctrl {
-            let before = self.editor.text().to_owned();
+            let before = self.editor.revision();
             let mode_prefix = self.mode_prefix();
             self.reset_completion(effects);
             match character {
@@ -628,7 +503,7 @@ impl ChatInputState {
                 Some('j') => self.editor.insert("\n"),
                 _ => {}
             }
-            self.finish_user_edit(&before, effects);
+            self.finish_user_edit(before, effects);
             return;
         }
 
@@ -646,7 +521,7 @@ impl ChatInputState {
             return;
         }
 
-        let before = self.editor.text().to_owned();
+        let before = self.editor.revision();
         let mode_prefix = self.mode_prefix();
         match key {
             KeyName::Escape => self.editor.set_text(""),
@@ -661,8 +536,14 @@ impl ChatInputState {
             KeyName::Right if alt => self.editor.move_word_right(),
             KeyName::Left => self.editor.move_left_bounded(shift, mode_prefix),
             KeyName::Right => self.editor.move_right(shift),
-            KeyName::Home => self.editor.move_home_bounded(shift, mode_prefix),
-            KeyName::End => self.editor.move_end(shift),
+            KeyName::Home => {
+                self.editor
+                    .move_visual_home(shift, self.effective_content_width(), mode_prefix)
+            }
+            KeyName::End => {
+                self.editor
+                    .move_visual_end(shift, self.effective_content_width(), mode_prefix)
+            }
             KeyName::Up => {
                 self.history_up(effects);
                 return;
@@ -694,21 +575,61 @@ impl ChatInputState {
                 }
             }
         }
-        self.finish_user_edit(&before, effects);
-        if self.editor.text() != before {
+        self.finish_user_edit(before, effects);
+        if self.editor.revision() != before {
             if key == KeyName::Char
                 && !self.secret_input
                 && !ctrl
                 && !alt
                 && !meta
-                && self.editor.cursor() == self.editor.text().graphemes(true).count()
-                && is_path_candidate(self.editor.text())
+                && self.editor.cursor_at_end()
+                && self.editor.has_path_syntax()
             {
                 effects.push(InputEffect::NormalizeCurrentText {
                     snapshot: self.editor_snapshot(),
                 });
             }
             self.refresh_completion(effects);
+        }
+    }
+
+    fn apply_voice_key(
+        &mut self,
+        key: KeyName,
+        character: Option<char>,
+        ctrl: bool,
+        effects: &mut Vec<InputEffect>,
+    ) -> bool {
+        let outcome = self.voice.handle_key(
+            key == KeyName::Char && character == Some('r') && ctrl,
+            key == KeyName::Char && character == Some('c') && ctrl,
+        );
+        if let Some(command) = outcome.command {
+            effects.push(match command {
+                VoiceCommand::Start => InputEffect::RecordingStartRequested,
+                VoiceCommand::Stop => InputEffect::RecordingStopRequested,
+                VoiceCommand::Cancel => InputEffect::RecordingCancelRequested,
+            });
+        }
+        outcome.consumed
+    }
+
+    fn apply_voice_update(&mut self, update: VoiceUpdate, effects: &mut Vec<InputEffect>) {
+        match self.voice.apply(update) {
+            VoiceUpdateOutcome::None => {}
+            VoiceUpdateOutcome::Insert(text) => {
+                self.editor.insert(&text);
+                self.history_navigating = false;
+                effects.push(InputEffect::HistoryReset);
+                self.refresh_completion(effects);
+            }
+            VoiceUpdateOutcome::Notify(message) => effects.push(InputEffect::Notify {
+                message,
+                severity: Severity::Warning,
+            }),
+            VoiceUpdateOutcome::Rejected(reason) => effects.push(InputEffect::Rejected {
+                reason: reason.to_owned(),
+            }),
         }
     }
 
@@ -721,10 +642,10 @@ impl ChatInputState {
                 return;
             }
         }
-        let before = self.editor.text().to_owned();
+        let before = self.editor.revision();
         let start = self.editor.cursor();
         self.editor.paste(text);
-        self.finish_user_edit(&before, effects);
+        self.finish_user_edit(before, effects);
         if is_path_candidate(text) {
             self.last_paste = Some(start..self.editor.cursor());
             effects.push(InputEffect::NormalizePastedPath {
@@ -791,8 +712,8 @@ impl ChatInputState {
         });
     }
 
-    fn finish_user_edit(&mut self, before: &str, effects: &mut Vec<InputEffect>) {
-        if self.editor.text() == before {
+    fn finish_user_edit(&mut self, before: u64, effects: &mut Vec<InputEffect>) {
+        if self.editor.revision() == before {
             return;
         }
         self.history_navigating = false;
@@ -828,7 +749,11 @@ impl ChatInputState {
         let mode_prefix = self.mode_prefix();
         let loaded_unmoved =
             self.editor.history_loaded() && !self.editor.cursor_moved_since_history_load();
-        if !loaded_unmoved && self.editor.move_visual_up(self.content_width, mode_prefix) {
+        if !loaded_unmoved
+            && self
+                .editor
+                .move_visual_up(self.effective_content_width(), mode_prefix)
+        {
             return;
         }
         if !loaded_unmoved && self.editor.cursor() != mode_prefix {
@@ -853,7 +778,7 @@ impl ChatInputState {
         if !loaded_unmoved
             && self
                 .editor
-                .move_visual_down(self.content_width, mode_prefix)
+                .move_visual_down(self.effective_content_width(), mode_prefix)
         {
             return;
         }
@@ -868,79 +793,6 @@ impl ChatInputState {
             effects.push(InputEffect::CompletionReset);
         } else {
             self.history_navigating = true;
-        }
-    }
-
-    /// Projects the state onto the schema shared with the reference traces.
-    #[must_use]
-    pub fn observe(&self) -> StateObservation {
-        let completion = match self.completion.view() {
-            Some(view) => CompletionObservation {
-                open: true,
-                kind: Some(candidate_kind(view.candidates)),
-                selected: view.selected,
-                items: view
-                    .candidates
-                    .iter()
-                    .map(|candidate| CompletionItemObservation {
-                        label: candidate.label.clone(),
-                        description: candidate.description.clone(),
-                    })
-                    .collect(),
-            },
-            None => CompletionObservation {
-                open: false,
-                kind: None,
-                selected: 0,
-                items: Vec::new(),
-            },
-        };
-        StateObservation {
-            text: self.editor.text().to_owned(),
-            mode: self.mode,
-            cursor: char_offset(self.editor.text(), self.editor.cursor()),
-            selection: self.editor.selection().map(|range| {
-                [
-                    char_offset(self.editor.text(), range.start),
-                    char_offset(self.editor.text(), range.end),
-                ]
-            }),
-            completion,
-            history: HistoryObservation {
-                navigating: self.history_navigating,
-                loaded_entry: self.editor.history_loaded(),
-                cursor_moved_since_load: self.editor.cursor_moved_since_history_load(),
-            },
-            feedback_active: self.feedback_active,
-            switching: self.switching,
-        }
-    }
-
-    /// Projects the normalized composer render contract recorded by the oracle.
-    /// Terminal-cell clipping and popup layout are verified at the renderer boundary.
-    #[must_use]
-    pub fn observe_render(&self) -> RenderObservation {
-        let prefix = self.mode.prefix_len();
-        let (row, column) = visual_cursor_cell(
-            self.editor.text(),
-            self.editor.cursor(),
-            self.content_width,
-            prefix,
-        );
-        RenderObservation {
-            border_classes: Vec::new(),
-            border_title: String::new(),
-            cursor_cell: [row, column],
-            popup_rows: self.completion.view().map_or_else(Vec::new, |view| {
-                view.candidates
-                    .iter()
-                    .map(|candidate| candidate.label.clone())
-                    .collect()
-            }),
-            popup_visible: self.completion.view().is_some(),
-            prompt: self.mode.symbol(),
-            visual_lines: visual_text_lines(self.editor.text(), self.content_width, prefix),
-            wrap_width: self.content_width,
         }
     }
 }

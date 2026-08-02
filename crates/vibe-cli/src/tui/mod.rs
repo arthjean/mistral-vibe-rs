@@ -5,7 +5,9 @@ mod clipboard_images;
 pub mod commands;
 pub mod completion;
 mod composer;
+mod composer_layout;
 pub mod controls;
+mod feedback;
 pub mod history;
 pub mod input;
 pub mod interaction;
@@ -18,7 +20,9 @@ pub mod setup;
 mod shell;
 mod shortcuts;
 pub mod state;
+mod switching;
 pub mod terminal;
+mod voice;
 mod workflow;
 
 use std::collections::BTreeMap;
@@ -46,7 +50,7 @@ use vibe_app_server::release3::{Release3Paths, Release3Service};
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
 
-use self::chat_input::{ChatInputState, InputEffect, InputEvent};
+use self::chat_input::{ChatInputState, InputEffect, InputEvent, Safety};
 use self::clipboard_images::{ClipboardImageManager, ImageModel, ImageModels};
 use self::commands::{CommandContext, CommandId};
 use self::composer::{
@@ -72,6 +76,7 @@ use self::state::{
     ApplyResult, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiSnapshot, TuiState,
 };
 use self::terminal::{CrosstermOps, TerminalGuard};
+use self::voice::VoiceManager;
 use self::workflow::{
     CommandAction, RuntimeCommand, apply_thinking, cycle_agent, dispatch_command,
     handle_overlay_key, is_user_skill, show_rewind, start_next_queued_prompt, start_prompt,
@@ -138,6 +143,7 @@ struct InteractiveRuntime {
     thinking: String,
     mode: String,
     agent_name: String,
+    safety: Safety,
     banner: BannerMetrics,
     context_tokens: u64,
     context_window: u64,
@@ -147,7 +153,9 @@ struct InteractiveRuntime {
     skills: BTreeMap<String, RuntimeSkill>,
     shell: Option<ActiveShell>,
     cloud: CloudWorkflowState,
+    pending_switch: Option<switching::SwitchRequest>,
     telemetry: Option<Arc<CliTelemetryObserver>>,
+    voice: VoiceManager,
 }
 
 impl InteractiveRuntime {
@@ -258,6 +266,11 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
         vibe_home_directory(&arguments, &working_directory).join("vibehistory"),
     );
     let mut input = ChatInputState::new();
+    input.set_voice_enabled(
+        runtime
+            .as_ref()
+            .is_some_and(|runtime| runtime.voice.enabled()),
+    );
     input.replace_history(history_load.entries);
     input.set_viewport_width(state.viewport.0);
     input.set_command_context(CommandContext::new(teleport_available(runtime.as_ref())));
@@ -292,6 +305,8 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     let mut events = EventStream::new();
     let mut ticker = tokio::time::interval(FRAME_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut voice_ticker = tokio::time::interval(Duration::from_millis(100));
+    voice_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut loop_ticker = tokio::time::interval(Duration::from_secs(1));
     loop_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut active: Option<ActiveTurn> = None;
@@ -302,12 +317,29 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     let event_loop = async {
         let mut exit = false;
         while !exit {
+            if let Some(runtime) = runtime.as_mut() {
+                while let Some(event) = runtime.voice.try_next_event() {
+                    apply_composer_event(
+                        &mut input,
+                        event,
+                        &working_directory,
+                        &mut state,
+                    );
+                }
+            }
             for diagnostic in prompt_history.drain_ready().await {
                 state.push_diagnostic(diagnostic);
             }
             drain_updates(&mut state, runtime.as_mut(), active.as_mut(), &mut controls);
             drain_callback_requests(runtime.as_mut(), &mut state, &mut controls);
-            finish_active(&mut state, &mut controls, &mut runtime, &mut active).await?;
+            finish_active(
+                &mut state,
+                &mut controls,
+                &mut runtime,
+                &mut active,
+                &mut input,
+            )
+            .await?;
             finish_shell(runtime.as_mut(), &mut state).await;
             start_next_queued_prompt(
                 &working_directory,
@@ -355,6 +387,8 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
             let agent_name =
                 runtime_view.map_or("default", |runtime| runtime.agent_name.as_str());
             let border_title = format!(" {} ", agent_name.to_lowercase());
+            input.set_agent_name(agent_name);
+            input.set_safety(runtime_view.map_or(Safety::Neutral, |runtime| runtime.safety));
             let banner = runtime_view.map_or(&fallback_banner, |runtime| &runtime.banner);
             let model =
                 runtime_view.map_or(arguments.model.as_str(), |runtime| runtime.model.as_str());
@@ -382,6 +416,11 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                             cwd: &working_directory,
                             agent_name: &border_title,
                             secret_input,
+                            safety: input.safety(),
+                            switching: input.switching(),
+                            feedback_active: input.feedback_active(),
+                            voice_phase: input.voice_phase(),
+                            voice_indicator: input.voice_indicator(),
                             banner: BannerContext {
                                 version: env!("CARGO_PKG_VERSION"),
                                 model,
@@ -479,7 +518,21 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                         &mut state,
                     )?;
                 }
-                _ = ticker.tick() => {}
+                _ = ticker.tick() => {
+                    if let Some(runtime) = runtime.as_mut() {
+                        switching::apply_pending(runtime, &mut input, &mut state);
+                    }
+                }
+                _ = voice_ticker.tick() => {
+                    if input.voice_phase() == self::chat_input::VoicePhase::Transcribing {
+                        apply_composer_event(
+                            &mut input,
+                            InputEvent::VoiceIndicatorTick,
+                            &working_directory,
+                            &mut state,
+                        );
+                    }
+                }
                 _ = loop_ticker.tick() => {
                     if active.is_none()
                         && runtime.as_ref().is_none_or(|runtime| runtime.shell.is_none())
@@ -542,6 +595,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     if let Some(runtime) = runtime.as_mut() {
         interrupt_shell(runtime, &mut state).await;
         finish_shell(Some(runtime), &mut state).await;
+        runtime.voice.shutdown().await;
     }
     let cleanup_result = clipboard_images
         .shutdown()
@@ -624,7 +678,7 @@ async fn handle_terminal_event(
             }
             MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Drag(MouseButton::Left) => {
                 let screen = Rect::new(0, 0, state.viewport.0, state.viewport.1);
-                if let Some((row, column, width)) = self::render::editor_mouse_cell(
+                if let Some((row, column)) = self::render::editor_mouse_cell(
                     input.editor(),
                     screen,
                     *secret_input,
@@ -633,7 +687,6 @@ async fn handle_terminal_event(
                     mouse.row,
                 ) {
                     let extend_selection = matches!(mouse.kind, MouseEventKind::Drag(_));
-                    input.set_content_width(width);
                     apply_composer_event(
                         input,
                         InputEvent::Mouse {
@@ -648,7 +701,7 @@ async fn handle_terminal_event(
             }
             _ => {}
         },
-        Event::Key(key) if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) => {
+        Event::Key(key) if accepts_key_event(key.kind) => {
             if should_defer_submission(key, path_normalization.has_pending()) {
                 *deferred_enter = Some(key);
                 return Ok(false);
@@ -677,6 +730,10 @@ async fn handle_terminal_event(
         Event::FocusGained | Event::FocusLost | Event::Key(_) => {}
     }
     Ok(false)
+}
+
+const fn accepts_key_event(kind: KeyEventKind) -> bool {
+    matches!(kind, KeyEventKind::Press | KeyEventKind::Repeat)
 }
 
 fn should_defer_submission(key: KeyEvent, normalization_pending: bool) -> bool {
@@ -885,6 +942,28 @@ async fn handle_key(
         apply_composer_effects(input, effects, working_directory, state);
         return Ok(false);
     }
+    let voice_key = input.voice_phase().is_active()
+        || (input.voice_phase() == self::chat_input::VoicePhase::Idle
+            && key.code == KeyCode::Char('r')
+            && key.modifiers.contains(KeyModifiers::CONTROL));
+    if voice_key {
+        if let Some(event) = normalized_input_event(key) {
+            let effects = apply_composer_event(input, event, working_directory, state);
+            if let Some(runtime) = runtime.as_mut() {
+                runtime
+                    .voice
+                    .apply_effects(&effects, input.voice_generation());
+            }
+        }
+        return Ok(false);
+    }
+    if input.feedback_active() && key.code == KeyCode::Esc {
+        if let Some(event) = normalized_input_event(key) {
+            let effects = apply_composer_event(input, event, working_directory, state);
+            feedback::handle_effects(&effects, runtime, input, state).await;
+        }
+        return Ok(false);
+    }
     if key.code != KeyCode::Esc {
         state.rewind_confirmation.cancel();
     }
@@ -905,7 +984,7 @@ async fn handle_key(
         if let Some(event) = normalized_input_event(key) {
             apply_composer_event(input, event, working_directory, state);
         }
-        cycle_agent(runtime, state);
+        cycle_agent(runtime, state, input);
         return Ok(false);
     }
     if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -1132,6 +1211,7 @@ async fn handle_key(
                             return Ok(true);
                         }
                         if let Some(mut previous) = runtime.take() {
+                            previous.voice.shutdown().await;
                             let session_id = previous.session_id.clone();
                             previous.service.close_session(&session_id).await?;
                             previous.service.shutdown()?;
@@ -1150,6 +1230,7 @@ async fn handle_key(
                         configured.trust = setup_completion.resources.workspace_trusted;
                         *runtime = Some(start_runtime(&configured, working_directory, credential)?);
                         if let Some(runtime) = runtime.as_ref() {
+                            input.set_voice_enabled(runtime.voice.enabled());
                             input.set_teleport_available(teleport_available(Some(runtime)));
                             input.set_user_skills(
                                 runtime
@@ -1255,6 +1336,7 @@ async fn handle_key(
                         runtime,
                         state,
                         controls,
+                        input,
                         theme,
                         active.is_some(),
                     )
@@ -1388,6 +1470,7 @@ async fn handle_key(
         | KeyCode::Char(_) => {
             if let Some(event) = normalized_input_event(key) {
                 let effects = apply_composer_event(input, event, working_directory, state);
+                feedback::handle_effects(&effects, runtime, input, state).await;
                 path_normalization
                     .schedule_effects(&effects)
                     .map_err(CliError::Terminal)?;
@@ -1411,12 +1494,14 @@ fn apply_path_normalization_event(
         .map_err(CliError::Terminal)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_runtime_command(
     command: &RuntimeCommand,
     working_directory: &Path,
     runtime: &mut Option<InteractiveRuntime>,
     state: &mut TuiState,
     controls: &mut ControlState,
+    input: &mut ChatInputState,
     theme: &mut ResolvedTheme,
     turn_active: bool,
 ) -> bool {
@@ -1647,40 +1732,20 @@ async fn handle_runtime_command(
                     apply_thinking(runtime, value, state);
                 }
                 ["model", value] if !value.trim().is_empty() => {
-                    if persist_user_setting(
+                    switching::request(
                         runtime,
-                        &["active_model"],
-                        json!(value),
-                        false,
+                        input,
                         state,
-                    ) && call_runtime(
-                        runtime,
-                        "session/settings/update",
-                        json!({"sessionId": runtime.session_id, "model": value}),
-                        state,
-                    )
-                    .is_some()
-                    {
-                        runtime.model = (*value).to_owned();
-                        push_local_notice(
-                            state,
-                            "Model updated for this session and future sessions",
-                            EntryStatus::Completed,
-                        );
-                    }
+                        switching::SwitchRequest::Model((*value).to_owned()),
+                    );
                 }
                 ["agent", value] if !value.trim().is_empty() => {
-                    if call_runtime(
+                    switching::request(
                         runtime,
-                        "session/agent/update",
-                        json!({"sessionId": runtime.session_id, "name": value}),
+                        input,
                         state,
-                    )
-                    .is_some()
-                    {
-                        sync_runtime_intent(runtime, Some(value));
-                        push_local_notice(state, "Session agent updated", EntryStatus::Completed);
-                    }
+                        switching::SwitchRequest::Agent((*value).to_owned()),
+                    );
                 }
                 ["proxy", "off"] => {
                     if persist_user_setting(runtime, &["proxy"], Value::Null, true, state) {
@@ -2014,6 +2079,41 @@ fn sync_runtime_intent(runtime: &mut InteractiveRuntime, agent_name: Option<&str
             runtime.mode = mode;
         }
         runtime.auto_approve = session.intent.auto_approve;
+    }
+    runtime.safety = active_agent_safety(
+        &mut runtime.service,
+        &runtime.session_id,
+        &runtime.agent_name,
+    );
+}
+
+fn active_agent_safety(
+    service: &mut HeadlessService<LiveTurnDriver>,
+    session_id: &str,
+    agent_name: &str,
+) -> Safety {
+    service
+        .public_call("agents/list", json!({"sessionId": session_id}))
+        .ok()
+        .and_then(|result| result.get("agents").and_then(Value::as_array).cloned())
+        .into_iter()
+        .flatten()
+        .find(|agent| agent.get("name").and_then(Value::as_str) == Some(agent_name))
+        .and_then(|agent| {
+            agent
+                .get("safety")
+                .and_then(Value::as_str)
+                .map(parse_safety)
+        })
+        .unwrap_or(Safety::Neutral)
+}
+
+fn parse_safety(value: &str) -> Safety {
+    match value {
+        "safe" | "read_only" => Safety::Safe,
+        "destructive" | "approval_required" => Safety::Destructive,
+        "yolo" | "unsafe" => Safety::Yolo,
+        _ => Safety::Neutral,
     }
 }
 
@@ -2671,6 +2771,7 @@ fn start_runtime(
     working_directory: &Path,
     credential: String,
 ) -> Result<InteractiveRuntime, CliError> {
+    let voice_credential = credential.clone();
     let release3 = release3_service(arguments, working_directory)?;
     let mut banner = banner_metrics_from_release3(&release3, arguments, working_directory);
     let skills = runtime_skills(&release3);
@@ -2721,12 +2822,25 @@ fn start_runtime(
         continue_session: arguments.continue_session,
     })?;
     refresh_server_banner_metrics(&mut service, &mut banner);
+    let voice_enabled = service
+        .public_call("config/read", json!({}))
+        .ok()
+        .and_then(|result| {
+            result
+                .get("snapshot")
+                .and_then(|snapshot| snapshot.pointer("/config/voice_mode_enabled"))
+                .and_then(Value::as_bool)
+        })
+        .unwrap_or(false);
+    let voice = VoiceManager::production(voice_credential, &arguments.api_base, voice_enabled)
+        .map_err(CliError::Terminal)?;
     let session = service.session(&session_id)?;
     let agent_name = session
         .intent
         .agent
         .clone()
         .unwrap_or_else(|| "default".to_owned());
+    let safety = active_agent_safety(&mut service, &session_id, &agent_name);
     Ok(InteractiveRuntime {
         service,
         session_id,
@@ -2741,6 +2855,7 @@ fn start_runtime(
             .mode
             .unwrap_or_else(|| preferences.mode.clone()),
         agent_name,
+        safety,
         banner,
         context_tokens: 0,
         context_window: arguments.max_tokens.unwrap_or(DEFAULT_CONTEXT_WINDOW),
@@ -2750,7 +2865,9 @@ fn start_runtime(
         skills,
         shell: None,
         cloud: CloudWorkflowState::default(),
+        pending_switch: None,
         telemetry,
+        voice,
     })
 }
 
@@ -3154,6 +3271,7 @@ async fn finish_active(
     controls: &mut ControlState,
     runtime: &mut Option<InteractiveRuntime>,
     active: &mut Option<ActiveTurn>,
+    input: &mut ChatInputState,
 ) -> Result<(), CliError> {
     if !active
         .as_ref()
@@ -3178,12 +3296,13 @@ async fn finish_active(
     let runtime = runtime
         .as_mut()
         .ok_or_else(|| CliError::Terminal("interactive runtime disappeared".to_owned()))?;
-    match outcome {
+    let turn_completed = match outcome {
         Ok(outcome) => {
             runtime.context_tokens = outcome.context_tokens;
             runtime.service.finish_reserved(&reservation, outcome)?;
             controls.complete_turn(&turn_id, "Turn complete");
             state.waiting = false;
+            true
         }
         Err(error) => {
             runtime
@@ -3192,8 +3311,9 @@ async fn finish_active(
             controls.complete_turn(&turn_id, "Turn failed");
             state.waiting = false;
             state.push_diagnostic(error.to_string());
+            false
         }
-    }
+    };
     resync_current_projection(runtime, state);
     sync_active_callbacks(runtime, state, controls);
     if let Some(loop_id) = scheduled_loop_id {
@@ -3221,6 +3341,9 @@ async fn finish_active(
                 "Code mode is active, but planning context could not be cleared: {error}"
             )),
         }
+    }
+    if turn_completed {
+        feedback::maybe_activate(runtime, input, state).await;
     }
     Ok(())
 }
@@ -3751,6 +3874,7 @@ mod tests {
             thinking: "off".to_owned(),
             mode: "code".to_owned(),
             agent_name: "default".to_owned(),
+            safety: Safety::Neutral,
             banner: BannerMetrics::default(),
             context_tokens: 0,
             context_window: DEFAULT_CONTEXT_WINDOW,
@@ -3760,8 +3884,88 @@ mod tests {
             skills: BTreeMap::new(),
             shell: None,
             cloud: CloudWorkflowState::default(),
+            pending_switch: None,
             telemetry: None,
+            voice: VoiceManager::production(
+                "test-credential".to_owned(),
+                "https://provider.invalid",
+                false,
+            )
+            .expect("test voice manager"),
         }
+    }
+
+    #[tokio::test]
+    async fn feedback_activation_and_response_use_the_existing_resource_boundary() {
+        let mut runtime = interactive_test_runtime("feedback-session");
+        let mut input = ChatInputState::default();
+        let mut state = TuiState::new("feedback-session");
+
+        feedback::maybe_activate(&mut runtime, &mut input, &mut state).await;
+        assert!(
+            input.feedback_active(),
+            "feedback diagnostics: {:?}",
+            state.diagnostics().collect::<Vec<_>>()
+        );
+        let effects = input.apply(InputEvent::Key {
+            key: chat_input::KeyName::Char,
+            char: Some('2'),
+            mods: Vec::new(),
+        });
+        let mut runtime = Some(runtime);
+        feedback::handle_effects(&effects, &mut runtime, &mut input, &mut state).await;
+        assert!(!input.feedback_active());
+        assert_eq!(state.diagnostics().count(), 0);
+
+        feedback::maybe_activate(
+            runtime.as_mut().expect("runtime remains available"),
+            &mut input,
+            &mut state,
+        )
+        .await;
+        assert!(!input.feedback_active(), "feedback is not asked twice");
+    }
+
+    #[tokio::test]
+    async fn unavailable_feedback_persistence_exits_transient_state_once() {
+        let mut runtime = None;
+        let mut input = ChatInputState::default();
+        let mut state = TuiState::new("feedback-session");
+        let _ = input.apply(InputEvent::Feedback { active: true });
+
+        feedback::handle_effects(
+            &[InputEffect::FeedbackSnooze],
+            &mut runtime,
+            &mut input,
+            &mut state,
+        )
+        .await;
+
+        assert!(!input.feedback_active());
+        assert_eq!(state.diagnostics().count(), 1);
+    }
+
+    #[test]
+    fn switching_state_spans_the_scheduler_boundary() {
+        let mut runtime = interactive_test_runtime("switch-session");
+        let mut input = ChatInputState::default();
+        let mut state = TuiState::new("switch-session");
+
+        switching::request(
+            &mut runtime,
+            &mut input,
+            &mut state,
+            switching::SwitchRequest::Agent("default".to_owned()),
+        );
+        assert!(input.switching());
+        assert_eq!(
+            runtime.pending_switch,
+            Some(switching::SwitchRequest::Agent("default".to_owned()))
+        );
+
+        switching::apply_pending(&mut runtime, &mut input, &mut state);
+        assert!(!input.switching());
+        assert!(runtime.pending_switch.is_none());
     }
 
     #[test]
@@ -3809,6 +4013,13 @@ mod tests {
         );
         assert_eq!(external.mode(), chat_input::InputMode::Prompt);
         assert!(external.completion().view().is_some());
+    }
+
+    #[test]
+    fn terminal_adapter_accepts_press_and_repeat_but_not_release() {
+        assert!(accepts_key_event(KeyEventKind::Press));
+        assert!(accepts_key_event(KeyEventKind::Repeat));
+        assert!(!accepts_key_event(KeyEventKind::Release));
     }
 
     #[test]
@@ -4147,9 +4358,16 @@ mod tests {
                 tokio::task::yield_now().await;
             }
 
-            finish_active(&mut state, &mut controls, &mut runtime, &mut active)
-                .await
-                .expect("terminal commit finishes");
+            let mut input = ChatInputState::default();
+            finish_active(
+                &mut state,
+                &mut controls,
+                &mut runtime,
+                &mut active,
+                &mut input,
+            )
+            .await
+            .expect("terminal commit finishes");
             let canonical_watermark = runtime
                 .as_mut()
                 .expect("runtime")

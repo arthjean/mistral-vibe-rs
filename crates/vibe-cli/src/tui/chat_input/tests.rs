@@ -548,3 +548,285 @@ fn path_normalization_requires_the_original_cursor_snapshot() {
     assert_eq!(state.observe().text, "/tmp/old.png");
     assert_eq!(state.observe().cursor, 11);
 }
+
+#[test]
+fn feedback_keys_are_consumed_while_printable_dismissal_is_reinserted() {
+    let mut state = ChatInputState::new();
+    state.apply(InputEvent::Feedback { active: true });
+    assert_eq!(
+        state.apply(character('2')),
+        vec![InputEffect::FeedbackRating { rating: 2 }]
+    );
+    assert_eq!(state.observe().text, "");
+
+    assert_eq!(
+        state.apply(character('x')),
+        vec![InputEffect::FeedbackDismissed, InputEffect::HistoryReset]
+    );
+    assert_eq!(state.observe().text, "x");
+}
+
+#[test]
+fn voice_effects_are_generation_aware_and_preserve_the_prompt() {
+    let mut state = ChatInputState::new();
+    state.set_voice_enabled(true);
+    type_text(&mut state, "say: ");
+
+    assert_eq!(
+        state.apply(InputEvent::Key {
+            key: KeyName::Char,
+            char: Some('r'),
+            mods: vec![Modifier::Ctrl],
+        }),
+        vec![InputEffect::RecordingStartRequested]
+    );
+    let generation = state.voice_generation();
+    assert_eq!(state.voice_phase(), VoicePhase::Starting);
+    assert_eq!(
+        state.apply(InputEvent::VoiceStartResolved {
+            generation,
+            error: None,
+        }),
+        Vec::new()
+    );
+    assert_eq!(state.voice_phase(), VoicePhase::Recording);
+
+    assert_eq!(
+        state.apply(character('x')),
+        vec![InputEffect::RecordingStopRequested]
+    );
+    assert_eq!(state.observe().text, "say: ");
+    assert_eq!(state.voice_phase(), VoicePhase::Transcribing);
+    assert_eq!(
+        state.apply(InputEvent::Transcript {
+            text: "hello".to_owned(),
+            generation: Some(generation),
+        }),
+        vec![InputEffect::HistoryReset]
+    );
+    assert_eq!(state.observe().text, "say: hello");
+    assert_eq!(state.voice_phase(), VoicePhase::Idle);
+
+    let effects = state.apply(InputEvent::Transcript {
+        text: " stale".to_owned(),
+        generation: Some(generation),
+    });
+    assert!(matches!(effects.as_slice(), [InputEffect::Rejected { .. }]));
+    assert_eq!(state.observe().text, "say: hello");
+}
+
+#[test]
+fn voice_start_failure_recovers_to_idle_with_bounded_feedback() {
+    let mut state = ChatInputState::new();
+    state.set_voice_enabled(true);
+    state.apply(InputEvent::Key {
+        key: KeyName::Char,
+        char: Some('r'),
+        mods: vec![Modifier::Ctrl],
+    });
+    let generation = state.voice_generation();
+    assert_eq!(
+        state.apply(InputEvent::VoiceStartResolved {
+            generation,
+            error: Some("No microphone is available".to_owned()),
+        }),
+        vec![InputEffect::Notify {
+            message: "No microphone is available".to_owned(),
+            severity: Severity::Warning,
+        }]
+    );
+    assert_eq!(state.voice_phase(), VoicePhase::Idle);
+}
+
+#[test]
+fn streaming_voice_deltas_survive_stop_and_cancel_invalidates_late_results() {
+    let mut state = ChatInputState::new();
+    state.set_voice_enabled(true);
+    type_text(&mut state, "say: ");
+    state.apply(InputEvent::Key {
+        key: KeyName::Char,
+        char: Some('r'),
+        mods: vec![Modifier::Ctrl],
+    });
+    let generation = state.voice_generation();
+    state.apply(InputEvent::VoiceStartResolved {
+        generation,
+        error: None,
+    });
+
+    assert_eq!(
+        state.apply(InputEvent::VoiceTranscriptDelta {
+            text: "hello".to_owned(),
+            generation,
+        }),
+        vec![InputEffect::HistoryReset]
+    );
+    assert_eq!(state.observe().text, "say: hello");
+    assert_eq!(
+        state.apply(character('x')),
+        vec![InputEffect::RecordingStopRequested]
+    );
+    assert_eq!(state.observe().text, "say: hello");
+    assert_eq!(
+        state.apply(InputEvent::VoiceStopResolved {
+            generation,
+            error: None,
+        }),
+        Vec::new()
+    );
+    assert_eq!(state.voice_phase(), VoicePhase::Transcribing);
+    assert_eq!(
+        state.apply(InputEvent::VoiceTranscriptDelta {
+            text: " world".to_owned(),
+            generation,
+        }),
+        vec![InputEffect::HistoryReset]
+    );
+    assert_eq!(state.apply(character('z')), Vec::new());
+    assert_eq!(state.observe().text, "say: hello world");
+
+    assert_eq!(
+        state.apply(InputEvent::Key {
+            key: KeyName::Char,
+            char: Some('c'),
+            mods: vec![Modifier::Ctrl],
+        }),
+        vec![InputEffect::RecordingCancelRequested]
+    );
+    assert_eq!(state.voice_phase(), VoicePhase::Idle);
+    assert_eq!(
+        state.apply(InputEvent::VoiceTranscriptDelta {
+            text: " stale".to_owned(),
+            generation,
+        }),
+        Vec::new()
+    );
+    assert_eq!(
+        state.apply(InputEvent::VoiceDone { generation }),
+        Vec::new()
+    );
+    assert_eq!(
+        state.apply(InputEvent::VoiceStopResolved {
+            generation,
+            error: Some("late failure".to_owned()),
+        }),
+        Vec::new()
+    );
+    assert_eq!(state.observe().text, "say: hello world");
+}
+
+#[test]
+fn empty_and_failed_transcriptions_recover_without_losing_the_prompt() {
+    let mut state = ChatInputState::new();
+    state.set_voice_enabled(true);
+    type_text(&mut state, "draft");
+
+    for error in [None, Some("Transcription failed".to_owned())] {
+        let failed = error.is_some();
+        state.apply(InputEvent::Key {
+            key: KeyName::Char,
+            char: Some('r'),
+            mods: vec![Modifier::Ctrl],
+        });
+        let generation = state.voice_generation();
+        state.apply(InputEvent::VoiceStartResolved {
+            generation,
+            error: None,
+        });
+        let effects = if failed {
+            state.apply(InputEvent::VoiceStopResolved { generation, error })
+        } else {
+            state.apply(InputEvent::VoiceDone { generation })
+        };
+        if failed {
+            assert!(matches!(effects.as_slice(), [InputEffect::Notify { .. }]));
+        } else {
+            assert_eq!(effects, Vec::new());
+        }
+        assert_eq!(state.voice_phase(), VoicePhase::Idle);
+        assert_eq!(state.observe().text, "draft");
+        assert_eq!(
+            state.apply(InputEvent::VoiceTranscriptDelta {
+                text: "late".to_owned(),
+                generation,
+            }),
+            Vec::new()
+        );
+        assert_eq!(state.observe().text, "draft");
+    }
+}
+
+#[test]
+fn one_thousand_out_of_order_voice_sequences_apply_no_stale_result() {
+    let mut seed = 0x4d59_5df4_d0f3_3173_u64;
+    for _ in 0..1_000 {
+        let mut state = ChatInputState::new();
+        state.set_voice_enabled(true);
+        type_text(&mut state, "draft");
+        state.apply(InputEvent::Key {
+            key: KeyName::Char,
+            char: Some('r'),
+            mods: vec![Modifier::Ctrl],
+        });
+        let stale_generation = state.voice_generation();
+        state.apply(InputEvent::Key {
+            key: KeyName::Char,
+            char: Some('c'),
+            mods: vec![Modifier::Ctrl],
+        });
+        state.apply(InputEvent::Key {
+            key: KeyName::Char,
+            char: Some('r'),
+            mods: vec![Modifier::Ctrl],
+        });
+        let current_generation = state.voice_generation();
+        state.apply(InputEvent::VoiceStartResolved {
+            generation: current_generation,
+            error: None,
+        });
+
+        for _ in 0..16 {
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            let event = match seed % 5 {
+                0 => InputEvent::VoiceTranscriptDelta {
+                    text: "stale".to_owned(),
+                    generation: stale_generation,
+                },
+                1 => InputEvent::VoiceDone {
+                    generation: stale_generation,
+                },
+                2 => InputEvent::VoicePeak {
+                    generation: stale_generation,
+                    level: 7,
+                },
+                3 => InputEvent::VoiceStartResolved {
+                    generation: stale_generation,
+                    error: Some("late start".to_owned()),
+                },
+                _ => InputEvent::VoiceStopResolved {
+                    generation: stale_generation,
+                    error: Some("late stop".to_owned()),
+                },
+            };
+            assert_eq!(state.apply(event), Vec::new());
+            assert_eq!(state.observe().text, "draft");
+            assert_eq!(state.voice_phase(), VoicePhase::Recording);
+            assert_eq!(state.voice_generation(), current_generation);
+        }
+    }
+}
+
+#[test]
+fn safety_switching_and_recording_are_observable_render_states() {
+    let mut state = ChatInputState::new();
+    state.set_agent_name("agent");
+    state.set_safety(Safety::Destructive);
+    let render = state.observe_render();
+    assert_eq!(render.border_classes, ["border-warning"]);
+    assert_eq!(render.border_title, " agent ");
+
+    state.apply(InputEvent::Switching { active: true });
+    let render = state.observe_render();
+    assert_eq!(render.prompt, None);
+    assert_eq!(render.wrap_width, 0);
+}

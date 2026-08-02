@@ -7,6 +7,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use nix::pty::{Winsize, openpty};
+use nix::sys::termios::{LocalFlags, tcgetattr};
 
 #[test]
 #[allow(clippy::unwrap_in_result)]
@@ -25,6 +26,8 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
     let mut master = File::from(pty.master);
     let mut reader = master.try_clone().expect("PTY reader clones");
     let slave = File::from(pty.slave);
+    let terminal_probe = slave.try_clone().expect("PTY probe clones");
+    let baseline_termios = tcgetattr(&terminal_probe).expect("PTY attributes read");
     let mut child = Command::new(env!("CARGO_BIN_EXE_vibe"))
         .current_dir(temporary.path())
         .arg("--trust")
@@ -153,6 +156,8 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
         );
         std::thread::sleep(Duration::from_millis(10));
     };
+    let restored_termios = tcgetattr(&terminal_probe).expect("restored PTY attributes read");
+    drop(terminal_probe);
     drop(master);
     let transcript = reader.join().expect("PTY reader joins");
 
@@ -179,5 +184,24 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
             .any(|window| window == b"\x1b[?25h"),
         "TUI did not restore cursor visibility"
     );
+    for (sequence, capability) in [
+        (b"\x1b[?1000l".as_slice(), "mouse capture"),
+        (b"\x1b[?2004l".as_slice(), "bracketed paste"),
+        (b"\x1b[?1004l".as_slice(), "focus reporting"),
+    ] {
+        assert!(
+            transcript
+                .windows(sequence.len())
+                .any(|window| window == sequence),
+            "TUI did not disable {capability}"
+        );
+    }
+    for flag in [LocalFlags::ICANON, LocalFlags::ECHO] {
+        assert_eq!(
+            restored_termios.local_flags.contains(flag),
+            baseline_termios.local_flags.contains(flag),
+            "TUI did not restore terminal flag {flag:?}"
+        );
+    }
     Ok(())
 }

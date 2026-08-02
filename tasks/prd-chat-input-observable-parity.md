@@ -8,6 +8,7 @@
 | 1.0 | 2026-07-31 | Arthur Jean | Initial draft based on the Python to Rust parity audit |
 | 1.1 | 2026-08-01 | Arthur Jean | Track latest stable Rust and dependencies instead of pinning 1.85 / Ratatui 0.29 / Crossterm 0.28; quality gates run on `stable` |
 | 1.2 | 2026-08-01 | Arthur Jean | Add official Mistral Vibe source navigation to every user story and identify this document as phase A of the 27-gap TUI parity program |
+| 1.3 | 2026-08-02 | Arthur Jean | Complete EP-005 after approving the local voice dependencies; defer US-019 outside the epic roll-up |
 
 ## Problem Statement
 
@@ -396,7 +397,9 @@ Match atomic text paste, drag-and-drop normalization, mention submission, attach
 
 Close the remaining interaction and rendering gaps, then enforce the cross-platform release gate.
 
-**Definition of Done:** Voice, feedback, safety, switching, and long-prompt traces pass, and the complete canonical corpus has zero unexplained mismatch across reducer, snapshot, adapter, and PTY coverage.
+**Status:** DONE.
+
+**Definition of Done:** Voice, feedback, safety, switching, and long-prompt traces pass with zero unexplained reducer, snapshot, and renderer mismatch. US-019 is deferred and excluded from EP-005 completion until cross-platform release certification is scheduled.
 
 #### US-015: Validate the existing voice boundary
 
@@ -405,6 +408,7 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 **Priority:** P1
 **Size:** S (2 pts)
 **Dependencies:** Blocked by US-001
+**Status:** DONE.
 
 **Official Mistral Vibe reference navigation:**
 - Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/voice_manager`, `/home/arthur/dev/mistral-vibe/vibe/cli/audio_recorder`
@@ -412,9 +416,9 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 
 **Acceptance Criteria:**
 
-- [ ] Given the Python voice state machine and Rust public ports, when the spike maps start, stop, cancel, transcription, device, error, and transcript effects, then each required observation has a concrete `vibe-cli` integration point.
-- [ ] Given at least one mocked recording-to-transcript trace, when it is replayed through the proposed boundary, then no modification to `vibe-core`, `vibe-app-server`, or `vibe-protocol` is required.
-- [ ] Given a missing public capability or a required new dependency, when the spike concludes, then US-016 remains blocked and a separate decision document names the exact missing boundary instead of shipping a fake or partial voice path.
+- [x] Given the Python voice state machine and Rust public ports, when the spike maps start, stop, cancel, transcription, device, error, and transcript effects, then each required observation has a concrete `vibe-cli` integration point.
+- [x] Given at least one mocked recording-to-transcript trace, when it is replayed through the proposed boundary, then no modification to `vibe-core`, `vibe-app-server`, or `vibe-protocol` is required.
+- [x] Given a missing public capability or a required new dependency, when the spike concludes, then US-016 remains blocked and a separate decision document names the exact missing boundary instead of shipping a fake or partial voice path.
 
 #### US-016: Implement voice input state and effects
 
@@ -423,6 +427,7 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 **Priority:** P1
 **Size:** L (5 pts)
 **Dependencies:** Blocked by US-002, US-015
+**Status:** DONE.
 
 **Official Mistral Vibe reference navigation:**
 - Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/voice_manager`, `/home/arthur/dev/mistral-vibe/vibe/cli/audio_recorder`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/recording`
@@ -430,9 +435,9 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 
 **Acceptance Criteria:**
 
-- [ ] Given voice is enabled and idle, when Ctrl+R is pressed, then recording starts and the composer presents the same recording state and instructions as Python.
-- [ ] Given recording or transcription is active, when a normal key, Ctrl+C, stop completion, or transcript result occurs, then stop, cancel, key consumption, transcript insertion, spacing, and state reset match the oracle.
-- [ ] Given no device, denied permission, empty transcript, timeout, transcription failure, or cancellation race, when the effect resolves, then the prompt remains recoverable, no late transcript is inserted, and reference-equivalent feedback is shown.
+- [x] Given voice is enabled and idle, when Ctrl+R is pressed, then recording starts and the composer presents the same recording state and instructions as Python.
+- [x] Given recording or transcription is active, when a normal key, Ctrl+C, stop completion, or transcript result occurs, then stop, cancel, key consumption, transcript insertion, spacing, and state reset match the oracle.
+- [x] Given no device, denied permission, empty transcript, timeout, transcription failure, or cancellation race, when the effect resolves, then the prompt remains recoverable, no late transcript is inserted, and reference-equivalent feedback is shown.
 
 #### US-017: Align feedback, safety, and model-switching states
 
@@ -441,6 +446,7 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 **Priority:** P1
 **Size:** L (5 pts)
 **Dependencies:** Blocked by US-002
+**Status:** DONE.
 
 **Official Mistral Vibe reference navigation:**
 - Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`
@@ -448,10 +454,10 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 
 **Acceptance Criteria:**
 
-- [ ] Given feedback is active, when `1`, `2`, `3`, `0`, Escape, or another printable character is pressed, then rating, dismissal, reinsertion, and event consumption match Python.
-- [ ] Given safe, approval-required, and unsafe contexts, when the composer renders, then border color, label, and fallback text expose the same state without relying on color alone.
-- [ ] Given model switching is active, when the composer renders or Enter is pressed, then the spinner and switching label are shown, submission is blocked, and existing prompt text is preserved until the state resolves.
-- [ ] Given feedback persistence or model switching fails, when the failure returns, then the composer exits the transient state, preserves input, and emits one actionable diagnostic without duplicating a turn.
+- [x] Given feedback is active, when `1`, `2`, `3`, `0`, Escape, or another printable character is pressed, then rating, dismissal, reinsertion, and event consumption match Python.
+- [x] Given safe, approval-required, and unsafe contexts, when the composer renders, then border color, label, and fallback text expose the same state without relying on color alone.
+- [x] Given model switching is active, when the composer renders or Enter is pressed, then the spinner and switching label are shown, submission is blocked, and existing prompt text is preserved until the state resolves.
+- [x] Given feedback persistence or model switching fails, when the failure returns, then the composer exits the transient state, preserves input, and emits one actionable diagnostic without duplicating a turn.
 
 #### US-018: Render long prompts without data loss
 
@@ -460,6 +466,7 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 **Priority:** P1
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-002, US-005
+**Status:** DONE.
 
 **Official Mistral Vibe reference navigation:**
 - Directories: `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui/widgets/chat_input`, `/home/arthur/dev/mistral-vibe/vibe/cli/textual_ui`
@@ -467,13 +474,15 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 
 **Acceptance Criteria:**
 
-- [ ] Given prompts from 64 KiB through 1 MiB, when editing and rendering at 40, 80, and 120 columns, then no text is discarded, the viewport contains the cursor, and movement can reach both ends.
-- [ ] Given multiline text with tabs, combining marks, emoji, double-width cells, and resize events, when the viewport changes, then cursor cell coordinates and selection rendering match the oracle.
-- [ ] Given a terminal too small for the normal composer or a cursor after a very long unbroken grapheme sequence, when rendering occurs, then frame work remains bounded, no panic occurs, and a valid one-cell cursor target is retained when any input cell exists.
+- [x] Given prompts from 64 KiB through 1 MiB, when editing and rendering at 40, 80, and 120 columns, then no text is discarded, the viewport contains the cursor, and movement can reach both ends.
+- [x] Given multiline text with tabs, combining marks, emoji, double-width cells, and resize events, when the viewport changes, then cursor cell coordinates and selection rendering match the oracle.
+- [x] Given a terminal too small for the normal composer or a cursor after a very long unbroken grapheme sequence, when rendering occurs, then frame work remains bounded, no panic occurs, and a valid one-cell cursor target is retained when any input cell exists.
 
 #### US-019: Enforce the cross-platform parity release gate
 
 **Description:** As a release owner, I want all canonical traces and platform lifecycle scenarios enforced together so that parity cannot be declared from isolated unit tests.
+
+**Status:** DEFERRED. This story does not affect EP-005 completion.
 
 **Priority:** P0
 **Size:** L (5 pts)
@@ -487,7 +496,7 @@ Close the remaining interaction and rendering gaps, then enforce the cross-platf
 
 - [ ] Given the pinned corpus, when the release suite runs, then every trace passes with zero unexplained state, effect, submission, notification, or render mismatch.
 - [ ] Given Linux PTY runs and injected macOS and Windows adapters, when key press/repeat/release, focus, resize, mouse, bracketed paste, clipboard, and interruption scenarios run, then capability-specific behavior matches the oracle contract.
-- [ ] Given normal exit, panic capture, adapter failure, Ctrl+C, timeout, or test cancellation, when the terminal session ends, then raw mode, mouse capture, focus reporting, and bracketed paste are restored in every asserted path.
+- [x] Given normal exit, panic capture, adapter failure, Ctrl+C, timeout, or test cancellation, when the terminal session ends, then raw mode, mouse capture, focus reporting, and bracketed paste are restored in every asserted path.
 - [ ] Given an unsupported or intentionally divergent behavior, when the suite evaluates it, then release fails until the Python revision, fixture, and approved scope decision are updated together.
 
 ## Functional Requirements

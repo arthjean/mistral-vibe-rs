@@ -58,3 +58,25 @@ fn secret_submission_never_enters_prompt_history() {
     assert_eq!(editor.submit().as_deref(), Some("ordinary prompt"));
     assert_eq!(editor.history, vec!["ordinary prompt"]);
 }
+
+#[test]
+fn syntax_counts_follow_edits_history_and_submission() {
+    let mut editor = PromptEditor::default();
+    editor.set_text("alpha/@~\"'");
+    assert!(editor.has_path_syntax());
+    assert!(editor.has_mention_syntax());
+
+    editor.select(5..10);
+    editor.delete_backward();
+    assert_eq!(editor.text(), "alpha");
+    assert!(!editor.has_path_syntax());
+    assert!(!editor.has_mention_syntax());
+
+    editor.replace_history(vec!["saved/@".to_owned()]);
+    assert!(editor.history_previous());
+    assert!(editor.has_path_syntax());
+    assert!(editor.has_mention_syntax());
+    assert_eq!(editor.submit().as_deref(), Some("saved/@"));
+    assert!(!editor.has_path_syntax());
+    assert!(!editor.has_mention_syntax());
+}

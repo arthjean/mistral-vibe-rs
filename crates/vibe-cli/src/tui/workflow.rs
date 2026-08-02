@@ -19,6 +19,7 @@ use super::pickers::{
 };
 use super::setup::ResolvedTheme;
 use super::state::{EntryStatus, TranscriptKind, TuiState};
+use super::switching::{self, SwitchRequest};
 use super::{
     ActiveTurn, Arguments, CliError, InteractiveRuntime, RuntimeSkill, adopt_hydrated_session,
     call_runtime, metadata_session_id, parse_runtime_skills, persist_user_setting,
@@ -163,6 +164,7 @@ pub(super) async fn dispatch_command(
                 }
                 refresh_server_banner_metrics(&mut runtime.service, &mut runtime.banner);
                 apply_render_preferences(runtime, state);
+                sync_voice_preference(runtime, composer);
                 push_local_notice(
                     state,
                     "Configuration reloaded (includes agent instructions and skills).",
@@ -224,10 +226,12 @@ pub(super) async fn dispatch_command(
         }
         CommandId::Settings if command_arguments.starts_with("set ") => {
             set_config_value(&command_arguments[4..], runtime, state);
+            sync_voice_preference(runtime, composer);
             Ok(CommandAction::Handled)
         }
         CommandId::Settings if command_arguments.starts_with("reset ") => {
             reset_config_value(&command_arguments[6..], runtime, state);
+            sync_voice_preference(runtime, composer);
             Ok(CommandAction::Handled)
         }
         CommandId::Clear => Ok(CommandAction::Runtime(RuntimeCommand::new(
@@ -502,7 +506,11 @@ fn invoked_skill<'a>(runtime: &'a InteractiveRuntime, input: &str) -> Option<&'a
     runtime.skills.get(&name)
 }
 
-pub(super) fn cycle_agent(runtime: &mut Option<InteractiveRuntime>, state: &mut TuiState) {
+pub(super) fn cycle_agent(
+    runtime: &mut Option<InteractiveRuntime>,
+    state: &mut TuiState,
+    composer: &mut ChatInputState,
+) {
     let Some(runtime) = runtime.as_mut() else {
         return;
     };
@@ -535,22 +543,8 @@ pub(super) fn cycle_agent(runtime: &mut Option<InteractiveRuntime>, state: &mut 
         .iter()
         .position(|agent| *agent == runtime.agent_name)
         .unwrap_or_default();
-    let next = agents[(current + 1) % agents.len()];
-    if call_runtime(
-        runtime,
-        "session/agent/update",
-        json!({"sessionId": runtime.session_id, "name": next}),
-        state,
-    )
-    .is_some()
-    {
-        sync_runtime_intent(runtime, Some(next));
-        push_local_notice(
-            state,
-            &format!("Switched to agent `{next}`"),
-            EntryStatus::Completed,
-        );
-    }
+    let next = agents[(current + 1) % agents.len()].to_owned();
+    switching::request(runtime, composer, state, SwitchRequest::Agent(next));
 }
 
 fn select_overlay_item(
@@ -599,25 +593,8 @@ fn select_overlay_item(
             }
         },
         OverlayKind::Model => {
-            if persist_user_setting(runtime, &["active_model"], json!(item.id), false, state) {
-                let model = item.id;
-                if call_runtime(
-                    runtime,
-                    "session/settings/update",
-                    json!({"sessionId": runtime.session_id, "model": model}),
-                    state,
-                )
-                .is_some()
-                {
-                    runtime.model = model;
-                    state.overlay = None;
-                    push_local_notice(
-                        state,
-                        "Model updated for this session and future sessions",
-                        EntryStatus::Completed,
-                    );
-                }
-            }
+            switching::request(runtime, composer, state, SwitchRequest::Model(item.id));
+            state.overlay = None;
         }
         OverlayKind::Thinking => {
             apply_thinking(runtime, &item.id, state);
@@ -662,6 +639,7 @@ fn select_overlay_item(
                 .and_then(|value| value.as_bool())
                 .unwrap_or(false);
             if persist_user_setting(runtime, &[&item.id], json!(!current), false, state) {
+                sync_voice_preference(runtime, composer);
                 show_voice(runtime, state);
             }
         }
@@ -712,6 +690,14 @@ fn select_overlay_item(
         | OverlayKind::Status
         | OverlayKind::DataRetention => {}
     }
+}
+
+fn sync_voice_preference(runtime: &mut InteractiveRuntime, composer: &mut ChatInputState) {
+    let enabled = configured_value(runtime, "voice_mode_enabled")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+    runtime.voice.set_enabled(enabled);
+    composer.set_voice_enabled(enabled);
 }
 
 fn reset_selected_config(runtime: &mut Option<InteractiveRuntime>, state: &mut TuiState) {

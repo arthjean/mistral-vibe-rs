@@ -14,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 base64.workspace = true
 clap.workspace = true
+cpal.workspace = true
 crossterm.workspace = true
 futures-util.workspace = true
 hex.workspace = true
@@ -26,6 +27,7 @@ shlex.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-tungstenite.workspace = true
 toml.workspace = true
 unicode-segmentation.workspace = true
 unicode-width.workspace = true

@@ -2,7 +2,8 @@ use std::io::{Stdout, Write};
 
 use crossterm::cursor::{Hide, Show};
 use crossterm::event::{
-    DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+    DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+    EnableFocusChange, EnableMouseCapture,
 };
 use crossterm::execute;
 use crossterm::terminal::{
@@ -16,15 +17,17 @@ pub enum TerminalStep {
     AlternateScreen,
     MouseCapture,
     BracketedPaste,
+    FocusReporting,
     CursorHidden,
 }
 
 impl TerminalStep {
-    const ENTER_ORDER: [Self; 5] = [
+    const ENTER_ORDER: [Self; 6] = [
         Self::RawMode,
         Self::AlternateScreen,
         Self::MouseCapture,
         Self::BracketedPaste,
+        Self::FocusReporting,
         Self::CursorHidden,
     ];
 }
@@ -64,6 +67,7 @@ where
             TerminalStep::AlternateScreen => execute!(self.writer, EnterAlternateScreen),
             TerminalStep::MouseCapture => execute!(self.writer, EnableMouseCapture),
             TerminalStep::BracketedPaste => execute!(self.writer, EnableBracketedPaste),
+            TerminalStep::FocusReporting => execute!(self.writer, EnableFocusChange),
             TerminalStep::CursorHidden => execute!(self.writer, Hide),
         };
         result.map_err(|error| error.to_string())
@@ -75,6 +79,7 @@ where
             TerminalStep::AlternateScreen => execute!(self.writer, LeaveAlternateScreen),
             TerminalStep::MouseCapture => execute!(self.writer, DisableMouseCapture),
             TerminalStep::BracketedPaste => execute!(self.writer, DisableBracketedPaste),
+            TerminalStep::FocusReporting => execute!(self.writer, DisableFocusChange),
             TerminalStep::CursorHidden => execute!(self.writer, Show),
         };
         result.map_err(|error| error.to_string())
@@ -195,6 +200,9 @@ pub enum ShutdownReason {
     Sigint,
     TerminalLoss,
     NestedError,
+    AdapterFailure,
+    Timeout,
+    TestCancellation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -319,6 +327,9 @@ mod tests {
             ShutdownReason::Sigint,
             ShutdownReason::TerminalLoss,
             ShutdownReason::NestedError,
+            ShutdownReason::AdapterFailure,
+            ShutdownReason::Timeout,
+            ShutdownReason::TestCancellation,
         ] {
             let (ops, transcript) = ops(None, None);
             {
@@ -326,11 +337,12 @@ mod tests {
                 let _ = reason;
             }
             let transcript = transcript.lock().expect("terminal transcript");
-            assert_eq!(transcript.len(), 10);
+            assert_eq!(transcript.len(), 12);
             assert_eq!(
-                &transcript[5..],
+                &transcript[6..],
                 &[
                     (false, TerminalStep::CursorHidden),
+                    (false, TerminalStep::FocusReporting),
                     (false, TerminalStep::BracketedPaste),
                     (false, TerminalStep::MouseCapture),
                     (false, TerminalStep::AlternateScreen),
@@ -368,7 +380,7 @@ mod tests {
         assert_eq!(error.failures.len(), 1);
         assert!(guard.is_restored());
         assert!(guard.restore().is_err());
-        assert_eq!(transcript.lock().expect("terminal transcript").len(), 10);
+        assert_eq!(transcript.lock().expect("terminal transcript").len(), 12);
     }
 
     #[test]
@@ -382,9 +394,9 @@ mod tests {
         drop(guard);
 
         let transcript = transcript.lock().expect("terminal transcript");
-        assert_eq!(transcript.len(), 20);
-        assert_eq!(&transcript[..5], &transcript[10..15]);
-        assert_eq!(&transcript[5..10], &transcript[15..20]);
+        assert_eq!(transcript.len(), 24);
+        assert_eq!(&transcript[..6], &transcript[12..18]);
+        assert_eq!(&transcript[6..12], &transcript[18..24]);
     }
 
     #[test]
@@ -395,7 +407,7 @@ mod tests {
             panic!("injected panic");
         });
         assert!(result.is_err());
-        assert_eq!(transcript.lock().expect("terminal transcript").len(), 10);
+        assert_eq!(transcript.lock().expect("terminal transcript").len(), 12);
     }
 
     #[test]

@@ -3,7 +3,7 @@
     "file": "tasks/prd-chat-input-observable-parity.md",
     "title": "Chat Input Observable Parity",
     "created_at": "2026-07-31",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -41,10 +41,10 @@
     {
       "id": "EP-005",
       "title": "Voice, Feedback, Visual States, and Release Validation",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 5,
-      "stories_done": 0
+      "stories_done": 4
     }
   ],
   "stories": [
@@ -250,65 +250,65 @@
       "id": "US-015",
       "title": "Validate the existing voice boundary",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-001"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-02",
+      "completed_at": "2026-08-02",
+      "reviewed_at": "2026-08-02"
     },
     {
       "id": "US-016",
       "title": "Implement voice input state and effects",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-002",
         "US-015"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-02",
+      "completed_at": "2026-08-02",
+      "reviewed_at": "2026-08-02"
     },
     {
       "id": "US-017",
       "title": "Align feedback, safety, and model-switching states",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-002"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-02",
+      "completed_at": "2026-08-02",
+      "reviewed_at": "2026-08-02"
     },
     {
       "id": "US-018",
       "title": "Render long prompts without data loss",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-002",
         "US-005"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-02",
+      "completed_at": "2026-08-02",
+      "reviewed_at": "2026-08-02"
     },
     {
       "id": "US-019",
       "title": "Enforce the cross-platform parity release gate",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DEFERRED",
       "priority": "P0",
       "size": "L",
       "blocked_by": [

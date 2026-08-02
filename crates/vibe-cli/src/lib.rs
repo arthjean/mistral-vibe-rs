@@ -14,7 +14,7 @@ pub mod tui;
 
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use clap::{ArgAction, Parser, ValueEnum};
 use secrecy::SecretString;
@@ -29,9 +29,10 @@ use vibe_app_server::client::{
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
 use vibe_core::telemetry::{
-    ReqwestTelemetryTransport, TelemetryClient, TelemetryConfig, TelemetryEventObserver,
-    TelemetryMetadata,
+    ReqwestTelemetryTransport, TelemetryAttributes, TelemetryClient, TelemetryConfig,
+    TelemetryEnvelope, TelemetryEvent, TelemetryEventObserver, TelemetryField, TelemetryMetadata,
 };
+use vibe_core::{engine::EventObserver, events::EventEnvelope};
 
 pub const ADAPTER_NAME: &str = "vibe-cli";
 
@@ -523,7 +524,87 @@ pub enum CliError {
     Driver(#[from] vibe_app_server::client::DriverError),
 }
 
-pub(crate) type CliTelemetryObserver = TelemetryEventObserver<ReqwestTelemetryTransport>;
+pub(crate) struct CliTelemetryObserver {
+    events: TelemetryEventObserver<ReqwestTelemetryTransport>,
+    feedback: Arc<TelemetryClient<ReqwestTelemetryTransport>>,
+    metadata: TelemetryMetadata,
+    pending_feedback: Mutex<Vec<tokio::task::JoinHandle<()>>>,
+}
+
+impl CliTelemetryObserver {
+    fn new(
+        event_config: TelemetryConfig,
+        feedback_config: TelemetryConfig,
+        transport: ReqwestTelemetryTransport,
+        metadata: TelemetryMetadata,
+    ) -> Self {
+        let feedback = Arc::new(TelemetryClient::new(feedback_config, transport.clone()));
+        Self {
+            events: TelemetryEventObserver::new(
+                TelemetryClient::new(event_config, transport),
+                metadata.clone(),
+            ),
+            feedback,
+            metadata,
+            pending_feedback: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Queues best-effort telemetry after validating the complete envelope.
+    /// Delivery errors follow the same intentionally silent policy as engine
+    /// telemetry and all queued work is joined by [`Self::flush`].
+    pub(crate) fn enqueue_feedback(&self, rating: u8, model: &str) -> Result<(), String> {
+        let envelope = feedback_envelope(rating, model, self.metadata.clone())?;
+        let client = Arc::clone(&self.feedback);
+        let task = tokio::spawn(async move {
+            let _ = client.record(&envelope).await;
+        });
+        if let Ok(mut pending) = self.pending_feedback.lock() {
+            pending.retain(|task| !task.is_finished());
+            pending.push(task);
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn flush(&self) {
+        self.events.flush().await;
+        let pending = self
+            .pending_feedback
+            .lock()
+            .map(|mut pending| std::mem::take(&mut *pending))
+            .unwrap_or_default();
+        for task in pending {
+            let _ = task.await;
+        }
+    }
+}
+
+impl EventObserver for CliTelemetryObserver {
+    fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
+        self.events.observe(event)
+    }
+}
+
+fn feedback_envelope(
+    rating: u8,
+    model: &str,
+    metadata: TelemetryMetadata,
+) -> Result<TelemetryEnvelope, String> {
+    let mut attributes = TelemetryAttributes::default();
+    attributes
+        .count(TelemetryField::Rating, u64::from(rating))
+        .label(TelemetryField::Version, env!("CARGO_PKG_VERSION"))
+        .map_err(|error| error.to_string())?
+        .label(TelemetryField::Model, model)
+        .map_err(|error| error.to_string())?;
+    TelemetryEnvelope::new(
+        TelemetryEvent::FeedbackSubmitted,
+        metadata,
+        attributes,
+        None,
+    )
+    .map_err(|error| error.to_string())
+}
 
 pub(crate) fn telemetry_event_observer(
     arguments: &Arguments,
@@ -535,12 +616,11 @@ pub(crate) fn telemetry_event_observer(
     }
     let api_base =
         Url::parse(&arguments.api_base).map_err(|error| CliError::Telemetry(error.to_string()))?;
-    let config = TelemetryConfig::new(
-        true,
-        &api_base,
-        Some(SecretString::from(credential.to_owned())),
-    )
-    .map_err(|error| CliError::Telemetry(error.to_string()))?;
+    let credential = SecretString::from(credential.to_owned());
+    let event_config = TelemetryConfig::new(true, &api_base, Some(credential.clone()))
+        .map_err(|error| CliError::Telemetry(error.to_string()))?;
+    let feedback_config = TelemetryConfig::new(true, &api_base, Some(credential))
+        .map_err(|error| CliError::Telemetry(error.to_string()))?;
     let transport = ReqwestTelemetryTransport::try_new()
         .map_err(|error| CliError::Telemetry(error.to_string()))?;
     let metadata = TelemetryMetadata::new(
@@ -549,8 +629,10 @@ pub(crate) fn telemetry_event_observer(
         entrypoint,
     )
     .map_err(|error| CliError::Telemetry(error.to_string()))?;
-    Ok(Some(Arc::new(TelemetryEventObserver::new(
-        TelemetryClient::new(config, transport),
+    Ok(Some(Arc::new(CliTelemetryObserver::new(
+        event_config,
+        feedback_config,
+        transport,
         metadata,
     ))))
 }
@@ -665,6 +747,26 @@ mod tests {
             telemetry_event_observer(&enabled, "credential", "cli")
                 .expect("enabled telemetry")
                 .is_some()
+        );
+    }
+
+    #[test]
+    fn feedback_telemetry_keeps_the_numeric_rating_version_and_model() {
+        let metadata =
+            TelemetryMetadata::new("2.23.1", "linux-x86_64", "tui").expect("safe metadata");
+        let envelope =
+            feedback_envelope(3, "mistral-medium-3.5", metadata).expect("feedback envelope");
+        let value = serde_json::to_value(envelope).expect("telemetry JSON");
+
+        assert_eq!(value["event"], "vibe.user_rating_feedback");
+        assert_eq!(value["properties"]["attributes"]["rating"], 3);
+        assert_eq!(
+            value["properties"]["attributes"]["version"],
+            env!("CARGO_PKG_VERSION")
+        );
+        assert_eq!(
+            value["properties"]["attributes"]["model"],
+            "mistral-medium-3.5"
         );
     }
 

@@ -22,17 +22,14 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use vibe_cli::tui::attachments::{PromptDraft, normalize_pasted_text, prepare_submission};
-use vibe_cli::tui::chat_input::{ChatInputState, InputEffect, InputEvent};
+use vibe_cli::tui::chat_input::{ChatInputState, InputEffect, InputEvent, Safety};
 use vibe_cli::tui::commands::CommandContext;
 use vibe_cli::tui::completion::CompletionRequest;
 
 const SCHEMA_VERSION: u32 = 1;
 const MAX_EFFECT_ROUNDS: usize = 8;
 /// Recorded in the corpus but not compared yet, with the story that closes it.
-const DEFERRED_DIMENSIONS: &[(&str, &str)] = &[(
-    "render",
-    "US-018 closes non-composer viewport rendering after EP-002",
-)];
+const DEFERRED_DIMENSIONS: &[(&str, &str)] = &[];
 /// Placeholder the oracle substitutes for the recording workspace path.
 const WORKSPACE_PLACEHOLDER: &str = "__WORKSPACE__";
 /// Fields the reference records inside `state` that Rust does not model yet.
@@ -336,6 +333,7 @@ impl Divergence {
 struct Replay {
     state: ChatInputState,
     workspace: PathBuf,
+    voice_start_error: Option<String>,
 }
 
 struct StepObservation {
@@ -386,6 +384,36 @@ impl Replay {
                 .iter()
                 .map(|(command, description)| (command.as_str(), description.as_str())),
         );
+        state.set_agent_name(
+            setup
+                .get("agentName")
+                .and_then(Value::as_str)
+                .unwrap_or_default(),
+        );
+        state.set_safety(
+            setup
+                .get("safety")
+                .cloned()
+                .map(serde_json::from_value::<Safety>)
+                .transpose()
+                .map_err(|error| format!("safety setup is invalid: {error}"))?
+                .unwrap_or(Safety::Neutral),
+        );
+        state.set_voice_enabled(
+            setup
+                .pointer("/voice/enabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        );
+        if let Some(active) = setup
+            .pointer("/initial/feedbackActive")
+            .and_then(Value::as_bool)
+        {
+            state.apply(InputEvent::Feedback { active });
+        }
+        if let Some(active) = setup.pointer("/initial/switching").and_then(Value::as_bool) {
+            state.apply(InputEvent::Switching { active });
+        }
         let history = setup_history(setup);
         if !history.is_empty() {
             let contents = history
@@ -397,7 +425,15 @@ impl Replay {
                 .map_err(|error| format!("history workspace fixture: {error}"))?;
         }
         state.replace_history(history);
-        Ok(Self { state, workspace })
+        let voice_start_error = setup
+            .pointer("/voice/startError")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        Ok(Self {
+            state,
+            workspace,
+            voice_start_error,
+        })
     }
 
     /// Applies one trace event and settles every effect it triggers.
@@ -449,6 +485,12 @@ impl Replay {
                                 text: normalized,
                             });
                         }
+                    }
+                    InputEffect::RecordingStartRequested => {
+                        follow_up.push(InputEvent::VoiceStartResolved {
+                            generation: self.state.voice_generation(),
+                            error: self.voice_start_error.clone(),
+                        });
                     }
                     _ => {}
                 }
@@ -578,13 +620,6 @@ fn is_ep002_story(trace: &Map<String, Value>) -> bool {
     )
 }
 
-fn is_ep003_story(trace: &Map<String, Value>) -> bool {
-    matches!(
-        trace.get("story").and_then(Value::as_str),
-        Some("US-008" | "US-009" | "US-010" | "US-011")
-    )
-}
-
 fn composer_render_projection(render: &Value) -> Value {
     let mut projection = Map::new();
     for field in ["cursorCell", "prompt", "visualLines", "wrapWidth"] {
@@ -593,6 +628,25 @@ fn composer_render_projection(render: &Value) -> Value {
         }
     }
     Value::Object(projection)
+}
+
+fn normalize_workspace_render(render: &mut Value, workspace: &Path) {
+    let workspace = workspace.to_string_lossy();
+    let Some(render) = render.as_object_mut() else {
+        return;
+    };
+    let Some(lines) = render.get("visualLines").and_then(Value::as_array) else {
+        return;
+    };
+    let text = lines.iter().filter_map(Value::as_str).collect::<String>();
+    if !text.contains(workspace.as_ref()) {
+        return;
+    }
+    // Fixture paths are replaced after recording, so their host-dependent
+    // length can change wrapping and cursor columns. Keep content and chrome
+    // assertions exact while excluding only those derived path coordinates.
+    render.insert("visualLines".to_owned(), json!([text]));
+    render.remove("cursorCell");
 }
 
 /// Rewrites the recorded workspace placeholder to this run's temporary path.
@@ -894,29 +948,21 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
                 }
             }
 
-            if is_ep002_story(object)
-                && let Some(expected_render) = observation.get("render")
-            {
-                let expected_render = composer_render_projection(expected_render);
-                let actual_render = serde_json::to_value(replay.state.observe_render())
+            if let Some(expected_render) = observation.get("render") {
+                let mut actual_render = serde_json::to_value(replay.state.observe_render())
                     .map_err(|error| format!("render observation does not serialize: {error}"))?;
-                let actual_render = composer_render_projection(&actual_render);
+                let mut expected_render = if is_ep002_story(object) {
+                    actual_render = composer_render_projection(&actual_render);
+                    composer_render_projection(expected_render)
+                } else {
+                    expected_render.clone()
+                };
+                normalize_workspace_render(&mut expected_render, &replay.workspace);
+                normalize_workspace_render(&mut actual_render, &replay.workspace);
                 observed.entry("render").or_insert(None);
                 if observed.get("render").is_none_or(Option::is_none)
                     && let Some(divergence) =
                         compare("render", Some(index), &expected_render, &actual_render)
-                {
-                    observed.insert("render", Some(divergence));
-                }
-            } else if is_ep003_story(object)
-                && let Some(expected_render) = observation.get("render")
-            {
-                let actual_render = serde_json::to_value(replay.state.observe_render())
-                    .map_err(|error| format!("render observation does not serialize: {error}"))?;
-                observed.entry("render").or_insert(None);
-                if observed.get("render").is_none_or(Option::is_none)
-                    && let Some(divergence) =
-                        compare("render", Some(index), expected_render, &actual_render)
                 {
                     observed.insert("render", Some(divergence));
                 }

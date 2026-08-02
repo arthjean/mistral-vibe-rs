@@ -11,9 +11,10 @@ use unicode_width::UnicodeWidthStr;
 mod completion_popup;
 mod markdown;
 
-use super::chat_input::InputMode;
+use super::chat_input::{InputMode, Safety, VoicePhase};
 use super::completion::CompletionEngine;
-use super::input::{PromptEditor, composer_content_width, visual_cursor_cell, visual_lines};
+use super::composer_layout::{CHROME_HEIGHT, ComposerLayout, PROMPT_WIDTH};
+use super::input::{PromptEditor, VisualLayout};
 use super::setup::{ResolvedTheme, Theme};
 use super::state::{EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
 use markdown::markdown_lines;
@@ -21,9 +22,6 @@ use markdown::markdown_lines;
 pub const MAX_RENDER_CHARS: usize = 64 * 1024;
 pub const MAX_RENDER_LINE_CHARS: usize = 4 * 1024;
 const MAX_RENDER_LINES: usize = 4 * 1024;
-const COMPOSER_MIN_BODY_HEIGHT: u16 = 3;
-const COMPOSER_CHROME_HEIGHT: u16 = 2;
-const COMPOSER_PROMPT_WIDTH: u16 = 2;
 const MISTRAL_ORANGE: Color = Color::Rgb(255, 130, 5);
 const PETIT_CHAT: [&str; 3] = ["  ⡠⣒⠄  ⡔⢄⠔⡄", " ⢸⠸⣀⡔⢉⠱⣃⡢⣂⡣", "  ⠉⠒⠣⠤⠵⠤⠬⠮⠆"];
 
@@ -53,6 +51,11 @@ pub struct UiContext<'a> {
     pub cwd: &'a Path,
     pub agent_name: &'a str,
     pub secret_input: bool,
+    pub safety: Safety,
+    pub switching: bool,
+    pub feedback_active: bool,
+    pub voice_phase: VoicePhase,
+    pub voice_indicator: u8,
     pub banner: BannerContext<'a>,
     pub tokens: TokenState,
 }
@@ -83,7 +86,13 @@ pub fn draw(
 ) {
     let requested_completion_height = completion_popup::requested_height(completion);
     let activity_height = u16::from(activity_text(state).is_some());
-    let input_height = composer_height(editor, frame.area(), context.secret_input, input_mode);
+    let composer = ComposerLayout::for_viewport(
+        editor,
+        frame.area().width,
+        frame.area().height,
+        input_mode.prefix_len(),
+    );
+    let input_height = composer.input_height();
     let completion_height = requested_completion_height.min(
         frame
             .area()
@@ -109,7 +118,9 @@ pub fn draw(
     draw_transcript(frame, transcript_area, state, theme, context.banner);
     draw_activity(frame, activity_area, state, theme);
     completion_popup::draw(frame, completion_area, completion, theme);
-    draw_input(frame, input_area, editor, input_mode, theme, context);
+    draw_input(
+        frame, input_area, editor, input_mode, theme, context, &composer,
+    );
     draw_footer(frame, footer_area, context.cwd, context.tokens, theme);
     if let Some(overlay) = &state.overlay {
         draw_overlay(frame, overlay, theme);
@@ -205,29 +216,6 @@ fn draw_overlay(
             .wrap(Wrap { trim: false }),
         area,
     );
-}
-
-fn composer_height(
-    editor: &PromptEditor,
-    area: Rect,
-    secret_input: bool,
-    input_mode: InputMode,
-) -> u16 {
-    let input_width = composer_content_width(area.width);
-    let body_height = editor_visual_height(editor, secret_input, input_mode, input_width)
-        .max(COMPOSER_MIN_BODY_HEIGHT)
-        .min(area.height.saturating_div(2).max(COMPOSER_MIN_BODY_HEIGHT));
-    body_height.saturating_add(COMPOSER_CHROME_HEIGHT)
-}
-
-fn editor_visual_height(
-    editor: &PromptEditor,
-    _secret_input: bool,
-    input_mode: InputMode,
-    width: usize,
-) -> u16 {
-    let rows = visual_lines(editor.text(), width.max(1), input_mode.prefix_len()).len();
-    u16::try_from(rows).unwrap_or(u16::MAX)
 }
 
 fn draw_transcript(
@@ -498,11 +486,15 @@ fn draw_input(
     input_mode: InputMode,
     theme: ResolvedTheme,
     context: UiContext<'_>,
+    composer: &ComposerLayout,
 ) {
-    let input_width = composer_content_width(area.width);
-    let text = editor_text(editor, context.secret_input, input_mode, input_width);
+    let input_width = composer.width();
     let title = if context.secret_input {
         " API key (stored in native keyring) "
+    } else if context.switching {
+        " Switching "
+    } else if context.feedback_active {
+        " Rate response: 1-3, 0 later, Esc dismisses "
     } else if context.agent_name.is_empty() {
         ""
     } else {
@@ -510,7 +502,11 @@ fn draw_input(
     };
     let block = Block::default()
         .borders(Borders::TOP | Borders::BOTTOM)
-        .border_style(muted_style(theme))
+        .border_style(composer_border_style(
+            theme,
+            context.safety,
+            context.voice_phase,
+        ))
         .title_style(muted_style(theme))
         .title_alignment(Alignment::Right)
         .title(title);
@@ -519,34 +515,69 @@ fn draw_input(
         area.x,
         area.y.saturating_add(1),
         area.width,
-        area.height.saturating_sub(COMPOSER_CHROME_HEIGHT),
+        area.height.saturating_sub(CHROME_HEIGHT),
     );
     let [prompt_area, input_area, _trailing_area] = Layout::horizontal([
-        Constraint::Length(COMPOSER_PROMPT_WIDTH),
+        Constraint::Length(PROMPT_WIDTH),
         Constraint::Length(u16::try_from(input_width).unwrap_or(u16::MAX)),
         Constraint::Min(0),
     ])
     .areas(body);
-    let (cursor_row, cursor_column) = editor_cursor(editor, input_mode, input_width);
-    let scroll = cursor_row.saturating_sub(input_area.height.saturating_sub(1));
+    let text = editor_text(
+        editor,
+        context.secret_input,
+        composer.visual(),
+        composer.scroll(),
+        usize::from(input_area.height),
+    );
+    const PEAK_BLOCKS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    const FILL_BLOCKS: [char; 8] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
+    let indicator = usize::from(context.voice_indicator.min(7));
+    let prompt = if context.voice_phase == VoicePhase::Transcribing {
+        FILL_BLOCKS[indicator]
+    } else if context.voice_phase.is_active() {
+        PEAK_BLOCKS[indicator]
+    } else if context.switching {
+        '⠋'
+    } else {
+        input_mode.symbol()
+    };
     frame.render_widget(
-        Paragraph::new(input_mode.symbol().to_string()).style(orange_style(theme)),
+        Paragraph::new(prompt.to_string()).style(orange_style(theme)),
         prompt_area,
     );
-    frame.render_widget(
-        Paragraph::new(text)
-            .style(base_style(theme))
-            .scroll((scroll, 0)),
-        input_area,
-    );
-    frame.set_cursor_position((
-        input_area
-            .x
-            .saturating_add(cursor_column.min(input_area.width.saturating_sub(1))),
-        input_area
-            .y
-            .saturating_add(cursor_row.saturating_sub(scroll)),
-    ));
+    let input_style = if context.voice_phase.is_active() {
+        muted_style(theme)
+    } else {
+        base_style(theme)
+    };
+    frame.render_widget(Paragraph::new(text).style(input_style), input_area);
+    if input_area.width > 0 && input_area.height > 0 {
+        frame.set_cursor_position((
+            input_area.x.saturating_add(
+                u16::try_from(composer.cursor_column())
+                    .unwrap_or(u16::MAX)
+                    .min(input_area.width.saturating_sub(1)),
+            ),
+            input_area.y.saturating_add(
+                u16::try_from(composer.cursor_row().saturating_sub(composer.scroll()))
+                    .unwrap_or(u16::MAX)
+                    .min(input_area.height.saturating_sub(1)),
+            ),
+        ));
+    }
+}
+
+fn composer_border_style(theme: ResolvedTheme, safety: Safety, voice: VoicePhase) -> Style {
+    if voice.is_active() {
+        return orange_style(theme);
+    }
+    match safety {
+        Safety::Neutral => muted_style(theme),
+        Safety::Safe => success_style(theme),
+        Safety::Destructive => warning_style(theme),
+        Safety::Yolo => error_style(theme),
+    }
 }
 
 /// Maps an absolute terminal coordinate into the scrolled editor body.
@@ -555,21 +586,23 @@ fn draw_input(
 pub(crate) fn editor_mouse_cell(
     editor: &PromptEditor,
     screen: Rect,
-    secret_input: bool,
+    _secret_input: bool,
     input_mode: InputMode,
     x: u16,
     y: u16,
-) -> Option<(usize, usize, usize)> {
-    let input_height = composer_height(editor, screen, secret_input, input_mode);
+) -> Option<(usize, usize)> {
+    let composer =
+        ComposerLayout::for_viewport(editor, screen.width, screen.height, input_mode.prefix_len());
+    let input_height = composer.input_height();
     let input_y = screen
         .y
         .saturating_add(screen.height)
         .saturating_sub(1)
         .saturating_sub(input_height);
     let body_y = input_y.saturating_add(1);
-    let body_height = input_height.saturating_sub(COMPOSER_CHROME_HEIGHT);
-    let input_x = screen.x.saturating_add(COMPOSER_PROMPT_WIDTH);
-    let input_width = u16::try_from(composer_content_width(screen.width)).unwrap_or(u16::MAX);
+    let body_height = composer.body_height();
+    let input_x = screen.x.saturating_add(PROMPT_WIDTH);
+    let input_width = u16::try_from(composer.width()).unwrap_or(u16::MAX);
     if x < input_x
         || x >= input_x.saturating_add(input_width)
         || y < body_y
@@ -577,41 +610,36 @@ pub(crate) fn editor_mouse_cell(
     {
         return None;
     }
-    let (cursor_row, _) = editor_cursor(editor, input_mode, usize::from(input_width));
-    let scroll = cursor_row.saturating_sub(body_height.saturating_sub(1));
     Some((
-        usize::from(y.saturating_sub(body_y).saturating_add(scroll)),
+        usize::from(y.saturating_sub(body_y)).saturating_add(composer.scroll()),
         usize::from(x.saturating_sub(input_x)),
-        usize::from(input_width),
     ))
 }
 
 fn editor_text(
     editor: &PromptEditor,
     secret_input: bool,
-    input_mode: InputMode,
-    width: usize,
+    layout: &VisualLayout,
+    scroll: usize,
+    height: usize,
 ) -> Text<'static> {
-    let prefix = input_mode.prefix_len();
     let selection = editor.selection();
-    let graphemes = editor.text().graphemes(true).collect::<Vec<_>>();
-    let ranges = visual_lines(editor.text(), width.max(1), prefix);
-    let mut lines = Vec::with_capacity(ranges.len());
-    let mut rendered = 0usize;
-    for range in ranges {
+    let mut lines = Vec::with_capacity(height);
+    for range in layout.lines().iter().skip(scroll).take(height) {
         let mut line = Vec::new();
-        for index in range {
-            if rendered >= MAX_RENDER_CHARS {
-                line.push(Span::raw("…"));
-                break;
-            }
-            let grapheme = graphemes[index];
+        let mut column = 0usize;
+        for index in range.clone() {
+            let grapheme = layout.grapheme(editor.text(), index);
             let visible = if secret_input {
                 "•".to_owned()
+            } else if grapheme == "\t" {
+                " ".repeat(4 - (column % 4))
+            } else if grapheme.chars().all(char::is_control) {
+                String::new()
             } else {
                 sanitize_inline(grapheme)
             };
-            rendered = rendered.saturating_add(visible.chars().count());
+            column = column.saturating_add(UnicodeWidthStr::width(visible.as_str()));
             let selected = selection
                 .as_ref()
                 .is_some_and(|selection| selection.contains(&index));
@@ -622,24 +650,8 @@ fn editor_text(
             });
         }
         lines.push(line);
-        if rendered >= MAX_RENDER_CHARS {
-            break;
-        }
     }
     Text::from(lines.into_iter().map(Line::from).collect::<Vec<_>>())
-}
-
-fn editor_cursor(editor: &PromptEditor, input_mode: InputMode, width: usize) -> (u16, u16) {
-    let (row, column) = visual_cursor_cell(
-        editor.text(),
-        editor.cursor(),
-        width,
-        input_mode.prefix_len(),
-    );
-    (
-        u16::try_from(row).unwrap_or(u16::MAX),
-        u16::try_from(column).unwrap_or(u16::MAX),
-    )
 }
 
 fn semantic_lines(entry: &TranscriptEntry, width: u16, theme: ResolvedTheme) -> Vec<Line<'static>> {
@@ -780,7 +792,7 @@ fn user_message_lines(
     } else {
         Modifier::empty()
     });
-    let max_width = usize::from(width.saturating_sub(COMPOSER_PROMPT_WIDTH).max(1));
+    let max_width = usize::from(width.saturating_sub(PROMPT_WIDTH).max(1));
     let mut lines = vec![Line::default()];
     for (index, wrapped_line) in wrapped_terminal_lines(content, max_width)
         .into_iter()
@@ -1045,6 +1057,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::tui::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName};
     use crate::tui::state::{EntryStatus, TranscriptEntry, TranscriptKind};
 
     fn theme(colors_enabled: bool) -> ResolvedTheme {
@@ -1059,6 +1072,11 @@ mod tests {
             cwd: Path::new("/workspace"),
             agent_name: " default ",
             secret_input,
+            safety: Safety::Neutral,
+            switching: false,
+            feedback_active: false,
+            voice_phase: VoicePhase::Disabled,
+            voice_indicator: 0,
             banner: BannerContext {
                 version: env!("CARGO_PKG_VERSION"),
                 model: "mistral-medium-3.5",
@@ -1131,6 +1149,38 @@ mod tests {
         let rendered = sanitize_terminal(&input, RenderLimits::default());
         assert!(rendered.chars().count() < MAX_RENDER_CHARS + 100);
         assert_eq!(truncate_width("abc e\u{301}z", 5), "abc …");
+    }
+
+    #[test]
+    fn active_feedback_has_keyboard_visible_instructions() {
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut state = TuiState::new("session");
+        state.ready = true;
+        let editor = PromptEditor::default();
+        let mut context = test_context(false);
+        context.feedback_active = true;
+        terminal
+            .draw(|frame| {
+                draw(
+                    frame,
+                    &mut state,
+                    &editor,
+                    &CompletionEngine::default(),
+                    InputMode::Prompt,
+                    theme(false),
+                    context,
+                );
+            })
+            .expect("feedback frame");
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains("Rate response: 1-3, 0 later, Esc dismisses"));
     }
 
     #[test]
@@ -1279,6 +1329,72 @@ mod tests {
                 .bg,
             Color::Reset
         );
+    }
+
+    #[test]
+    fn voice_chrome_matches_recording_and_flushing_states() {
+        let backend = TestBackend::new(84, 30);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut state = TuiState::new("session");
+        let mut editor = PromptEditor::default();
+        editor.set_text("draft");
+        let completion = CompletionEngine::default();
+        let mut context = test_context(false);
+        context.voice_phase = VoicePhase::Recording;
+        context.voice_indicator = 7;
+
+        terminal
+            .draw(|frame| {
+                draw(
+                    frame,
+                    &mut state,
+                    &editor,
+                    &completion,
+                    InputMode::Prompt,
+                    theme(true),
+                    context,
+                );
+            })
+            .expect("recording composer renders");
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains(" default "));
+        assert!(rendered.contains('█'));
+        assert!(!rendered.contains("Recording:"));
+        assert_eq!(
+            composer_border_style(theme(true), Safety::Neutral, VoicePhase::Recording),
+            orange_style(theme(true))
+        );
+
+        context.voice_phase = VoicePhase::Transcribing;
+        context.voice_indicator = 3;
+        terminal
+            .draw(|frame| {
+                draw(
+                    frame,
+                    &mut state,
+                    &editor,
+                    &completion,
+                    InputMode::Prompt,
+                    theme(true),
+                    context,
+                );
+            })
+            .expect("flushing composer renders");
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains('▌'));
+        assert!(!rendered.contains("Transcribing:"));
     }
 
     #[test]
@@ -1481,12 +1597,9 @@ mod tests {
                 })
                 .expect("mode composer renders");
 
-            let input_height = composer_height(
-                &editor,
-                Rect::new(0, 0, width, 12),
-                false,
-                InputMode::Command,
-            );
+            let input_height =
+                ComposerLayout::for_viewport(&editor, width, 12, InputMode::Command.prefix_len())
+                    .input_height();
             let body_y = 12_u16.saturating_sub(input_height);
             let buffer = terminal.backend().buffer();
             assert_eq!(
@@ -1514,7 +1627,7 @@ mod tests {
         let body_y = 5;
         assert_eq!(
             editor_mouse_cell(&editor, screen, false, InputMode::Prompt, 4, body_y),
-            Some((0, 2, 31))
+            Some((0, 2))
         );
         assert_eq!(
             editor_mouse_cell(&editor, screen, false, InputMode::Prompt, 1, body_y),
@@ -1522,6 +1635,37 @@ mod tests {
         );
         assert_eq!(
             editor_mouse_cell(&editor, screen, false, InputMode::Prompt, 4, 0),
+            None
+        );
+
+        editor.set_text("word ".repeat(200));
+        let composer = ComposerLayout::for_viewport(
+            &editor,
+            screen.width,
+            screen.height,
+            InputMode::Prompt.prefix_len(),
+        );
+        let body_y = screen
+            .height
+            .saturating_sub(1)
+            .saturating_sub(composer.input_height())
+            .saturating_add(1);
+        assert!(composer.scroll() > 0);
+        assert_eq!(
+            editor_mouse_cell(&editor, screen, false, InputMode::Prompt, 4, body_y),
+            Some((composer.scroll(), 2))
+        );
+        assert_eq!(
+            editor_mouse_cell(
+                &editor,
+                screen,
+                false,
+                InputMode::Prompt,
+                PROMPT_WIDTH.saturating_add(
+                    u16::try_from(composer.width()).expect("composer width fits terminal")
+                ),
+                body_y,
+            ),
             None
         );
     }
@@ -1623,5 +1767,116 @@ mod tests {
             .collect::<String>();
         assert!(scrolled.contains("line-one"));
         assert!(!scrolled.contains("line-seven"));
+    }
+
+    #[test]
+    fn one_mebibyte_prompt_keeps_both_ends_and_cursor_visible_at_reference_widths() {
+        let text = format!("HEAD{}TAIL", "a".repeat(1024 * 1024 - 8));
+        for width in [40, 80, 120] {
+            let backend = TestBackend::new(width, 24);
+            let mut terminal = Terminal::new(backend).expect("test terminal");
+            let mut state = TuiState::new("session");
+            let mut editor = PromptEditor::default();
+            editor.set_text(&text);
+
+            terminal
+                .draw(|frame| draw_test(frame, &mut state, &editor, false))
+                .expect("tail viewport renders");
+            let tail = terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect::<String>();
+            assert!(tail.contains("TAIL"), "tail missing at {width} columns");
+            let cursor = terminal
+                .get_cursor_position()
+                .expect("tail cursor remains visible");
+            assert!(cursor.x < width && cursor.y < 24);
+
+            editor.move_home(false);
+            terminal
+                .draw(|frame| draw_test(frame, &mut state, &editor, false))
+                .expect("head viewport renders");
+            let head = terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect::<String>();
+            assert!(head.contains("HEAD"), "head missing at {width} columns");
+        }
+    }
+
+    #[test]
+    fn one_mebibyte_prompt_edit_and_cached_frames_stay_within_release_budgets() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut state = TuiState::new("session");
+        let mut input = ChatInputState::default();
+        input.replace_text("a".repeat(1024 * 1024));
+        terminal
+            .draw(|frame| draw_test(frame, &mut state, input.editor(), false))
+            .expect("layout cache warms");
+
+        let edit_started = std::time::Instant::now();
+        let effects = input.apply(InputEvent::Key {
+            key: KeyName::Char,
+            char: Some('z'),
+            mods: Vec::new(),
+        });
+        assert_eq!(effects, vec![InputEffect::HistoryReset]);
+        terminal
+            .draw(|frame| draw_test(frame, &mut state, input.editor(), false))
+            .expect("edited prompt renders");
+        let edit_frame = edit_started.elapsed();
+        assert!(
+            edit_frame < std::time::Duration::from_millis(50),
+            "1 MiB edit-and-render frame took {edit_frame:?}"
+        );
+        assert!(
+            terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .any(|cell| cell.symbol() == "z"),
+            "edited tail is not visible"
+        );
+
+        let mut frames = Vec::with_capacity(200);
+        for _ in 0..200 {
+            let started = std::time::Instant::now();
+            terminal
+                .draw(|frame| draw_test(frame, &mut state, input.editor(), false))
+                .expect("cached frame renders");
+            frames.push(started.elapsed());
+        }
+        frames.sort_unstable();
+        let p95 = frames[189];
+        assert!(
+            p95 < std::time::Duration::from_millis(50),
+            "1 MiB cached-frame p95 was {p95:?}"
+        );
+    }
+
+    #[test]
+    fn tiny_terminals_keep_long_unbroken_prompts_bounded() {
+        let mut editor = PromptEditor::default();
+        editor.set_text("界".repeat(4096));
+        for (width, height) in [(1, 1), (2, 2), (9, 3)] {
+            let backend = TestBackend::new(width, height);
+            let mut terminal = Terminal::new(backend).expect("tiny terminal");
+            let mut state = TuiState::new("session");
+            terminal
+                .draw(|frame| draw_test(frame, &mut state, &editor, false))
+                .expect("tiny prompt frame");
+            let cursor = terminal
+                .get_cursor_position()
+                .expect("tiny terminal cursor");
+            assert!(cursor.x < width && cursor.y < height);
+        }
     }
 }

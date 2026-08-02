@@ -21,12 +21,12 @@
     },
     "clipboard-implicit-empty-paste": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "clipboard-whitespace-paste": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "commands-excluded": {
@@ -71,17 +71,17 @@
     },
     "dnd-absolute-image": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "dnd-escaped-image": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "dnd-text-path-untouched": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "external-editor-refreshes-completion": {
@@ -100,19 +100,19 @@
       "state": "parity"
     },
     "feedback-other-character": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "feedback-rating-keys": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "feedback-snooze-key": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "history-down-restores-draft": {
       "effects": "parity",
@@ -170,48 +170,48 @@
     },
     "long-prompt-resize": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "long-prompt-unicode": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "long-prompt-viewport-40": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "long-prompt-viewport-80": {
       "effects": "parity",
-      "render": "deferred",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "mention-directory-submission": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "mention-external-path-submission": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "mention-image-payload-submission": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity",
       "submission": "parity"
     },
     "mention-missing-path-submission": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "mention-text-file-submission": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "mode-backspace-keeps-text": {
@@ -266,27 +266,27 @@
     },
     "paste-control-characters": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "paste-empty-triggers-clipboard": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "paste-large-payload": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "paste-mode-characters": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "paste-multiline-atomic": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "path-accept-directory": {
@@ -351,12 +351,12 @@
     },
     "safety-destructive-chrome": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "safety-transition": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "slash-no-match": {
@@ -436,12 +436,12 @@
     },
     "switching-blocks-submission": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "switching-resolves": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "unicode-combining-backspace": {
@@ -475,33 +475,33 @@
       "state": "parity"
     },
     "voice-ctrl-c-cancels": {
-      "effects": "gap",
-      "render": "deferred",
+      "effects": "parity",
+      "render": "parity",
       "state": "parity"
     },
     "voice-disabled-ignores-key": {
       "effects": "parity",
-      "render": "deferred",
+      "render": "parity",
       "state": "parity"
     },
     "voice-key-stops-recording": {
-      "effects": "gap",
-      "render": "deferred",
-      "state": "gap"
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
     },
     "voice-start-failure": {
-      "effects": "gap",
-      "render": "deferred",
+      "effects": "parity",
+      "render": "parity",
       "state": "parity"
     },
     "voice-start-recording": {
-      "effects": "gap",
-      "render": "deferred",
+      "effects": "parity",
+      "render": "parity",
       "state": "parity"
     },
     "voice-transcript-insertion": {
-      "effects": "gap",
-      "render": "deferred",
+      "effects": "parity",
+      "render": "parity",
       "state": "parity"
     }
   },
