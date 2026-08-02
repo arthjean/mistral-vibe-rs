@@ -246,9 +246,9 @@ Make approvals, questions, plan review, queued intent, shell streaming, interrup
 
 **Acceptance Criteria:**
 
-- [ ] Given an approval callback, when it becomes active, then tool-specific command, arguments or diff, permission labels, and one-time, session, permanent, and deny choices match Python.
-- [ ] Given a choice after the grace period, when submitted, then session, turn, callback, permission scope, and retry identities are preserved and exactly one response is sent.
-- [ ] Given early input, Escape, duplicate or stale callback, response rejection, or resync, when handled, then approval fails closed and the wrong turn or permission policy is never mutated.
+- [x] Given an approval callback, when it becomes active, then tool-specific command, arguments or diff, permission labels, and one-time, session, permanent, and deny choices match Python.
+- [x] Given a choice after the grace period, when submitted, then session, turn, callback, permission scope, and retry identities are preserved and exactly one response is sent.
+- [x] Given early input, Escape, duplicate or stale callback, response rejection, or resync, when handled, then approval fails closed and the wrong turn or permission policy is never mutated.
 
 #### US-025: Implement structured questions and FIFO callback ownership
 
@@ -263,9 +263,9 @@ Make approvals, questions, plan review, queued intent, shell streaming, interrup
 
 **Acceptance Criteria:**
 
-- [ ] Given callbacks arriving in any identifier order, when overlays are scheduled, then one callback is active at a time and pending callbacks activate FIFO by arrival.
-- [ ] Given one or multiple questions, when answered, then tabs, cursor restoration, single-select, multi-select, Other text, shortcuts, ordered payload, and cancellation match Python.
-- [ ] Given active composer typing, empty required Other text, incomplete selection, grace-period input, stale callback, or server failure, when handled, then no ordinary prompt or partial answer is emitted as a callback response.
+- [x] Given callbacks arriving in any identifier order, when overlays are scheduled, then one callback is active at a time and pending callbacks activate FIFO by arrival.
+- [x] Given one or multiple questions, when answered, then tabs, cursor restoration, single-select, multi-select, Other text, shortcuts, ordered payload, and cancellation match Python.
+- [x] Given active composer typing, empty required Other text, incomplete selection, grace-period input, stale callback, or server failure, when handled, then no ordinary prompt or partial answer is emitted as a callback response.
 
 #### US-026: Preserve live plan-review state and editor actions
 
@@ -280,9 +280,9 @@ Make approvals, questions, plan review, queued intent, shell streaming, interrup
 
 **Acceptance Criteria:**
 
-- [ ] Given `PlanReviewStarted` with a file path, when reduced, then the active plan path and current contents remain visible and file changes refresh the review state without starting another turn.
-- [ ] Given the external-editor shortcut or a review choice, when activated, then editor and callback effects preserve plan and callback identity and settle once.
-- [ ] Given a missing file, watcher failure, editor failure, stale end event, or cancellation, when handled, then no obsolete plan is approved and the composer returns to a recoverable state.
+- [x] Given `PlanReviewStarted` with a file path, when reduced, then the active plan path and current contents remain visible and file changes refresh the review state without starting another turn.
+- [x] Given the external-editor shortcut or a review choice, when activated, then editor and callback effects preserve plan and callback identity and settle once.
+- [x] Given a missing file, watcher failure, editor failure, stale end event, or cancellation, when handled, then no obsolete plan is approved and the composer returns to a recoverable state.
 
 #### US-027: Match typed queue, grouping, presentation, and command gating
 
@@ -297,9 +297,9 @@ Make approvals, questions, plan review, queued intent, shell streaming, interrup
 
 **Acceptance Criteria:**
 
-- [ ] Given busy agent or shell work, when prompts, prepared prompts, images, skills, or shell commands are submitted, then typed items and visible pending rows append FIFO with the reference queue header and content.
-- [ ] Given the runtime becomes eligible, when drainage starts, then one owner groups consecutive prompts into the reference turn, preserves shell boundaries and IDs, and continues in FIFO order.
-- [ ] Given slash or Teleport input while busy, pause, pop-last, unsupported images, callback activity, cancellation, shutdown, or injection failure, when handled, then execution, rejection, retention, or requeue behavior matches Python without duplication or loss.
+- [x] Given busy agent or shell work, when prompts, prepared prompts, images, skills, or shell commands are submitted, then typed items and visible pending rows append FIFO with the reference queue header and content.
+- [x] Given the runtime becomes eligible, when drainage starts, then one owner groups consecutive prompts into the reference turn, preserves shell boundaries and IDs, and continues in FIFO order.
+- [x] Given slash or Teleport input while busy, pause, pop-last, unsupported images, callback activity, cancellation, shutdown, or injection failure, when handled, then execution, rejection, retention, or requeue behavior matches Python without duplication or loss.
 
 #### US-028: Finalize cancellation and stream local shell output
 
@@ -314,9 +314,9 @@ Make approvals, questions, plan review, queued intent, shell streaming, interrup
 
 **Acceptance Criteria:**
 
-- [ ] Given a running local shell command, when output chunks arrive, then stdout and stderr update the same transcript entry before process termination and remain scrollable.
-- [ ] Given active agent, shell, callback, plan, or queue work, when cancellation occurs, then only the highest-priority identity receives one cancel effect and final state includes the reference interrupted or cancelled marker.
-- [ ] Given duplicate cancel, late stream patch, rejection, disconnect, process kill failure, or shutdown, when handled, then stale effects cannot revive work, queued intent is preserved where eligible, and terminal modes remain valid.
+- [x] Given a running local shell command, when output chunks arrive, then stdout and stderr update the same transcript entry before process termination and remain scrollable.
+- [x] Given active agent, shell, callback, plan, or queue work, when cancellation occurs, then only the highest-priority identity receives one cancel effect and final state includes the reference interrupted or cancelled marker.
+- [x] Given duplicate cancel, late stream patch, rejection, disconnect, process kill failure, or shutdown, when handled, then stale effects cannot revive work, queued intent is preserved where eligible, and terminal modes remain valid.
 
 ---
 
