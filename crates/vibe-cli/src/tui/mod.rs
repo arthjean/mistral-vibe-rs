@@ -19,6 +19,7 @@ pub mod render;
 pub mod setup;
 mod shell;
 mod shortcuts;
+pub mod startup;
 pub mod state;
 mod switching;
 pub mod terminal;
@@ -46,7 +47,7 @@ use vibe_app_server::client::{
     PublicCallbackState, PublicContentBlock, PublicDispatch, PublicHistoryEntry, PublicMessageRole,
     PublicTurnOutcome, SessionOptions, TurnDriver, TurnReservation,
 };
-use vibe_app_server::release3::{Release3Paths, Release3Service};
+use vibe_app_server::release3::Release3Service;
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
 
@@ -196,18 +197,78 @@ impl Default for BannerMetrics {
 }
 
 #[derive(Default)]
-struct CloudWorkflowState {
-    picker_id: Option<String>,
-    project_id: Option<String>,
-    teleport_operation_id: Option<String>,
+enum CloudWorkflowState {
+    #[default]
+    Idle,
+    ConfiguringProject {
+        picker_id: String,
+    },
+    SelectingTeleportProject {
+        picker_id: String,
+        prompt: Option<String>,
+    },
+    Teleporting {
+        operation_id: String,
+    },
 }
 
-pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
+impl CloudWorkflowState {
+    fn picker_id(&self) -> Option<&str> {
+        match self {
+            Self::ConfiguringProject { picker_id }
+            | Self::SelectingTeleportProject { picker_id, .. } => Some(picker_id),
+            Self::Idle | Self::Teleporting { .. } => None,
+        }
+    }
+
+    fn teleport_operation_id(&self) -> Option<&str> {
+        match self {
+            Self::Teleporting { operation_id } => Some(operation_id),
+            Self::Idle
+            | Self::ConfiguringProject { .. }
+            | Self::SelectingTeleportProject { .. } => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InteractiveExit {
+    pub session_started: bool,
+}
+
+pub async fn run_interactive(
+    invocation: startup::InteractiveInvocation,
+) -> Result<InteractiveExit, CliError> {
+    let startup::InteractiveInvocation {
+        mut arguments,
+        post_mount_action,
+        ..
+    } = invocation;
     validate_arguments(&arguments)?;
     let working_directory = match &arguments.workdir {
         Some(path) => path.clone(),
         None => std::env::current_dir().map_err(CliError::CurrentDirectory)?,
     };
+    let startup_host = startup::startup_host(&arguments, &working_directory);
+    let trust = startup::resolve_workspace_trust(&mut arguments, &startup_host)?;
+    if trust.cancelled {
+        return Ok(InteractiveExit {
+            session_started: false,
+        });
+    }
+    match startup::resolve_bare_resume(&arguments, &startup_host)? {
+        startup::ResumeResolution::Unchanged => {}
+        startup::ResumeResolution::StartNew => arguments.resume = None,
+        startup::ResumeResolution::Resume(session_id) => {
+            arguments.resume = Some(session_id);
+            arguments.continue_session = false;
+        }
+        startup::ResumeResolution::Abort => {
+            return Ok(InteractiveExit {
+                session_started: false,
+            });
+        }
+    }
     let credential_store = NativeCredentialStore::new("mistral-vibe-rs");
     let (initial_credential, keyring_error) = if arguments.setup {
         (None, None)
@@ -223,13 +284,19 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
             },
         }
     };
-    let mut runtime = initial_credential
-        .map(|credential| start_runtime(&arguments, &working_directory, credential))
-        .transpose()?;
-    let fallback_banner = runtime.as_ref().map_or_else(
-        || local_banner_metrics(&arguments, &working_directory),
-        |runtime| runtime.banner.clone(),
-    );
+    let release3 = startup_host
+        .into_release3(arguments.trust)
+        .map_err(startup::StartupError::from)?;
+    let fallback_banner = banner_metrics_from_release3(&release3, &arguments, &working_directory);
+    let mut runtime = match initial_credential {
+        Some(credential) => Some(start_runtime(
+            &arguments,
+            &working_directory,
+            release3,
+            credential,
+        )?),
+        None => None,
+    };
     let session_id = runtime
         .as_ref()
         .map_or_else(|| "setup".to_owned(), |runtime| runtime.session_id.clone());
@@ -241,6 +308,9 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
             state
         }
     };
+    if let Some(warning) = trust.dangerous_warning {
+        push_local_notice(&mut state, &warning, EntryStatus::Completed);
+    }
     if let Some(error) = keyring_error {
         state.push_diagnostic(format!(
             "Native credential lookup failed: {error}. Restart with --setup after repairing keyring access"
@@ -263,7 +333,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
         sync_active_callbacks(runtime, &mut state, &mut controls);
     }
     let (mut prompt_history, history_load) = PromptHistory::open(
-        vibe_home_directory(&arguments, &working_directory).join("vibehistory"),
+        startup::vibe_home_directory(&arguments, &working_directory).join("vibehistory"),
     );
     let mut input = ChatInputState::new();
     input.set_voice_enabled(
@@ -313,10 +383,14 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     let mut clipboard_images = ClipboardImageManager::default();
     let mut path_normalization = PathNormalizationManager::new().map_err(CliError::Terminal)?;
     let mut deferred_enter = None;
+    let mut session_started = runtime.is_some();
+    let mut mounted_startup = startup::MountedStartup::new(post_mount_action);
+    state.waiting |= runtime.is_some();
 
     let event_loop = async {
         let mut exit = false;
         while !exit {
+            session_started |= runtime.is_some();
             if let Some(runtime) = runtime.as_mut() {
                 while let Some(event) = runtime.voice.try_next_event() {
                     apply_composer_event(
@@ -439,6 +513,17 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                     );
                 })
                 .map_err(|error| CliError::Terminal(error.to_string()))?;
+            startup::complete_mounted_startup(
+                &mut mounted_startup,
+                &working_directory,
+                &mut runtime,
+                &mut active,
+                &mut state,
+                &mut controls,
+                &mut input,
+                &mut clipboard_images,
+            )
+            .await?;
             tokio::select! {
                 signal = tokio::signal::ctrl_c() => {
                     signal.map_err(|error| CliError::Terminal(error.to_string()))?;
@@ -461,6 +546,12 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
                 }
                 event = events.next(), if deferred_enter.is_none() => {
                     match event {
+                        Some(Ok(Event::Key(key))) if mounted_startup.is_fatal()
+                            && matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) =>
+                        {
+                            exit = true;
+                        }
+                        Some(Ok(_)) if mounted_startup.is_fatal() => {}
                         Some(Ok(event)) => {
                             exit = handle_terminal_event(
                                 event,
@@ -626,7 +717,7 @@ pub async fn run_interactive(arguments: Arguments) -> Result<(), CliError> {
     if let Some(telemetry) = telemetry {
         telemetry.flush().await;
     }
-    result
+    result.map(|()| InteractiveExit { session_started })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1228,7 +1319,13 @@ async fn handle_key(
                         configured.provider_style = setup_completion.resources.provider.clone();
                         configured.model = setup_completion.resources.model.clone();
                         configured.trust = setup_completion.resources.workspace_trusted;
-                        *runtime = Some(start_runtime(&configured, working_directory, credential)?);
+                        let release3 = release3_service(&configured, working_directory)?;
+                        *runtime = Some(start_runtime(
+                            &configured,
+                            working_directory,
+                            release3,
+                            credential,
+                        )?);
                         if let Some(runtime) = runtime.as_ref() {
                             input.set_voice_enabled(runtime.voice.enabled());
                             input.set_teleport_available(teleport_available(Some(runtime)));
@@ -2197,11 +2294,16 @@ async fn handle_project_command(
             )
             .await
             {
-                runtime.cloud.picker_id = result
+                let picker_id = result
                     .result
                     .get("pickerId")
                     .and_then(Value::as_str)
                     .map(ToOwned::to_owned);
+                let Some(picker_id) = picker_id else {
+                    state.push_diagnostic("Remote project picker omitted its identity");
+                    return;
+                };
+                runtime.cloud = CloudWorkflowState::ConfiguringProject { picker_id };
                 push_json_notice(
                     state,
                     "Remote projects",
@@ -2213,7 +2315,7 @@ async fn handle_project_command(
             }
         }
         ["select", project_id] => {
-            let Some(picker_id) = runtime.cloud.picker_id.clone() else {
+            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
                 state.push_diagnostic("Open the remote project picker first");
                 return;
             };
@@ -2230,16 +2332,23 @@ async fn handle_project_command(
             .await
             .is_some()
             {
-                runtime.cloud.project_id = Some((*project_id).to_owned());
                 push_local_notice(
                     state,
                     &format!("Selected remote project `{project_id}`"),
                     EntryStatus::Completed,
                 );
+                complete_project_selection(
+                    picker_id,
+                    (*project_id).to_owned(),
+                    working_directory,
+                    runtime,
+                    state,
+                )
+                .await;
             }
         }
         ["more"] => {
-            let Some(picker_id) = runtime.cloud.picker_id.clone() else {
+            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
                 state.push_diagnostic("Open the remote project picker first");
                 return;
             };
@@ -2262,7 +2371,7 @@ async fn handle_project_command(
             }
         }
         ["create", name] | ["create", name, _] => {
-            let Some(picker_id) = runtime.cloud.picker_id.clone() else {
+            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
                 state.push_diagnostic("Open the remote project picker first");
                 return;
             };
@@ -2280,7 +2389,7 @@ async fn handle_project_command(
             )
             .await
             {
-                runtime.cloud.project_id = result
+                let project_id = result
                     .result
                     .get("project")
                     .and_then(|project| project.get("projectId"))
@@ -2291,10 +2400,22 @@ async fn handle_project_command(
                     "Remote project created",
                     result.result.get("project"),
                 );
+                let Some(project_id) = project_id else {
+                    state.push_diagnostic("Created remote project omitted its identity");
+                    return;
+                };
+                complete_project_selection(
+                    picker_id,
+                    project_id,
+                    working_directory,
+                    runtime,
+                    state,
+                )
+                .await;
             }
         }
         ["unlink"] | ["cancel"] => {
-            let Some(picker_id) = runtime.cloud.picker_id.clone() else {
+            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
                 state.push_diagnostic("No remote project picker is active");
                 return;
             };
@@ -2312,10 +2433,7 @@ async fn handle_project_command(
             .await
             .is_some()
             {
-                runtime.cloud.project_id = None;
-                if method.ends_with("cancel") {
-                    runtime.cloud.picker_id = None;
-                }
+                runtime.cloud = CloudWorkflowState::Idle;
                 push_local_notice(
                     state,
                     "Remote project selection cleared",
@@ -2339,7 +2457,8 @@ async fn handle_teleport_command(
     if let Some(action) = arguments.first()
         && matches!(*action, "approve" | "deny" | "cancel")
     {
-        let Some(operation_id) = runtime.cloud.teleport_operation_id.clone() else {
+        let Some(operation_id) = runtime.cloud.teleport_operation_id().map(ToOwned::to_owned)
+        else {
             state.push_diagnostic("No Teleport operation is active");
             return;
         };
@@ -2364,20 +2483,113 @@ async fn handle_teleport_command(
         let _ = call_runtime_async(runtime, method, params, state).await;
         return;
     }
-    let (Some(picker_id), Some(project_id)) = (
-        runtime.cloud.picker_id.clone(),
-        runtime.cloud.project_id.clone(),
-    ) else {
-        state.push_diagnostic("Select a remote project before starting Teleport");
+    let prompt = (!arguments.is_empty()).then(|| arguments.join(" "));
+    start_teleport(prompt.as_deref(), working_directory, runtime, state).await;
+}
+
+async fn start_teleport(
+    prompt: Option<&str>,
+    working_directory: &Path,
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+) {
+    runtime.cloud = CloudWorkflowState::Idle;
+    let Some(result) = call_runtime_async(
+        runtime,
+        "vibeCode/projects/open",
+        json!({
+            "sessionId": runtime.session_id,
+            "workingDirectory": working_directory,
+            "purpose": "teleport",
+            "prompt": prompt,
+        }),
+        state,
+    )
+    .await
+    else {
+        state.push_diagnostic("Teleport project resolution failed");
         return;
     };
+    let picker_id = result
+        .result
+        .get("pickerId")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    let Some(picker_id) = picker_id else {
+        state.push_diagnostic("Teleport project picker omitted its identity");
+        return;
+    };
+    let project_id = result
+        .result
+        .get("resolvedProjectId")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    let Some(project_id) = project_id else {
+        runtime.cloud = CloudWorkflowState::SelectingTeleportProject {
+            picker_id,
+            prompt: prompt.map(ToOwned::to_owned),
+        };
+        push_json_notice(
+            state,
+            "Select a remote project for Teleport",
+            result
+                .result
+                .get("view")
+                .and_then(|view| view.pointer("/state/projects")),
+        );
+        return;
+    };
+    begin_teleport(
+        picker_id,
+        project_id,
+        prompt,
+        working_directory,
+        runtime,
+        state,
+    )
+    .await;
+}
+
+async fn complete_project_selection(
+    picker_id: String,
+    project_id: String,
+    working_directory: &Path,
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+) {
+    match std::mem::take(&mut runtime.cloud) {
+        CloudWorkflowState::SelectingTeleportProject { prompt, .. } => {
+            begin_teleport(
+                picker_id,
+                project_id,
+                prompt.as_deref(),
+                working_directory,
+                runtime,
+                state,
+            )
+            .await;
+        }
+        CloudWorkflowState::ConfiguringProject { .. } => {}
+        CloudWorkflowState::Idle | CloudWorkflowState::Teleporting { .. } => {
+            state.push_diagnostic("Remote project selection completed without an active picker");
+        }
+    }
+}
+
+async fn begin_teleport(
+    picker_id: String,
+    project_id: String,
+    prompt: Option<&str>,
+    working_directory: &Path,
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+) {
     let operation_id = format!(
         "teleport-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |duration| duration.as_millis())
     );
-    let prompt = arguments.join(" ");
     if call_runtime_async(
         runtime,
         "vibeCode/teleport/start",
@@ -2394,7 +2606,7 @@ async fn handle_teleport_command(
     .await
     .is_some()
     {
-        runtime.cloud.teleport_operation_id = Some(operation_id);
+        runtime.cloud = CloudWorkflowState::Teleporting { operation_id };
     }
 }
 
@@ -2769,10 +2981,10 @@ fn tui_state_from_public_session(
 fn start_runtime(
     arguments: &Arguments,
     working_directory: &Path,
+    release3: Release3Service,
     credential: String,
 ) -> Result<InteractiveRuntime, CliError> {
     let voice_credential = credential.clone();
-    let release3 = release3_service(arguments, working_directory)?;
     let mut banner = banner_metrics_from_release3(&release3, arguments, working_directory);
     let skills = runtime_skills(&release3);
     let preferences = startup_preferences(arguments, &release3)?;
@@ -2917,13 +3129,6 @@ fn parse_runtime_skills(skills: Option<&Value>) -> BTreeMap<String, RuntimeSkill
         .collect()
 }
 
-fn local_banner_metrics(arguments: &Arguments, working_directory: &Path) -> BannerMetrics {
-    release3_service(arguments, working_directory).map_or_else(
-        |_| BannerMetrics::default(),
-        |release3| banner_metrics_from_release3(&release3, arguments, working_directory),
-    )
-}
-
 fn banner_metrics_from_release3(
     release3: &Release3Service,
     arguments: &Arguments,
@@ -3004,37 +3209,13 @@ fn release3_service(
     arguments: &Arguments,
     working_directory: &Path,
 ) -> Result<Release3Service, CliError> {
-    let vibe_home = vibe_home_directory(arguments, working_directory);
-    let session_root = arguments
-        .session_root
-        .clone()
-        .unwrap_or_else(|| vibe_home.join("sessions"));
     Release3Service::new(
-        Release3Paths {
-            vibe_home,
-            working_directory: working_directory.to_path_buf(),
-            session_root,
-        },
+        startup::release3_paths(arguments, working_directory),
         toml::Table::new(),
         arguments.trust,
     )
     .map(Release3Service::with_runtime_session_persistence)
     .map_err(|error| CliError::Terminal(error.to_string()))
-}
-
-fn vibe_home_directory(arguments: &Arguments, working_directory: &Path) -> std::path::PathBuf {
-    arguments
-        .session_root
-        .as_deref()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .or_else(|| std::env::var_os("VIBE_HOME").map(Into::into))
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(std::path::PathBuf::from)
-                .map(|path| path.join(".vibe"))
-        })
-        .unwrap_or_else(|| working_directory.join(".vibe"))
 }
 
 fn startup_preferences(

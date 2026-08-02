@@ -375,6 +375,15 @@ fn production_server(arguments: &Arguments) -> Result<AppServer, CliError> {
 }
 
 fn validate_arguments(arguments: &Arguments) -> Result<(), CliError> {
+    if arguments
+        .prompt
+        .as_deref()
+        .is_some_and(|prompt| prompt.trim().is_empty())
+    {
+        return Err(CliError::InvalidArguments(
+            "No prompt provided for programmatic mode".to_owned(),
+        ));
+    }
     if arguments.resume.as_deref() == Some("") && arguments.prompt.is_some() {
         return Err(CliError::InvalidArguments(
             "--resume requires a session ID in programmatic mode".to_owned(),
@@ -514,6 +523,8 @@ pub enum CliError {
     Teleport(String),
     #[error("terminal UI failed: {0}")]
     Terminal(String),
+    #[error(transparent)]
+    Startup(#[from] tui::startup::StartupError),
     #[error("telemetry setup failed: {0}")]
     Telemetry(String),
     #[error(transparent)]
@@ -522,6 +533,42 @@ pub enum CliError {
     Client(#[from] ClientError),
     #[error(transparent)]
     Driver(#[from] vibe_app_server::client::DriverError),
+}
+
+#[cfg(test)]
+pub(crate) fn arguments_for_test() -> Arguments {
+    Arguments {
+        initial_prompt: None,
+        version: None,
+        prompt: None,
+        output: OutputMode::Text,
+        resume: None,
+        continue_session: false,
+        workdir: None,
+        add_directories: Vec::new(),
+        trust: false,
+        agent: None,
+        enabled_tools: Vec::new(),
+        disabled_tools: Vec::new(),
+        tool_filters: Vec::new(),
+        max_turns: None,
+        max_tokens: None,
+        max_price: None,
+        auto_approve: false,
+        setup: false,
+        check_upgrade: false,
+        telemetry: false,
+        worktree: None,
+        teleport: false,
+        provider_style: "mistral".to_owned(),
+        model: "mistral-medium-3.5".to_owned(),
+        input_price: 1.5,
+        output_price: 7.5,
+        api_base: "https://api.mistral.ai/v1/chat/completions".to_owned(),
+        credential_environment: "MISTRAL_API_KEY".to_owned(),
+        session_root: None,
+        fake_response: None,
+    }
 }
 
 pub(crate) struct CliTelemetryObserver {
@@ -731,6 +778,17 @@ mod tests {
         assert!(parsed.version.is_none());
         assert!(parsed.initial_prompt.is_none());
         assert!(parsed.prompt.is_none());
+    }
+
+    #[test]
+    fn empty_programmatic_prompt_is_rejected() {
+        let mut arguments = arguments(OutputMode::Text);
+        arguments.prompt = Some("  ".to_owned());
+        assert!(matches!(
+            validate_arguments(&arguments),
+            Err(CliError::InvalidArguments(message))
+                if message == "No prompt provided for programmatic mode"
+        ));
     }
 
     #[test]

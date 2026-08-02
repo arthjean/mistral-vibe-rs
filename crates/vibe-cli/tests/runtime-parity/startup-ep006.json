@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "version": "2.23.2",
+    "sourceFiles": [
+      "vibe/cli/cli.py",
+      "vibe/cli/entrypoint.py",
+      "vibe/cli/textual_ui/app.py",
+      "vibe/cli/textual_ui/startup.py",
+      "vibe/core/trusted_folders.py",
+      "vibe/core/worktree.py"
+    ]
+  },
+  "traces": [
+    {
+      "id": "trust-before-session-initialization",
+      "story": "US-020",
+      "referenceCommit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+      "arguments": {
+        "initialPrompt": null,
+        "prompt": null,
+        "resume": null,
+        "continueSession": false,
+        "worktree": null,
+        "teleport": false
+      },
+      "expected": {
+        "route": "interactive",
+        "postMountAction": null
+      }
+    },
+    {
+      "id": "worktree-before-trust-and-session",
+      "story": "US-021",
+      "referenceCommit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+      "arguments": {
+        "initialPrompt": "inspect the checkout",
+        "prompt": null,
+        "resume": null,
+        "continueSession": false,
+        "worktree": "review",
+        "teleport": false
+      },
+      "expected": {
+        "route": "interactive",
+        "postMountAction": {
+          "type": "prompt",
+          "prompt": "inspect the checkout"
+        }
+      }
+    },
+    {
+      "id": "positional-prompt-after-mount",
+      "story": "US-022",
+      "referenceCommit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+      "arguments": {
+        "initialPrompt": "explain this repository",
+        "prompt": null,
+        "resume": null,
+        "continueSession": false,
+        "worktree": null,
+        "teleport": false
+      },
+      "expected": {
+        "route": "interactive",
+        "postMountAction": {
+          "type": "prompt",
+          "prompt": "explain this repository"
+        }
+      }
+    },
+    {
+      "id": "stdin-prompt-after-mount",
+      "story": "US-022",
+      "referenceCommit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+      "arguments": {
+        "initialPrompt": "piped request",
+        "prompt": null,
+        "resume": null,
+        "continueSession": false,
+        "worktree": null,
+        "teleport": false
+      },
+      "expected": {
+        "route": "interactive",
+        "postMountAction": {
+          "type": "prompt",
+          "prompt": "piped request"
+        }
+      }
+    },
+    {
+      "id": "explicit-programmatic-prompt",
+      "story": "US-022",
+      "referenceCommit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+      "arguments": {
+        "initialPrompt": null,
+        "prompt": "headless request",
+        "resume": null,
+        "continueSession": false,
+        "worktree": null,
+        "teleport": false
+      },
+      "expected": {
+        "route": "programmatic",
+        "postMountAction": null
+      }
+    },
+    {
+      "id": "teleport-after-mount-without-prompt",
+      "story": "US-022",
+      "referenceCommit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+      "arguments": {
+        "initialPrompt": null,
+        "prompt": null,
+        "resume": null,
+        "continueSession": false,
+        "worktree": null,
+        "teleport": true
+      },
+      "expected": {
+        "route": "interactive",
+        "postMountAction": {
+          "type": "teleport",
+          "prompt": null
+        }
+      }
+    },
+    {
+      "id": "teleport-after-mount-without-agent-turn",
+      "story": "US-022",
+      "referenceCommit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+      "arguments": {
+        "initialPrompt": "deployment context",
+        "prompt": null,
+        "resume": null,
+        "continueSession": false,
+        "worktree": null,
+        "teleport": true
+      },
+      "expected": {
+        "route": "interactive",
+        "postMountAction": {
+          "type": "teleport",
+          "prompt": "deployment context"
+        }
+      }
+    },
+    {
+      "id": "bare-resume-picker-before-session-initialization",
+      "story": "US-023",
+      "referenceCommit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+      "arguments": {
+        "initialPrompt": null,
+        "prompt": null,
+        "resume": "",
+        "continueSession": false,
+        "worktree": null,
+        "teleport": false
+      },
+      "expected": {
+        "route": "interactive",
+        "postMountAction": null
+      }
+    },
+    {
+      "id": "direct-resume-without-picker",
+      "story": "US-023",
+      "referenceCommit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+      "arguments": {
+        "initialPrompt": null,
+        "prompt": null,
+        "resume": "session-123",
+        "continueSession": false,
+        "worktree": null,
+        "teleport": false
+      },
+      "expected": {
+        "route": "interactive",
+        "postMountAction": null
+      }
+    },
+    {
+      "id": "continue-without-picker",
+      "story": "US-023",
+      "referenceCommit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+      "arguments": {
+        "initialPrompt": null,
+        "prompt": null,
+        "resume": null,
+        "continueSession": true,
+        "worktree": null,
+        "teleport": false
+      },
+      "expected": {
+        "route": "interactive",
+        "postMountAction": null
+      }
+    }
+  ],
+  "unavailable": []
+}
