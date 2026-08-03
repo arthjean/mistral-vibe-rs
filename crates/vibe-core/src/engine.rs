@@ -826,6 +826,17 @@ where
                 usage.output_tokens,
                 self.limits.output_price_per_million_micros,
             ));
+            emit(
+                self.observer.as_ref(),
+                &mut reducer,
+                &mut events,
+                &mut next_event_id,
+                EngineEvent::Stats {
+                    context_tokens,
+                    input_tokens: usage.input_tokens,
+                    output_tokens: usage.output_tokens,
+                },
+            )?;
             let assistant_message = ModelMessage::Assistant {
                 content: completion.text.clone(),
                 reasoning: completion.reasoning.clone(),

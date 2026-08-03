@@ -86,6 +86,13 @@ pub enum EngineEvent {
         #[serde(default)]
         message: Option<String>,
     },
+    /// Usage observed after a model completion. It carries no history, so the
+    /// projection is untouched and only live observers react to it.
+    Stats {
+        context_tokens: u64,
+        input_tokens: u64,
+        output_tokens: u64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -913,6 +920,7 @@ fn reduce_event(
                 entry.metadata_mut().session_id.clone_from(to_session_id);
             }
         }
+        EngineEvent::Stats { .. } => {}
         EngineEvent::Lifecycle {
             state: next,
             message,

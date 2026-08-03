@@ -393,6 +393,13 @@ pub enum ProgrammaticUpdate {
         event_id: u64,
         emitted_at: u64,
     },
+    /// Usage observed mid-turn, so context pressure is visible before the turn
+    /// settles.
+    Stats {
+        context_tokens: u64,
+        input_tokens: u64,
+        output_tokens: u64,
+    },
 }
 
 const MAX_PROGRAMMATIC_UPDATES: usize = 1_024;
@@ -494,6 +501,7 @@ impl EventObserver for ProgrammaticEventObserver {
         if reducer.apply(event).map_err(|error| error.to_string())? == ApplyOutcome::Duplicate {
             return Ok(());
         }
+        forward_stats(&self.sender, event)?;
         let mut emitted = self
             .emitted
             .lock()
@@ -522,6 +530,29 @@ impl EventObserver for ProgrammaticEventObserver {
         }
         Ok(())
     }
+}
+
+/// Usage carries no history, so it is forwarded straight to the live observer
+/// instead of travelling through the projection.
+fn forward_stats(
+    sender: &tokio::sync::mpsc::Sender<ProgrammaticUpdate>,
+    event: &EventEnvelope,
+) -> Result<(), String> {
+    let vibe_core::events::EngineEvent::Stats {
+        context_tokens,
+        input_tokens,
+        output_tokens,
+    } = event.event
+    else {
+        return Ok(());
+    };
+    sender
+        .try_send(ProgrammaticUpdate::Stats {
+            context_tokens,
+            input_tokens,
+            output_tokens,
+        })
+        .map_err(|error| format!("usage update queue is unavailable: {error}"))
 }
 
 fn public_history_entry_identity(entry: &PublicHistoryEntry) -> String {
@@ -570,6 +601,7 @@ impl EventObserver for ServerProjectionObserver {
             }
             (reducer.state().clone(), changed)
         };
+        forward_stats(&self.sender, event)?;
 
         let mut event_id = self
             .server
@@ -4707,7 +4739,10 @@ command = "/must-not-run"
         assert_eq!(turn.events.len(), 3);
         assert_eq!(turn.stop_reason, PublicTurnStopReason::Complete);
         let mut update_count = 0;
-        while let Ok(ProgrammaticUpdate::HistoryEntry { entry, .. }) = updates.try_recv() {
+        while let Ok(update) = updates.try_recv() {
+            let ProgrammaticUpdate::HistoryEntry { entry, .. } = update else {
+                continue;
+            };
             assert_eq!(entry.metadata().turn_id.as_deref(), Some("turn-1"));
             update_count += 1;
         }
@@ -5527,10 +5562,13 @@ command = "/must-not-run"
             .await
             .expect("first turn runs");
         let mut first_event_ids = Vec::new();
-        while let Ok(ProgrammaticUpdate::HistoryEntry {
-            event_id, entry, ..
-        }) = first_updates.try_recv()
-        {
+        while let Ok(update) = first_updates.try_recv() {
+            let ProgrammaticUpdate::HistoryEntry {
+                event_id, entry, ..
+            } = update
+            else {
+                continue;
+            };
             assert_eq!(
                 entry.metadata().turn_id.as_deref(),
                 Some(first.turn_id.as_str())
@@ -5560,10 +5598,13 @@ command = "/must-not-run"
             .await
             .expect("second turn runs");
         let mut second_event_ids = Vec::new();
-        while let Ok(ProgrammaticUpdate::HistoryEntry {
-            event_id, entry, ..
-        }) = second_updates.try_recv()
-        {
+        while let Ok(update) = second_updates.try_recv() {
+            let ProgrammaticUpdate::HistoryEntry {
+                event_id, entry, ..
+            } = update
+            else {
+                continue;
+            };
             assert_eq!(
                 entry.metadata().turn_id.as_deref(),
                 Some(second.turn_id.as_str())

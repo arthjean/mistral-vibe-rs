@@ -293,7 +293,12 @@ where
             }
         };
         if result.is_ok() {
-            while let Ok(ProgrammaticUpdate::HistoryEntry { entry, .. }) = updates.try_recv() {
+            // Every queued update is consumed: stopping at the first non-entry
+            // update would truncate the stream the turn already produced.
+            while let Ok(update) = updates.try_recv() {
+                let ProgrammaticUpdate::HistoryEntry { entry, .. } = update else {
+                    continue;
+                };
                 if let Err(error) = write_json_line(stdout, &entry) {
                     result = Err(error);
                     break;

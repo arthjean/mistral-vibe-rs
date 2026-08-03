@@ -3383,13 +3383,23 @@ fn drain_updates(
     let Some(active) = active else {
         return;
     };
-    if drain_update_receiver(state, &active.turn_id, &mut active.updates) {
-        if let Some(runtime) = runtime {
+    let mut live_context_tokens = None;
+    let resync = drain_update_receiver(
+        state,
+        &active.turn_id,
+        &mut active.updates,
+        &mut live_context_tokens,
+    );
+    if let Some(runtime) = runtime {
+        if let Some(context_tokens) = live_context_tokens {
+            runtime.context_tokens = context_tokens;
+        }
+        if resync {
             resync_current_projection(runtime, state);
             sync_active_callbacks(runtime, state, controls);
-        } else {
-            state.push_diagnostic("Canonical resync is unavailable until setup completes");
         }
+    } else if resync {
+        state.push_diagnostic("Canonical resync is unavailable until setup completes");
     }
 }
 
@@ -3397,9 +3407,14 @@ fn drain_update_receiver(
     state: &mut TuiState,
     turn_id: &str,
     updates: &mut tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
+    live_context_tokens: &mut Option<u64>,
 ) -> bool {
     while let Ok(update) = updates.try_recv() {
         let event = match update {
+            ProgrammaticUpdate::Stats { context_tokens, .. } => {
+                *live_context_tokens = Some(context_tokens);
+                continue;
+            }
             ProgrammaticUpdate::HistoryEntry {
                 event_id, entry, ..
             } => {
@@ -3477,7 +3492,8 @@ async fn finish_active(
     let (reservation, outcome) = task
         .await
         .map_err(|error| CliError::Terminal(format!("turn task failed: {error}")))?;
-    let _ = drain_update_receiver(state, &turn_id, &mut updates);
+    let mut live_context_tokens = None;
+    let _ = drain_update_receiver(state, &turn_id, &mut updates, &mut live_context_tokens);
     let runtime = runtime
         .as_mut()
         .ok_or_else(|| CliError::Terminal("interactive runtime disappeared".to_owned()))?;
@@ -3745,6 +3761,36 @@ mod tests {
                 Poll::Pending
             }
         }
+    }
+
+    #[tokio::test]
+    async fn usage_reaches_the_context_gauge_before_the_turn_settles() {
+        let (sender, mut updates) = tokio::sync::mpsc::channel(8);
+        sender
+            .send(ProgrammaticUpdate::Stats {
+                context_tokens: 4_096,
+                input_tokens: 3_000,
+                output_tokens: 1_096,
+            })
+            .await
+            .expect("usage update queues");
+        sender
+            .send(ProgrammaticUpdate::Watermark {
+                event_id: 1,
+                emitted_at: 0,
+            })
+            .await
+            .expect("watermark queues");
+        let mut state = TuiState::new("session");
+        let mut live = None;
+        assert!(!drain_update_receiver(
+            &mut state,
+            "turn",
+            &mut updates,
+            &mut live
+        ));
+        assert_eq!(live, Some(4_096));
+        assert_eq!(state.watermark, 1, "usage must not consume the sequence");
     }
 
     #[test]
