@@ -10,7 +10,7 @@ use thiserror::Error;
 
 pub const PROTOCOL_VERSION: &str = "1";
 
-pub const SERVER_METHODS: [&str; 79] = [
+pub const SERVER_METHODS: [&str; 81] = [
     "account/read",
     "agents/install",
     "agents/list",
@@ -26,6 +26,7 @@ pub const SERVER_METHODS: [&str; 79] = [
     "connectors/auth/read",
     "connectors/read",
     "connectors/refresh",
+    "connectors/toggle",
     "diagnostics/list",
     "diagnostics/logs/read",
     "feedback/record",
@@ -36,6 +37,7 @@ pub const SERVER_METHODS: [&str; 79] = [
     "loops/delete",
     "loops/list",
     "mcp/add",
+    "mcp/auth/complete",
     "mcp/login",
     "mcp/logout",
     "mcp/read",
@@ -373,12 +375,6 @@ pub enum ProtocolVersion {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "transport", rename_all = "kebab-case")]
 pub enum SessionMcpServer {
-    Http {
-        name: String,
-        url: String,
-        #[serde(default)]
-        headers: BTreeMap<String, String>,
-    },
     StreamableHttp {
         name: String,
         url: String,
@@ -458,7 +454,7 @@ mod tests {
             .iter()
             .copied()
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(unique.len(), 79);
+        assert_eq!(unique.len(), 81);
         assert_eq!(unique.len(), SERVER_METHODS.len());
     }
 }
