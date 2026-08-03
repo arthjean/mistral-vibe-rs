@@ -220,6 +220,18 @@ fn prompt_and_mcp_projection_reject_oversized_or_malformed_untrusted_inputs() {
 }
 
 #[test]
+fn resolved_paths_compare_equal_across_unresolvable_traversals() {
+    assert!(crate::session::same_path(
+        "/missing/root/../workspace",
+        "/missing/workspace"
+    ));
+    assert!(!crate::session::same_path(
+        "/missing/workspace",
+        "/missing/other"
+    ));
+}
+
+#[test]
 fn session_updates_carry_the_projected_message_identity() {
     let entry = serde_json::from_value::<PublicHistoryEntry>(json!({
         "type": "message",

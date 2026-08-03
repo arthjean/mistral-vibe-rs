@@ -34,6 +34,11 @@ async fn built_in_help_is_advertised_and_does_not_start_a_model_turn() {
     assert_eq!(updates.len(), 2);
     assert_eq!(updates[0].update["sessionUpdate"], "user_message_chunk");
     assert_eq!(updates[1].update["sessionUpdate"], "agent_message_chunk");
+    // The echoed command and its reply are distinct messages.
+    assert_ne!(
+        updates[0].update["messageId"],
+        updates[1].update["messageId"]
+    );
     let help = updates[1].update["content"]["text"]
         .as_str()
         .expect("help text");

@@ -12,7 +12,7 @@ use vibe_app_server::client::TurnDriver;
 use crate::agent::AcpAgent;
 use crate::history::history_page;
 use crate::protocol::{AcpError, AcpPromptResponse, AcpUsage};
-use crate::session::{AcpHarness, ActivePhase, now_millis};
+use crate::session::{AcpHarness, ActivePhase};
 use crate::updates::{UpdateSender, queue_update, text_chunk};
 
 pub(crate) struct CommandInfo {
@@ -149,7 +149,7 @@ where
         queue_update(
             self.sender,
             self.session_id(),
-            text_chunk(kind, &format!("command-{}", now_millis()), text),
+            text_chunk(kind, &self.harness.next_local_id("command"), text),
         )
     }
 

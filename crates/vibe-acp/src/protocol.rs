@@ -261,15 +261,15 @@ impl AcpError {
             Self::SessionNotFound(_) => -32001,
             Self::SessionConflict(_) | Self::AlreadyInitialized => -32002,
             Self::NotInitialized => -32003,
+            Self::Disconnected => -32004,
+            Self::Backpressure => -32005,
             Self::InvalidResponse(_)
             | Self::ClientToolTimeout(_)
             | Self::ClientTool(_)
             | Self::Driver(_)
             | Self::Configuration(_)
             | Self::StatePoisoned
-            | Self::Client(_)
-            | Self::Disconnected
-            | Self::Backpressure => -32603,
+            | Self::Client(_) => -32603,
         }
     }
 }

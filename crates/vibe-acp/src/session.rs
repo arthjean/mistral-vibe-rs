@@ -1,7 +1,7 @@
 //! Session state: settings, per-session harness, and lifecycle slots.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -428,8 +428,26 @@ pub(crate) fn same_path(left: &str, right: &str) -> bool {
     resolved_path(left) == resolved_path(right)
 }
 
+/// Resolves a path for comparison. Unresolvable paths fall back to lexical
+/// normalization rather than a raw string, so `/a/../b` and `/b` still match.
 fn resolved_path(value: &str) -> PathBuf {
-    std::fs::canonicalize(value).unwrap_or_else(|_| PathBuf::from(value))
+    std::fs::canonicalize(value).unwrap_or_else(|_| lexically_normalized(Path::new(value)))
+}
+
+fn lexically_normalized(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    normalized.push("..");
+                }
+            }
+            other => normalized.push(other),
+        }
+    }
+    normalized
 }
 
 pub(crate) fn now_millis() -> u128 {
