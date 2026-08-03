@@ -253,9 +253,13 @@ fn draw_overlay(
     let outer = frame.area();
     let width = outer.width.saturating_sub(4).clamp(1, 86);
     let visible = overlay.visible_items();
+    // Rows, plus the optional filter and notice blocks, the blank separator, the
+    // help line, and the border. Under-counting silently drops the help line.
     let content_height = u16::try_from(visible.len())
         .unwrap_or(u16::MAX)
-        .saturating_add(5);
+        .saturating_add(4)
+        .saturating_add(if overlay.query.is_empty() { 0 } else { 2 })
+        .saturating_add(if overlay.notice.is_some() { 2 } else { 0 });
     let available_height = outer.height.saturating_sub(2).max(1);
     let height = content_height.min(available_height);
     let area = Rect::new(
@@ -320,7 +324,13 @@ fn draw_overlay(
             "↑↓/jk Navigate  Enter Resume  Delete Remove  Esc Close"
         }
         super::interaction::OverlayKind::Mcp | super::interaction::OverlayKind::Connectors => {
-            "↑↓/jk Navigate  Enter Toggle  Ctrl+R Refresh  Esc Close"
+            "↑↓/jk Navigate  Enter Show tools  d Disable  e Enable  Ctrl+R Refresh  Esc Close"
+        }
+        super::interaction::OverlayKind::McpDetail => {
+            "↑↓/jk Navigate  d Disable  e Enable  Backspace Back  Esc Close"
+        }
+        super::interaction::OverlayKind::RemoteProjectCreate => {
+            "↑↓/Tab Field  Type Edit  Enter Next/Create  Esc Cancel"
         }
         _ => "↑↓/jk Navigate  Enter Select  Esc Close",
     };

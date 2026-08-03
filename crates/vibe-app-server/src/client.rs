@@ -663,6 +663,55 @@ pub struct InProcessClient {
     pending_mcp: BTreeMap<String, Vec<McpServerConfig>>,
 }
 
+pub struct PendingPublicCall {
+    server: AppServer,
+    request_id: RequestId,
+    method: String,
+    outbound: Vec<Vec<u8>>,
+    deferred: Vec<DeferredWork>,
+}
+
+impl PendingPublicCall {
+    pub async fn complete(mut self) -> Result<PublicDispatch, ClientError> {
+        for work in self.deferred {
+            let completed = match work {
+                DeferredWork::ResourceRequest {
+                    request_id,
+                    session_id,
+                    command,
+                } => {
+                    self.server
+                        .execute_resource_request(request_id, session_id, command)
+                        .await
+                }
+                DeferredWork::CloudRequest {
+                    request_id,
+                    method,
+                    params,
+                } => {
+                    self.server
+                        .execute_cloud_request(request_id, method, params)
+                        .await
+                }
+                _ => {
+                    return Err(ClientError::InvalidResponse(format!(
+                        "unsupported deferred work returned by `{}`",
+                        self.method
+                    )));
+                }
+            };
+            if completed.close_after_flush || !completed.deferred.is_empty() {
+                return Err(ClientError::InvalidResponse(format!(
+                    "deferred work returned nested work for `{}`",
+                    self.method
+                )));
+            }
+            self.outbound.extend(completed.outbound);
+        }
+        decode_public_dispatch(self.outbound, &self.request_id, &self.method)
+    }
+}
+
 impl InProcessClient {
     pub fn connect() -> Result<Self, ClientError> {
         Self::connect_with_server(AppServer::default())
@@ -1075,6 +1124,14 @@ impl InProcessClient {
         method: &str,
         params: Value,
     ) -> Result<PublicDispatch, ClientError> {
+        self.begin_public_call(method, params)?.complete().await
+    }
+
+    pub fn begin_public_call(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<PendingPublicCall, ClientError> {
         let request_id = self.take_request_id();
         let request = request_bytes(request_id.clone(), method, params)?;
         let batch = self.connection.dispatch(&request);
@@ -1083,50 +1140,13 @@ impl InProcessClient {
                 "`{method}` unexpectedly closed the connection"
             )));
         }
-        let mut outbound = batch.outbound;
-        for work in batch.deferred {
-            match work {
-                DeferredWork::ResourceRequest {
-                    request_id,
-                    session_id,
-                    method,
-                    params,
-                } => {
-                    let completed = self
-                        .server
-                        .execute_resource_request(request_id, session_id, method, params)
-                        .await;
-                    if completed.close_after_flush || !completed.deferred.is_empty() {
-                        return Err(ClientError::InvalidResponse(
-                            "resource request returned nested work".to_owned(),
-                        ));
-                    }
-                    outbound.extend(completed.outbound);
-                }
-                DeferredWork::CloudRequest {
-                    request_id,
-                    method,
-                    params,
-                } => {
-                    let completed = self
-                        .server
-                        .execute_cloud_request(request_id, method, params)
-                        .await;
-                    if completed.close_after_flush || !completed.deferred.is_empty() {
-                        return Err(ClientError::InvalidResponse(
-                            "cloud request returned nested work".to_owned(),
-                        ));
-                    }
-                    outbound.extend(completed.outbound);
-                }
-                _ => {
-                    return Err(ClientError::InvalidResponse(format!(
-                        "unsupported deferred work returned by `{method}`"
-                    )));
-                }
-            }
-        }
-        decode_public_dispatch(outbound, &request_id, method)
+        Ok(PendingPublicCall {
+            server: self.server.clone(),
+            request_id,
+            method: method.to_owned(),
+            outbound: batch.outbound,
+            deferred: batch.deferred,
+        })
     }
 
     fn reserve_compaction(
@@ -1605,6 +1625,14 @@ where
         params: Value,
     ) -> Result<PublicDispatch, ClientError> {
         self.client.public_call_async(method, params).await
+    }
+
+    pub fn begin_public_call(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<PendingPublicCall, ClientError> {
+        self.client.begin_public_call(method, params)
     }
 
     pub fn interactive_update_channel_after(
@@ -4187,6 +4215,87 @@ command = "/must-not-run"
         );
     }
 
+    #[tokio::test]
+    async fn trust_transition_rebinds_session_scoped_project_config_writes() {
+        let temporary = tempfile::tempdir().expect("runtime home");
+        let workspace = temporary.path().join("workspace");
+        std::fs::create_dir_all(workspace.join(".vibe")).expect("project config directory");
+        std::fs::write(workspace.join(".vibe/config.toml"), "").expect("project config fixture");
+        let release3 = Release3Service::new(
+            Release3Paths {
+                vibe_home: temporary.path().join("home"),
+                working_directory: workspace.clone(),
+                session_root: temporary.path().join("sessions"),
+            },
+            toml::Table::new(),
+            false,
+        )
+        .expect("release-3 service");
+        let mut service = HeadlessService::new_shared_with_server(
+            Arc::new(EchoTurnDriver::new("unused")),
+            AppServer::with_release3_service(release3),
+        )
+        .expect("service starts");
+        let mut session_options = options();
+        session_options.session_id = Some("trust-config".to_owned());
+        session_options.working_directory = workspace.to_string_lossy().into_owned();
+        session_options.trusted = false;
+        let session_id = service
+            .start_session(&session_options)
+            .expect("untrusted session starts");
+
+        let untrusted_write = service.public_call(
+            "config/batchWrite",
+            json!({
+                "sessionId": session_id,
+                "writes": [{
+                    "target": "project",
+                    "expectedFingerprint": null,
+                    "mutations": [{"path": ["theme"], "value": "dark"}],
+                }],
+            }),
+        );
+        assert!(
+            untrusted_write.is_err(),
+            "untrusted project write is rejected"
+        );
+
+        service
+            .public_call_async(
+                "workspace/trust/decision",
+                json!({
+                    "sessionId": session_id,
+                    "cwd": workspace,
+                    "decision": "trust_cwd",
+                }),
+            )
+            .await
+            .expect("workspace trust commits");
+        let trusted = service
+            .public_call("config/read", json!({"sessionId": session_id}))
+            .expect("trusted config reads");
+        assert_eq!(trusted["snapshot"]["selectedTarget"], json!("project"));
+        let fingerprint = trusted["snapshot"]["fingerprints"]["project"].clone();
+        service
+            .public_call(
+                "config/batchWrite",
+                json!({
+                    "sessionId": session_id,
+                    "writes": [{
+                        "target": "project",
+                        "expectedFingerprint": fingerprint,
+                        "mutations": [{"path": ["theme"], "value": "dark"}],
+                    }],
+                }),
+            )
+            .expect("trusted project write commits");
+        assert!(
+            std::fs::read_to_string(workspace.join(".vibe/config.toml"))
+                .expect("project config persisted")
+                .contains("theme = \"dark\"")
+        );
+    }
+
     #[test]
     fn mcp_initialization_rejects_malformed_diagnostics() {
         let valid = br#"{"jsonrpc":"2.0","method":"mcp/updated","params":{"mcp":{"sources":[{"diagnostic":"connection failed"}],"discoveryErrors":{}}}}"#;
@@ -4723,6 +4832,16 @@ command = "/must-not-run"
                 .map(|event| event.method.as_str()),
             Some("workspace/trust/updated")
         );
+        let integrations = service
+            .public_call_async(
+                "mcp/read",
+                json!({
+                    "sessionId": session_id,
+                }),
+            )
+            .await
+            .expect("deferred MCP resource response");
+        assert!(integrations.result["mcp"]["sources"].is_array());
     }
 
     #[tokio::test]

@@ -1,6 +1,8 @@
 use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 
+use serde_json::Value;
+
 use super::attachments::{PreparedSubmission, PromptDraft};
 
 const QUIT_CONFIRMATION_WINDOW_MS: u64 = 1_000;
@@ -9,22 +11,128 @@ const QUIT_CONFIRMATION_WINDOW_MS: u64 = 1_000;
 pub enum OverlayKind {
     Help,
     Config,
+    ConfigChoice,
+    ConfigTarget,
     Model,
     Thinking,
     Theme,
     Sessions,
     Mcp,
+    McpDetail,
+    McpAuth,
     Connectors,
     Voice,
     Debug,
     Status,
     DataRetention,
     Proxy,
+    RemoteProjects,
+    RemoteProjectCreate,
+    TeleportApproval,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntegrationKind {
+    McpServer,
+    Connector,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigLayerTarget {
+    User,
+    Project,
+}
+
+impl ConfigLayerTarget {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::Project => "project",
+        }
+    }
+
+    #[must_use]
+    pub fn from_snapshot(value: &Value) -> Self {
+        if value.get("selectedTarget").and_then(Value::as_str) == Some("project") {
+            Self::Project
+        } else {
+            Self::User
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntegrationTarget {
+    pub kind: IntegrationKind,
+    pub source: String,
+    pub tool: Option<String>,
+    pub enabled: bool,
+    pub requires_auth: bool,
+    pub requires_setup: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthActionKind {
+    Open,
+    Copy,
+    Show,
+    Refresh,
+    Logout,
+    Close,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthAction {
+    pub kind: IntegrationKind,
+    pub source: String,
+    pub url: String,
+    pub action: AuthActionKind,
+    pub enable_on_complete: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteProjectAction {
+    Select {
+        project_id: String,
+    },
+    Create {
+        name: String,
+        default_branch: String,
+    },
+    More,
+    Unlink,
+    Cancel,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteProjectDraft {
+    pub name: String,
+    pub default_branch: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TeleportPushAction {
+    pub operation_id: String,
+    pub approved: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OverlayAction {
+    Select(String),
+    ConfigChoice { path: String, value: Value },
+    ConfigSpecial { path: String, value: String },
+    ConfigTarget(ConfigLayerTarget),
+    Integration(IntegrationTarget),
+    Authenticate(AuthAction),
+    RemoteProject(RemoteProjectAction),
+    TeleportPush(TeleportPushAction),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlayItem {
     pub id: String,
+    pub action: OverlayAction,
     pub label: String,
     pub description: String,
     pub disabled: bool,
@@ -38,12 +146,20 @@ impl OverlayItem {
         description: impl Into<String>,
         disabled: bool,
     ) -> Self {
+        let id = id.into();
         Self {
-            id: id.into(),
+            action: OverlayAction::Select(id.clone()),
+            id,
             label: label.into(),
             description: description.into(),
             disabled,
         }
+    }
+
+    #[must_use]
+    pub fn with_action(mut self, action: OverlayAction) -> Self {
+        self.action = action;
+        self
     }
 }
 
@@ -123,6 +239,16 @@ impl Overlay {
             current.saturating_add(delta.unsigned_abs()).min(last)
         };
         self.selected = visible.get(next).copied();
+    }
+
+    pub fn select_by_id(&mut self, id: &str) {
+        if let Some(selected) = self
+            .visible_indexes()
+            .into_iter()
+            .find(|index| self.items[*index].id == id && !self.items[*index].disabled)
+        {
+            self.selected = Some(selected);
+        }
     }
 
     #[must_use]

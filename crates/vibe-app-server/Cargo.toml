@@ -21,12 +21,15 @@ bench = false
 base64.workspace = true
 command-group.workspace = true
 futures-util.workspace = true
+getrandom.workspace = true
+keyring.workspace = true
 reqwest.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["net"] }
 toml.workspace = true
 url.workspace = true
 vibe-core = { path = "../vibe-core" }

@@ -5,12 +5,15 @@ use serde_json::json;
 use super::chat_input::{ChatInputState, InputEvent};
 use super::state::{EntryStatus, TuiState};
 use super::{
-    InteractiveRuntime, call_runtime, persist_user_setting, push_local_notice, sync_runtime_intent,
+    InteractiveRuntime, call_runtime, persist_setting, push_local_notice, sync_runtime_intent,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum SwitchRequest {
-    Model(String),
+    Model {
+        model: String,
+        target: Option<String>,
+    },
     Agent(String),
 }
 
@@ -37,23 +40,44 @@ pub(super) fn apply_pending(
         return;
     };
     match request {
-        SwitchRequest::Model(model) => {
-            if persist_user_setting(runtime, &["active_model"], json!(model), false, state)
-                && call_runtime(
-                    runtime,
-                    "session/settings/update",
-                    json!({"sessionId": runtime.session_id, "model": model}),
-                    state,
-                )
-                .is_some()
+        SwitchRequest::Model { model, target } => {
+            let previous = runtime.model.clone();
+            if call_runtime(
+                runtime,
+                "session/settings/update",
+                json!({"sessionId": runtime.session_id, "model": model}),
+                state,
+            )
+            .is_none()
             {
-                runtime.model = model;
-                push_local_notice(
-                    state,
-                    "Model updated for this session and future sessions",
-                    EntryStatus::Completed,
-                );
+                let _ = composer.apply(InputEvent::Switching { active: false });
+                return;
             }
+            if !persist_setting(
+                runtime,
+                target.as_deref().unwrap_or("user"),
+                &["active_model"],
+                json!(model),
+                false,
+                state,
+            ) {
+                if let Err(error) = runtime.service.public_call(
+                    "session/settings/update",
+                    json!({"sessionId": runtime.session_id, "model": previous}),
+                ) {
+                    state.push_diagnostic(format!(
+                        "Model preference save failed and the active session rollback also failed: {error}"
+                    ));
+                }
+                let _ = composer.apply(InputEvent::Switching { active: false });
+                return;
+            }
+            runtime.model = model;
+            push_local_notice(
+                state,
+                "Model updated for this session and future sessions",
+                EntryStatus::Completed,
+            );
         }
         SwitchRequest::Agent(agent) => {
             if call_runtime(

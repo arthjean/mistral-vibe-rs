@@ -107,7 +107,7 @@ pub(in crate::tui) async fn complete_mounted_startup(
         Some(PostMountAction::Teleport(prompt)) => {
             if let Some(runtime) = runtime.as_mut() {
                 if runtime.vibe_code_enabled {
-                    start_teleport(prompt.as_deref(), working_directory, runtime, state).await;
+                    start_teleport(prompt.as_deref(), working_directory, runtime, state);
                 } else {
                     state.push_diagnostic(
                         "Startup Teleport is unavailable in the active configuration",

@@ -1,0 +1,680 @@
+{
+  "oracle": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "deterministicRuns": 10,
+    "engine": "python-textual-capture"
+  },
+  "oracleProbe": {
+    "expected": {
+      "config": {
+        "filtered": [
+          "active_model"
+        ],
+        "origin": "project config",
+        "values": [
+          "mistral-large",
+          "unfocused"
+        ]
+      },
+      "loops": "| Prompt | Next in | Every | ID |\n|--------|------|-------|----|\n| check \\| deploy report | 30s | 1h1m1s | `loop-1` |",
+      "mcp": [
+        {
+          "optionId": "connector:drive",
+          "status": "connected",
+          "tools": "1 tool"
+        },
+        {
+          "optionId": "server:github",
+          "status": "needs auth",
+          "tools": "no tools"
+        }
+      ],
+      "mcpAdd": {
+        "login": true,
+        "name": "github",
+        "scopes": [
+          "repo",
+          "read"
+        ],
+        "transport": "streamable-http",
+        "url": "https://mcp.example/rpc"
+      },
+      "projects": [
+        {
+          "kind": "project",
+          "label": "currently linked",
+          "name": "Current",
+          "optionId": "project:current",
+          "recommended": true
+        },
+        {
+          "kind": "project",
+          "label": "exact repo match",
+          "name": "Other",
+          "optionId": "project:other",
+          "recommended": false
+        },
+        {
+          "kind": "load_more",
+          "label": "",
+          "name": null,
+          "optionId": "action:load_more",
+          "recommended": false
+        },
+        {
+          "kind": "create",
+          "label": "repo-linked project",
+          "name": null,
+          "optionId": "action:create",
+          "recommended": false
+        },
+        {
+          "kind": "unlink",
+          "label": "",
+          "name": null,
+          "optionId": "action:unlink",
+          "recommended": false
+        }
+      ],
+      "proxy": {
+        "keys": [
+          "HTTP_PROXY",
+          "HTTPS_PROXY",
+          "ALL_PROXY",
+          "NO_PROXY",
+          "SSL_CERT_FILE",
+          "SSL_CERT_DIR"
+        ],
+        "parse": [
+          "HTTPS_PROXY",
+          "https://proxy.example"
+        ]
+      },
+      "teleport": {
+        "complete": "Teleported to Vibe Code Web: https://chat.mistral.ai/code/project-1",
+        "failed": "Teleport failed: cloud unavailable",
+        "pushing": "Pushing 2 commits..."
+      },
+      "traceCoverage": [
+        "auth_action",
+        "config",
+        "loops",
+        "mcp",
+        "mcp_auth",
+        "mcp_detail",
+        "projects",
+        "proxy",
+        "proxy_mutation",
+        "teleport"
+      ]
+    },
+    "script": "ep009-python-oracle.py"
+  },
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "sourceFiles": [
+      "vibe/cli/textual_ui/screens/config/config_screen.py",
+      "vibe/cli/textual_ui/screens/config/edit.py",
+      "vibe/core/proxy_setup.py",
+      "vibe/cli/textual_ui/widgets/mcp_app.py",
+      "vibe/cli/textual_ui/mcp_commands.py",
+      "vibe/cli/textual_ui/widgets/mcp_oauth_app.py",
+      "vibe/cli/textual_ui/widgets/connector_auth_app.py",
+      "vibe/cli/textual_ui/widgets/vibe_code_project/picker.py",
+      "vibe/cli/textual_ui/widgets/vibe_code_project/create.py",
+      "vibe/cli/textual_ui/app.py",
+      "vibe/cli/textual_ui/scheduled_loop_runner.py"
+    ],
+    "version": "mistral-vibe pinned runtime oracle"
+  },
+  "schemaVersion": 5,
+  "traces": [
+    {
+      "divergences": [],
+      "events": [
+        {
+          "kind": "config",
+          "schema": {
+            "properties": {
+              "active_model": {
+                "description": "Model.",
+                "type": "string"
+              },
+              "api_key": {
+                "description": "Secret.",
+                "type": "string",
+                "writeOnly": true
+              },
+              "enable_update_checks": {
+                "description": "Updates.",
+                "type": "boolean"
+              },
+              "limits": {
+                "properties": {
+                  "max_turns": {
+                    "description": "Turn limit.",
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "optional_note": {
+                "default": null,
+                "description": "Optional.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "snapshot": {
+            "config": {
+              "active_model": "codestral",
+              "api_key": "[redacted]",
+              "custom_runtime": 7,
+              "enable_update_checks": true,
+              "limits": {
+                "max_turns": 12
+              }
+            },
+            "layerValues": [
+              {
+                "layer": "defaults",
+                "values": {
+                  "active_model": "default"
+                }
+              },
+              {
+                "layer": "selected_toml",
+                "values": {
+                  "active_model": "codestral"
+                }
+              },
+              {
+                "layer": "environment",
+                "values": {
+                  "limits": {
+                    "max_turns": 12
+                  }
+                }
+              }
+            ],
+            "selectedTarget": "project"
+          }
+        },
+        {
+          "kind": "proxy",
+          "settings": {
+            "descriptions": {
+              "ALL_PROXY": "Proxy URL for all requests (fallback)",
+              "HTTPS_PROXY": "Proxy URL for HTTPS requests",
+              "HTTP_PROXY": "Proxy URL for HTTP requests",
+              "NO_PROXY": "Comma-separated list of hosts to bypass proxy",
+              "SSL_CERT_DIR": "Path to directory containing SSL certificates",
+              "SSL_CERT_FILE": "Path to custom SSL certificate file"
+            },
+            "values": {
+              "ALL_PROXY": "socks5://proxy.example",
+              "HTTPS_PROXY": null,
+              "HTTP_PROXY": "https://proxy.example",
+              "NO_PROXY": "localhost,.internal",
+              "SSL_CERT_DIR": "/certs",
+              "SSL_CERT_FILE": "/certs/ca.pem"
+            }
+          }
+        },
+        {
+          "changes": {
+            "ALL_PROXY": "socks5://all.example",
+            "HTTPS_PROXY": null,
+            "HTTP_PROXY": "https://new.example",
+            "NO_PROXY": "localhost,.internal",
+            "SSL_CERT_DIR": "/certs",
+            "SSL_CERT_FILE": "/certs/ca.pem"
+          },
+          "initial": "CUSTOM=value\nHTTP_PROXY='old'\n",
+          "kind": "proxy_mutation"
+        },
+        {
+          "changes": {
+            "HTTP_PROXY": "bad\nvalue"
+          },
+          "initial": "CUSTOM=value\nHTTP_PROXY='old'\n",
+          "kind": "proxy_mutation"
+        }
+      ],
+      "expected": [
+        "config|Settings|-|Save changes to:enabled:project configuration layer;Popular settings:disabled:;active model:enabled:codestral · string · project config · Model.;Advanced settings:disabled:;api key:disabled:[redacted] · string · effective · Secret.;custom runtime:disabled:7 · number · effective · schema unavailable; read-only;enable update checks:enabled:True · boolean · effective · Updates.;limits › max turns:enabled:12 · integer · env · Turn limit.;optional note:enabled:— · string · defaults · Optional.",
+        "proxy|Proxy Configuration|-|HTTP_PROXY:enabled:https://proxy.example · Proxy URL for HTTP requests;HTTPS_PROXY:enabled:not set · Proxy URL for HTTPS requests;ALL_PROXY:enabled:socks5://proxy.example · Proxy URL for all requests (fallback);NO_PROXY:enabled:localhost,.internal · Comma-separated list of hosts to bypass proxy;SSL_CERT_FILE:enabled:/certs/ca.pem · Path to custom SSL certificate file;SSL_CERT_DIR:enabled:/certs · Path to directory containing SSL certificates",
+        "proxy-fs|ok|\"CUSTOM=value\\nHTTP_PROXY='https://new.example'\\nALL_PROXY='socks5://all.example'\\nNO_PROXY='localhost,.internal'\\nSSL_CERT_FILE='/certs/ca.pem'\\nSSL_CERT_DIR='/certs'\\n\"",
+        "proxy-fs|error|\"CUSTOM=value\\nHTTP_PROXY='old'\\n\""
+      ],
+      "id": "typed-layers-and-proxy-contract",
+      "reference": [
+        "config|Settings|-|Save changes to:enabled:project configuration layer;Popular settings:disabled:;active model:enabled:codestral · string · project config · Model.;Advanced settings:disabled:;api key:disabled:[redacted] · string · effective · Secret.;custom runtime:disabled:7 · number · effective · schema unavailable; read-only;enable update checks:enabled:True · boolean · effective · Updates.;limits › max turns:enabled:12 · integer · env · Turn limit.;optional note:enabled:— · string · defaults · Optional.",
+        "proxy|Proxy Configuration|-|HTTP_PROXY:enabled:https://proxy.example · Proxy URL for HTTP requests;HTTPS_PROXY:enabled:not set · Proxy URL for HTTPS requests;ALL_PROXY:enabled:socks5://proxy.example · Proxy URL for all requests (fallback);NO_PROXY:enabled:localhost,.internal · Comma-separated list of hosts to bypass proxy;SSL_CERT_FILE:enabled:/certs/ca.pem · Path to custom SSL certificate file;SSL_CERT_DIR:enabled:/certs · Path to directory containing SSL certificates",
+        "proxy-fs|ok|\"CUSTOM=value\\nHTTP_PROXY='https://new.example'\\nALL_PROXY='socks5://all.example'\\nNO_PROXY='localhost,.internal'\\nSSL_CERT_FILE='/certs/ca.pem'\\nSSL_CERT_DIR='/certs'\\n\"",
+        "proxy-fs|error|\"CUSTOM=value\\nHTTP_PROXY='old'\\n\""
+      ],
+      "story": "US-031"
+    },
+    {
+      "divergences": [
+        {
+          "event": 2,
+          "reason": "The reference points at the `r` binding in a disabled hint; the Rust detail view exposes the refresh as a selectable action so credential setup stays executable from the overlay."
+        },
+        {
+          "event": 3,
+          "reason": "US-032 requires open, copy, show URL, completion refresh, logout and close as explicit actions; the reference drives a streaming OAuth login worker whose only affordances are three options plus keyboard bindings, so the two surfaces cannot present the same rows."
+        },
+        {
+          "event": 4,
+          "reason": "US-032 requires open, copy, show URL, completion refresh, logout and close as explicit actions; the reference drives a streaming OAuth login worker whose only affordances are three options plus keyboard bindings, so the two surfaces cannot present the same rows."
+        },
+        {
+          "event": 5,
+          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
+        },
+        {
+          "event": 6,
+          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
+        },
+        {
+          "event": 7,
+          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
+        },
+        {
+          "event": 8,
+          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
+        },
+        {
+          "event": 9,
+          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
+        },
+        {
+          "event": 10,
+          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
+        },
+        {
+          "event": 11,
+          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
+        },
+        {
+          "event": 12,
+          "reason": "The Rust runtime refuses an authentication URL that is neither HTTPS nor loopback; the reference opens whatever the server returns."
+        }
+      ],
+      "events": [
+        {
+          "connectors": {
+            "connectors": {
+              "sources": [
+                {
+                  "alias": "archive",
+                  "authState": "connected",
+                  "enabled": false,
+                  "id": "archive",
+                  "name": "Archive",
+                  "toolNames": []
+                },
+                {
+                  "alias": "broken",
+                  "authState": "failed",
+                  "id": "broken",
+                  "name": "Broken",
+                  "toolNames": []
+                },
+                {
+                  "alias": "calendar",
+                  "authState": "not_required",
+                  "id": "calendar",
+                  "name": "Calendar",
+                  "toolNames": [
+                    "events"
+                  ]
+                },
+                {
+                  "alias": "drive",
+                  "authState": "disconnected",
+                  "id": "drive",
+                  "name": "Drive",
+                  "toolNames": [
+                    "search_files"
+                  ]
+                },
+                {
+                  "alias": "vault",
+                  "authState": "setup_required",
+                  "id": "vault",
+                  "name": "Vault",
+                  "toolNames": [
+                    "read_secret"
+                  ]
+                }
+              ]
+            }
+          },
+          "kind": "mcp",
+          "mcp": {
+            "mcp": {
+              "sources": [
+                {
+                  "enabled": true,
+                  "name": "github",
+                  "status": "healthy",
+                  "tools": [
+                    {
+                      "description": "Search repositories",
+                      "enabled": true,
+                      "name": "search"
+                    },
+                    {
+                      "description": "Read files",
+                      "enabled": false,
+                      "name": "read"
+                    }
+                  ],
+                  "transport": "streamable-http"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "connectors": {
+            "connectors": {
+              "sources": []
+            }
+          },
+          "kind": "mcp_detail",
+          "mcp": {
+            "mcp": {
+              "sources": [
+                {
+                  "name": "github",
+                  "tools": [
+                    {
+                      "description": "Search repositories",
+                      "enabled": true,
+                      "name": "search"
+                    },
+                    {
+                      "description": "Read files",
+                      "enabled": false,
+                      "name": "read"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "source": "github",
+          "source_kind": "server"
+        },
+        {
+          "connectors": {
+            "connectors": {
+              "sources": [
+                {
+                  "alias": "vault",
+                  "authState": "setup_required",
+                  "enabled": true,
+                  "id": "vault",
+                  "name": "Vault",
+                  "toolNames": [
+                    "read_secret"
+                  ]
+                }
+              ]
+            }
+          },
+          "kind": "mcp_detail",
+          "mcp": {
+            "mcp": {
+              "sources": []
+            }
+          },
+          "source": "vault",
+          "source_kind": "connector"
+        },
+        {
+          "kind": "mcp_auth",
+          "source": "github",
+          "source_kind": "server",
+          "url": "https://auth.example/authorize?state=opaque"
+        },
+        {
+          "kind": "mcp_auth",
+          "source": "drive",
+          "source_kind": "connector",
+          "url": "https://connectors.mistral.ai/auth/drive"
+        },
+        {
+          "action": "open",
+          "kind": "auth_action",
+          "source": "github",
+          "source_kind": "server",
+          "url": "https://auth.example/authorize?state=opaque"
+        },
+        {
+          "action": "copy",
+          "kind": "auth_action",
+          "source": "github",
+          "source_kind": "server",
+          "url": "https://auth.example/authorize?state=opaque"
+        },
+        {
+          "action": "show",
+          "kind": "auth_action",
+          "source": "github",
+          "source_kind": "server",
+          "url": "https://auth.example/authorize?state=opaque"
+        },
+        {
+          "action": "refresh",
+          "kind": "auth_action",
+          "source": "github",
+          "source_kind": "server",
+          "url": "https://auth.example/authorize?state=opaque"
+        },
+        {
+          "action": "logout",
+          "kind": "auth_action",
+          "source": "github",
+          "source_kind": "server",
+          "url": "https://auth.example/authorize?state=opaque"
+        },
+        {
+          "action": "close",
+          "kind": "auth_action",
+          "source": "github",
+          "source_kind": "server",
+          "url": "https://auth.example/authorize?state=opaque"
+        },
+        {
+          "action": "refresh",
+          "kind": "auth_action",
+          "source": "drive",
+          "source_kind": "connector",
+          "url": "https://connectors.mistral.ai/auth/drive"
+        },
+        {
+          "kind": "mcp_auth",
+          "source": "github",
+          "source_kind": "server",
+          "url": "http://auth.example/authorize"
+        }
+      ],
+      "expected": [
+        "mcp|MCP Servers & Connectors|-|Local MCP Servers:disabled:;github:enabled:streamable-http · 1/2 tools · enabled;:disabled:;Workspace Connectors:disabled:;Calendar:enabled:connector · 1 tool · connected;Drive:enabled:connector · 1 tool · needs auth;Vault:enabled:connector · 1 tool · needs setup;Archive:enabled:connector · no tools · disabled;Broken:enabled:connector · no tools · error - try refreshing",
+        "mcp-detail|MCP Server: github|-|read:enabled:Read files (disabled);search:enabled:Search repositories",
+        "mcp-detail|Connector: Vault|-|Set up credentials in the Mistral dashboard:disabled:Then refresh this connector;Refresh connector:enabled:Check whether credential setup is complete",
+        "auth|Authenticate github|-|Open in browser:enabled:Open the validated authentication URL;Copy URL:enabled:Copy the authentication URL to the clipboard;Show URL:enabled:Print the authentication URL in the transcript;Authentication complete:enabled:Refresh source state after sign-in;Log out:enabled:Clear saved authentication for this source;Close:enabled:Return without changing source state",
+        "auth|Authenticate drive|-|Open in browser:enabled:Open the validated authentication URL;Copy URL:enabled:Copy the authentication URL to the clipboard;Show URL:enabled:Print the authentication URL in the transcript;Authentication complete:enabled:Refresh source state after sign-in;Close:enabled:Return without changing source state",
+        "effect|open_url|server|github|https://auth.example/authorize?state=opaque|calls=url/open:https://auth.example/authorize?state=opaque",
+        "effect|copy_url|server|github|https://auth.example/authorize?state=opaque|calls=clipboard/write:https://auth.example/authorize?state=opaque",
+        "effect|show_url|server|github|https://auth.example/authorize?state=opaque|calls=transcript/write:github",
+        "effect|complete_auth|server|github|-|calls=mcp/auth/complete:github",
+        "effect|logout|server|github|calls=mcp/logout:github",
+        "effect|close|-|-|calls=overlay/close",
+        "effect|complete_auth|connector|drive|-|calls=connectors/refresh:drive",
+        "error:unsafe authentication URL"
+      ],
+      "id": "grouped-mcp-connector-lifecycle",
+      "reference": [
+        "mcp|MCP Servers & Connectors|-|Local MCP Servers:disabled:;github:enabled:streamable-http · 1/2 tools · enabled;:disabled:;Workspace Connectors:disabled:;Calendar:enabled:connector · 1 tool · connected;Drive:enabled:connector · 1 tool · needs auth;Vault:enabled:connector · 1 tool · needs setup;Archive:enabled:connector · no tools · disabled;Broken:enabled:connector · no tools · error - try refreshing",
+        "mcp-detail|MCP Server: github|-|read:enabled:Read files (disabled);search:enabled:Search repositories",
+        "mcp-detail|Connector: Vault|-|Set up credentials in the Mistral dashboard, then press r to refresh.:disabled:",
+        "auth|MCP Server: github|Once authenticated in your browser, return to Vibe|This MCP server requires authentication:disabled:;:disabled:;Press enter to open auth in your browser:enabled:;Copy URL to clipboard:enabled:;Manually show the URL:enabled:",
+        "auth|Connector: drive|Once authenticated, press r to refresh|This connector requires authentication:disabled:;:disabled:;Press Enter to open auth in your browser:enabled:;Copy URL to clipboard:enabled:;Manually show the URL:enabled:",
+        "reference|open|server|github|detail=Once authenticated in your browser, return to Vibe|calls=url/open:https://auth.example/authorize?state=opaque,mcp/login:github",
+        "reference|copy|server|github|detail=Once authenticated in your browser, return to Vibe|calls=clipboard/write:https://auth.example/authorize?state=opaque,mcp/login:github",
+        "reference|show|server|github|detail=https://auth.example/authorize?state=opaque Once authenticated in your browser, return to Vibe|calls=mcp/login:github",
+        "reference|refresh|server|github|detail=Once authenticated in your browser, return to Vibe|calls=mcp/login:github",
+        "reference|logout|unsupported",
+        "reference|close|server|github|detail=Once authenticated in your browser, return to Vibe|calls=mcp/login:github,MCPOAuthClosed(refreshed=False,server_name=)",
+        "reference|refresh|connector|drive|detail=Once authenticated, press r to refresh|calls=connectors/auth-url:drive,connectors/refresh:drive",
+        "auth|MCP Server: github|Once authenticated in your browser, return to Vibe|This MCP server requires authentication:disabled:;:disabled:;Press enter to open auth in your browser:enabled:;Copy URL to clipboard:enabled:;Manually show the URL:enabled:"
+      ],
+      "story": "US-032"
+    },
+    {
+      "divergences": [
+        {
+          "event": 1,
+          "reason": "The Rust picker reports that the saved project link stopped matching this repository; the reference clears the link silently and keeps the repository line."
+        },
+        {
+          "event": 3,
+          "reason": "The Rust runtime opens a typed approval overlay; the reference asks the same question through the shared user-question flow built inline in `app.py:_ask_push_approval`."
+        }
+      ],
+      "events": [
+        {
+          "kind": "projects",
+          "teleport": true,
+          "view": {
+            "context": {
+              "repoName": "parity",
+              "repoUrl": "git@example/parity.git",
+              "savedLink": {
+                "projectId": "project-1",
+                "projectName": "Parity",
+                "repoUrl": "git@example/parity.git"
+              }
+            },
+            "state": {
+              "projects": [
+                {
+                  "isReadOnly": false,
+                  "name": "Parity",
+                  "projectId": "project-1",
+                  "repositories": [
+                    {
+                      "repoUrl": "git@example/parity.git"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "kind": "projects",
+          "teleport": false,
+          "view": {
+            "context": {
+              "repoName": "parity",
+              "repoUrl": "git@example/parity.git",
+              "savedLink": null
+            },
+            "savedProjectLinkCleared": true,
+            "state": {
+              "nextCursor": null,
+              "projects": []
+            }
+          }
+        },
+        {
+          "kind": "loops",
+          "loops": [
+            {
+              "id": "loop-1",
+              "intervalSeconds": 3661,
+              "nextFireAt": 130.0,
+              "prompt": "check | deploy\nreport"
+            }
+          ],
+          "now_seconds": 100
+        },
+        {
+          "event": {
+            "branchNotPushed": false,
+            "kind": "push_required",
+            "operationId": "teleport-1",
+            "unpushedCount": 2
+          },
+          "kind": "teleport"
+        },
+        {
+          "event": {
+            "kind": "complete",
+            "operationId": "teleport-1",
+            "url": "https://chat.mistral.ai/code/project-1"
+          },
+          "kind": "teleport"
+        },
+        {
+          "event": {
+            "error": {
+              "message": "cloud unavailable"
+            },
+            "kind": "failed",
+            "operationId": "teleport-2"
+          },
+          "kind": "teleport"
+        },
+        {
+          "event": {
+            "kind": "cancelled",
+            "operationId": "teleport-3"
+          },
+          "kind": "teleport"
+        }
+      ],
+      "expected": [
+        "projects|Vibe Code project|Repository: example/parity|Projects:disabled:;Parity:enabled:1 repo · Currently linked;:disabled:;:disabled:;Actions:disabled:;Create new project:enabled:repo-linked project;Unlink project:enabled:",
+        "projects|Vibe Code project|The saved project link no longer matches this repository. Select a project.|:disabled:;:disabled:;Actions:disabled:;Create new project:enabled:recommended",
+        "| Prompt | Next in | Every | ID |\n|--------|------|-------|----|\n| check \\| deploy report | 30s | 1h1m1s | `loop-1` |",
+        "teleport-approval|Teleport needs to push changes|Choose whether Teleport may push this repository.|Push and continue:enabled:Push 2 unpushed commits before starting Teleport;Cancel:enabled:Cancel Teleport without pushing",
+        "Completed:Teleported to Vibe Code Web: https://chat.mistral.ai/code/project-1",
+        "Failed:Teleport failed: cloud unavailable",
+        "Cancelled:Teleport cancelled."
+      ],
+      "id": "project-teleport-and-loop-presentation",
+      "reference": [
+        "projects|Vibe Code project|Repository: example/parity|Projects:disabled:;Parity:enabled:1 repo · Currently linked;:disabled:;:disabled:;Actions:disabled:;Create new project:enabled:repo-linked project;Unlink project:enabled:",
+        "projects|Vibe Code project|Repository: example/parity|:disabled:;:disabled:;Actions:disabled:;Create new project:enabled:recommended",
+        "| Prompt | Next in | Every | ID |\n|--------|------|-------|----|\n| check \\| deploy report | 30s | 1h1m1s | `loop-1` |",
+        "Streaming:Teleport requires pushing 2 commits. Use `/teleport approve` or `/teleport deny`.",
+        "Completed:Teleported to Vibe Code Web: https://chat.mistral.ai/code/project-1",
+        "Failed:Teleport failed: cloud unavailable",
+        "Cancelled:Teleport cancelled."
+      ],
+      "story": "US-033"
+    }
+  ],
+  "unavailable": [
+    {
+      "dimension": "teleport push approval question",
+      "reason": "The reference builds the question inline in `app.py:_ask_push_approval` and answers it through the app-server user-question flow, so capturing it would require mounting the whole Vibe App with a live client."
+    },
+    {
+      "dimension": "OAuth login streaming",
+      "reason": "The reference widget consumes an async login stream from the app server; the oracle can only pin its rendered states, not the transport itself."
+    }
+  ]
+}

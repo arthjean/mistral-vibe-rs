@@ -79,6 +79,21 @@ impl SystemClipboardPort for SystemClipboard {
     }
 }
 
+pub(crate) async fn copy_text_bounded(text: String) -> Result<(), ClipboardError> {
+    if text.is_empty() {
+        return Err(ClipboardError::Unavailable);
+    }
+    for (program, arguments) in copy_commands() {
+        if super::external_action::run_command(program, arguments, Some(text.as_bytes().to_vec()))
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+    }
+    write_osc52(&text)
+}
+
 #[derive(Debug)]
 pub(crate) struct CapturedClipboardImage {
     pub path: PathBuf,

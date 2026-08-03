@@ -10,9 +10,13 @@ use vibe_cli::tui::commands::{
 use vibe_cli::tui::completion::CompletionEngine;
 use vibe_cli::tui::input::PromptEditor;
 use vibe_cli::tui::interaction::{
-    Overlay, OverlayItem, OverlayKind, PromptQueue, QuitConfirmation,
+    ConfigLayerTarget, IntegrationKind, IntegrationTarget, Overlay, OverlayAction, OverlayItem,
+    OverlayKind, PromptQueue, QuitConfirmation, RemoteProjectAction,
 };
-use vibe_cli::tui::pickers::{config_overlay, mcp_overlay, rewind_state, sessions_overlay};
+use vibe_cli::tui::pickers::{
+    config_overlay, config_target_overlay, mcp_detail_overlay, mcp_overlay, proxy_overlay,
+    remote_projects_overlay, rewind_state, sessions_overlay,
+};
 use vibe_cli::tui::render::{BannerContext, TokenState, UiContext, draw};
 use vibe_cli::tui::rewind::RewindAction;
 use vibe_cli::tui::setup::{DetectedTheme, Theme, resolve_theme};
@@ -378,7 +382,8 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
         &serde_json::json!({
             "properties": {
                 "active_model": {"type": "string"},
-                "thinking": {"enum": ["off", "low", "high"]}
+                "thinking": {"enum": ["off", "low", "high"]},
+                "voice_mode_enabled": {"type": "boolean"}
             }
         }),
     );
@@ -399,9 +404,13 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
         config
             .items
             .iter()
-            .any(|item| item.id == "voice_mode_enabled"
-                && item.description.contains("environment"))
+            .any(|item| item.id == "voice_mode_enabled" && item.description.contains("env"))
     );
+    let targets = config_target_overlay(ConfigLayerTarget::Project);
+    assert!(targets.items.iter().any(|item| matches!(
+        item.action,
+        OverlayAction::ConfigTarget(ConfigLayerTarget::User)
+    )));
 
     let sessions = sessions_overlay(
         &serde_json::json!({
@@ -419,17 +428,187 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
         Some("session-123")
     );
 
-    let mcp = mcp_overlay(&serde_json::json!({
-        "mcp": {
-            "sources": [{
+    let mcp = mcp_overlay(
+        &serde_json::json!({
+            "mcp": {
+                "sources": [{
+                    "name": "github",
+                    "transport": "streamable-http",
+                    "status": "healthy",
+                    "enabled": true,
+                    "tools": [
+                        {"name": "search", "enabled": true},
+                        {"name": "read", "enabled": false}
+                    ]
+                }]
+            }
+        }),
+        &serde_json::json!({
+            "connectors": {
+                "sources": [{
+                    "id": "drive",
+                    "name": "Drive",
+                    "authState": "disconnected",
+                    "toolNames": ["search_files"]
+                }]
+            }
+        }),
+    );
+    assert!(
+        mcp.items
+            .iter()
+            .any(|item| item.description.contains("2 tools"))
+    );
+    assert!(
+        mcp.items
+            .iter()
+            .any(|item| item.description.contains("needs auth"))
+    );
+    assert!(!mcp.items.iter().any(|item| item.label.trim() == "read"));
+    let detail = mcp_detail_overlay(
+        &serde_json::json!({
+            "mcp": {"sources": [{
                 "name": "github",
-                "status": "connected",
-                "enabled": true,
-                "tools": [{"name": "search"}, {"name": "read"}]
-            }]
+                "tools": [
+                    {"name": "search", "enabled": true},
+                    {"name": "read", "enabled": false}
+                ]
+            }]}
+        }),
+        &serde_json::json!({"connectors": {"sources": []}}),
+        &IntegrationTarget {
+            kind: IntegrationKind::McpServer,
+            source: "github".to_owned(),
+            tool: None,
+            enabled: true,
+            requires_auth: false,
+            requires_setup: false,
+        },
+    );
+    assert_eq!(detail.kind, OverlayKind::McpDetail);
+    assert!(detail.items.iter().any(|item| {
+        item.label.trim() == "read"
+            && !matches!(
+                item.action,
+                OverlayAction::Integration(IntegrationTarget { enabled: true, .. })
+            )
+    }));
+    let setup = mcp_detail_overlay(
+        &serde_json::json!({"mcp": {"sources": []}}),
+        &serde_json::json!({
+            "connectors": {"sources": [{
+                "id": "vault",
+                "name": "Vault",
+                "authState": "setup_required",
+                "toolNames": ["read_secret"]
+            }]}
+        }),
+        &IntegrationTarget {
+            kind: IntegrationKind::Connector,
+            source: "vault".to_owned(),
+            tool: None,
+            enabled: true,
+            requires_auth: false,
+            requires_setup: true,
+        },
+    );
+    assert!(
+        setup
+            .items
+            .iter()
+            .any(|item| item.disabled && item.label.contains("dashboard"))
+    );
+    assert!(setup.items.iter().any(|item| {
+        matches!(
+            &item.action,
+            OverlayAction::Integration(IntegrationTarget {
+                requires_setup: true,
+                requires_auth: false,
+                ..
+            })
+        )
+    }));
+
+    let proxy = proxy_overlay(&serde_json::json!({
+        "values": {"HTTP_PROXY": "https://proxy.example", "NO_PROXY": "localhost"},
+        "descriptions": {
+            "HTTP_PROXY": "Proxy URL for HTTP requests",
+            "HTTPS_PROXY": "Proxy URL for HTTPS requests",
+            "ALL_PROXY": "Proxy URL for all requests (fallback)",
+            "NO_PROXY": "Comma-separated list of hosts to bypass proxy",
+            "SSL_CERT_FILE": "Path to custom SSL certificate file",
+            "SSL_CERT_DIR": "Path to directory containing SSL certificates"
         }
     }));
-    assert!(mcp.items[0].description.contains("2 tools"));
+    assert_eq!(proxy.items.len(), 6);
+    assert!(
+        proxy
+            .items
+            .iter()
+            .any(|item| item.id == "NO_PROXY" && item.description.contains("localhost"))
+    );
+
+    let projects = remote_projects_overlay(&serde_json::json!({
+        "context": {
+            "repoName": "parity",
+            "repoUrl": "git@example/parity.git",
+            "savedLink": {
+                "projectId": "project-1",
+                "projectName": "Parity",
+                "repoUrl": "git@example/parity.git"
+            }
+        },
+        "state": {"projects": [
+            {
+                "projectId": "project-1",
+                "name": "Parity",
+                "repositories": [{"repoUrl": "git@example/parity.git"}],
+                "isReadOnly": false
+            },
+            {
+                "projectId": "read-only",
+                "name": "Read only",
+                "repositories": [{"repoUrl": "git@example/parity.git"}],
+                "isReadOnly": true
+            },
+            {
+                "projectId": "unrelated",
+                "name": "Unrelated",
+                "repositories": [{"repoUrl": "git@example/other.git"}],
+                "isReadOnly": false
+            }
+        ]},
+        "git": {"defaultBranch": "main", "branch": "feature/parity"}
+    }));
+    assert_eq!(projects.kind, OverlayKind::RemoteProjects);
+    // The reference mounts one picker title and heads it with the repository,
+    // whether or not the selection feeds Teleport (`app.py:2992`).
+    assert_eq!(projects.title, "Vibe Code project");
+    assert_eq!(
+        projects.notice.as_deref(),
+        Some("Repository: example/parity")
+    );
+    assert!(
+        projects
+            .items
+            .iter()
+            .any(|item| item.label == "Create new project")
+    );
+    assert!(projects.items.iter().any(|item| matches!(
+        &item.action,
+        OverlayAction::RemoteProject(RemoteProjectAction::Create {
+            default_branch,
+            ..
+        }) if default_branch == "main"
+    )));
+    assert!(
+        projects
+            .items
+            .iter()
+            .any(|item| item.label == "Unlink project")
+    );
+    assert!(!projects.items.iter().any(|item| item.label == "Read only"));
+    assert!(!projects.items.iter().any(|item| item.label == "Unrelated"));
 
     let fresh = config_overlay(
         &serde_json::json!({"config": {}}),

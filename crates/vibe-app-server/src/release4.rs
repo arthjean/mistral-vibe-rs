@@ -1317,6 +1317,10 @@ fn is_project_linked_to_repo(project: &Project, repo_url: &str) -> bool {
         .any(|repository| normalize_repo_url(&repository.repo_url) == normalized_repo_url)
 }
 
+fn project_is_selectable(project: &Project, repo_url: &str) -> bool {
+    !project.is_read_only && is_project_linked_to_repo(project, repo_url)
+}
+
 fn suggested_project_name(git: &ProjectGitSnapshot) -> String {
     let root_name = Path::new(&git.repo_root)
         .file_name()
@@ -2224,9 +2228,32 @@ impl Release4Service {
                 ("focusOptionId", Value::Null),
             ]));
         };
-        let page = self
-            .project_list_cloud(Some(requested_cursor.clone()))
-            .await?;
+        let repo_url = {
+            let state = self.lock_projects()?;
+            picker(&state, &picker_id, &session_id)?.repo_url.clone()
+        };
+        let mut cursor = Some(requested_cursor.clone());
+        let mut pages = Vec::new();
+        let mut focus = None;
+        let mut seen = BTreeSet::new();
+        while let Some(page_cursor) = cursor.take() {
+            if pages.len() >= MAX_HEADLESS_PROJECT_PAGES || !seen.insert(page_cursor.clone()) {
+                return Err(Release4Error::Conflict(
+                    "Vibe Code project pagination did not terminate safely".to_owned(),
+                ));
+            }
+            let page = self.project_list_cloud(Some(page_cursor)).await?;
+            focus = page
+                .projects
+                .iter()
+                .find(|project| project_is_selectable(project, &repo_url))
+                .map(|project| project.project_id.clone());
+            cursor.clone_from(&page.next_cursor);
+            pages.push(page);
+            if focus.is_some() {
+                break;
+            }
+        }
         let mut state = self.lock_projects()?;
         let picker = picker_mut(&mut state, &picker_id, &session_id)?;
         if picker.next_cursor.as_deref() != Some(&requested_cursor) {
@@ -2234,13 +2261,18 @@ impl Release4Service {
                 "project picker changed while loading the next page".to_owned(),
             ));
         }
-        for project in page.projects {
-            picker.projects.insert(project.project_id.clone(), project);
+        for page in pages {
+            for project in page.projects {
+                picker.projects.insert(project.project_id.clone(), project);
+            }
+            picker.next_cursor = page.next_cursor;
         }
-        picker.next_cursor = page.next_cursor;
         Ok(Release4Dispatch::result([
             ("view", project_view(picker)),
-            ("focusOptionId", Value::Null),
+            (
+                "focusOptionId",
+                focus.map_or(Value::Null, |id| json!(format!("project:{id}"))),
+            ),
         ]))
     }
 
@@ -2889,10 +2921,35 @@ impl Release4Service {
                 ("focusOptionId", Value::Null),
             ]));
         };
-        let page = self
-            .sync_project_cloud()?
-            .list(Some(&requested_cursor))
-            .map_err(Release4Error::Cloud)?;
+        let repo_url = {
+            let state = self.lock_projects()?;
+            picker(&state, picker_id, session_id)?.repo_url.clone()
+        };
+        let cloud = self.sync_project_cloud()?;
+        let mut cursor = Some(requested_cursor.clone());
+        let mut pages = Vec::new();
+        let mut focus = None;
+        let mut seen = BTreeSet::new();
+        while let Some(page_cursor) = cursor.take() {
+            if pages.len() >= MAX_HEADLESS_PROJECT_PAGES || !seen.insert(page_cursor.clone()) {
+                return Err(Release4Error::Conflict(
+                    "Vibe Code project pagination did not terminate safely".to_owned(),
+                ));
+            }
+            let page = cloud
+                .list(Some(&page_cursor))
+                .map_err(Release4Error::Cloud)?;
+            focus = page
+                .projects
+                .iter()
+                .find(|project| project_is_selectable(project, &repo_url))
+                .map(|project| project.project_id.clone());
+            cursor.clone_from(&page.next_cursor);
+            pages.push(page);
+            if focus.is_some() {
+                break;
+            }
+        }
         let mut state = self.lock_projects()?;
         let picker = picker_mut(&mut state, picker_id, session_id)?;
         if picker.next_cursor.as_deref() != Some(&requested_cursor) {
@@ -2900,13 +2957,18 @@ impl Release4Service {
                 "project picker changed while loading the next page".to_owned(),
             ));
         }
-        for project in page.projects {
-            picker.projects.insert(project.project_id.clone(), project);
+        for page in pages {
+            for project in page.projects {
+                picker.projects.insert(project.project_id.clone(), project);
+            }
+            picker.next_cursor = page.next_cursor;
         }
-        picker.next_cursor = page.next_cursor;
         Ok(Release4Dispatch::result([
             ("view", project_view(picker)),
-            ("focusOptionId", Value::Null),
+            (
+                "focusOptionId",
+                focus.map_or(Value::Null, |id| json!(format!("project:{id}"))),
+            ),
         ]))
     }
 
@@ -4799,6 +4861,73 @@ mod tests {
                     if message.contains("not linked")
             ));
         }
+    }
+
+    #[tokio::test]
+    async fn project_load_more_skips_ineligible_pages_and_focuses_the_first_selectable_project() {
+        let repo_url = "https://github.com/mistralai/mistral-vibe.git";
+        let cloud = Arc::new(HeadlessProjects::new([
+            (
+                None,
+                ProjectPage {
+                    projects: vec![listed_project(
+                        "initial-wrong-repo",
+                        &["https://github.com/mistralai/other.git"],
+                        false,
+                    )],
+                    next_cursor: Some("ineligible".to_owned()),
+                },
+            ),
+            (
+                Some("ineligible"),
+                ProjectPage {
+                    projects: vec![listed_project("read-only", &[repo_url], true)],
+                    next_cursor: Some("selectable".to_owned()),
+                },
+            ),
+            (
+                Some("selectable"),
+                ProjectPage {
+                    projects: vec![listed_project("eligible", &[repo_url], false)],
+                    next_cursor: Some("tail".to_owned()),
+                },
+            ),
+        ]));
+        let service = headless_service(cloud.clone());
+        let opened = service
+            .dispatch_deferred(
+                "vibeCode/projects/open",
+                &params(json!({
+                    "sessionId": "configure",
+                    "workingDirectory": "/repo/mistral-vibe",
+                    "purpose": "configure",
+                })),
+            )
+            .await
+            .expect("configure picker opens");
+        let picker_id = opened.result["pickerId"].as_str().expect("picker ID");
+
+        let loaded = service
+            .dispatch_deferred(
+                "vibeCode/projects/loadMore",
+                &params(json!({
+                    "sessionId": "configure",
+                    "pickerId": picker_id,
+                })),
+            )
+            .await
+            .expect("eligible page loads");
+
+        assert_eq!(loaded.result["focusOptionId"], json!("project:eligible"));
+        assert_eq!(loaded.result["view"]["state"]["nextCursor"], json!("tail"));
+        assert_eq!(
+            cloud.list_calls.lock().expect("list calls").as_slice(),
+            &[
+                None,
+                Some("ineligible".to_owned()),
+                Some("selectable".to_owned()),
+            ]
+        );
     }
 
     #[tokio::test]

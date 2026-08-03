@@ -9,7 +9,10 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use thiserror::Error;
 use toml::{Table, Value as TomlValue};
-use vibe_core::config::{ConfigMutation, ConfigPaths, ConfigTarget, ConfigWrite, LayeredConfig};
+use vibe_core::config::{
+    ConfigMutation, ConfigPaths, ConfigTarget, ConfigWrite, LayeredConfig, ProxyEnvironmentStore,
+    ProxyKey,
+};
 use vibe_core::continuity::SessionContinuity;
 use vibe_core::events::ModelMessage;
 use vibe_core::extensions::{
@@ -172,6 +175,11 @@ impl Release3Service {
             next_session: Arc::new(AtomicU64::new(1)),
             persist_runtime_sessions: false,
         }
+    }
+
+    #[must_use]
+    pub fn layered_config(&self) -> LayeredConfig {
+        self.config.clone()
     }
 
     #[must_use]
@@ -403,14 +411,8 @@ impl Release3Service {
             )])),
             "config/batchWrite" => self.config_batch_write(params),
             "config/thinking/write" => self.single_config_write(params, "thinking", "value"),
-            "config/proxy/write" => self.single_config_write(params, "proxy", "value"),
-            "config/proxy/read" => {
-                let snapshot = self.config.load().map_err(config_error)?;
-                Ok(Release3Dispatch::result([(
-                    "proxy",
-                    snapshot.public_value("proxy"),
-                )]))
-            }
+            "config/proxy/write" => self.proxy_write(params),
+            "config/proxy/read" => self.proxy_read(),
             "session/list" => self.session_list(params),
             "history/list" => self.history_list(params),
             "session/log/read" => self.session_log(params),
@@ -430,6 +432,20 @@ impl Release3Service {
             "workspace/prompt/prepare" => self.prompt_prepare(params),
             _ => Err(Release3Error::MethodNotFound(method.to_owned())),
         }
+    }
+
+    pub fn dispatch_scoped(
+        &self,
+        method: &str,
+        params: &BTreeMap<String, Value>,
+        working_directory: PathBuf,
+        project_trusted: bool,
+    ) -> Result<Release3Dispatch, Release3Error> {
+        let mut scoped = self.clone();
+        scoped.config = self
+            .config
+            .scoped_to_working_directory(working_directory, project_trusted);
+        scoped.dispatch(method, params)
     }
 
     pub fn close_saved_session(&self, session_id: &str, now_ms: u64) -> Result<(), Release3Error> {
@@ -548,6 +564,62 @@ impl Release3Service {
             "snapshot",
             snapshot.public_view(),
         )]))
+    }
+
+    fn proxy_read(&self) -> Result<Release3Dispatch, Release3Error> {
+        let values = ProxyEnvironmentStore::new(&self.paths.vibe_home)
+            .read()
+            .map_err(config_error)?;
+        Ok(Release3Dispatch::result([(
+            "settings",
+            json!({
+                "values": ProxyKey::ALL.into_iter().map(|key| {
+                    (key.as_str().to_owned(), values.get(&key).cloned().map(Value::String).unwrap_or(Value::Null))
+                }).collect::<Map<_, _>>(),
+                "descriptions": ProxyKey::ALL.into_iter().map(|key| {
+                    (key.as_str().to_owned(), json!(key.description()))
+                }).collect::<Map<_, _>>(),
+            }),
+        )]))
+    }
+
+    fn proxy_write(
+        &self,
+        params: &BTreeMap<String, Value>,
+    ) -> Result<Release3Dispatch, Release3Error> {
+        let changes = params
+            .get("changes")
+            .and_then(Value::as_object)
+            .ok_or_else(|| Release3Error::InvalidParams("changes must be an object".to_owned()))?;
+        let mut parsed = BTreeMap::new();
+        for (key, value) in changes {
+            let key = ProxyKey::try_from(key.as_str())
+                .map_err(|error| Release3Error::InvalidParams(error.to_string()))?;
+            let value = match value {
+                Value::Null => None,
+                Value::String(value) if value.is_empty() => None,
+                Value::String(value) if !value.contains(['\n', '\r', '\0']) => Some(value.clone()),
+                Value::String(_) => {
+                    return Err(Release3Error::InvalidParams(format!(
+                        "proxy value for `{}` contains a forbidden control character",
+                        key.as_str()
+                    )));
+                }
+                _ => {
+                    return Err(Release3Error::InvalidParams(format!(
+                        "proxy value for `{}` must be a string or null",
+                        key.as_str()
+                    )));
+                }
+            };
+            parsed.insert(key, value);
+        }
+        if !parsed.is_empty() {
+            ProxyEnvironmentStore::new(&self.paths.vibe_home)
+                .write(&parsed)
+                .map_err(config_error)?;
+        }
+        Ok(Release3Dispatch::result([] as [(&str, Value); 0]))
     }
 
     fn session_list(
@@ -1529,8 +1601,65 @@ mod tests {
             service
                 .dispatch("config/proxy/read", &BTreeMap::new())
                 .expect("proxy read")
-                .result["proxy"],
-            json!("[redacted]")
+                .result["settings"]["values"]["HTTP_PROXY"],
+            Value::Null
+        );
+    }
+
+    #[test]
+    fn proxy_environment_round_trips_all_supported_keys_and_preserves_other_values() {
+        let (temporary, service) = service();
+        fs::create_dir_all(temporary.path().join("home")).expect("proxy home");
+        fs::write(
+            temporary.path().join("home/.env"),
+            "MISTRAL_API_KEY='preserved'\nHTTP_PROXY='old'\n",
+        )
+        .expect("dotenv fixture");
+        service
+            .dispatch(
+                "config/proxy/write",
+                &BTreeMap::from([(
+                    "changes".to_owned(),
+                    json!({
+                        "HTTP_PROXY": "https://proxy.example",
+                        "HTTPS_PROXY": "https://secure-proxy.example",
+                        "ALL_PROXY": "socks5://proxy.example",
+                        "NO_PROXY": "localhost,.internal",
+                        "SSL_CERT_FILE": "/certs/ca.pem",
+                        "SSL_CERT_DIR": "/certs",
+                    }),
+                )]),
+            )
+            .expect("proxy write");
+        let dispatch = service
+            .dispatch("config/proxy/read", &BTreeMap::new())
+            .expect("proxy read");
+        assert_eq!(
+            dispatch.result["settings"]["values"]["NO_PROXY"],
+            "localhost,.internal"
+        );
+        let persisted =
+            fs::read_to_string(temporary.path().join("home/.env")).expect("dotenv persisted");
+        assert!(persisted.contains("MISTRAL_API_KEY='preserved'"));
+        assert!(persisted.contains("SSL_CERT_DIR='/certs'"));
+    }
+
+    #[test]
+    fn proxy_environment_rejects_unknown_keys_without_mutation() {
+        let (temporary, service) = service();
+        fs::create_dir_all(temporary.path().join("home")).expect("proxy home");
+        fs::write(temporary.path().join("home/.env"), "HTTP_PROXY='old'\n")
+            .expect("dotenv fixture");
+        let error = service
+            .dispatch(
+                "config/proxy/write",
+                &BTreeMap::from([("changes".to_owned(), json!({"BAD_PROXY": "value"}))]),
+            )
+            .expect_err("unknown key rejected");
+        assert!(matches!(error, Release3Error::InvalidParams(_)));
+        assert_eq!(
+            fs::read_to_string(temporary.path().join("home/.env")).expect("unchanged"),
+            "HTTP_PROXY='old'\n"
         );
     }
 

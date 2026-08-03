@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
@@ -17,12 +16,15 @@ use crate::mcp::{
     McpTransportConfig,
 };
 
+mod proxy;
+
+pub use proxy::{ProxyEnvironmentStore, ProxyKey, ProxyKeyError};
+
 const CONFIG_FILE: &str = "config.toml";
 const PROJECT_DIRECTORY: &str = ".vibe";
 const TRANSACTION_FILE: &str = ".config-transaction.json";
 const LOCK_FILE: &str = ".config.lock";
 const MAX_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -75,7 +77,14 @@ pub struct ConfigSnapshot {
     pub selected_target: ConfigTarget,
     pub selected_path: PathBuf,
     pub fingerprints: BTreeMap<ConfigTarget, Option<String>>,
+    pub target_values: BTreeMap<ConfigTarget, Table>,
     pub layer_values: Vec<ConfigLayer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct IntegrationPreference {
+    pub enabled: bool,
+    pub disabled_tools: BTreeSet<String>,
 }
 
 impl ConfigSnapshot {
@@ -86,6 +95,9 @@ impl ConfigSnapshot {
             "selectedTarget": self.selected_target,
             "selectedPath": self.selected_path,
             "fingerprints": self.fingerprints,
+            "targetValues": self.target_values.iter().map(|(target, values)| {
+                (target, redact_table(values))
+            }).collect::<BTreeMap<_, _>>(),
             "layers": self.layer_values.iter().map(|layer| layer.kind).collect::<Vec<_>>(),
             "layerValues": self.layer_values.iter().map(|layer| json!({
                 "layer": layer.kind,
@@ -125,42 +137,56 @@ impl ConfigSnapshot {
                 ConfigError::InvalidMcp("each mcp_servers entry must be a table".to_owned())
             })?;
             let transport = required_mcp_string(table, "transport")?;
-            if transport != "stdio" {
-                return Err(ConfigError::InvalidMcp(
-                    "only stdio MCP transport is supported in TOML configuration".to_owned(),
-                ));
-            }
             let alias = required_mcp_string(table, "name")?.to_owned();
             if !aliases.insert(alias.clone()) {
                 return Err(ConfigError::InvalidMcp(
                     "MCP server names must be unique".to_owned(),
                 ));
             }
-            let command = required_mcp_string(table, "command")?.to_owned();
-            let arguments = optional_mcp_strings(table, "args")?;
-            let environment = optional_mcp_environment(table)?;
-            let working_directory = optional_mcp_string(table, "cwd")?
-                .map(PathBuf::from)
-                .map(|path| {
-                    if path.is_absolute() {
-                        path
-                    } else {
-                        working_directory.join(path)
+            let transport = match transport {
+                "stdio" => {
+                    let command = required_mcp_string(table, "command")?.to_owned();
+                    let arguments = optional_mcp_strings(table, "args")?;
+                    let environment = optional_mcp_environment(table)?;
+                    let working_directory = optional_mcp_string(table, "cwd")?
+                        .map(PathBuf::from)
+                        .map(|path| {
+                            if path.is_absolute() {
+                                path
+                            } else {
+                                working_directory.join(path)
+                            }
+                        })
+                        .or_else(|| Some(working_directory.to_path_buf()));
+                    McpTransportConfig::Stdio {
+                        command,
+                        arguments,
+                        environment,
+                        working_directory,
                     }
-                })
-                .or_else(|| Some(working_directory.to_path_buf()));
+                }
+                "streamable-http" => {
+                    let url = Url::parse(required_mcp_string(table, "url")?).map_err(|_| {
+                        ConfigError::InvalidMcp(
+                            "MCP server field `url` must be a valid URL".to_owned(),
+                        )
+                    })?;
+                    let headers = optional_mcp_environment_at(table, "headers")?;
+                    McpTransportConfig::StreamableHttp { url, headers }
+                }
+                _ => {
+                    return Err(ConfigError::InvalidMcp(
+                        "MCP transport must be stdio or streamable-http".to_owned(),
+                    ));
+                }
+            };
             let disabled = optional_mcp_bool(table, "disabled")?.unwrap_or(false);
             let disabled_tools = optional_mcp_strings(table, "disabled_tools")?
                 .into_iter()
                 .collect();
             servers.push(McpServerConfig {
                 alias,
-                transport: McpTransportConfig::Stdio {
-                    command,
-                    arguments,
-                    environment,
-                    working_directory,
-                },
+                transport,
                 enabled: !disabled,
                 disabled_tools,
                 startup_timeout_ms: optional_mcp_timeout(
@@ -173,10 +199,28 @@ impl ConfigSnapshot {
                     "tool_timeout_sec",
                     DEFAULT_MCP_TOOL_TIMEOUT_MS,
                 )?,
-                oauth: None,
             });
         }
         Ok(servers)
+    }
+
+    pub fn mcp_aliases(&self) -> Result<BTreeSet<String>, ConfigError> {
+        config_array(&self.effective, "mcp_servers")?
+            .into_iter()
+            .map(|entry| {
+                entry
+                    .as_table()
+                    .and_then(|entry| entry.get("name"))
+                    .and_then(Value::as_str)
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_owned)
+                    .ok_or_else(|| {
+                        ConfigError::InvalidMcp(
+                            "each effective mcp_servers entry requires a non-empty name".to_owned(),
+                        )
+                    })
+            })
+            .collect()
     }
 }
 
@@ -268,6 +312,18 @@ impl LayeredConfig {
         self
     }
 
+    #[must_use]
+    pub fn scoped_to_working_directory(
+        &self,
+        working_directory: PathBuf,
+        project_trusted: bool,
+    ) -> Self {
+        let mut scoped = self.clone();
+        scoped.paths.working_directory = working_directory;
+        scoped.project_trusted = project_trusted;
+        scoped
+    }
+
     pub fn load(&self) -> Result<ConfigSnapshot, ConfigError> {
         let _guard = self
             .transaction_lock
@@ -276,6 +332,7 @@ impl LayeredConfig {
         ensure_private_directory(&self.paths.vibe_home)?;
         let _file_guard = ConfigFileLock::acquire(&self.paths.vibe_home)?;
         recover_transaction(&self.paths)?;
+        cleanup_orphan_sidecars(&self.paths)?;
 
         let user_path = self.paths.user_config();
         let project_path = self.paths.project_config();
@@ -288,7 +345,20 @@ impl LayeredConfig {
             |path| (ConfigTarget::Project, path),
         );
 
-        let selected = read_table_optional(&selected_path)?;
+        let user_values = read_table_optional(&user_path)?;
+        let project_values = if self.project_trusted {
+            read_table_optional(&project_path)?
+        } else {
+            Table::new()
+        };
+        let target_values = BTreeMap::from([
+            (ConfigTarget::User, user_values),
+            (ConfigTarget::Project, project_values),
+        ]);
+        let selected = target_values
+            .get(&selected_target)
+            .cloned()
+            .unwrap_or_default();
         let environment = environment_table(&self.environment)?;
         let layers = vec![
             ConfigLayer {
@@ -297,7 +367,7 @@ impl LayeredConfig {
             },
             ConfigLayer {
                 kind: ConfigLayerKind::SelectedToml,
-                values: selected,
+                values: selected.clone(),
             },
             ConfigLayer {
                 kind: ConfigLayerKind::Experiments,
@@ -334,6 +404,7 @@ impl LayeredConfig {
             selected_target,
             selected_path,
             fingerprints,
+            target_values,
             layer_values: layers,
         })
     }
@@ -353,6 +424,7 @@ impl LayeredConfig {
         ensure_private_directory(&self.paths.vibe_home)?;
         let _file_guard = ConfigFileLock::acquire(&self.paths.vibe_home)?;
         recover_transaction(&self.paths)?;
+        cleanup_orphan_sidecars(&self.paths)?;
 
         let mut targets = BTreeSet::new();
         let mut prepared = Vec::with_capacity(writes.len());
@@ -385,6 +457,9 @@ impl LayeredConfig {
             entries: prepared.iter().map(PreparedWrite::journal_entry).collect(),
         };
         write_journal(&journal_path, &journal)?;
+        for item in &mut prepared {
+            item.cleanup_on_drop = false;
+        }
 
         if let Err(error) = commit_prepared(&prepared) {
             if let Err(rollback) = rollback_prepared(&prepared) {
@@ -412,36 +487,252 @@ impl LayeredConfig {
         self.load()
     }
 
+    pub fn preflight_mcp_add(&self, config: &McpServerConfig) -> Result<(), ConfigError> {
+        let snapshot = self.load()?;
+        preflight_mcp_add(&snapshot.effective, config)
+    }
+
+    pub fn persist_mcp_add(&self, config: &McpServerConfig) -> Result<ConfigSnapshot, ConfigError> {
+        let snapshot = self.load()?;
+        preflight_mcp_add(&snapshot.effective, config)?;
+        let mut entries = selected_config_array(&snapshot, "mcp_servers")?;
+        entries.push(mcp_server_value(config)?);
+        self.replace_selected_array(&snapshot, "mcp_servers", entries)
+    }
+
+    pub fn persist_mcp_state(
+        &self,
+        alias: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        let snapshot = self.load()?;
+        let target = snapshot.selected_target;
+        let expected_fingerprint = snapshot.fingerprints[&target].clone();
+        self.persist_mcp_state_cas(alias, enabled, disabled_tools, target, expected_fingerprint)
+    }
+
+    pub fn persist_mcp_state_cas(
+        &self,
+        alias: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+        target: ConfigTarget,
+        expected_fingerprint: Option<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        let snapshot = self.load()?;
+        let mut entries = config_array_for_target(&snapshot, target, "mcp_servers")?;
+        if !config_array(&snapshot.effective, "mcp_servers")?
+            .iter()
+            .filter_map(Value::as_table)
+            .any(|entry| entry.get("name").and_then(Value::as_str) == Some(alias))
+        {
+            return Err(ConfigError::InvalidMcp(format!(
+                "unknown MCP server `{alias}`"
+            )));
+        }
+        let position = entries.iter().position(|entry| {
+            entry
+                .as_table()
+                .and_then(|entry| entry.get("name"))
+                .and_then(Value::as_str)
+                == Some(alias)
+        });
+        let position = position.unwrap_or_else(|| {
+            let mut entry = Table::new();
+            entry.insert("name".to_owned(), Value::String(alias.to_owned()));
+            entries.push(Value::Table(entry));
+            entries.len() - 1
+        });
+        let entry = entries[position].as_table_mut().ok_or_else(|| {
+            ConfigError::InvalidMcp("selected MCP entry must be a table".to_owned())
+        })?;
+        entry.insert("disabled".to_owned(), Value::Boolean(!enabled));
+        entry.insert(
+            "disabled_tools".to_owned(),
+            Value::Array(disabled_tools.iter().cloned().map(Value::String).collect()),
+        );
+        self.replace_array_cas(target, expected_fingerprint, "mcp_servers", entries)
+    }
+
+    pub fn connector_preferences(
+        &self,
+    ) -> Result<BTreeMap<String, IntegrationPreference>, ConfigError> {
+        let snapshot = self.load()?;
+        let entries = config_array(&snapshot.effective, "connectors")?;
+        let mut preferences = BTreeMap::new();
+        for entry in entries {
+            let entry = entry.as_table().ok_or_else(|| {
+                ConfigError::InvalidIntegration("each connectors entry must be a table".to_owned())
+            })?;
+            let name = entry
+                .get("name")
+                .or_else(|| entry.get("id"))
+                .and_then(Value::as_str)
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| {
+                    ConfigError::InvalidIntegration(
+                        "connector field `name` must be a non-empty string".to_owned(),
+                    )
+                })?;
+            let enabled = match entry.get("disabled") {
+                None => true,
+                Some(Value::Boolean(disabled)) => !disabled,
+                Some(_) => {
+                    return Err(ConfigError::InvalidIntegration(
+                        "connector field `disabled` must be a boolean".to_owned(),
+                    ));
+                }
+            };
+            let disabled_tools = match entry.get("disabled_tools") {
+                None => BTreeSet::new(),
+                Some(Value::Array(values)) => values
+                    .iter()
+                    .map(|value| {
+                        value.as_str().map(str::to_owned).ok_or_else(|| {
+                            ConfigError::InvalidIntegration(
+                                "connector field `disabled_tools` must contain strings".to_owned(),
+                            )
+                        })
+                    })
+                    .collect::<Result<_, _>>()?,
+                Some(_) => {
+                    return Err(ConfigError::InvalidIntegration(
+                        "connector field `disabled_tools` must be an array".to_owned(),
+                    ));
+                }
+            };
+            if preferences
+                .insert(
+                    name.to_owned(),
+                    IntegrationPreference {
+                        enabled,
+                        disabled_tools,
+                    },
+                )
+                .is_some()
+            {
+                return Err(ConfigError::InvalidIntegration(format!(
+                    "connector `{name}` appears more than once"
+                )));
+            }
+        }
+        Ok(preferences)
+    }
+
+    pub fn persist_connector_state(
+        &self,
+        name: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        let snapshot = self.load()?;
+        let target = snapshot.selected_target;
+        let expected_fingerprint = snapshot.fingerprints[&target].clone();
+        self.persist_connector_state_cas(
+            name,
+            enabled,
+            disabled_tools,
+            target,
+            expected_fingerprint,
+        )
+    }
+
+    pub fn persist_connector_state_cas(
+        &self,
+        name: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+        target: ConfigTarget,
+        expected_fingerprint: Option<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        let snapshot = self.load()?;
+        let mut entries = config_array_for_target(&snapshot, target, "connectors")?;
+        let position = entries.iter().position(|entry| {
+            entry
+                .as_table()
+                .and_then(|entry| entry.get("name").or_else(|| entry.get("id")))
+                .and_then(Value::as_str)
+                == Some(name)
+        });
+        let position = position.unwrap_or_else(|| {
+            let mut entry = Table::new();
+            entry.insert("name".to_owned(), Value::String(name.to_owned()));
+            entries.push(Value::Table(entry));
+            entries.len() - 1
+        });
+        let entry = entries[position].as_table_mut().ok_or_else(|| {
+            ConfigError::InvalidIntegration("connector entry must be a table".to_owned())
+        })?;
+        entry.insert("disabled".to_owned(), Value::Boolean(!enabled));
+        entry.insert(
+            "disabled_tools".to_owned(),
+            Value::Array(disabled_tools.iter().cloned().map(Value::String).collect()),
+        );
+        self.replace_array_cas(target, expected_fingerprint, "connectors", entries)
+    }
+
+    fn replace_selected_array(
+        &self,
+        snapshot: &ConfigSnapshot,
+        key: &str,
+        entries: Vec<Value>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        self.batch_write(&[ConfigWrite {
+            target: snapshot.selected_target,
+            expected_fingerprint: snapshot.fingerprints[&snapshot.selected_target].clone(),
+            mutations: vec![ConfigMutation::set([key], Value::Array(entries))],
+        }])
+    }
+
+    fn replace_array_cas(
+        &self,
+        target: ConfigTarget,
+        expected_fingerprint: Option<String>,
+        key: &str,
+        entries: Vec<Value>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        self.batch_write(&[ConfigWrite {
+            target,
+            expected_fingerprint,
+            mutations: vec![ConfigMutation::set([key], Value::Array(entries))],
+        }])
+    }
+
     #[must_use]
     pub fn schema() -> JsonValue {
         json!({
             "type": "object",
             "additionalProperties": true,
             "properties": {
-                "active_model": {"type": "string", "default": ""},
-                "thinking": {"enum": ["off", "low", "medium", "high", "max"], "default": "off"},
-                "theme": {"enum": ["system", "light", "dark"], "default": "system"},
+                "active_model": {"type": "string", "default": "", "description": "Model used for new turns."},
+                "thinking": {"enum": ["off", "low", "medium", "high", "max"], "default": "off", "description": "Reasoning effort for the active model."},
+                "theme": {"enum": ["system", "light", "dark"], "default": "system", "description": "Terminal color theme."},
                 "notifications": {
                     "enum": ["off", "unfocused", "always"],
-                    "default": "unfocused"
+                    "default": "unfocused",
+                    "description": "When desktop notifications may be sent."
                 },
-                "enable_update_checks": {"type": "boolean", "default": true},
-                "show_thinking_nodes": {"type": "boolean", "default": true},
-                "voice_mode_enabled": {"type": "boolean", "default": false},
-                "narrator_enabled": {"type": "boolean", "default": false},
-                "proxy": {"type": ["string", "null"], "format": "uri"},
-                "tls_ca_path": {"type": ["string", "null"]},
-                "dotenv_path": {"type": ["string", "null"]},
+                "enable_update_checks": {"type": "boolean", "default": true, "description": "Check for new releases in the background."},
+                "show_thinking_nodes": {"type": "boolean", "default": true, "description": "Show reasoning regions in the transcript."},
+                "voice_mode_enabled": {"type": "boolean", "default": false, "description": "Enable voice input."},
+                "narrator_enabled": {"type": "boolean", "default": false, "description": "Read eligible assistant responses aloud."},
+                "proxy": {"type": ["string", "null"], "format": "uri", "description": "Legacy proxy URL. Prefer /proxy-setup for protocol-specific values."},
+                "tls_ca_path": {"type": ["string", "null"], "description": "Legacy TLS certificate path. Prefer /proxy-setup."},
+                "dotenv_path": {"type": ["string", "null"], "description": "Optional dotenv file loaded by the runtime."},
                 "mcp_servers": {
                     "type": "array",
+                    "description": "MCP server definitions.",
                     "items": {
                         "type": "object",
-                        "additionalProperties": true,
-                        "required": ["name", "transport", "command"],
+                        "additionalProperties": false,
+                        "required": ["name", "transport"],
                         "properties": {
                             "name": {"type": "string", "minLength": 1},
-                            "transport": {"const": "stdio"},
+                            "transport": {"enum": ["stdio", "streamable-http"]},
                             "command": {"type": "string", "minLength": 1},
+                            "url": {"type": "string", "format": "uri"},
+                            "headers": {"type": "object", "additionalProperties": {"type": "string"}},
                             "args": {"type": "array", "items": {"type": "string"}},
                             "env": {"type": "object", "additionalProperties": {"type": "string"}},
                             "cwd": {"type": "string"},
@@ -452,6 +743,33 @@ impl LayeredConfig {
                             },
                             "startup_timeout_sec": {"type": "number", "exclusiveMinimum": 0},
                             "tool_timeout_sec": {"type": "number", "exclusiveMinimum": 0}
+                        },
+                        "allOf": [
+                            {
+                                "if": {"properties": {"transport": {"const": "stdio"}}},
+                                "then": {"required": ["command"]}
+                            },
+                            {
+                                "if": {"properties": {"transport": {"const": "streamable-http"}}},
+                                "then": {"required": ["url"]}
+                            }
+                        ]
+                    }
+                },
+                "connectors": {
+                    "type": "array",
+                    "description": "Persistent connector enablement preferences.",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["name"],
+                        "properties": {
+                            "name": {"type": "string", "minLength": 1},
+                            "disabled": {"type": "boolean"},
+                            "disabled_tools": {
+                                "type": "array",
+                                "items": {"type": "string"}
+                            }
                         }
                     }
                 }
@@ -467,11 +785,15 @@ impl LayeredConfig {
     }
 }
 
+mod integrations;
+use integrations::*;
+
 struct PreparedWrite {
     destination: PathBuf,
     temporary: PathBuf,
     backup: PathBuf,
     had_original: bool,
+    cleanup_on_drop: bool,
 }
 
 impl PreparedWrite {
@@ -480,26 +802,28 @@ impl PreparedWrite {
             .parent()
             .ok_or_else(|| ConfigError::InvalidPath(destination.clone()))?;
         ensure_private_directory(parent)?;
-        let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let temporary = parent.join(format!(".config.{sequence}.tmp"));
-        let backup = parent.join(format!(".config.{sequence}.bak"));
+        let token = random_sidecar_token()?;
+        let temporary = parent.join(format!(".config.{token}.tmp"));
+        let backup = parent.join(format!(".config.{token}.bak"));
         let mut file = open_private_new(&temporary).map_err(|source| ConfigError::Io {
             path: temporary.clone(),
             source,
         })?;
-        file.write_all(&bytes)
-            .and_then(|()| file.write_all(b"\n"))
-            .and_then(|()| file.sync_all())
-            .map_err(|source| ConfigError::Io {
-                path: temporary.clone(),
-                source,
-            })?;
-        Ok(Self {
+        let prepared = Self {
             had_original: destination.is_file(),
             destination,
             temporary,
             backup,
-        })
+            cleanup_on_drop: true,
+        };
+        file.write_all(&bytes)
+            .and_then(|()| file.write_all(b"\n"))
+            .and_then(|()| file.sync_all())
+            .map_err(|source| ConfigError::Io {
+                path: prepared.temporary.clone(),
+                source,
+            })?;
+        Ok(prepared)
     }
 
     fn journal_entry(&self) -> JournalEntry {
@@ -508,6 +832,14 @@ impl PreparedWrite {
             temporary: self.temporary.clone(),
             backup: self.backup.clone(),
             had_original: self.had_original,
+        }
+    }
+}
+
+impl Drop for PreparedWrite {
+    fn drop(&mut self) {
+        if self.cleanup_on_drop {
+            let _ = fs::remove_file(&self.temporary);
         }
     }
 }
@@ -630,6 +962,7 @@ fn recover_transaction(paths: &ConfigPaths) -> Result<(), ConfigError> {
                     temporary: entry.temporary,
                     backup: entry.backup,
                     had_original: entry.had_original,
+                    cleanup_on_drop: false,
                 })
                 .collect::<Vec<_>>();
             rollback_prepared(&recovered)?;
@@ -656,6 +989,60 @@ fn recover_transaction(paths: &ConfigPaths) -> Result<(), ConfigError> {
         source,
     })?;
     sync_directory(&paths.vibe_home)
+}
+
+fn cleanup_orphan_sidecars(paths: &ConfigPaths) -> Result<(), ConfigError> {
+    let parents = [paths.user_config(), paths.project_config()]
+        .into_iter()
+        .filter_map(|path| path.parent().map(Path::to_path_buf))
+        .collect::<BTreeSet<_>>();
+    for parent in parents {
+        let entries = match fs::read_dir(&parent) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(source) => {
+                return Err(ConfigError::Io {
+                    path: parent,
+                    source,
+                });
+            }
+        };
+        let mut removed = false;
+        for entry in entries {
+            let entry = entry.map_err(|source| ConfigError::Io {
+                path: parent.clone(),
+                source,
+            })?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let token = name.strip_prefix(".config.").and_then(|name| {
+                name.strip_suffix(".tmp")
+                    .or_else(|| name.strip_suffix(".bak"))
+            });
+            if token.is_none_or(|token| {
+                token.len() != 32 || !token.bytes().all(|byte| byte.is_ascii_hexdigit())
+            }) {
+                continue;
+            }
+            fs::remove_file(entry.path()).map_err(|source| ConfigError::Io {
+                path: entry.path(),
+                source,
+            })?;
+            removed = true;
+        }
+        if removed {
+            sync_directory(&parent)?;
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn random_sidecar_token() -> Result<String, ConfigError> {
+    let mut bytes = [0_u8; 16];
+    getrandom::fill(&mut bytes).map_err(|_| ConfigError::RandomUnavailable)?;
+    Ok(format!("{:032x}", u128::from_ne_bytes(bytes)))
 }
 
 fn validate_journal(journal: &ConfigJournal, paths: &ConfigPaths) -> Result<(), ConfigError> {
@@ -690,8 +1077,7 @@ fn write_journal(path: &Path, journal: &ConfigJournal) -> Result<(), ConfigError
         .parent()
         .ok_or_else(|| ConfigError::InvalidPath(path.to_path_buf()))?;
     ensure_private_directory(parent)?;
-    let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let temporary = parent.join(format!(".journal.{sequence}.tmp"));
+    let temporary = parent.join(format!(".journal.{}.tmp", random_sidecar_token()?));
     let encoded = serde_json::to_vec(journal).map_err(ConfigError::Json)?;
     let result = (|| {
         let mut file = open_private_new(&temporary).map_err(|source| ConfigError::Io {
@@ -815,110 +1201,6 @@ fn environment_table(environment: &BTreeMap<String, String>) -> Result<Table, Co
         )?;
     }
     Ok(table)
-}
-
-fn required_mcp_string<'a>(table: &'a Table, key: &str) -> Result<&'a str, ConfigError> {
-    optional_mcp_string(table, key)?
-        .ok_or_else(|| ConfigError::InvalidMcp(format!("MCP server field `{key}` is required")))
-}
-
-fn optional_mcp_string<'a>(table: &'a Table, key: &str) -> Result<Option<&'a str>, ConfigError> {
-    match table.get(key) {
-        Some(Value::String(value)) if !value.is_empty() => Ok(Some(value)),
-        Some(_) => Err(ConfigError::InvalidMcp(format!(
-            "MCP server field `{key}` must be a non-empty string"
-        ))),
-        None => Ok(None),
-    }
-}
-
-fn optional_mcp_bool(table: &Table, key: &str) -> Result<Option<bool>, ConfigError> {
-    match table.get(key) {
-        Some(Value::Boolean(value)) => Ok(Some(*value)),
-        Some(_) => Err(ConfigError::InvalidMcp(format!(
-            "MCP server field `{key}` must be a boolean"
-        ))),
-        None => Ok(None),
-    }
-}
-
-fn optional_mcp_strings(table: &Table, key: &str) -> Result<Vec<String>, ConfigError> {
-    match table.get(key) {
-        Some(Value::Array(values)) => values
-            .iter()
-            .map(|value| {
-                value.as_str().map(str::to_owned).ok_or_else(|| {
-                    ConfigError::InvalidMcp(format!(
-                        "MCP server field `{key}` must contain only strings"
-                    ))
-                })
-            })
-            .collect(),
-        Some(_) => Err(ConfigError::InvalidMcp(format!(
-            "MCP server field `{key}` must be an array"
-        ))),
-        None => Ok(Vec::new()),
-    }
-}
-
-fn optional_mcp_environment(table: &Table) -> Result<BTreeMap<String, String>, ConfigError> {
-    match table.get("env") {
-        Some(Value::Table(values)) => values
-            .iter()
-            .map(|(key, value)| {
-                value
-                    .as_str()
-                    .map(|value| (key.clone(), value.to_owned()))
-                    .ok_or_else(|| {
-                        ConfigError::InvalidMcp(
-                            "MCP server field `env` must contain only strings".to_owned(),
-                        )
-                    })
-            })
-            .collect(),
-        Some(_) => Err(ConfigError::InvalidMcp(
-            "MCP server field `env` must be a table".to_owned(),
-        )),
-        None => Ok(BTreeMap::new()),
-    }
-}
-
-fn optional_mcp_timeout(table: &Table, key: &str, default_ms: u64) -> Result<u64, ConfigError> {
-    let Some(value) = table.get(key) else {
-        return Ok(default_ms);
-    };
-    let seconds = match value {
-        Value::Integer(value) => *value as f64,
-        Value::Float(value) => *value,
-        _ => {
-            return Err(ConfigError::InvalidMcp(format!(
-                "MCP server field `{key}` must be numeric"
-            )));
-        }
-    };
-    let milliseconds = seconds * 1_000.0;
-    if !milliseconds.is_finite()
-        || !(1.0..=600_000.0).contains(&milliseconds)
-        || milliseconds.fract() != 0.0
-    {
-        return Err(ConfigError::InvalidMcp(format!(
-            "MCP server field `{key}` must resolve to 1 through 600000 milliseconds"
-        )));
-    }
-    Ok(milliseconds as u64)
-}
-
-fn merge_tables(target: &mut Table, overlay: &Table) {
-    for (key, value) in overlay {
-        match (target.get_mut(key), value) {
-            (Some(Value::Table(target_table)), Value::Table(overlay_table)) => {
-                merge_tables(target_table, overlay_table);
-            }
-            _ => {
-                target.insert(key.clone(), value.clone());
-            }
-        }
-    }
 }
 
 fn apply_mutation(table: &mut Table, mutation: &ConfigMutation) -> Result<(), ConfigError> {
@@ -1113,6 +1395,8 @@ fn sync_directory(path: &Path) -> Result<(), ConfigError> {
 pub enum ConfigError {
     #[error("configuration state lock is poisoned")]
     LockPoisoned,
+    #[error("secure randomness is unavailable for configuration persistence")]
+    RandomUnavailable,
     #[error("configuration path has no parent: `{0}`")]
     InvalidPath(PathBuf),
     #[error("configuration file exceeds the 4 MiB limit: `{0}`")]
@@ -1159,8 +1443,12 @@ pub enum ConfigError {
     NonTableParent(String),
     #[error("invalid VIBE environment key `{0}`")]
     InvalidEnvironmentKey(String),
+    #[error("proxy value for `{0}` contains a forbidden control character")]
+    InvalidProxyValue(ProxyKey),
     #[error("invalid MCP configuration: {0}")]
     InvalidMcp(String),
+    #[error("invalid integration configuration: {0}")]
+    InvalidIntegration(String),
     #[error("invalid URL in sensitive configuration field `{path}`")]
     InvalidSensitiveUrl { path: String },
     #[error("credentials are forbidden in sensitive configuration field `{path}`")]
@@ -1288,6 +1576,199 @@ winner = "defaults"
     }
 
     #[test]
+    fn orphan_transaction_sidecars_are_recovered_without_touching_unrelated_files() {
+        let temporary = tempfile::tempdir().expect("temporary root");
+        let store = config(temporary.path());
+        let user_parent = store
+            .paths
+            .user_config()
+            .parent()
+            .expect("user parent")
+            .to_path_buf();
+        let project_parent = store
+            .paths
+            .project_config()
+            .parent()
+            .expect("project parent")
+            .to_path_buf();
+        let orphan_tmp = user_parent.join(".config.0123456789abcdef0123456789abcdef.tmp");
+        let orphan_bak = project_parent.join(".config.fedcba9876543210fedcba9876543210.bak");
+        let unrelated = user_parent.join(".config.keep.tmp");
+        fs::write(&orphan_tmp, "partial").expect("orphan temp fixture");
+        fs::write(&orphan_bak, "partial").expect("orphan backup fixture");
+        fs::write(&unrelated, "keep").expect("unrelated fixture");
+
+        store.load().expect("orphan recovery succeeds");
+
+        assert!(!orphan_tmp.exists());
+        assert!(!orphan_bak.exists());
+        assert!(unrelated.exists());
+    }
+
+    #[test]
+    fn integration_rollbacks_use_the_committed_fingerprint_without_clobbering_a_later_writer() {
+        let temporary = tempfile::tempdir().expect("temporary root");
+        let store = config(temporary.path());
+        fs::write(
+            store.paths.user_config(),
+            r#"
+[[mcp_servers]]
+name = "docs"
+url = "https://mcp.example.test/rpc"
+
+[[connectors]]
+name = "drive"
+"#,
+        )
+        .expect("integration fixture");
+
+        let mcp_commit = store
+            .persist_mcp_state("docs", false, &BTreeSet::from(["search".to_owned()]))
+            .expect("MCP preference commit");
+        let mcp_target = mcp_commit.selected_target;
+        let after_mcp_writer = store
+            .batch_write(&[ConfigWrite {
+                target: mcp_target,
+                expected_fingerprint: mcp_commit.fingerprints[&mcp_target].clone(),
+                mutations: vec![ConfigMutation::set(
+                    ["writer"],
+                    Value::String("after-mcp".to_owned()),
+                )],
+            }])
+            .expect("interleaved MCP writer");
+        assert!(matches!(
+            store.persist_mcp_state_cas(
+                "docs",
+                true,
+                &BTreeSet::new(),
+                mcp_target,
+                mcp_commit.fingerprints[&mcp_target].clone(),
+            ),
+            Err(ConfigError::ConcurrentEdit { target }) if target == mcp_target
+        ));
+        assert_eq!(
+            store.load().expect("MCP conflict reloads").effective["writer"].as_str(),
+            Some("after-mcp")
+        );
+
+        let connector_commit = store
+            .persist_connector_state("drive", false, &BTreeSet::from(["search".to_owned()]))
+            .expect("connector preference commit");
+        let connector_target = connector_commit.selected_target;
+        store
+            .batch_write(&[ConfigWrite {
+                target: connector_target,
+                expected_fingerprint: connector_commit.fingerprints[&connector_target].clone(),
+                mutations: vec![ConfigMutation::set(
+                    ["writer"],
+                    Value::String("after-connector".to_owned()),
+                )],
+            }])
+            .expect("interleaved connector writer");
+        assert!(matches!(
+            store.persist_connector_state_cas(
+                "drive",
+                true,
+                &BTreeSet::new(),
+                connector_target,
+                connector_commit.fingerprints[&connector_target].clone(),
+            ),
+            Err(ConfigError::ConcurrentEdit { target }) if target == connector_target
+        ));
+        let final_snapshot = store.load().expect("connector conflict reloads");
+        assert_eq!(
+            final_snapshot.effective["writer"].as_str(),
+            Some("after-connector")
+        );
+        assert_ne!(
+            final_snapshot.fingerprints[&connector_target],
+            after_mcp_writer.fingerprints[&connector_target]
+        );
+    }
+
+    #[test]
+    fn runtime_and_agent_integration_overrides_win_over_selected_preferences() {
+        let temporary = tempfile::tempdir().expect("temporary root");
+        let store = config(temporary.path())
+            .with_runtime_overrides(table(
+                r#"
+[[mcp_servers]]
+name = "docs"
+disabled = true
+
+[[connectors]]
+name = "drive"
+disabled = true
+"#,
+            ))
+            .with_agent_overlay(table(
+                r#"
+[[mcp_servers]]
+name = "docs"
+disabled_tools = ["agent-search"]
+
+[[connectors]]
+name = "drive"
+disabled_tools = ["agent-search"]
+"#,
+            ));
+        fs::write(
+            store.paths.user_config(),
+            r#"
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://mcp.example.test/rpc"
+disabled = false
+disabled_tools = ["selected-search"]
+
+[[connectors]]
+name = "drive"
+disabled = false
+disabled_tools = ["selected-search"]
+"#,
+        )
+        .expect("selected integration preferences");
+
+        let snapshot = store.load().expect("layered integrations load");
+        let mcp = snapshot
+            .mcp_servers(Path::new("/workspace"))
+            .expect("MCP decodes")
+            .into_iter()
+            .find(|server| server.alias == "docs")
+            .expect("MCP remains defined");
+        assert!(!mcp.enabled);
+        assert_eq!(
+            mcp.disabled_tools,
+            BTreeSet::from(["agent-search".to_owned()])
+        );
+        let connector = config_array(&snapshot.effective, "connectors")
+            .expect("connectors decode")
+            .into_iter()
+            .find(|entry| {
+                entry
+                    .as_table()
+                    .and_then(|entry| entry.get("name"))
+                    .and_then(Value::as_str)
+                    == Some("drive")
+            })
+            .expect("connector remains defined");
+        let connector = connector.as_table().expect("connector table");
+        assert_eq!(
+            connector.get("disabled").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            connector
+                .get("disabled_tools")
+                .and_then(Value::as_array)
+                .and_then(|tools| tools.first())
+                .and_then(Value::as_str),
+            Some("agent-search")
+        );
+    }
+
+    #[test]
     fn corrupt_untrusted_and_secret_bearing_inputs_fail_closed_without_leaking() {
         let temporary = tempfile::tempdir().expect("temporary root");
         let config = config(temporary.path());
@@ -1335,6 +1816,10 @@ winner = "defaults"
         assert_eq!(trusted.public_view()["config"]["api_key"], "[redacted]");
         assert_eq!(trusted.public_view()["config"]["privateKey"], "[redacted]");
         assert_eq!(trusted.public_view()["config"]["proxy"], "[redacted]");
+        assert_eq!(
+            trusted.public_view()["targetValues"]["project"]["api_key"],
+            "[redacted]"
+        );
         assert!(
             trusted.public_view()["layerValues"]
                 .as_array()
@@ -1351,6 +1836,7 @@ winner = "defaults"
             .expect("user fallback");
         assert_eq!(revoked.selected_target, ConfigTarget::User);
         assert_ne!(revoked.effective["active_model"].as_str(), Some("project"));
+        assert_eq!(revoked.public_view()["targetValues"]["project"], json!({}));
     }
 
     #[test]
@@ -1374,6 +1860,7 @@ disabled_tools = ["admin"]
             selected_target: ConfigTarget::User,
             selected_path: PathBuf::from("/home/user/.vibe/config.toml"),
             fingerprints: BTreeMap::new(),
+            target_values: BTreeMap::new(),
             layer_values: Vec::new(),
         };
         let servers = snapshot
@@ -1402,6 +1889,128 @@ disabled_tools = ["admin"]
     }
 
     #[test]
+    fn integration_mutations_persist_and_mcp_collisions_fail_before_overwrite() {
+        let temporary = tempfile::tempdir().expect("temporary root");
+        let store = config(temporary.path());
+        let server = McpServerConfig {
+            alias: "docs".to_owned(),
+            transport: McpTransportConfig::StreamableHttp {
+                url: Url::parse("https://mcp.example.test/rpc").expect("fixture URL"),
+                headers: BTreeMap::new(),
+            },
+            enabled: true,
+            disabled_tools: BTreeSet::new(),
+            startup_timeout_ms: 1_500,
+            tool_timeout_ms: 2_000,
+        };
+
+        store.persist_mcp_add(&server).expect("MCP persists");
+        store
+            .persist_mcp_state("docs", false, &BTreeSet::from(["search".to_owned()]))
+            .expect("MCP state persists");
+        let configured = store
+            .load()
+            .expect("configuration reloads")
+            .mcp_servers(Path::new("/workspace"))
+            .expect("MCP configuration decodes");
+        assert_eq!(configured.len(), 1);
+        assert!(!configured[0].enabled);
+        assert_eq!(
+            configured[0].disabled_tools,
+            BTreeSet::from(["search".to_owned()])
+        );
+
+        assert!(store.preflight_mcp_add(&server).is_err());
+        let same_url = McpServerConfig {
+            alias: "other".to_owned(),
+            ..server.clone()
+        };
+        assert!(store.preflight_mcp_add(&same_url).is_err());
+
+        store
+            .persist_connector_state(
+                "github",
+                false,
+                &BTreeSet::from(["create_issue".to_owned()]),
+            )
+            .expect("connector state persists");
+        let preferences = store
+            .connector_preferences()
+            .expect("connector preferences reload");
+        assert_eq!(
+            preferences.get("github"),
+            Some(&IntegrationPreference {
+                enabled: false,
+                disabled_tools: BTreeSet::from(["create_issue".to_owned()]),
+            })
+        );
+    }
+
+    #[test]
+    fn integration_mutations_never_copy_higher_layer_secrets_into_the_selected_file() {
+        let temporary = tempfile::tempdir().expect("temporary root");
+        let store = config(temporary.path()).with_experiments(table(
+            r#"
+[[mcp_servers]]
+name = "inherited"
+transport = "stdio"
+command = "/usr/bin/inherited"
+env = { API_TOKEN = "must-not-be-copied" }
+"#,
+        ));
+        let server = McpServerConfig {
+            alias: "selected".to_owned(),
+            transport: McpTransportConfig::StreamableHttp {
+                url: Url::parse("https://selected.example.test/mcp").expect("fixture URL"),
+                headers: BTreeMap::new(),
+            },
+            enabled: true,
+            disabled_tools: BTreeSet::new(),
+            startup_timeout_ms: 1_000,
+            tool_timeout_ms: 1_000,
+        };
+
+        store
+            .persist_mcp_add(&server)
+            .expect("selected MCP persists");
+        let aliases = store
+            .load()
+            .expect("merged integrations reload")
+            .mcp_servers(Path::new("/workspace"))
+            .expect("merged MCP configuration")
+            .into_iter()
+            .map(|config| config.alias)
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            aliases,
+            BTreeSet::from(["inherited".to_owned(), "selected".to_owned()])
+        );
+
+        store
+            .persist_mcp_state("inherited", false, &BTreeSet::from(["search".to_owned()]))
+            .expect("inherited MCP preference persists");
+        let inherited = store
+            .load()
+            .expect("preference reloads")
+            .mcp_servers(Path::new("/workspace"))
+            .expect("effective MCP configuration")
+            .into_iter()
+            .find(|config| config.alias == "inherited")
+            .expect("inherited MCP remains visible");
+        assert!(!inherited.enabled);
+        assert_eq!(
+            inherited.disabled_tools,
+            BTreeSet::from(["search".to_owned()])
+        );
+
+        let selected = fs::read_to_string(store.paths.user_config()).expect("selected file reads");
+        assert!(selected.contains("selected"));
+        assert!(selected.contains("inherited"));
+        assert!(!selected.contains("/usr/bin/inherited"));
+        assert!(!selected.contains("must-not-be-copied"));
+    }
+
+    #[test]
     fn duplicate_mcp_entries_fail_without_echoing_secret_bearing_values() {
         let snapshot = ConfigSnapshot {
             effective: table(
@@ -1420,6 +2029,7 @@ command = "top-secret-command"
             selected_target: ConfigTarget::User,
             selected_path: PathBuf::from("/home/user/.vibe/config.toml"),
             fingerprints: BTreeMap::new(),
+            target_values: BTreeMap::new(),
             layer_values: Vec::new(),
         };
         let error = snapshot
@@ -1444,13 +2054,14 @@ command = "must-not-run"
             selected_target: ConfigTarget::User,
             selected_path: PathBuf::from("/home/user/.vibe/config.toml"),
             fingerprints: BTreeMap::new(),
+            target_values: BTreeMap::new(),
             layer_values: Vec::new(),
         };
         let error = snapshot
             .mcp_servers(Path::new("/workspace"))
             .expect_err("unsupported transport fails closed")
             .to_string();
-        assert!(error.contains("only stdio"));
+        assert!(error.contains("must be stdio or streamable-http"));
         assert!(!error.contains("must-not-run"));
     }
 

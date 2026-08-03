@@ -5,12 +5,13 @@ use serde_json::{Value, json};
 
 mod config;
 mod mcp;
+mod overlay;
 
 use super::chat_input::ChatInputState;
 use super::clipboard::{SystemClipboard, SystemClipboardPort};
 use super::commands::{CommandId, parse_command_in};
 use super::controls::ControlState;
-use super::interaction::{Overlay, OverlayKind};
+use super::interaction::{Overlay, OverlayKind, RemoteProjectAction, TeleportPushAction};
 use super::pickers::{
     config_overlay, debug_overlay, help_overlay, model_overlay, proxy_overlay, rewind_state,
     sessions_overlay, status_overlay, theme_overlay, thinking_overlay, voice_overlay,
@@ -24,15 +25,20 @@ use super::state::{EntryStatus, TranscriptKind, TuiState};
 use super::switching::{self, SwitchRequest};
 use super::{
     Arguments, CliError, InteractiveRuntime, adopt_hydrated_session, call_runtime,
-    metadata_session_id, parse_runtime_skills, persist_user_setting, push_local_notice,
-    refresh_server_banner_metrics, sync_runtime_intent, update_theme,
+    metadata_session_id, parse_runtime_skills, push_local_notice, refresh_server_banner_metrics,
+    sync_runtime_intent,
 };
 pub(super) use config::apply_thinking;
 use config::{
-    apply_render_preferences, configured_value, persist_config_setting, reset_config_value,
-    reset_config_value_at, selected_config_target, set_config_value,
+    apply_render_preferences, configured_value, reset_config_value, reset_config_value_at,
+    selected_config_target, set_config_value, update_proxy_value,
 };
-use mcp::{handle_mcp, refresh_selected_mcp, show_mcp, source_enabled as mcp_source_enabled};
+pub(in crate::tui) use mcp::{McpEffect, McpPendingOperation, apply_pending_operation};
+pub(super) use mcp::{SystemUrlOpener, execute_mcp_effect};
+use mcp::{handle_mcp, refresh_selected_mcp, set_selected_mcp};
+#[cfg(test)]
+pub(in crate::tui) use mcp::{reduce_auth_action, valid_auth_url};
+use overlay::select_overlay_item;
 
 const DATA_RETENTION_MESSAGE: &str = "\
 ## Your Data Helps Improve Mistral AI
@@ -54,6 +60,20 @@ pub(super) enum CommandAction {
 pub(super) struct RuntimeCommand {
     pub id: CommandId,
     pub arguments: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum OverlayEffect {
+    Mcp(McpEffect),
+    RemoteProject(RemoteProjectAction),
+    TeleportPush(TeleportPushAction),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum OverlayKeyResult {
+    Unhandled,
+    Handled,
+    Effect(OverlayEffect),
 }
 
 impl RuntimeCommand {
@@ -161,7 +181,13 @@ pub(super) async fn dispatch_command(
                             .map(|skill| (skill.name.as_str(), skill.description.as_str())),
                     );
                 }
-                refresh_server_banner_metrics(&mut runtime.service, &mut runtime.banner);
+                let session_id = runtime.session_id.clone();
+                refresh_server_banner_metrics(
+                    &mut runtime.service,
+                    &session_id,
+                    &mut runtime.banner,
+                )
+                .await;
                 apply_render_preferences(runtime, state);
                 sync_voice_preference(runtime, composer);
                 push_local_notice(
@@ -185,7 +211,11 @@ pub(super) async fn dispatch_command(
             Ok(CommandAction::Handled)
         }
         CommandId::ProxySetup => {
-            show_proxy(runtime, state);
+            if command_arguments.is_empty() {
+                show_proxy(runtime, state);
+            } else {
+                update_proxy_value(&command_arguments, runtime, state);
+            }
             Ok(CommandAction::Handled)
         }
         CommandId::Resume => {
@@ -299,27 +329,30 @@ pub(super) async fn dispatch_command(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn handle_overlay_key(
+pub(super) async fn handle_overlay_key(
     key: KeyEvent,
     runtime: &mut Option<InteractiveRuntime>,
     state: &mut TuiState,
     controls: &mut ControlState,
     composer: &mut ChatInputState,
     theme: &mut ResolvedTheme,
-) -> bool {
+) -> OverlayKeyResult {
     if state.rewind.is_some() {
         handle_rewind_key(key, runtime, state, controls, composer);
-        return true;
+        return OverlayKeyResult::Handled;
     }
     let Some(kind) = state.overlay.as_ref().map(|overlay| overlay.kind) else {
-        return false;
+        return OverlayKeyResult::Unhandled;
     };
+    if kind == OverlayKind::RemoteProjectCreate {
+        return handle_remote_project_create_key(key, runtime, state);
+    }
     if kind == OverlayKind::Sessions {
         let current_session_id = runtime
             .as_ref()
             .map_or("", |runtime| runtime.session_id.as_str());
         let Some(overlay) = state.overlay.as_mut() else {
-            return false;
+            return OverlayKeyResult::Unhandled;
         };
         let effect =
             reduce_session_picker_key(overlay, &mut state.session_delete, current_session_id, key);
@@ -335,10 +368,31 @@ pub(super) fn handle_overlay_key(
                 delete_selected_session(runtime, state, &session_id);
             }
         }
-        return true;
+        return OverlayKeyResult::Handled;
     }
     match key.code {
-        KeyCode::Esc => state.overlay = None,
+        KeyCode::Esc => {
+            if kind == OverlayKind::TeleportApproval {
+                let action = state.overlay.as_ref().and_then(|overlay| {
+                    overlay.items.iter().find_map(|item| match &item.action {
+                        super::interaction::OverlayAction::TeleportPush(action) => {
+                            Some(TeleportPushAction {
+                                operation_id: action.operation_id.clone(),
+                                approved: false,
+                            })
+                        }
+                        _ => None,
+                    })
+                });
+                return action.map_or(OverlayKeyResult::Handled, |action| {
+                    OverlayKeyResult::Effect(OverlayEffect::TeleportPush(action))
+                });
+            }
+            if let Some(effect) = remote_project_escape_effect(kind) {
+                return OverlayKeyResult::Effect(effect);
+            }
+            state.overlay = None;
+        }
         KeyCode::Up | KeyCode::Char('k') if key.modifiers.is_empty() => {
             if let Some(overlay) = state.overlay.as_mut() {
                 overlay.move_selection(-1);
@@ -349,15 +403,37 @@ pub(super) fn handle_overlay_key(
                 overlay.move_selection(1);
             }
         }
+        KeyCode::Backspace if kind == OverlayKind::McpDetail && key.modifiers.is_empty() => {
+            return OverlayKeyResult::Effect(OverlayEffect::Mcp(McpEffect::Show { filter: None }));
+        }
         KeyCode::Backspace if key.modifiers.is_empty() => {
             if let Some(overlay) = state.overlay.as_mut() {
                 overlay.pop_query();
             }
         }
         KeyCode::Char('r')
-            if kind == OverlayKind::Mcp && key.modifiers.contains(KeyModifiers::CONTROL) =>
+            if matches!(kind, OverlayKind::Mcp | OverlayKind::McpDetail)
+                && key.modifiers.contains(KeyModifiers::CONTROL) =>
         {
-            refresh_selected_mcp(runtime, state);
+            if let Some(effect) = refresh_selected_mcp(state) {
+                return OverlayKeyResult::Effect(OverlayEffect::Mcp(effect));
+            }
+        }
+        KeyCode::Char('d')
+            if matches!(kind, OverlayKind::Mcp | OverlayKind::McpDetail)
+                && key.modifiers.is_empty() =>
+        {
+            if let Some(effect) = set_selected_mcp(state, false) {
+                return OverlayKeyResult::Effect(OverlayEffect::Mcp(effect));
+            }
+        }
+        KeyCode::Char('e')
+            if matches!(kind, OverlayKind::Mcp | OverlayKind::McpDetail)
+                && key.modifiers.is_empty() =>
+        {
+            if let Some(effect) = set_selected_mcp(state, true) {
+                return OverlayKeyResult::Effect(OverlayEffect::Mcp(effect));
+            }
         }
         KeyCode::Char('r')
             if kind == OverlayKind::Config && key.modifiers.contains(KeyModifiers::CONTROL) =>
@@ -374,7 +450,11 @@ pub(super) fn handle_overlay_key(
                         | OverlayKind::DataRetention
                 ) =>
         {
-            select_overlay_item(runtime, state, controls, composer, theme);
+            if let Some(effect) =
+                select_overlay_item(runtime, state, controls, composer, theme).await
+            {
+                return OverlayKeyResult::Effect(effect);
+            }
         }
         KeyCode::Char(character) if key.modifiers.is_empty() => {
             if let Some(overlay) = state.overlay.as_mut() {
@@ -383,7 +463,87 @@ pub(super) fn handle_overlay_key(
         }
         _ => {}
     }
-    true
+    OverlayKeyResult::Handled
+}
+
+pub(super) fn handle_remote_project_create_key(
+    key: KeyEvent,
+    runtime: &mut Option<InteractiveRuntime>,
+    state: &mut TuiState,
+) -> OverlayKeyResult {
+    let Some(runtime) = runtime.as_mut() else {
+        state.overlay = None;
+        return OverlayKeyResult::Handled;
+    };
+    let Some(mut draft) = runtime.remote_project_draft.clone() else {
+        state.push_diagnostic("Remote project draft is unavailable");
+        state.overlay.clone_from(&runtime.remote_project_overlay);
+        return OverlayKeyResult::Handled;
+    };
+    let selected = state
+        .overlay
+        .as_ref()
+        .and_then(|overlay| overlay.selected_item())
+        .map(|item| item.id.as_str())
+        .unwrap_or_default();
+    match key.code {
+        KeyCode::Esc => {
+            runtime.remote_project_draft = None;
+            state.overlay.clone_from(&runtime.remote_project_overlay);
+            return OverlayKeyResult::Handled;
+        }
+        KeyCode::Up | KeyCode::BackTab => {
+            if let Some(overlay) = state.overlay.as_mut() {
+                overlay.move_selection(-1);
+            }
+            return OverlayKeyResult::Handled;
+        }
+        KeyCode::Down | KeyCode::Tab => {
+            if let Some(overlay) = state.overlay.as_mut() {
+                overlay.move_selection(1);
+            }
+            return OverlayKeyResult::Handled;
+        }
+        KeyCode::Enter if selected == "remote-project:create:submit" => {
+            let action = RemoteProjectAction::Create {
+                name: draft.name.trim().to_owned(),
+                default_branch: draft.default_branch.trim().to_owned(),
+            };
+            return OverlayKeyResult::Effect(OverlayEffect::RemoteProject(action));
+        }
+        KeyCode::Enter => {
+            if let Some(overlay) = state.overlay.as_mut() {
+                overlay.move_selection(1);
+            }
+            return OverlayKeyResult::Handled;
+        }
+        KeyCode::Backspace if key.modifiers.is_empty() => match selected {
+            "remote-project:create:name" => {
+                draft.name.pop();
+            }
+            "remote-project:create:branch" => {
+                draft.default_branch.pop();
+            }
+            _ => return OverlayKeyResult::Handled,
+        },
+        KeyCode::Char(character) if key.modifiers.is_empty() => match selected {
+            "remote-project:create:name" => draft.name.push(character),
+            "remote-project:create:branch" => draft.default_branch.push(character),
+            _ => return OverlayKeyResult::Handled,
+        },
+        _ => return OverlayKeyResult::Handled,
+    }
+    let selected_id = selected.to_owned();
+    let mut overlay = super::pickers::remote_project_create_overlay(&draft);
+    overlay.select_by_id(&selected_id);
+    runtime.remote_project_draft = Some(draft);
+    state.overlay = Some(overlay);
+    OverlayKeyResult::Handled
+}
+
+fn remote_project_escape_effect(kind: OverlayKind) -> Option<OverlayEffect> {
+    (kind == OverlayKind::RemoteProjects)
+        .then_some(OverlayEffect::RemoteProject(RemoteProjectAction::Cancel))
 }
 
 pub(super) fn cycle_agent(
@@ -427,108 +587,6 @@ pub(super) fn cycle_agent(
     switching::request(runtime, composer, state, SwitchRequest::Agent(next));
 }
 
-fn select_overlay_item(
-    runtime: &mut Option<InteractiveRuntime>,
-    state: &mut TuiState,
-    controls: &mut ControlState,
-    composer: &mut ChatInputState,
-    theme: &mut ResolvedTheme,
-) {
-    let Some((kind, item)) = state.overlay.as_ref().and_then(|overlay| {
-        overlay
-            .selected_item()
-            .cloned()
-            .map(|item| (overlay.kind, item))
-    }) else {
-        return;
-    };
-    let Some(runtime) = runtime.as_mut() else {
-        state.overlay = None;
-        return;
-    };
-    match kind {
-        OverlayKind::Config => match item.id.as_str() {
-            "active_model" => show_model(runtime, state),
-            "thinking" => state.overlay = Some(thinking_overlay(&runtime.thinking)),
-            "theme" => {
-                let current = configured_value(runtime, "theme")
-                    .and_then(|value| value.as_str().map(ToOwned::to_owned))
-                    .unwrap_or_else(|| "system".to_owned());
-                state.overlay = Some(theme_overlay(&current));
-            }
-            key if item.description.contains("boolean") => {
-                let current = configured_value(runtime, key)
-                    .and_then(|value| value.as_bool())
-                    .unwrap_or(false);
-                let path = key.split('.').collect::<Vec<_>>();
-                let target = selected_config_target(runtime).unwrap_or_else(|| "user".to_owned());
-                if persist_config_setting(runtime, &target, &path, json!(!current), false, state) {
-                    show_config(runtime, state);
-                }
-            }
-            key => {
-                let target = selected_config_target(runtime).unwrap_or_else(|| "user".to_owned());
-                composer.replace_text(format!("/settings set --target {target} {key} "));
-                state.overlay = None;
-            }
-        },
-        OverlayKind::Model => {
-            switching::request(runtime, composer, state, SwitchRequest::Model(item.id));
-            state.overlay = None;
-        }
-        OverlayKind::Thinking => {
-            apply_thinking(runtime, &item.id, state);
-            state.overlay = None;
-        }
-        OverlayKind::Theme => {
-            update_theme(runtime, &item.id, state, theme);
-            state.overlay = None;
-        }
-        OverlayKind::Sessions => {
-            resume_selected_session(runtime, state, controls, &item.id);
-        }
-        OverlayKind::Mcp | OverlayKind::Connectors => {
-            let enabled = mcp_source_enabled(runtime, &item.id, state).unwrap_or(true);
-            if call_runtime(
-                runtime,
-                "mcp/toggle",
-                json!({
-                    "sessionId": runtime.session_id,
-                    "name": item.id,
-                    "disabled": enabled,
-                }),
-                state,
-            )
-            .is_some()
-            {
-                show_mcp(runtime, state, None);
-            }
-        }
-        OverlayKind::Voice => {
-            let current = configured_value(runtime, &item.id)
-                .and_then(|value| value.as_bool())
-                .unwrap_or(false);
-            if persist_user_setting(runtime, &[&item.id], json!(!current), false, state) {
-                sync_voice_preference(runtime, composer);
-                show_voice(runtime, state);
-            }
-        }
-        OverlayKind::Proxy => {
-            let command = if item.id == "tls_ca_path" {
-                "/settings certificate "
-            } else {
-                "/settings proxy "
-            };
-            composer.replace_text(command);
-            state.overlay = None;
-        }
-        OverlayKind::Help
-        | OverlayKind::Debug
-        | OverlayKind::Status
-        | OverlayKind::DataRetention => {}
-    }
-}
-
 fn sync_voice_preference(runtime: &mut InteractiveRuntime, composer: &mut ChatInputState) {
     let enabled = configured_value(runtime, "voice_mode_enabled")
         .and_then(|value| value.as_bool())
@@ -556,7 +614,7 @@ fn reset_selected_config(runtime: &mut Option<InteractiveRuntime>, state: &mut T
 }
 
 fn show_config(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
-    let Some(snapshot) = call_runtime(runtime, "config/read", json!({}), state)
+    let Some(mut snapshot) = call_runtime(runtime, "config/read", json!({}), state)
         .and_then(|result| result.get("snapshot").cloned())
     else {
         return;
@@ -564,6 +622,11 @@ fn show_config(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
     let schema = call_runtime(runtime, "config/schema", json!({}), state)
         .and_then(|result| result.get("schema").cloned())
         .unwrap_or(Value::Null);
+    if let Some(target) = runtime.config_target
+        && let Some(snapshot) = snapshot.as_object_mut()
+    {
+        snapshot.insert("selectedTarget".to_owned(), json!(target.as_str()));
+    }
     state.overlay = Some(config_overlay(&snapshot, &schema));
 }
 
@@ -633,10 +696,10 @@ fn show_voice(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
 }
 
 fn show_proxy(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
-    if let Some(snapshot) = call_runtime(runtime, "config/read", json!({}), state)
-        .and_then(|result| result.get("snapshot").cloned())
+    if let Some(settings) = call_runtime(runtime, "config/proxy/read", json!({}), state)
+        .and_then(|result| result.get("settings").cloned())
     {
-        state.overlay = Some(proxy_overlay(&snapshot));
+        state.overlay = Some(proxy_overlay(&settings));
     }
 }
 
@@ -919,4 +982,18 @@ fn accept_rewind(
 
 fn map_value(map: std::collections::BTreeMap<String, Value>) -> Value {
     Value::Object(map.into_iter().collect())
+}
+
+#[cfg(test)]
+mod overlay_effect_tests {
+    use super::*;
+
+    #[test]
+    fn remote_project_escape_emits_cancellation() {
+        assert_eq!(
+            remote_project_escape_effect(OverlayKind::RemoteProjects),
+            Some(OverlayEffect::RemoteProject(RemoteProjectAction::Cancel))
+        );
+        assert_eq!(remote_project_escape_effect(OverlayKind::Mcp), None);
+    }
 }

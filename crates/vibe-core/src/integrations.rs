@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -6,23 +6,30 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use thiserror::Error;
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use url::Url;
+
+mod operational;
+mod shared;
+
+pub use operational::{
+    AccountView, Diagnostic, LogRecord, OperationalResources, OperationalStats, RuntimeView,
+};
+pub use shared::{IntegrationError, redact};
+use shared::{
+    connector_availability_updates, connector_tool_spec, normalize_alias,
+    validate_connector_tool_specs, validate_definition,
+};
 
 use crate::policy::{ApprovalAgent, PermissionRequirement, PermissionStore, PolicyGuardedTool};
 use crate::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolHandler, ToolInvocation,
-    ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
+    ToolOutputSink, ToolRegistry, ToolSource,
 };
 
 const CONNECTOR_CACHE_TTL_MS: u64 = 600_000;
-const MAX_PUBLIC_LOG_MESSAGE: usize = 2_048;
 const MAX_CONNECTORS: usize = 256;
 const MAX_CONNECTOR_TOOLS: usize = 256;
-const MAX_DIAGNOSTICS: usize = 1_024;
-const MAX_LOG_RECORDS: usize = 4_096;
-const MAX_FEEDBACK_RECORDS: usize = 256;
 const CONNECTOR_CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub type ConnectorFuture<'a> =
@@ -76,9 +83,23 @@ pub struct ConnectorView {
     pub base_url: Url,
     pub auth_kind: ConnectorAuthKind,
     pub auth_state: ConnectorAuthState,
+    #[serde(default = "default_connector_enabled")]
+    pub enabled: bool,
     pub tool_names: Vec<String>,
     #[serde(default)]
+    pub disabled_tools: BTreeSet<String>,
+    #[serde(default)]
     pub diagnostic: Option<String>,
+}
+
+const fn default_connector_enabled() -> bool {
+    true
+}
+
+fn canonical_connector_url(url: &Url) -> String {
+    let mut url = url.clone();
+    url.set_fragment(None);
+    url.to_string().trim_end_matches('/').to_owned()
 }
 
 pub trait ConnectorBackend: Send + Sync {
@@ -122,8 +143,8 @@ impl ConnectorRegistry {
             )));
         }
         let cache_key = format!("{credential_reference}\n{base_url}");
-        let (old_gates, old_tools, old_names) = {
-            let mut state = self
+        let (previous, old_gates, old_tools, old_names) = {
+            let state = self
                 .state
                 .lock()
                 .map_err(|_| IntegrationError::LockPoisoned("connectors"))?;
@@ -138,73 +159,133 @@ impl ConnectorRegistry {
                 .flat_map(|view| view.tool_names.iter().cloned())
                 .collect::<Vec<_>>();
             (
-                std::mem::take(&mut state.auth_gates),
+                state
+                    .views
+                    .iter()
+                    .map(|(id, view)| {
+                        (
+                            id.clone(),
+                            (
+                                view.auth_kind,
+                                view.auth_state,
+                                view.enabled,
+                                view.disabled_tools.clone(),
+                                view.diagnostic.clone(),
+                            ),
+                        )
+                    })
+                    .collect::<BTreeMap<_, _>>(),
+                state.auth_gates.values().cloned().collect::<Vec<_>>(),
                 state.tools.clone(),
                 old_names,
             )
         };
-        for gate in old_gates.values() {
-            *gate.write().await = ConnectorAuthState::Disconnected;
-        }
-        if let Some(tools) = old_tools {
-            for name in old_names {
-                let _ = tools.set_availability(
-                    &name,
-                    ToolSource::Connector,
-                    ToolAvailability::Unavailable,
-                );
-            }
-        }
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("connectors"))?;
-        let mut aliases = BTreeMap::<String, usize>::new();
-        state.views.clear();
-        state.definitions.clear();
+        let mut aliases = BTreeSet::new();
+        let mut resources = BTreeSet::new();
+        let mut views = BTreeMap::new();
+        let mut next_definitions = BTreeMap::new();
+        let mut auth_gates = BTreeMap::new();
         for definition in definitions {
             validate_definition(&definition)?;
+            if next_definitions.contains_key(&definition.id) {
+                return Err(IntegrationError::InvalidConnector(format!(
+                    "connector ID `{}` appears more than once",
+                    definition.id
+                )));
+            }
             let base_alias = normalize_alias(&definition.name);
-            let count = aliases.entry(base_alias.clone()).or_default();
-            *count = count.saturating_add(1);
-            let alias = if *count == 1 {
-                base_alias
-            } else {
-                format!("{base_alias}_{count}")
-            };
-            let auth_state = match definition.auth_kind {
+            if !aliases.insert(base_alias.clone()) {
+                return Err(IntegrationError::InvalidConnector(format!(
+                    "connector alias `{base_alias}` appears more than once"
+                )));
+            }
+            if !resources.insert(canonical_connector_url(&definition.base_url)) {
+                return Err(IntegrationError::InvalidConnector(
+                    "connector URL appears more than once".to_owned(),
+                ));
+            }
+            let alias = base_alias;
+            let default_auth_state = match definition.auth_kind {
                 ConnectorAuthKind::None => ConnectorAuthState::NotRequired,
                 ConnectorAuthKind::OAuth => ConnectorAuthState::Disconnected,
                 ConnectorAuthKind::CredentialSetup => ConnectorAuthState::SetupRequired,
             };
+            let auth_state = previous
+                .get(&definition.id)
+                .filter(|(auth_kind, _, _, _, _)| *auth_kind == definition.auth_kind)
+                .map(|(_, auth_state, _, _, _)| *auth_state)
+                .unwrap_or(default_auth_state);
             let mut tool_names = definition
                 .tools
                 .iter()
                 .map(|tool| format!("connector_{alias}_{}", normalize_alias(&tool.name)))
                 .collect::<Vec<_>>();
             tool_names.sort();
-            state.views.insert(
-                definition.id.clone(),
-                ConnectorView {
-                    id: definition.id.clone(),
-                    alias,
-                    name: definition.name.clone(),
-                    base_url: definition.base_url.clone(),
-                    auth_kind: definition.auth_kind,
-                    auth_state,
-                    tool_names,
-                    diagnostic: None,
-                },
-            );
-            state.auth_gates.insert(
+            let disabled_tools = previous
+                .get(&definition.id)
+                .map(|(_, _, _, tools, _)| {
+                    tools
+                        .iter()
+                        .filter(|tool| tool_names.contains(tool))
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default();
+            let view = ConnectorView {
+                id: definition.id.clone(),
+                alias,
+                name: definition.name.clone(),
+                base_url: definition.base_url.clone(),
+                auth_kind: definition.auth_kind,
+                auth_state,
+                enabled: previous
+                    .get(&definition.id)
+                    .map(|(_, _, enabled, _, _)| *enabled)
+                    .unwrap_or(true),
+                tool_names,
+                disabled_tools,
+                diagnostic: previous
+                    .get(&definition.id)
+                    .and_then(|(_, _, _, _, diagnostic)| diagnostic.clone()),
+            };
+            validate_connector_tool_specs(&view, &definition)?;
+            views.insert(definition.id.clone(), view);
+            auth_gates.insert(
                 definition.id.clone(),
                 Arc::new(AsyncRwLock::new(auth_state)),
             );
-            state.definitions.insert(definition.id.clone(), definition);
+            next_definitions.insert(definition.id.clone(), definition);
         }
-        state.cache_key = Some(cache_key);
-        state.cached_at = now;
-        Ok(state.views.values().cloned().collect())
+        if let Some(tools) = old_tools {
+            let updates = old_names
+                .into_iter()
+                .map(|name| (name, ToolAvailability::Unavailable))
+                .collect::<Vec<_>>();
+            let reconciled = tools
+                .set_availabilities(ToolSource::Connector, &updates)
+                .map_err(|error| IntegrationError::Tool(error.to_string()))?;
+            if !reconciled {
+                return Err(IntegrationError::Tool(
+                    "connector tool registry is out of sync with the live catalog".to_owned(),
+                ));
+            }
+        }
+        let result = views.values().cloned().collect();
+        {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| IntegrationError::LockPoisoned("connectors"))?;
+            state.views = views;
+            state.definitions = next_definitions;
+            state.auth_gates = auth_gates;
+            state.cache_key = Some(cache_key);
+            state.cached_at = now;
+        }
+        for gate in old_gates {
+            *gate.write().await = ConnectorAuthState::Disconnected;
+        }
+        Ok(result)
     }
 
     pub fn views(&self) -> Result<Vec<ConnectorView>, IntegrationError> {
@@ -218,13 +299,71 @@ impl ConnectorRegistry {
             .collect())
     }
 
+    pub fn invalidate_cache(&self) -> Result<(), IntegrationError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| IntegrationError::LockPoisoned("connectors"))?;
+        state.cache_key = None;
+        state.cached_at = 0;
+        Ok(())
+    }
+
+    pub async fn toggle(
+        &self,
+        connector_id: &str,
+        tool_name: Option<&str>,
+        enabled: bool,
+    ) -> Result<ConnectorView, IntegrationError> {
+        let _mutation = self.mutation.lock().await;
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| IntegrationError::LockPoisoned("connectors"))?;
+        let tools = state.tools.clone();
+        let mut next = state
+            .views
+            .get(connector_id)
+            .cloned()
+            .ok_or_else(|| IntegrationError::ConnectorNotFound(connector_id.to_owned()))?;
+        let names = if let Some(tool_name) = tool_name {
+            if !next.tool_names.iter().any(|name| name == tool_name) {
+                return Err(IntegrationError::Tool(format!(
+                    "connector `{connector_id}` has no tool `{tool_name}`"
+                )));
+            }
+            if enabled {
+                next.disabled_tools.remove(tool_name);
+            } else {
+                next.disabled_tools.insert(tool_name.to_owned());
+            }
+            vec![tool_name.to_owned()]
+        } else {
+            next.enabled = enabled;
+            next.tool_names.clone()
+        };
+        if let Some(tools) = tools {
+            let updates = connector_availability_updates(&next, names);
+            if !tools
+                .set_availabilities(ToolSource::Connector, &updates)
+                .map_err(|error| IntegrationError::Tool(error.to_string()))?
+            {
+                return Err(IntegrationError::Tool(format!(
+                    "connector `{connector_id}` tools are no longer registered"
+                )));
+            }
+        }
+        state.views.insert(connector_id.to_owned(), next.clone());
+        Ok(next)
+    }
+
     pub async fn set_auth(
         &self,
         connector_id: &str,
         connected: bool,
     ) -> Result<ConnectorView, IntegrationError> {
         let _mutation = self.mutation.lock().await;
-        let (auth_state, gate, tools, tool_names) =
+        let (previous_auth, next, gate, tools) =
             {
                 let state = self
                     .state
@@ -243,41 +382,47 @@ impl ConnectorRegistry {
                         ConnectorAuthKind::CredentialSetup => ConnectorAuthState::SetupRequired,
                     }
                 };
+                let mut next = view.clone();
+                next.auth_state = auth_state;
                 (
-                    auth_state,
+                    view.auth_state,
+                    next,
                     state.auth_gates.get(connector_id).cloned().ok_or_else(|| {
                         IntegrationError::ConnectorNotFound(connector_id.to_owned())
                     })?,
                     state.tools.clone(),
-                    view.tool_names.clone(),
                 )
             };
-        *gate.write().await = auth_state;
+        let updates = connector_availability_updates(&next, next.tool_names.clone());
+        let becoming_available = matches!(
+            next.auth_state,
+            ConnectorAuthState::Connected | ConnectorAuthState::NotRequired
+        );
+        if becoming_available {
+            *gate.write().await = next.auth_state;
+        }
         if let Some(tools) = tools {
-            let availability = if matches!(
-                auth_state,
-                ConnectorAuthState::Connected | ConnectorAuthState::NotRequired
-            ) {
-                ToolAvailability::Available
-            } else {
-                ToolAvailability::Unavailable
-            };
-            for name in tool_names {
-                tools
-                    .set_availability(&name, ToolSource::Connector, availability)
-                    .map_err(|error| IntegrationError::Tool(error.to_string()))?;
+            let updated = tools
+                .set_availabilities(ToolSource::Connector, &updates)
+                .map_err(|error| IntegrationError::Tool(error.to_string()))?;
+            if !updated {
+                if becoming_available {
+                    *gate.write().await = previous_auth;
+                }
+                return Err(IntegrationError::Tool(format!(
+                    "connector `{connector_id}` tools are no longer registered"
+                )));
             }
+        }
+        if !becoming_available {
+            *gate.write().await = next.auth_state;
         }
         let mut state = self
             .state
             .lock()
             .map_err(|_| IntegrationError::LockPoisoned("connectors"))?;
-        let view = state
-            .views
-            .get_mut(connector_id)
-            .ok_or_else(|| IntegrationError::ConnectorNotFound(connector_id.to_owned()))?;
-        view.auth_state = auth_state;
-        Ok(view.clone())
+        state.views.insert(connector_id.to_owned(), next.clone());
+        Ok(next)
     }
 
     pub async fn fail_auth(
@@ -286,7 +431,7 @@ impl ConnectorRegistry {
         error: &str,
     ) -> Result<ConnectorView, IntegrationError> {
         let _mutation = self.mutation.lock().await;
-        let (gate, tools, tool_names) =
+        let (mut next, gate, tools) =
             {
                 let state = self
                     .state
@@ -297,32 +442,33 @@ impl ConnectorRegistry {
                     .get(connector_id)
                     .ok_or_else(|| IntegrationError::ConnectorNotFound(connector_id.to_owned()))?;
                 (
+                    view.clone(),
                     state.auth_gates.get(connector_id).cloned().ok_or_else(|| {
                         IntegrationError::ConnectorNotFound(connector_id.to_owned())
                     })?,
                     state.tools.clone(),
-                    view.tool_names.clone(),
                 )
             };
-        *gate.write().await = ConnectorAuthState::Failed;
+        next.auth_state = ConnectorAuthState::Failed;
+        next.diagnostic = Some(redact(error));
         if let Some(tools) = tools {
-            for name in tool_names {
-                tools
-                    .set_availability(&name, ToolSource::Connector, ToolAvailability::Unavailable)
-                    .map_err(|tool_error| IntegrationError::Tool(tool_error.to_string()))?;
+            let updates = connector_availability_updates(&next, next.tool_names.clone());
+            if !tools
+                .set_availabilities(ToolSource::Connector, &updates)
+                .map_err(|tool_error| IntegrationError::Tool(tool_error.to_string()))?
+            {
+                return Err(IntegrationError::Tool(format!(
+                    "connector `{connector_id}` tools are no longer registered"
+                )));
             }
         }
+        *gate.write().await = ConnectorAuthState::Failed;
         let mut state = self
             .state
             .lock()
             .map_err(|_| IntegrationError::LockPoisoned("connectors"))?;
-        let view = state
-            .views
-            .get_mut(connector_id)
-            .ok_or_else(|| IntegrationError::ConnectorNotFound(connector_id.to_owned()))?;
-        view.auth_state = ConnectorAuthState::Failed;
-        view.diagnostic = Some(redact(error));
-        Ok(view.clone())
+        state.views.insert(connector_id.to_owned(), next.clone());
+        Ok(next)
     }
 
     pub async fn close(&self) -> Result<(), IntegrationError> {
@@ -377,8 +523,8 @@ impl ConnectorRegistry {
                 .get(connector_id)
                 .ok_or_else(|| IntegrationError::ConnectorNotFound(connector_id.clone()))?;
             for remote in &definition.tools {
-                let public_name =
-                    format!("connector_{}_{}", view.alias, normalize_alias(&remote.name));
+                let spec = connector_tool_spec(view, remote);
+                let public_name = spec.name.clone();
                 let backend = backend.clone();
                 let connector = connector_id.clone();
                 let remote_name = remote.name.clone();
@@ -446,28 +592,7 @@ impl ConnectorRegistry {
                     handler,
                 ));
                 tools
-                    .register(
-                        ToolSpec {
-                            name: public_name.clone(),
-                            description: remote.description.clone(),
-                            input_schema: remote.input_schema.clone(),
-                            output_schema: remote.output_schema.clone(),
-                            config: Value::Null,
-                            state: Value::Null,
-                            availability: if matches!(
-                                view.auth_state,
-                                ConnectorAuthState::Connected | ConnectorAuthState::NotRequired
-                            ) {
-                                ToolAvailability::Available
-                            } else {
-                                ToolAvailability::Unavailable
-                            },
-                            presentation: ToolPresentationKind::Connector,
-                            source: ToolSource::Connector,
-                            selection_priority: 40,
-                        },
-                        guarded,
-                    )
+                    .register(spec, guarded)
                     .map_err(|error| IntegrationError::Tool(error.to_string()))?;
                 registered.push(public_name);
             }
@@ -475,322 +600,6 @@ impl ConnectorRegistry {
         registered.sort();
         Ok(registered)
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountView {
-    pub authenticated: bool,
-    pub account_id: Option<String>,
-    pub display_name: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Diagnostic {
-    pub code: String,
-    pub message: String,
-    pub source: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LogRecord {
-    pub timestamp: u64,
-    pub level: String,
-    pub message: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OperationalStats {
-    pub turns: u64,
-    pub tool_calls: u64,
-    pub failures: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeView {
-    pub version: String,
-    pub ready: bool,
-    pub active_sessions: usize,
-}
-
-#[derive(Default)]
-struct OperationalState {
-    account: Option<AccountView>,
-    diagnostics: Vec<Diagnostic>,
-    logs: Vec<LogRecord>,
-    feedback: Vec<String>,
-    stats: OperationalStats,
-    active_sessions: usize,
-    ready: bool,
-}
-
-pub struct OperationalResources {
-    version: String,
-    state: Mutex<OperationalState>,
-}
-
-impl OperationalResources {
-    #[must_use]
-    pub fn new(version: impl Into<String>) -> Self {
-        Self {
-            version: version.into(),
-            state: Mutex::new(OperationalState::default()),
-        }
-    }
-
-    pub fn set_account(&self, account: AccountView) -> Result<(), IntegrationError> {
-        self.state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?
-            .account = Some(account);
-        Ok(())
-    }
-
-    pub fn account(&self) -> Result<Option<AccountView>, IntegrationError> {
-        Ok(self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?
-            .account
-            .clone())
-    }
-
-    pub fn record_diagnostic(
-        &self,
-        code: impl Into<String>,
-        message: &str,
-        source: impl Into<String>,
-    ) -> Result<(), IntegrationError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?;
-        push_bounded(
-            &mut state.diagnostics,
-            MAX_DIAGNOSTICS,
-            Diagnostic {
-                code: bounded_text(&code.into(), 128),
-                message: redact(message),
-                source: bounded_text(&source.into(), 128),
-            },
-        );
-        Ok(())
-    }
-
-    pub fn diagnostics(&self) -> Result<Vec<Diagnostic>, IntegrationError> {
-        Ok(self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?
-            .diagnostics
-            .clone())
-    }
-
-    pub fn record_log(
-        &self,
-        timestamp: u64,
-        level: impl Into<String>,
-        message: &str,
-    ) -> Result<(), IntegrationError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?;
-        push_bounded(
-            &mut state.logs,
-            MAX_LOG_RECORDS,
-            LogRecord {
-                timestamp,
-                level: bounded_text(&level.into(), 32),
-                message: redact(message),
-            },
-        );
-        Ok(())
-    }
-
-    pub fn logs(&self, offset: usize, limit: usize) -> Result<Vec<LogRecord>, IntegrationError> {
-        Ok(self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?
-            .logs
-            .iter()
-            .skip(offset)
-            .take(limit.min(1_000))
-            .cloned()
-            .collect())
-    }
-
-    pub fn record_feedback(&self, message: &str) -> Result<usize, IntegrationError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?;
-        push_bounded(&mut state.feedback, MAX_FEEDBACK_RECORDS, redact(message));
-        Ok(state.feedback.len())
-    }
-
-    pub fn should_show_feedback(&self) -> Result<bool, IntegrationError> {
-        Ok(self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?
-            .feedback
-            .is_empty())
-    }
-
-    pub fn summarize(&self, text: &str) -> Result<String, IntegrationError> {
-        if text.trim().is_empty() {
-            return Err(IntegrationError::UnsupportedNarration(
-                "cannot summarize empty text".to_owned(),
-            ));
-        }
-        Ok(text.chars().take(280).collect())
-    }
-
-    pub fn set_runtime(&self, ready: bool, active_sessions: usize) -> Result<(), IntegrationError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?;
-        state.ready = ready;
-        state.active_sessions = active_sessions;
-        Ok(())
-    }
-
-    pub fn runtime(&self) -> Result<RuntimeView, IntegrationError> {
-        let state = self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?;
-        Ok(RuntimeView {
-            version: self.version.clone(),
-            ready: state.ready,
-            active_sessions: state.active_sessions,
-        })
-    }
-
-    pub fn stats(&self) -> Result<OperationalStats, IntegrationError> {
-        Ok(self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?
-            .stats
-            .clone())
-    }
-
-    pub fn record_tool_outcome(&self, failed: bool) -> Result<(), IntegrationError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("operational resources"))?;
-        state.stats.tool_calls = state.stats.tool_calls.saturating_add(1);
-        if failed {
-            state.stats.failures = state.stats.failures.saturating_add(1);
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum IntegrationError {
-    #[error("{0} lock is poisoned")]
-    LockPoisoned(&'static str),
-    #[error("connector `{0}` was not found")]
-    ConnectorNotFound(String),
-    #[error("invalid connector: {0}")]
-    InvalidConnector(String),
-    #[error("connector tool failed: {0}")]
-    Tool(String),
-    #[error("narration is unavailable: {0}")]
-    UnsupportedNarration(String),
-    #[error("connector backend unavailable")]
-    BackendUnavailable,
-}
-
-fn validate_definition(definition: &ConnectorDefinition) -> Result<(), IntegrationError> {
-    if definition.id.is_empty()
-        || definition.name.is_empty()
-        || definition.base_url.scheme() != "https"
-    {
-        return Err(IntegrationError::InvalidConnector(
-            "id, name, and HTTPS base URL are required".to_owned(),
-        ));
-    }
-    if definition.tools.len() > MAX_CONNECTOR_TOOLS {
-        return Err(IntegrationError::InvalidConnector(format!(
-            "tool count exceeds limit of {MAX_CONNECTOR_TOOLS}"
-        )));
-    }
-    if definition.tools.iter().any(|tool| {
-        tool.name.is_empty()
-            || tool.input_schema.get("type").and_then(Value::as_str) != Some("object")
-    }) {
-        return Err(IntegrationError::InvalidConnector(
-            "tool names and object schemas are required".to_owned(),
-        ));
-    }
-    Ok(())
-}
-
-fn normalize_alias(value: &str) -> String {
-    let normalized = value
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character.to_ascii_lowercase()
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    normalized.trim_matches('_').to_owned()
-}
-
-pub fn redact(message: &str) -> String {
-    let bounded = bounded_text(message, MAX_PUBLIC_LOG_MESSAGE);
-    let lowered = bounded.to_ascii_lowercase();
-    let sensitive = [
-        "authorization:",
-        "bearer ",
-        "api_key=",
-        "api-key=",
-        "apikey=",
-        "api key",
-        "x-api-key",
-        "token=",
-        "access_token",
-        "refresh_token",
-        "password=",
-        "secret=",
-        "client_secret",
-        "client-secret",
-    ];
-    let uri_userinfo = lowered.find("://").is_some_and(|scheme| {
-        lowered[scheme + 3..]
-            .split('/')
-            .next()
-            .is_some_and(|authority| authority.contains('@'))
-    });
-    if uri_userinfo || sensitive.iter().any(|marker| lowered.contains(marker)) {
-        return "[redacted sensitive error]".to_owned();
-    }
-    bounded
-}
-
-fn bounded_text(message: &str, max_chars: usize) -> String {
-    message.chars().take(max_chars).collect()
-}
-
-fn push_bounded<T>(values: &mut Vec<T>, limit: usize, value: T) {
-    if values.len() == limit {
-        values.remove(0);
-    }
-    values.push(value);
 }
 
 #[cfg(test)]
@@ -854,10 +663,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn discovery_cache_keys_credentials_and_deduplicates_aliases() {
+    async fn discovery_cache_keys_credentials_and_rejects_identity_collisions() {
         let registry = ConnectorRegistry::default();
         let base = Url::parse("https://api.example").expect("url");
-        let views = registry
+        assert!(matches!(
+            registry
             .discover(
                 vec![
                     definition("one", "Issue Tracker"),
@@ -867,10 +677,37 @@ mod tests {
                 &base,
                 100,
             )
+            .await,
+            Err(IntegrationError::InvalidConnector(message))
+                if message.contains("alias `issue_tracker`")
+        ));
+        assert!(registry.views().expect("unchanged registry").is_empty());
+
+        let mut duplicate_url = definition("two", "Calendar");
+        duplicate_url.base_url = Url::parse("https://connectors.example/").expect("URL");
+        assert!(matches!(
+            registry
+                .discover(
+                    vec![definition("one", "Issue Tracker"), duplicate_url],
+                    "credential-a",
+                    &base,
+                    100,
+                )
+                .await,
+            Err(IntegrationError::InvalidConnector(message))
+                if message.contains("URL appears more than once")
+        ));
+        assert!(registry.views().expect("unchanged registry").is_empty());
+
+        let views = registry
+            .discover(
+                vec![definition("one", "Issue Tracker")],
+                "credential-a",
+                &base,
+                100,
+            )
             .await
             .expect("discover");
-        assert_eq!(views[0].alias, "issue_tracker");
-        assert_eq!(views[1].alias, "issue_tracker_2");
         let cached = registry
             .discover(Vec::new(), "credential-a", &base, 200)
             .await
@@ -881,6 +718,74 @@ mod tests {
             .await
             .expect("new key");
         assert!(refreshed.is_empty());
+    }
+
+    #[tokio::test]
+    async fn invalid_catalog_refresh_preserves_the_live_registry() {
+        let registry = ConnectorRegistry::default();
+        let base = Url::parse("https://api.example").expect("url");
+        let initial = registry
+            .discover(vec![definition("one", "Tracker")], "credential", &base, 1)
+            .await
+            .expect("initial catalog");
+        let tools = ToolRegistry::default();
+        registry
+            .register_tools(
+                &tools,
+                Arc::new(FakeBackend),
+                PermissionStore::default(),
+                Arc::new(Approve),
+            )
+            .expect("register tools");
+        registry.invalidate_cache().expect("invalidate cache");
+        let mut invalid = definition("two", "Broken");
+        invalid.tools[0].input_schema = json!({"type": "object", "properties": []});
+
+        assert!(matches!(
+            registry
+                .discover(vec![invalid], "credential", &base, 2)
+                .await,
+            Err(IntegrationError::InvalidConnector(_))
+        ));
+        assert_eq!(registry.views().expect("preserved views"), initial);
+        tools
+            .invoke(
+                "connector_tracker_search",
+                ToolInvocation {
+                    call_id: "after-invalid-refresh".to_owned(),
+                    arguments: json!({}),
+                },
+            )
+            .await
+            .expect("existing tool remains live");
+    }
+
+    #[tokio::test]
+    async fn desynchronized_tool_registry_aborts_catalog_swap() {
+        let registry = ConnectorRegistry::default();
+        let base = Url::parse("https://api.example").expect("url");
+        let initial = registry
+            .discover(vec![definition("one", "Tracker")], "credential", &base, 1)
+            .await
+            .expect("initial catalog");
+        registry
+            .register_tools(
+                &ToolRegistry::default(),
+                Arc::new(FakeBackend),
+                PermissionStore::default(),
+                Arc::new(Approve),
+            )
+            .expect("register tools");
+        registry.state.lock().expect("connector state").tools = Some(ToolRegistry::default());
+        registry.invalidate_cache().expect("invalidate cache");
+
+        assert!(matches!(
+            registry
+                .discover(vec![definition("two", "Calendar")], "credential", &base, 2)
+                .await,
+            Err(IntegrationError::Tool(message)) if message.contains("out of sync")
+        ));
+        assert_eq!(registry.views().expect("preserved views"), initial);
     }
 
     #[tokio::test]
@@ -915,6 +820,100 @@ mod tests {
             .await
             .expect("invoke");
         assert_eq!(output.model_text, "search complete");
+    }
+
+    #[tokio::test]
+    async fn connector_tool_toggle_survives_catalog_refresh() {
+        let registry = ConnectorRegistry::default();
+        let base = Url::parse("https://api.example").expect("url");
+        registry
+            .discover(vec![definition("one", "Tracker")], "credential", &base, 1)
+            .await
+            .expect("discover");
+        let tools = ToolRegistry::default();
+        registry
+            .register_tools(
+                &tools,
+                Arc::new(FakeBackend),
+                PermissionStore::default(),
+                Arc::new(Approve),
+            )
+            .expect("register");
+
+        let disabled = registry
+            .toggle("one", Some("connector_tracker_search"), false)
+            .await
+            .expect("disable tool");
+        assert!(disabled.disabled_tools.contains("connector_tracker_search"));
+
+        registry.invalidate_cache().expect("invalidate");
+        let refreshed = registry
+            .discover(vec![definition("one", "Tracker")], "credential", &base, 2)
+            .await
+            .expect("refresh");
+        assert!(
+            refreshed[0]
+                .disabled_tools
+                .contains("connector_tracker_search")
+        );
+        registry
+            .register_tools(
+                &tools,
+                Arc::new(FakeBackend),
+                PermissionStore::default(),
+                Arc::new(Approve),
+            )
+            .expect("reregister");
+        assert!(matches!(
+            tools
+                .invoke(
+                    "connector_tracker_search",
+                    ToolInvocation {
+                        call_id: "disabled".to_owned(),
+                        arguments: json!({}),
+                    },
+                )
+                .await,
+            Err(ToolError::Unavailable(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn disconnected_connector_toggle_preserves_unavailable_state() {
+        let registry = ConnectorRegistry::default();
+        let base = Url::parse("https://api.example").expect("url");
+        let mut connector = definition("one", "Tracker");
+        connector.auth_kind = ConnectorAuthKind::OAuth;
+        registry
+            .discover(vec![connector], "credential", &base, 1)
+            .await
+            .expect("discover");
+        let tools = ToolRegistry::default();
+        registry
+            .register_tools(
+                &tools,
+                Arc::new(FakeBackend),
+                PermissionStore::default(),
+                Arc::new(Approve),
+            )
+            .expect("register");
+
+        registry
+            .toggle("one", Some("connector_tracker_search"), false)
+            .await
+            .expect("disable");
+        registry
+            .toggle("one", Some("connector_tracker_search"), true)
+            .await
+            .expect("enable while disconnected");
+
+        let tool = tools
+            .list()
+            .expect("tools")
+            .into_iter()
+            .find(|tool| tool.name == "connector_tracker_search")
+            .expect("connector tool");
+        assert_eq!(tool.availability, ToolAvailability::Unavailable);
     }
 
     #[tokio::test]

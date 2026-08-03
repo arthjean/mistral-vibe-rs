@@ -435,16 +435,10 @@ where
                         DeferredWork::ResourceRequest {
                             request_id,
                             session_id,
-                            method,
-                            params,
+                            command,
                         } => {
                             let response = server
-                                .execute_resource_request(
-                                    request_id,
-                                    session_id,
-                                    method,
-                                    params,
-                                )
+                                .execute_resource_request(request_id, session_id, command)
                                 .await;
                             for outbound in response.outbound {
                                 if let Err(error) = transport.send(&outbound).await {
@@ -1239,9 +1233,9 @@ mod tests {
 
         fn dispatch<'a>(
             &'a self,
-            request: ResourceBackendRequest,
+            _request: ResourceBackendRequest,
         ) -> ResourceFuture<'a, ResourceDispatch> {
-            Box::pin(async move { Err(ResourceError::MethodNotFound(request.method)) })
+            Box::pin(async move { Err(ResourceError::MethodNotFound("test".to_owned())) })
         }
 
         fn close_session<'a>(

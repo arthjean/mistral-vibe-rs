@@ -9,6 +9,7 @@ pub mod completion;
 mod composer;
 mod composer_layout;
 pub mod controls;
+mod external_action;
 mod feedback;
 pub mod history;
 pub mod input;
@@ -20,6 +21,7 @@ pub mod pickers;
 mod plan_review;
 mod prompt;
 mod queue;
+mod remote_project_workflow;
 pub mod render;
 pub mod rewind;
 #[cfg(test)]
@@ -62,6 +64,9 @@ use vibe_app_server::client::{
 };
 use vibe_app_server::release3::Release3Service;
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
+use vibe_app_server::resources::{
+    CoreResourceBackend, MistralConnectorClient, production_mcp_adapters,
+};
 use vibe_app_server::server::AppServer;
 
 use self::callback::{
@@ -75,7 +80,9 @@ use self::callback::{
 };
 use self::chat_input::{ChatInputState, InputEffect, InputEvent, Safety};
 use self::clipboard_images::{ClipboardImageManager, ImageModel, ImageModels};
-use self::cloud_workflow::{CloudWorkflowState, ProjectSelection};
+use self::cloud_workflow::{
+    CloudWorkflowState, format_cancelled_loop, format_created_loop, format_loop_list,
+};
 use self::commands::{CommandContext, CommandId};
 use self::composer::{
     apply_effects as apply_composer_effects, apply_event as apply_composer_event,
@@ -86,10 +93,14 @@ use self::controls::{ApprovalScope, CallbackChoice, CallbackRequest, ControlStat
 use self::controls::{CallbackEffect, PendingCallback};
 use self::history::PromptHistory;
 use self::input::{ExternalEditorPort, SystemExternalEditor};
+use self::interaction::Overlay;
 use self::path_normalization::PathNormalizationManager;
 use self::plan_review::PlanReviewMonitor;
 use self::prompt::{PromptContext, enqueue_prompt, is_user_skill, start_prompt};
 use self::queue::start_next_queued_prompt;
+use self::remote_project_workflow::{
+    handle_project_action, handle_project_command, handle_teleport_command, start_teleport,
+};
 use self::render::{BannerContext, TokenState, UiContext, draw};
 use self::setup::{
     CredentialStore, EnvironmentThemeDetector, NativeCredentialStore, NotificationPreference,
@@ -106,8 +117,9 @@ use self::state::{
 use self::terminal::{CrosstermOps, TerminalGuard};
 use self::voice::VoiceManager;
 use self::workflow::{
-    CommandAction, RuntimeCommand, apply_thinking, cycle_agent, dispatch_command,
-    handle_overlay_key, show_rewind,
+    CommandAction, OverlayEffect, OverlayKeyResult, RuntimeCommand, SystemUrlOpener,
+    apply_thinking, cycle_agent, dispatch_command, execute_mcp_effect, handle_overlay_key,
+    show_rewind,
 };
 use crate::{
     Arguments, CliError, CliTelemetryObserver, price_per_million_micros, telemetry_event_observer,
@@ -181,12 +193,143 @@ struct InteractiveRuntime {
     auto_approve: bool,
     vibe_code_enabled: bool,
     clear_context_after_turn: bool,
+    config_target: Option<interaction::ConfigLayerTarget>,
+    remote_project_overlay: Option<Overlay>,
+    remote_project_draft: Option<interaction::RemoteProjectDraft>,
+    ui_operation_sender: Option<tokio::sync::mpsc::UnboundedSender<UiOperationCompletion>>,
+    ui_operation_generation: u64,
+    active_ui_operation: Option<u64>,
     skills: BTreeMap<String, RuntimeSkill>,
     shell: Option<ActiveShell>,
     cloud: CloudWorkflowState,
     pending_switch: Option<switching::SwitchRequest>,
     telemetry: Option<Arc<CliTelemetryObserver>>,
     voice: VoiceManager,
+}
+
+#[derive(Debug, Clone)]
+enum UiOperation {
+    Mcp(workflow::McpPendingOperation),
+    RemoteProject(remote_project_workflow::ProjectPendingOperation),
+}
+
+struct UiOperationCompletion {
+    generation: u64,
+    operation: UiOperation,
+    result: Result<PublicDispatch, String>,
+}
+
+fn schedule_ui_call(
+    runtime: &mut InteractiveRuntime,
+    method: &str,
+    mut params: Value,
+    operation: UiOperation,
+    state: &mut TuiState,
+) -> bool {
+    if runtime.active_ui_operation.is_some() {
+        state.push_diagnostic("An interactive operation is already in progress");
+        return false;
+    }
+    let Some(sender) = runtime.ui_operation_sender.clone() else {
+        state.push_diagnostic("Interactive operation channel is unavailable");
+        return false;
+    };
+    let Some(params) = params.as_object_mut() else {
+        state.push_diagnostic("Interactive operation parameters must be an object");
+        return false;
+    };
+    params
+        .entry("sessionId")
+        .or_insert_with(|| json!(runtime.session_id));
+    let pending = match runtime
+        .service
+        .begin_public_call(method, Value::Object(params.clone()))
+    {
+        Ok(pending) => pending,
+        Err(error) => {
+            state.push_diagnostic(error.to_string());
+            return false;
+        }
+    };
+    runtime.ui_operation_generation = runtime.ui_operation_generation.saturating_add(1);
+    let generation = runtime.ui_operation_generation;
+    runtime.active_ui_operation = Some(generation);
+    tokio::spawn(async move {
+        let result = tokio::time::timeout(Duration::from_secs(30), pending.complete())
+            .await
+            .map_err(|_| "Interactive operation timed out".to_owned())
+            .and_then(|result| result.map_err(|error| error.to_string()));
+        let _ = sender.send(UiOperationCompletion {
+            generation,
+            operation,
+            result,
+        });
+    });
+    true
+}
+
+fn schedule_ui_external<F>(
+    runtime: &mut InteractiveRuntime,
+    operation: UiOperation,
+    work: F,
+    state: &mut TuiState,
+) -> bool
+where
+    F: Future<Output = Result<(), String>> + Send + 'static,
+{
+    if runtime.active_ui_operation.is_some() {
+        state.push_diagnostic("An interactive operation is already in progress");
+        return false;
+    }
+    let Some(sender) = runtime.ui_operation_sender.clone() else {
+        state.push_diagnostic("Interactive operation channel is unavailable");
+        return false;
+    };
+    runtime.ui_operation_generation = runtime.ui_operation_generation.saturating_add(1);
+    let generation = runtime.ui_operation_generation;
+    runtime.active_ui_operation = Some(generation);
+    tokio::spawn(async move {
+        let result = work.await.map(|()| PublicDispatch {
+            result: BTreeMap::new(),
+            notifications: Vec::new(),
+        });
+        let _ = sender.send(UiOperationCompletion {
+            generation,
+            operation,
+            result,
+        });
+    });
+    true
+}
+
+fn apply_ui_operation_completion(
+    completion: UiOperationCompletion,
+    runtime: &mut Option<InteractiveRuntime>,
+    state: &mut TuiState,
+) {
+    let Some(runtime) = runtime.as_mut() else {
+        return;
+    };
+    if runtime.active_ui_operation != Some(completion.generation) {
+        return;
+    }
+    runtime.active_ui_operation = None;
+    if let Ok(dispatch) = &completion.result {
+        apply_public_notifications(dispatch, state);
+    }
+    match completion.operation {
+        UiOperation::Mcp(operation) => {
+            workflow::apply_pending_operation(operation, completion.result, runtime, state);
+        }
+        UiOperation::RemoteProject(operation) => {
+            remote_project_workflow::apply_pending_operation(
+                operation,
+                completion.result,
+                runtime,
+                state,
+            );
+        }
+    }
 }
 
 impl InteractiveRuntime {
@@ -433,6 +576,10 @@ pub async fn run_interactive(
     let mut clipboard_images = ClipboardImageManager::default();
     let mut path_normalization = PathNormalizationManager::new().map_err(CliError::Terminal)?;
     let mut deferred_enter = None;
+    let (ui_operation_sender, mut ui_operation_receiver) = tokio::sync::mpsc::unbounded_channel();
+    if let Some(runtime) = runtime.as_mut() {
+        runtime.ui_operation_sender = Some(ui_operation_sender.clone());
+    }
     let mut session_started = runtime.is_some();
     let mut mounted_startup = startup::MountedStartup::new(post_mount_action);
     let mut plan_review_monitor = PlanReviewMonitor::default();
@@ -443,6 +590,9 @@ pub async fn run_interactive(
         while !exit {
             session_started |= runtime.is_some();
             if let Some(runtime) = runtime.as_mut() {
+                if runtime.ui_operation_sender.is_none() {
+                    runtime.ui_operation_sender = Some(ui_operation_sender.clone());
+                }
                 while let Some(event) = runtime.voice.try_next_event() {
                     apply_composer_event(
                         &mut input,
@@ -682,6 +832,12 @@ pub async fn run_interactive(
                             &mut state,
                         ).await;
                     }
+                }
+                completion = ui_operation_receiver.recv() => {
+                    let completion = completion.ok_or_else(|| {
+                        CliError::Terminal("interactive operation worker stopped".to_owned())
+                    })?;
+                    apply_ui_operation_completion(completion, &mut runtime, &mut state);
                 }
                 event = path_normalization.next_event(), if path_normalization.has_pending() => {
                     let event = event.ok_or_else(|| {
@@ -1097,10 +1253,32 @@ async fn handle_key(
     )? {
         return Ok(false);
     }
-    if handle_overlay_key(key, runtime, state, controls, input, theme) {
-        let effects = input.refresh_after_adapter_mutation();
-        apply_composer_effects(input, effects, working_directory, state);
-        return Ok(false);
+    match handle_overlay_key(key, runtime, state, controls, input, theme).await {
+        OverlayKeyResult::Unhandled => {}
+        OverlayKeyResult::Handled => {
+            let effects = input.refresh_after_adapter_mutation();
+            apply_composer_effects(input, effects, working_directory, state);
+            return Ok(false);
+        }
+        OverlayKeyResult::Effect(effect) => {
+            let Some(runtime) = runtime.as_mut() else {
+                return Ok(false);
+            };
+            match effect {
+                OverlayEffect::Mcp(effect) => {
+                    execute_mcp_effect(effect, runtime, state, &SystemUrlOpener);
+                }
+                OverlayEffect::RemoteProject(action) => {
+                    handle_project_action(action, working_directory, runtime, state);
+                }
+                OverlayEffect::TeleportPush(action) => {
+                    remote_project_workflow::handle_teleport_push_response(action, runtime, state);
+                }
+            }
+            let effects = input.refresh_after_adapter_mutation();
+            apply_composer_effects(input, effects, working_directory, state);
+            return Ok(false);
+        }
     }
     let voice_key = input.voice_phase().is_active()
         || (input.voice_phase() == self::chat_input::VoicePhase::Idle
@@ -1547,8 +1725,7 @@ async fn handle_key(
                             working_directory,
                             runtime,
                             state,
-                        )
-                        .await;
+                        );
                     }
                 }
                 CommandAction::Unhandled
@@ -1896,14 +2073,17 @@ async fn handle_runtime_command(
                     }
                 }
                 ["thinking", value @ ("off" | "low" | "medium" | "high" | "max")] => {
-                    apply_thinking(runtime, value, state);
+                    apply_thinking(runtime, value, None, state);
                 }
                 ["model", value] if !value.trim().is_empty() => {
                     switching::request(
                         runtime,
                         input,
                         state,
-                        switching::SwitchRequest::Model((*value).to_owned()),
+                        switching::SwitchRequest::Model {
+                            model: (*value).to_owned(),
+                            target: None,
+                        },
                     );
                 }
                 ["agent", value] if !value.trim().is_empty() => {
@@ -1991,7 +2171,7 @@ async fn handle_runtime_command(
                         );
                     }
                 }
-                ["theme", value] => update_theme(runtime, value, state, theme),
+                ["theme", value] => update_theme(runtime, value, None, state, theme),
                 _ => state.push_diagnostic(
                     "Usage: /settings [turns|tokens|mode|thinking|model|agent|proxy|certificate|notifications|updates|theme] [value]",
                 ),
@@ -2002,7 +2182,7 @@ async fn handle_runtime_command(
                 .split_whitespace()
                 .next()
                 .unwrap_or_default();
-            update_theme(runtime, value, state, theme);
+            update_theme(runtime, value, None, state, theme);
         }
         CommandId::Update => push_local_notice(
             state,
@@ -2035,10 +2215,10 @@ async fn handle_runtime_command(
         }
         CommandId::Loop => handle_loop_command(command_arguments, runtime, state),
         CommandId::RemoteProject => {
-            handle_project_command(command_arguments, working_directory, runtime, state).await
+            handle_project_command(command_arguments, working_directory, runtime, state)
         }
         CommandId::Teleport => {
-            handle_teleport_command(command_arguments, working_directory, runtime, state).await
+            handle_teleport_command(command_arguments, working_directory, runtime, state)
         }
         _ => return false,
     }
@@ -2048,9 +2228,14 @@ async fn handle_runtime_command(
 fn call_runtime(
     runtime: &mut InteractiveRuntime,
     method: &str,
-    params: Value,
+    mut params: Value,
     state: &mut TuiState,
 ) -> Option<BTreeMap<String, Value>> {
+    if let Some(params) = params.as_object_mut() {
+        params
+            .entry("sessionId")
+            .or_insert_with(|| json!(runtime.session_id));
+    }
     match runtime.service.public_call(method, params) {
         Ok(result) => Some(result),
         Err(error) => {
@@ -2061,9 +2246,10 @@ fn call_runtime(
 }
 
 fn configured_theme(runtime: Option<&mut InteractiveRuntime>) -> Option<Theme> {
-    let result = runtime?
+    let runtime = runtime?;
+    let result = runtime
         .service
-        .public_call("config/read", json!({}))
+        .public_call("config/read", json!({"sessionId": runtime.session_id}))
         .ok()?;
     result
         .get("snapshot")
@@ -2085,6 +2271,7 @@ fn parse_theme(value: &str) -> Option<Theme> {
 fn update_theme(
     runtime: &mut InteractiveRuntime,
     value: &str,
+    target: Option<&str>,
     state: &mut TuiState,
     theme: &mut ResolvedTheme,
 ) {
@@ -2092,7 +2279,14 @@ fn update_theme(
         state.push_diagnostic("Usage: /theme <system|light|dark>");
         return;
     };
-    if persist_user_setting(runtime, &["theme"], json!(value), false, state) {
+    if persist_setting(
+        runtime,
+        target.unwrap_or("user"),
+        &["theme"],
+        json!(value),
+        false,
+        state,
+    ) {
         let no_color = !theme.colors_enabled;
         *theme = resolve_theme(preference, EnvironmentThemeDetector.detect(), no_color);
         push_local_notice(state, "Theme preference saved", EntryStatus::Completed);
@@ -2142,10 +2336,24 @@ fn persist_user_setting(
     remove: bool,
     state: &mut TuiState,
 ) -> bool {
-    let expected_fingerprint = match runtime.service.public_call("config/read", json!({})) {
+    persist_setting(runtime, "user", path, value, remove, state)
+}
+
+pub(in crate::tui) fn persist_setting(
+    runtime: &mut InteractiveRuntime,
+    target: &str,
+    path: &[&str],
+    value: Value,
+    remove: bool,
+    state: &mut TuiState,
+) -> bool {
+    let expected_fingerprint = match runtime
+        .service
+        .public_call("config/read", json!({"sessionId": runtime.session_id}))
+    {
         Ok(result) => result
             .get("snapshot")
-            .and_then(|snapshot| snapshot.pointer("/fingerprints/user"))
+            .and_then(|snapshot| snapshot.pointer(&format!("/fingerprints/{target}")))
             .cloned()
             .unwrap_or(Value::Null),
         Err(error) => {
@@ -2163,7 +2371,7 @@ fn persist_user_setting(
         "config/batchWrite",
         json!({
             "writes": [{
-                "target": "user",
+                "target": target,
                 "expectedFingerprint": expected_fingerprint,
                 "mutations": [mutation],
             }],
@@ -2176,22 +2384,17 @@ fn persist_user_setting(
 async fn call_runtime_async(
     runtime: &mut InteractiveRuntime,
     method: &str,
-    params: Value,
+    mut params: Value,
     state: &mut TuiState,
 ) -> Option<PublicDispatch> {
+    if let Some(params) = params.as_object_mut() {
+        params
+            .entry("sessionId")
+            .or_insert_with(|| json!(runtime.session_id));
+    }
     match runtime.service.public_call_async(method, params).await {
         Ok(dispatch) => {
-            for notification in &dispatch.notifications {
-                push_local_notice(
-                    state,
-                    &format!(
-                        "{}: {}",
-                        notification.method,
-                        compact_json(&json!(notification.params))
-                    ),
-                    EntryStatus::Completed,
-                );
-            }
+            apply_public_notifications(&dispatch, state);
             Some(dispatch)
         }
         Err(error) => {
@@ -2199,6 +2402,88 @@ async fn call_runtime_async(
             None
         }
     }
+}
+
+fn apply_public_notifications(dispatch: &PublicDispatch, state: &mut TuiState) {
+    for notification in &dispatch.notifications {
+        if notification.method == "vibeCode/teleport/event" {
+            if let Some(event) = notification.params.get("event")
+                && event.get("kind").and_then(Value::as_str) == Some("push_required")
+            {
+                match pickers::teleport_push_overlay(event) {
+                    Some(overlay) => state.overlay = Some(overlay),
+                    None => state.push_diagnostic("Teleport push request omitted its operation ID"),
+                }
+            }
+            match teleport_event_message(notification.params.get("event")) {
+                Ok((message, status)) => push_local_notice(state, &message, status),
+                Err(message) => state.push_diagnostic(message),
+            }
+        } else {
+            push_local_notice(
+                state,
+                &format!(
+                    "{}: {}",
+                    notification.method,
+                    compact_json(&json!(notification.params))
+                ),
+                EntryStatus::Completed,
+            );
+        }
+    }
+}
+
+fn teleport_event_message(event: Option<&Value>) -> Result<(String, EntryStatus), &'static str> {
+    let event = event.ok_or("Teleport event omitted its payload")?;
+    let kind = event
+        .get("kind")
+        .and_then(Value::as_str)
+        .ok_or("Teleport event omitted its kind")?;
+    let (message, status) = match kind {
+        "summarizing_context" => ("Summarizing context...".to_owned(), EntryStatus::Streaming),
+        "checking_git" => ("Preparing workspace...".to_owned(), EntryStatus::Streaming),
+        "push_required" => {
+            let count = event
+                .get("unpushedCount")
+                .and_then(Value::as_u64)
+                .unwrap_or_default();
+            let branch = event
+                .get("branchNotPushed")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let message = if branch {
+                "Teleport requires publishing the current branch.".to_owned()
+            } else {
+                format!(
+                    "Teleport requires pushing {count} commit{}.",
+                    if count == 1 { "" } else { "s" }
+                )
+            };
+            (message, EntryStatus::Streaming)
+        }
+        "pushing" => ("Syncing with remote...".to_owned(), EntryStatus::Streaming),
+        "starting_workflow" => ("Teleporting...".to_owned(), EntryStatus::Streaming),
+        "complete" => {
+            let url = event
+                .get("url")
+                .and_then(Value::as_str)
+                .ok_or("Completed Teleport event omitted its URL")?;
+            (
+                format!("Teleported to Vibe Code Web: {url}"),
+                EntryStatus::Completed,
+            )
+        }
+        "failed" => {
+            let message = event
+                .pointer("/error/message")
+                .and_then(Value::as_str)
+                .unwrap_or("Teleport failed");
+            return Ok((format!("Teleport failed: {message}"), EntryStatus::Failed));
+        }
+        "cancelled" => ("Teleport cancelled.".to_owned(), EntryStatus::Cancelled),
+        _ => return Err("Teleport event kind is unknown"),
+    };
+    Ok((message, status))
 }
 
 fn adopt_hydrated_session(
@@ -2307,7 +2592,14 @@ fn handle_loop_command(arguments: &str, runtime: &mut InteractiveRuntime, state:
                 json!({"sessionId": runtime.session_id}),
                 state,
             ) {
-                push_json_notice(state, "Scheduled loops", result.get("loops"));
+                match result
+                    .get("loops")
+                    .ok_or("Scheduled-loop response omitted its list")
+                    .and_then(|loops| format_loop_list(loops, unix_seconds()))
+                {
+                    Ok(message) => push_local_notice(state, &message, EntryStatus::Completed),
+                    Err(message) => state.push_diagnostic(message),
+                }
             }
         }
         [action, target] if matches!(*action, "cancel" | "rm" | "stop" | "delete") => {
@@ -2319,8 +2611,23 @@ fn handle_loop_command(arguments: &str, runtime: &mut InteractiveRuntime, state:
                     json!({"sessionId": runtime.session_id, "loopId": target}),
                 )
             };
-            if call_runtime(runtime, method, params, state).is_some() {
-                push_local_notice(state, "Scheduled loop removed", EntryStatus::Completed);
+            if let Some(result) = call_runtime(runtime, method, params, state) {
+                let message = if *target == "all" {
+                    result
+                        .get("count")
+                        .and_then(Value::as_u64)
+                        .map(|count| format!("Cancelled {count} scheduled loop(s)."))
+                        .ok_or("Scheduled-loop clear response omitted its count")
+                } else {
+                    result
+                        .get("loop")
+                        .ok_or("Scheduled-loop delete response omitted the loop")
+                        .and_then(format_cancelled_loop)
+                };
+                match message {
+                    Ok(message) => push_local_notice(state, &message, EntryStatus::Completed),
+                    Err(message) => state.push_diagnostic(message),
+                }
             }
         }
         [interval, prompt @ ..] if !prompt.is_empty() => {
@@ -2334,385 +2641,20 @@ fn handle_loop_command(arguments: &str, runtime: &mut InteractiveRuntime, state:
                 }),
                 state,
             ) {
-                push_json_notice(state, "Scheduled loop created", result.get("loop"));
+                match result
+                    .get("loop")
+                    .ok_or("Scheduled-loop create response omitted the loop")
+                    .and_then(format_created_loop)
+                {
+                    Ok(message) => push_local_notice(state, &message, EntryStatus::Completed),
+                    Err(message) => state.push_diagnostic(message),
+                }
             }
         }
         _ => state.push_diagnostic(
             "Usage: /loop [list|ls] | /loop <interval> <prompt> | /loop delete <id|all>",
         ),
     }
-}
-
-async fn handle_project_command(
-    command_arguments: &str,
-    working_directory: &Path,
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-) {
-    let arguments = command_arguments.split_whitespace().collect::<Vec<_>>();
-    match arguments.as_slice() {
-        [] | ["open"] => {
-            if let Err(message) = runtime.cloud.ensure_idle() {
-                state.push_diagnostic(message);
-                return;
-            }
-            if let Some(result) = call_runtime_async(
-                runtime,
-                "vibeCode/projects/open",
-                json!({
-                    "sessionId": runtime.session_id,
-                    "workingDirectory": working_directory,
-                    "purpose": "configure",
-                }),
-                state,
-            )
-            .await
-            {
-                let picker_id = result
-                    .result
-                    .get("pickerId")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned);
-                let Some(picker_id) = picker_id else {
-                    state.push_diagnostic("Remote project picker omitted its identity");
-                    return;
-                };
-                if let Err(message) = runtime.cloud.configure_project(picker_id) {
-                    state.push_diagnostic(message);
-                    return;
-                }
-                push_json_notice(
-                    state,
-                    "Remote projects",
-                    result
-                        .result
-                        .get("view")
-                        .and_then(|view| view.pointer("/state/projects")),
-                );
-            }
-        }
-        ["select", project_id] => {
-            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
-                state.push_diagnostic("Open the remote project picker first");
-                return;
-            };
-            if call_runtime_async(
-                runtime,
-                "vibeCode/projects/select",
-                json!({
-                    "sessionId": runtime.session_id,
-                    "pickerId": picker_id,
-                    "projectId": project_id,
-                }),
-                state,
-            )
-            .await
-            .is_some()
-            {
-                push_local_notice(
-                    state,
-                    &format!("Selected remote project `{project_id}`"),
-                    EntryStatus::Completed,
-                );
-                complete_project_selection(
-                    (*project_id).to_owned(),
-                    working_directory,
-                    runtime,
-                    state,
-                )
-                .await;
-            }
-        }
-        ["more"] => {
-            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
-                state.push_diagnostic("Open the remote project picker first");
-                return;
-            };
-            if let Some(result) = call_runtime_async(
-                runtime,
-                "vibeCode/projects/loadMore",
-                json!({"sessionId": runtime.session_id, "pickerId": picker_id}),
-                state,
-            )
-            .await
-            {
-                push_json_notice(
-                    state,
-                    "Remote projects",
-                    result
-                        .result
-                        .get("view")
-                        .and_then(|view| view.pointer("/state/projects")),
-                );
-            }
-        }
-        ["create", name] | ["create", name, _] => {
-            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
-                state.push_diagnostic("Open the remote project picker first");
-                return;
-            };
-            let default_branch = arguments.get(2).copied().unwrap_or("main");
-            if let Some(result) = call_runtime_async(
-                runtime,
-                "vibeCode/projects/create",
-                json!({
-                    "sessionId": runtime.session_id,
-                    "pickerId": picker_id,
-                    "name": name,
-                    "defaultBranch": default_branch,
-                }),
-                state,
-            )
-            .await
-            {
-                let project_id = result
-                    .result
-                    .get("project")
-                    .and_then(|project| project.get("projectId"))
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned);
-                push_json_notice(
-                    state,
-                    "Remote project created",
-                    result.result.get("project"),
-                );
-                let Some(project_id) = project_id else {
-                    state.push_diagnostic("Created remote project omitted its identity");
-                    return;
-                };
-                complete_project_selection(project_id, working_directory, runtime, state).await;
-            }
-        }
-        ["unlink"] | ["cancel"] => {
-            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
-                state.push_diagnostic("No remote project picker is active");
-                return;
-            };
-            let method = if arguments[0] == "unlink" {
-                "vibeCode/projects/unlink"
-            } else {
-                "vibeCode/projects/cancel"
-            };
-            if call_runtime_async(
-                runtime,
-                method,
-                json!({"sessionId": runtime.session_id, "pickerId": picker_id}),
-                state,
-            )
-            .await
-            .is_some()
-            {
-                runtime.cloud.cancel_project_selection();
-                push_local_notice(
-                    state,
-                    "Remote project selection cleared",
-                    EntryStatus::Completed,
-                );
-            }
-        }
-        _ => state.push_diagnostic(
-            "Usage: /remote-project [open|more|select <id>|create <name> [branch]|unlink|cancel]",
-        ),
-    }
-}
-
-async fn handle_teleport_command(
-    command_arguments: &str,
-    working_directory: &Path,
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-) {
-    let arguments = command_arguments.split_whitespace().collect::<Vec<_>>();
-    if let Some(action) = arguments.first()
-        && matches!(*action, "approve" | "deny" | "cancel")
-    {
-        let Some(operation_id) = runtime.cloud.teleport_operation_id().map(ToOwned::to_owned)
-        else {
-            state.push_diagnostic("No Teleport operation is active");
-            return;
-        };
-        let (method, params) = if *action == "cancel" {
-            (
-                "vibeCode/teleport/cancel",
-                json!({
-                    "sessionId": runtime.session_id,
-                    "operationId": operation_id,
-                }),
-            )
-        } else {
-            (
-                "vibeCode/teleport/push/respond",
-                json!({
-                    "sessionId": runtime.session_id,
-                    "operationId": operation_id,
-                    "approved": *action == "approve",
-                }),
-            )
-        };
-        if call_runtime_async(runtime, method, params, state)
-            .await
-            .is_some()
-        {
-            runtime.cloud.complete_teleport();
-        }
-        return;
-    }
-    let prompt = (!arguments.is_empty()).then(|| arguments.join(" "));
-    start_teleport(prompt.as_deref(), working_directory, runtime, state).await;
-}
-
-async fn start_teleport(
-    prompt: Option<&str>,
-    working_directory: &Path,
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-) {
-    if let Err(message) = runtime.cloud.ensure_idle() {
-        state.push_diagnostic(message);
-        return;
-    }
-    let Some(result) = call_runtime_async(
-        runtime,
-        "vibeCode/projects/open",
-        with_optional_prompt(
-            json!({
-                "sessionId": runtime.session_id,
-                "workingDirectory": working_directory,
-                "purpose": "teleport",
-            }),
-            prompt,
-        ),
-        state,
-    )
-    .await
-    else {
-        state.push_diagnostic("Teleport project resolution failed");
-        return;
-    };
-    let picker_id = result
-        .result
-        .get("pickerId")
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned);
-    let Some(picker_id) = picker_id else {
-        state.push_diagnostic("Teleport project picker omitted its identity");
-        return;
-    };
-    let project_id = result
-        .result
-        .get("resolvedProjectId")
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned);
-    let Some(project_id) = project_id else {
-        if let Err(message) = runtime
-            .cloud
-            .select_teleport_project(picker_id, prompt.map(ToOwned::to_owned))
-        {
-            state.push_diagnostic(message);
-            return;
-        }
-        push_json_notice(
-            state,
-            "Select a remote project for Teleport",
-            result
-                .result
-                .get("view")
-                .and_then(|view| view.pointer("/state/projects")),
-        );
-        return;
-    };
-    begin_teleport(
-        picker_id,
-        project_id,
-        prompt,
-        working_directory,
-        runtime,
-        state,
-    )
-    .await;
-}
-
-async fn complete_project_selection(
-    project_id: String,
-    working_directory: &Path,
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-) {
-    match runtime.cloud.complete_project_selection() {
-        Some(ProjectSelection::StartTeleport { picker_id, prompt }) => {
-            begin_teleport(
-                picker_id,
-                project_id,
-                prompt.as_deref(),
-                working_directory,
-                runtime,
-                state,
-            )
-            .await;
-        }
-        Some(ProjectSelection::Configured) => {}
-        None => {
-            state.push_diagnostic("Remote project selection completed without an active picker");
-        }
-    }
-}
-
-async fn begin_teleport(
-    picker_id: String,
-    project_id: String,
-    prompt: Option<&str>,
-    working_directory: &Path,
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-) {
-    let operation_id = format!(
-        "teleport-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_millis())
-    );
-    if let Some(dispatch) = call_runtime_async(
-        runtime,
-        "vibeCode/teleport/start",
-        with_optional_prompt(
-            json!({
-                "sessionId": runtime.session_id,
-                "operationId": operation_id,
-                "pickerId": picker_id,
-                "projectId": project_id,
-                "workingDirectory": working_directory,
-            }),
-            prompt,
-        ),
-        state,
-    )
-    .await
-        && !teleport_dispatch_is_terminal(&dispatch)
-        && let Err(message) = runtime.cloud.start_teleport(operation_id)
-    {
-        state.push_diagnostic(message);
-    }
-}
-
-fn teleport_dispatch_is_terminal(dispatch: &PublicDispatch) -> bool {
-    dispatch.notifications.iter().rev().any(|notification| {
-        notification.method == "vibeCode/teleport/event"
-            && notification
-                .params
-                .get("event")
-                .and_then(|event| event.get("kind"))
-                .and_then(Value::as_str)
-                .is_some_and(|kind| matches!(kind, "complete" | "failed" | "cancelled"))
-    })
-}
-
-fn with_optional_prompt(mut params: Value, prompt: Option<&str>) -> Value {
-    if let Some(prompt) = prompt
-        && let Some(params) = params.as_object_mut()
-    {
-        params.insert("prompt".to_owned(), json!(prompt));
-    }
-    params
 }
 
 fn push_json_notice(state: &mut TuiState, label: &str, value: Option<&Value>) {
@@ -3090,7 +3032,8 @@ fn start_runtime(
     credential: String,
 ) -> Result<InteractiveRuntime, CliError> {
     let voice_credential = credential.clone();
-    let mut banner = banner_metrics_from_release3(&release3, arguments, working_directory);
+    let connector_credential = credential.clone();
+    let banner = banner_metrics_from_release3(&release3, arguments, working_directory);
     let skills = runtime_skills(&release3);
     let preferences = startup_preferences(arguments, &release3)?;
     let release4 = Release4Service::production(
@@ -3107,7 +3050,24 @@ fn start_runtime(
         driver = driver.with_event_observer(observer.clone());
     }
     let driver = Arc::new(driver);
-    let server = AppServer::default()
+    let connector = Arc::new(
+        MistralConnectorClient::new(&arguments.api_base, connector_credential)
+            .map_err(|error| CliError::Terminal(error.to_string()))?,
+    );
+    let (mcp_factory, mcp_auth) =
+        production_mcp_adapters().map_err(|error| CliError::Terminal(error.to_string()))?;
+    let resource_backend = CoreResourceBackend::default()
+        .with_config(release3.layered_config())
+        .with_mcp_factory(mcp_factory)
+        .with_mcp_auth(mcp_auth)
+        .with_connector_catalog(
+            connector.clone(),
+            connector.clone(),
+            arguments.credential_environment.clone(),
+            connector.base_url(),
+        )
+        .with_connector_auth(connector);
+    let server = AppServer::with_resource_backend(Arc::new(resource_backend))
         .using_release3_service(release3)
         .using_release4_service(release4);
     let mut service = HeadlessService::new_interactive_shared_with_server(driver, server)?;
@@ -3138,9 +3098,8 @@ fn start_runtime(
         resume: arguments.resume.clone(),
         continue_session: arguments.continue_session,
     })?;
-    refresh_server_banner_metrics(&mut service, &mut banner);
     let voice_enabled = service
-        .public_call("config/read", json!({}))
+        .public_call("config/read", json!({"sessionId": session_id}))
         .ok()
         .and_then(|result| {
             result
@@ -3179,6 +3138,12 @@ fn start_runtime(
         auto_approve: session.intent.auto_approve,
         vibe_code_enabled: preferences.vibe_code_enabled,
         clear_context_after_turn: false,
+        config_target: None,
+        remote_project_overlay: None,
+        remote_project_draft: None,
+        ui_operation_sender: None,
+        ui_operation_generation: 0,
+        active_ui_operation: None,
         skills,
         shell: None,
         cloud: CloudWorkflowState::default(),
@@ -3254,18 +3219,24 @@ fn banner_metrics_from_release3(
     banner
 }
 
-fn refresh_server_banner_metrics(
+async fn refresh_server_banner_metrics(
     service: &mut HeadlessService<LiveTurnDriver>,
+    session_id: &str,
     banner: &mut BannerMetrics,
 ) {
-    if let Ok(result) = service.public_call("connectors/read", json!({}))
-        && let Some(counts) = result.get("counts")
+    if let Ok(dispatch) = service
+        .public_call_async("connectors/read", json!({"sessionId": session_id}))
+        .await
+        && let Some(counts) = dispatch.result.get("counts")
     {
         banner.connectors_connected = json_usize(counts.get("connected"));
         banner.connectors_total = json_usize(counts.get("total"));
     }
-    if let Ok(result) = service.public_call("mcp/read", json!({}))
-        && let Some(sources) = result
+    if let Ok(dispatch) = service
+        .public_call_async("mcp/read", json!({"sessionId": session_id}))
+        .await
+        && let Some(sources) = dispatch
+            .result
             .get("mcp")
             .and_then(|mcp| mcp.get("sources"))
             .and_then(Value::as_array)
@@ -3281,10 +3252,10 @@ fn refresh_server_banner_metrics(
             })
             .count();
     }
-    if let Ok(result) = service.public_call("diagnostics/list", json!({})) {
+    if let Ok(result) = service.public_call("diagnostics/list", json!({"sessionId": session_id})) {
         banner.hooks_count = json_usize(result.get("hooksCount"));
     }
-    if let Ok(result) = service.public_call("account/read", json!({})) {
+    if let Ok(result) = service.public_call("account/read", json!({"sessionId": session_id})) {
         banner.plan = result
             .get("account")
             .and_then(|account| account.get("plan"))
@@ -3747,6 +3718,7 @@ fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) {
 mod tests {
     use std::collections::VecDeque;
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::task::{Context, Poll};
 
     use super::*;
@@ -3901,6 +3873,12 @@ mod tests {
             auto_approve: true,
             vibe_code_enabled: true,
             clear_context_after_turn: false,
+            config_target: None,
+            remote_project_overlay: None,
+            remote_project_draft: None,
+            ui_operation_sender: None,
+            ui_operation_generation: 0,
+            active_ui_operation: None,
             skills: BTreeMap::new(),
             shell: None,
             cloud: CloudWorkflowState::default(),
@@ -3913,6 +3891,163 @@ mod tests {
             )
             .expect("test voice manager"),
         }
+    }
+
+    #[tokio::test]
+    async fn ui_operations_are_mutually_exclusive_and_session_scoped() {
+        let mut runtime = interactive_test_runtime("ui-operation-session");
+        let (operation_sender, mut operation_receiver) = tokio::sync::mpsc::unbounded_channel();
+        runtime.ui_operation_sender = Some(operation_sender);
+        let mut state = TuiState::new("ui-operation-session");
+        let rejected_work_ran = Arc::new(AtomicBool::new(false));
+
+        assert!(schedule_ui_call(
+            &mut runtime,
+            "config/read",
+            json!({}),
+            UiOperation::Mcp(workflow::McpPendingOperation::CopyUrl),
+            &mut state,
+        ));
+        let rejected_work = Arc::clone(&rejected_work_ran);
+        assert!(!schedule_ui_external(
+            &mut runtime,
+            UiOperation::Mcp(workflow::McpPendingOperation::CopyUrl),
+            async move {
+                rejected_work.store(true, Ordering::SeqCst);
+                Ok(())
+            },
+            &mut state,
+        ));
+        assert_eq!(runtime.ui_operation_generation, 1);
+        assert!(
+            state
+                .diagnostics()
+                .any(|message| message.contains("already in progress"))
+        );
+
+        let completion = tokio::time::timeout(Duration::from_secs(1), operation_receiver.recv())
+            .await
+            .expect("config read completes")
+            .expect("operation channel remains open");
+        assert!(completion.result.is_ok(), "sessionId was injected");
+        let mut runtime = Some(runtime);
+        apply_ui_operation_completion(completion, &mut runtime, &mut state);
+        assert_eq!(
+            runtime
+                .as_ref()
+                .expect("runtime remains mounted")
+                .active_ui_operation,
+            None
+        );
+        assert!(!rejected_work_ran.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn remote_project_create_draft_survives_failure_and_clears_on_success_or_cancel() {
+        let draft = interaction::RemoteProjectDraft {
+            name: "vibe-rs".to_owned(),
+            default_branch: "main".to_owned(),
+        };
+        let picker = Overlay::new(
+            interaction::OverlayKind::RemoteProjects,
+            "Projects",
+            Vec::new(),
+        );
+        let mut runtime = interactive_test_runtime("remote-project-create");
+        runtime
+            .cloud
+            .configure_project("picker".to_owned())
+            .expect("picker starts");
+        runtime.remote_project_overlay = Some(picker.clone());
+        runtime.remote_project_draft = Some(draft.clone());
+        let mut state = TuiState::new("remote-project-create");
+        let mut create_overlay = pickers::remote_project_create_overlay(&draft);
+        create_overlay.select_by_id("remote-project:create:submit");
+        state.overlay = Some(create_overlay);
+        let mut submitting_runtime = Some(runtime);
+
+        assert!(matches!(
+            workflow::handle_remote_project_create_key(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+                &mut submitting_runtime,
+                &mut state,
+            ),
+            workflow::OverlayKeyResult::Effect(workflow::OverlayEffect::RemoteProject(
+                interaction::RemoteProjectAction::Create { .. }
+            ))
+        ));
+        assert_eq!(
+            submitting_runtime
+                .as_ref()
+                .expect("runtime remains mounted")
+                .remote_project_draft,
+            Some(draft.clone())
+        );
+
+        let mut runtime = interactive_test_runtime("remote-project-create-failure");
+        runtime.remote_project_overlay = Some(picker.clone());
+        runtime.remote_project_draft = Some(draft.clone());
+        state.overlay = Some(pickers::remote_project_create_overlay(&draft));
+        remote_project_workflow::apply_pending_operation(
+            remote_project_workflow::ProjectPendingOperation::Create {
+                working_directory: PathBuf::from("/workspace"),
+                requested_name: draft.name.clone(),
+            },
+            Err("creation failed".to_owned()),
+            &mut runtime,
+            &mut state,
+        );
+        assert_eq!(runtime.remote_project_draft, Some(draft.clone()));
+        assert_eq!(
+            state.overlay.as_ref().map(|overlay| overlay.kind),
+            Some(interaction::OverlayKind::RemoteProjectCreate)
+        );
+
+        runtime
+            .cloud
+            .configure_project("picker".to_owned())
+            .expect("picker restarts");
+        remote_project_workflow::apply_pending_operation(
+            remote_project_workflow::ProjectPendingOperation::Create {
+                working_directory: PathBuf::from("/workspace"),
+                requested_name: draft.name.clone(),
+            },
+            Ok(PublicDispatch {
+                result: BTreeMap::from([(
+                    "project".to_owned(),
+                    json!({"projectId": "project-1", "name": "vibe-rs"}),
+                )]),
+                notifications: Vec::new(),
+            }),
+            &mut runtime,
+            &mut state,
+        );
+        assert!(runtime.remote_project_draft.is_none());
+        assert!(state.overlay.is_none());
+
+        runtime.remote_project_overlay = Some(picker);
+        runtime.remote_project_draft = Some(draft.clone());
+        state.overlay = Some(pickers::remote_project_create_overlay(&draft));
+        let mut runtime = Some(runtime);
+        assert_eq!(
+            workflow::handle_remote_project_create_key(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+                &mut runtime,
+                &mut state,
+            ),
+            workflow::OverlayKeyResult::Handled
+        );
+        assert!(
+            runtime
+                .as_ref()
+                .expect("runtime remains mounted")
+                .remote_project_draft
+                .is_none()
+        );
+        assert_eq!(
+            state.overlay.as_ref().map(|overlay| overlay.kind),
+            Some(interaction::OverlayKind::RemoteProjects)
+        );
     }
 
     struct StartupProjects;
@@ -4009,6 +4144,8 @@ mod tests {
                 "startup-teleport",
                 server,
             ));
+            let (operation_sender, mut operation_receiver) = tokio::sync::mpsc::unbounded_channel();
+            runtime.as_mut().expect("runtime").ui_operation_sender = Some(operation_sender);
             let mut mounted = startup::MountedStartup::new(Some(
                 startup::PostMountAction::Teleport(prompt.clone()),
             ));
@@ -4030,6 +4167,14 @@ mod tests {
             )
             .await
             .expect("mounted Teleport startup");
+            for _ in 0..2 {
+                let completion =
+                    tokio::time::timeout(Duration::from_secs(1), operation_receiver.recv())
+                        .await
+                        .expect("startup operation completes")
+                        .expect("startup operation channel");
+                apply_ui_operation_completion(completion, &mut runtime, &mut state);
+            }
             startup::complete_mounted_startup(
                 &mut mounted,
                 Path::new("/workspace"),

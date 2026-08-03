@@ -1,8 +1,27 @@
+use std::collections::BTreeSet;
+
 use serde_json::Value;
 
+mod integrations;
+mod remote_projects;
+
+pub use integrations::{mcp_auth_overlay, mcp_detail_overlay, mcp_overlay};
+pub use remote_projects::{
+    remote_project_create_overlay, remote_projects_overlay, teleport_push_overlay,
+};
+
 use super::commands::{COMMANDS, CommandContext, command_available_in};
-use super::interaction::{Overlay, OverlayItem, OverlayKind};
+use super::interaction::{ConfigLayerTarget, Overlay, OverlayAction, OverlayItem, OverlayKind};
 use super::rewind::{RewindState, RewindTarget};
+
+const POPULAR_CONFIG_FIELDS: &[&str] = &[
+    "active_model",
+    "thinking",
+    "theme",
+    "notifications",
+    "voice_mode_enabled",
+    "narrator_enabled",
+];
 
 #[must_use]
 pub fn help_overlay(context: &CommandContext) -> Overlay {
@@ -39,52 +58,203 @@ pub fn help_overlay(context: &CommandContext) -> Overlay {
 #[must_use]
 pub fn config_overlay(snapshot: &Value, schema: &Value) -> Overlay {
     let config = snapshot.get("config").unwrap_or(snapshot);
-    let properties = schema.get("properties").and_then(Value::as_object);
     let mut fields = Vec::new();
-    flatten_config("", config, &mut fields);
-    let configured = fields
+    collect_schema_fields("", schema, config, &mut fields);
+    let known = fields
         .iter()
-        .map(|(path, _)| path.clone())
-        .collect::<std::collections::BTreeSet<_>>();
-    if let Some(properties) = properties {
-        for (path, field_schema) in properties {
-            if !fields.iter().any(|(field, _)| field == path) {
-                fields.push((
-                    path.clone(),
-                    field_schema.get("default").cloned().unwrap_or(Value::Null),
-                ));
-            }
-        }
-    }
+        .map(|(path, _, _, _)| path.clone())
+        .collect::<BTreeSet<_>>();
+    let mut fallback = Vec::new();
+    flatten_config("", config, &mut fallback);
+    fields.extend(
+        fallback
+            .into_iter()
+            .filter(|(path, _)| !known.contains(path))
+            .map(|(path, value)| (path, value, Value::Null, true)),
+    );
     fields.sort_by(|left, right| {
         config_priority(&left.0)
             .cmp(&config_priority(&right.0))
             .then_with(|| left.0.cmp(&right.0))
     });
-    let items = fields
+    let mut popular = Vec::new();
+    let mut advanced = Vec::new();
+    for item in fields
         .into_iter()
-        .map(|(path, value)| {
-            let schema = properties.and_then(|properties| properties.get(&path));
-            let kind = schema
-                .and_then(schema_kind)
+        .map(|(path, value, field_schema, configured)| {
+            let schema_available = !field_schema.is_null();
+            let kind = schema_kind(&field_schema)
                 .map_or_else(|| value_kind(&value).to_owned(), str::to_owned);
+            let description = field_schema
+                .get("description")
+                .and_then(Value::as_str)
+                .unwrap_or(if schema_available {
+                    ""
+                } else {
+                    "schema unavailable; read-only"
+                });
+            let details = format!(
+                "{} · {kind} · {}",
+                compact_value(&value),
+                origin_label(&config_origin(snapshot, &path, configured)),
+            );
+            let details = if description.is_empty() {
+                details
+            } else {
+                format!("{details} · {description}")
+            };
             OverlayItem::new(
                 path.clone(),
-                path.replace('_', " "),
-                format!(
-                    "{} · {kind} · {}",
-                    compact_value(&value),
-                    config_origin(snapshot, &path, configured.contains(&path))
-                ),
-                false,
+                path.replace('.', " › ").replace('_', " "),
+                details,
+                !schema_available || config_field_is_secret(&path, &field_schema),
             )
         })
-        .collect();
+    {
+        if POPULAR_CONFIG_FIELDS.contains(&item.id.as_str()) {
+            popular.push(item);
+        } else {
+            advanced.push(item);
+        }
+    }
+    let target = ConfigLayerTarget::from_snapshot(snapshot);
+    let mut items = Vec::with_capacity(popular.len() + advanced.len() + 3);
+    items.push(OverlayItem::new(
+        "config-target",
+        "Save changes to",
+        format!("{} configuration layer", target.as_str()),
+        false,
+    ));
+    if !popular.is_empty() {
+        items.push(OverlayItem::new(
+            "heading:popular",
+            "Popular settings",
+            "",
+            true,
+        ));
+        items.extend(popular);
+    }
+    if !advanced.is_empty() {
+        items.push(OverlayItem::new(
+            "heading:advanced",
+            "Advanced settings",
+            "",
+            true,
+        ));
+        items.extend(advanced);
+    }
     Overlay::new(OverlayKind::Config, "Settings", items)
 }
 
-fn config_origin<'a>(snapshot: &'a Value, path: &str, configured: bool) -> &'a str {
-    let pointer = format!("/{}", path.replace('.', "/"));
+#[must_use]
+pub fn config_target_overlay(current: ConfigLayerTarget) -> Overlay {
+    Overlay::new(
+        OverlayKind::ConfigTarget,
+        "Select configuration layer",
+        [ConfigLayerTarget::User, ConfigLayerTarget::Project]
+            .into_iter()
+            .map(|target| {
+                OverlayItem::new(
+                    format!("config-target:{}", target.as_str()),
+                    target.as_str(),
+                    if target == current { "current" } else { "" },
+                    false,
+                )
+                .with_action(OverlayAction::ConfigTarget(target))
+            })
+            .collect(),
+    )
+}
+
+#[must_use]
+pub fn config_choice_overlay(path: &str, schema: &Value, current: Option<&Value>) -> Overlay {
+    let choices = schema
+        .get("enum")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Overlay::new(
+        OverlayKind::ConfigChoice,
+        format!("Set {}", path.replace('_', " ")),
+        choices
+            .into_iter()
+            .enumerate()
+            .map(|(index, choice)| {
+                let label = compact_value(&choice);
+                OverlayItem::new(
+                    format!("config-choice:{path}:{index}"),
+                    label,
+                    if current == Some(&choice) {
+                        "current"
+                    } else {
+                        ""
+                    },
+                    false,
+                )
+                .with_action(OverlayAction::ConfigChoice {
+                    path: path.to_owned(),
+                    value: choice,
+                })
+            })
+            .collect(),
+    )
+}
+
+fn collect_schema_fields(
+    prefix: &str,
+    schema: &Value,
+    config: &Value,
+    output: &mut Vec<(String, Value, Value, bool)>,
+) {
+    let Some(properties) = schema.get("properties").and_then(Value::as_object) else {
+        return;
+    };
+    for (name, field_schema) in properties {
+        let path = if prefix.is_empty() {
+            name.clone()
+        } else {
+            format!("{prefix}.{name}")
+        };
+        let value = config.get(name);
+        let nested_properties = field_schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .is_some();
+        if nested_properties {
+            collect_schema_fields(&path, field_schema, value.unwrap_or(&Value::Null), output);
+        } else {
+            output.push((
+                path,
+                value
+                    .cloned()
+                    .or_else(|| field_schema.get("default").cloned())
+                    .unwrap_or(Value::Null),
+                field_schema.clone(),
+                value.is_some(),
+            ));
+        }
+    }
+}
+
+/// Mirrors the reference `screens/config/_common.origin_label` vocabulary.
+fn origin_label(origin: &str) -> String {
+    match origin {
+        "overrides" => "temporary".to_owned(),
+        "environment" => "env".to_owned(),
+        other => other
+            .strip_suffix("-toml")
+            .map_or_else(|| other.to_owned(), |layer| format!("{layer} config")),
+    }
+}
+
+fn config_origin(snapshot: &Value, path: &str, configured: bool) -> String {
+    let pointer = format!(
+        "/{}",
+        path.split('.')
+            .map(|segment| segment.replace('~', "~0").replace('/', "~1"))
+            .collect::<Vec<_>>()
+            .join("/")
+    );
     snapshot
         .get("layerValues")
         .and_then(Value::as_array)
@@ -100,15 +270,20 @@ fn config_origin<'a>(snapshot: &'a Value, path: &str, configured: bool) -> &'a s
         .and_then(Value::as_str)
         .map(|layer| {
             if layer == "selected_toml" {
-                snapshot
-                    .get("selectedTarget")
-                    .and_then(Value::as_str)
-                    .unwrap_or(layer)
+                // The reference names TOML layers `<target>-toml`; the wire keeps
+                // the selected target beside the layer.
+                format!(
+                    "{}-toml",
+                    snapshot
+                        .get("selectedTarget")
+                        .and_then(Value::as_str)
+                        .unwrap_or("selected")
+                )
             } else {
-                layer
+                layer.to_owned()
             }
         })
-        .unwrap_or(if configured { "effective" } else { "default" })
+        .unwrap_or_else(|| if configured { "effective" } else { "defaults" }.to_owned())
 }
 
 #[must_use]
@@ -239,42 +414,6 @@ pub fn sessions_overlay(result: &Value, current_session_id: &str) -> Overlay {
 }
 
 #[must_use]
-pub fn mcp_overlay(result: &Value) -> Overlay {
-    let items = result
-        .pointer("/mcp/sources")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|source| {
-            let name = source.get("name").and_then(Value::as_str)?;
-            let status = source
-                .get("status")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown");
-            let enabled = source
-                .get("enabled")
-                .and_then(Value::as_bool)
-                .unwrap_or(status != "disabled");
-            let tools = source
-                .get("tools")
-                .and_then(Value::as_array)
-                .map_or(0, Vec::len);
-            Some(OverlayItem::new(
-                name,
-                name,
-                format!(
-                    "{status} · {tools} tool{}{}",
-                    if tools == 1 { "" } else { "s" },
-                    if enabled { "" } else { " · disabled" }
-                ),
-                false,
-            ))
-        })
-        .collect();
-    Overlay::new(OverlayKind::Mcp, "MCP servers and connectors", items)
-}
-
-#[must_use]
 pub fn voice_overlay(snapshot: &Value) -> Overlay {
     let config = snapshot.get("config").unwrap_or(snapshot);
     Overlay::new(
@@ -294,24 +433,38 @@ pub fn voice_overlay(snapshot: &Value) -> Overlay {
 }
 
 #[must_use]
-pub fn proxy_overlay(snapshot: &Value) -> Overlay {
-    let config = snapshot.get("config").unwrap_or(snapshot);
+pub fn proxy_overlay(settings: &Value) -> Overlay {
+    let values = settings.get("values").unwrap_or(settings);
+    let descriptions = settings.get("descriptions").and_then(Value::as_object);
     Overlay::new(
         OverlayKind::Proxy,
-        "Proxy and TLS",
-        [("proxy", "Proxy URL"), ("tls_ca_path", "TLS certificate")]
-            .into_iter()
-            .map(|(key, label)| {
-                OverlayItem::new(
-                    key,
-                    label,
-                    config
-                        .get(key)
-                        .map_or_else(|| "not set".to_owned(), compact_value),
-                    false,
-                )
-            })
-            .collect(),
+        "Proxy Configuration",
+        [
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "ALL_PROXY",
+            "NO_PROXY",
+            "SSL_CERT_FILE",
+            "SSL_CERT_DIR",
+        ]
+        .into_iter()
+        .map(|key| {
+            let description = descriptions
+                .and_then(|descriptions| descriptions.get(key))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let value = values.get(key).filter(|value| !value.is_null());
+            OverlayItem::new(
+                key,
+                key,
+                value.map_or_else(
+                    || format!("not set · {description}"),
+                    |value| format!("{} · {description}", compact_value(value)),
+                ),
+                false,
+            )
+        })
+        .collect(),
     )
 }
 
@@ -417,28 +570,41 @@ fn flatten_config(prefix: &str, value: &Value, output: &mut Vec<(String, Value)>
 }
 
 fn config_priority(path: &str) -> usize {
-    const POPULAR: &[&str] = &[
-        "active_model",
-        "thinking",
-        "theme",
-        "notifications",
-        "voice_mode_enabled",
-        "narrator_enabled",
-    ];
-    POPULAR
+    POPULAR_CONFIG_FIELDS
         .iter()
         .position(|popular| *popular == path)
-        .unwrap_or(POPULAR.len())
+        .unwrap_or(POPULAR_CONFIG_FIELDS.len())
 }
 
 fn schema_kind(schema: &Value) -> Option<&str> {
-    if schema.get("enum").is_some() {
+    if schema.get("enum").is_some() || schema.get("const").is_some() {
         return Some("choice");
     }
     schema
         .get("type")
         .and_then(Value::as_str)
+        .or_else(|| {
+            schema
+                .get("type")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .find(|kind| *kind != "null")
+        })
         .or_else(|| schema.get("format").and_then(Value::as_str))
+}
+
+fn config_field_is_secret(path: &str, schema: &Value) -> bool {
+    schema.get("writeOnly").and_then(Value::as_bool) == Some(true)
+        || schema.get("format").and_then(Value::as_str) == Some("password")
+        || path.split('.').any(|segment| {
+            let normalized = segment.to_ascii_lowercase();
+            normalized.contains("password")
+                || normalized.contains("secret")
+                || normalized.contains("api_key")
+                || normalized.contains("token")
+        })
 }
 
 fn value_kind(value: &Value) -> &'static str {
@@ -452,9 +618,25 @@ fn value_kind(value: &Value) -> &'static str {
     }
 }
 
+/// Mirrors the reference `screens/config/_common.format_value` vocabulary so a
+/// value reads the same in both runtimes.
 fn compact_value(value: &Value) -> String {
     let rendered = match value {
+        Value::Bool(true) => "True".to_owned(),
+        Value::Bool(false) => "False".to_owned(),
+        Value::Null => "—".to_owned(),
+        Value::String(value) if value.is_empty() => "\"\"".to_owned(),
         Value::String(value) => value.clone(),
+        Value::Array(items) => format!(
+            "[{} item{}]",
+            items.len(),
+            if items.len() == 1 { "" } else { "s" }
+        ),
+        Value::Object(entries) => format!(
+            "{{{} entr{}}}",
+            entries.len(),
+            if entries.len() == 1 { "y" } else { "ies" }
+        ),
         other => serde_json::to_string(other).unwrap_or_else(|_| "?".to_owned()),
     };
     if rendered.chars().count() <= 80 {

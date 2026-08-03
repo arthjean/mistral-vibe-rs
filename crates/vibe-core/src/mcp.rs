@@ -7,10 +7,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{FutureExt, StreamExt, stream::FuturesUnordered};
-use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStderr, ChildStdin, ChildStdout, Command};
@@ -28,6 +26,10 @@ use crate::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler,
     ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
 };
+
+mod http;
+
+pub use http::HttpMcpPeerFactory;
 
 const MAX_MCP_SERVERS: usize = 256;
 const MAX_MCP_TOOLS_PER_SERVER: usize = 256;
@@ -50,11 +52,6 @@ pub type McpFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, McpError>> + S
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "transport", rename_all = "kebab-case")]
 pub enum McpTransportConfig {
-    Http {
-        url: Url,
-        #[serde(default)]
-        headers: BTreeMap<String, String>,
-    },
     StreamableHttp {
         url: Url,
         #[serde(default)]
@@ -84,8 +81,6 @@ pub struct McpServerConfig {
     pub startup_timeout_ms: u64,
     #[serde(default = "default_tool_timeout_ms")]
     pub tool_timeout_ms: u64,
-    #[serde(default)]
-    pub oauth: Option<McpOAuthConfig>,
 }
 
 const fn default_startup_timeout_ms() -> u64 {
@@ -94,186 +89,6 @@ const fn default_startup_timeout_ms() -> u64 {
 
 const fn default_tool_timeout_ms() -> u64 {
     DEFAULT_MCP_TOOL_TIMEOUT_MS
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct McpOAuthConfig {
-    pub resource: Url,
-    pub issuer: Url,
-    pub client_id: String,
-    pub redirect_uri: Url,
-    #[serde(default)]
-    pub scopes: Vec<String>,
-}
-
-impl McpOAuthConfig {
-    pub fn validate(&self) -> Result<(), McpError> {
-        require_secure_url(&self.resource, "resource")?;
-        require_secure_url(&self.issuer, "issuer")?;
-        if self.client_id.is_empty() {
-            return Err(McpError::InvalidConfig(
-                "OAuth client ID is empty".to_owned(),
-            ));
-        }
-        let redirect_valid = self.redirect_uri.scheme() == "https"
-            || (self.redirect_uri.scheme() == "http"
-                && self.redirect_uri.host_str().is_some_and(is_loopback_host));
-        if !redirect_valid {
-            return Err(McpError::InvalidConfig(
-                "OAuth redirect must use HTTPS or loopback HTTP".to_owned(),
-            ));
-        }
-        Ok(())
-    }
-
-    #[must_use]
-    pub fn fingerprint(&self) -> String {
-        let mut scopes = self.scopes.clone();
-        scopes.sort();
-        let payload = format!(
-            "{}\n{}\n{}\n{}\n{}",
-            canonical_resource(&self.resource),
-            self.issuer,
-            self.client_id,
-            self.redirect_uri,
-            scopes.join(" ")
-        );
-        format!("sha256:{}", hex::encode(Sha256::digest(payload.as_bytes())))
-    }
-}
-
-#[derive(Clone)]
-pub struct StoredOAuthToken {
-    pub access_token: SecretString,
-    pub refresh_token: Option<SecretString>,
-    pub audience: Url,
-    pub issuer: Url,
-    pub expires_at: u64,
-    pub fingerprint: String,
-}
-
-pub trait TokenStore: Send + Sync {
-    fn load(&self, alias: &str) -> Result<Option<StoredOAuthToken>, McpError>;
-    fn save(&self, alias: &str, token: StoredOAuthToken) -> Result<(), McpError>;
-    fn delete(&self, alias: &str) -> Result<(), McpError>;
-}
-
-pub struct McpOAuthManager {
-    storage: Arc<dyn TokenStore>,
-    locks: Mutex<BTreeMap<String, Arc<Mutex<()>>>>,
-}
-
-impl McpOAuthManager {
-    #[must_use]
-    pub fn new(storage: Arc<dyn TokenStore>) -> Self {
-        Self {
-            storage,
-            locks: Mutex::new(BTreeMap::new()),
-        }
-    }
-
-    pub async fn save(
-        &self,
-        alias: &str,
-        config: &McpOAuthConfig,
-        token: StoredOAuthToken,
-    ) -> Result<(), McpError> {
-        config.validate()?;
-        self.validate_token(config, &token, 0)?;
-        let lock = self.alias_lock(alias).await?;
-        let _guard = lock.lock().await;
-        self.storage.save(alias, token)
-    }
-
-    pub async fn load_valid(
-        &self,
-        alias: &str,
-        config: &McpOAuthConfig,
-        now: u64,
-    ) -> Result<StoredOAuthToken, McpError> {
-        config.validate()?;
-        let lock = self.alias_lock(alias).await?;
-        let _guard = lock.lock().await;
-        let token = self.storage.load(alias)?.ok_or(McpError::AuthRequired)?;
-        if let Err(error) = self.validate_token(config, &token, now) {
-            self.storage.delete(alias)?;
-            return Err(error);
-        }
-        Ok(token)
-    }
-
-    pub async fn logout(&self, alias: &str) -> Result<(), McpError> {
-        let lock = self.alias_lock(alias).await?;
-        let _guard = lock.lock().await;
-        self.storage.delete(alias)
-    }
-
-    pub async fn request_headers(
-        &self,
-        alias: &str,
-        config: &McpServerConfig,
-        now: u64,
-    ) -> Result<BTreeMap<String, SecretString>, McpError> {
-        validate_config(config)?;
-        if alias != config.alias {
-            return Err(McpError::InvalidConfig(
-                "credential alias does not match the MCP server alias".to_owned(),
-            ));
-        }
-        match &config.oauth {
-            Some(oauth) => {
-                let token = self.load_valid(alias, oauth, now).await?;
-                Ok(BTreeMap::from([(
-                    "Authorization".to_owned(),
-                    SecretString::from(format!("Bearer {}", token.access_token.expose_secret())),
-                )]))
-            }
-            None => Ok(static_headers(&config.transport)
-                .into_iter()
-                .map(|(name, value)| (name, SecretString::from(value)))
-                .collect()),
-        }
-    }
-
-    async fn alias_lock(&self, alias: &str) -> Result<Arc<Mutex<()>>, McpError> {
-        if alias.is_empty() || alias.len() > 128 || sanitize_name(alias) != alias {
-            return Err(McpError::InvalidConfig(
-                "invalid credential alias".to_owned(),
-            ));
-        }
-        let mut locks = self.locks.lock().await;
-        if let Some(lock) = locks.get(alias) {
-            return Ok(lock.clone());
-        }
-        if locks.len() >= MAX_MCP_SERVERS {
-            return Err(McpError::RegistryFull(MAX_MCP_SERVERS));
-        }
-        let lock = Arc::new(Mutex::new(()));
-        locks.insert(alias.to_owned(), lock.clone());
-        Ok(lock)
-    }
-
-    fn validate_token(
-        &self,
-        config: &McpOAuthConfig,
-        token: &StoredOAuthToken,
-        now: u64,
-    ) -> Result<(), McpError> {
-        if canonical_resource(&token.audience) != canonical_resource(&config.resource) {
-            return Err(McpError::AudienceMismatch);
-        }
-        if token.issuer != config.issuer {
-            return Err(McpError::IssuerMismatch);
-        }
-        if token.fingerprint != config.fingerprint() {
-            return Err(McpError::FingerprintMismatch);
-        }
-        if now > 0 && token.expires_at <= now {
-            return Err(McpError::TokenExpired);
-        }
-        Ok(())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -315,6 +130,18 @@ impl McpPeerFactory for StdioMcpPeerFactory {
             let peer = StdioMcpPeer::connect(config).await?;
             Ok(Arc::new(peer) as Arc<dyn McpPeer>)
         })
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DefaultMcpPeerFactory;
+
+impl McpPeerFactory for DefaultMcpPeerFactory {
+    fn connect<'a>(&'a self, config: &'a McpServerConfig) -> McpFuture<'a, Arc<dyn McpPeer>> {
+        match config.transport {
+            McpTransportConfig::Stdio { .. } => StdioMcpPeerFactory.connect(config),
+            McpTransportConfig::StreamableHttp { .. } => HttpMcpPeerFactory.connect(config),
+        }
     }
 }
 
@@ -994,735 +821,8 @@ async fn cleanup_stdio_process_group(
         .map_err(|error| McpError::Transport(format!("cannot reap stdio process job: {error}")))
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum McpServerStatus {
-    Healthy,
-    Disabled,
-    Failed,
-    AuthRequired,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct McpServerView {
-    pub alias: String,
-    pub transport: String,
-    pub enabled: bool,
-    pub status: McpServerStatus,
-    pub tools: Vec<String>,
-    pub diagnostic: Option<String>,
-}
-
-#[derive(Default)]
-struct McpRegistryState {
-    configs: BTreeMap<String, McpServerConfig>,
-    views: BTreeMap<String, McpServerView>,
-    peers: BTreeMap<String, Arc<dyn McpPeer>>,
-    epochs: BTreeMap<String, watch::Sender<u64>>,
-    runtime: Option<McpRuntime>,
-}
-
-#[derive(Clone)]
-struct McpRuntime {
-    factory: Arc<dyn McpPeerFactory>,
-    tools: ToolRegistry,
-    policy: PermissionStore,
-    approval: Arc<dyn ApprovalAgent>,
-}
-
-#[derive(Clone, Default)]
-pub struct McpRegistry {
-    state: Arc<Mutex<McpRegistryState>>,
-}
-
-impl McpRegistry {
-    pub async fn discover_all(
-        &self,
-        configs: Vec<McpServerConfig>,
-        factory: Arc<dyn McpPeerFactory>,
-        tools: &ToolRegistry,
-        policy: PermissionStore,
-        approval: Arc<dyn ApprovalAgent>,
-    ) -> Vec<String> {
-        let exceeded_limit = configs.len() > MAX_MCP_SERVERS;
-        let mut pending = FuturesUnordered::new();
-        let mut aliases = BTreeSet::new();
-        let mut diagnostics = Vec::new();
-        for config in configs.into_iter().take(MAX_MCP_SERVERS) {
-            if !aliases.insert(config.alias.clone()) {
-                let alias = config.alias.chars().take(128).collect::<String>();
-                diagnostics.push(crate::integrations::redact(&format!(
-                    "MCP `{alias}`: duplicate server alias was ignored"
-                )));
-                continue;
-            }
-            let factory = factory.clone();
-            pending.push(
-                async move {
-                    let result = match validate_config(&config) {
-                        Ok(()) if config.enabled => Ok(()),
-                        Ok(()) => Err(McpError::Disabled),
-                        Err(error) => Err(error),
-                    };
-                    let result = match result {
-                        Ok(()) => match timeout_operation_for(
-                            factory.connect(&config),
-                            config.startup_timeout_ms,
-                        )
-                        .await
-                        {
-                            Ok(peer) => discover_peer(peer, config.startup_timeout_ms).await,
-                            Err(error) => Err(error),
-                        },
-                        Err(error) => Err(error),
-                    };
-                    (config, result)
-                }
-                .boxed(),
-            );
-        }
-        if exceeded_limit {
-            diagnostics.push(format!(
-                "MCP registry: server count exceeds limit of {MAX_MCP_SERVERS}"
-            ));
-        }
-        while let Some((config, result)) = pending.next().await {
-            let alias = config.alias.clone();
-            let transport = transport_name(&config.transport).to_owned();
-            diagnostics.extend(self.retire_alias(&alias).await);
-            let mut state = self.state.lock().await;
-            state.configs.insert(alias.clone(), config.clone());
-            match result {
-                Err(McpError::Disabled) => {
-                    state.views.insert(
-                        alias.clone(),
-                        McpServerView {
-                            alias,
-                            transport,
-                            enabled: false,
-                            status: McpServerStatus::Disabled,
-                            tools: Vec::new(),
-                            diagnostic: None,
-                        },
-                    );
-                }
-                Err(error) => {
-                    let diagnostic = canonical_diagnostic(&alias, &error);
-                    diagnostics.push(diagnostic.clone());
-                    state.views.insert(
-                        alias.clone(),
-                        McpServerView {
-                            alias,
-                            transport,
-                            enabled: config.enabled,
-                            status: if matches!(error, McpError::AuthRequired) {
-                                McpServerStatus::AuthRequired
-                            } else {
-                                McpServerStatus::Failed
-                            },
-                            tools: Vec::new(),
-                            diagnostic: Some(diagnostic),
-                        },
-                    );
-                }
-                Ok((peer, remote_tools)) => {
-                    state
-                        .epochs
-                        .entry(alias.clone())
-                        .or_insert_with(|| watch::channel(0).0);
-                    let (registered, server_diagnostics) = register_remote_tools(
-                        self.state.clone(),
-                        &alias,
-                        &config,
-                        peer.clone(),
-                        remote_tools,
-                        tools,
-                        policy.clone(),
-                        approval.clone(),
-                    );
-                    diagnostics.extend(server_diagnostics.iter().cloned());
-                    state.peers.insert(alias.clone(), peer);
-                    state.views.insert(
-                        alias.clone(),
-                        McpServerView {
-                            alias,
-                            transport,
-                            enabled: true,
-                            status: McpServerStatus::Healthy,
-                            tools: registered,
-                            diagnostic: server_diagnostics.first().cloned(),
-                        },
-                    );
-                }
-            }
-        }
-        self.state.lock().await.runtime = Some(McpRuntime {
-            factory,
-            tools: tools.clone(),
-            policy,
-            approval,
-        });
-        diagnostics.sort();
-        diagnostics
-    }
-
-    async fn retire_alias(&self, alias: &str) -> Vec<String> {
-        let (peer, tool_names, tools) = {
-            let mut state = self.state.lock().await;
-            if let Some(epoch) = state.epochs.get(alias) {
-                epoch.send_modify(|value| *value = value.saturating_add(1));
-            }
-            let tool_names = state
-                .views
-                .remove(alias)
-                .map(|view| view.tools)
-                .unwrap_or_default();
-            state.configs.remove(alias);
-            let tools = state.runtime.as_ref().map(|runtime| runtime.tools.clone());
-            (state.peers.remove(alias), tool_names, tools)
-        };
-        if let Some(tools) = tools {
-            for tool_name in tool_names {
-                let _ = tools.set_availability(
-                    &tool_name,
-                    ToolSource::Mcp,
-                    ToolAvailability::Unavailable,
-                );
-            }
-        }
-        match peer {
-            Some(peer) => timeout_operation(peer.close())
-                .await
-                .err()
-                .map(|error| canonical_diagnostic(alias, &error))
-                .into_iter()
-                .collect(),
-            None => Vec::new(),
-        }
-    }
-
-    pub async fn read(&self) -> Vec<McpServerView> {
-        self.state.lock().await.views.values().cloned().collect()
-    }
-
-    pub async fn toggle(&self, alias: &str, enabled: bool) -> Result<McpServerView, McpError> {
-        if enabled {
-            return self.reconnect(alias).await;
-        }
-        let (peer, tool_names, tools) = {
-            let mut state = self.state.lock().await;
-            let config = state
-                .configs
-                .get_mut(alias)
-                .ok_or_else(|| McpError::UnknownServer(alias.to_owned()))?;
-            config.enabled = enabled;
-            let view = state
-                .views
-                .get_mut(alias)
-                .ok_or_else(|| McpError::UnknownServer(alias.to_owned()))?;
-            view.enabled = enabled;
-            view.status = McpServerStatus::Disabled;
-            view.diagnostic = None;
-            let tool_names = view.tools.clone();
-            if let Some(epoch) = state.epochs.get(alias) {
-                epoch.send_modify(|value| *value = value.saturating_add(1));
-            }
-            let tools = state.runtime.as_ref().map(|runtime| runtime.tools.clone());
-            (state.peers.remove(alias), tool_names, tools)
-        };
-        if let Some(tools) = tools {
-            for tool_name in tool_names {
-                tools
-                    .set_availability(&tool_name, ToolSource::Mcp, ToolAvailability::Disabled)
-                    .map_err(|error| McpError::Tool(error.to_string()))?;
-            }
-        }
-        if let Some(peer) = peer {
-            timeout_operation(peer.close()).await?;
-        }
-        self.state
-            .lock()
-            .await
-            .views
-            .get(alias)
-            .cloned()
-            .ok_or_else(|| McpError::UnknownServer(alias.to_owned()))
-    }
-
-    pub async fn refresh(&self, alias: &str) -> Result<McpServerView, McpError> {
-        let (peer, config, runtime, old_tools) = {
-            let state = self.state.lock().await;
-            let view = state
-                .views
-                .get(alias)
-                .ok_or_else(|| McpError::UnknownServer(alias.to_owned()))?;
-            if !view.enabled || view.status != McpServerStatus::Healthy {
-                return Err(McpError::Disabled);
-            }
-            (
-                state
-                    .peers
-                    .get(alias)
-                    .cloned()
-                    .ok_or_else(|| McpError::UnknownServer(alias.to_owned()))?,
-                state
-                    .configs
-                    .get(alias)
-                    .cloned()
-                    .ok_or_else(|| McpError::UnknownServer(alias.to_owned()))?,
-                state.runtime.clone().ok_or(McpError::ReconnectRequired)?,
-                view.tools.clone(),
-            )
-        };
-        let remote = timeout_operation_for(
-            peer.refresh(MAX_MCP_DISCOVERY_BYTES),
-            config.tool_timeout_ms,
-        )
-        .await
-        .and_then(decode_remote_tools)?;
-        for tool_name in old_tools {
-            runtime
-                .tools
-                .set_availability(&tool_name, ToolSource::Mcp, ToolAvailability::Unavailable)
-                .map_err(|error| McpError::Tool(error.to_string()))?;
-        }
-        let (mut registered, diagnostics) = register_remote_tools(
-            self.state.clone(),
-            alias,
-            &config,
-            peer,
-            remote,
-            &runtime.tools,
-            runtime.policy,
-            runtime.approval,
-        );
-        registered.sort();
-        let mut state = self.state.lock().await;
-        let view = state
-            .views
-            .get_mut(alias)
-            .ok_or_else(|| McpError::UnknownServer(alias.to_owned()))?;
-        view.tools = registered;
-        view.diagnostic = diagnostics.first().cloned();
-        Ok(view.clone())
-    }
-
-    async fn reconnect(&self, alias: &str) -> Result<McpServerView, McpError> {
-        let (config, runtime, transport) = {
-            let mut state = self.state.lock().await;
-            let config = {
-                let config = state
-                    .configs
-                    .get_mut(alias)
-                    .ok_or_else(|| McpError::UnknownServer(alias.to_owned()))?;
-                config.enabled = true;
-                config.clone()
-            };
-            let transport = transport_name(&config.transport).to_owned();
-            (
-                config,
-                state.runtime.clone().ok_or(McpError::ReconnectRequired)?,
-                transport,
-            )
-        };
-        let result = async {
-            validate_config(&config)?;
-            let peer =
-                timeout_operation_for(runtime.factory.connect(&config), config.startup_timeout_ms)
-                    .await?;
-            discover_peer(peer, config.startup_timeout_ms).await
-        }
-        .await;
-        match result {
-            Ok((peer, remote)) => {
-                let (mut registered, diagnostics) = register_remote_tools(
-                    self.state.clone(),
-                    alias,
-                    &config,
-                    peer.clone(),
-                    remote,
-                    &runtime.tools,
-                    runtime.policy,
-                    runtime.approval,
-                );
-                registered.sort();
-                let mut state = self.state.lock().await;
-                let epoch = state
-                    .epochs
-                    .entry(alias.to_owned())
-                    .or_insert_with(|| watch::channel(0).0);
-                epoch.send_modify(|value| *value = value.saturating_add(1));
-                state.peers.insert(alias.to_owned(), peer);
-                let view = McpServerView {
-                    alias: alias.to_owned(),
-                    transport,
-                    enabled: true,
-                    status: McpServerStatus::Healthy,
-                    tools: registered,
-                    diagnostic: diagnostics.first().cloned(),
-                };
-                state.views.insert(alias.to_owned(), view.clone());
-                Ok(view)
-            }
-            Err(error) => {
-                let diagnostic = canonical_diagnostic(alias, &error);
-                let mut state = self.state.lock().await;
-                state.views.insert(
-                    alias.to_owned(),
-                    McpServerView {
-                        alias: alias.to_owned(),
-                        transport,
-                        enabled: true,
-                        status: if matches!(error, McpError::AuthRequired) {
-                            McpServerStatus::AuthRequired
-                        } else {
-                            McpServerStatus::Failed
-                        },
-                        tools: Vec::new(),
-                        diagnostic: Some(diagnostic),
-                    },
-                );
-                Err(error)
-            }
-        }
-    }
-
-    pub async fn close(&self) -> Vec<String> {
-        let (peers, tools, tool_names) = {
-            let mut state = self.state.lock().await;
-            let peers = state
-                .peers
-                .iter()
-                .map(|(alias, peer)| (alias.clone(), peer.clone()))
-                .collect::<Vec<_>>();
-            let tools = state.runtime.as_ref().map(|runtime| runtime.tools.clone());
-            let tool_names = state
-                .views
-                .values()
-                .flat_map(|view| view.tools.iter().cloned())
-                .collect::<Vec<_>>();
-            for view in state.views.values_mut() {
-                view.enabled = false;
-                view.status = McpServerStatus::Disabled;
-            }
-            for epoch in state.epochs.values() {
-                epoch.send_modify(|value| *value = value.saturating_add(1));
-            }
-            state.peers.clear();
-            (peers, tools, tool_names)
-        };
-        if let Some(tools) = tools {
-            for tool_name in tool_names {
-                let _ =
-                    tools.set_availability(&tool_name, ToolSource::Mcp, ToolAvailability::Disabled);
-            }
-        }
-        let mut diagnostics = Vec::new();
-        for (alias, peer) in peers {
-            if let Err(error) = timeout_operation(peer.close()).await {
-                diagnostics.push(canonical_diagnostic(&alias, &error));
-            }
-        }
-        diagnostics
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn register_remote_tools(
-    state: Arc<Mutex<McpRegistryState>>,
-    alias: &str,
-    config: &McpServerConfig,
-    peer: Arc<dyn McpPeer>,
-    remote_tools: Vec<RemoteTool>,
-    tools: &ToolRegistry,
-    policy: PermissionStore,
-    approval: Arc<dyn ApprovalAgent>,
-) -> (Vec<String>, Vec<String>) {
-    let mut registered = Vec::new();
-    let mut diagnostics = Vec::new();
-    for remote in remote_tools {
-        if config.disabled_tools.contains(&remote.name) {
-            continue;
-        }
-        let public_name = format!(
-            "mcp_{}_{}",
-            sanitize_name(alias),
-            sanitize_name(&remote.name)
-        );
-        if let Err(error) = validate_remote_tool(&remote, &config.transport) {
-            diagnostics.push(canonical_diagnostic(alias, &error));
-            continue;
-        }
-        let peer_handler = peer.clone();
-        let remote_name = remote.name.clone();
-        let live_state = state.clone();
-        let live_alias = alias.to_owned();
-        let tool_timeout_ms = config.tool_timeout_ms;
-        let handler: Arc<dyn ToolHandler> = Arc::new(
-            move |invocation: &ToolInvocation, output: ToolOutputSink| -> OwnedToolHandlerFuture {
-                let peer = peer_handler.clone();
-                let remote_name = remote_name.clone();
-                let arguments = invocation.arguments.clone();
-                let state = live_state.clone();
-                let alias = live_alias.clone();
-                Box::pin(async move {
-                    let mut epoch = {
-                        let state = state.lock().await;
-                        let available = state.views.get(&alias).is_some_and(|view| {
-                            view.enabled && view.status == McpServerStatus::Healthy
-                        }) && state
-                            .peers
-                            .get(&alias)
-                            .is_some_and(|active| Arc::ptr_eq(active, &peer));
-                        if !available {
-                            return Err(ToolError::Unavailable(format!(
-                                "MCP server `{alias}` is disabled"
-                            )));
-                        }
-                        state
-                            .epochs
-                            .get(&alias)
-                            .ok_or_else(|| {
-                                ToolError::Unavailable(format!("MCP server `{alias}` is disabled"))
-                            })?
-                            .subscribe()
-                    };
-                    let mut peer_guard =
-                        InvocationPeerGuard::new(state.clone(), alias.clone(), peer.clone());
-                    let call_result = tokio::select! {
-                        biased;
-                        changed = epoch.changed() => {
-                            let _ = changed;
-                            peer_guard.disarm();
-                            return Err(ToolError::Unavailable(format!(
-                                "MCP server `{alias}` changed while the tool was running"
-                            )));
-                        }
-                        result = timeout_operation_for(
-                            peer.call(
-                                &remote_name,
-                                arguments,
-                                output.remaining_bytes(),
-                                output.clone(),
-                            ),
-                            tool_timeout_ms,
-                        ) => result,
-                    };
-                    let response = match call_result {
-                        Ok(response) => response,
-                        Err(error) => {
-                            peer_guard.disarm();
-                            let diagnostic = canonical_diagnostic(&alias, &error);
-                            retire_failed_peer(state, alias, peer, diagnostic).await;
-                            return Err(ToolError::Execution(error.to_string()));
-                        }
-                    };
-                    if response.len() > output.remaining_bytes() {
-                        peer_guard.disarm();
-                        retire_failed_peer(
-                            state,
-                            alias,
-                            peer,
-                            "MCP invocation exceeded its output budget".to_owned(),
-                        )
-                        .await;
-                        return Err(ToolError::OutputTooLarge {
-                            actual: response.len(),
-                            limit: output.remaining_bytes(),
-                        });
-                    }
-                    match serde_json::from_slice(&response) {
-                        Ok(result) => {
-                            peer_guard.disarm();
-                            Ok(result)
-                        }
-                        Err(error) => {
-                            peer_guard.disarm();
-                            retire_failed_peer(
-                                state,
-                                alias,
-                                peer,
-                                "MCP invocation returned an invalid result".to_owned(),
-                            )
-                            .await;
-                            Err(ToolError::InvalidResult(error.to_string()))
-                        }
-                    }
-                })
-            },
-        );
-        let server = alias.to_owned();
-        let remote_permission_name = remote.name.clone();
-        let guarded = Arc::new(PolicyGuardedTool::new(
-            public_name.clone(),
-            policy.clone(),
-            approval.clone(),
-            Arc::new(move |_invocation| {
-                Ok(vec![PermissionRequirement::Mcp {
-                    server: server.clone(),
-                    tool: remote_permission_name.clone(),
-                }])
-            }),
-            handler,
-        ));
-        let spec = ToolSpec {
-            name: public_name.clone(),
-            description: remote.description,
-            input_schema: remote.input_schema,
-            output_schema: remote.output_schema,
-            config: Value::Null,
-            state: Value::Null,
-            availability: ToolAvailability::Available,
-            presentation: ToolPresentationKind::Mcp,
-            source: ToolSource::Mcp,
-            selection_priority: 50,
-        };
-        match tools.register(spec, guarded) {
-            Ok(_) => registered.push(public_name),
-            Err(error) => diagnostics.push(canonical_diagnostic(
-                alias,
-                &McpError::Tool(error.to_string()),
-            )),
-        }
-    }
-    (registered, diagnostics)
-}
-
-struct InvocationPeerGuard {
-    state: Arc<Mutex<McpRegistryState>>,
-    alias: String,
-    peer: Arc<dyn McpPeer>,
-    armed: bool,
-}
-
-impl InvocationPeerGuard {
-    fn new(state: Arc<Mutex<McpRegistryState>>, alias: String, peer: Arc<dyn McpPeer>) -> Self {
-        Self {
-            state,
-            alias,
-            peer,
-            armed: true,
-        }
-    }
-
-    fn disarm(&mut self) {
-        self.armed = false;
-    }
-}
-
-impl Drop for InvocationPeerGuard {
-    fn drop(&mut self) {
-        if !self.armed {
-            return;
-        }
-        let state = self.state.clone();
-        let alias = self.alias.clone();
-        let peer = self.peer.clone();
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(async move {
-                retire_failed_peer(
-                    state,
-                    alias,
-                    peer,
-                    "MCP invocation was cancelled".to_owned(),
-                )
-                .await;
-            });
-        }
-    }
-}
-
-async fn retire_failed_peer(
-    state: Arc<Mutex<McpRegistryState>>,
-    alias: String,
-    peer: Arc<dyn McpPeer>,
-    diagnostic: String,
-) {
-    let (tool_names, tools, removed) = {
-        let mut state = state.lock().await;
-        let is_active = state
-            .peers
-            .get(&alias)
-            .is_some_and(|active| Arc::ptr_eq(active, &peer));
-        if !is_active {
-            return;
-        }
-        if let Some(epoch) = state.epochs.get(&alias) {
-            epoch.send_modify(|value| *value = value.saturating_add(1));
-        }
-        let tool_names = state
-            .views
-            .get_mut(&alias)
-            .map(|view| {
-                view.status = McpServerStatus::Failed;
-                view.diagnostic = Some(diagnostic);
-                view.tools.clone()
-            })
-            .unwrap_or_default();
-        let tools = state.runtime.as_ref().map(|runtime| runtime.tools.clone());
-        let removed = state.peers.remove(&alias).is_some();
-        (tool_names, tools, removed)
-    };
-    if let Some(tools) = tools {
-        for tool_name in tool_names {
-            let _ =
-                tools.set_availability(&tool_name, ToolSource::Mcp, ToolAvailability::Unavailable);
-        }
-    }
-    if removed {
-        let _ = timeout_operation(peer.close()).await;
-    }
-}
-
-async fn timeout_operation<T>(future: McpFuture<'_, T>) -> Result<T, McpError> {
-    tokio::time::timeout(MCP_OPERATION_TIMEOUT, future)
-        .await
-        .map_err(|_| McpError::Transport("operation timed out".to_owned()))?
-}
-
-async fn timeout_operation_for<T>(
-    future: McpFuture<'_, T>,
-    timeout_ms: u64,
-) -> Result<T, McpError> {
-    tokio::time::timeout(Duration::from_millis(timeout_ms), future)
-        .await
-        .map_err(|_| McpError::Transport("operation timed out".to_owned()))?
-}
-
-async fn discover_peer(
-    peer: Arc<dyn McpPeer>,
-    timeout_ms: u64,
-) -> Result<(Arc<dyn McpPeer>, Vec<RemoteTool>), McpError> {
-    match timeout_operation_for(peer.discover(MAX_MCP_DISCOVERY_BYTES), timeout_ms)
-        .await
-        .and_then(decode_remote_tools)
-    {
-        Ok(remote) => Ok((peer, remote)),
-        Err(discovery_error) => match timeout_operation(peer.close()).await {
-            Ok(()) => Err(discovery_error),
-            Err(cleanup_error) => Err(McpError::Transport(format!(
-                "{discovery_error}; cleanup failed: {cleanup_error}"
-            ))),
-        },
-    }
-}
-
-fn decode_remote_tools(response: Vec<u8>) -> Result<Vec<RemoteTool>, McpError> {
-    if response.len() > MAX_MCP_DISCOVERY_BYTES {
-        return Err(McpError::Tool(format!(
-            "MCP discovery response exceeds {MAX_MCP_DISCOVERY_BYTES} bytes"
-        )));
-    }
-    let tools = serde_json::from_slice::<Vec<RemoteTool>>(&response)
-        .map_err(|error| McpError::Tool(format!("invalid MCP discovery response: {error}")))?;
-    if tools.len() > MAX_MCP_TOOLS_PER_SERVER {
-        return Err(McpError::Tool(format!(
-            "MCP discovery returned more than {MAX_MCP_TOOLS_PER_SERVER} tools"
-        )));
-    }
-    Ok(tools)
-}
+mod registry;
+pub use registry::{McpRegistry, McpServerStatus, McpServerView};
 
 pub fn rejected_root_claims(claims: &[PathBuf], authorized_roots: &[PathBuf]) -> Vec<PathBuf> {
     let roots = authorized_roots
@@ -1751,14 +851,6 @@ pub enum McpError {
     Disabled,
     #[error("MCP authorization is required")]
     AuthRequired,
-    #[error("OAuth token audience mismatch")]
-    AudienceMismatch,
-    #[error("OAuth token issuer mismatch")]
-    IssuerMismatch,
-    #[error("OAuth configuration fingerprint mismatch")]
-    FingerprintMismatch,
-    #[error("OAuth token expired")]
-    TokenExpired,
     #[error("unknown MCP server `{0}`")]
     UnknownServer(String),
     #[error("MCP server must be reconnected before it can be enabled or refreshed")]
@@ -1769,8 +861,6 @@ pub enum McpError {
     Tool(String),
     #[error("MCP registry capacity of {0} servers was reached")]
     RegistryFull(usize),
-    #[error("credential storage failed")]
-    CredentialStore,
 }
 
 pub fn validate_config(config: &McpServerConfig) -> Result<(), McpError> {
@@ -1788,8 +878,7 @@ pub fn validate_config(config: &McpServerConfig) -> Result<(), McpError> {
         )));
     }
     match &config.transport {
-        McpTransportConfig::Http { url, headers }
-        | McpTransportConfig::StreamableHttp { url, headers } => {
+        McpTransportConfig::StreamableHttp { url, headers } => {
             require_secure_url(url, "server")?;
             validate_headers(headers)?;
         }
@@ -1811,29 +900,6 @@ pub fn validate_config(config: &McpServerConfig) -> Result<(), McpError> {
             }
         }
     }
-    if let Some(oauth) = &config.oauth {
-        oauth.validate()?;
-        let transport_resource = match &config.transport {
-            McpTransportConfig::Http { url, .. }
-            | McpTransportConfig::StreamableHttp { url, .. } => Some(url),
-            McpTransportConfig::Stdio { .. } => None,
-        };
-        if transport_resource
-            .is_none_or(|url| canonical_resource(url) != canonical_resource(&oauth.resource))
-        {
-            return Err(McpError::InvalidConfig(
-                "OAuth resource must exactly match the HTTP transport destination".to_owned(),
-            ));
-        }
-        if static_headers(&config.transport)
-            .keys()
-            .any(|name| name.eq_ignore_ascii_case("authorization"))
-        {
-            return Err(McpError::InvalidConfig(
-                "OAuth transport cannot also carry a static Authorization header".to_owned(),
-            ));
-        }
-    }
     Ok(())
 }
 
@@ -1844,10 +910,7 @@ fn validate_remote_tool(tool: &RemoteTool, transport: &McpTransportConfig) -> Re
     if !tool.input_schema.is_object() {
         return Err(McpError::Tool("input schema must be an object".to_owned()));
     }
-    if matches!(
-        transport,
-        McpTransportConfig::Http { .. } | McpTransportConfig::StreamableHttp { .. }
-    ) {
+    if matches!(transport, McpTransportConfig::StreamableHttp { .. }) {
         let mut names = BTreeSet::new();
         validate_header_annotations(&tool.input_schema, &mut names)?;
     }
@@ -1916,15 +979,12 @@ fn is_header_name(name: &str) -> bool {
         })
 }
 
-fn static_headers(transport: &McpTransportConfig) -> BTreeMap<String, String> {
-    match transport {
-        McpTransportConfig::Http { headers, .. }
-        | McpTransportConfig::StreamableHttp { headers, .. } => headers.clone(),
-        McpTransportConfig::Stdio { .. } => BTreeMap::new(),
-    }
-}
-
 fn require_secure_url(url: &Url, field: &str) -> Result<(), McpError> {
+    if url.fragment().is_some() {
+        return Err(McpError::InvalidConfig(format!(
+            "{field} URL must not contain a fragment"
+        )));
+    }
     let secure = url.scheme() == "https"
         || (url.scheme() == "http" && url.host_str().is_some_and(is_loopback_host));
     if secure {
@@ -1946,9 +1006,15 @@ fn canonical_resource(url: &Url) -> String {
     canonical.to_string().trim_end_matches('/').to_owned()
 }
 
+fn transport_url(transport: &McpTransportConfig) -> Option<&Url> {
+    match transport {
+        McpTransportConfig::StreamableHttp { url, .. } => Some(url),
+        McpTransportConfig::Stdio { .. } => None,
+    }
+}
+
 fn transport_name(transport: &McpTransportConfig) -> &'static str {
     match transport {
-        McpTransportConfig::Http { .. } => "http",
         McpTransportConfig::StreamableHttp { .. } => "streamable-http",
         McpTransportConfig::Stdio { .. } => "stdio",
     }
@@ -1978,8 +1044,7 @@ fn default_enabled() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex as StdMutex;
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use super::*;
     use crate::policy::{
@@ -1989,40 +1054,6 @@ mod tests {
     use serde_json::json;
     use tempfile::tempdir;
     use tokio::sync::Notify;
-
-    #[derive(Default)]
-    struct MemoryTokenStore {
-        tokens: StdMutex<BTreeMap<String, StoredOAuthToken>>,
-        deletes: AtomicU64,
-    }
-
-    impl TokenStore for MemoryTokenStore {
-        fn load(&self, alias: &str) -> Result<Option<StoredOAuthToken>, McpError> {
-            Ok(self
-                .tokens
-                .lock()
-                .map_err(|_| McpError::CredentialStore)?
-                .get(alias)
-                .cloned())
-        }
-
-        fn save(&self, alias: &str, token: StoredOAuthToken) -> Result<(), McpError> {
-            self.tokens
-                .lock()
-                .map_err(|_| McpError::CredentialStore)?
-                .insert(alias.to_owned(), token);
-            Ok(())
-        }
-
-        fn delete(&self, alias: &str) -> Result<(), McpError> {
-            self.tokens
-                .lock()
-                .map_err(|_| McpError::CredentialStore)?
-                .remove(alias);
-            self.deletes.fetch_add(1, Ordering::Relaxed);
-            Ok(())
-        }
-    }
 
     struct AlwaysApprove;
 
@@ -2037,6 +1068,77 @@ mod tests {
         fail_calls: bool,
         oversized: bool,
         closed: AtomicBool,
+    }
+
+    struct SerialRefreshPeer {
+        active: AtomicUsize,
+        maximum: AtomicUsize,
+    }
+
+    struct FailingClosePeer;
+
+    impl McpPeer for FailingClosePeer {
+        fn discover<'a>(&'a self, _max_response_bytes: usize) -> McpFuture<'a, Vec<u8>> {
+            Box::pin(async {
+                serde_json::to_vec(&vec![remote_tool()])
+                    .map_err(|error| McpError::Transport(error.to_string()))
+            })
+        }
+
+        fn call<'a>(
+            &'a self,
+            _name: &'a str,
+            _arguments: Value,
+            _max_response_bytes: usize,
+            _output: ToolOutputSink,
+        ) -> McpFuture<'a, Vec<u8>> {
+            Box::pin(async { Err(McpError::Transport("not used".to_owned())) })
+        }
+
+        fn refresh<'a>(&'a self, max_response_bytes: usize) -> McpFuture<'a, Vec<u8>> {
+            self.discover(max_response_bytes)
+        }
+
+        fn close<'a>(&'a self) -> McpFuture<'a, ()> {
+            Box::pin(async { Err(McpError::Transport("close failed".to_owned())) })
+        }
+    }
+
+    impl SerialRefreshPeer {
+        fn tools() -> Result<Vec<u8>, McpError> {
+            serde_json::to_vec(&vec![remote_tool()])
+                .map_err(|error| McpError::Transport(error.to_string()))
+        }
+    }
+
+    impl McpPeer for SerialRefreshPeer {
+        fn discover<'a>(&'a self, _max_response_bytes: usize) -> McpFuture<'a, Vec<u8>> {
+            Box::pin(async { Self::tools() })
+        }
+
+        fn call<'a>(
+            &'a self,
+            _name: &'a str,
+            _arguments: Value,
+            _max_response_bytes: usize,
+            _output: ToolOutputSink,
+        ) -> McpFuture<'a, Vec<u8>> {
+            Box::pin(async { Err(McpError::Transport("not used".to_owned())) })
+        }
+
+        fn refresh<'a>(&'a self, _max_response_bytes: usize) -> McpFuture<'a, Vec<u8>> {
+            Box::pin(async move {
+                let active = self.active.fetch_add(1, Ordering::AcqRel) + 1;
+                self.maximum.fetch_max(active, Ordering::AcqRel);
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                self.active.fetch_sub(1, Ordering::AcqRel);
+                Self::tools()
+            })
+        }
+
+        fn close<'a>(&'a self) -> McpFuture<'a, ()> {
+            Box::pin(async { Ok(()) })
+        }
     }
 
     impl McpPeer for FakePeer {
@@ -2172,7 +1274,6 @@ mod tests {
             disabled_tools: BTreeSet::new(),
             startup_timeout_ms: DEFAULT_MCP_STARTUP_TIMEOUT_MS,
             tool_timeout_ms: DEFAULT_MCP_TOOL_TIMEOUT_MS,
-            oauth: None,
         }
     }
 
@@ -2276,6 +1377,296 @@ mod tests {
         ));
         let enabled = registry.toggle("good", true).await.expect("reconnect");
         assert_eq!(enabled.status, McpServerStatus::Healthy);
+    }
+
+    #[tokio::test]
+    async fn rediscovery_retires_aliases_missing_from_the_new_configuration() {
+        let first_a = Arc::new(FakePeer {
+            tools: vec![remote_tool()],
+            fail_calls: false,
+            oversized: false,
+            closed: AtomicBool::new(false),
+        });
+        let first_b = Arc::new(FakePeer {
+            tools: vec![remote_tool()],
+            fail_calls: false,
+            oversized: false,
+            closed: AtomicBool::new(false),
+        });
+        let registry = McpRegistry::default();
+        let tools = ToolRegistry::default();
+        registry
+            .discover_all(
+                vec![config("a"), config("b")],
+                Arc::new(FakeFactory {
+                    peers: BTreeMap::from([
+                        ("a".to_owned(), first_a.clone() as Arc<dyn McpPeer>),
+                        ("b".to_owned(), first_b.clone() as Arc<dyn McpPeer>),
+                    ]),
+                }),
+                &tools,
+                PermissionStore::default(),
+                Arc::new(AlwaysApprove),
+            )
+            .await;
+
+        let replacement_a: Arc<dyn McpPeer> = Arc::new(FakePeer {
+            tools: vec![remote_tool()],
+            fail_calls: false,
+            oversized: false,
+            closed: AtomicBool::new(false),
+        });
+        registry
+            .discover_all(
+                vec![config("a")],
+                Arc::new(FakeFactory {
+                    peers: BTreeMap::from([("a".to_owned(), replacement_a)]),
+                }),
+                &tools,
+                PermissionStore::default(),
+                Arc::new(AlwaysApprove),
+            )
+            .await;
+
+        assert!(first_a.closed.load(Ordering::Acquire));
+        assert!(first_b.closed.load(Ordering::Acquire));
+        assert_eq!(
+            registry
+                .read()
+                .await
+                .into_iter()
+                .map(|view| view.alias)
+                .collect::<Vec<_>>(),
+            vec!["a"]
+        );
+        assert!(matches!(
+            tools
+                .invoke(
+                    "mcp_b_search",
+                    ToolInvocation {
+                        call_id: "retired-call".to_owned(),
+                        arguments: json!({"query": "rust"}),
+                    },
+                )
+                .await,
+            Err(ToolError::Unavailable(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn disabled_tool_preferences_survive_disabled_startup_and_reconnect() {
+        let peer: Arc<dyn McpPeer> = Arc::new(FakePeer {
+            tools: vec![remote_tool()],
+            fail_calls: false,
+            oversized: false,
+            closed: AtomicBool::new(false),
+        });
+        let factory = Arc::new(FakeFactory {
+            peers: BTreeMap::from([("disabled".to_owned(), peer)]),
+        });
+        let mut disabled = config("disabled");
+        disabled.enabled = false;
+        disabled.disabled_tools = BTreeSet::from(["search".to_owned()]);
+        let registry = McpRegistry::default();
+        let tools = ToolRegistry::default();
+        registry
+            .discover_all(
+                vec![disabled],
+                factory,
+                &tools,
+                PermissionStore::default(),
+                Arc::new(AlwaysApprove),
+            )
+            .await;
+
+        let initial = registry.read().await.remove(0);
+        assert_eq!(
+            initial.disabled_tools,
+            BTreeSet::from(["search".to_owned()])
+        );
+        let enabled = registry.toggle("disabled", true).await.expect("reconnect");
+        assert_eq!(
+            enabled.disabled_tools,
+            BTreeSet::from(["mcp_disabled_search".to_owned()])
+        );
+        assert!(matches!(
+            tools
+                .invoke(
+                    "mcp_disabled_search",
+                    ToolInvocation {
+                        call_id: "call-disabled".to_owned(),
+                        arguments: json!({"query": "rust"}),
+                    },
+                )
+                .await,
+            Err(ToolError::Unavailable(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn per_tool_toggle_updates_visible_state_and_registry_availability() {
+        let peer: Arc<dyn McpPeer> = Arc::new(FakePeer {
+            tools: vec![remote_tool()],
+            fail_calls: false,
+            oversized: false,
+            closed: AtomicBool::new(false),
+        });
+        let registry = McpRegistry::default();
+        let tools = ToolRegistry::default();
+        registry
+            .discover_all(
+                vec![config("tools")],
+                Arc::new(FakeFactory {
+                    peers: BTreeMap::from([("tools".to_owned(), peer)]),
+                }),
+                &tools,
+                PermissionStore::default(),
+                Arc::new(AlwaysApprove),
+            )
+            .await;
+
+        let disabled = registry
+            .toggle_tool("tools", "mcp_tools_search", false)
+            .await
+            .expect("tool disables");
+        assert!(disabled.disabled_tools.contains("mcp_tools_search"));
+        assert!(matches!(
+            tools
+                .invoke(
+                    "mcp_tools_search",
+                    ToolInvocation {
+                        call_id: "disabled".to_owned(),
+                        arguments: json!({"query": "rust"}),
+                    },
+                )
+                .await,
+            Err(ToolError::Unavailable(_))
+        ));
+
+        let refreshed = registry.refresh("tools").await.expect("server refreshes");
+        assert!(refreshed.disabled_tools.contains("mcp_tools_search"));
+        assert!(matches!(
+            tools
+                .invoke(
+                    "mcp_tools_search",
+                    ToolInvocation {
+                        call_id: "still-disabled".to_owned(),
+                        arguments: json!({"query": "rust"}),
+                    },
+                )
+                .await,
+            Err(ToolError::Unavailable(_))
+        ));
+
+        let enabled = registry
+            .toggle_tool("tools", "mcp_tools_search", true)
+            .await
+            .expect("tool re-enables");
+        assert!(enabled.disabled_tools.is_empty());
+        tools
+            .invoke(
+                "mcp_tools_search",
+                ToolInvocation {
+                    call_id: "enabled".to_owned(),
+                    arguments: json!({"query": "rust"}),
+                },
+            )
+            .await
+            .expect("enabled tool invokes");
+
+        let cleared = registry.clear_auth("tools").await.expect("auth clears");
+        assert_eq!(cleared.status, McpServerStatus::AuthRequired);
+        assert!(matches!(
+            tools
+                .invoke(
+                    "mcp_tools_search",
+                    ToolInvocation {
+                        call_id: "logged-out".to_owned(),
+                        arguments: json!({"query": "rust"}),
+                    },
+                )
+                .await,
+            Err(ToolError::Unavailable(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn concurrent_refreshes_are_serialized() {
+        let peer = Arc::new(SerialRefreshPeer {
+            active: AtomicUsize::new(0),
+            maximum: AtomicUsize::new(0),
+        });
+        let registry = McpRegistry::default();
+        registry
+            .discover_all(
+                vec![config("serialized")],
+                Arc::new(FakeFactory {
+                    peers: BTreeMap::from([(
+                        "serialized".to_owned(),
+                        peer.clone() as Arc<dyn McpPeer>,
+                    )]),
+                }),
+                &ToolRegistry::default(),
+                PermissionStore::default(),
+                Arc::new(AlwaysApprove),
+            )
+            .await;
+
+        let (left, right) = tokio::join!(
+            registry.refresh("serialized"),
+            registry.refresh("serialized")
+        );
+
+        left.expect("first refresh");
+        right.expect("second refresh");
+        assert_eq!(peer.maximum.load(Ordering::Acquire), 1);
+    }
+
+    #[tokio::test]
+    async fn cleanup_failure_never_rolls_back_disable_or_logout_state() {
+        let peer: Arc<dyn McpPeer> = Arc::new(FailingClosePeer);
+        let registry = McpRegistry::default();
+        let tools = ToolRegistry::default();
+        registry
+            .discover_all(
+                vec![config("cleanup")],
+                Arc::new(FakeFactory {
+                    peers: BTreeMap::from([("cleanup".to_owned(), peer)]),
+                }),
+                &tools,
+                PermissionStore::default(),
+                Arc::new(AlwaysApprove),
+            )
+            .await;
+
+        let disabled = registry
+            .toggle("cleanup", false)
+            .await
+            .expect("disable commits despite close failure");
+        assert!(!disabled.enabled);
+        assert_eq!(disabled.status, McpServerStatus::Disabled);
+        assert!(
+            disabled
+                .diagnostic
+                .as_deref()
+                .is_some_and(|message| message.contains("close failed"))
+        );
+
+        registry
+            .toggle("cleanup", true)
+            .await
+            .expect("server reconnects");
+        let logged_out = registry
+            .clear_auth("cleanup")
+            .await
+            .expect("logout commits despite close failure");
+        assert_eq!(logged_out.status, McpServerStatus::AuthRequired);
+        assert!(
+            logged_out
+                .diagnostic
+                .as_deref()
+                .is_some_and(|message| message.contains("close failed"))
+        );
     }
 
     #[tokio::test]
@@ -2613,67 +2004,6 @@ mod tests {
                 status: McpServerStatus::Failed,
                 ..
             }]
-        ));
-    }
-
-    #[tokio::test]
-    async fn oauth_binds_resource_fingerprint_and_never_passes_static_token() {
-        let storage = Arc::new(MemoryTokenStore::default());
-        let manager = McpOAuthManager::new(storage.clone());
-        let oauth = McpOAuthConfig {
-            resource: Url::parse("https://mcp.example/service").expect("resource"),
-            issuer: Url::parse("https://auth.example").expect("issuer"),
-            client_id: "client".to_owned(),
-            redirect_uri: Url::parse("http://127.0.0.1:8123/callback").expect("redirect"),
-            scopes: vec!["tools".to_owned()],
-        };
-        manager
-            .save(
-                "server",
-                &oauth,
-                StoredOAuthToken {
-                    access_token: SecretString::from("secret-token".to_owned()),
-                    refresh_token: None,
-                    audience: oauth.resource.clone(),
-                    issuer: oauth.issuer.clone(),
-                    expires_at: 100,
-                    fingerprint: oauth.fingerprint(),
-                },
-            )
-            .await
-            .expect("save");
-        let mut server = config("server");
-        server.transport = McpTransportConfig::StreamableHttp {
-            url: oauth.resource.clone(),
-            headers: BTreeMap::new(),
-        };
-        server.oauth = Some(oauth.clone());
-        let headers = manager
-            .request_headers("server", &server, 50)
-            .await
-            .expect("headers");
-        assert_eq!(headers.len(), 1);
-        assert!(
-            headers["Authorization"]
-                .expose_secret()
-                .starts_with("Bearer ")
-        );
-        let mut wrong = oauth;
-        wrong.resource = Url::parse("https://other.example/mcp").expect("other");
-        assert!(matches!(
-            manager.load_valid("server", &wrong, 50).await,
-            Err(McpError::AudienceMismatch | McpError::FingerprintMismatch)
-        ));
-        assert_eq!(storage.deletes.load(Ordering::Relaxed), 1);
-
-        let mut redirected = server;
-        redirected.transport = McpTransportConfig::StreamableHttp {
-            url: Url::parse("https://attacker.example/mcp").expect("attacker"),
-            headers: BTreeMap::new(),
-        };
-        assert!(matches!(
-            manager.request_headers("server", &redirected, 50).await,
-            Err(McpError::InvalidConfig(_))
         ));
     }
 

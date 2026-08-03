@@ -1,7 +1,8 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 
 use serde::Deserialize;
@@ -9,12 +10,14 @@ use serde_json::{Map, Value, json};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use url::Url;
+use vibe_core::config::{ConfigSnapshot, LayeredConfig};
 use vibe_core::integrations::{
-    ConnectorBackend, ConnectorDefinition, ConnectorRegistry, ConnectorView, redact,
+    ConnectorAuthKind, ConnectorBackend, ConnectorDefinition, ConnectorRegistry, ConnectorView,
+    redact,
 };
 use vibe_core::mcp::{
-    McpPeerFactory, McpRegistry, McpServerConfig, McpServerView, McpTransportConfig,
-    StdioMcpPeerFactory,
+    DefaultMcpPeerFactory, McpPeerFactory, McpRegistry, McpServerConfig, McpServerStatus,
+    McpServerView, McpTransportConfig,
 };
 use vibe_core::platform::{Platform, parse_policy_path};
 use vibe_core::policy::{
@@ -25,16 +28,28 @@ use vibe_core::process::{ProcessSpec, TerminalManager};
 use vibe_core::shell::{ShellConfig, ShellPolicyContext, analyze_shell};
 use vibe_core::tools::ToolRegistry;
 
+mod backend_command;
+mod mcp_oauth;
+mod mistral_connector;
+
+pub use backend_command::{
+    ConnectorCommand, McpAddTransport, McpCommand, ResourceBackendCommand, ShellCommand,
+};
+pub use mcp_oauth::production_mcp_adapters;
+pub use mistral_connector::MistralConnectorClient;
+
 pub const RESOURCE_METHODS: &[&str] = &[
     "account/read",
     "connectors/auth/read",
     "connectors/read",
     "connectors/refresh",
+    "connectors/toggle",
     "diagnostics/list",
     "diagnostics/logs/read",
     "feedback/record",
     "feedback/shouldShow",
     "mcp/add",
+    "mcp/auth/complete",
     "mcp/login",
     "mcp/logout",
     "mcp/read",
@@ -62,7 +77,9 @@ pub const BACKEND_RESOURCE_METHODS: &[&str] = &[
     "connectors/auth/read",
     "connectors/read",
     "connectors/refresh",
+    "connectors/toggle",
     "mcp/add",
+    "mcp/auth/complete",
     "mcp/login",
     "mcp/logout",
     "mcp/read",
@@ -94,6 +111,7 @@ pub struct ResourceSession {
     pub session_id: String,
     pub generation: u64,
     pub working_directory: String,
+    pub project_trusted: bool,
     pub policy: PermissionStore,
     pub tools: ToolRegistry,
 }
@@ -101,12 +119,70 @@ pub struct ResourceSession {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResourceBackendRequest {
     pub session_id: String,
-    pub method: String,
-    pub params: BTreeMap<String, Value>,
+    pub command: ResourceBackendCommand,
+}
+
+impl ResourceBackendRequest {
+    pub fn parse(
+        session_id: String,
+        method: &str,
+        params: &BTreeMap<String, Value>,
+        session_active: bool,
+    ) -> Result<Self, ResourceError> {
+        Ok(Self {
+            session_id,
+            command: ResourceBackendCommand::parse(method, params, session_active)?,
+        })
+    }
 }
 
 pub type ResourceFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, ResourceError>> + Send + 'a>>;
+
+pub trait McpAuthBackend: Send + Sync {
+    fn login<'a>(
+        &'a self,
+        session_id: &'a str,
+        config: &'a McpServerConfig,
+    ) -> ResourceFuture<'a, String>;
+
+    fn complete<'a>(
+        &'a self,
+        session_id: &'a str,
+        config: &'a McpServerConfig,
+    ) -> ResourceFuture<'a, bool>;
+
+    fn logout<'a>(
+        &'a self,
+        session_id: &'a str,
+        config: &'a McpServerConfig,
+    ) -> ResourceFuture<'a, ()>;
+
+    fn close_session<'a>(&'a self, session_id: &'a str) -> ResourceFuture<'a, ()>;
+}
+
+pub trait ConnectorAuthBackend: Send + Sync {
+    fn auth_url<'a>(
+        &'a self,
+        session_id: &'a str,
+        connector_id: &'a str,
+    ) -> ResourceFuture<'a, Option<String>>;
+
+    fn refresh<'a>(
+        &'a self,
+        session_id: &'a str,
+        connector_id: &'a str,
+    ) -> ResourceFuture<'a, bool>;
+}
+
+pub trait ConnectorCatalogBackend: Send + Sync {
+    fn catalog<'a>(&'a self) -> ResourceFuture<'a, ConnectorCatalog>;
+}
+
+pub struct ConnectorCatalog {
+    pub definitions: Vec<ConnectorDefinition>,
+    pub connected: BTreeSet<String>,
+}
 
 pub trait ResourceBackend: Send + Sync {
     fn open_session(&self, session: ResourceSession) -> Result<(), ResourceError>;
@@ -137,590 +213,9 @@ pub trait ResourceBackend: Send + Sync {
     }
 }
 
-struct BackendDenyApproval;
-
-impl ApprovalAgent for BackendDenyApproval {
-    fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
-        Box::pin(async { Ok(ApprovalDecision::Deny) })
-    }
-}
-
-struct CoreResourceSession {
-    working_directory: String,
-    policy: PermissionStore,
-    tools: ToolRegistry,
-    mcp: McpRegistry,
-    connectors: ConnectorRegistry,
-    terminals: TerminalManager,
-    shell_operations: Mutex<BTreeMap<String, String>>,
-}
-
-struct CoreResourceEntry {
-    generation: u64,
-    session: Arc<CoreResourceSession>,
-}
-
-#[derive(Clone)]
-pub struct CoreResourceBackend {
-    sessions: Arc<StdMutex<BTreeMap<String, CoreResourceEntry>>>,
-    mcp_factory: Option<Arc<dyn McpPeerFactory>>,
-    connector_definitions: Arc<Vec<ConnectorDefinition>>,
-    connector_backend: Option<Arc<dyn ConnectorBackend>>,
-    connector_base_url: Option<Url>,
-    connector_credential_reference: Arc<str>,
-    approval: Arc<dyn ApprovalAgent>,
-}
-
-impl Default for CoreResourceBackend {
-    fn default() -> Self {
-        Self {
-            sessions: Arc::new(StdMutex::new(BTreeMap::new())),
-            mcp_factory: Some(Arc::new(StdioMcpPeerFactory)),
-            connector_definitions: Arc::new(Vec::new()),
-            connector_backend: None,
-            connector_base_url: None,
-            connector_credential_reference: Arc::from("unconfigured"),
-            approval: Arc::new(BackendDenyApproval),
-        }
-    }
-}
-
-impl CoreResourceBackend {
-    #[must_use]
-    pub fn with_mcp_factory(mut self, factory: Arc<dyn McpPeerFactory>) -> Self {
-        self.mcp_factory = Some(factory);
-        self
-    }
-
-    #[must_use]
-    pub fn with_connectors(
-        mut self,
-        definitions: Vec<ConnectorDefinition>,
-        backend: Arc<dyn ConnectorBackend>,
-        credential_reference: impl Into<Arc<str>>,
-        base_url: Url,
-    ) -> Self {
-        self.connector_definitions = Arc::new(definitions);
-        self.connector_backend = Some(backend);
-        self.connector_credential_reference = credential_reference.into();
-        self.connector_base_url = Some(base_url);
-        self
-    }
-
-    #[must_use]
-    pub fn with_approval(mut self, approval: Arc<dyn ApprovalAgent>) -> Self {
-        self.approval = approval;
-        self
-    }
-
-    fn session(&self, session_id: &str) -> Result<Arc<CoreResourceSession>, ResourceError> {
-        self.sessions
-            .lock()
-            .map_err(|_| {
-                ResourceError::Unavailable("resource backend lock is poisoned".to_owned())
-            })?
-            .get(session_id)
-            .map(|entry| Arc::clone(&entry.session))
-            .ok_or_else(|| ResourceError::NotFound(format!("session `{session_id}` was not found")))
-    }
-
-    async fn dispatch_mcp(
-        &self,
-        session: &CoreResourceSession,
-        request: &ResourceBackendRequest,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        match request.method.as_str() {
-            "mcp/read" => Ok(read_only([("mcp", mcp_view(session.mcp.read().await))])),
-            "mcp/add" => {
-                let factory = self.mcp_factory.clone().ok_or_else(|| {
-                    ResourceError::Unavailable("MCP transport backend is not configured".to_owned())
-                })?;
-                let transport_name =
-                    optional_string(&request.params, "transport")?.unwrap_or("streamable-http");
-                let (alias, transport) = match transport_name {
-                    "stdio" => {
-                        let session_root = PathBuf::from(&session.working_directory);
-                        let working_directory =
-                            optional_string(&request.params, "workingDirectory")?
-                                .map(PathBuf::from)
-                                .map(|path| {
-                                    if path.is_absolute() {
-                                        path
-                                    } else {
-                                        session_root.join(path)
-                                    }
-                                })
-                                .unwrap_or(session_root);
-                        if !matches!(
-                            session
-                                .policy
-                                .try_trust_decision(&working_directory)
-                                .map_err(policy_error)?,
-                            Some(TrustDecision::Trusted | TrustDecision::SessionTrusted)
-                        ) {
-                            return Err(ResourceError::Unavailable(
-                                "workspace trust is required before launching a project MCP executable"
-                                    .to_owned(),
-                            ));
-                        }
-                        let command = required_string(&request.params, "command")?.to_owned();
-                        let alias = optional_string(&request.params, "name")?
-                            .map(str::to_owned)
-                            .unwrap_or_else(|| mcp_command_alias(&command));
-                        let arguments =
-                            optional_string_list(&request.params, "arguments")?.unwrap_or_default();
-                        let environment = optional_string_map(&request.params, "environment")?
-                            .unwrap_or_default();
-                        (
-                            alias,
-                            McpTransportConfig::Stdio {
-                                command,
-                                arguments,
-                                environment,
-                                working_directory: Some(working_directory),
-                            },
-                        )
-                    }
-                    "http" | "sse" | "streamable-http" => {
-                        let raw_url = required_string(&request.params, "url")?;
-                        let url = Url::parse(raw_url)
-                            .map_err(|error| ResourceError::InvalidParams(error.to_string()))?;
-                        let alias = optional_string(&request.params, "name")?
-                            .map(str::to_owned)
-                            .unwrap_or_else(|| mcp_alias(&url));
-                        let transport = if matches!(transport_name, "http" | "sse") {
-                            McpTransportConfig::Http {
-                                url,
-                                headers: BTreeMap::new(),
-                            }
-                        } else {
-                            McpTransportConfig::StreamableHttp {
-                                url,
-                                headers: BTreeMap::new(),
-                            }
-                        };
-                        (alias, transport)
-                    }
-                    value => {
-                        return Err(ResourceError::InvalidParams(format!(
-                            "unsupported MCP transport `{value}`"
-                        )));
-                    }
-                };
-                let diagnostics = session
-                    .mcp
-                    .discover_all(
-                        vec![McpServerConfig {
-                            alias,
-                            transport,
-                            enabled: true,
-                            disabled_tools: Default::default(),
-                            startup_timeout_ms: vibe_core::mcp::DEFAULT_MCP_STARTUP_TIMEOUT_MS,
-                            tool_timeout_ms: vibe_core::mcp::DEFAULT_MCP_TOOL_TIMEOUT_MS,
-                            oauth: None,
-                        }],
-                        factory,
-                        &session.tools,
-                        session.policy.clone(),
-                        self.approval.clone(),
-                    )
-                    .await;
-                let state = mcp_view(session.mcp.read().await);
-                Ok(canonical_mutation("mcp", state, "mcp/updated", diagnostics))
-            }
-            "mcp/refresh" => {
-                let name = required_string(&request.params, "name")?;
-                session
-                    .mcp
-                    .refresh(name)
-                    .await
-                    .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
-                let state = mcp_view(session.mcp.read().await);
-                Ok(canonical_mutation("mcp", state, "mcp/updated", Vec::new()))
-            }
-            "mcp/toggle" => {
-                if optional_string(&request.params, "toolName")?.is_some() {
-                    return Err(ResourceError::Unavailable(
-                        "per-tool MCP toggles are not supported by the configured backend"
-                            .to_owned(),
-                    ));
-                }
-                let name = required_string(&request.params, "name")?;
-                let disabled = required_bool(&request.params, "disabled")?;
-                session
-                    .mcp
-                    .toggle(name, !disabled)
-                    .await
-                    .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
-                let state = mcp_view(session.mcp.read().await);
-                Ok(canonical_mutation("mcp", state, "mcp/updated", Vec::new()))
-            }
-            "mcp/login" | "mcp/logout" => Err(ResourceError::Unavailable(
-                "MCP OAuth interaction backend is not configured".to_owned(),
-            )),
-            _ => Err(ResourceError::MethodNotFound(request.method.clone())),
-        }
-    }
-
-    async fn dispatch_connectors(
-        &self,
-        session: &CoreResourceSession,
-        request: &ResourceBackendRequest,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        match request.method.as_str() {
-            "connectors/read" => Ok(read_only([(
-                "counts",
-                connector_counts_value(&session.connectors.views().map_err(integration_error)?),
-            )])),
-            "connectors/auth/read" => {
-                let name = required_string(&request.params, "name")?;
-                let view = session
-                    .connectors
-                    .views()
-                    .map_err(integration_error)?
-                    .into_iter()
-                    .find(|view| view.id == name || view.alias == name)
-                    .ok_or_else(|| {
-                        ResourceError::NotFound(format!("connector `{name}` was not found"))
-                    })?;
-                Ok(read_only([(
-                    "url",
-                    json!(format!("https://connectors.mistral.ai/auth/{}", view.id)),
-                )]))
-            }
-            "connectors/refresh" => {
-                let name = required_string(&request.params, "name")?;
-                let definitions = self.connector_definitions.as_ref().clone();
-                if !definitions
-                    .iter()
-                    .any(|definition| definition.id == name || definition.name == name)
-                {
-                    return Err(ResourceError::NotFound(format!(
-                        "connector `{name}` was not found"
-                    )));
-                }
-                session
-                    .connectors
-                    .discover(
-                        definitions,
-                        &self.connector_credential_reference,
-                        self.connector_base_url.as_ref().ok_or_else(|| {
-                            ResourceError::Unavailable(
-                                "connector catalog backend is not configured".to_owned(),
-                            )
-                        })?,
-                        now_millis(),
-                    )
-                    .await
-                    .map_err(integration_error)?;
-                let backend = self.connector_backend.clone().ok_or_else(|| {
-                    ResourceError::Unavailable(
-                        "connector transport backend is not configured".to_owned(),
-                    )
-                })?;
-                session
-                    .connectors
-                    .register_tools(
-                        &session.tools,
-                        backend,
-                        session.policy.clone(),
-                        self.approval.clone(),
-                    )
-                    .map_err(integration_error)?;
-                let state = connector_view(session.connectors.views().map_err(integration_error)?);
-                Ok(canonical_mutation(
-                    "connectors",
-                    state,
-                    "connectors/updated",
-                    Vec::new(),
-                ))
-            }
-            _ => Err(ResourceError::MethodNotFound(request.method.clone())),
-        }
-    }
-
-    async fn dispatch_shell(
-        &self,
-        session: &CoreResourceSession,
-        request: &ResourceBackendRequest,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let operation_id = required_string(&request.params, "operationId")?.to_owned();
-        match request.method.as_str() {
-            "shell/run" => {
-                let command = required_string(&request.params, "command")?;
-                let existing_terminal = session
-                    .shell_operations
-                    .lock()
-                    .await
-                    .get(&operation_id)
-                    .cloned();
-                if let Some(terminal_id) = existing_terminal {
-                    let mut output = session
-                        .terminals
-                        .read(&terminal_id)
-                        .await
-                        .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
-                    if !matches!(output.state, vibe_core::process::TerminalState::Running) {
-                        let final_output =
-                            session
-                                .terminals
-                                .wait(&terminal_id)
-                                .await
-                                .map_err(|error| {
-                                    ResourceError::Unavailable(redact(&error.to_string()))
-                                })?;
-                        output.chunks.extend(final_output.chunks);
-                        output.state = final_output.state;
-                        output.backpressure_dropped |= final_output.backpressure_dropped;
-                        let removed = session
-                            .shell_operations
-                            .lock()
-                            .await
-                            .remove(&operation_id)
-                            .is_some_and(|candidate| candidate == terminal_id);
-                        if removed {
-                            session
-                                .terminals
-                                .release(&terminal_id)
-                                .await
-                                .map_err(|error| {
-                                    ResourceError::Unavailable(redact(&error.to_string()))
-                                })?;
-                        }
-                    }
-                    let status = output.state.clone();
-                    let state = json!({
-                        "operationId": operation_id,
-                        "terminalId": terminal_id,
-                        "status": status,
-                        "output": output,
-                    });
-                    return Ok(canonical_mutation(
-                        "shell",
-                        state,
-                        "shell/updated",
-                        Vec::new(),
-                    ));
-                }
-                if !matches!(
-                    session
-                        .policy
-                        .try_trust_decision(&session.working_directory)
-                        .map_err(policy_error)?,
-                    Some(TrustDecision::Trusted | TrustDecision::SessionTrusted)
-                ) {
-                    return Err(ResourceError::Conflict(
-                        "manual shell requires a trusted workspace".to_owned(),
-                    ));
-                }
-                let platform = host_platform();
-                let working_directory = parse_policy_path(platform, &session.working_directory)
-                    .map_err(|error| ResourceError::InvalidParams(error.to_string()))?;
-                let analysis = analyze_shell(
-                    ShellConfig::default_for(platform).flavor,
-                    command,
-                    &ShellPolicyContext {
-                        platform,
-                        working_directory: working_directory.clone(),
-                        roots: vec![working_directory],
-                    },
-                );
-                if analysis.mode != PermissionMode::Always {
-                    return Err(ResourceError::Conflict(format!(
-                        "shell operation `{operation_id}` requires explicit approval: {}",
-                        analysis.rationale.join("; ")
-                    )));
-                }
-                let shell = ShellConfig::default_for(platform);
-                let mut spec =
-                    ProcessSpec::new(shell.executable, PathBuf::from(&session.working_directory));
-                spec.arguments = shell
-                    .arguments
-                    .into_iter()
-                    .chain(std::iter::once(command.to_owned()))
-                    .collect();
-                let terminal_id = session
-                    .terminals
-                    .run(spec)
-                    .await
-                    .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
-                if let Err(error) = session.terminals.close_stdin(&terminal_id).await {
-                    let _ = session.terminals.interrupt(&terminal_id).await;
-                    let _ = session.terminals.release(&terminal_id).await;
-                    return Err(ResourceError::Unavailable(redact(&error.to_string())));
-                }
-                let mut operations = session.shell_operations.lock().await;
-                if operations.contains_key(&operation_id) {
-                    drop(operations);
-                    let _ = session.terminals.interrupt(&terminal_id).await;
-                    let _ = session.terminals.release(&terminal_id).await;
-                    return Err(ResourceError::Conflict(format!(
-                        "shell operation `{operation_id}` already exists"
-                    )));
-                }
-                operations.insert(operation_id.clone(), terminal_id.clone());
-                let state = json!({
-                    "operationId": operation_id,
-                    "terminalId": terminal_id,
-                    "status": "running"
-                });
-                Ok(canonical_mutation(
-                    "shell",
-                    state,
-                    "shell/updated",
-                    Vec::new(),
-                ))
-            }
-            "shell/interrupt" => {
-                let terminal_id = session
-                    .shell_operations
-                    .lock()
-                    .await
-                    .remove(&operation_id)
-                    .ok_or_else(|| {
-                        ResourceError::NotFound(format!(
-                            "shell operation `{operation_id}` was not found"
-                        ))
-                    })?;
-                let output = session
-                    .terminals
-                    .interrupt(&terminal_id)
-                    .await
-                    .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
-                session
-                    .terminals
-                    .release(&terminal_id)
-                    .await
-                    .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
-                let status = output.state.clone();
-                let state = json!({
-                    "operationId": operation_id,
-                    "terminalId": terminal_id,
-                    "status": status,
-                    "output": output,
-                });
-                Ok(canonical_mutation(
-                    "shell",
-                    state,
-                    "shell/updated",
-                    Vec::new(),
-                ))
-            }
-            _ => Err(ResourceError::MethodNotFound(request.method.clone())),
-        }
-    }
-}
-
-impl ResourceBackend for CoreResourceBackend {
-    fn open_session(&self, session: ResourceSession) -> Result<(), ResourceError> {
-        let mut sessions = self.sessions.lock().map_err(|_| {
-            ResourceError::Unavailable("resource backend lock is poisoned".to_owned())
-        })?;
-        if let Some(existing) = sessions.get_mut(&session.session_id) {
-            if session.generation > existing.generation {
-                existing.generation = session.generation;
-            }
-            return Ok(());
-        }
-        if !sessions.contains_key(&session.session_id) && sessions.len() >= MAX_RESOURCE_SESSIONS {
-            return Err(ResourceError::Conflict(
-                "resource backend session capacity was reached".to_owned(),
-            ));
-        }
-        sessions.insert(
-            session.session_id,
-            CoreResourceEntry {
-                generation: session.generation,
-                session: Arc::new(CoreResourceSession {
-                    working_directory: session.working_directory,
-                    policy: session.policy,
-                    tools: session.tools,
-                    mcp: McpRegistry::default(),
-                    connectors: ConnectorRegistry::default(),
-                    terminals: TerminalManager::default(),
-                    shell_operations: Mutex::new(BTreeMap::new()),
-                }),
-            },
-        );
-        Ok(())
-    }
-
-    fn configure_mcp<'a>(
-        &'a self,
-        session_id: &'a str,
-        configs: Vec<McpServerConfig>,
-    ) -> ResourceFuture<'a, ResourceDispatch> {
-        Box::pin(async move {
-            let session = self.session(session_id)?;
-            let factory = self.mcp_factory.clone().ok_or_else(|| {
-                ResourceError::Unavailable("MCP transport backend is not configured".to_owned())
-            })?;
-            let diagnostics = session
-                .mcp
-                .discover_all(
-                    configs,
-                    factory,
-                    &session.tools,
-                    session.policy.clone(),
-                    self.approval.clone(),
-                )
-                .await;
-            let state = mcp_view(session.mcp.read().await);
-            Ok(canonical_mutation("mcp", state, "mcp/updated", diagnostics))
-        })
-    }
-
-    fn dispatch<'a>(
-        &'a self,
-        request: ResourceBackendRequest,
-    ) -> ResourceFuture<'a, ResourceDispatch> {
-        Box::pin(async move {
-            let session = self.session(&request.session_id)?;
-            match request.method.as_str() {
-                method if method.starts_with("mcp/") => self.dispatch_mcp(&session, &request).await,
-                method if method.starts_with("connectors/") => {
-                    self.dispatch_connectors(&session, &request).await
-                }
-                method if method.starts_with("shell/") => {
-                    self.dispatch_shell(&session, &request).await
-                }
-                _ => Err(ResourceError::MethodNotFound(request.method)),
-            }
-        })
-    }
-
-    fn close_session<'a>(&'a self, session_id: &'a str, generation: u64) -> ResourceFuture<'a, ()> {
-        Box::pin(async move {
-            let session = {
-                let mut sessions = self.sessions.lock().map_err(|_| {
-                    ResourceError::Unavailable("resource backend lock is poisoned".to_owned())
-                })?;
-                let matches_generation = sessions
-                    .get(session_id)
-                    .is_some_and(|entry| entry.generation == generation);
-                matches_generation
-                    .then(|| sessions.remove(session_id))
-                    .flatten()
-                    .map(|entry| entry.session)
-            };
-            let Some(session) = session else {
-                return Ok(());
-            };
-            let mut failures = session.mcp.close().await;
-            if let Err(error) = session.connectors.close().await {
-                failures.push(redact(&error.to_string()));
-            }
-            if let Err(error) = session.terminals.cleanup_all().await {
-                failures.push(redact(&error.to_string()));
-            }
-            if failures.is_empty() {
-                Ok(())
-            } else {
-                Err(ResourceError::Unavailable(failures.join("; ")))
-            }
-        })
-    }
-}
+mod core_backend;
+pub use core_backend::CoreResourceBackend;
+use core_backend::CoreResourceSession;
 
 #[derive(Debug, Clone)]
 struct McpSource {
@@ -757,6 +252,10 @@ impl ResourceService {
         params: &BTreeMap<String, Value>,
         session_active: bool,
     ) -> Result<ResourceDispatch, ResourceError> {
+        if BACKEND_RESOURCE_METHODS.contains(&method) {
+            let command = ResourceBackendCommand::parse(method, params, session_active)?;
+            return self.dispatch_backend_fallback(command);
+        }
         match method {
             "account/read" => Ok(read_only([(
                 "account",
@@ -769,9 +268,6 @@ impl ResourceService {
                     "teleportAction": null
                 }),
             )])),
-            "connectors/read" => Ok(read_only([("counts", self.connector_counts())])),
-            "connectors/auth/read" => self.connector_auth(params),
-            "connectors/refresh" => self.connector_refresh(params),
             "diagnostics/list" => Ok(read_only([
                 (
                     "issues",
@@ -792,14 +288,6 @@ impl ResourceService {
                 "show",
                 json!(self.feedback_actions.is_empty()),
             )])),
-            "mcp/add" => self.mcp_add(params),
-            "mcp/login" => self.mcp_auth(params, true),
-            "mcp/logout" => self.mcp_auth(params, false),
-            "mcp/read" => Ok(read_only([("mcp", self.mcp_state())])),
-            "mcp/refresh" => Err(ResourceError::Unavailable(
-                "MCP refresh backend is not attached".to_owned(),
-            )),
-            "mcp/toggle" => self.mcp_toggle(params),
             "narration/summarize" => self.narration(params),
             "review/approve" => self.review_mutate(params, session_active, true),
             "review/revert" => self.review_mutate(params, session_active, false),
@@ -834,8 +322,6 @@ impl ResourceService {
             "session/ready/read" | "session/ready/wait" => {
                 Ok(read_only([("ready", json!(self.ready))]))
             }
-            "shell/run" => self.shell_run(params, session_active),
-            "shell/interrupt" => self.shell_interrupt(params),
             "stats/read" => Ok(read_only([
                 ("stats", empty_stats()),
                 ("contextWindow", json!(0)),
@@ -847,6 +333,81 @@ impl ResourceService {
             "workspace/trust/status" => self.trust_status(params),
             "workspace/trust/decision" => self.trust_decision(params),
             _ => Err(ResourceError::MethodNotFound(method.to_owned())),
+        }
+    }
+
+    fn dispatch_backend_fallback(
+        &mut self,
+        command: ResourceBackendCommand,
+    ) -> Result<ResourceDispatch, ResourceError> {
+        match command {
+            ResourceBackendCommand::Connector(ConnectorCommand::Read) => Ok(read_only([
+                ("counts", self.connector_counts()),
+                ("connectors", self.connector_state()),
+            ])),
+            ResourceBackendCommand::Connector(ConnectorCommand::AuthRead { name }) => {
+                let connected = self.connectors.get(&name).ok_or_else(|| {
+                    ResourceError::NotFound(format!("connector `{name}` was not found"))
+                })?;
+                Ok(read_only([(
+                    "url",
+                    if *connected {
+                        Value::Null
+                    } else {
+                        json!(format!("https://connectors.mistral.ai/auth/{name}"))
+                    },
+                )]))
+            }
+            ResourceBackendCommand::Connector(ConnectorCommand::Refresh { name }) => {
+                Err(ResourceError::Unavailable(format!(
+                    "connector `{name}` refresh backend is not attached"
+                )))
+            }
+            ResourceBackendCommand::Connector(ConnectorCommand::Toggle { .. }) => Err(
+                ResourceError::Unavailable("connector toggle backend is not attached".to_owned()),
+            ),
+            ResourceBackendCommand::Mcp(McpCommand::Read) => {
+                Ok(read_only([("mcp", self.mcp_state())]))
+            }
+            ResourceBackendCommand::Mcp(McpCommand::Add(add)) => {
+                Err(ResourceError::Unavailable(format!(
+                    "MCP source `{}` cannot be added because no MCP backend is attached",
+                    add.alias
+                )))
+            }
+            ResourceBackendCommand::Mcp(McpCommand::Login { name }) => {
+                Err(ResourceError::Unavailable(format!(
+                    "MCP source `{name}` login backend is not attached"
+                )))
+            }
+            ResourceBackendCommand::Mcp(McpCommand::CompleteAuth { name }) => {
+                Err(ResourceError::Unavailable(format!(
+                    "MCP source `{name}` authentication backend is not attached"
+                )))
+            }
+            ResourceBackendCommand::Mcp(McpCommand::Logout { name }) => {
+                Err(ResourceError::Unavailable(format!(
+                    "MCP source `{name}` logout backend is not attached"
+                )))
+            }
+            ResourceBackendCommand::Mcp(McpCommand::Refresh { .. }) => Err(
+                ResourceError::Unavailable("MCP refresh backend is not attached".to_owned()),
+            ),
+            ResourceBackendCommand::Mcp(McpCommand::Toggle { name, .. }) => {
+                Err(ResourceError::Unavailable(format!(
+                    "MCP source `{name}` toggle backend is not attached"
+                )))
+            }
+            ResourceBackendCommand::Shell(ShellCommand::Run { operation_id, .. }) => {
+                Err(ResourceError::Unavailable(format!(
+                    "shell operation `{operation_id}` cannot run because no shell backend is attached"
+                )))
+            }
+            ResourceBackendCommand::Shell(ShellCommand::Interrupt { operation_id }) => {
+                Err(ResourceError::Unavailable(format!(
+                    "shell operation `{operation_id}` cannot be interrupted because no shell backend is attached"
+                )))
+            }
         }
     }
 
@@ -921,84 +482,6 @@ impl ResourceService {
         Ok(())
     }
 
-    pub fn validate_backend_request(
-        &self,
-        method: &str,
-        params: &BTreeMap<String, Value>,
-        session_active: bool,
-    ) -> Result<(), ResourceError> {
-        match method {
-            "connectors/read" | "mcp/read" => Ok(()),
-            "connectors/auth/read"
-            | "connectors/refresh"
-            | "mcp/login"
-            | "mcp/logout"
-            | "mcp/refresh" => {
-                required_string(params, "name")?;
-                Ok(())
-            }
-            "mcp/add" => {
-                let transport = optional_string(params, "transport")?.unwrap_or("streamable-http");
-                let default_name = if transport == "stdio" {
-                    let command = required_string(params, "command")?;
-                    optional_string_list(params, "arguments")?;
-                    optional_string_map(params, "environment")?;
-                    optional_string(params, "workingDirectory")?;
-                    mcp_command_alias(command)
-                } else {
-                    let raw_url = required_string(params, "url")?;
-                    let url = Url::parse(raw_url).map_err(|_| {
-                        ResourceError::InvalidParams("url must be valid HTTPS".to_owned())
-                    })?;
-                    if url.scheme() != "https" {
-                        return Err(ResourceError::InvalidParams(
-                            "MCP HTTP endpoints require HTTPS".to_owned(),
-                        ));
-                    }
-                    mcp_alias(&url)
-                };
-                let name = optional_string(params, "name")?.unwrap_or(&default_name);
-                if name.is_empty() {
-                    return Err(ResourceError::InvalidParams(
-                        "MCP source name cannot be empty".to_owned(),
-                    ));
-                }
-                if !matches!(transport, "http" | "streamable-http" | "sse" | "stdio") {
-                    return Err(ResourceError::InvalidParams(
-                        "unsupported MCP transport".to_owned(),
-                    ));
-                }
-                Ok(())
-            }
-            "mcp/toggle" => {
-                required_string(params, "name")?;
-                required_bool(params, "disabled")?;
-                optional_string(params, "toolName")?;
-                Ok(())
-            }
-            "shell/run" => {
-                if session_active {
-                    return Err(ResourceError::Conflict(
-                        "manual shell cannot run during an active turn".to_owned(),
-                    ));
-                }
-                required_string(params, "operationId")?;
-                let command = required_string(params, "command")?;
-                if command.trim().is_empty() {
-                    return Err(ResourceError::InvalidParams(
-                        "shell command cannot be empty".to_owned(),
-                    ));
-                }
-                Ok(())
-            }
-            "shell/interrupt" => {
-                required_string(params, "operationId")?;
-                Ok(())
-            }
-            _ => Err(ResourceError::MethodNotFound(method.to_owned())),
-        }
-    }
-
     fn connector_counts(&self) -> Value {
         json!({
             "connected": self.connectors.values().filter(|connected| **connected).count(),
@@ -1006,33 +489,20 @@ impl ResourceService {
         })
     }
 
-    fn connector_auth(
-        &mut self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let name = required_string(params, "name")?;
-        let connected = self
-            .connectors
-            .get(name)
-            .ok_or_else(|| ResourceError::NotFound(format!("connector `{name}` was not found")))?;
-        Ok(read_only([(
-            "url",
-            if *connected {
-                Value::Null
-            } else {
-                json!(format!("https://connectors.mistral.ai/auth/{name}"))
-            },
-        )]))
-    }
-
-    fn connector_refresh(
-        &mut self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let name = required_string(params, "name")?;
-        Err(ResourceError::Unavailable(format!(
-            "connector `{name}` refresh backend is not attached"
-        )))
+    fn connector_state(&self) -> Value {
+        json!({
+            "sources": self.connectors.iter().map(|(name, connected)| {
+                json!({
+                    "id": name,
+                    "alias": name,
+                    "name": name,
+                    "kind": "connector",
+                    "transport": "https",
+                    "authState": if *connected { "connected" } else { "disconnected" },
+                    "toolNames": [],
+                })
+            }).collect::<Vec<_>>()
+        })
     }
 
     fn logs_read(
@@ -1086,66 +556,6 @@ impl ResourceService {
             action.to_owned(),
         );
         Ok(read_only([]))
-    }
-
-    fn mcp_add(
-        &mut self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let raw_url = required_string(params, "url")?;
-        let url = Url::parse(raw_url)
-            .map_err(|_| ResourceError::InvalidParams("url must be valid HTTPS".to_owned()))?;
-        if url.scheme() != "https" {
-            return Err(ResourceError::InvalidParams(
-                "MCP HTTP endpoints require HTTPS".to_owned(),
-            ));
-        }
-        let requested_name = optional_string(params, "name")?
-            .map(str::to_owned)
-            .unwrap_or_else(|| {
-                url.host_str()
-                    .unwrap_or("mcp")
-                    .replace(|character: char| !character.is_ascii_alphanumeric(), "_")
-            });
-        if requested_name.is_empty() {
-            return Err(ResourceError::InvalidParams(
-                "MCP source name cannot be empty".to_owned(),
-            ));
-        }
-        let transport = optional_string(params, "transport")?.unwrap_or("streamable-http");
-        if !matches!(transport, "http" | "streamable-http" | "sse") {
-            return Err(ResourceError::InvalidParams(
-                "unsupported MCP transport".to_owned(),
-            ));
-        }
-        let _ = (url, transport);
-        Err(ResourceError::Unavailable(format!(
-            "MCP source `{requested_name}` cannot be added because no MCP backend is attached"
-        )))
-    }
-
-    fn mcp_auth(
-        &mut self,
-        params: &BTreeMap<String, Value>,
-        login: bool,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let name = required_string(params, "name")?;
-        let action = if login { "login" } else { "logout" };
-        Err(ResourceError::Unavailable(format!(
-            "MCP source `{name}` {action} backend is not attached"
-        )))
-    }
-
-    fn mcp_toggle(
-        &mut self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let name = required_string(params, "name")?;
-        let _ = required_bool(params, "disabled")?;
-        let _ = optional_string(params, "toolName")?;
-        Err(ResourceError::Unavailable(format!(
-            "MCP source `{name}` toggle backend is not attached"
-        )))
     }
 
     fn narration(
@@ -1323,38 +733,6 @@ impl ResourceService {
                 })
                 .collect(),
         )
-    }
-
-    fn shell_run(
-        &mut self,
-        params: &BTreeMap<String, Value>,
-        session_active: bool,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        if session_active {
-            return Err(ResourceError::Conflict(
-                "manual shell cannot run during an active turn".to_owned(),
-            ));
-        }
-        let operation_id = required_string(params, "operationId")?;
-        let command = required_string(params, "command")?;
-        if command.trim().is_empty() {
-            return Err(ResourceError::InvalidParams(
-                "shell command cannot be empty".to_owned(),
-            ));
-        }
-        Err(ResourceError::Unavailable(format!(
-            "shell operation `{operation_id}` cannot run because no shell backend is attached"
-        )))
-    }
-
-    fn shell_interrupt(
-        &mut self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let operation_id = required_string(params, "operationId")?;
-        Err(ResourceError::Unavailable(format!(
-            "shell operation `{operation_id}` cannot be interrupted because no shell backend is attached"
-        )))
     }
 
     fn trust_status(
@@ -1578,9 +956,18 @@ fn canonical_mutation(
     }
 }
 
-fn mcp_view(views: Vec<McpServerView>) -> Value {
+fn mcp_view(views: Vec<McpServerView>, tools: &ToolRegistry) -> Value {
+    let descriptions = tools
+        .list()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|tool| (tool.name, tool.description))
+        .collect::<BTreeMap<_, _>>();
     json!({
         "sources": views.into_iter().map(|view| {
+            let disabled_tools = view.disabled_tools;
+            let source_available = view.enabled
+                && view.status == vibe_core::mcp::McpServerStatus::Healthy;
             json!({
                 "name": view.alias,
                 "kind": "server",
@@ -1589,7 +976,9 @@ fn mcp_view(views: Vec<McpServerView>) -> Value {
                 "enabled": view.enabled,
                 "diagnostic": view.diagnostic,
                 "tools": view.tools.into_iter().map(|name| {
-                    json!({"name": name, "description": "", "enabled": true})
+                    let enabled = source_available && !disabled_tools.contains(&name);
+                    let description = descriptions.get(&name).cloned().unwrap_or_default();
+                    json!({"name": name, "description": description, "enabled": enabled})
                 }).collect::<Vec<_>>()
             })
         }).collect::<Vec<_>>(),
@@ -1606,7 +995,7 @@ fn connector_view(views: Vec<ConnectorView>) -> Value {
 fn connector_counts_value(views: &[ConnectorView]) -> Value {
     json!({
         "connected": views.iter().filter(|view| {
-            matches!(
+            view.enabled && matches!(
                 view.auth_state,
                 vibe_core::integrations::ConnectorAuthState::Connected
                     | vibe_core::integrations::ConnectorAuthState::NotRequired
@@ -1616,38 +1005,34 @@ fn connector_counts_value(views: &[ConnectorView]) -> Value {
     })
 }
 
-fn mcp_alias(url: &Url) -> String {
-    let alias = url
-        .host_str()
-        .unwrap_or("mcp")
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character.to_ascii_lowercase()
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    alias.trim_matches('_').to_owned()
+fn validate_auth_url(url: String, source: &str) -> Result<String, ResourceError> {
+    let parsed = Url::parse(&url)
+        .map_err(|_| ResourceError::Unavailable(format!("{source} returned an invalid URL")))?;
+    if parsed.scheme() == "https"
+        || (parsed.scheme() == "http"
+            && parsed
+                .host_str()
+                .is_some_and(|host| matches!(host, "localhost" | "127.0.0.1" | "::1")))
+    {
+        Ok(url)
+    } else {
+        Err(ResourceError::Unavailable(format!(
+            "{source} returned an unsafe URL"
+        )))
+    }
 }
 
-fn mcp_command_alias(command: &str) -> String {
-    PathBuf::from(command)
-        .file_stem()
-        .and_then(|name| name.to_str())
-        .unwrap_or("mcp")
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character.to_ascii_lowercase()
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>()
-        .trim_matches('_')
-        .to_owned()
+fn resolve_connector(
+    session: &CoreResourceSession,
+    name: &str,
+) -> Result<ConnectorView, ResourceError> {
+    session
+        .connectors
+        .views()
+        .map_err(integration_error)?
+        .into_iter()
+        .find(|view| view.id == name || view.alias == name || view.name == name)
+        .ok_or_else(|| ResourceError::NotFound(format!("connector `{name}` was not found")))
 }
 
 fn integration_error(error: vibe_core::integrations::IntegrationError) -> ResourceError {
@@ -1703,73 +1088,6 @@ fn optional_string<'a>(
             "{key} must be a string"
         ))),
     }
-}
-
-fn optional_string_list(
-    params: &BTreeMap<String, Value>,
-    key: &str,
-) -> Result<Option<Vec<String>>, ResourceError> {
-    let Some(value) = params.get(key) else {
-        return Ok(None);
-    };
-    let values = value
-        .as_array()
-        .ok_or_else(|| ResourceError::InvalidParams(format!("{key} must be an array")))?;
-    if values.len() > 256 {
-        return Err(ResourceError::InvalidParams(format!(
-            "{key} contains too many entries"
-        )));
-    }
-    values
-        .iter()
-        .map(|value| {
-            value
-                .as_str()
-                .filter(|value| value.len() <= MAX_RESOURCE_STRING_BYTES && !value.contains('\0'))
-                .map(str::to_owned)
-                .ok_or_else(|| {
-                    ResourceError::InvalidParams(format!("{key} entries must be bounded strings"))
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map(Some)
-}
-
-fn optional_string_map(
-    params: &BTreeMap<String, Value>,
-    key: &str,
-) -> Result<Option<BTreeMap<String, String>>, ResourceError> {
-    let Some(value) = params.get(key) else {
-        return Ok(None);
-    };
-    let values = value
-        .as_object()
-        .ok_or_else(|| ResourceError::InvalidParams(format!("{key} must be an object")))?;
-    if values.len() > 256 {
-        return Err(ResourceError::InvalidParams(format!(
-            "{key} contains too many entries"
-        )));
-    }
-    values
-        .iter()
-        .map(|(name, value)| {
-            let value = value
-                .as_str()
-                .filter(|value| value.len() <= MAX_RESOURCE_STRING_BYTES && !value.contains('\0'))
-                .ok_or_else(|| {
-                    ResourceError::InvalidParams(format!("{key} values must be bounded strings"))
-                })?;
-            Ok((name.clone(), value.to_owned()))
-        })
-        .collect::<Result<BTreeMap<_, _>, _>>()
-        .map(Some)
-}
-
-fn required_bool(params: &BTreeMap<String, Value>, key: &str) -> Result<bool, ResourceError> {
-    params
-        .get(key)
-        .and_then(Value::as_bool)
-        .ok_or_else(|| ResourceError::InvalidParams(format!("{key} must be a boolean")))
 }
 
 fn required_object<'a>(
@@ -1852,6 +1170,131 @@ pub struct SessionResourceParams {
 mod tests {
     use super::*;
 
+    struct FakeMcpAuth {
+        url: String,
+        calls: StdMutex<Vec<String>>,
+    }
+
+    struct FakeConnectorTransport;
+
+    struct CountingEmptyConnectorCatalog {
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl ConnectorCatalogBackend for CountingEmptyConnectorCatalog {
+        fn catalog<'a>(&'a self) -> ResourceFuture<'a, ConnectorCatalog> {
+            Box::pin(async move {
+                self.calls.fetch_add(1, Ordering::AcqRel);
+                Ok(ConnectorCatalog {
+                    definitions: Vec::new(),
+                    connected: BTreeSet::new(),
+                })
+            })
+        }
+    }
+
+    impl ConnectorBackend for FakeConnectorTransport {
+        fn call<'a>(
+            &'a self,
+            _connector_id: &'a str,
+            _tool: &'a str,
+            _arguments: Value,
+            _max_response_bytes: usize,
+        ) -> vibe_core::integrations::ConnectorFuture<'a> {
+            Box::pin(async { Ok(br#"{}"#.to_vec()) })
+        }
+    }
+
+    struct FakeConnectorAuth {
+        url: String,
+        connected: bool,
+        calls: StdMutex<Vec<String>>,
+    }
+
+    impl ConnectorAuthBackend for FakeConnectorAuth {
+        fn auth_url<'a>(
+            &'a self,
+            session_id: &'a str,
+            connector_id: &'a str,
+        ) -> ResourceFuture<'a, Option<String>> {
+            Box::pin(async move {
+                self.calls
+                    .lock()
+                    .map_err(|_| ResourceError::Unavailable("auth test lock".to_owned()))?
+                    .push(format!("auth:{session_id}:{connector_id}"));
+                Ok(Some(self.url.clone()))
+            })
+        }
+
+        fn refresh<'a>(
+            &'a self,
+            session_id: &'a str,
+            connector_id: &'a str,
+        ) -> ResourceFuture<'a, bool> {
+            Box::pin(async move {
+                self.calls
+                    .lock()
+                    .map_err(|_| ResourceError::Unavailable("auth test lock".to_owned()))?
+                    .push(format!("refresh:{session_id}:{connector_id}"));
+                Ok(self.connected)
+            })
+        }
+    }
+
+    impl McpAuthBackend for FakeMcpAuth {
+        fn login<'a>(
+            &'a self,
+            session_id: &'a str,
+            config: &'a McpServerConfig,
+        ) -> ResourceFuture<'a, String> {
+            Box::pin(async move {
+                self.calls
+                    .lock()
+                    .map_err(|_| ResourceError::Unavailable("auth test lock".to_owned()))?
+                    .push(format!("login:{session_id}:{}", config.alias));
+                Ok(self.url.clone())
+            })
+        }
+
+        fn complete<'a>(
+            &'a self,
+            session_id: &'a str,
+            config: &'a McpServerConfig,
+        ) -> ResourceFuture<'a, bool> {
+            Box::pin(async move {
+                self.calls
+                    .lock()
+                    .map_err(|_| ResourceError::Unavailable("auth test lock".to_owned()))?
+                    .push(format!("complete:{session_id}:{}", config.alias));
+                Ok(true)
+            })
+        }
+
+        fn logout<'a>(
+            &'a self,
+            session_id: &'a str,
+            config: &'a McpServerConfig,
+        ) -> ResourceFuture<'a, ()> {
+            Box::pin(async move {
+                self.calls
+                    .lock()
+                    .map_err(|_| ResourceError::Unavailable("auth test lock".to_owned()))?
+                    .push(format!("logout:{session_id}:{}", config.alias));
+                Ok(())
+            })
+        }
+
+        fn close_session<'a>(&'a self, session_id: &'a str) -> ResourceFuture<'a, ()> {
+            Box::pin(async move {
+                self.calls
+                    .lock()
+                    .map_err(|_| ResourceError::Unavailable("auth test lock".to_owned()))?
+                    .push(format!("close:{session_id}"));
+                Ok(())
+            })
+        }
+    }
+
     fn params(value: Value) -> BTreeMap<String, Value> {
         value
             .as_object()
@@ -1859,6 +1302,44 @@ mod tests {
             .iter()
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect()
+    }
+
+    fn backend_request(
+        session_id: &str,
+        method: &str,
+        params: BTreeMap<String, Value>,
+    ) -> ResourceBackendRequest {
+        ResourceBackendRequest::parse(session_id.to_owned(), method, &params, false)
+            .expect("valid backend request")
+    }
+
+    fn disabled_mcp(alias: &str) -> McpServerConfig {
+        McpServerConfig {
+            alias: alias.to_owned(),
+            transport: McpTransportConfig::StreamableHttp {
+                url: Url::parse("https://mcp.example/rpc").expect("MCP URL"),
+                headers: BTreeMap::new(),
+            },
+            enabled: false,
+            disabled_tools: Default::default(),
+            startup_timeout_ms: vibe_core::mcp::DEFAULT_MCP_STARTUP_TIMEOUT_MS,
+            tool_timeout_ms: vibe_core::mcp::DEFAULT_MCP_TOOL_TIMEOUT_MS,
+        }
+    }
+
+    fn oauth_connector() -> ConnectorDefinition {
+        ConnectorDefinition {
+            id: "drive-id".to_owned(),
+            name: "Drive".to_owned(),
+            base_url: Url::parse("https://connectors.example/drive").expect("connector URL"),
+            auth_kind: vibe_core::integrations::ConnectorAuthKind::OAuth,
+            tools: vec![vibe_core::integrations::ConnectorTool {
+                name: "search".to_owned(),
+                description: "Search files".to_owned(),
+                input_schema: json!({"type": "object"}),
+                output_schema: None,
+            }],
+        }
     }
 
     #[test]
@@ -1995,6 +1476,240 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mcp_oauth_routes_the_exact_source_and_rejects_unsafe_urls() {
+        let auth = Arc::new(FakeMcpAuth {
+            url: "https://auth.example/authorize?state=opaque".to_owned(),
+            calls: StdMutex::new(Vec::new()),
+        });
+        let backend = CoreResourceBackend::default().with_mcp_auth(auth.clone());
+        backend
+            .open_session(ResourceSession {
+                session_id: "s1".to_owned(),
+                generation: 1,
+                working_directory: "/workspace".to_owned(),
+                project_trusted: false,
+                policy: PermissionStore::default(),
+                tools: ToolRegistry::default(),
+            })
+            .expect("open session");
+        backend
+            .configure_mcp("s1", vec![disabled_mcp("source-a")])
+            .await
+            .expect("configure source");
+        let login = backend
+            .dispatch(backend_request(
+                "s1",
+                "mcp/login",
+                params(json!({"name": "source-a"})),
+            ))
+            .await
+            .expect("OAuth URL");
+        assert_eq!(
+            login.result["auth"]["url"],
+            "https://auth.example/authorize?state=opaque"
+        );
+        let completion = backend
+            .dispatch(backend_request(
+                "s1",
+                "mcp/auth/complete",
+                params(json!({"name": "source-a"})),
+            ))
+            .await
+            .expect("OAuth completion is checked");
+        assert_eq!(completion.result["auth"]["verified"], true);
+        backend
+            .dispatch(backend_request(
+                "s1",
+                "mcp/logout",
+                params(json!({"name": "source-a"})),
+            ))
+            .await
+            .expect("logout");
+        assert_eq!(
+            auth.calls.lock().expect("calls").as_slice(),
+            [
+                "login:s1:source-a",
+                "complete:s1:source-a",
+                "logout:s1:source-a"
+            ]
+        );
+        assert!(matches!(
+            backend
+                .dispatch(backend_request(
+                    "s1",
+                    "mcp/login",
+                    params(json!({"name": "unknown"})),
+                ))
+                .await,
+            Err(ResourceError::NotFound(_))
+        ));
+        backend
+            .close_session("s1", 1)
+            .await
+            .expect("OAuth session cleanup");
+        assert_eq!(
+            auth.calls.lock().expect("calls").last().map(String::as_str),
+            Some("close:s1")
+        );
+
+        let unsafe_backend = CoreResourceBackend::default().with_mcp_auth(Arc::new(FakeMcpAuth {
+            url: "http://auth.example/authorize".to_owned(),
+            calls: StdMutex::new(Vec::new()),
+        }));
+        unsafe_backend
+            .open_session(ResourceSession {
+                session_id: "s2".to_owned(),
+                generation: 1,
+                working_directory: "/workspace".to_owned(),
+                project_trusted: false,
+                policy: PermissionStore::default(),
+                tools: ToolRegistry::default(),
+            })
+            .expect("open unsafe session");
+        unsafe_backend
+            .configure_mcp("s2", vec![disabled_mcp("source-b")])
+            .await
+            .expect("configure unsafe source");
+        assert!(matches!(
+            unsafe_backend
+                .dispatch(backend_request(
+                    "s2",
+                    "mcp/login",
+                    params(json!({"name": "source-b"})),
+                ))
+                .await,
+            Err(ResourceError::Unavailable(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn connectors_initialize_lazily_and_route_auth_to_the_exact_source() {
+        let auth = Arc::new(FakeConnectorAuth {
+            url: "https://connectors.example/authorize?state=opaque".to_owned(),
+            connected: true,
+            calls: StdMutex::new(Vec::new()),
+        });
+        let backend = CoreResourceBackend::default()
+            .with_connectors(
+                vec![oauth_connector()],
+                Arc::new(FakeConnectorTransport),
+                "credential",
+                Url::parse("https://connectors.example").expect("catalog URL"),
+            )
+            .with_connector_auth(auth.clone());
+        backend
+            .open_session(ResourceSession {
+                session_id: "s1".to_owned(),
+                generation: 1,
+                working_directory: "/workspace".to_owned(),
+                project_trusted: false,
+                policy: PermissionStore::default(),
+                tools: ToolRegistry::default(),
+            })
+            .expect("open session");
+
+        let listed = backend
+            .dispatch(backend_request("s1", "connectors/read", BTreeMap::new()))
+            .await
+            .expect("connectors initialize");
+        assert_eq!(listed.result["connectors"]["sources"][0]["id"], "drive-id");
+        let login = backend
+            .dispatch(backend_request(
+                "s1",
+                "connectors/auth/read",
+                params(json!({"name": "drive"})),
+            ))
+            .await
+            .expect("connector auth URL");
+        assert_eq!(
+            login.result["url"],
+            "https://connectors.example/authorize?state=opaque"
+        );
+        assert_eq!(
+            auth.calls.lock().expect("calls").as_slice(),
+            ["auth:s1:drive-id"]
+        );
+        let refreshed = backend
+            .dispatch(backend_request(
+                "s1",
+                "connectors/refresh",
+                params(json!({"name": "drive"})),
+            ))
+            .await
+            .expect("connector refresh");
+        assert_eq!(
+            refreshed.result["connectors"]["sources"][0]["authState"],
+            "connected"
+        );
+        assert_eq!(
+            auth.calls.lock().expect("calls").as_slice(),
+            ["auth:s1:drive-id", "refresh:s1:drive-id"]
+        );
+    }
+
+    #[tokio::test]
+    async fn connector_persistence_failure_leaves_runtime_state_unchanged() {
+        let temporary = tempfile::tempdir().expect("temporary root");
+        let vibe_home = temporary.path().join("home/.vibe");
+        let workspace = temporary.path().join("workspace");
+        std::fs::create_dir_all(&vibe_home).expect("config directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        let config_path = vibe_home.join("config.toml");
+        let store = LayeredConfig::new(
+            vibe_core::config::ConfigPaths {
+                vibe_home,
+                working_directory: workspace.clone(),
+            },
+            toml::Table::new(),
+        );
+        let backend = CoreResourceBackend::default()
+            .with_config(store)
+            .with_connectors(
+                vec![oauth_connector()],
+                Arc::new(FakeConnectorTransport),
+                "credential",
+                Url::parse("https://connectors.example").expect("catalog URL"),
+            );
+        backend
+            .open_session(ResourceSession {
+                session_id: "transaction".to_owned(),
+                generation: 1,
+                working_directory: workspace.to_string_lossy().into_owned(),
+                project_trusted: false,
+                policy: PermissionStore::default(),
+                tools: ToolRegistry::default(),
+            })
+            .expect("session opens");
+        backend
+            .dispatch(backend_request(
+                "transaction",
+                "connectors/read",
+                BTreeMap::new(),
+            ))
+            .await
+            .expect("connector initializes");
+        std::fs::write(&config_path, "invalid = [").expect("corrupt config fixture");
+
+        assert!(
+            backend
+                .dispatch(backend_request(
+                    "transaction",
+                    "connectors/toggle",
+                    params(json!({"name": "drive", "disabled": true})),
+                ))
+                .await
+                .is_err()
+        );
+        let session = backend.session("transaction").expect("session remains");
+        let view = session
+            .connectors
+            .views()
+            .expect("connector state")
+            .remove(0);
+        assert!(view.enabled);
+    }
+
+    #[tokio::test]
     async fn core_backend_denies_stdio_mcp_before_workspace_trust() {
         let workspace = tempfile::tempdir().expect("workspace");
         let backend = CoreResourceBackend::default();
@@ -2003,20 +1718,21 @@ mod tests {
                 session_id: "s1".to_owned(),
                 generation: 1,
                 working_directory: workspace.path().to_string_lossy().into_owned(),
+                project_trusted: false,
                 policy: PermissionStore::default(),
                 tools: ToolRegistry::default(),
             })
             .expect("open session");
         let error = backend
-            .dispatch(ResourceBackendRequest {
-                session_id: "s1".to_owned(),
-                method: "mcp/add".to_owned(),
-                params: params(json!({
+            .dispatch(backend_request(
+                "s1",
+                "mcp/add",
+                params(json!({
                     "name": "untrusted",
                     "transport": "stdio",
                     "command": "must-not-launch"
                 })),
-            })
+            ))
             .await
             .expect_err("untrusted executable must be denied before spawn");
         assert!(
@@ -2042,21 +1758,22 @@ mod tests {
                 session_id: "s1".to_owned(),
                 generation: 1,
                 working_directory: workspace.path().to_string_lossy().into_owned(),
+                project_trusted: true,
                 policy,
                 tools: ToolRegistry::default(),
             })
             .expect("open session");
         let error = backend
-            .dispatch(ResourceBackendRequest {
-                session_id: "s1".to_owned(),
-                method: "mcp/add".to_owned(),
-                params: params(json!({
+            .dispatch(backend_request(
+                "s1",
+                "mcp/add",
+                params(json!({
                     "name": "outside",
                     "transport": "stdio",
                     "command": "must-not-launch",
                     "workingDirectory": outside.path()
                 })),
-            })
+            ))
             .await
             .expect_err("outside working directory must be denied before spawn");
         assert!(
@@ -2081,20 +1798,21 @@ mod tests {
                 session_id: "s1".to_owned(),
                 generation: 1,
                 working_directory: workspace.path().to_string_lossy().into_owned(),
+                project_trusted: true,
                 policy,
                 tools: ToolRegistry::default(),
             })
             .expect("open session");
         let dispatch = backend
-            .dispatch(ResourceBackendRequest {
-                session_id: "s1".to_owned(),
-                method: "shell/run".to_owned(),
-                params: params(json!({
+            .dispatch(backend_request(
+                "s1",
+                "shell/run",
+                params(json!({
                     "sessionId": "s1",
                     "operationId": "shell-1",
                     "command": "pwd"
                 })),
-            })
+            ))
             .await
             .expect("run shell");
         assert_eq!(
@@ -2109,15 +1827,15 @@ mod tests {
                 let mut saw_output = false;
                 loop {
                     let dispatch = backend
-                        .dispatch(ResourceBackendRequest {
-                            session_id: "s1".to_owned(),
-                            method: "shell/run".to_owned(),
-                            params: params(json!({
+                        .dispatch(backend_request(
+                            "s1",
+                            "shell/run",
+                            params(json!({
                                 "sessionId": "s1",
                                 "operationId": "shell-1",
                                 "command": "pwd"
                             })),
-                        })
+                        ))
                         .await
                         .expect("poll shell");
                     saw_output |= dispatch
@@ -2153,15 +1871,15 @@ mod tests {
             "shell output must be drained before process release"
         );
         let denied = backend
-            .dispatch(ResourceBackendRequest {
-                session_id: "s1".to_owned(),
-                method: "shell/run".to_owned(),
-                params: params(json!({
+            .dispatch(backend_request(
+                "s1",
+                "shell/run",
+                params(json!({
                     "sessionId": "s1",
                     "operationId": "shell-2",
                     "command": "rm forbidden"
                 })),
-            })
+            ))
             .await
             .expect_err("destructive shell command must be denied before spawn");
         assert!(matches!(denied, ResourceError::Conflict(_)));
@@ -2175,6 +1893,7 @@ mod tests {
             session_id: "s1".to_owned(),
             generation,
             working_directory: "/workspace".to_owned(),
+            project_trusted: false,
             policy: PermissionStore::default(),
             tools: ToolRegistry::default(),
         };
@@ -2186,11 +1905,7 @@ mod tests {
             .await
             .expect("stale cleanup is harmless");
         let dispatch = backend
-            .dispatch(ResourceBackendRequest {
-                session_id: "s1".to_owned(),
-                method: "mcp/read".to_owned(),
-                params: BTreeMap::new(),
-            })
+            .dispatch(backend_request("s1", "mcp/read", BTreeMap::new()))
             .await
             .expect("reattached resources remain available");
         assert!(dispatch.result.contains_key("mcp"));
@@ -2201,13 +1916,47 @@ mod tests {
             .expect("current cleanup");
         assert!(matches!(
             backend
-                .dispatch(ResourceBackendRequest {
-                    session_id: "s1".to_owned(),
-                    method: "mcp/read".to_owned(),
-                    params: BTreeMap::new(),
-                })
+                .dispatch(backend_request("s1", "mcp/read", BTreeMap::new()))
                 .await,
             Err(ResourceError::NotFound(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn empty_connector_catalog_initializes_once_under_concurrent_reads() {
+        let catalog = Arc::new(CountingEmptyConnectorCatalog {
+            calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let backend = CoreResourceBackend::default().with_connector_catalog(
+            catalog.clone(),
+            Arc::new(FakeConnectorTransport),
+            "credential",
+            Url::parse("https://connectors.example.test").expect("connector URL"),
+        );
+        backend
+            .open_session(ResourceSession {
+                session_id: "connector-read".to_owned(),
+                generation: 1,
+                working_directory: "/workspace".to_owned(),
+                project_trusted: false,
+                policy: PermissionStore::default(),
+                tools: ToolRegistry::default(),
+            })
+            .expect("open connector session");
+
+        let first = backend.dispatch(backend_request(
+            "connector-read",
+            "connectors/read",
+            BTreeMap::new(),
+        ));
+        let second = backend.dispatch(backend_request(
+            "connector-read",
+            "connectors/read",
+            BTreeMap::new(),
+        ));
+        let (first, second) = tokio::join!(first, second);
+        first.expect("first connector read");
+        second.expect("second connector read");
+        assert_eq!(catalog.calls.load(Ordering::Acquire), 1);
     }
 }

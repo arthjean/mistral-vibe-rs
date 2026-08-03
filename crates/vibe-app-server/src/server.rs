@@ -11,7 +11,8 @@ use crate::release4::{
 };
 use crate::resources::{
     BACKEND_RESOURCE_METHODS, CoreResourceBackend, RESOURCE_METHODS, ResourceBackend,
-    ResourceBackendRequest, ResourceDispatch, ResourceError, ResourceService, ResourceSession,
+    ResourceBackendCommand, ResourceBackendRequest, ResourceDispatch, ResourceError,
+    ResourceService, ResourceSession,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -58,11 +59,13 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "connectors/auth/read",
     "connectors/read",
     "connectors/refresh",
+    "connectors/toggle",
     "diagnostics/list",
     "diagnostics/logs/read",
     "feedback/record",
     "feedback/shouldShow",
     "mcp/add",
+    "mcp/auth/complete",
     "mcp/login",
     "mcp/logout",
     "mcp/read",
@@ -223,8 +226,7 @@ pub enum DeferredWork {
     ResourceRequest {
         request_id: RequestId,
         session_id: String,
-        method: String,
-        params: BTreeMap<String, Value>,
+        command: ResourceBackendCommand,
     },
     CloudRequest {
         request_id: RequestId,
@@ -1198,8 +1200,7 @@ impl AppServer {
         &self,
         request_id: RequestId,
         session_id: String,
-        method: String,
-        params: BTreeMap<String, Value>,
+        command: ResourceBackendCommand,
     ) -> DispatchBatch {
         let Some(backend) = &self.resource_backend else {
             return error_batch(
@@ -1210,8 +1211,7 @@ impl AppServer {
         };
         let request = ResourceBackendRequest {
             session_id,
-            method,
-            params,
+            command,
         };
         resource_result_batch(request_id, backend.dispatch(request).await)
     }
@@ -1400,6 +1400,10 @@ impl AppServer {
                 session_id: attachment.id.clone(),
                 generation: 1,
                 working_directory: attachment.working_directory.clone(),
+                project_trusted: matches!(
+                    policy.try_trust_decision(&attachment.working_directory),
+                    Ok(Some(TrustDecision::Trusted | TrustDecision::SessionTrusted))
+                ),
                 policy,
                 tools,
             })
@@ -1769,6 +1773,7 @@ impl ServerConnection {
                         session_id: session.id.clone(),
                         generation,
                         working_directory: session.working_directory.clone(),
+                        project_trusted: session.intent.trusted,
                         policy: session.policy.clone(),
                         tools: session.tools.clone(),
                     })
@@ -2226,6 +2231,9 @@ impl ServerConnection {
                     .get(&session_id)
                     .map(|session| session.working_directory.clone())
                     .unwrap_or_default(),
+                project_trusted: sessions
+                    .get(&session_id)
+                    .is_some_and(|session| session.intent.trusted),
                 policy: permission_store,
                 tools,
             })
@@ -3062,10 +3070,11 @@ impl ServerConnection {
                     "sessionId must be a non-empty string",
                 );
             };
-            let working_directory = self.server.lock_sessions().ok().and_then(|sessions| {
-                session_by_id_or_alias(&sessions, session_id)
-                    .map(|session| session.working_directory.clone())
-            });
+            let working_directory = match self.server.lock_sessions() {
+                Ok(sessions) => session_by_id_or_alias(&sessions, session_id)
+                    .map(|session| session.working_directory.clone()),
+                Err(error) => return internal_error_batch(request.id, &error),
+            };
             let Some(working_directory) = working_directory else {
                 return error_batch(
                     request.id,
@@ -3105,12 +3114,41 @@ impl ServerConnection {
         if BACKEND_RESOURCE_METHODS.contains(&request.method.as_str())
             && self.server.resource_backend.is_some()
         {
-            let validation = match self.server.resources.lock() {
-                Ok(resources) => resources.validate_backend_request(
-                    &request.method,
-                    &request.params,
-                    session_active,
-                ),
+            let command = match ResourceBackendCommand::parse(
+                &request.method,
+                &request.params,
+                session_active,
+            ) {
+                Ok(command) => command,
+                Err(error) => return resource_error_batch(request.id, error),
+            };
+            return DispatchBatch {
+                outbound: Vec::new(),
+                deferred: vec![DeferredWork::ResourceRequest {
+                    request_id: request.id,
+                    session_id: session_id.unwrap_or_default(),
+                    command,
+                }],
+                close_after_flush: false,
+            };
+        }
+        if request.method == "workspace/trust/decision" {
+            let session_id = session_id.unwrap_or_default();
+            let mut sessions = match self.server.lock_sessions() {
+                Ok(sessions) => sessions,
+                Err(error) => return internal_error_batch(request.id, &error),
+            };
+            let Some(session) = session_mut_by_id_or_alias(&mut sessions, &session_id) else {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::NotFound,
+                    "Session was not found",
+                );
+            };
+            let result = match self.server.resources.lock() {
+                Ok(mut resources) => {
+                    resources.dispatch(&request.method, &request.params, session_active)
+                }
                 Err(_) => {
                     return error_batch(
                         request.id,
@@ -3119,19 +3157,14 @@ impl ServerConnection {
                     );
                 }
             };
-            if let Err(error) = validation {
-                return resource_error_batch(request.id, error);
+            if result.is_ok() {
+                session.intent.trusted = request
+                    .params
+                    .get("decision")
+                    .and_then(Value::as_str)
+                    .is_some_and(|decision| matches!(decision, "trust_repo" | "trust_cwd"));
             }
-            return DispatchBatch {
-                outbound: Vec::new(),
-                deferred: vec![DeferredWork::ResourceRequest {
-                    request_id: request.id,
-                    session_id: session_id.unwrap_or_default(),
-                    method: request.method,
-                    params: request.params,
-                }],
-                close_after_flush: false,
-            };
+            return resource_result_batch(request.id, result);
         }
         let result = match self.server.resources.lock() {
             Ok(mut resources) => {
@@ -4559,8 +4592,8 @@ mod tests {
             request: ResourceBackendRequest,
         ) -> crate::resources::ResourceFuture<'a, ResourceDispatch> {
             Box::pin(async move {
-                match request.method.as_str() {
-                    "mcp/add" => {
+                match request.command {
+                    ResourceBackendCommand::Mcp(crate::resources::McpCommand::Add(_)) => {
                         *self.mcp_added.lock().map_err(|_| {
                             ResourceError::Unavailable("test backend lock".to_owned())
                         })? = true;
@@ -4572,7 +4605,7 @@ mod tests {
                             }),
                         })
                     }
-                    "mcp/read" => {
+                    ResourceBackendCommand::Mcp(crate::resources::McpCommand::Read) => {
                         let added = *self.mcp_added.lock().map_err(|_| {
                             ResourceError::Unavailable("test backend lock".to_owned())
                         })?;
@@ -4584,7 +4617,7 @@ mod tests {
                             notification: None,
                         })
                     }
-                    method => Err(ResourceError::MethodNotFound(method.to_owned())),
+                    command => Err(ResourceError::MethodNotFound(format!("{command:?}"))),
                 }
             })
         }
@@ -6389,7 +6422,7 @@ mod tests {
             "mcp/add",
             json!({
                 "sessionId": "session-1",
-                "url": "https://mcp.example",
+                "url": "https://127.0.0.1:9/mcp",
                 "name": "example"
             }),
         ));
@@ -6401,19 +6434,13 @@ mod tests {
         let Some(DeferredWork::ResourceRequest {
             request_id,
             session_id,
-            method,
-            params,
+            command,
         }) = deferred
         else {
             return;
         };
         let add = server
-            .execute_resource_request(
-                request_id.clone(),
-                session_id.clone(),
-                method.clone(),
-                params.clone(),
-            )
+            .execute_resource_request(request_id.clone(), session_id.clone(), command.clone())
             .await;
         assert!(matches!(
             decode_frame(&add.outbound[0]).expect("MCP response"),
@@ -6421,7 +6448,7 @@ mod tests {
                 if result["mcp"]["sources"][0]["status"] == json!("failed")
                     && result["diagnostics"][0]
                         .as_str()
-                        .is_some_and(|message| message.contains("supports stdio transports only"))
+                        .is_some_and(|message| message.contains("MCP `example`"))
         ));
         assert!(matches!(
             decode_frame(&add.outbound[1]).expect("MCP notification"),
@@ -6471,19 +6498,13 @@ mod tests {
         let Some(DeferredWork::ResourceRequest {
             request_id,
             session_id,
-            method,
-            params,
+            command,
         }) = deferred
         else {
             return;
         };
         let added = server
-            .execute_resource_request(
-                request_id.clone(),
-                session_id.clone(),
-                method.clone(),
-                params.clone(),
-            )
+            .execute_resource_request(request_id.clone(), session_id.clone(), command.clone())
             .await;
         assert_eq!(added.outbound.len(), 2);
         assert!(matches!(
@@ -6507,19 +6528,13 @@ mod tests {
         let Some(DeferredWork::ResourceRequest {
             request_id,
             session_id,
-            method,
-            params,
+            command,
         }) = deferred
         else {
             return;
         };
         let read = server
-            .execute_resource_request(
-                request_id.clone(),
-                session_id.clone(),
-                method.clone(),
-                params.clone(),
-            )
+            .execute_resource_request(request_id.clone(), session_id.clone(), command.clone())
             .await;
         assert!(matches!(
             decode_frame(&read.outbound[0]).expect("canonical state"),

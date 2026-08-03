@@ -26,7 +26,11 @@ use vibe_app_server::client::{
     ProgrammaticTurn, ProgrammaticUpdate, PublicTurnStopReason, SessionOptions, TurnDriver,
     programmatic_update_channel,
 };
+use vibe_app_server::release3::Release3Service;
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
+use vibe_app_server::resources::{
+    CoreResourceBackend, MistralConnectorClient, production_mcp_adapters,
+};
 use vibe_app_server::server::AppServer;
 use vibe_core::telemetry::{
     ReqwestTelemetryTransport, TelemetryAttributes, TelemetryClient, TelemetryConfig,
@@ -358,20 +362,39 @@ where
 }
 
 fn production_server(arguments: &Arguments) -> Result<AppServer, CliError> {
-    if !arguments.teleport {
-        return Ok(AppServer::default());
-    }
+    let release3 = Release3Service::default();
     let credential = std::env::var(&arguments.credential_environment).map_err(|_| {
-        CliError::Teleport(format!(
-            "credential environment `{}` is unavailable",
-            arguments.credential_environment
-        ))
+        vibe_app_server::client::DriverError::MissingCredentialEnvironment(
+            arguments.credential_environment.clone(),
+        )
     })?;
+    let connector = Arc::new(
+        MistralConnectorClient::new(&arguments.api_base, credential.clone())
+            .map_err(|error| CliError::Terminal(error.to_string()))?,
+    );
+    let (mcp_factory, mcp_auth) =
+        production_mcp_adapters().map_err(|error| CliError::Terminal(error.to_string()))?;
+    let resource_backend = CoreResourceBackend::default()
+        .with_config(release3.layered_config())
+        .with_mcp_factory(mcp_factory)
+        .with_mcp_auth(mcp_auth)
+        .with_connector_catalog(
+            connector.clone(),
+            connector.clone(),
+            arguments.credential_environment.clone(),
+            connector.base_url(),
+        )
+        .with_connector_auth(connector);
+    let server = AppServer::with_resource_backend(Arc::new(resource_backend))
+        .using_release3_service(release3);
+    if !arguments.teleport {
+        return Ok(server);
+    }
     let config = VibeCodeCloudConfig::from_credential(credential)
         .map_err(|error| CliError::Teleport(error.to_string()))?;
     let release4 = Release4Service::production(config)
         .map_err(|error| CliError::Teleport(error.to_string()))?;
-    Ok(AppServer::default().using_release4_service(release4))
+    Ok(server.using_release4_service(release4))
 }
 
 fn validate_arguments(arguments: &Arguments) -> Result<(), CliError> {

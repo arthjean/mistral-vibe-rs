@@ -110,6 +110,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
             session_id: "session-1".to_owned(),
             generation: 1,
             working_directory: temporary.path().to_string_lossy().into_owned(),
+            project_trusted: true,
             policy,
             tools: tools.clone(),
         })

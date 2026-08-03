@@ -1,6 +1,7 @@
 use super::*;
 use crate::release3::Release3Dispatch;
 use crate::session_lifecycle::{DeleteSessionError, delete_session_transactionally};
+use std::path::PathBuf;
 use vibe_core::workspace::{RestoreTransaction, WorkspaceError};
 
 pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest) -> DispatchBatch {
@@ -17,11 +18,34 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
             Ok(rewind) => rewind,
             Err(batch) => return batch,
         };
+    let config_scope = request
+        .method
+        .starts_with("config/")
+        .then(|| {
+            target_session_id.as_deref().and_then(|session_id| {
+                connection.server.lock_sessions().ok().and_then(|sessions| {
+                    session_by_id_or_alias(&sessions, session_id).map(|session| {
+                        (
+                            PathBuf::from(&session.working_directory),
+                            session.intent.trusted,
+                        )
+                    })
+                })
+            })
+        })
+        .flatten();
     let dispatched = if request.method == "session/rewind" {
         connection
             .server
             .release3
             .rewind_after_workspace_restore(&request.params)
+    } else if let Some((working_directory, project_trusted)) = config_scope {
+        connection.server.release3.dispatch_scoped(
+            &request.method,
+            &request.params,
+            working_directory,
+            project_trusted,
+        )
     } else {
         connection
             .server
