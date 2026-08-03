@@ -38,6 +38,16 @@ impl ToolOutputSink {
         }
     }
 
+    #[must_use]
+    pub fn discard(max_output_bytes: usize) -> Self {
+        Self::new(None, max_output_bytes)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_streaming(stream: ToolStreamSink, max_output_bytes: usize) -> Self {
+        Self::new(Some(stream), max_output_bytes)
+    }
+
     pub fn emit(&self, chunk: impl Into<String>) -> Result<(), ToolError> {
         let chunk = chunk.into();
         let chunk_bytes = u64::try_from(chunk.len()).unwrap_or(u64::MAX);
@@ -304,6 +314,30 @@ impl ToolRegistry {
             return Ok(false);
         }
         registered.spec.availability = availability;
+        Ok(true)
+    }
+
+    pub fn set_availabilities(
+        &self,
+        source: ToolSource,
+        updates: &[(String, ToolAvailability)],
+    ) -> Result<bool, ToolError> {
+        let mut tools = self
+            .tools
+            .write()
+            .map_err(|_| ToolError::RegistryPoisoned)?;
+        if updates.iter().any(|(name, _)| {
+            tools
+                .get(name)
+                .is_none_or(|registered| registered.spec.source != source)
+        }) {
+            return Ok(false);
+        }
+        for (name, availability) in updates {
+            if let Some(registered) = tools.get_mut(name) {
+                registered.spec.availability = *availability;
+            }
+        }
         Ok(true)
     }
 
