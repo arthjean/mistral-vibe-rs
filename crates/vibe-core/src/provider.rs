@@ -1607,14 +1607,7 @@ fn validate_provider_endpoint(endpoint: &str) -> Result<(), ProviderError> {
             "provider endpoint must not contain credentials".to_owned(),
         ));
     }
-    let loopback_http = parsed.scheme() == "http"
-        && parsed.host_str().is_some_and(|host| {
-            host == "localhost"
-                || host
-                    .parse::<std::net::IpAddr>()
-                    .is_ok_and(|ip| ip.is_loopback())
-        });
-    if parsed.scheme() != "https" && !loopback_http {
+    if !crate::text::is_secure_transport(&parsed) {
         return Err(ProviderError::InvalidRequest(
             "provider endpoint must use HTTPS unless it is loopback".to_owned(),
         ));

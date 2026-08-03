@@ -38,49 +38,6 @@ struct ContinuityState {
     aliases: BTreeSet<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NotificationOutcome {
-    Applied,
-    Duplicate,
-    Gap { expected: u64, actual: u64 },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NotificationReducer {
-    watermark: u64,
-}
-
-impl NotificationReducer {
-    #[must_use]
-    pub const fn new(watermark: u64) -> Self {
-        Self { watermark }
-    }
-
-    #[must_use]
-    pub const fn watermark(&self) -> u64 {
-        self.watermark
-    }
-
-    pub fn apply(&mut self, event_id: u64) -> NotificationOutcome {
-        if event_id <= self.watermark {
-            return NotificationOutcome::Duplicate;
-        }
-        let expected = self.watermark.saturating_add(1);
-        if event_id != expected {
-            return NotificationOutcome::Gap {
-                expected,
-                actual: event_id,
-            };
-        }
-        self.watermark = event_id;
-        NotificationOutcome::Applied
-    }
-
-    pub fn resync(&mut self, snapshot_watermark: u64) {
-        self.watermark = snapshot_watermark;
-    }
-}
-
 #[derive(Clone)]
 pub struct SessionContinuity {
     store: SessionStore,
@@ -330,10 +287,6 @@ impl SessionContinuity {
         self.rewind(selector, 0, BTreeMap::new(), now_ms)
     }
 
-    pub fn stale_interrupt_target(&self, selector: &str) -> Result<String, ContinuityError> {
-        Ok(self.snapshot(selector)?.session_id)
-    }
-
     fn find_snapshot(&self, selector: &str) -> Result<Option<ContinuitySnapshot>, ContinuityError> {
         let sessions = self.lock_sessions()?;
         Ok(find_state(&sessions, selector).map(|state| state.snapshot.clone()))
@@ -528,8 +481,9 @@ mod tests {
         assert!(handoff.resources.contains("terminal-1"));
         assert_eq!(
             continuity
-                .stale_interrupt_target("root-session")
-                .expect("old alias routes"),
+                .snapshot("root-session")
+                .expect("old alias still resolves")
+                .session_id,
             "next-session"
         );
         assert!(
@@ -544,22 +498,6 @@ mod tests {
             .expect("new session reconnects");
         assert!(recovered.completed_operations.contains("operation-1"));
         assert_eq!(recovered.watermark, 1);
-    }
-
-    #[test]
-    fn duplicate_and_gap_reduction_requires_snapshot_resync() {
-        let mut reducer = NotificationReducer::new(4);
-        assert_eq!(reducer.apply(4), NotificationOutcome::Duplicate);
-        assert_eq!(
-            reducer.apply(6),
-            NotificationOutcome::Gap {
-                expected: 5,
-                actual: 6
-            }
-        );
-        assert_eq!(reducer.watermark(), 4);
-        reducer.resync(6);
-        assert_eq!(reducer.apply(7), NotificationOutcome::Applied);
     }
 
     #[test]
@@ -599,25 +537,6 @@ mod tests {
             .expect("durable reconnect");
         assert_eq!(reconnected.watermark, 1);
         assert!(reconnected.completed_operations.contains("same-operation"));
-    }
-
-    #[test]
-    fn ten_thousand_fault_schedules_never_duplicate_or_advance_across_a_gap() {
-        for schedule in 0_u64..10_000 {
-            let baseline = schedule % 17;
-            let mut reducer = NotificationReducer::new(baseline);
-            assert_eq!(reducer.apply(baseline), NotificationOutcome::Duplicate);
-            assert!(matches!(
-                reducer.apply(baseline.saturating_add(2)),
-                NotificationOutcome::Gap { .. }
-            ));
-            assert_eq!(reducer.watermark(), baseline);
-            reducer.resync(baseline.saturating_add(2));
-            assert_eq!(
-                reducer.apply(baseline.saturating_add(3)),
-                NotificationOutcome::Applied
-            );
-        }
     }
 
     #[test]

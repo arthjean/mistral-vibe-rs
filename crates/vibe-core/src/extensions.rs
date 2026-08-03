@@ -16,9 +16,11 @@ use tokio::process::Command;
 use tokio::time::timeout;
 use toml::Table;
 
+use crate::atomic_file::write_atomically;
 use crate::engine::CancellationToken;
 use crate::policy::{PermissionMode, PermissionRule};
 use crate::storage::{SessionStore, StorageError};
+use crate::text::{bounded_utf8, matches_wildcard, truncate_utf8};
 
 const MAX_EXTENSION_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_HOOK_OUTPUT_BYTES: usize = 1024 * 1024;
@@ -26,7 +28,6 @@ const MAX_DELEGATION_RESULT_BYTES: usize = 64 * 1024;
 const MAX_DELEGATION_DEPTH: u8 = 3;
 const MAX_DELEGATION_DURATION: Duration = Duration::from_secs(60);
 const MAX_CHILD_ID_ATTEMPTS: usize = 1024;
-static INSTALL_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static CHILD_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -882,15 +883,13 @@ impl AgentRegistry {
             source,
         })?;
         let destination = self.user_directory.join(format!("{}.toml", profile.name));
-        let sequence = INSTALL_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let temporary = self.user_directory.join(format!(".agent-{sequence}.tmp"));
-        fs::copy(source, &temporary).map_err(|source| ExtensionError::Io {
-            path: temporary.clone(),
-            source,
+        let contents = fs::read(source).map_err(|error| ExtensionError::Io {
+            path: source.to_path_buf(),
+            source: error,
         })?;
-        fs::rename(&temporary, &destination).map_err(|source| ExtensionError::Io {
-            path: destination.clone(),
-            source,
+        write_atomically(&destination, "agent", &contents).map_err(|error| ExtensionError::Io {
+            path: error.path,
+            source: error.source,
         })?;
         let installed = parse_agent(&destination, ExtensionSource::User)?;
         self.agents
@@ -928,7 +927,14 @@ impl AgentRegistry {
         })?;
         self.agents.remove(name);
         if self.active == name {
-            self.active = "default".to_owned();
+            // `new` guarantees the active agent exists; keep that invariant by
+            // falling back to a profile that is actually registered.
+            self.active = self
+                .agents
+                .values()
+                .find(|profile| profile.kind == AgentKind::Agent)
+                .map(|profile| profile.name.clone())
+                .ok_or_else(|| ExtensionError::MissingAgent("default".to_owned()))?;
         }
         Ok(())
     }
@@ -1002,7 +1008,7 @@ impl HookManager {
                     invocation
                         .tool_name
                         .as_deref()
-                        .is_some_and(|name| wildcard_match(name, matcher))
+                        .is_some_and(|name| matches_wildcard(matcher, name))
                 })
         }) {
             let mut attempt = 0_u8;
@@ -1159,7 +1165,7 @@ async fn execute_hook(
         return Err(ExtensionError::HookFailed {
             name: hook.name.clone(),
             status: status.code(),
-            stderr: bounded_utf8(&stderr),
+            stderr: bounded_stderr(&stderr),
         });
     }
     if stdout.iter().all(u8::is_ascii_whitespace) {
@@ -1233,8 +1239,8 @@ async fn drain_bounded(
     Ok((retained, truncated))
 }
 
-fn bounded_utf8(bytes: &[u8]) -> String {
-    String::from_utf8_lossy(bytes).chars().take(1024).collect()
+fn bounded_stderr(bytes: &[u8]) -> String {
+    truncate_utf8(&String::from_utf8_lossy(bytes), 1024).to_owned()
 }
 
 pub type SubagentFuture<'a> = Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>>;
@@ -1407,8 +1413,14 @@ impl SubagentManager {
                 self.runner.run(context, cancellation.clone()),
             ) => {
                 match outcome {
-                    Ok(Ok(result)) => (DelegationStatus::Completed, bounded_result(&result)),
-                    Ok(Err(error)) => (DelegationStatus::Failed, bounded_result(&error)),
+                    Ok(Ok(result)) => (
+                        DelegationStatus::Completed,
+                        bounded_utf8(&result, MAX_DELEGATION_RESULT_BYTES, "…[truncated]"),
+                    ),
+                    Ok(Err(error)) => (
+                        DelegationStatus::Failed,
+                        bounded_utf8(&error, MAX_DELEGATION_RESULT_BYTES, "…[truncated]"),
+                    ),
                     Err(_) => {
                         cancellation.cancel();
                         (DelegationStatus::Failed, "Subagent timed out".to_owned())
@@ -1416,7 +1428,12 @@ impl SubagentManager {
                 }
             }
         };
-        finalizer.finish().await?;
+        // Closing the child session is cleanup: its failure is reported with the
+        // outcome rather than discarding work the subagent already completed.
+        let result = match finalizer.finish().await {
+            Ok(()) => result,
+            Err(error) => format!("{result}\n\n[child session cleanup failed: {error}]"),
+        };
         Ok(DelegationEffect {
             parent_session_id: request.parent_session_id,
             child_session_id: child_session_id.clone(),
@@ -1511,17 +1528,6 @@ impl Drop for DelegationFinalizer {
     }
 }
 
-fn bounded_result(result: &str) -> String {
-    if result.len() <= MAX_DELEGATION_RESULT_BYTES {
-        return result.to_owned();
-    }
-    let mut boundary = MAX_DELEGATION_RESULT_BYTES;
-    while !result.is_char_boundary(boundary) {
-        boundary = boundary.saturating_sub(1);
-    }
-    format!("{}…[truncated]", &result[..boundary])
-}
-
 fn sorted_files(
     directory: &Path,
     extension: &str,
@@ -1600,16 +1606,6 @@ const fn source_priority(source: ExtensionSource) -> u8 {
         ExtensionSource::Configured => 1,
         ExtensionSource::Project => 2,
         ExtensionSource::User => 3,
-    }
-}
-
-fn wildcard_match(value: &str, pattern: &str) -> bool {
-    if pattern == "*" {
-        return true;
-    }
-    match pattern.split_once('*') {
-        Some((prefix, suffix)) => value.starts_with(prefix) && value.ends_with(suffix),
-        None => value == pattern,
     }
 }
 

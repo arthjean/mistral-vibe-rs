@@ -10,9 +10,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 use url::Url;
 
-use crate::tools::{
-    OwnedToolHandlerFuture, ToolError, ToolHandler, ToolInvocation, ToolOutputSink,
-};
+use crate::tools::{ToolError, ToolHandler, ToolInvocation, ToolOutputSink};
 
 pub type ApprovalFuture<'a> =
     Pin<Box<dyn Future<Output = Result<ApprovalDecision, PolicyError>> + Send + 'a>>;
@@ -169,7 +167,7 @@ impl ToolHandler for PolicyGuardedTool {
         let approval = self.approval.clone();
         let requirements = self.requirements.clone();
         let inner = self.inner.clone();
-        let future: OwnedToolHandlerFuture = Box::pin(async move {
+        Box::pin(async move {
             let requirements = requirements(&invocation)?;
             let lease = store
                 .authorize(
@@ -180,14 +178,16 @@ impl ToolHandler for PolicyGuardedTool {
                 )
                 .await
                 .map_err(|error| ToolError::Execution(error.to_string()))?;
+            // The read guard is held across the side effect on purpose: it is
+            // what makes revocation atomic. `revoke_trust` needs the write lock,
+            // so it cannot land between this revalidation and the effect it
+            // authorizes, and any waiting revocation applies to the next call.
             let state = store.state.read().await;
             lease
                 .revalidate_locked(&state)
-                .await
                 .map_err(|error| ToolError::Execution(error.to_string()))?;
             inner.invoke(&invocation, output).await
-        });
-        future
+        })
     }
 }
 
@@ -198,11 +198,45 @@ struct TrustRoot {
     kind: TrustRootKind,
 }
 
+impl TrustRoot {
+    /// Resolves `path` to the canonical root a trust decision applies to.
+    fn resolve(
+        path: &Path,
+        decision: TrustDecision,
+        kind: TrustRootKind,
+    ) -> Result<Self, PolicyError> {
+        let canonical_path = canonicalize_for_policy(path)?;
+        if canonical_path.parent().is_none() {
+            return Err(PolicyError::UnsafeTrustRoot(canonical_path));
+        }
+        Ok(Self {
+            canonical_path,
+            decision,
+            kind,
+        })
+    }
+}
+
 #[derive(Debug, Default)]
 struct PolicyState {
     revision: u64,
     rules: Vec<PermissionRule>,
     roots: BTreeMap<PathBuf, TrustRoot>,
+}
+
+impl PolicyState {
+    fn insert_root(&mut self, root: TrustRoot) {
+        self.roots.insert(root.canonical_path.clone(), root);
+        self.revision = self.revision.saturating_add(1);
+    }
+
+    /// The most specific trust root covering `canonical`, if any.
+    fn closest_root(&self, canonical: &Path) -> Option<&TrustRoot> {
+        self.roots
+            .values()
+            .filter(|root| canonical.starts_with(&root.canonical_path))
+            .max_by_key(|root| root.canonical_path.components().count())
+    }
 }
 
 #[derive(Clone, Default, Debug)]
@@ -238,51 +272,23 @@ impl PermissionStore {
         decision: TrustDecision,
         kind: TrustRootKind,
     ) -> Result<(), PolicyError> {
-        let canonical_path =
-            std::fs::canonicalize(path.as_ref()).map_err(|source| PolicyError::PathResolution {
-                path: path.as_ref().to_path_buf(),
-                source,
-            })?;
-        if canonical_path.parent().is_none() {
-            return Err(PolicyError::UnsafeTrustRoot(canonical_path));
-        }
-        let mut state = self.state.write().await;
-        state.roots.insert(
-            canonical_path.clone(),
-            TrustRoot {
-                canonical_path,
-                decision,
-                kind,
-            },
-        );
-        state.revision = state.revision.saturating_add(1);
+        let root = TrustRoot::resolve(path.as_ref(), decision, kind)?;
+        self.state.write().await.insert_root(root);
         Ok(())
     }
 
+    /// Non-blocking [`PermissionStore::set_trust`], for callers holding a lock.
     pub fn try_set_trust(
         &self,
         path: impl AsRef<Path>,
         decision: TrustDecision,
         kind: TrustRootKind,
     ) -> Result<(), PolicyError> {
-        let canonical_path =
-            std::fs::canonicalize(path.as_ref()).map_err(|source| PolicyError::PathResolution {
-                path: path.as_ref().to_path_buf(),
-                source,
-            })?;
-        if canonical_path.parent().is_none() {
-            return Err(PolicyError::UnsafeTrustRoot(canonical_path));
-        }
-        let mut state = self.state.try_write().map_err(|_| PolicyError::Busy)?;
-        state.roots.insert(
-            canonical_path.clone(),
-            TrustRoot {
-                canonical_path,
-                decision,
-                kind,
-            },
-        );
-        state.revision = state.revision.saturating_add(1);
+        let root = TrustRoot::resolve(path.as_ref(), decision, kind)?;
+        self.state
+            .try_write()
+            .map_err(|_| PolicyError::Busy)?
+            .insert_root(root);
         Ok(())
     }
 
@@ -290,36 +296,22 @@ impl PermissionStore {
         &self,
         path: impl AsRef<Path>,
     ) -> Result<Option<TrustDecision>, PolicyError> {
-        let canonical_path =
-            std::fs::canonicalize(path.as_ref()).map_err(|source| PolicyError::PathResolution {
-                path: path.as_ref().to_path_buf(),
-                source,
-            })?;
-        let state = self.state.try_read().map_err(|_| PolicyError::Busy)?;
-        Ok(state
-            .roots
-            .values()
-            .filter(|root| canonical_path.starts_with(&root.canonical_path))
-            .max_by_key(|root| root.canonical_path.components().count())
+        let canonical_path = canonicalize_for_policy(path.as_ref())?;
+        Ok(self
+            .state
+            .try_read()
+            .map_err(|_| PolicyError::Busy)?
+            .closest_root(&canonical_path)
             .map(|root| root.decision))
     }
 
     pub async fn revoke_trust(&self, path: impl AsRef<Path>) -> Result<(), PolicyError> {
-        let canonical_path =
-            std::fs::canonicalize(path.as_ref()).map_err(|source| PolicyError::PathResolution {
-                path: path.as_ref().to_path_buf(),
-                source,
-            })?;
-        let mut state = self.state.write().await;
-        state.roots.insert(
-            canonical_path.clone(),
-            TrustRoot {
-                canonical_path,
-                decision: TrustDecision::Untrusted,
-                kind: TrustRootKind::Workspace,
-            },
-        );
-        state.revision = state.revision.saturating_add(1);
+        let root = TrustRoot::resolve(
+            path.as_ref(),
+            TrustDecision::Untrusted,
+            TrustRootKind::Workspace,
+        )?;
+        self.state.write().await.insert_root(root);
         Ok(())
     }
 
@@ -436,10 +428,14 @@ pub struct PolicyLease {
 impl PolicyLease {
     pub async fn revalidate(&self) -> Result<(), PolicyError> {
         let state = self.store.state.read().await;
-        self.revalidate_locked(&state).await
+        self.revalidate_locked(&state)
     }
 
-    async fn revalidate_locked(&self, state: &PolicyState) -> Result<(), PolicyError> {
+    /// Revalidates against a state the caller already holds a guard on.
+    ///
+    /// Callers that must keep policy frozen across a side effect hold the read
+    /// guard themselves and use this rather than [`Self::revalidate`].
+    fn revalidate_locked(&self, state: &PolicyState) -> Result<(), PolicyError> {
         if state.revision == self.revision {
             return Ok(());
         }
@@ -547,12 +543,7 @@ fn resolve_path(
     requested: &Path,
 ) -> Result<(PermissionMode, String), PolicyError> {
     let canonical = canonicalize_for_policy(requested)?;
-    let closest = state
-        .roots
-        .values()
-        .filter(|root| canonical.starts_with(&root.canonical_path))
-        .max_by_key(|root| root.canonical_path.components().count());
-    Ok(match closest {
+    Ok(match state.closest_root(&canonical) {
         Some(root) if root.decision == TrustDecision::Untrusted => (
             PermissionMode::Never,
             format!(

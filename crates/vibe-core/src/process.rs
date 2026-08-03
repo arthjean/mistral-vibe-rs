@@ -1,8 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::pin::Pin;
-use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
@@ -16,21 +15,12 @@ use tokio::process::{ChildStdin, Command};
 use tokio::sync::{Mutex, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 
-#[cfg(windows)]
-use command_group::{AsyncCommandGroup, AsyncGroupChild};
-#[cfg(not(windows))]
-use tokio::process::Child;
-
+use crate::child::{ChildGroup, Rung, TerminationError};
 use crate::workspace::{GitInspector, GitInspectorFuture, GitState, WorkspaceError};
 
 const DEFAULT_QUEUE_CAPACITY: usize = 128;
 const DEFAULT_MAX_OUTPUT_BYTES: usize = 1_048_576;
 const DEFAULT_CLEANUP_GRACE: Duration = Duration::from_secs(2);
-
-#[cfg(windows)]
-type ManagedChild = AsyncGroupChild;
-#[cfg(not(windows))]
-type ManagedChild = Child;
 
 pub type ToolIoFuture<'a> = Pin<Box<dyn Future<Output = Result<Value, ToolIoError>> + Send + 'a>>;
 
@@ -99,12 +89,11 @@ pub struct ProcessRead {
 
 struct ManagedProcess {
     id: String,
-    child: Mutex<ManagedChild>,
+    child: Mutex<ChildGroup>,
     stdin: Mutex<Option<ChildStdin>>,
     chunks: Mutex<mpsc::Receiver<ProcessChunk>>,
     readers: Mutex<Vec<JoinHandle<()>>>,
     state: Mutex<TerminalState>,
-    process_group: Option<i32>,
     output_dropped: Arc<AtomicBool>,
 }
 
@@ -142,55 +131,15 @@ impl TerminalManager {
         command
             .args(&spec.arguments)
             .current_dir(&spec.working_directory)
-            .envs(&spec.environment)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        #[cfg(unix)]
-        command.process_group(0);
-        #[cfg(not(windows))]
-        let mut child = command.spawn().map_err(|source| ProcessError::Spawn {
-            program: spec.program.clone(),
-            source,
-        })?;
-        #[cfg(windows)]
-        let mut child = {
-            let mut group = command.group();
-            group.kill_on_drop(true);
-            group.spawn().map_err(|source| ProcessError::Spawn {
+            .envs(&spec.environment);
+        let (child, pipes) =
+            ChildGroup::spawn(&mut command).map_err(|source| ProcessError::Spawn {
                 program: spec.program.clone(),
                 source,
-            })?
-        };
-        let process_group = child.id().and_then(|id| i32::try_from(id).ok());
-        #[cfg(not(windows))]
-        let stdin = child.stdin.take();
-        #[cfg(not(windows))]
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or(ProcessError::MissingPipe("stdout"))?;
-        #[cfg(not(windows))]
-        let stderr = child
-            .stderr
-            .take()
-            .ok_or(ProcessError::MissingPipe("stderr"))?;
-        #[cfg(windows)]
-        let (stdin, stdout, stderr) = {
-            let child = child.inner();
-            (
-                child.stdin.take(),
-                child
-                    .stdout
-                    .take()
-                    .ok_or(ProcessError::MissingPipe("stdout"))?,
-                child
-                    .stderr
-                    .take()
-                    .ok_or(ProcessError::MissingPipe("stderr"))?,
-            )
-        };
+            })?;
+        let stdin = pipes.stdin;
+        let stdout = pipes.stdout.ok_or(ProcessError::MissingPipe("stdout"))?;
+        let stderr = pipes.stderr.ok_or(ProcessError::MissingPipe("stderr"))?;
         let terminal_sequence = self.next_terminal.fetch_add(1, Ordering::Relaxed);
         let terminal_id = format!("terminal-{terminal_sequence}");
         let (sender, receiver) = mpsc::channel(spec.queue_capacity.max(1));
@@ -224,7 +173,6 @@ impl TerminalManager {
             chunks: Mutex::new(receiver),
             readers: Mutex::new(readers),
             state: Mutex::new(TerminalState::Running),
-            process_group,
             output_dropped,
         });
         self.processes
@@ -311,45 +259,34 @@ impl TerminalManager {
         if process.state.lock().await.is_terminal() {
             return self.read(terminal_id).await;
         }
-        self.signal_graceful(&process)?;
-        let graceful = {
-            let mut child = process.child.lock().await;
-            tokio::time::timeout(self.cleanup_grace, child.wait()).await
-        };
-        let status = match graceful {
-            Ok(Ok(status)) => status,
-            Ok(Err(source)) => {
-                *process.state.lock().await = TerminalState::Running;
-                return Err(ProcessError::Io {
-                    terminal_id: terminal_id.to_owned(),
-                    source,
-                });
-            }
-            Err(_) => {
-                self.signal_force(&process)?;
-                let mut child = process.child.lock().await;
-                match tokio::time::timeout(self.cleanup_grace, child.wait()).await {
-                    Ok(Ok(status)) => status,
-                    Ok(Err(source)) => {
-                        *process.state.lock().await = TerminalState::Running;
-                        return Err(ProcessError::Io {
-                            terminal_id: terminal_id.to_owned(),
-                            source,
-                        });
-                    }
-                    Err(_) => {
-                        *process.state.lock().await = TerminalState::Running;
-                        return Err(ProcessError::CleanupDeadline(terminal_id.to_owned()));
-                    }
-                }
-            }
-        };
-        self.terminate_remaining_group(&process, true).await?;
+        self.interrupt_running(&process).await?;
+        self.join_readers(&process).await;
+        self.read(terminal_id).await
+    }
+
+    /// Signals a live process group and records the resulting exit status.
+    ///
+    /// The state stays `Running` on failure so a caller can retry rather than
+    /// observe a terminal state for a process that is still alive.
+    async fn interrupt_running(&self, process: &ManagedProcess) -> Result<(), ProcessError> {
+        let status = process
+            .child
+            .lock()
+            .await
+            .shut_down(self.cleanup_grace, Rung::Terminate)
+            .await
+            .map_err(|error| process.termination_error(error))?;
+        process
+            .child
+            .lock()
+            .await
+            .reap_group(self.cleanup_grace, true)
+            .await
+            .map_err(|error| process.termination_error(error))?;
         *process.state.lock().await = TerminalState::Interrupted {
             code: status.code(),
         };
-        self.join_readers(&process).await;
-        self.read(terminal_id).await
+        Ok(())
     }
 
     pub async fn release(&self, terminal_id: &str) -> Result<(), ProcessError> {
@@ -358,7 +295,13 @@ impl TerminalManager {
         if !process.state.lock().await.is_terminal() {
             return Err(ProcessError::NotRunning(terminal_id.to_owned()));
         }
-        self.terminate_remaining_group(&process, false).await?;
+        process
+            .child
+            .lock()
+            .await
+            .reap_group(self.cleanup_grace, false)
+            .await
+            .map_err(|error| process.termination_error(error))?;
         self.join_readers(&process).await;
         self.processes.lock().await.remove(terminal_id);
         Ok(())
@@ -406,119 +349,18 @@ impl TerminalManager {
     ) -> Result<ProcessRead, ProcessError> {
         let was_running = !process.state.lock().await.is_terminal();
         if was_running {
-            self.signal_graceful(&process)?;
-            let graceful = {
-                let mut child = process.child.lock().await;
-                tokio::time::timeout(self.cleanup_grace, child.wait()).await
-            };
-            let status = match graceful {
-                Ok(Ok(status)) => status,
-                Ok(Err(source)) => {
-                    *process.state.lock().await = TerminalState::Running;
-                    return Err(ProcessError::Io {
-                        terminal_id: process.id.clone(),
-                        source,
-                    });
-                }
-                Err(_) => {
-                    self.signal_force(&process)?;
-                    let mut child = process.child.lock().await;
-                    match tokio::time::timeout(self.cleanup_grace, child.wait()).await {
-                        Ok(Ok(status)) => status,
-                        Ok(Err(source)) => {
-                            *process.state.lock().await = TerminalState::Running;
-                            return Err(ProcessError::Io {
-                                terminal_id: process.id.clone(),
-                                source,
-                            });
-                        }
-                        Err(_) => {
-                            *process.state.lock().await = TerminalState::Running;
-                            return Err(ProcessError::CleanupDeadline(process.id.clone()));
-                        }
-                    }
-                }
-            };
-            *process.state.lock().await = TerminalState::Interrupted {
-                code: status.code(),
-            };
+            self.interrupt_running(&process).await?;
+        } else {
+            process
+                .child
+                .lock()
+                .await
+                .reap_group(self.cleanup_grace, false)
+                .await
+                .map_err(|error| process.termination_error(error))?;
         }
-        self.terminate_remaining_group(&process, was_running)
-            .await?;
         self.join_readers(&process).await;
         self.read(&process.id).await
-    }
-
-    async fn terminate_remaining_group(
-        &self,
-        process: &ManagedProcess,
-        graceful_already_sent: bool,
-    ) -> Result<(), ProcessError> {
-        #[cfg(unix)]
-        {
-            if !self.group_alive(process)? {
-                return Ok(());
-            }
-            if !graceful_already_sent {
-                self.signal_graceful(process)?;
-            }
-            if self.wait_for_group_exit(process).await? {
-                return Ok(());
-            }
-            self.signal_force(process)?;
-            if self.wait_for_group_exit(process).await? {
-                return Ok(());
-            }
-            Err(ProcessError::CleanupDeadline(process.id.clone()))
-        }
-        #[cfg(windows)]
-        {
-            if !graceful_already_sent {
-                self.signal_force(process)?;
-            }
-            let mut child = process.child.lock().await;
-            match tokio::time::timeout(self.cleanup_grace, child.wait()).await {
-                Ok(Ok(_)) => Ok(()),
-                Ok(Err(source)) => Err(ProcessError::Io {
-                    terminal_id: process.id.clone(),
-                    source,
-                }),
-                Err(_) => Err(ProcessError::CleanupDeadline(process.id.clone())),
-            }
-        }
-    }
-
-    #[cfg(unix)]
-    async fn wait_for_group_exit(&self, process: &ManagedProcess) -> Result<bool, ProcessError> {
-        let deadline = tokio::time::Instant::now() + self.cleanup_grace;
-        loop {
-            if !self.group_alive(process)? {
-                return Ok(true);
-            }
-            if tokio::time::Instant::now() >= deadline {
-                return Ok(false);
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    }
-
-    #[cfg(unix)]
-    fn group_alive(&self, process: &ManagedProcess) -> Result<bool, ProcessError> {
-        use nix::errno::Errno;
-        use nix::sys::signal::kill;
-        use nix::unistd::Pid;
-
-        let Some(group) = process.process_group else {
-            return Err(ProcessError::MissingProcessGroup(process.id.clone()));
-        };
-        match kill(Pid::from_raw(-group), None) {
-            Ok(()) | Err(Errno::EPERM) => Ok(true),
-            Err(Errno::ESRCH) => Ok(false),
-            Err(error) => Err(ProcessError::Signal {
-                terminal_id: process.id.clone(),
-                message: error.to_string(),
-            }),
-        }
     }
 
     async fn process(&self, terminal_id: &str) -> Result<Arc<ManagedProcess>, ProcessError> {
@@ -565,78 +407,25 @@ impl TerminalManager {
             }
         }
     }
+}
 
-    #[cfg(unix)]
-    fn signal_graceful(&self, process: &ManagedProcess) -> Result<(), ProcessError> {
-        use nix::errno::Errno;
-        use nix::sys::signal::{Signal, killpg};
-        use nix::unistd::Pid;
-
-        let Some(group) = process.process_group else {
-            return Err(ProcessError::MissingProcessGroup(process.id.clone()));
-        };
-        match killpg(Pid::from_raw(group), Signal::SIGTERM) {
-            Ok(()) | Err(Errno::ESRCH) => Ok(()),
-            Err(error) => Err(ProcessError::Signal {
-                terminal_id: process.id.clone(),
-                message: error.to_string(),
-            }),
+impl ManagedProcess {
+    /// Names the terminal a shutdown failure belongs to.
+    fn termination_error(&self, error: TerminationError) -> ProcessError {
+        match error {
+            TerminationError::Deadline => ProcessError::CleanupDeadline(self.id.clone()),
+            TerminationError::Signal(message) | TerminationError::Wait(message) => {
+                ProcessError::Signal {
+                    terminal_id: self.id.clone(),
+                    message,
+                }
+            }
         }
-    }
-
-    #[cfg(windows)]
-    fn signal_graceful(&self, process: &ManagedProcess) -> Result<(), ProcessError> {
-        process
-            .child
-            .try_lock()
-            .map_err(|_| ProcessError::Signal {
-                terminal_id: process.id.clone(),
-                message: "child process is busy".to_owned(),
-            })?
-            .start_kill()
-            .map_err(|error| ProcessError::Signal {
-                terminal_id: process.id.clone(),
-                message: error.to_string(),
-            })
-    }
-
-    #[cfg(unix)]
-    fn signal_force(&self, process: &ManagedProcess) -> Result<(), ProcessError> {
-        use nix::errno::Errno;
-        use nix::sys::signal::{Signal, killpg};
-        use nix::unistd::Pid;
-
-        let Some(group) = process.process_group else {
-            return Err(ProcessError::MissingProcessGroup(process.id.clone()));
-        };
-        match killpg(Pid::from_raw(group), Signal::SIGKILL) {
-            Ok(()) | Err(Errno::ESRCH) => Ok(()),
-            Err(error) => Err(ProcessError::Signal {
-                terminal_id: process.id.clone(),
-                message: error.to_string(),
-            }),
-        }
-    }
-
-    #[cfg(windows)]
-    fn signal_force(&self, process: &ManagedProcess) -> Result<(), ProcessError> {
-        process
-            .child
-            .try_lock()
-            .map_err(|_| ProcessError::Signal {
-                terminal_id: process.id.clone(),
-                message: "child process is busy".to_owned(),
-            })?
-            .start_kill()
-            .map_err(|error| ProcessError::Signal {
-                terminal_id: process.id.clone(),
-                message: error.to_string(),
-            })
     }
 }
 
 impl GitInspector for TerminalManager {
-    fn inspect<'a>(&'a self, root: &'a Path) -> GitInspectorFuture<'a> {
+    fn inspect<'a>(&'a self, root: &'a std::path::Path) -> GitInspectorFuture<'a> {
         Box::pin(async move {
             let mut spec = ProcessSpec::new("git", root);
             spec.arguments = vec![
@@ -649,36 +438,22 @@ impl GitInspector for TerminalManager {
             let terminal_id = self
                 .run(spec)
                 .await
-                .map_err(|error| WorkspaceError::InvalidPattern(error.to_string()))?;
+                .map_err(|error| WorkspaceError::GitInspection(error.to_string()))?;
             let output = self
                 .wait(&terminal_id)
                 .await
-                .map_err(|error| WorkspaceError::InvalidPattern(error.to_string()))?;
+                .map_err(|error| WorkspaceError::GitInspection(error.to_string()))?;
+            let _ = self.release(&terminal_id).await;
             let bytes = output
                 .chunks
                 .iter()
                 .filter(|chunk| chunk.stream == ProcessStream::Stdout)
                 .flat_map(|chunk| chunk.bytes.iter().copied())
                 .collect::<Vec<_>>();
-            let text = String::from_utf8(bytes)
-                .map_err(|_| WorkspaceError::InvalidEncoding(PathBuf::from("git status")))?;
-            let mut lines = text.lines();
-            let header = lines.next().unwrap_or_default();
-            let branch = header
-                .strip_prefix("## ")
-                .and_then(|value| value.split(['.', ' ']).next())
-                .filter(|value| !value.is_empty())
-                .map(str::to_owned);
-            let changed_paths = lines
-                .filter_map(|line| line.get(3..))
-                .map(str::to_owned)
-                .collect();
-            let _ = self.release(&terminal_id).await;
-            Ok(GitState {
-                branch,
-                head: None,
-                changed_paths,
-            })
+            let text = String::from_utf8(bytes).map_err(|_| {
+                WorkspaceError::GitInspection("git status output is not valid UTF-8".to_owned())
+            })?;
+            Ok(GitState::from_porcelain(&text))
         })
     }
 }

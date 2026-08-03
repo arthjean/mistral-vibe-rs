@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use thiserror::Error;
 
 use crate::policy::{ApprovalAgent, PermissionRequirement, PermissionStore, PolicyGuardedTool};
+use crate::text::matches_wildcard;
 use crate::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolError, ToolExecutionOutput,
     ToolHandler, ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource,
@@ -27,6 +28,7 @@ pub use review::{RestoreTransaction, ReviewManager};
 pub const DEFAULT_MAX_READ_BYTES: usize = 1_048_576;
 pub const DEFAULT_MAX_LINES: usize = 2_000;
 pub const DEFAULT_MAX_DISCOVERED_FILES: usize = 10_000;
+const DIFF_CONTEXT_LINES: usize = 3;
 
 pub type GitInspectorFuture<'a> =
     Pin<Box<dyn Future<Output = Result<GitState, WorkspaceError>> + Send + 'a>>;
@@ -43,6 +45,32 @@ pub struct GitState {
     pub changed_paths: Vec<String>,
 }
 
+impl GitState {
+    /// Parses `git status --porcelain=v1 --branch` output.
+    ///
+    /// The first line carries the branch header; every other line is a status
+    /// code followed by a path at a fixed offset.
+    #[must_use]
+    pub fn from_porcelain(output: &str) -> Self {
+        let mut lines = output.lines();
+        let branch = lines
+            .next()
+            .unwrap_or_default()
+            .strip_prefix("## ")
+            .and_then(|value| value.split(['.', ' ']).next())
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
+        Self {
+            branch,
+            head: None,
+            changed_paths: lines
+                .filter_map(|line| line.get(3..))
+                .map(str::to_owned)
+                .collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileRead {
@@ -51,7 +79,9 @@ pub struct FileRead {
     pub numbered_content: String,
     pub start_line: usize,
     pub end_line: usize,
-    pub bytes_read: usize,
+    /// Byte length of `content`, which is the selected line range rather than
+    /// the whole file.
+    pub content_bytes: usize,
     pub truncated: bool,
 }
 
@@ -160,22 +190,19 @@ impl Workspace {
         &self.canonical_root
     }
 
-    pub fn read(
-        &self,
-        path: impl AsRef<Path>,
-        start_line: usize,
-        max_lines: Option<usize>,
-    ) -> Result<FileRead, WorkspaceError> {
-        let relative = self.confined(path.as_ref(), true)?;
+    /// Reads a whole workspace file as text, bounded by the byte budget.
+    ///
+    /// The returned flag reports whether the byte budget cut the file short.
+    fn read_text(&self, relative: &Path) -> Result<(String, bool), WorkspaceError> {
         let mut file = self
             .directory
-            .open(&relative)
+            .open(relative)
             .map_err(|source| WorkspaceError::Io {
-                path: relative.clone(),
+                path: relative.to_path_buf(),
                 source,
             })?;
         let before = file.metadata().map_err(|source| WorkspaceError::Io {
-            path: relative.clone(),
+            path: relative.to_path_buf(),
             source,
         })?;
         let read_limit = u64::try_from(self.max_read_bytes.saturating_add(1))
@@ -185,23 +212,49 @@ impl Workspace {
             .take(read_limit)
             .read_to_end(&mut bytes)
             .map_err(|source| WorkspaceError::Io {
-                path: relative.clone(),
+                path: relative.to_path_buf(),
                 source,
             })?;
         let after = file.metadata().map_err(|source| WorkspaceError::Io {
-            path: relative.clone(),
+            path: relative.to_path_buf(),
             source,
         })?;
         if before.len() != after.len() {
-            return Err(WorkspaceError::ChangedDuringRead(relative));
+            return Err(WorkspaceError::ChangedDuringRead(relative.to_path_buf()));
         }
-        let byte_truncated = bytes.len() > self.max_read_bytes;
+        let truncated = bytes.len() > self.max_read_bytes;
         bytes.truncate(self.max_read_bytes);
         if bytes.contains(&0) {
-            return Err(WorkspaceError::Binary(relative));
+            return Err(WorkspaceError::Binary(relative.to_path_buf()));
         }
-        let content = String::from_utf8(bytes)
-            .map_err(|_| WorkspaceError::InvalidEncoding(relative.clone()))?;
+        let content = match String::from_utf8(bytes) {
+            Ok(content) => content,
+            // The byte budget can land inside a character. Only the tail may be
+            // split that way; an earlier failure is a genuine encoding error.
+            Err(error)
+                if truncated
+                    && error.utf8_error().valid_up_to()
+                        >= self.max_read_bytes.saturating_sub(3) =>
+            {
+                let valid_up_to = error.utf8_error().valid_up_to();
+                let mut bytes = error.into_bytes();
+                bytes.truncate(valid_up_to);
+                String::from_utf8(bytes)
+                    .map_err(|_| WorkspaceError::InvalidEncoding(relative.to_path_buf()))?
+            }
+            Err(_) => return Err(WorkspaceError::InvalidEncoding(relative.to_path_buf())),
+        };
+        Ok((content, truncated))
+    }
+
+    pub fn read(
+        &self,
+        path: impl AsRef<Path>,
+        start_line: usize,
+        max_lines: Option<usize>,
+    ) -> Result<FileRead, WorkspaceError> {
+        let relative = self.confined(path.as_ref(), true)?;
+        let (content, byte_truncated) = self.read_text(&relative)?;
         let start = start_line.max(1);
         let line_limit = max_lines.unwrap_or(self.max_lines).min(self.max_lines);
         let all_lines = content.lines().collect::<Vec<_>>();
@@ -223,7 +276,7 @@ impl Workspace {
             .join("\n");
         Ok(FileRead {
             path: path_display(&relative),
-            bytes_read: selected_content.len(),
+            content_bytes: selected_content.len(),
             content: selected_content,
             numbered_content,
             start_line: start,
@@ -302,12 +355,14 @@ impl Workspace {
             .into_iter()
             .filter(|entry| !entry.is_directory)
         {
-            let read = match self.read(&entry.path, 1, Some(self.max_lines)) {
-                Ok(read) => read,
+            let relative = self.confined(Path::new(&entry.path), true)?;
+            // Search the whole file, not just the first page a reader would get.
+            let content = match self.read_text(&relative) {
+                Ok((content, _)) => content,
                 Err(WorkspaceError::Binary(_) | WorkspaceError::InvalidEncoding(_)) => continue,
                 Err(error) => return Err(error),
             };
-            for (index, line) in read.content.lines().enumerate() {
+            for (index, line) in content.lines().enumerate() {
                 let is_match = compiled.as_ref().map_or_else(
                     || line.contains(pattern),
                     |compiled| compiled.is_match(line),
@@ -739,6 +794,8 @@ pub enum WorkspaceError {
     WriteLimit { actual: usize, limit: usize },
     #[error("invalid search pattern: {0}")]
     InvalidPattern(String),
+    #[error("git inspection failed: {0}")]
+    GitInspection(String),
     #[error("edit is stale in `{path}` because `{needle}` was not found")]
     StaleEdit { path: PathBuf, needle: String },
     #[error("edit in `{path}` matches {matches} locations; set replace_all explicitly")]
@@ -822,43 +879,100 @@ fn edit_spec() -> ToolSpec {
     }
 }
 
+/// Renders a single unified-diff hunk covering the changed span.
+///
+/// Only the lines that actually differ, plus [`DIFF_CONTEXT_LINES`] of context,
+/// reach the model. Emitting whole files would make an one-line edit cost as
+/// much as the file itself.
 fn unified_diff(before: &str, after: &str) -> String {
     if before == after {
         return String::new();
     }
-    let mut lines = vec!["--- before".to_owned(), "+++ after".to_owned()];
-    lines.extend(before.lines().map(|line| format!("-{line}")));
-    lines.extend(after.lines().map(|line| format!("+{line}")));
+    let before_lines = before.lines().collect::<Vec<_>>();
+    let after_lines = after.lines().collect::<Vec<_>>();
+    let shortest = before_lines.len().min(after_lines.len());
+    let prefix = before_lines
+        .iter()
+        .zip(&after_lines)
+        .take_while(|(left, right)| left == right)
+        .count();
+    let suffix = before_lines
+        .iter()
+        .rev()
+        .zip(after_lines.iter().rev())
+        .take_while(|(left, right)| left == right)
+        .count()
+        .min(shortest.saturating_sub(prefix));
+    let context_start = prefix.saturating_sub(DIFF_CONTEXT_LINES);
+    let before_span = context_start
+        ..before_lines
+            .len()
+            .saturating_sub(suffix)
+            .saturating_add(DIFF_CONTEXT_LINES)
+            .min(before_lines.len());
+    let after_span = context_start
+        ..after_lines
+            .len()
+            .saturating_sub(suffix)
+            .saturating_add(DIFF_CONTEXT_LINES)
+            .min(after_lines.len());
+
+    let mut lines = vec![
+        "--- before".to_owned(),
+        "+++ after".to_owned(),
+        format!(
+            "@@ -{},{} +{},{} @@",
+            hunk_start(before_span.start, before_span.len()),
+            before_span.len(),
+            hunk_start(after_span.start, after_span.len()),
+            after_span.len(),
+        ),
+    ];
+    lines.extend(
+        before_lines
+            .get(context_start..prefix)
+            .unwrap_or_default()
+            .iter()
+            .map(|line| format!(" {line}")),
+    );
+    lines.extend(
+        before_lines
+            .get(prefix..before_lines.len().saturating_sub(suffix))
+            .unwrap_or_default()
+            .iter()
+            .map(|line| format!("-{line}")),
+    );
+    lines.extend(
+        after_lines
+            .get(prefix..after_lines.len().saturating_sub(suffix))
+            .unwrap_or_default()
+            .iter()
+            .map(|line| format!("+{line}")),
+    );
+    lines.extend(
+        after_lines
+            .get(after_lines.len().saturating_sub(suffix)..after_span.end)
+            .unwrap_or_default()
+            .iter()
+            .map(|line| format!(" {line}")),
+    );
     lines.join("\n")
+}
+
+const fn hunk_start(start: usize, length: usize) -> usize {
+    if length == 0 {
+        start
+    } else {
+        start.saturating_add(1)
+    }
 }
 
 fn is_ignored(path: &str, patterns: &[String]) -> bool {
     patterns.iter().any(|pattern| {
         path.split('/')
-            .any(|component| wildcard_match(pattern, component))
-            || wildcard_match(pattern, path)
+            .any(|component| matches_wildcard(pattern, component))
+            || matches_wildcard(pattern, path)
     })
-}
-
-fn wildcard_match(pattern: &str, value: &str) -> bool {
-    if !pattern.contains('*') {
-        return pattern == value;
-    }
-    let parts = pattern.split('*').collect::<Vec<_>>();
-    let mut remainder = value;
-    for (index, part) in parts.iter().enumerate() {
-        if part.is_empty() {
-            continue;
-        }
-        let Some(position) = remainder.find(part) else {
-            return false;
-        };
-        if index == 0 && !pattern.starts_with('*') && position != 0 {
-            return false;
-        }
-        remainder = &remainder[position.saturating_add(part.len())..];
-    }
-    pattern.ends_with('*') || remainder.is_empty()
 }
 
 fn path_display(path: &Path) -> String {
@@ -901,6 +1015,57 @@ mod tests {
         let matches = workspace.search("alpha", false, 10).expect("search");
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].path, "visible.txt");
+    }
+
+    #[test]
+    fn search_reaches_past_the_reader_page_limit() {
+        let directory = tempdir().expect("tempdir");
+        let mut content = "filler\n".repeat(DEFAULT_MAX_LINES + 10);
+        content.push_str("needle\n");
+        std::fs::write(directory.path().join("long.txt"), content).expect("long file");
+        let workspace = Workspace::open(directory.path()).expect("workspace");
+
+        let matches = workspace.search("needle", false, 10).expect("search");
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].line, DEFAULT_MAX_LINES + 11);
+    }
+
+    #[test]
+    fn edit_diff_reports_only_the_changed_span() {
+        let directory = tempdir().expect("tempdir");
+        let before = (0..500)
+            .map(|line| format!("line {line}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(directory.path().join("wide.txt"), &before).expect("seed file");
+        let workspace = Arc::new(Workspace::open(directory.path()).expect("workspace"));
+        let review = ReviewManager::new(workspace);
+        review.begin_turn("turn-1").expect("turn");
+
+        let result = review
+            .edit(
+                "wide.txt",
+                &[EditOperation {
+                    old_text: "line 250".to_owned(),
+                    new_text: "line 250 edited".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("edit");
+
+        assert!(result.diff.contains("@@ -248,7 +248,7 @@"));
+        assert!(result.diff.contains("-line 250"));
+        assert!(result.diff.contains("+line 250 edited"));
+        assert_eq!(
+            result
+                .diff
+                .lines()
+                .filter(|line| line.starts_with('-'))
+                .count(),
+            2,
+            "only the changed line and the `--- before` header start with a dash"
+        );
     }
 
     #[test]
