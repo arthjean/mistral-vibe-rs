@@ -1,44 +1,35 @@
 use super::*;
+use crate::text::canonical_url;
 
-pub(super) fn config_array(table: &Table, key: &str) -> Result<Vec<Value>, ConfigError> {
-    match table.get(key) {
+pub(super) fn config_array(
+    table: &Table,
+    collection: IntegrationCollection,
+) -> Result<Vec<Value>, ConfigError> {
+    match table.get(collection.key()) {
         None => Ok(Vec::new()),
         Some(Value::Array(entries)) => Ok(entries.clone()),
-        Some(_) if key == "mcp_servers" => Err(ConfigError::InvalidMcp(
-            "mcp_servers must be an array of tables".to_owned(),
-        )),
-        Some(_) => Err(ConfigError::InvalidIntegration(format!(
-            "{key} must be an array of tables"
-        ))),
+        Some(_) => {
+            Err(collection.invalid(&format!("{} must be an array of tables", collection.key())))
+        }
     }
-}
-
-pub(super) fn selected_config_array(
-    snapshot: &ConfigSnapshot,
-    key: &str,
-) -> Result<Vec<Value>, ConfigError> {
-    snapshot
-        .target_values
-        .get(&snapshot.selected_target)
-        .map_or_else(|| Ok(Vec::new()), |table| config_array(table, key))
 }
 
 pub(super) fn config_array_for_target(
     snapshot: &ConfigSnapshot,
     target: ConfigTarget,
-    key: &str,
+    collection: IntegrationCollection,
 ) -> Result<Vec<Value>, ConfigError> {
     snapshot
         .target_values
         .get(&target)
-        .map_or_else(|| Ok(Vec::new()), |table| config_array(table, key))
+        .map_or_else(|| Ok(Vec::new()), |table| config_array(table, collection))
 }
 
 pub(super) fn preflight_mcp_add(
     table: &Table,
     config: &McpServerConfig,
 ) -> Result<(), ConfigError> {
-    for entry in config_array(table, "mcp_servers")? {
+    for entry in config_array(table, IntegrationCollection::McpServers)? {
         let entry = entry.as_table().ok_or_else(|| {
             ConfigError::InvalidMcp("each mcp_servers entry must be a table".to_owned())
         })?;
@@ -71,12 +62,6 @@ pub(super) fn mcp_transport_url(transport: &McpTransportConfig) -> Option<&Url> 
         McpTransportConfig::StreamableHttp { url, .. } => Some(url),
         McpTransportConfig::Stdio { .. } => None,
     }
-}
-
-pub(super) fn canonical_url(url: &Url) -> String {
-    let mut url = url.clone();
-    url.set_fragment(None);
-    url.to_string().trim_end_matches('/').to_owned()
 }
 
 pub(super) fn mcp_server_value(config: &McpServerConfig) -> Result<Value, ConfigError> {
@@ -212,12 +197,6 @@ pub(super) fn optional_mcp_strings(table: &Table, key: &str) -> Result<Vec<Strin
     }
 }
 
-pub(super) fn optional_mcp_environment(
-    table: &Table,
-) -> Result<BTreeMap<String, String>, ConfigError> {
-    optional_mcp_environment_at(table, "env")
-}
-
 pub(super) fn optional_mcp_environment_at(
     table: &Table,
     key: &str,
@@ -225,10 +204,10 @@ pub(super) fn optional_mcp_environment_at(
     match table.get(key) {
         Some(Value::Table(values)) => values
             .iter()
-            .map(|(key, value)| {
+            .map(|(name, value)| {
                 value
                     .as_str()
-                    .map(|value| (key.clone(), value.to_owned()))
+                    .map(|value| (name.clone(), value.to_owned()))
                     .ok_or_else(|| {
                         ConfigError::InvalidMcp(format!(
                             "MCP server field `{key}` must contain only strings"
@@ -292,13 +271,25 @@ pub(super) fn merge_tables(target: &mut Table, overlay: &Table) {
     }
 }
 
-#[derive(Clone, Copy)]
-enum IntegrationCollection {
+/// A configured collection of external tool providers.
+///
+/// MCP servers and connectors share one persistence shape: an array of tables
+/// keyed by an identity, each carrying `disabled` and `disabled_tools`. The
+/// differences between them live here rather than at every call site.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum IntegrationCollection {
     McpServers,
     Connectors,
 }
 
 impl IntegrationCollection {
+    pub(super) const fn key(self) -> &'static str {
+        match self {
+            Self::McpServers => "mcp_servers",
+            Self::Connectors => "connectors",
+        }
+    }
+
     fn from_key(key: &str) -> Option<Self> {
         match key {
             "mcp_servers" => Some(Self::McpServers),
@@ -307,12 +298,20 @@ impl IntegrationCollection {
         }
     }
 
-    fn identity(self, table: &Table) -> Option<&str> {
+    /// The field an entry is identified by, which connectors allow to be `id`.
+    pub(super) fn identity(self, table: &Table) -> Option<&str> {
         match self {
             Self::McpServers => table.get("name"),
             Self::Connectors => table.get("name").or_else(|| table.get("id")),
         }
         .and_then(Value::as_str)
+    }
+
+    pub(super) fn invalid(self, message: &str) -> ConfigError {
+        match self {
+            Self::McpServers => ConfigError::InvalidMcp(message.to_owned()),
+            Self::Connectors => ConfigError::InvalidIntegration(message.to_owned()),
+        }
     }
 }
 

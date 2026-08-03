@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -11,10 +11,12 @@ use thiserror::Error;
 use toml::{Table, Value};
 use url::Url;
 
+use crate::atomic_file::{self, AtomicWriteError, create_private_file, write_atomically};
 use crate::mcp::{
     DEFAULT_MCP_STARTUP_TIMEOUT_MS, DEFAULT_MCP_TOOL_TIMEOUT_MS, McpServerConfig,
     McpTransportConfig,
 };
+use crate::text::hex_encode;
 
 mod proxy;
 
@@ -177,7 +179,7 @@ impl ConfigSnapshot {
                 "stdio" => {
                     let command = required_mcp_string(table, "command")?.to_owned();
                     let arguments = optional_mcp_strings(table, "args")?;
-                    let environment = optional_mcp_environment(table)?;
+                    let environment = optional_mcp_environment_at(table, "env")?;
                     let working_directory = optional_mcp_string(table, "cwd")?
                         .map(PathBuf::from)
                         .map(|path| {
@@ -235,7 +237,7 @@ impl ConfigSnapshot {
     }
 
     pub fn mcp_aliases(&self) -> Result<BTreeSet<String>, ConfigError> {
-        config_array(&self.effective, "mcp_servers")?
+        config_array(&self.effective, IntegrationCollection::McpServers)?
             .into_iter()
             .map(|entry| {
                 entry
@@ -439,10 +441,6 @@ impl LayeredConfig {
         })
     }
 
-    pub fn reload(&self) -> Result<ConfigSnapshot, ConfigError> {
-        self.load()
-    }
-
     pub fn batch_write(&self, writes: &[ConfigWrite]) -> Result<ConfigSnapshot, ConfigError> {
         if writes.is_empty() {
             return self.load();
@@ -525,9 +523,16 @@ impl LayeredConfig {
     pub fn persist_mcp_add(&self, config: &McpServerConfig) -> Result<ConfigSnapshot, ConfigError> {
         let snapshot = self.load()?;
         preflight_mcp_add(&snapshot.effective, config)?;
-        let mut entries = selected_config_array(&snapshot, "mcp_servers")?;
+        let target = snapshot.selected_target;
+        let mut entries =
+            config_array_for_target(&snapshot, target, IntegrationCollection::McpServers)?;
         entries.push(mcp_server_value(config)?);
-        self.replace_selected_array(&snapshot, "mcp_servers", entries)
+        self.replace_array_cas(
+            target,
+            snapshot.fingerprints.get(&target).cloned().flatten(),
+            IntegrationCollection::McpServers.key(),
+            entries,
+        )
     }
 
     pub fn persist_mcp_state(
@@ -536,10 +541,12 @@ impl LayeredConfig {
         enabled: bool,
         disabled_tools: &BTreeSet<String>,
     ) -> Result<ConfigSnapshot, ConfigError> {
-        let snapshot = self.load()?;
-        let target = snapshot.selected_target;
-        let expected_fingerprint = snapshot.fingerprints[&target].clone();
-        self.persist_mcp_state_cas(alias, enabled, disabled_tools, target, expected_fingerprint)
+        self.persist_integration_state(
+            IntegrationCollection::McpServers,
+            alias,
+            enabled,
+            disabled_tools,
+        )
     }
 
     pub fn persist_mcp_state_cas(
@@ -550,46 +557,93 @@ impl LayeredConfig {
         target: ConfigTarget,
         expected_fingerprint: Option<String>,
     ) -> Result<ConfigSnapshot, ConfigError> {
+        self.persist_integration_state_cas(
+            IntegrationCollection::McpServers,
+            alias,
+            enabled,
+            disabled_tools,
+            target,
+            expected_fingerprint,
+        )
+    }
+
+    /// Persists enablement against the target the snapshot selected.
+    fn persist_integration_state(
+        &self,
+        collection: IntegrationCollection,
+        name: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
         let snapshot = self.load()?;
-        let mut entries = config_array_for_target(&snapshot, target, "mcp_servers")?;
-        if !config_array(&snapshot.effective, "mcp_servers")?
-            .iter()
-            .filter_map(Value::as_table)
-            .any(|entry| entry.get("name").and_then(Value::as_str) == Some(alias))
+        let target = snapshot.selected_target;
+        let expected_fingerprint = snapshot.fingerprints.get(&target).cloned().flatten();
+        self.persist_integration_state_cas(
+            collection,
+            name,
+            enabled,
+            disabled_tools,
+            target,
+            expected_fingerprint,
+        )
+    }
+
+    /// Persists enablement for one entry, failing if the target changed.
+    ///
+    /// The entry is created in the target when it is only present in another
+    /// layer, so disabling a default-provided server writes an explicit record.
+    fn persist_integration_state_cas(
+        &self,
+        collection: IntegrationCollection,
+        name: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+        target: ConfigTarget,
+        expected_fingerprint: Option<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        let snapshot = self.load()?;
+        if collection == IntegrationCollection::McpServers
+            && !config_array(&snapshot.effective, collection)?
+                .iter()
+                .filter_map(Value::as_table)
+                .any(|entry| collection.identity(entry) == Some(name))
         {
-            return Err(ConfigError::InvalidMcp(format!(
-                "unknown MCP server `{alias}`"
-            )));
+            return Err(collection.invalid(&format!("unknown MCP server `{name}`")));
         }
-        let position = entries.iter().position(|entry| {
-            entry
-                .as_table()
-                .and_then(|entry| entry.get("name"))
-                .and_then(Value::as_str)
-                == Some(alias)
-        });
-        let position = position.unwrap_or_else(|| {
-            let mut entry = Table::new();
-            entry.insert("name".to_owned(), Value::String(alias.to_owned()));
-            entries.push(Value::Table(entry));
-            entries.len() - 1
-        });
-        let entry = entries[position].as_table_mut().ok_or_else(|| {
-            ConfigError::InvalidMcp("selected MCP entry must be a table".to_owned())
-        })?;
+        let mut entries = config_array_for_target(&snapshot, target, collection)?;
+        let position = entries
+            .iter()
+            .position(|entry| {
+                entry
+                    .as_table()
+                    .and_then(|entry| collection.identity(entry))
+                    == Some(name)
+            })
+            .unwrap_or_else(|| {
+                let mut entry = Table::new();
+                entry.insert("name".to_owned(), Value::String(name.to_owned()));
+                entries.push(Value::Table(entry));
+                entries.len().saturating_sub(1)
+            });
+        let entry = entries
+            .get_mut(position)
+            .and_then(Value::as_table_mut)
+            .ok_or_else(|| {
+                collection.invalid(&format!("{} entry must be a table", collection.key()))
+            })?;
         entry.insert("disabled".to_owned(), Value::Boolean(!enabled));
         entry.insert(
             "disabled_tools".to_owned(),
             Value::Array(disabled_tools.iter().cloned().map(Value::String).collect()),
         );
-        self.replace_array_cas(target, expected_fingerprint, "mcp_servers", entries)
+        self.replace_array_cas(target, expected_fingerprint, collection.key(), entries)
     }
 
     pub fn connector_preferences(
         &self,
     ) -> Result<BTreeMap<String, IntegrationPreference>, ConfigError> {
         let snapshot = self.load()?;
-        let entries = config_array(&snapshot.effective, "connectors")?;
+        let entries = config_array(&snapshot.effective, IntegrationCollection::Connectors)?;
         let mut preferences = BTreeMap::new();
         for entry in entries {
             let entry = entry.as_table().ok_or_else(|| {
@@ -656,15 +710,11 @@ impl LayeredConfig {
         enabled: bool,
         disabled_tools: &BTreeSet<String>,
     ) -> Result<ConfigSnapshot, ConfigError> {
-        let snapshot = self.load()?;
-        let target = snapshot.selected_target;
-        let expected_fingerprint = snapshot.fingerprints[&target].clone();
-        self.persist_connector_state_cas(
+        self.persist_integration_state(
+            IntegrationCollection::Connectors,
             name,
             enabled,
             disabled_tools,
-            target,
-            expected_fingerprint,
         )
     }
 
@@ -676,43 +726,14 @@ impl LayeredConfig {
         target: ConfigTarget,
         expected_fingerprint: Option<String>,
     ) -> Result<ConfigSnapshot, ConfigError> {
-        let snapshot = self.load()?;
-        let mut entries = config_array_for_target(&snapshot, target, "connectors")?;
-        let position = entries.iter().position(|entry| {
-            entry
-                .as_table()
-                .and_then(|entry| entry.get("name").or_else(|| entry.get("id")))
-                .and_then(Value::as_str)
-                == Some(name)
-        });
-        let position = position.unwrap_or_else(|| {
-            let mut entry = Table::new();
-            entry.insert("name".to_owned(), Value::String(name.to_owned()));
-            entries.push(Value::Table(entry));
-            entries.len() - 1
-        });
-        let entry = entries[position].as_table_mut().ok_or_else(|| {
-            ConfigError::InvalidIntegration("connector entry must be a table".to_owned())
-        })?;
-        entry.insert("disabled".to_owned(), Value::Boolean(!enabled));
-        entry.insert(
-            "disabled_tools".to_owned(),
-            Value::Array(disabled_tools.iter().cloned().map(Value::String).collect()),
-        );
-        self.replace_array_cas(target, expected_fingerprint, "connectors", entries)
-    }
-
-    fn replace_selected_array(
-        &self,
-        snapshot: &ConfigSnapshot,
-        key: &str,
-        entries: Vec<Value>,
-    ) -> Result<ConfigSnapshot, ConfigError> {
-        self.batch_write(&[ConfigWrite {
-            target: snapshot.selected_target,
-            expected_fingerprint: snapshot.fingerprints[&snapshot.selected_target].clone(),
-            mutations: vec![ConfigMutation::set([key], Value::Array(entries))],
-        }])
+        self.persist_integration_state_cas(
+            IntegrationCollection::Connectors,
+            name,
+            enabled,
+            disabled_tools,
+            target,
+            expected_fingerprint,
+        )
     }
 
     fn replace_array_cas(
@@ -835,7 +856,7 @@ impl PreparedWrite {
         let token = random_sidecar_token()?;
         let temporary = parent.join(format!(".config.{token}.tmp"));
         let backup = parent.join(format!(".config.{token}.bak"));
-        let mut file = open_private_new(&temporary).map_err(|source| ConfigError::Io {
+        let mut file = create_private_file(&temporary).map_err(|source| ConfigError::Io {
             path: temporary.clone(),
             source,
         })?;
@@ -1107,30 +1128,9 @@ fn write_journal(path: &Path, journal: &ConfigJournal) -> Result<(), ConfigError
         .parent()
         .ok_or_else(|| ConfigError::InvalidPath(path.to_path_buf()))?;
     ensure_private_directory(parent)?;
-    let temporary = parent.join(format!(".journal.{}.tmp", random_sidecar_token()?));
-    let encoded = serde_json::to_vec(journal).map_err(ConfigError::Json)?;
-    let result = (|| {
-        let mut file = open_private_new(&temporary).map_err(|source| ConfigError::Io {
-            path: temporary.clone(),
-            source,
-        })?;
-        file.write_all(&encoded)
-            .and_then(|()| file.write_all(b"\n"))
-            .and_then(|()| file.sync_all())
-            .map_err(|source| ConfigError::Io {
-                path: temporary.clone(),
-                source,
-            })?;
-        fs::rename(&temporary, path).map_err(|source| ConfigError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
-        sync_directory(parent)
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&temporary);
-    }
-    result
+    let mut encoded = serde_json::to_vec(journal).map_err(ConfigError::Json)?;
+    encoded.push(b'\n');
+    write_atomically(path, "journal", &encoded).map_err(ConfigError::from)
 }
 
 fn read_table_optional(path: &Path) -> Result<Table, ConfigError> {
@@ -1192,13 +1192,7 @@ fn fingerprint_optional(path: &Path) -> Result<Option<String>, ConfigError> {
 }
 
 fn hex_digest(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    let mut encoded = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        let _ = write!(encoded, "{byte:02x}");
-    }
-    encoded
+    hex_encode(&Sha256::digest(bytes))
 }
 
 fn environment_table(environment: &BTreeMap<String, String>) -> Result<Table, ConfigError> {
@@ -1343,7 +1337,7 @@ impl ConfigFileLock {
         use fs2::FileExt as _;
 
         let path = vibe_home.join(LOCK_FILE);
-        let file = open_private_lock(&path).map_err(|source| ConfigError::Io {
+        let file = atomic_file::open_private_lock(&path).map_err(|source| ConfigError::Io {
             path: path.clone(),
             source,
         })?;
@@ -1362,63 +1356,17 @@ impl Drop for ConfigFileLock {
 }
 
 fn ensure_private_directory(path: &Path) -> Result<(), ConfigError> {
-    fs::create_dir_all(path).map_err(|source| ConfigError::Io {
+    atomic_file::ensure_private_directory(path).map_err(|source| ConfigError::Io {
         path: path.to_path_buf(),
         source,
-    })?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|source| {
-            ConfigError::Io {
-                path: path.to_path_buf(),
-                source,
-            }
-        })?;
-    }
-    Ok(())
-}
-
-fn open_private_new(path: &Path) -> std::io::Result<File> {
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt as _;
-
-        options.mode(0o600);
-    }
-    options.open(path)
-}
-
-fn open_private_lock(path: &Path) -> std::io::Result<File> {
-    let mut options = OpenOptions::new();
-    options.read(true).write(true).create(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt as _;
-
-        options.mode(0o600);
-    }
-    options.open(path)
+    })
 }
 
 fn sync_directory(path: &Path) -> Result<(), ConfigError> {
-    #[cfg(unix)]
-    {
-        File::open(path)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|source| ConfigError::Io {
-                path: path.to_path_buf(),
-                source,
-            })
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = path;
-        Ok(())
-    }
+    atomic_file::sync_directory(path).map_err(|source| ConfigError::Io {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -1483,6 +1431,15 @@ pub enum ConfigError {
     InvalidSensitiveUrl { path: String },
     #[error("credentials are forbidden in sensitive configuration field `{path}`")]
     SensitiveUrlCredentials { path: String },
+}
+
+impl From<AtomicWriteError> for ConfigError {
+    fn from(error: AtomicWriteError) -> Self {
+        Self::Io {
+            path: error.path,
+            source: error.source,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1772,7 +1729,7 @@ disabled_tools = ["selected-search"]
             mcp.disabled_tools,
             BTreeSet::from(["agent-search".to_owned()])
         );
-        let connector = config_array(&snapshot.effective, "connectors")
+        let connector = config_array(&snapshot.effective, IntegrationCollection::Connectors)
             .expect("connectors decode")
             .into_iter()
             .find(|entry| {

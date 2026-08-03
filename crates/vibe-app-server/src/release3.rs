@@ -398,8 +398,9 @@ impl Release3Service {
         params: &BTreeMap<String, Value>,
     ) -> Result<Release3Dispatch, Release3Error> {
         match method {
-            "config/read" => self.config_snapshot(false),
-            "config/reload" => self.config_snapshot(true),
+            // `load` always reads from disk, so reading and reloading are the
+            // same operation.
+            "config/read" | "config/reload" => self.config_snapshot(),
             "config/schema" => Ok(Release3Dispatch::result([(
                 "schema",
                 LayeredConfig::schema(),
@@ -488,13 +489,8 @@ impl Release3Service {
             .map_err(config_error)
     }
 
-    fn config_snapshot(&self, reload: bool) -> Result<Release3Dispatch, Release3Error> {
-        let snapshot = if reload {
-            self.config.reload()
-        } else {
-            self.config.load()
-        }
-        .map_err(config_error)?;
+    fn config_snapshot(&self) -> Result<Release3Dispatch, Release3Error> {
+        let snapshot = self.config.load().map_err(config_error)?;
         Ok(Release3Dispatch::result([(
             "snapshot",
             snapshot.public_view(),

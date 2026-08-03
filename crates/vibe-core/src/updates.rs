@@ -14,6 +14,8 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::atomic_file::write_atomically;
+
 /// Reference `UPDATE_CACHE_TTL_SECONDS`.
 pub const UPDATE_CACHE_TTL_SECONDS: i64 = 24 * 60 * 60;
 
@@ -363,15 +365,8 @@ impl UpdateCacheStore {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent).map_err(|_| UpdateError::CacheWrite)?;
         }
-        let temporary = self
-            .path
-            .with_file_name(format!(".cache.toml.tmp-{}", std::process::id()));
-        fs::write(&temporary, encoded).map_err(|_| UpdateError::CacheWrite)?;
-        if fs::rename(&temporary, &self.path).is_err() {
-            let _ = fs::remove_file(&temporary);
-            return Err(UpdateError::CacheWrite);
-        }
-        Ok(())
+        write_atomically(&self.path, "cache.toml", encoded.as_bytes())
+            .map_err(|_| UpdateError::CacheWrite)
     }
 
     fn read_document(&self) -> Option<toml::Table> {

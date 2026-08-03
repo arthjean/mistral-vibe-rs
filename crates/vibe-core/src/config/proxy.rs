@@ -1,14 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use super::{
-    ConfigError, ConfigFileLock, ensure_private_directory, open_private_new, random_sidecar_token,
-    sync_directory,
-};
+use super::{ConfigError, ConfigFileLock, ensure_private_directory};
+use crate::atomic_file::write_atomically;
 
 const PROXY_ENV_FILE: &str = ".env";
 
@@ -120,7 +117,7 @@ impl ProxyEnvironmentStore {
         let _lock = ConfigFileLock::acquire(parent)?;
         let existing = read_contents(&self.path)?;
         let encoded = apply_changes(&existing, changes);
-        replace_atomically(&self.path, encoded.as_bytes())
+        write_atomically(&self.path, "env", encoded.as_bytes()).map_err(ConfigError::from)
     }
 }
 
@@ -198,40 +195,6 @@ fn apply_changes(existing: &str, changes: &BTreeMap<ProxyKey, Option<String>>) -
 
 fn encode(key: ProxyKey, value: &str) -> String {
     format!("{}='{}'", key.as_str(), value.replace('\'', "\\'"))
-}
-
-fn replace_atomically(path: &Path, bytes: &[u8]) -> Result<(), ConfigError> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| ConfigError::InvalidPath(path.to_path_buf()))?;
-    let temporary = parent.join(format!(".env.{}.tmp", random_sidecar_token()?));
-    let mut file = open_private_new(&temporary).map_err(|source| ConfigError::Io {
-        path: temporary.clone(),
-        source,
-    })?;
-    if let Err(source) = file.write_all(bytes).and_then(|()| file.sync_all()) {
-        let _ = fs::remove_file(&temporary);
-        return Err(ConfigError::Io {
-            path: temporary,
-            source,
-        });
-    }
-    drop(file);
-    #[cfg(target_os = "windows")]
-    if path.exists() {
-        fs::remove_file(path).map_err(|source| ConfigError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
-    }
-    if let Err(source) = fs::rename(&temporary, path) {
-        let _ = fs::remove_file(&temporary);
-        return Err(ConfigError::Io {
-            path: path.to_path_buf(),
-            source,
-        });
-    }
-    sync_directory(parent)
 }
 
 #[cfg(test)]
