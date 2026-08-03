@@ -1341,69 +1341,31 @@ impl AppServer {
                 intent.agent_permission_rules.clone(),
             )
             .map_err(|error| ServerError::Resource(error.to_string()))?;
-        let review = if let Ok(workspace) = Workspace::open(&attachment.working_directory) {
-            let workspace = Arc::new(workspace);
-            let review =
-                review_override.unwrap_or_else(|| Arc::new(ReviewManager::new(workspace.clone())));
-            WorkspaceTools::new(workspace, review.clone())
-                .register(
-                    &tools,
-                    policy.clone(),
-                    self.approval_factory.for_agent(
-                        &attachment.id,
-                        intent.approval,
-                        intent.auto_approve,
-                    ),
-                )
-                .map_err(|error| ServerError::Resource(error.to_string()))?;
-            Some(review)
-        } else {
-            None
-        };
+        let review = self.register_workspace_tools(
+            &attachment.id,
+            &attachment.working_directory,
+            &policy,
+            &tools,
+            &intent,
+            review_override,
+        )?;
         self.session_tool_factory
             .register(&attachment.id, &tools)
             .map_err(ServerError::Resource)?;
-        let timestamp = now_millis();
-        sessions.insert(
+        let mut session = SessionRuntime::new(
             attachment.id.clone(),
-            SessionRuntime {
-                id: attachment.id.clone(),
-                working_directory: attachment.working_directory.clone(),
-                intent,
-                status: SessionStatus::Idle,
-                active_turn: None,
-                active_turn_started_at: None,
-                active_scheduled_loop: None,
-                compaction_pending: false,
-                pending_callback: None,
-                resolved_callbacks: BTreeMap::new(),
-                context: Vec::new(),
-                steering: Vec::new(),
-                snapshot: None,
-                attachments: 1,
-                resource_generation: 1,
-                aliases: BTreeSet::new(),
-                created_at: timestamp,
-                updated_at: timestamp,
-                latest_turn: None,
-                event_watermark: 0,
-                policy: policy.clone(),
-                tools: tools.clone(),
-                persisted: Some(attachment.hydrated.clone()),
-                review,
-            },
+            attachment.working_directory.clone(),
+            intent,
+            policy.clone(),
+            tools.clone(),
+            review,
+            now_millis(),
         );
-        if let Err(error) = self
-            .resources
-            .lock()
-            .map_err(|_| ServerError::StatePoisoned)?
-            .open_session(&attachment.id, policy.clone(), tools.clone())
-        {
-            sessions.remove(&attachment.id);
-            return Err(ServerError::Resource(error.to_string()));
-        }
-        if let Some(backend) = &self.resource_backend
-            && let Err(error) = backend.open_session(ResourceSession {
+        session.persisted = Some(attachment.hydrated.clone());
+        sessions.insert(attachment.id.clone(), session);
+        self.open_session_resources(
+            &mut sessions,
+            ResourceSession {
                 session_id: attachment.id.clone(),
                 generation: 1,
                 working_directory: attachment.working_directory.clone(),
@@ -1413,13 +1375,67 @@ impl AppServer {
                 ),
                 policy,
                 tools,
-            })
+            },
+        )
+        .map_err(|error| ServerError::Resource(error.to_string()))
+    }
+
+    /// Registers the workspace tool surface for a session root.
+    ///
+    /// Returns the review manager that owns the session's file checkpoints, or
+    /// `None` when the root is not a usable workspace.
+    fn register_workspace_tools(
+        &self,
+        session_id: &str,
+        working_directory: &str,
+        policy: &PermissionStore,
+        tools: &ToolRegistry,
+        intent: &SessionIntent,
+        review: Option<Arc<ReviewManager>>,
+    ) -> Result<Option<Arc<ReviewManager>>, ServerError> {
+        let Ok(workspace) = Workspace::open(working_directory) else {
+            return Ok(None);
+        };
+        let workspace = Arc::new(workspace);
+        let review = review.unwrap_or_else(|| Arc::new(ReviewManager::new(workspace.clone())));
+        WorkspaceTools::new(workspace, review.clone())
+            .register(
+                tools,
+                policy.clone(),
+                self.approval_factory
+                    .for_agent(session_id, intent.approval, intent.auto_approve),
+            )
+            .map_err(|error| ServerError::Resource(error.to_string()))?;
+        Ok(Some(review))
+    }
+
+    /// Opens the in-memory and operational resource state for a session that is
+    /// already in the map, removing it again if either backend refuses.
+    fn open_session_resources(
+        &self,
+        sessions: &mut BTreeMap<String, SessionRuntime>,
+        session: ResourceSession,
+    ) -> Result<(), ResourceError> {
+        let session_id = session.session_id.clone();
+        let opened = self
+            .resources
+            .lock()
+            .map_err(|_| ResourceError::Unavailable("resource state lock is poisoned".to_owned()))
+            .and_then(|mut resources| {
+                resources.open_session(&session_id, session.policy.clone(), session.tools.clone())
+            });
+        if let Err(error) = opened {
+            sessions.remove(&session_id);
+            return Err(error);
+        }
+        if let Some(backend) = &self.resource_backend
+            && let Err(error) = backend.open_session(session)
         {
             if let Ok(mut resources) = self.resources.lock() {
-                resources.close_session(&attachment.id);
+                resources.close_session(&session_id);
             }
-            sessions.remove(&attachment.id);
-            return Err(ServerError::Resource(error.to_string()));
+            sessions.remove(&session_id);
+            return Err(error);
         }
         Ok(())
     }
@@ -1460,36 +1476,37 @@ impl AppServer {
     }
 
     fn refresh_session_workspace_tools(&self, session_id: &str) -> Result<(), ServerError> {
-        let mut sessions = self.lock_sessions()?;
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        let workspace_directory = session.working_directory.clone();
-        let policy = session.policy.clone();
-        let tools = session.tools.clone();
-        let permission_rules = session.intent.agent_permission_rules.clone();
-        let approval = self.approval_factory.for_agent(
-            session_id,
-            session.intent.approval,
-            session.intent.auto_approve,
-        );
-        let review = session.review.clone().or_else(|| {
-            Workspace::open(&workspace_directory)
-                .ok()
-                .map(Arc::new)
-                .map(ReviewManager::new)
-                .map(Arc::new)
-        });
-        session.review.clone_from(&review);
-        drop(sessions);
+        let (working_directory, policy, tools, intent, previous_review) = {
+            let sessions = self.lock_sessions()?;
+            let session = sessions
+                .get(session_id)
+                .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+            (
+                session.working_directory.clone(),
+                session.policy.clone(),
+                session.tools.clone(),
+                session.intent.clone(),
+                session.review.clone(),
+            )
+        };
         policy
-            .try_replace_rules_with_rationale_prefix("agent-profile:", permission_rules)
+            .try_replace_rules_with_rationale_prefix(
+                "agent-profile:",
+                intent.agent_permission_rules.clone(),
+            )
             .map_err(|error| ServerError::Resource(error.to_string()))?;
-        if let (Ok(workspace), Some(review)) = (Workspace::open(&workspace_directory), review) {
-            let workspace = Arc::new(workspace);
-            WorkspaceTools::new(workspace, review)
-                .register(&tools, policy, approval)
-                .map_err(|error| ServerError::Resource(error.to_string()))?;
+        let review = self
+            .register_workspace_tools(
+                session_id,
+                &working_directory,
+                &policy,
+                &tools,
+                &intent,
+                previous_review.clone(),
+            )?
+            .or(previous_review);
+        if let Some(session) = self.lock_sessions()?.get_mut(session_id) {
+            session.review = review;
         }
         Ok(())
     }
@@ -2115,40 +2132,30 @@ impl ServerConnection {
                 &error.to_string(),
             );
         }
-        let review = if let Ok(workspace) = Workspace::open(&working_directory) {
-            if intent.trusted
-                && let Err(error) = permission_store.try_set_trust(
-                    &working_directory,
-                    TrustDecision::SessionTrusted,
-                    TrustRootKind::Workspace,
-                )
-            {
-                return error_batch(
-                    request.id,
-                    ProtocolErrorCode::InvalidParams,
-                    &error.to_string(),
-                );
-            }
-            let workspace = Arc::new(workspace);
-            let review = Arc::new(ReviewManager::new(workspace.clone()));
-            if let Err(error) = WorkspaceTools::new(workspace, review.clone()).register(
-                &tools,
-                permission_store.clone(),
-                self.server.approval_factory.for_agent(
-                    &session_id,
-                    intent.approval,
-                    intent.auto_approve,
-                ),
-            ) {
-                return error_batch(
-                    request.id,
-                    ProtocolErrorCode::InternalError,
-                    &error.to_string(),
-                );
-            }
-            Some(review)
-        } else {
-            None
+        if intent.trusted
+            && Workspace::open(&working_directory).is_ok()
+            && let Err(error) = permission_store.try_set_trust(
+                &working_directory,
+                TrustDecision::SessionTrusted,
+                TrustRootKind::Workspace,
+            )
+        {
+            return error_batch(
+                request.id,
+                ProtocolErrorCode::InvalidParams,
+                &error.to_string(),
+            );
+        }
+        let review = match self.server.register_workspace_tools(
+            &session_id,
+            &working_directory,
+            &permission_store,
+            &tools,
+            &intent,
+            None,
+        ) {
+            Ok(review) => review,
+            Err(error) => return internal_error_batch(request.id, &error),
         };
         if let Err(error) = self
             .server
@@ -2189,66 +2196,32 @@ impl ServerConnection {
                 "Session already exists",
             );
         }
-        sessions.insert(
+        let project_trusted = intent.trusted;
+        let mut session = SessionRuntime::new(
             session_id.clone(),
-            SessionRuntime {
-                id: session_id.clone(),
-                working_directory,
-                intent,
-                status: SessionStatus::Idle,
-                active_turn: None,
-                active_turn_started_at: None,
-                active_scheduled_loop: None,
-                compaction_pending: false,
-                pending_callback: None,
-                resolved_callbacks: BTreeMap::new(),
-                context: Vec::new(),
-                steering: Vec::new(),
-                snapshot: initial_snapshot,
-                attachments: 1,
-                resource_generation: 1,
-                aliases,
-                created_at,
-                updated_at,
-                latest_turn: None,
-                event_watermark: 0,
-                policy: permission_store.clone(),
-                tools: tools.clone(),
-                persisted,
-                review,
-            },
+            working_directory.clone(),
+            intent,
+            permission_store.clone(),
+            tools.clone(),
+            review,
+            created_at,
         );
-        let resource_result = self
-            .server
-            .resources
-            .lock()
-            .map_err(|_| ResourceError::Unavailable("resource state lock is poisoned".to_owned()))
-            .and_then(|mut resources| {
-                resources.open_session(&session_id, permission_store.clone(), tools.clone())
-            });
-        if let Err(error) = resource_result {
-            sessions.remove(&session_id);
-            return resource_error_batch(request.id, error);
-        }
-        if let Some(backend) = &self.server.resource_backend
-            && let Err(error) = backend.open_session(ResourceSession {
+        session.updated_at = updated_at;
+        session.snapshot = initial_snapshot;
+        session.aliases = aliases;
+        session.persisted = persisted;
+        sessions.insert(session_id.clone(), session);
+        if let Err(error) = self.server.open_session_resources(
+            &mut sessions,
+            ResourceSession {
                 session_id: session_id.clone(),
                 generation: 1,
-                working_directory: sessions
-                    .get(&session_id)
-                    .map(|session| session.working_directory.clone())
-                    .unwrap_or_default(),
-                project_trusted: sessions
-                    .get(&session_id)
-                    .is_some_and(|session| session.intent.trusted),
+                working_directory,
+                project_trusted,
                 policy: permission_store,
                 tools,
-            })
-        {
-            if let Ok(mut resources) = self.server.resources.lock() {
-                resources.close_session(&session_id);
-            }
-            sessions.remove(&session_id);
+            },
+        ) {
             return resource_error_batch(request.id, error);
         }
         self.attached_sessions.insert(session_id.clone());
@@ -3290,6 +3263,49 @@ struct SessionRuntime {
     tools: ToolRegistry,
     persisted: Option<HydratedSession>,
     review: Option<Arc<ReviewManager>>,
+}
+
+impl SessionRuntime {
+    /// A freshly attached, idle session holding one attachment.
+    ///
+    /// Callers set the fields that vary by entry point: `persisted`,
+    /// `snapshot`, `aliases` and `updated_at`.
+    fn new(
+        id: String,
+        working_directory: String,
+        intent: SessionIntent,
+        policy: PermissionStore,
+        tools: ToolRegistry,
+        review: Option<Arc<ReviewManager>>,
+        created_at: u64,
+    ) -> Self {
+        Self {
+            id,
+            working_directory,
+            intent,
+            status: SessionStatus::Idle,
+            active_turn: None,
+            active_turn_started_at: None,
+            active_scheduled_loop: None,
+            compaction_pending: false,
+            pending_callback: None,
+            resolved_callbacks: BTreeMap::new(),
+            context: Vec::new(),
+            steering: Vec::new(),
+            snapshot: None,
+            attachments: 1,
+            resource_generation: 1,
+            aliases: BTreeSet::new(),
+            created_at,
+            updated_at: created_at,
+            latest_turn: None,
+            event_watermark: 0,
+            policy,
+            tools,
+            persisted: None,
+            review,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
