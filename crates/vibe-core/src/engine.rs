@@ -12,15 +12,16 @@ use thiserror::Error;
 use tokio::sync::Notify;
 
 use crate::events::{
-    EngineEvent, EventEnvelope, LifecycleState, ModelMessage, ProjectionError, ProjectionReducer,
-    ProjectionSnapshot,
+    EngineEvent, EventEnvelope, LifecycleState, ModelMessage, ModelToolCall, ProjectionError,
+    ProjectionReducer, ProjectionSnapshot,
 };
 use crate::provider::{
     AssistantMessage, ProviderBackend, ProviderChunk, ProviderError, ProviderInput, ProviderStream,
     ProviderTransport, TransportError, Usage, aggregate_provider_chunks,
 };
-use crate::storage::{SessionMetadata, SessionStore, StorageError};
-use crate::tools::ToolExecutionOutput;
+use crate::storage::{SessionMetadata, SessionStore};
+use crate::text::bounded_utf8;
+use crate::tools::{MAX_TOOL_ERROR_BYTES, ToolExecutionOutput};
 
 pub type ProviderFuture<'a> =
     Pin<Box<dyn Future<Output = Result<AssistantMessage, ProviderError>> + Send + 'a>>;
@@ -32,6 +33,11 @@ pub type ToolStreamSink = Arc<dyn Fn(String) -> Result<(), String> + Send + Sync
 pub type CompactionFuture<'a> =
     Pin<Box<dyn Future<Output = Result<CompactionResult, String>> + Send + 'a>>;
 pub type PersistenceFuture<'a> = Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'a>>;
+
+/// Buffered tool output chunks awaiting projection.
+const TOOL_STREAM_CAPACITY: usize = 256;
+/// Stands in for a tool result the turn was cancelled before receiving.
+const INTERRUPTED_TOOL_RESULT: &str = "Tool execution interrupted";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SessionStats {
@@ -253,40 +259,31 @@ impl TranscriptSink for SessionTranscriptSink {
                 *metadata = handoff;
                 return Ok(());
             }
-            let stored = self
-                .store
-                .load(&metadata.id)
-                .map_err(|error| error.to_string())?;
-            if let Some(system) = messages
-                .iter()
-                .find(|message| matches!(message, ModelMessage::System { .. }))
-            {
-                self.store
-                    .append_message(&mut metadata, system, persisted_at)
-                    .map_err(|error| error.to_string())?;
-            }
-            let non_system_messages: Vec<_> = messages
+            // The metadata already records how much of the log is persisted, so
+            // a checkpoint never has to re-read the transcript it just wrote.
+            let non_system: Vec<&ModelMessage> = messages
                 .iter()
                 .filter(|message| !matches!(message, ModelMessage::System { .. }))
                 .collect();
-            let boundary_unchanged = stored.messages.len() <= non_system_messages.len()
-                && stored
-                    .messages
-                    .iter()
-                    .zip(&non_system_messages)
-                    .all(|(stored, current)| stored == *current);
-            if !boundary_unchanged {
-                self.store
+            if !SessionStore::extends_persisted_log(&metadata, &non_system)
+                .map_err(|error| error.to_string())?
+            {
+                return self
+                    .store
                     .replace_messages(&mut metadata, messages, persisted_at)
-                    .map_err(|error| error.to_string())?;
-                return Ok(());
+                    .map_err(|error| error.to_string());
             }
-            for message in &non_system_messages[stored.messages.len()..] {
-                self.store
-                    .append_message(&mut metadata, message, persisted_at)
-                    .map_err(|error| error.to_string())?;
-            }
-            Ok(())
+            let persisted = usize::try_from(metadata.message_count).unwrap_or(usize::MAX);
+            let pending: Vec<ModelMessage> = messages
+                .iter()
+                .find(|message| matches!(message, ModelMessage::System { .. }))
+                .into_iter()
+                .chain(non_system.into_iter().skip(persisted))
+                .cloned()
+                .collect();
+            self.store
+                .append_messages(&mut metadata, &pending, persisted_at)
+                .map_err(|error| error.to_string())
         })
     }
 
@@ -571,272 +568,72 @@ where
         cancellation: CancellationToken,
         controls: TurnControlHandle,
     ) -> Result<TurnOutcome, EngineError> {
-        let session_id = session_id.into();
         let prompt = prompt.into();
-        let mut reducer = input.turn_id.as_ref().map_or_else(
-            || ProjectionReducer::new(&session_id),
-            |turn_id| ProjectionReducer::for_turn(&session_id, turn_id),
-        );
-        let mut events = Vec::new();
+        let mut recorder =
+            TurnRecorder::new(self.observer.as_ref(), session_id, input.turn_id.as_deref());
         let mut messages = input.messages.clone();
-        let mut usage = self.baseline.usage.clone();
-        let mut price_micros = priced_tokens(
-            usage.input_tokens,
-            self.limits.input_price_per_million_micros,
-        )
-        .saturating_add(priced_tokens(
-            usage.output_tokens,
-            self.limits.output_price_per_million_micros,
-        ));
-        let mut context_tokens = self.baseline.context_tokens;
-        let mut steps = self.baseline.steps;
+        let mut ledger = TurnLedger::new(&self.baseline, &self.limits);
         let mut checkpoints = 0_u32;
-        let mut next_event_id = 1_u64;
-        let mut finalized = false;
 
-        emit(
-            self.observer.as_ref(),
-            &mut reducer,
-            &mut events,
-            &mut next_event_id,
-            EngineEvent::UserMessage {
-                content: prompt.clone(),
-            },
-        )?;
+        recorder.emit(EngineEvent::UserMessage {
+            content: prompt.clone(),
+        })?;
         messages.push(ModelMessage::User { content: prompt });
-        emit(
-            self.observer.as_ref(),
-            &mut reducer,
-            &mut events,
-            &mut next_event_id,
-            EngineEvent::Title {
-                title: title_from_messages(&messages),
-            },
-        )?;
-        persist_owned(&self.sink, &messages, reducer.state()).await?;
+        recorder.emit(EngineEvent::Title {
+            title: title_from_messages(&messages),
+        })?;
+        persist(&self.sink, &messages, recorder.state()).await?;
         checkpoints = checkpoints.saturating_add(1);
 
-        let stop_reason = 'turn: loop {
-            if cancellation.is_cancelled() {
-                break TurnStopReason::Cancelled;
+        let stop_reason = loop {
+            if let Some(reason) = self.exhausted_budget(&ledger, &cancellation) {
+                break reason;
             }
-            if steps >= self.limits.max_steps {
-                break TurnStopReason::MaxSteps;
-            }
-            if usage.input_tokens.saturating_add(usage.output_tokens) > self.limits.max_total_tokens
-            {
-                break TurnStopReason::TokenLimit;
-            }
-            if price_micros > self.limits.max_price_micros {
-                break TurnStopReason::PriceLimit;
-            }
-            for control in controls.drain()? {
-                match control {
-                    TurnControl::Steer { content } => {
-                        emit(
-                            self.observer.as_ref(),
-                            &mut reducer,
-                            &mut events,
-                            &mut next_event_id,
-                            EngineEvent::UserSteer {
-                                content: content.clone(),
-                            },
-                        )?;
-                        messages.push(ModelMessage::User { content });
-                    }
-                    TurnControl::InjectContext {
-                        content,
-                        as_message,
-                    } => {
-                        emit(
-                            self.observer.as_ref(),
-                            &mut reducer,
-                            &mut events,
-                            &mut next_event_id,
-                            EngineEvent::ContextInjected {
-                                content: content.clone(),
-                                as_message,
-                            },
-                        )?;
-                        messages.push(ModelMessage::User { content });
-                    }
-                    TurnControl::ResolveCallback {
-                        callback_id,
-                        accepted,
-                        value,
-                    } => {
-                        let callback_is_projected = reducer.state().history.iter().any(|entry| {
-                            matches!(
-                                entry,
-                                crate::events::PublicHistoryEntry::Callback {
-                                    callback_id: projected_id,
-                                    ..
-                                } if projected_id == &callback_id
-                            )
-                        });
-                        if callback_is_projected {
-                            emit(
-                                self.observer.as_ref(),
-                                &mut reducer,
-                                &mut events,
-                                &mut next_event_id,
-                                EngineEvent::CallbackResolved {
-                                    callback_id,
-                                    accepted,
-                                    value,
-                                },
-                            )?;
-                        }
-                        if !accepted {
-                            break 'turn TurnStopReason::Cancelled;
-                        }
-                    }
-                }
+            if let Some(reason) = self.apply_controls(&mut recorder, &mut messages, &controls)? {
+                break reason;
             }
             input.messages.clone_from(&messages);
-            let provider_stream = tokio::select! {
-                result = self.provider.stream(&input) => result,
-                () = cancellation.cancelled() => break TurnStopReason::Cancelled,
-            };
-            let completion = match provider_stream {
-                Ok(mut provider_stream) => {
-                    let mut chunks = Vec::new();
-                    let stream_result = loop {
-                        let next = tokio::select! {
-                            next = provider_stream.chunks.next() => next,
-                            () = cancellation.cancelled() => {
-                                break 'turn TurnStopReason::Cancelled;
-                            }
-                        };
-                        let Some(chunk) = next else {
-                            break Ok(());
-                        };
-                        let chunk = match chunk {
-                            Ok(chunk) => chunk,
-                            Err(error) => break Err(error),
-                        };
-                        match &chunk {
-                            ProviderChunk::Text { text } if !text.is_empty() => {
-                                emit(
-                                    self.observer.as_ref(),
-                                    &mut reducer,
-                                    &mut events,
-                                    &mut next_event_id,
-                                    EngineEvent::ModelText { text: text.clone() },
-                                )?;
-                            }
-                            ProviderChunk::Reasoning { text, .. } if !text.is_empty() => {
-                                emit(
-                                    self.observer.as_ref(),
-                                    &mut reducer,
-                                    &mut events,
-                                    &mut next_event_id,
-                                    EngineEvent::ModelReasoning { text: text.clone() },
-                                )?;
-                            }
-                            ProviderChunk::Text { .. }
-                            | ProviderChunk::Reasoning { .. }
-                            | ProviderChunk::ToolCall { .. }
-                            | ProviderChunk::Usage { .. }
-                            | ProviderChunk::Refusal { .. }
-                            | ProviderChunk::Stop { .. } => {}
+            let completion = match self
+                .stream_completion(&mut recorder, &input, &cancellation)
+                .await?
+            {
+                StreamOutcome::Cancelled => break TurnStopReason::Cancelled,
+                StreamOutcome::Completed(Ok(completion)) => *completion,
+                StreamOutcome::Completed(Err(ProviderError::ContextOverflow)) => {
+                    match self
+                        .compact(&mut recorder, &mut messages, &cancellation)
+                        .await?
+                    {
+                        Some(()) => {
+                            persist(&self.sink, &messages, recorder.state()).await?;
+                            checkpoints = checkpoints.saturating_add(1);
+                            continue;
                         }
-                        chunks.push(chunk);
-                    };
-                    if let Err(error) = stream_result {
-                        Err(error)
-                    } else if chunks.is_empty() {
-                        Err(ProviderError::MalformedStream(
-                            "provider stream produced no typed chunks".to_owned(),
-                        ))
-                    } else {
-                        aggregate_provider_chunks(chunks, provider_stream.correlation_id)
+                        None => break TurnStopReason::Cancelled,
                     }
                 }
-                Err(error) => Err(error),
-            };
-            let completion = match completion {
-                Ok(completion) => completion,
-                Err(ProviderError::ContextOverflow) => {
-                    let compaction = tokio::select! {
-                        result = self.compactor.compact(&reducer.state().session_id, &messages) => result,
-                        () = cancellation.cancelled() => break TurnStopReason::Cancelled,
-                    }
-                    .map_err(EngineError::Compaction)?;
-                    emit(
-                        self.observer.as_ref(),
-                        &mut reducer,
-                        &mut events,
-                        &mut next_event_id,
-                        EngineEvent::Compaction {
-                            summary: compaction.summary,
-                        },
-                    )?;
-                    let old_session_id = reducer.state().session_id.clone();
-                    emit(
-                        self.observer.as_ref(),
-                        &mut reducer,
-                        &mut events,
-                        &mut next_event_id,
-                        EngineEvent::SessionHandoff {
-                            from_session_id: old_session_id,
-                            to_session_id: compaction.new_session_id,
-                        },
-                    )?;
-                    messages = compaction.messages;
-                    persist_owned(&self.sink, &messages, reducer.state()).await?;
-                    checkpoints = checkpoints.saturating_add(1);
-                    continue;
+                StreamOutcome::Completed(Err(ProviderError::Refusal(_))) => {
+                    break TurnStopReason::Refusal;
                 }
-                Err(ProviderError::Refusal(_)) => break TurnStopReason::Refusal,
-                Err(ProviderError::Transport(TransportError::ResponseTooLarge { .. })) => {
-                    break TurnStopReason::ResponseLength;
-                }
-                Err(error) => {
-                    emit(
-                        self.observer.as_ref(),
-                        &mut reducer,
-                        &mut events,
-                        &mut next_event_id,
-                        EngineEvent::Lifecycle {
-                            state: LifecycleState::Failed,
-                            message: Some(error.to_string()),
-                        },
-                    )?;
-                    persist_owned(&self.sink, &messages, reducer.state()).await?;
+                StreamOutcome::Completed(Err(ProviderError::Transport(
+                    TransportError::ResponseTooLarge { .. },
+                ))) => break TurnStopReason::ResponseLength,
+                StreamOutcome::Completed(Err(error)) => {
+                    recorder.emit(EngineEvent::Lifecycle {
+                        state: LifecycleState::Failed,
+                        message: Some(error.to_string()),
+                    })?;
+                    persist(&self.sink, &messages, recorder.state()).await?;
                     return Err(EngineError::Provider(error));
                 }
             };
-            steps = steps.saturating_add(1);
-            context_tokens = completion
-                .usage
-                .input_tokens
-                .saturating_add(completion.usage.output_tokens);
-            usage.input_tokens = usage
-                .input_tokens
-                .saturating_add(completion.usage.input_tokens);
-            usage.output_tokens = usage
-                .output_tokens
-                .saturating_add(completion.usage.output_tokens);
-            price_micros = priced_tokens(
-                usage.input_tokens,
-                self.limits.input_price_per_million_micros,
-            )
-            .saturating_add(priced_tokens(
-                usage.output_tokens,
-                self.limits.output_price_per_million_micros,
-            ));
-            emit(
-                self.observer.as_ref(),
-                &mut reducer,
-                &mut events,
-                &mut next_event_id,
-                EngineEvent::Stats {
-                    context_tokens,
-                    input_tokens: usage.input_tokens,
-                    output_tokens: usage.output_tokens,
-                },
-            )?;
+
+            ledger.record_completion(&completion.usage, &self.limits);
+            recorder.emit(EngineEvent::Stats {
+                context_tokens: ledger.context_tokens,
+                input_tokens: ledger.usage.input_tokens,
+                output_tokens: ledger.usage.output_tokens,
+            })?;
             let assistant_message = ModelMessage::Assistant {
                 content: completion.text.clone(),
                 reasoning: completion.reasoning.clone(),
@@ -844,235 +641,456 @@ where
                 reasoning_state: completion.reasoning_state.clone(),
                 tool_calls: completion.tool_calls.clone(),
             };
-            if usage.input_tokens.saturating_add(usage.output_tokens) > self.limits.max_total_tokens
-            {
+            // A limit reached mid-cycle keeps a tool-free reply, but never a
+            // reply whose tool calls would be left unanswered.
+            if let Some(reason) = self.exhausted_budget(&ledger, &cancellation) {
                 if completion.tool_calls.is_empty() {
                     messages.push(assistant_message);
                 }
-                break TurnStopReason::TokenLimit;
-            }
-            if price_micros > self.limits.max_price_micros {
-                if completion.tool_calls.is_empty() {
-                    messages.push(assistant_message);
-                }
-                break TurnStopReason::PriceLimit;
+                break reason;
             }
             if completion.text.len() > self.limits.max_response_bytes {
                 break TurnStopReason::ResponseLength;
             }
-
             messages.push(assistant_message);
             if completion.tool_calls.is_empty() {
                 break TurnStopReason::Complete;
             }
-            let tool_calls = completion.tool_calls;
-            for call in &tool_calls {
-                emit(
-                    self.observer.as_ref(),
-                    &mut reducer,
-                    &mut events,
-                    &mut next_event_id,
-                    EngineEvent::ToolCall {
-                        call_id: call.id.clone(),
-                        name: call.name.clone(),
-                        arguments: call.arguments.clone(),
-                    },
-                )?;
-            }
-            let mut pending = FuturesUnordered::new();
-            let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(256);
-            for (index, call) in tool_calls.iter().enumerate() {
-                let started = Instant::now();
-                let sender = stream_tx.clone();
-                let output: ToolStreamSink = Arc::new(move |chunk| {
-                    sender
-                        .try_send((index, chunk))
-                        .map_err(|error| format!("tool output backpressure: {error}"))
-                });
-                pending.push(
-                    async move {
-                        (
-                            index,
-                            started,
-                            self.tools
-                                .execute_stream(&call.name, &call.arguments, output)
-                                .await,
-                        )
-                    }
-                    .boxed(),
-                );
-            }
-            drop(stream_tx);
-            let mut ordered_results = vec![None; tool_calls.len()];
-            let mut cancellation_seen = false;
-            while !pending.is_empty() {
-                tokio::select! {
-                    streamed = stream_rx.recv() => {
-                        if let Some((index, chunk)) = streamed {
-                            emit(
-                                self.observer.as_ref(),
-                                &mut reducer,
-                                &mut events,
-                                &mut next_event_id,
-                                EngineEvent::ToolStream {
-                                    call_id: tool_calls[index].id.clone(),
-                                    chunk,
-                                },
-                            )?;
-                        }
-                    }
-                    next = pending.next() => {
-                        let Some((index, started, result)) = next else {
-                            break;
-                        };
-                        while let Ok((stream_index, chunk)) = stream_rx.try_recv() {
-                            emit(
-                                self.observer.as_ref(),
-                                &mut reducer,
-                                &mut events,
-                                &mut next_event_id,
-                                EngineEvent::ToolStream {
-                                    call_id: tool_calls[stream_index].id.clone(),
-                                    chunk,
-                                },
-                            )?;
-                        }
-                        let duration_ms = u64::try_from(started.elapsed().as_millis())
-                            .unwrap_or(u64::MAX);
-                        let (output, is_error) = match result {
-                            Ok(output) => (output, false),
-                            Err(message) => (
-                                ToolExecutionOutput::text(bounded_tool_error(&message)),
-                                true,
-                            ),
-                        };
-                        emit(
-                            self.observer.as_ref(),
-                            &mut reducer,
-                            &mut events,
-                            &mut next_event_id,
-                            EngineEvent::ToolResult {
-                                call_id: tool_calls[index].id.clone(),
-                                content: output.model_text.clone(),
-                                typed_result: output.typed_result,
-                                display: output.display,
-                                duration_ms,
-                                is_error,
-                                cancelled: false,
-                            },
-                        )?;
-                        ordered_results[index] = Some((output.model_text, is_error));
-                    }
-                    () = cancellation.cancelled(), if !cancellation_seen => {
-                        cancellation_seen = true;
-                        break;
-                    }
-                }
-            }
-            drop(pending);
-            while let Ok((stream_index, chunk)) = stream_rx.try_recv() {
-                emit(
-                    self.observer.as_ref(),
-                    &mut reducer,
-                    &mut events,
-                    &mut next_event_id,
-                    EngineEvent::ToolStream {
-                        call_id: tool_calls[stream_index].id.clone(),
-                        chunk,
-                    },
-                )?;
-            }
-            if cancellation_seen {
-                for (index, result) in ordered_results.iter_mut().enumerate() {
-                    if result.is_some() {
-                        continue;
-                    }
-                    let content = "Tool execution interrupted".to_owned();
-                    emit(
-                        self.observer.as_ref(),
-                        &mut reducer,
-                        &mut events,
-                        &mut next_event_id,
-                        EngineEvent::ToolResult {
-                            call_id: tool_calls[index].id.clone(),
-                            content: content.clone(),
-                            typed_result: Value::Null,
-                            display: Value::Null,
-                            duration_ms: 0,
-                            is_error: true,
-                            cancelled: true,
-                        },
-                    )?;
-                    *result = Some((content, true));
-                }
-            }
-            for (call, result) in tool_calls.into_iter().zip(ordered_results) {
-                let (content, is_error) =
-                    result.unwrap_or_else(|| ("Tool execution interrupted".to_owned(), true));
+
+            let results = self
+                .execute_tool_calls(&mut recorder, &completion.tool_calls, &cancellation)
+                .await?;
+            for (call, (content, is_error)) in completion.tool_calls.into_iter().zip(results) {
                 messages.push(ModelMessage::Tool {
                     call_id: call.id,
                     content,
                     is_error,
                 });
             }
-            persist_owned(&self.sink, &messages, reducer.state()).await?;
+            persist(&self.sink, &messages, recorder.state()).await?;
             checkpoints = checkpoints.saturating_add(1);
             if cancellation.is_cancelled() {
                 break TurnStopReason::Cancelled;
             }
         };
 
-        if !finalized {
-            let lifecycle = match stop_reason {
-                TurnStopReason::Complete
-                | TurnStopReason::MaxSteps
-                | TurnStopReason::TokenLimit
-                | TurnStopReason::PriceLimit => LifecycleState::Completed,
-                TurnStopReason::Cancelled => LifecycleState::Cancelled,
-                TurnStopReason::Failed
-                | TurnStopReason::Refusal
-                | TurnStopReason::ResponseLength => LifecycleState::Failed,
-            };
-            emit(
-                self.observer.as_ref(),
-                &mut reducer,
-                &mut events,
-                &mut next_event_id,
-                EngineEvent::Lifecycle {
-                    state: lifecycle,
-                    message: Some(stop_message(&stop_reason).to_owned()),
-                },
-            )?;
-            finalized = true;
-        }
-        if finalized {
-            persist_owned(&self.sink, &messages, reducer.state()).await?;
-            persist_stats_owned(
-                &self.sink,
-                &SessionStats {
-                    usage: usage.clone(),
-                    context_tokens,
-                    steps,
-                },
-            )
-            .await?;
-        }
+        recorder.emit(EngineEvent::Lifecycle {
+            state: lifecycle_for(&stop_reason),
+            message: Some(stop_message(&stop_reason).to_owned()),
+        })?;
+        persist(&self.sink, &messages, recorder.state()).await?;
+        persist_stats(
+            &self.sink,
+            &SessionStats {
+                usage: ledger.usage.clone(),
+                context_tokens: ledger.context_tokens,
+                steps: ledger.steps,
+            },
+        )
+        .await?;
+        let (events, snapshot) = recorder.finish();
         Ok(TurnOutcome {
-            session_id: reducer.state().session_id.clone(),
+            session_id: snapshot.session_id.clone(),
             events,
-            snapshot: reducer.state().clone(),
+            snapshot,
             messages,
-            usage,
-            context_tokens,
-            price_micros,
-            steps,
+            usage: ledger.usage,
+            context_tokens: ledger.context_tokens,
+            price_micros: ledger.price_micros,
+            steps: ledger.steps,
             checkpoints,
             stop_reason,
         })
     }
+
+    /// Reports the limit that ends the turn, if any is already reached.
+    fn exhausted_budget(
+        &self,
+        ledger: &TurnLedger,
+        cancellation: &CancellationToken,
+    ) -> Option<TurnStopReason> {
+        if cancellation.is_cancelled() {
+            return Some(TurnStopReason::Cancelled);
+        }
+        if ledger.steps >= self.limits.max_steps {
+            return Some(TurnStopReason::MaxSteps);
+        }
+        if ledger.total_tokens() > self.limits.max_total_tokens {
+            return Some(TurnStopReason::TokenLimit);
+        }
+        if ledger.price_micros > self.limits.max_price_micros {
+            return Some(TurnStopReason::PriceLimit);
+        }
+        None
+    }
+
+    /// Drains queued steering, context injection, and callback resolutions.
+    ///
+    /// Returns the stop reason when a control ends the turn.
+    fn apply_controls(
+        &self,
+        recorder: &mut TurnRecorder<'_>,
+        messages: &mut Vec<ModelMessage>,
+        controls: &TurnControlHandle,
+    ) -> Result<Option<TurnStopReason>, EngineError> {
+        for control in controls.drain()? {
+            match control {
+                TurnControl::Steer { content } => {
+                    recorder.emit(EngineEvent::UserSteer {
+                        content: content.clone(),
+                    })?;
+                    messages.push(ModelMessage::User { content });
+                }
+                TurnControl::InjectContext {
+                    content,
+                    as_message,
+                } => {
+                    recorder.emit(EngineEvent::ContextInjected {
+                        content: content.clone(),
+                        as_message,
+                    })?;
+                    messages.push(ModelMessage::User { content });
+                }
+                TurnControl::ResolveCallback {
+                    callback_id,
+                    accepted,
+                    value,
+                } => {
+                    // Only a callback the projection knows about can be resolved
+                    // against it; others are late replies to a dropped turn.
+                    if recorder.has_callback(&callback_id) {
+                        recorder.emit(EngineEvent::CallbackResolved {
+                            callback_id,
+                            accepted,
+                            value,
+                        })?;
+                    }
+                    if !accepted {
+                        return Ok(Some(TurnStopReason::Cancelled));
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Streams one provider completion, projecting text and reasoning as it arrives.
+    async fn stream_completion(
+        &self,
+        recorder: &mut TurnRecorder<'_>,
+        input: &ProviderInput,
+        cancellation: &CancellationToken,
+    ) -> Result<StreamOutcome, EngineError> {
+        let mut stream = tokio::select! {
+            result = self.provider.stream(input) => match result {
+                Ok(stream) => stream,
+                Err(error) => return Ok(StreamOutcome::Completed(Err(error))),
+            },
+            () = cancellation.cancelled() => return Ok(StreamOutcome::Cancelled),
+        };
+        let mut chunks = Vec::new();
+        loop {
+            let next = tokio::select! {
+                next = stream.chunks.next() => next,
+                () = cancellation.cancelled() => return Ok(StreamOutcome::Cancelled),
+            };
+            let Some(chunk) = next else {
+                break;
+            };
+            let chunk = match chunk {
+                Ok(chunk) => chunk,
+                Err(error) => return Ok(StreamOutcome::Completed(Err(error))),
+            };
+            match &chunk {
+                ProviderChunk::Text { text } if !text.is_empty() => {
+                    recorder.emit(EngineEvent::ModelText { text: text.clone() })?;
+                }
+                ProviderChunk::Reasoning { text, .. } if !text.is_empty() => {
+                    recorder.emit(EngineEvent::ModelReasoning { text: text.clone() })?;
+                }
+                ProviderChunk::Text { .. }
+                | ProviderChunk::Reasoning { .. }
+                | ProviderChunk::ToolCall { .. }
+                | ProviderChunk::Usage { .. }
+                | ProviderChunk::Refusal { .. }
+                | ProviderChunk::Stop { .. } => {}
+            }
+            chunks.push(chunk);
+        }
+        if chunks.is_empty() {
+            return Ok(StreamOutcome::Completed(Err(
+                ProviderError::MalformedStream(
+                    "provider stream produced no typed chunks".to_owned(),
+                ),
+            )));
+        }
+        Ok(StreamOutcome::Completed(
+            aggregate_provider_chunks(chunks, stream.correlation_id).map(Box::new),
+        ))
+    }
+
+    /// Compacts the transcript after a context overflow.
+    ///
+    /// `None` means the turn was cancelled while compaction was running.
+    async fn compact(
+        &self,
+        recorder: &mut TurnRecorder<'_>,
+        messages: &mut Vec<ModelMessage>,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<()>, EngineError> {
+        let compaction = tokio::select! {
+            result = self.compactor.compact(&recorder.state().session_id, messages) => result,
+            () = cancellation.cancelled() => return Ok(None),
+        }
+        .map_err(EngineError::Compaction)?;
+        recorder.emit(EngineEvent::Compaction {
+            summary: compaction.summary,
+        })?;
+        let from_session_id = recorder.state().session_id.clone();
+        recorder.emit(EngineEvent::SessionHandoff {
+            from_session_id,
+            to_session_id: compaction.new_session_id,
+        })?;
+        *messages = compaction.messages;
+        Ok(Some(()))
+    }
+
+    /// Runs every declared tool call concurrently, in declaration order.
+    ///
+    /// Events follow completion order so observers see progress as it happens,
+    /// while the returned results follow declaration order so the transcript
+    /// always answers the model's calls in the order it made them. Cancellation
+    /// still yields one result per call: an unanswered call would leave the
+    /// transcript malformed for the next request.
+    async fn execute_tool_calls(
+        &self,
+        recorder: &mut TurnRecorder<'_>,
+        tool_calls: &[ModelToolCall],
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<(String, bool)>, EngineError> {
+        for call in tool_calls {
+            recorder.emit(EngineEvent::ToolCall {
+                call_id: call.id.clone(),
+                name: call.name.clone(),
+                arguments: call.arguments.clone(),
+            })?;
+        }
+        let mut pending = FuturesUnordered::new();
+        let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(TOOL_STREAM_CAPACITY);
+        for (index, call) in tool_calls.iter().enumerate() {
+            let started = Instant::now();
+            let sender = stream_tx.clone();
+            let output: ToolStreamSink = Arc::new(move |chunk| {
+                sender
+                    .try_send((index, chunk))
+                    .map_err(|error| format!("tool output backpressure: {error}"))
+            });
+            pending.push(
+                async move {
+                    (
+                        index,
+                        started,
+                        self.tools
+                            .execute_stream(&call.name, &call.arguments, output)
+                            .await,
+                    )
+                }
+                .boxed(),
+            );
+        }
+        drop(stream_tx);
+
+        let mut results = vec![None; tool_calls.len()];
+        while !pending.is_empty() {
+            tokio::select! {
+                streamed = stream_rx.recv() => {
+                    if let Some((index, chunk)) = streamed {
+                        recorder.emit(EngineEvent::ToolStream {
+                            call_id: tool_calls[index].id.clone(),
+                            chunk,
+                        })?;
+                    }
+                }
+                next = pending.next() => {
+                    let Some((index, started, result)) = next else {
+                        break;
+                    };
+                    drain_tool_stream(recorder, tool_calls, &mut stream_rx)?;
+                    let duration_ms =
+                        u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+                    let (output, is_error) = match result {
+                        Ok(output) => (output, false),
+                        Err(message) => (
+                            ToolExecutionOutput::text(bounded_utf8(
+                                &message,
+                                MAX_TOOL_ERROR_BYTES,
+                                "…",
+                            )),
+                            true,
+                        ),
+                    };
+                    recorder.emit(EngineEvent::ToolResult {
+                        call_id: tool_calls[index].id.clone(),
+                        content: output.model_text.clone(),
+                        typed_result: output.typed_result,
+                        display: output.display,
+                        duration_ms,
+                        is_error,
+                        cancelled: false,
+                    })?;
+                    results[index] = Some((output.model_text, is_error));
+                }
+                () = cancellation.cancelled() => break,
+            }
+        }
+        drop(pending);
+        drain_tool_stream(recorder, tool_calls, &mut stream_rx)?;
+
+        for (index, result) in results.iter_mut().enumerate() {
+            if result.is_some() {
+                continue;
+            }
+            recorder.emit(EngineEvent::ToolResult {
+                call_id: tool_calls[index].id.clone(),
+                content: INTERRUPTED_TOOL_RESULT.to_owned(),
+                typed_result: Value::Null,
+                display: Value::Null,
+                duration_ms: 0,
+                is_error: true,
+                cancelled: true,
+            })?;
+            *result = Some((INTERRUPTED_TOOL_RESULT.to_owned(), true));
+        }
+        Ok(results
+            .into_iter()
+            .map(|result| result.unwrap_or_else(|| (INTERRUPTED_TOOL_RESULT.to_owned(), true)))
+            .collect())
+    }
 }
 
-async fn persist_owned(
+/// Projects every chunk a tool emitted before its result arrived.
+fn drain_tool_stream(
+    recorder: &mut TurnRecorder<'_>,
+    tool_calls: &[ModelToolCall],
+    stream_rx: &mut tokio::sync::mpsc::Receiver<(usize, String)>,
+) -> Result<(), EngineError> {
+    while let Ok((index, chunk)) = stream_rx.try_recv() {
+        recorder.emit(EngineEvent::ToolStream {
+            call_id: tool_calls[index].id.clone(),
+            chunk,
+        })?;
+    }
+    Ok(())
+}
+
+/// One provider exchange: either it produced a response, or the turn was cancelled.
+enum StreamOutcome {
+    /// The assistant message is boxed: it dwarfs the cancelled variant.
+    Completed(Result<Box<AssistantMessage>, ProviderError>),
+    Cancelled,
+}
+
+/// Accumulates everything a turn spends against [`EngineLimits`].
+struct TurnLedger {
+    usage: Usage,
+    context_tokens: u64,
+    price_micros: u64,
+    steps: u32,
+}
+
+impl TurnLedger {
+    fn new(baseline: &SessionStats, limits: &EngineLimits) -> Self {
+        Self {
+            price_micros: total_price_micros(&baseline.usage, limits),
+            usage: baseline.usage.clone(),
+            context_tokens: baseline.context_tokens,
+            steps: baseline.steps,
+        }
+    }
+
+    fn total_tokens(&self) -> u64 {
+        self.usage
+            .input_tokens
+            .saturating_add(self.usage.output_tokens)
+    }
+
+    fn record_completion(&mut self, usage: &Usage, limits: &EngineLimits) {
+        self.steps = self.steps.saturating_add(1);
+        self.context_tokens = usage.input_tokens.saturating_add(usage.output_tokens);
+        self.usage.input_tokens = self.usage.input_tokens.saturating_add(usage.input_tokens);
+        self.usage.output_tokens = self.usage.output_tokens.saturating_add(usage.output_tokens);
+        self.price_micros = total_price_micros(&self.usage, limits);
+    }
+}
+
+/// Collects a turn's events while keeping the public projection in step.
+///
+/// Every engine event flows through [`TurnRecorder::emit`], which is the single
+/// place where an event is stamped, reduced, observed, and retained.
+struct TurnRecorder<'a> {
+    observer: &'a dyn EventObserver,
+    reducer: ProjectionReducer,
+    events: Vec<EventEnvelope>,
+    next_event_id: u64,
+}
+
+impl<'a> TurnRecorder<'a> {
+    fn new(
+        observer: &'a dyn EventObserver,
+        session_id: impl Into<String>,
+        turn_id: Option<&str>,
+    ) -> Self {
+        let session_id = session_id.into();
+        Self {
+            observer,
+            reducer: turn_id.map_or_else(
+                || ProjectionReducer::new(&session_id),
+                |turn_id| ProjectionReducer::for_turn(&session_id, turn_id),
+            ),
+            events: Vec::new(),
+            next_event_id: 1,
+        }
+    }
+
+    fn state(&self) -> &ProjectionSnapshot {
+        self.reducer.state()
+    }
+
+    fn has_callback(&self, callback_id: &str) -> bool {
+        self.state().history.iter().any(|entry| {
+            matches!(
+                entry,
+                crate::events::PublicHistoryEntry::Callback {
+                    callback_id: projected,
+                    ..
+                } if projected == callback_id
+            )
+        })
+    }
+
+    fn emit(&mut self, event: EngineEvent) -> Result<(), EngineError> {
+        let envelope = EventEnvelope {
+            session_id: self.state().session_id.clone(),
+            turn_id: self.state().turn_id.clone(),
+            emitted_at: current_time_millis(),
+            event_id: self.next_event_id,
+            event,
+        };
+        self.reducer.apply(&envelope)?;
+        self.observer
+            .observe(&envelope)
+            .map_err(EngineError::Observation)?;
+        self.events.push(envelope);
+        self.next_event_id = self.next_event_id.saturating_add(1);
+        Ok(())
+    }
+
+    fn finish(self) -> (Vec<EventEnvelope>, ProjectionSnapshot) {
+        (self.events, self.reducer.into_state())
+    }
+}
+
+async fn persist(
     sink: &impl TranscriptSink,
     messages: &[ModelMessage],
     snapshot: &ProjectionSnapshot,
@@ -1082,7 +1100,7 @@ async fn persist_owned(
         .map_err(EngineError::Persistence)
 }
 
-async fn persist_stats_owned(
+async fn persist_stats(
     sink: &impl TranscriptSink,
     stats: &SessionStats,
 ) -> Result<(), EngineError> {
@@ -1091,20 +1109,35 @@ async fn persist_stats_owned(
         .map_err(EngineError::Persistence)
 }
 
+/// Total price of `usage` under `limits`, in micros.
+fn total_price_micros(usage: &Usage, limits: &EngineLimits) -> u64 {
+    priced_tokens(usage.input_tokens, limits.input_price_per_million_micros).saturating_add(
+        priced_tokens(usage.output_tokens, limits.output_price_per_million_micros),
+    )
+}
+
+/// The lifecycle state a stop reason lands in.
+const fn lifecycle_for(reason: &TurnStopReason) -> LifecycleState {
+    match reason {
+        TurnStopReason::Complete
+        | TurnStopReason::MaxSteps
+        | TurnStopReason::TokenLimit
+        | TurnStopReason::PriceLimit => LifecycleState::Completed,
+        TurnStopReason::Cancelled => LifecycleState::Cancelled,
+        TurnStopReason::Failed | TurnStopReason::Refusal | TurnStopReason::ResponseLength => {
+            LifecycleState::Failed
+        }
+    }
+}
+
+/// Price of `tokens` at `price_per_million_micros`, rounded down.
+///
+/// The multiplication happens in `u128` so a large token count at a large unit
+/// price cannot wrap before the division brings it back into range.
 fn priced_tokens(tokens: u64, price_per_million_micros: u64) -> u64 {
-    const MILLION: u64 = 1_000_000;
-    tokens
-        .checked_div(MILLION)
-        .unwrap_or_default()
-        .saturating_mul(price_per_million_micros)
-        .saturating_add(
-            tokens
-                .checked_rem(MILLION)
-                .unwrap_or_default()
-                .saturating_mul(price_per_million_micros)
-                .checked_div(MILLION)
-                .unwrap_or_default(),
-        )
+    const MILLION: u128 = 1_000_000;
+    u64::try_from(u128::from(tokens).saturating_mul(u128::from(price_per_million_micros)) / MILLION)
+        .unwrap_or(u64::MAX)
 }
 
 fn current_time_millis() -> u64 {
@@ -1113,29 +1146,6 @@ fn current_time_millis() -> u64 {
         .map_or(0, |duration| {
             u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
         })
-}
-
-fn emit(
-    observer: &dyn EventObserver,
-    reducer: &mut ProjectionReducer,
-    events: &mut Vec<EventEnvelope>,
-    next_event_id: &mut u64,
-    event: EngineEvent,
-) -> Result<(), EngineError> {
-    let envelope = EventEnvelope {
-        session_id: reducer.state().session_id.clone(),
-        turn_id: reducer.state().turn_id.clone(),
-        emitted_at: current_time_millis(),
-        event_id: *next_event_id,
-        event,
-    };
-    reducer.apply(&envelope)?;
-    observer
-        .observe(&envelope)
-        .map_err(EngineError::Observation)?;
-    events.push(envelope);
-    *next_event_id = next_event_id.saturating_add(1);
-    Ok(())
 }
 
 fn title_from_messages(messages: &[ModelMessage]) -> String {
@@ -1171,18 +1181,6 @@ fn stop_message(reason: &TurnStopReason) -> &'static str {
     }
 }
 
-fn bounded_tool_error(message: &str) -> String {
-    const MAX_TOOL_ERROR_BYTES: usize = 16_384;
-    if message.len() <= MAX_TOOL_ERROR_BYTES {
-        return message.to_owned();
-    }
-    let mut end = MAX_TOOL_ERROR_BYTES;
-    while !message.is_char_boundary(end) {
-        end = end.saturating_sub(1);
-    }
-    format!("{}…", &message[..end])
-}
-
 #[derive(Debug, Error)]
 pub enum EngineError {
     #[error(transparent)]
@@ -1197,8 +1195,6 @@ pub enum EngineError {
     Observation(String),
     #[error("turn control state lock is poisoned")]
     ControlStatePoisoned,
-    #[error(transparent)]
-    Storage(#[from] StorageError),
 }
 
 #[cfg(test)]
@@ -1873,6 +1869,57 @@ mod tests {
             .expect("cancellation is an outcome");
         assert_eq!(outcome.stop_reason, TurnStopReason::Cancelled);
         assert_eq!(outcome.snapshot.lifecycle, LifecycleState::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn transcript_checkpoints_append_and_rewrite_a_diverged_history() {
+        let temporary = tempfile::tempdir().expect("temporary session root");
+        let store = SessionStore::new(temporary.path()).with_pointer_key("sink");
+        let metadata = store
+            .create("session-sink", "/workspace", None, 10)
+            .expect("session creates");
+        let sink = SessionTranscriptSink::new(store.clone(), metadata);
+        let snapshot = ProjectionReducer::new("session-sink").state().clone();
+        let system = ModelMessage::System {
+            content: "system".to_owned(),
+        };
+        let first = ModelMessage::User {
+            content: "first".to_owned(),
+        };
+        let second = ModelMessage::User {
+            content: "second".to_owned(),
+        };
+
+        sink.persist(&[system.clone(), first.clone()], &snapshot)
+            .await
+            .expect("first checkpoint");
+        sink.persist(&[system.clone(), first.clone(), second.clone()], &snapshot)
+            .await
+            .expect("appending checkpoint");
+        assert_eq!(
+            store
+                .load("session-sink")
+                .expect("loads")
+                .messages
+                .iter()
+                .filter_map(|message| match message {
+                    ModelMessage::User { content } => Some(content.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            vec!["first", "second"]
+        );
+
+        // A rewind shortens the history: the log must be rewritten, not extended.
+        sink.persist(&[system, first], &snapshot)
+            .await
+            .expect("rewound checkpoint");
+        let stored = store.load("session-sink").expect("loads");
+        assert_eq!(stored.messages.len(), 1);
+        assert!(matches!(
+            stored.messages.first(),
+            Some(ModelMessage::User { content }) if content == "first"
+        ));
     }
 
     #[test]

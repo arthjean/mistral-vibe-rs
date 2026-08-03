@@ -9,7 +9,9 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+use crate::atomic_file::{self, AtomicWriteError, create_private_file, write_atomically};
 use crate::events::ModelMessage;
+use crate::text::hex_encode;
 
 const METADATA_FILE: &str = "meta.json";
 const MESSAGES_FILE: &str = "messages.jsonl";
@@ -239,34 +241,80 @@ impl SessionStore {
         message: &ModelMessage,
         now_ms: u64,
     ) -> Result<(), StorageError> {
-        if matches!(message, ModelMessage::System { .. }) {
-            metadata.system_prompt =
-                Some(serde_json::to_value(message).map_err(StorageError::Json)?);
-            metadata.updated_at_ms = now_ms;
-            metadata.end_time = Some(format_iso_timestamp(now_ms));
-            return self.write_metadata(metadata);
+        self.append_messages(metadata, std::slice::from_ref(message), now_ms)
+    }
+
+    /// Appends `messages` to the log, then writes metadata once.
+    ///
+    /// A system message never reaches the log: it is replaced wholesale in the
+    /// metadata, because only the current one is ever replayed.
+    pub fn append_messages(
+        &self,
+        metadata: &mut SessionMetadata,
+        messages: &[ModelMessage],
+        now_ms: u64,
+    ) -> Result<(), StorageError> {
+        if messages.is_empty() {
+            return Ok(());
         }
         let path = self.session_path(metadata).join(MESSAGES_FILE);
-        let encoded = serde_json::to_vec(message).map_err(StorageError::Json)?;
-        let mut file = OpenOptions::new()
-            .append(true)
-            .open(&path)
-            .map_err(|source| StorageError::Io {
-                path: path.clone(),
-                source,
-            })?;
-        file.write_all(&encoded)
-            .and_then(|()| file.write_all(b"\n"))
-            .and_then(|()| file.sync_data())
-            .map_err(|source| StorageError::Io {
-                path: path.clone(),
-                source,
-            })?;
-        metadata.message_count = metadata.message_count.saturating_add(1);
-        metadata.last_message_fingerprint = Some(message_fingerprint(message)?);
+        let mut encoded = Vec::new();
+        let mut appended = 0_u64;
+        let mut last = None;
+        for message in messages {
+            if matches!(message, ModelMessage::System { .. }) {
+                metadata.system_prompt =
+                    Some(serde_json::to_value(message).map_err(StorageError::Json)?);
+                continue;
+            }
+            serde_json::to_writer(&mut encoded, message).map_err(StorageError::Json)?;
+            encoded.push(b'\n');
+            appended = appended.saturating_add(1);
+            last = Some(message);
+        }
+        if !encoded.is_empty() {
+            let mut file = OpenOptions::new()
+                .append(true)
+                .open(&path)
+                .map_err(|source| StorageError::Io {
+                    path: path.clone(),
+                    source,
+                })?;
+            file.write_all(&encoded)
+                .and_then(|()| file.sync_data())
+                .map_err(|source| StorageError::Io {
+                    path: path.clone(),
+                    source,
+                })?;
+        }
+        metadata.message_count = metadata.message_count.saturating_add(appended);
+        if let Some(last) = last {
+            metadata.last_message_fingerprint = Some(message_fingerprint(last)?);
+        }
         metadata.updated_at_ms = now_ms;
         metadata.end_time = Some(format_iso_timestamp(now_ms));
         self.write_metadata(metadata)
+    }
+
+    /// Reports whether `messages` still extends what the log already holds.
+    ///
+    /// A shorter history, or a different message at the persisted boundary,
+    /// means the transcript was rewound or compacted and must be rewritten.
+    pub fn extends_persisted_log(
+        metadata: &SessionMetadata,
+        messages: &[&ModelMessage],
+    ) -> Result<bool, StorageError> {
+        let persisted = usize::try_from(metadata.message_count).unwrap_or(usize::MAX);
+        if messages.len() < persisted {
+            return Ok(false);
+        }
+        let Some(boundary) = persisted
+            .checked_sub(1)
+            .and_then(|index| messages.get(index))
+        else {
+            return Ok(persisted == 0);
+        };
+        Ok(metadata.last_message_fingerprint.as_deref() == Some(&message_fingerprint(boundary)?))
     }
 
     pub fn replace_messages(
@@ -276,41 +324,15 @@ impl SessionStore {
         now_ms: u64,
     ) -> Result<(), StorageError> {
         let path = self.session_path(metadata).join(MESSAGES_FILE);
-        let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let temporary = self
-            .session_path(metadata)
-            .join(format!(".messages.{sequence}.tmp"));
-        let non_system_messages = messages
+        let mut encoded = Vec::new();
+        for message in messages
             .iter()
-            .filter(|message| !matches!(message, ModelMessage::System { .. }));
-        let result = (|| {
-            let mut file = open_private_new(&temporary).map_err(|source| StorageError::Io {
-                path: temporary.clone(),
-                source,
-            })?;
-            for message in non_system_messages {
-                let encoded = serde_json::to_vec(message).map_err(StorageError::Json)?;
-                file.write_all(&encoded)
-                    .and_then(|()| file.write_all(b"\n"))
-                    .map_err(|source| StorageError::Io {
-                        path: temporary.clone(),
-                        source,
-                    })?;
-            }
-            file.sync_all().map_err(|source| StorageError::Io {
-                path: temporary.clone(),
-                source,
-            })?;
-            fs::rename(&temporary, &path).map_err(|source| StorageError::Io {
-                path: path.clone(),
-                source,
-            })?;
-            sync_directory(&self.session_path(metadata))
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(&temporary);
-            return result;
+            .filter(|message| !matches!(message, ModelMessage::System { .. }))
+        {
+            serde_json::to_writer(&mut encoded, message).map_err(StorageError::Json)?;
+            encoded.push(b'\n');
         }
+        write_atomically(&path, "messages", &encoded)?;
         metadata.system_prompt = messages
             .iter()
             .find(|message| matches!(message, ModelMessage::System { .. }))
@@ -652,7 +674,7 @@ impl SessionStore {
         result
     }
 
-    fn acquire_handoff_lock(&self, create_root: bool) -> Result<Option<HandoffLock>, StorageError> {
+    fn acquire_handoff_lock(&self, create_root: bool) -> Result<Option<FileLock>, StorageError> {
         let Some(pointer_key) = &self.pointer_key else {
             return Ok(None);
         };
@@ -661,7 +683,7 @@ impl SessionStore {
         }
         let pointer_directory = self.root.join(LAST_SESSION_DIRECTORY);
         ensure_private_directory(&pointer_directory)?;
-        HandoffLock::acquire(&pointer_directory.join(format!("{HANDOFF_LOCK_PREFIX}{pointer_key}")))
+        FileLock::acquire(&pointer_directory.join(format!("{HANDOFF_LOCK_PREFIX}{pointer_key}")))
             .map(Some)
     }
 
@@ -678,34 +700,9 @@ impl SessionStore {
         path: &Path,
         journal: &HandoffJournal,
     ) -> Result<(), StorageError> {
-        let parent = path
-            .parent()
-            .ok_or_else(|| StorageError::InvalidHandoffJournal(path.to_path_buf()))?;
-        let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let temporary = parent.join(format!(".handoff-journal.{sequence}.tmp"));
-        let encoded = serde_json::to_vec_pretty(journal).map_err(StorageError::Json)?;
-        let result = (|| {
-            let mut file = open_private_new(&temporary).map_err(|source| StorageError::Io {
-                path: temporary.clone(),
-                source,
-            })?;
-            file.write_all(&encoded)
-                .and_then(|()| file.write_all(b"\n"))
-                .and_then(|()| file.sync_all())
-                .map_err(|source| StorageError::Io {
-                    path: temporary.clone(),
-                    source,
-                })?;
-            fs::rename(&temporary, path).map_err(|source| StorageError::Io {
-                path: path.to_path_buf(),
-                source,
-            })?;
-            sync_directory(parent)
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(&temporary);
-        }
-        result
+        let mut encoded = serde_json::to_vec_pretty(journal).map_err(StorageError::Json)?;
+        encoded.push(b'\n');
+        write_atomically(path, "handoff-journal", &encoded).map_err(StorageError::from)
     }
 
     fn recover_handoff_locked(&self, path: &Path) -> Result<Option<String>, StorageError> {
@@ -863,7 +860,7 @@ impl SessionStore {
     pub fn migrate_legacy(&self) -> Result<MigrationReport, StorageError> {
         ensure_private_directory(&self.root)?;
         let lock_path = self.root.join(MIGRATION_LOCK_FILE);
-        let _lock = MigrationLock::acquire(&lock_path)?;
+        let _lock = FileLock::try_acquire(&lock_path, StorageError::MigrationInProgress)?;
         self.recover_migration_directories()?;
         let entries = fs::read_dir(&self.root).map_err(|source| StorageError::Io {
             path: self.root.clone(),
@@ -1110,33 +1107,10 @@ impl SessionStore {
     }
 
     fn write_metadata(&self, metadata: &SessionMetadata) -> Result<(), StorageError> {
-        let session_path = self.session_path(metadata);
-        let path = session_path.join(METADATA_FILE);
-        let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let temporary = session_path.join(format!(".meta.{sequence}.tmp"));
-        let encoded = serde_json::to_vec_pretty(metadata).map_err(StorageError::Json)?;
-        let result = (|| {
-            let mut file = open_private_new(&temporary).map_err(|source| StorageError::Io {
-                path: temporary.clone(),
-                source,
-            })?;
-            file.write_all(&encoded)
-                .and_then(|()| file.write_all(b"\n"))
-                .and_then(|()| file.sync_all())
-                .map_err(|source| StorageError::Io {
-                    path: temporary.clone(),
-                    source,
-                })?;
-            fs::rename(&temporary, &path).map_err(|source| StorageError::Io {
-                path: path.clone(),
-                source,
-            })?;
-            sync_directory(&session_path)
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(&temporary);
-        }
-        result
+        let path = self.session_path(metadata).join(METADATA_FILE);
+        let mut encoded = serde_json::to_vec_pretty(metadata).map_err(StorageError::Json)?;
+        encoded.push(b'\n');
+        write_atomically(&path, "meta", &encoded).map_err(StorageError::from)
     }
 
     fn write_pointer(&self, session_id: &str) -> Result<(), StorageError> {
@@ -1146,29 +1120,8 @@ impl SessionStore {
         let pointer_directory = self.root.join(LAST_SESSION_DIRECTORY);
         ensure_private_directory(&pointer_directory)?;
         let path = pointer_directory.join(pointer_key);
-        let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let temporary = pointer_directory.join(format!(".pointer.{sequence}.tmp"));
-        let result = (|| {
-            let mut file = open_private_new(&temporary).map_err(|source| StorageError::Io {
-                path: temporary.clone(),
-                source,
-            })?;
-            writeln!(file, "{session_id}")
-                .and_then(|()| file.sync_all())
-                .map_err(|source| StorageError::Io {
-                    path: temporary.clone(),
-                    source,
-                })?;
-            fs::rename(&temporary, &path).map_err(|source| StorageError::Io {
-                path: path.clone(),
-                source,
-            })?;
-            sync_directory(&pointer_directory)
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(&temporary);
-        }
-        result
+        write_atomically(&path, "pointer", format!("{session_id}\n").as_bytes())
+            .map_err(StorageError::from)
     }
 
     fn read_pointer(&self) -> Result<Option<String>, StorageError> {
@@ -1412,63 +1365,32 @@ enum MigrationOutcome {
     Skipped,
 }
 
-struct MigrationLock {
+/// An advisory exclusive lock released when the guard is dropped.
+struct FileLock {
     file: File,
 }
 
-struct HandoffLock {
-    file: File,
-}
-
-impl HandoffLock {
+impl FileLock {
+    /// Blocks until the lock is available.
     fn acquire(path: &Path) -> Result<Self, StorageError> {
         use fs2::FileExt as _;
 
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt as _;
-
-            options.mode(0o600);
-        }
-        let file = options.open(path).map_err(|source| StorageError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
+        let file = Self::open(path)?;
         file.lock_exclusive().map_err(|source| StorageError::Io {
             path: path.to_path_buf(),
             source,
         })?;
         Ok(Self { file })
     }
-}
 
-impl Drop for HandoffLock {
-    fn drop(&mut self) {
-        let _ = fs2::FileExt::unlock(&self.file);
-    }
-}
-
-impl MigrationLock {
-    fn acquire(path: &Path) -> Result<Self, StorageError> {
+    /// Fails with `busy` rather than waiting when another holder owns the lock.
+    fn try_acquire(path: &Path, busy: StorageError) -> Result<Self, StorageError> {
         use fs2::FileExt as _;
 
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt as _;
-
-            options.mode(0o600);
-        }
-        let file = options.open(path).map_err(|source| StorageError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
+        let file = Self::open(path)?;
         file.try_lock_exclusive().map_err(|source| {
             if source.kind() == std::io::ErrorKind::WouldBlock {
-                StorageError::MigrationInProgress
+                busy
             } else {
                 StorageError::Io {
                     path: path.to_path_buf(),
@@ -1478,76 +1400,40 @@ impl MigrationLock {
         })?;
         Ok(Self { file })
     }
+
+    fn open(path: &Path) -> Result<File, StorageError> {
+        atomic_file::open_private_lock(path).map_err(|source| StorageError::Io {
+            path: path.to_path_buf(),
+            source,
+        })
+    }
 }
 
-impl Drop for MigrationLock {
+impl Drop for FileLock {
     fn drop(&mut self) {
         let _ = fs2::FileExt::unlock(&self.file);
     }
 }
 
 fn ensure_private_directory(path: &Path) -> Result<(), StorageError> {
-    fs::create_dir_all(path).map_err(|source| StorageError::Io {
+    atomic_file::ensure_private_directory(path).map_err(|source| StorageError::Io {
         path: path.to_path_buf(),
         source,
-    })?;
-    set_private_directory_permissions(path)
+    })
 }
 
 fn create_private_directory(path: &Path) -> Result<(), StorageError> {
-    fs::create_dir(path).map_err(|source| StorageError::Io {
+    atomic_file::create_private_directory(path).map_err(|source| StorageError::Io {
         path: path.to_path_buf(),
         source,
-    })?;
-    set_private_directory_permissions(path)
-}
-
-fn set_private_directory_permissions(path: &Path) -> Result<(), StorageError> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|source| {
-            StorageError::Io {
-                path: path.to_path_buf(),
-                source,
-            }
-        })?;
-    }
-    Ok(())
-}
-
-fn create_private_file(path: &Path) -> std::io::Result<File> {
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt as _;
-
-        options.mode(0o600);
-    }
-    options.open(path)
-}
-
-fn open_private_new(path: &Path) -> std::io::Result<File> {
-    create_private_file(path)
+    })
 }
 
 fn sync_directory(path: &Path) -> Result<(), StorageError> {
-    #[cfg(unix)]
-    {
-        File::open(path)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|source| StorageError::Io {
-                path: path.to_path_buf(),
-                source,
-            })
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = path;
-        Ok(())
-    }
+    atomic_file::sync_directory(path).map_err(|source| StorageError::Io {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 #[derive(Debug, Error)]
@@ -1611,6 +1497,15 @@ pub enum StorageError {
     Json(serde_json::Error),
 }
 
+impl From<AtomicWriteError> for StorageError {
+    fn from(error: AtomicWriteError) -> Self {
+        Self::Io {
+            path: error.path,
+            source: error.source,
+        }
+    }
+}
+
 fn validate_session_id(id: &str) -> Result<(), StorageError> {
     let valid = !id.is_empty()
         && id.len() <= 128
@@ -1652,24 +1547,14 @@ fn session_directory_name(now_ms: u64, id: &str) -> String {
 
 fn directory_id(id: &str) -> String {
     let digest = Sha256::digest(id.as_bytes());
-    let mut encoded = String::with_capacity(32);
-    for byte in &digest[..16] {
-        use std::fmt::Write as _;
-        let _ = write!(encoded, "{byte:02x}");
-    }
-    encoded
+    hex_encode(digest.get(..16).unwrap_or(&digest))
 }
 
 fn message_fingerprint(message: &ModelMessage) -> Result<String, StorageError> {
     let value = serde_json::to_value(message).map_err(StorageError::Json)?;
-    let encoded = python_canonical_json(&value);
-    let digest = Sha256::digest(encoded.as_bytes());
-    let mut encoded = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        let _ = write!(encoded, "{byte:02x}");
-    }
-    Ok(encoded)
+    Ok(hex_encode(&Sha256::digest(
+        python_canonical_json(&value).as_bytes(),
+    )))
 }
 
 fn python_canonical_json(value: &Value) -> String {
@@ -2154,8 +2039,11 @@ mod tests {
         let temporary = tempfile::tempdir().expect("temporary session root");
         let store = SessionStore::new(temporary.path());
         fs::create_dir_all(temporary.path()).expect("root exists");
-        let lock = MigrationLock::acquire(&temporary.path().join(MIGRATION_LOCK_FILE))
-            .expect("migration lock");
+        let lock = FileLock::try_acquire(
+            &temporary.path().join(MIGRATION_LOCK_FILE),
+            StorageError::MigrationInProgress,
+        )
+        .expect("migration lock");
         assert!(matches!(
             store.migrate_legacy(),
             Err(StorageError::MigrationInProgress)
@@ -2166,8 +2054,11 @@ mod tests {
             b"stale process marker",
         )
         .expect("stale lock fixture");
-        let recovered = MigrationLock::acquire(&temporary.path().join(MIGRATION_LOCK_FILE))
-            .expect("OS lock ignores stale file contents");
+        let recovered = FileLock::try_acquire(
+            &temporary.path().join(MIGRATION_LOCK_FILE),
+            StorageError::MigrationInProgress,
+        )
+        .expect("OS lock ignores stale file contents");
         drop(recovered);
 
         let tombstone = temporary.path().join(".deleting-1-stale");

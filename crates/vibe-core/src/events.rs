@@ -445,6 +445,12 @@ impl ProjectionReducer {
         &self.state
     }
 
+    /// Consumes the reducer, yielding the projection it accumulated.
+    #[must_use]
+    pub fn into_state(self) -> ProjectionSnapshot {
+        self.state
+    }
+
     pub fn apply(&mut self, envelope: &EventEnvelope) -> Result<ApplyOutcome, ProjectionError> {
         if envelope.event_id == 0 {
             return Err(ProjectionError::InvalidEventId);
@@ -967,13 +973,18 @@ fn entry_metadata(
     }
 }
 
+/// Seals every entry still streaming.
+///
+/// Entries complete in order, so the scan stops at the first completed entry
+/// walking backwards instead of sweeping the whole history each time.
 fn complete_streaming_entries(state: &mut ProjectionSnapshot, emitted_at: u64) {
-    for entry in &mut state.history {
+    for entry in state.history.iter_mut().rev() {
         let metadata = entry.metadata_mut();
-        if metadata.generation_status == PublicEntryGenerationStatus::InProgress {
-            metadata.generation_status = PublicEntryGenerationStatus::Completed;
-            metadata.updated_at = emitted_at;
+        if metadata.generation_status == PublicEntryGenerationStatus::Completed {
+            break;
         }
+        metadata.generation_status = PublicEntryGenerationStatus::Completed;
+        metadata.updated_at = emitted_at;
     }
 }
 
@@ -1183,6 +1194,53 @@ mod tests {
                 ..
             }) if output.get("value").and_then(Value::as_str) == Some("yes")
         ));
+    }
+
+    #[test]
+    fn streaming_entries_seal_as_a_contiguous_tail() {
+        let mut reducer = ProjectionReducer::new("session-1");
+        for (id, emitted) in [
+            (
+                1,
+                EngineEvent::UserMessage {
+                    content: "go".to_owned(),
+                },
+            ),
+            (
+                2,
+                EngineEvent::ModelText {
+                    text: "thinking".to_owned(),
+                },
+            ),
+            (
+                3,
+                EngineEvent::ToolCall {
+                    call_id: "call-1".to_owned(),
+                    name: "read".to_owned(),
+                    arguments: "{}".to_owned(),
+                },
+            ),
+            (
+                4,
+                EngineEvent::ToolCall {
+                    call_id: "call-2".to_owned(),
+                    name: "read".to_owned(),
+                    arguments: "{}".to_owned(),
+                },
+            ),
+        ] {
+            reducer.apply(&event(id, emitted)).expect("valid event");
+        }
+
+        // Only the newest entry may still be generating: sealing walks back from
+        // the tail and must not leave an earlier entry in progress.
+        let statuses = reducer
+            .state()
+            .history
+            .iter()
+            .map(PublicHistoryEntry::is_completed)
+            .collect::<Vec<_>>();
+        assert_eq!(statuses, vec![true, true, true, false]);
     }
 
     #[test]
