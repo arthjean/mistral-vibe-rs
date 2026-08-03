@@ -157,6 +157,13 @@ pub(super) async fn start_prompt_with_client_id(
         }
     };
     prepared.turn.client_user_message_id = client_message_id.map(ToOwned::to_owned);
+    // Reference `_handle_turn`: narration restarts on the prepared prompt text.
+    if let Some(effect) = state.narrator.cancel()
+        && let Some(runtime) = runtime.as_mut()
+    {
+        super::apply_narrator_effect(effect, runtime, state);
+    }
+    state.narrator.on_turn_start(&prepared.turn.prompt);
     let Some(runtime) = runtime.as_mut() else {
         state.push_diagnostic("Setup is required before starting a session. Restart with --setup.");
         return Ok(false);

@@ -29,10 +29,11 @@ use super::{
     metadata_session_id, parse_runtime_skills, push_local_notice, refresh_server_banner_metrics,
     sync_runtime_intent, unix_millis,
 };
+pub(in crate::tui) use config::apply_render_preferences;
 pub(super) use config::apply_thinking;
 use config::{
-    apply_render_preferences, configured_value, reset_config_value, reset_config_value_at,
-    selected_config_target, set_config_value, update_proxy_value,
+    configured_value, reset_config_value, reset_config_value_at, selected_config_target,
+    set_config_value, update_proxy_value,
 };
 pub(in crate::tui) use mcp::{McpEffect, McpPendingOperation, apply_pending_operation};
 pub(super) use mcp::{SystemUrlOpener, UrlOpenerPort, execute_mcp_effect};

@@ -1,4 +1,5 @@
 pub mod attachments;
+pub mod attention;
 mod callback;
 pub mod chat_input;
 pub mod clipboard;
@@ -16,6 +17,7 @@ mod feedback;
 pub mod history;
 pub mod input;
 pub mod interaction;
+pub mod narrator;
 mod path_mentions;
 mod path_normalization;
 mod path_resources;
@@ -533,10 +535,10 @@ pub async fn run_interactive(
             EntryStatus::Completed,
         );
     }
-    if arguments.check_upgrade {
-        state.push_diagnostic(
-            "Upgrade discovery is unavailable in this build; the current session can continue",
-        );
+    if let Some(runtime) = runtime.as_mut() {
+        // Reference `_on_config_changed`: rendering, notification, and narration
+        // preferences apply before the first frame, not only after an edit.
+        workflow::apply_render_preferences(runtime, &mut state);
     }
     announce_release_notes(&arguments, &working_directory, &mut state);
     // Reference `_schedule_update_notification`: refresh the cache for the next
@@ -923,6 +925,12 @@ pub async fn run_interactive(
                             .and_then(Value::as_str)
                             .unwrap_or("Scheduled loop fired");
                         push_local_notice(&mut state, message, EntryStatus::Completed);
+                        // Reference `_begin_unsolicited_turn`: a turn nobody typed
+                        // still restarts narration, with no user message.
+                        if let Some(effect) = state.narrator.cancel() {
+                            apply_narrator_effect(effect, runtime, &mut state);
+                        }
+                        state.narrator.on_turn_start("");
                         match start_active_turn(
                             &runtime.service,
                             scheduled.reservation,
@@ -1132,9 +1140,31 @@ async fn handle_terminal_event(
             )
             .await;
         }
-        Event::FocusGained | Event::FocusLost | Event::Key(_) => {}
+        // Reference `on_app_focus` and `on_app_blur`.
+        Event::FocusGained => {
+            if let Some(effect) = state.notifier.on_focus() {
+                emit_attention(state, &effect);
+            }
+        }
+        Event::FocusLost => state.notifier.on_blur(),
+        Event::Key(_) => {}
     }
     Ok(false)
+}
+
+/// Writes one attention effect. A terminal that refuses the escape keeps the
+/// session usable and reports the scoped failure once.
+fn emit_attention(state: &mut TuiState, effect: &attention::AttentionEffect) {
+    if let Err(error) = attention::write_attention(&mut std::io::stdout().lock(), effect) {
+        state.push_diagnostic(error);
+    }
+}
+
+/// Reference `_terminal_notifier.notify`.
+fn notify_attention(state: &mut TuiState, context: attention::NotificationContext, now_ms: u64) {
+    if let Some(effect) = state.notifier.notify(context, now_ms) {
+        emit_attention(state, &effect);
+    }
 }
 
 const fn accepts_key_event(kind: KeyEventKind) -> bool {
@@ -1410,6 +1440,11 @@ async fn handle_key(
                     state.quit_confirmation.cancel();
                     return Ok(false);
                 }
+                // Reference `action_interrupt_or_quit`: the no-job steps, which
+                // include stopping narration, precede popping queued intent.
+                if stop_narration(runtime, state) {
+                    return Ok(false);
+                }
                 if let Some(cancelled) = state.prompt_queue.cancel_last() {
                     state.push_diagnostic(format!(
                         "Removed queued prompt: {}",
@@ -1505,6 +1540,9 @@ async fn handle_key(
     }
     match key.code {
         KeyCode::Esc => {
+            if stop_narration(runtime, state) {
+                return Ok(false);
+            }
             if !request_active_turn_interrupt(runtime, active, controls, state)
                 && let Some(runtime) = runtime.as_mut()
                 && runtime.shell.is_some()
@@ -2298,6 +2336,66 @@ async fn handle_runtime_command(
         _ => return false,
     }
     true
+}
+
+/// Executes one narrator effect. Summaries come from the existing narration
+/// resource; playback has no transport in this port, so a spoken summary settles
+/// with one bounded, non-secret notice instead of a silent success.
+pub(in crate::tui) fn apply_narrator_effect(
+    effect: narrator::NarratorEffect,
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+) {
+    match effect {
+        // Nothing is playing, so cancellation has no external effect to stop.
+        narrator::NarratorEffect::Stop => {}
+        narrator::NarratorEffect::Summarize {
+            generation,
+            user_message,
+            assistant_text,
+            ..
+        } => {
+            let summary = runtime
+                .service
+                .public_call(
+                    "narration/summarize",
+                    json!({
+                        "sessionId": runtime.session_id,
+                        "userMessage": user_message,
+                        "assistantText": assistant_text,
+                    }),
+                )
+                .ok()
+                .and_then(|result| {
+                    result
+                        .get("summary")
+                        .and_then(Value::as_str)
+                        .map(ToOwned::to_owned)
+                });
+            if let Some(narrator::NarratorEffect::Speak { generation, .. }) =
+                state.narrator.apply_summary(generation, summary)
+            {
+                state.narrator.settle(generation);
+                report_speech_unavailable(state);
+            }
+        }
+        narrator::NarratorEffect::Speak { generation, .. } => {
+            state.narrator.settle(generation);
+            report_speech_unavailable(state);
+        }
+    }
+}
+
+/// The narrator preference is honored, but this port has no speech transport.
+/// The operator is told once per session, never once per turn.
+fn report_speech_unavailable(state: &mut TuiState) {
+    if state.speech_notice_shown {
+        return;
+    }
+    state.speech_notice_shown = true;
+    state.push_diagnostic(
+        "Narrator playback is unavailable in this build; turn summaries are not spoken",
+    );
 }
 
 /// Reference `_run_check_upgrade`, reported inside the session: the forced check
@@ -3594,6 +3692,12 @@ fn drain_update_receiver(
             } => {
                 let mut transcript = history_entry(*entry);
                 transcript.id = format!("{turn_id}:{}", transcript.id);
+                let previous_text = state
+                    .entries
+                    .iter()
+                    .find(|current| current.id == transcript.id)
+                    .map(|current| current.text.clone());
+                track_narrated_entry(state, &transcript, previous_text.as_deref());
                 let existing = state
                     .entries
                     .iter()
@@ -3625,6 +3729,45 @@ fn drain_update_receiver(
         }
     }
     false
+}
+
+/// Reference `_try_interrupt_no_job_steps`: `Esc` and `Ctrl+C` stop narration
+/// before they mean anything else.
+fn stop_narration(runtime: &mut Option<InteractiveRuntime>, state: &mut TuiState) -> bool {
+    // The reference only cancels when narration is live, so an idle narrator
+    // keeps tracking the turn the operator is interrupting for another reason.
+    if state.narrator.state() == narrator::NarratorState::Idle {
+        return false;
+    }
+    let Some(effect) = state.narrator.cancel() else {
+        return false;
+    };
+    if let Some(runtime) = runtime.as_mut() {
+        apply_narrator_effect(effect, runtime, state);
+    }
+    true
+}
+
+/// Reference `_track_narrator_event`: the narrator follows the canonical stream,
+/// and a streamed assistant entry contributes only its new text.
+fn track_narrated_entry(
+    state: &mut TuiState,
+    entry: &TranscriptEntry,
+    previous_text: Option<&str>,
+) {
+    match entry.kind {
+        TranscriptKind::UserMessage if previous_text.is_none() => {
+            state.narrator.on_user_message(&entry.id);
+        }
+        TranscriptKind::AssistantMessage => {
+            let delta = match previous_text {
+                Some(previous) if entry.text.starts_with(previous) => &entry.text[previous.len()..],
+                _ => entry.text.as_str(),
+            };
+            state.narrator.on_assistant_text(delta);
+        }
+        _ => {}
+    }
 }
 
 fn resync_current_projection(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
@@ -3676,6 +3819,8 @@ async fn finish_active(
         settle_cancelled_reservation(runtime, state, &reservation, cancellation)?;
         controls.complete_turn(&turn_id, "Turn cancelled");
         state.waiting = false;
+        // Reference `_complete_unsolicited_turn`: a cancelled turn is not narrated.
+        state.narrator.on_turn_cancel();
         false
     } else {
         match outcome {
@@ -3694,11 +3839,22 @@ async fn finish_active(
                     .fail_reserved(&reservation, &error.to_string())?;
                 controls.complete_turn(&turn_id, "Turn failed");
                 state.waiting = false;
+                state.narrator.on_turn_error(&error.to_string());
                 report_turn_failure(state, &error);
                 false
             }
         }
     };
+    // Reference `_finalize_turn_ui`: narration settles and attention is
+    // requested for every turn outcome.
+    if let Some(effect) = state.narrator.on_turn_end() {
+        apply_narrator_effect(effect, runtime, state);
+    }
+    notify_attention(
+        state,
+        attention::NotificationContext::Complete,
+        unix_millis(),
+    );
     resync_current_projection(runtime, state);
     sync_active_callbacks(runtime, state, controls);
     if let Some(loop_id) = scheduled_loop_id {

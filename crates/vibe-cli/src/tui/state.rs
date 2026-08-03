@@ -6,10 +6,12 @@ use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{mpsc, watch};
 
+use super::attention::AttentionNotifier;
 use super::controls::CallbackPresentation;
 use super::debug_console::DebugConsole;
 use super::diagnostics::{Activity, ErrorLog};
 use super::interaction::{Overlay, PromptQueue, QuitConfirmation};
+use super::narrator::NarratorManager;
 use super::rewind::RewindState;
 use super::session_picker::SessionDeleteState;
 use super::transcript_view::TranscriptView;
@@ -168,6 +170,12 @@ pub struct TuiState {
     pub debug_console: Option<DebugConsole>,
     /// What the last frame painted, and what the operator selected in it.
     pub transcript_view: TranscriptView,
+    /// Focus-aware attention effects, owned locally like the reference adapter.
+    pub notifier: AttentionNotifier,
+    /// Narration lifecycle, owned locally so a resync cannot revive a summary.
+    pub narrator: NarratorManager,
+    /// Whether this session already reported that narration cannot be spoken.
+    pub speech_notice_shown: bool,
     turn_started_ms: Option<u64>,
     scroll_line_limit: usize,
     diagnostics: VecDeque<String>,
@@ -209,6 +217,9 @@ impl TuiState {
             errors: ErrorLog::default(),
             debug_console: None,
             transcript_view: TranscriptView::default(),
+            notifier: AttentionNotifier::default(),
+            narrator: NarratorManager::default(),
+            speech_notice_shown: false,
             turn_started_ms: None,
             scroll_line_limit: 0,
             diagnostics: VecDeque::new(),
@@ -410,6 +421,9 @@ impl TuiState {
         replacement.errors = std::mem::take(&mut self.errors);
         replacement.debug_console = self.debug_console.take();
         replacement.transcript_view = std::mem::take(&mut self.transcript_view);
+        replacement.notifier = std::mem::take(&mut self.notifier);
+        replacement.narrator = std::mem::take(&mut self.narrator);
+        replacement.speech_notice_shown = self.speech_notice_shown;
         replacement.diagnostics = self.diagnostics.clone();
         replacement.local_sequence = self.local_sequence;
         replacement.local_entries = self.local_entries.clone();

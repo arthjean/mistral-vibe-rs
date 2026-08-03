@@ -428,6 +428,12 @@ pub(super) fn activate_pending_callback_state(
         return false;
     }
     append_callback_notice(state, &pending, &pending.prompt);
+    // Reference `_show_callback`: an activated callback asks for attention.
+    super::notify_attention(
+        state,
+        super::attention::NotificationContext::ActionRequired,
+        now_ms,
+    );
     true
 }
 

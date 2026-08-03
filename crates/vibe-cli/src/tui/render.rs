@@ -542,10 +542,15 @@ fn activity_text(state: &TuiState) -> Option<(String, bool)> {
     if !state.connected || state.resync_required {
         return Some(("! Connection lost".to_owned(), true));
     }
+    if let Some(activity) = state.activity.as_ref() {
+        return Some((activity.line(), false));
+    }
+    // Reference `NarratorStatus`: narration keeps its own visible state once the
+    // loading indicator is gone.
     state
-        .activity
-        .as_ref()
-        .map(|activity| (activity.line(), false))
+        .narrator
+        .status_line()
+        .map(|narration| (narration, false))
 }
 
 fn draw_activity(frame: &mut Frame<'_>, area: Rect, state: &TuiState, theme: ResolvedTheme) {

@@ -317,13 +317,31 @@ pub(super) fn config_field_schema(
     config_schema_at(&schema, &segments).cloned()
 }
 
-pub(super) fn apply_render_preferences(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
+pub(in crate::tui) fn apply_render_preferences(
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+) {
     state.show_reasoning = configured_value(runtime, "show_thinking_nodes")
         .and_then(|value| value.as_bool())
         .unwrap_or(true);
     state.autocopy_to_clipboard = configured_value(runtime, "autocopy_to_clipboard")
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
+    state
+        .notifier
+        .set_policy(crate::tui::attention::NotificationPolicy::from_config(
+            configured_value(runtime, "notifications")
+                .as_ref()
+                .and_then(Value::as_str),
+        ));
+    // Reference `_refresh_config_from_disk`: a preference change cancels live
+    // narration before the new preference applies.
+    let narrator_enabled = configured_value(runtime, "narrator_enabled")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+    if let Some(effect) = state.narrator.sync(narrator_enabled, narrator_enabled) {
+        crate::tui::apply_narrator_effect(effect, runtime, state);
+    }
 }
 
 fn config_schema_at<'a>(schema: &'a Value, path: &[&str]) -> Option<&'a Value> {
