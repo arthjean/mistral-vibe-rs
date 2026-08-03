@@ -9,6 +9,7 @@
     )
 )]
 
+mod bootstrap;
 pub mod distribution;
 pub mod tui;
 
@@ -22,15 +23,10 @@ use serde::Serialize;
 use thiserror::Error;
 use url::Url;
 use vibe_app_server::client::{
-    ClientError, HeadlessService, LiveDriverConfig, LiveTurnDriver, ProgrammaticTeleportEvent,
-    ProgrammaticTurn, ProgrammaticUpdate, PublicTurnStopReason, SessionOptions, TurnDriver,
-    programmatic_update_channel,
+    ClientError, HeadlessService, LiveTurnDriver, ProgrammaticTeleportEvent, ProgrammaticTurn,
+    ProgrammaticUpdate, PublicTurnStopReason, TurnDriver, programmatic_update_channel,
 };
 use vibe_app_server::release3::Release3Service;
-use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
-use vibe_app_server::resources::{
-    CoreResourceBackend, MistralConnectorClient, production_mcp_adapters,
-};
 use vibe_app_server::server::AppServer;
 use vibe_core::telemetry::{
     ReqwestTelemetryTransport, TelemetryAttributes, TelemetryClient, TelemetryConfig,
@@ -141,16 +137,7 @@ pub async fn run(
         )
         .await
     } else {
-        let config = LiveDriverConfig {
-            style: arguments.provider_style.clone(),
-            endpoint: arguments.api_base.clone(),
-            model: arguments.model.clone(),
-            credential_environment: arguments.credential_environment.clone(),
-            system_prompt: "You are Mistral Vibe.".to_owned(),
-            session_root: arguments.session_root.clone(),
-            input_price_per_million_micros: price_per_million_micros(arguments.input_price)?,
-            output_price_per_million_micros: price_per_million_micros(arguments.output_price)?,
-        };
+        let config = bootstrap::live_driver_config(&arguments, &arguments.model)?;
         let credential = std::env::var(&arguments.credential_environment).map_err(|_| {
             vibe_app_server::client::DriverError::MissingCredentialEnvironment(
                 arguments.credential_environment.clone(),
@@ -202,39 +189,17 @@ where
                 "programmatic mode requires --prompt or an initial prompt".to_owned(),
             )
         })?;
-    let working_directory = match arguments.workdir {
+    let working_directory = match arguments.workdir.clone() {
         Some(path) => path,
         None => std::env::current_dir().map_err(CliError::CurrentDirectory)?,
     };
-    let max_price_micros = arguments
-        .max_price
-        .map(|price| (price * 1_000_000.0).round() as u64);
-    let session_id = arguments.resume.clone();
-    let options = SessionOptions {
-        working_directory: working_directory.to_string_lossy().into_owned(),
-        session_id,
-        add_directories: arguments
-            .add_directories
-            .iter()
-            .map(|path| path.to_string_lossy().into_owned())
-            .collect(),
-        trusted: arguments.trust,
-        agent: arguments.agent.clone(),
-        tool_filters: arguments.tool_filters.clone(),
-        enabled_tools: arguments.enabled_tools.clone(),
-        disabled_tools: arguments.disabled_tools.clone(),
-        mcp_servers: Vec::new(),
-        model: Some(arguments.model.clone()),
-        max_turns: arguments.max_turns,
-        max_tokens: arguments.max_tokens,
-        max_price_micros,
-        mode: None,
-        thinking: false,
-        reasoning_effort: None,
-        auto_approve: arguments.auto_approve,
-        resume: arguments.resume.clone(),
-        continue_session: arguments.continue_session,
-    };
+    let options = bootstrap::session_options(
+        &arguments,
+        &working_directory,
+        arguments.model.clone(),
+        None,
+        None,
+    );
     let mut service = HeadlessService::new_shared_with_server(Arc::new(driver), server)?;
     let session_id = service.start_session(&options)?;
     let mut close_session_id = session_id.clone();
@@ -367,39 +332,17 @@ where
 }
 
 fn production_server(arguments: &Arguments) -> Result<AppServer, CliError> {
-    let release3 = Release3Service::default();
     let credential = std::env::var(&arguments.credential_environment).map_err(|_| {
         vibe_app_server::client::DriverError::MissingCredentialEnvironment(
             arguments.credential_environment.clone(),
         )
     })?;
-    let connector = Arc::new(
-        MistralConnectorClient::new(&arguments.api_base, credential.clone())
-            .map_err(|error| CliError::Terminal(error.to_string()))?,
-    );
-    let (mcp_factory, mcp_auth) =
-        production_mcp_adapters().map_err(|error| CliError::Terminal(error.to_string()))?;
-    let resource_backend = CoreResourceBackend::default()
-        .with_config(release3.layered_config())
-        .with_mcp_factory(mcp_factory)
-        .with_mcp_auth(mcp_auth)
-        .with_connector_catalog(
-            connector.clone(),
-            connector.clone(),
-            arguments.credential_environment.clone(),
-            connector.base_url(),
-        )
-        .with_connector_auth(connector);
-    let server = AppServer::with_resource_backend(Arc::new(resource_backend))
-        .using_release3_service(release3);
+    let server =
+        bootstrap::resource_server(arguments, Release3Service::default(), credential.clone())?;
     if !arguments.teleport {
         return Ok(server);
     }
-    let config = VibeCodeCloudConfig::from_credential(credential)
-        .map_err(|error| CliError::Teleport(error.to_string()))?;
-    let release4 = Release4Service::production(config)
-        .map_err(|error| CliError::Teleport(error.to_string()))?;
-    Ok(server.using_release4_service(release4))
+    Ok(server.using_release4_service(bootstrap::cloud_service(credential)?))
 }
 
 fn validate_arguments(arguments: &Arguments) -> Result<(), CliError> {

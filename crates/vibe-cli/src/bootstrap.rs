@@ -1,0 +1,111 @@
+//! The single construction path for the driver, the app server, and the session
+//! options, shared by programmatic runs and the interactive TUI.
+//!
+//! Both entry points used to build these three values independently, so the two
+//! modes could drift apart silently. Keeping them here means a provider, backend,
+//! or session-intent change lands in one place.
+
+use std::path::Path;
+use std::sync::Arc;
+
+use vibe_app_server::client::{LiveDriverConfig, SessionOptions};
+use vibe_app_server::release3::Release3Service;
+use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
+use vibe_app_server::resources::{
+    CoreResourceBackend, MistralConnectorClient, production_mcp_adapters,
+};
+use vibe_app_server::server::AppServer;
+
+use crate::{Arguments, CliError, price_per_million_micros};
+
+const SYSTEM_PROMPT: &str = "You are Mistral Vibe.";
+
+pub(crate) fn live_driver_config(
+    arguments: &Arguments,
+    model: &str,
+) -> Result<LiveDriverConfig, CliError> {
+    Ok(LiveDriverConfig {
+        style: arguments.provider_style.clone(),
+        endpoint: arguments.api_base.clone(),
+        model: model.to_owned(),
+        credential_environment: arguments.credential_environment.clone(),
+        system_prompt: SYSTEM_PROMPT.to_owned(),
+        session_root: arguments.session_root.clone(),
+        input_price_per_million_micros: price_per_million_micros(arguments.input_price)?,
+        output_price_per_million_micros: price_per_million_micros(arguments.output_price)?,
+    })
+}
+
+/// The app server with the production resource backend attached. Cloud support
+/// is not attached here: each entry point decides whether it needs it, because
+/// requiring a usable cloud configuration where none is used would fail a run
+/// that never touches the cloud.
+pub(crate) fn resource_server(
+    arguments: &Arguments,
+    release3: Release3Service,
+    credential: String,
+) -> Result<AppServer, CliError> {
+    let connector = Arc::new(
+        MistralConnectorClient::new(&arguments.api_base, credential)
+            .map_err(|error| CliError::Terminal(error.to_string()))?,
+    );
+    let (mcp_factory, mcp_auth) =
+        production_mcp_adapters().map_err(|error| CliError::Terminal(error.to_string()))?;
+    let resource_backend = CoreResourceBackend::default()
+        .with_config(release3.layered_config())
+        .with_mcp_factory(mcp_factory)
+        .with_mcp_auth(mcp_auth)
+        .with_connector_catalog(
+            connector.clone(),
+            connector.clone(),
+            arguments.credential_environment.clone(),
+            connector.base_url(),
+        )
+        .with_connector_auth(connector);
+    Ok(AppServer::with_resource_backend(Arc::new(resource_backend))
+        .using_release3_service(release3))
+}
+
+pub(crate) fn cloud_service(credential: String) -> Result<Release4Service, CliError> {
+    let config = VibeCodeCloudConfig::from_credential(credential)
+        .map_err(|error| CliError::Teleport(error.to_string()))?;
+    Release4Service::production(config).map_err(|error| CliError::Teleport(error.to_string()))
+}
+
+/// Session options for one run. `thinking` is derived from `reasoning_effort`
+/// rather than passed alongside it, so the two can never disagree.
+pub(crate) fn session_options(
+    arguments: &Arguments,
+    working_directory: &Path,
+    model: String,
+    mode: Option<String>,
+    reasoning_effort: Option<String>,
+) -> SessionOptions {
+    SessionOptions {
+        working_directory: working_directory.to_string_lossy().into_owned(),
+        session_id: arguments.resume.clone(),
+        add_directories: arguments
+            .add_directories
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect(),
+        trusted: arguments.trust,
+        agent: arguments.agent.clone(),
+        tool_filters: arguments.tool_filters.clone(),
+        enabled_tools: arguments.enabled_tools.clone(),
+        disabled_tools: arguments.disabled_tools.clone(),
+        mcp_servers: Vec::new(),
+        model: Some(model),
+        max_turns: arguments.max_turns,
+        max_tokens: arguments.max_tokens,
+        max_price_micros: arguments
+            .max_price
+            .map(|price| (price * 1_000_000.0).round() as u64),
+        mode,
+        thinking: reasoning_effort.is_some(),
+        reasoning_effort,
+        auto_approve: arguments.auto_approve,
+        resume: arguments.resume.clone(),
+        continue_session: arguments.continue_session,
+    }
+}
