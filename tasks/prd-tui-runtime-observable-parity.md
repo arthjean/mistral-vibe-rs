@@ -385,9 +385,9 @@ Make typed settings, proxy, MCP, Vibe Code, Teleport, and scheduled-loop workflo
 
 **Acceptance Criteria:**
 
-- [ ] Given introspected fields, when settings open, then search, categories, effective values, source layers, booleans, enums, numbers, strings, lists, objects, optional values, and descriptions are keyboard operable.
-- [ ] Given a valid user or project edit, when saved, then the typed patch and expected fingerprint are sent once; HTTP, HTTPS, ALL, NO_PROXY, SSL certificate file, and certificate directory produce the same persisted environment contract as Python.
-- [ ] Given invalid input, unsupported or secret field, untrusted project layer, stale fingerprint, invalid proxy key, server rejection, or refresh failure, when handled, then no false success appears and current values remain recoverable.
+- [x] Given introspected fields, when settings open, then search, categories, effective values, source layers, booleans, enums, numbers, strings, lists, objects, optional values, and descriptions are keyboard operable.
+- [x] Given a valid user or project edit, when saved, then the typed patch and expected fingerprint are sent once; HTTP, HTTPS, ALL, NO_PROXY, SSL certificate file, and certificate directory produce the same persisted environment contract as Python.
+- [x] Given invalid input, unsupported or secret field, untrusted project layer, stale fingerprint, invalid proxy key, server rejection, or refresh failure, when handled, then no false success appears and current values remain recoverable.
 
 #### US-032: Implement MCP and connector lifecycle with authentication
 
@@ -402,9 +402,9 @@ Make typed settings, proxy, MCP, Vibe Code, Teleport, and scheduled-loop workflo
 
 **Acceptance Criteria:**
 
-- [ ] Given servers and connectors, when MCP management opens, then deterministic groups, source details, connection, enabled, needs-auth, needs-setup, unavailable, disabled, and per-tool states match Python.
-- [ ] Given toggle, setup, connector auth, or MCP OAuth, when selected, then the correct source receives the effect and OAuth supports open, copy, show URL, completion refresh, logout, and close behavior.
-- [ ] Given an untrusted workspace, unknown source, malformed or expired URL, opener or clipboard failure, auth cancellation, unsupported backend capability, server error, or stale refresh, when handled, then nothing is enabled implicitly and the overlay remains recoverable.
+- [x] Given servers and connectors, when MCP management opens, then deterministic groups, source details, connection, enabled, needs-auth, needs-setup, unavailable, disabled, and per-tool states match Python.
+- [x] Given toggle, setup, connector auth, or MCP OAuth, when selected, then the correct source receives the effect and OAuth supports open, copy, show URL, completion refresh, logout, and close behavior.
+- [x] Given an untrusted workspace, unknown source, malformed or expired URL, opener or clipboard failure, auth cancellation, unsupported backend capability, server error, or stale refresh, when handled, then nothing is enabled implicitly and the overlay remains recoverable.
 
 #### US-033: Match Vibe Code, Teleport, and scheduled-loop workflows
 
@@ -419,9 +419,9 @@ Make typed settings, proxy, MCP, Vibe Code, Teleport, and scheduled-loop workflo
 
 **Acceptance Criteria:**
 
-- [ ] Given linked, saved, stale, or multiple Vibe Code projects, when selection or Teleport starts, then target resolution, picker state, progress messages, saved-link behavior, and push approval match Python.
-- [ ] Given loop create, list, cancel-one, or cancel-all, when complete, then intervals, next-run durations, prompts, IDs, counts, and success messages render in the reference table or message form.
-- [ ] Given no project, stale link, network failure, rejected push, Teleport cancellation, malformed interval, missing loop ID, or server failure, when handled, then raw event JSON is not the primary UI and the workflow stays recoverable.
+- [x] Given linked, saved, stale, or multiple Vibe Code projects, when selection or Teleport starts, then target resolution, picker state, progress messages, saved-link behavior, and push approval match Python.
+- [x] Given loop create, list, cancel-one, or cancel-all, when complete, then intervals, next-run durations, prompts, IDs, counts, and success messages render in the reference table or message form.
+- [x] Given no project, stale link, network failure, rejected push, Teleport cancellation, malformed interval, missing loop ID, or server failure, when handled, then raw event JSON is not the primary UI and the workflow stays recoverable.
 
 ---
 
