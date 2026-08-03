@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::builtin_agents;
+use crate::host::now_millis;
+use crate::params;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use thiserror::Error;
@@ -106,14 +108,7 @@ pub struct Release3Service {
 impl Default for Release3Service {
     fn default() -> Self {
         let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let vibe_home = std::env::var_os("VIBE_HOME")
-            .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("HOME")
-                    .map(PathBuf::from)
-                    .map(|home| home.join(".vibe"))
-            })
-            .unwrap_or_else(|| working_directory.join(".vibe"));
+        let vibe_home = crate::host::vibe_home();
         Self::build(
             Release3Paths {
                 session_root: vibe_home.join("sessions"),
@@ -1464,39 +1459,30 @@ fn statistics_map(value: Option<&Value>) -> Result<BTreeMap<String, Value>, Rele
     config_map(value)
 }
 
-fn required_string<'a>(
-    params: &'a BTreeMap<String, Value>,
-    key: &str,
-) -> Result<&'a str, Release3Error> {
-    params
-        .get(key)
-        .and_then(Value::as_str)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| Release3Error::InvalidParams(format!("{key} must be a non-empty string")))
+fn invalid_params(error: params::ParamError) -> Release3Error {
+    Release3Error::InvalidParams(error.message())
 }
 
-fn optional_string(params: &BTreeMap<String, Value>, key: &str) -> Option<String> {
-    params
-        .get(key)
-        .and_then(Value::as_str)
+fn required_string<'a>(
+    values: &'a BTreeMap<String, Value>,
+    key: &str,
+) -> Result<&'a str, Release3Error> {
+    params::required_string(values, key).map_err(invalid_params)
+}
+
+fn optional_string(values: &BTreeMap<String, Value>, key: &str) -> Option<String> {
+    params::optional_string(values, key)
+        .ok()
+        .flatten()
         .map(ToOwned::to_owned)
 }
 
 fn usize_param(
-    params: &BTreeMap<String, Value>,
+    values: &BTreeMap<String, Value>,
     key: &str,
     default: usize,
 ) -> Result<usize, Release3Error> {
-    params
-        .get(key)
-        .map(|value| {
-            value
-                .as_u64()
-                .and_then(|value| usize::try_from(value).ok())
-                .ok_or_else(|| Release3Error::InvalidParams(format!("{key} must be an integer")))
-        })
-        .transpose()
-        .map(|value| value.unwrap_or(default))
+    params::usize_param(values, key, default, 0, usize::MAX).map_err(invalid_params)
 }
 
 fn config_error(error: vibe_core::config::ConfigError) -> Release3Error {
@@ -1511,15 +1497,6 @@ fn storage_error(error: vibe_core::storage::StorageError) -> Release3Error {
         | vibe_core::storage::StorageError::AmbiguousSession(_) => Release3Error::NotFound(message),
         _ => Release3Error::Storage(message),
     }
-}
-
-fn now_millis() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
-        .unwrap_or_default()
 }
 
 #[derive(Debug, Error)]

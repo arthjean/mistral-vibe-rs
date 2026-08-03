@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
-use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use url::Url;
 use vibe_core::integrations::{
@@ -19,8 +18,12 @@ use vibe_core::tools::ToolOutputSink;
 
 use super::{
     ConnectorAuthBackend, ConnectorCatalog, ConnectorCatalogBackend, ResourceError, ResourceFuture,
-    redact,
+    bounded_json, redact,
 };
+
+/// Connector payloads carry tool schemas, so they get a larger budget than the
+/// small OAuth documents.
+const MAX_CONNECTOR_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Clone)]
 pub struct MistralConnectorClient {
@@ -73,7 +76,7 @@ impl MistralConnectorClient {
                 response.status()
             )));
         }
-        bounded_json(response, "connector bootstrap").await
+        bounded_json(response, "connector bootstrap", MAX_CONNECTOR_RESPONSE_BYTES).await
     }
 
     fn endpoint(&self, path: &str) -> Result<Url, ResourceError> {
@@ -187,7 +190,8 @@ impl ConnectorAuthBackend for MistralConnectorClient {
                     response.status()
                 )));
             }
-            let payload = bounded_json::<Value>(response, "connector auth response").await?;
+            let payload = bounded_json::<Value>(response, "connector auth response", MAX_CONNECTOR_RESPONSE_BYTES)
+                .await?;
             Ok(payload
                 .get("auth_url")
                 .or_else(|| payload.get("authUrl"))
@@ -214,36 +218,6 @@ fn is_https_or_loopback_http(url: &Url) -> bool {
                         .parse::<IpAddr>()
                         .is_ok_and(|address| address.is_loopback())
             }))
-}
-
-async fn bounded_json<T: DeserializeOwned>(
-    mut response: reqwest::Response,
-    label: &str,
-) -> Result<T, ResourceError> {
-    const LIMIT: usize = 4 * 1024 * 1024;
-    if response
-        .content_length()
-        .is_some_and(|length| length > LIMIT as u64)
-    {
-        return Err(ResourceError::Unavailable(format!(
-            "{label} exceeded its byte budget"
-        )));
-    }
-    let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?
-    {
-        if bytes.len().saturating_add(chunk.len()) > LIMIT {
-            return Err(ResourceError::Unavailable(format!(
-                "{label} exceeded its byte budget"
-            )));
-        }
-        bytes.extend_from_slice(&chunk);
-    }
-    serde_json::from_slice(&bytes)
-        .map_err(|error| ResourceError::Unavailable(format!("{label} was invalid: {error}")))
 }
 
 #[derive(Deserialize)]

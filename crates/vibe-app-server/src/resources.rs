@@ -10,6 +10,8 @@ use serde_json::{Map, Value, json};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use url::Url;
+use crate::host::now_millis;
+use crate::params;
 use vibe_core::config::{ConfigSnapshot, LayeredConfig};
 use vibe_core::integrations::{
     ConnectorAuthKind, ConnectorBackend, ConnectorDefinition, ConnectorRegistry, ConnectorView,
@@ -29,6 +31,7 @@ use vibe_core::shell::{ShellConfig, ShellPolicyContext, analyze_shell};
 use vibe_core::tools::ToolRegistry;
 
 mod backend_command;
+mod core_backend;
 mod mcp_oauth;
 mod mistral_connector;
 
@@ -92,7 +95,7 @@ pub const BACKEND_RESOURCE_METHODS: &[&str] = &[
 const MAX_RESOURCE_RECORDS: usize = 1_024;
 const MAX_RESOURCE_SESSIONS: usize = 256;
 const MAX_FEEDBACK_ACTIONS: usize = 256;
-const MAX_RESOURCE_STRING_BYTES: usize = 65_536;
+use crate::params::MAX_PARAM_STRING_BYTES as MAX_RESOURCE_STRING_BYTES;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResourceDispatch {
@@ -213,7 +216,6 @@ pub trait ResourceBackend: Send + Sync {
     }
 }
 
-mod core_backend;
 pub use core_backend::CoreResourceBackend;
 use core_backend::CoreResourceSession;
 
@@ -876,6 +878,39 @@ impl ResourceService {
     }
 }
 
+/// Reads a JSON response body under a byte budget.
+///
+/// The budget is enforced while streaming rather than trusting
+/// `Content-Length`, so a lying header cannot make the client allocate without
+/// bound.
+async fn bounded_json<T: serde::de::DeserializeOwned>(
+    mut response: reqwest::Response,
+    label: &str,
+    limit: usize,
+) -> Result<T, ResourceError> {
+    let exceeded =
+        || ResourceError::Unavailable(format!("{label} exceeded its byte budget"));
+    if response
+        .content_length()
+        .is_some_and(|length| length > limit as u64)
+    {
+        return Err(exceeded());
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?
+    {
+        if bytes.len().saturating_add(chunk.len()) > limit {
+            return Err(exceeded());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    serde_json::from_slice(&bytes)
+        .map_err(|error| ResourceError::Unavailable(format!("{label} was invalid: {error}")))
+}
+
 fn read_only<const N: usize>(entries: [(&str, Value); N]) -> ResourceDispatch {
     ResourceDispatch {
         result: entries
@@ -1052,70 +1087,39 @@ fn host_platform() -> Platform {
     }
 }
 
-fn now_millis() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |duration| {
-            u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
-        })
+fn invalid_params(error: params::ParamError) -> ResourceError {
+    ResourceError::InvalidParams(error.message())
 }
 
 fn required_string<'a>(
-    params: &'a BTreeMap<String, Value>,
+    values: &'a BTreeMap<String, Value>,
     key: &str,
 ) -> Result<&'a str, ResourceError> {
-    params
-        .get(key)
-        .and_then(Value::as_str)
-        .filter(|value| {
-            !value.is_empty() && value.len() <= MAX_RESOURCE_STRING_BYTES && !value.contains('\0')
-        })
-        .ok_or_else(|| ResourceError::InvalidParams(format!("{key} must be a non-empty string")))
+    params::required_string(values, key).map_err(invalid_params)
 }
 
 fn optional_string<'a>(
-    params: &'a BTreeMap<String, Value>,
+    values: &'a BTreeMap<String, Value>,
     key: &str,
 ) -> Result<Option<&'a str>, ResourceError> {
-    match params.get(key) {
-        None | Some(Value::Null) => Ok(None),
-        Some(Value::String(value))
-            if value.len() <= MAX_RESOURCE_STRING_BYTES && !value.contains('\0') =>
-        {
-            Ok(Some(value))
-        }
-        Some(_) => Err(ResourceError::InvalidParams(format!(
-            "{key} must be a string"
-        ))),
-    }
+    params::optional_string(values, key).map_err(invalid_params)
 }
 
 fn required_object<'a>(
-    params: &'a BTreeMap<String, Value>,
+    values: &'a BTreeMap<String, Value>,
     key: &str,
 ) -> Result<&'a Map<String, Value>, ResourceError> {
-    params
-        .get(key)
-        .and_then(Value::as_object)
-        .ok_or_else(|| ResourceError::InvalidParams(format!("{key} must be an object")))
+    params::required_object(values, key).map_err(invalid_params)
 }
 
 fn usize_param(
-    params: &BTreeMap<String, Value>,
+    values: &BTreeMap<String, Value>,
     key: &str,
     default: usize,
     min: usize,
     max: usize,
 ) -> Result<usize, ResourceError> {
-    let Some(value) = params.get(key) else {
-        return Ok(default);
-    };
-    let value = value
-        .as_u64()
-        .and_then(|value| usize::try_from(value).ok())
-        .filter(|value| (*value >= min) && (*value <= max))
-        .ok_or_else(|| ResourceError::InvalidParams(format!("{key} is out of range")))?;
-    Ok(value)
+    params::usize_param(values, key, default, min, max).map_err(invalid_params)
 }
 
 #[derive(Debug, Error)]

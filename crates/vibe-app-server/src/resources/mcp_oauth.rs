@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -19,10 +19,12 @@ use vibe_core::mcp::{
 };
 
 use super::{McpAuthBackend, ResourceError, ResourceFuture};
+use crate::host::now_seconds;
 
 const KEYRING_SERVICE: &str = "mistral-vibe-rs";
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_CALLBACK_BYTES: usize = 8 * 1024;
+const MAX_OAUTH_RESPONSE_BYTES: usize = 1024 * 1024;
 
 pub type ProductionMcpAdapters = (Arc<dyn McpPeerFactory>, Arc<dyn McpAuthBackend>);
 
@@ -546,7 +548,7 @@ fn validate_token_type(token_type: &str) -> Result<(), ResourceError> {
 }
 
 async fn response_json<T: for<'de> Deserialize<'de>>(
-    mut response: reqwest::Response,
+    response: reqwest::Response,
 ) -> Result<T, ResourceError> {
     if !response.status().is_success() {
         return Err(ResourceError::Unavailable(format!(
@@ -554,30 +556,7 @@ async fn response_json<T: for<'de> Deserialize<'de>>(
             response.status()
         )));
     }
-    const LIMIT: usize = 1024 * 1024;
-    if response
-        .content_length()
-        .is_some_and(|length| length > LIMIT as u64)
-    {
-        return Err(ResourceError::Unavailable(
-            "MCP OAuth response exceeded its byte budget".to_owned(),
-        ));
-    }
-    let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?
-    {
-        if bytes.len().saturating_add(chunk.len()) > LIMIT {
-            return Err(ResourceError::Unavailable(
-                "MCP OAuth response exceeded its byte budget".to_owned(),
-            ));
-        }
-        bytes.extend_from_slice(&chunk);
-    }
-    serde_json::from_slice(&bytes)
-        .map_err(|error| ResourceError::Unavailable(format!("invalid MCP OAuth response: {error}")))
+    super::bounded_json(response, "MCP OAuth response", MAX_OAUTH_RESPONSE_BYTES).await
 }
 
 async fn receive_callback(
@@ -744,13 +723,6 @@ fn resource_identity(url: &Url) -> Result<String, ResourceError> {
         ));
     }
     Ok(url.as_str().to_owned())
-}
-
-fn now_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
 }
 
 fn keyring_account(resource: &Url) -> Result<String, ResourceError> {

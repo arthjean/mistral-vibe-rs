@@ -6,7 +6,7 @@ use url::Url;
 
 use super::ResourceError;
 
-const MAX_STRING_BYTES: usize = 65_536;
+use crate::params::MAX_PARAM_STRING_BYTES as MAX_STRING_BYTES;
 const MAX_COLLECTION_ENTRIES: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -236,38 +236,26 @@ fn parse_mcp_add(params: &BTreeMap<String, Value>) -> Result<McpAddCommand, Reso
     })
 }
 
+fn invalid_params(error: crate::params::ParamError) -> ResourceError {
+    ResourceError::InvalidParams(error.message())
+}
+
 fn required_string<'a>(
-    params: &'a BTreeMap<String, Value>,
+    values: &'a BTreeMap<String, Value>,
     key: &str,
 ) -> Result<&'a str, ResourceError> {
-    optional_string(params, key)?
-        .ok_or_else(|| ResourceError::InvalidParams(format!("{key} must be a string")))
+    crate::params::required_string(values, key).map_err(invalid_params)
 }
 
 fn optional_string<'a>(
-    params: &'a BTreeMap<String, Value>,
+    values: &'a BTreeMap<String, Value>,
     key: &str,
 ) -> Result<Option<&'a str>, ResourceError> {
-    match params.get(key) {
-        None | Some(Value::Null) => Ok(None),
-        Some(Value::String(value))
-            if !value.trim().is_empty()
-                && value.len() <= MAX_STRING_BYTES
-                && !value.contains('\0') =>
-        {
-            Ok(Some(value))
-        }
-        Some(_) => Err(ResourceError::InvalidParams(format!(
-            "{key} must be a string"
-        ))),
-    }
+    crate::params::optional_string(values, key).map_err(invalid_params)
 }
 
-fn required_bool(params: &BTreeMap<String, Value>, key: &str) -> Result<bool, ResourceError> {
-    params
-        .get(key)
-        .and_then(Value::as_bool)
-        .ok_or_else(|| ResourceError::InvalidParams(format!("{key} must be a boolean")))
+fn required_bool(values: &BTreeMap<String, Value>, key: &str) -> Result<bool, ResourceError> {
+    crate::params::required_bool(values, key).map_err(invalid_params)
 }
 
 fn optional_string_list(
