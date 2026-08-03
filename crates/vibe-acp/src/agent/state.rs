@@ -11,6 +11,10 @@ use vibe_app_server::client::TurnDriver;
 use crate::protocol::{AcpClientCapabilities, AcpClientInfo, AcpError};
 use crate::session::{AcpHarness, SessionSlot, now_millis};
 
+/// Closed sessions stay recorded so repeated closes remain idempotent, but the
+/// tombstones are evicted oldest-first instead of growing without bound.
+pub(crate) const MAX_CLOSED_SESSIONS: usize = 1_024;
+
 pub(crate) struct AgentState<D>
 where
     D: TurnDriver,
@@ -20,6 +24,7 @@ where
     client_info: Option<AcpClientInfo>,
     pub(crate) sessions: BTreeMap<String, SessionSlot<D>>,
     next_session: u64,
+    next_tombstone: u64,
 }
 
 impl<D> AgentState<D>
@@ -33,6 +38,7 @@ where
             client_info: None,
             sessions: BTreeMap::new(),
             next_session: 1,
+            next_tombstone: 1,
         }
     }
 
@@ -89,7 +95,7 @@ where
             Some(SessionSlot::Loading | SessionSlot::Active(_) | SessionSlot::Closing(_)) => {
                 Err(AcpError::SessionConflict(session_id.to_owned()))
             }
-            Some(SessionSlot::Closed) | None => {
+            Some(SessionSlot::Closed(_)) | None => {
                 self.sessions
                     .insert(session_id.to_owned(), SessionSlot::Loading);
                 Ok(())
@@ -128,7 +134,7 @@ where
         session_id: &str,
     ) -> Result<Option<Arc<AcpHarness<D>>>, AcpError> {
         match self.sessions.get(session_id) {
-            Some(SessionSlot::Closing(_) | SessionSlot::Closed) => Ok(None),
+            Some(SessionSlot::Closing(_) | SessionSlot::Closed(_)) => Ok(None),
             Some(SessionSlot::Loading) => Err(AcpError::SessionConflict(session_id.to_owned())),
             Some(SessionSlot::Active(harness)) => {
                 let harness = harness.clone();
@@ -141,7 +147,7 @@ where
     }
 
     pub(crate) fn is_closed(&self, session_id: &str) -> bool {
-        matches!(self.sessions.get(session_id), Some(SessionSlot::Closed))
+        matches!(self.sessions.get(session_id), Some(SessionSlot::Closed(_)))
     }
 
     /// Records the outcome of a close: a stopped session becomes a tombstone,
@@ -160,7 +166,30 @@ where
     }
 
     pub(crate) fn tombstone(&mut self, session_id: String) {
-        self.sessions.insert(session_id, SessionSlot::Closed);
+        let sequence = self.next_tombstone;
+        self.next_tombstone = self.next_tombstone.saturating_add(1);
+        self.sessions
+            .insert(session_id, SessionSlot::Closed(sequence));
+        self.evict_oldest_tombstones();
+    }
+
+    fn evict_oldest_tombstones(&mut self) {
+        let mut tombstones = self
+            .sessions
+            .iter()
+            .filter_map(|(session_id, slot)| match slot {
+                SessionSlot::Closed(sequence) => Some((*sequence, session_id.clone())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        if tombstones.len() <= MAX_CLOSED_SESSIONS {
+            return;
+        }
+        tombstones.sort_unstable();
+        let excess = tombstones.len().saturating_sub(MAX_CLOSED_SESSIONS);
+        for (_, session_id) in tombstones.into_iter().take(excess) {
+            self.sessions.remove(&session_id);
+        }
     }
 
     /// Takes ownership of every live session for shutdown, keeping tombstones
@@ -174,7 +203,7 @@ where
                 false
             }
             SessionSlot::Loading => false,
-            SessionSlot::Closed => true,
+            SessionSlot::Closed(_) => true,
         });
         live
     }

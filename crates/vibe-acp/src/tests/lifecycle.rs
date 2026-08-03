@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use vibe_app_server::client::EchoTurnDriver;
 
 use super::{RecordingTurnDriver, prompt, start_session};
+use crate::agent::state::MAX_CLOSED_SESSIONS;
 use crate::agent::{AcpAgent, SESSION_LIST_PAGE_SIZE};
 use crate::protocol::{
     AcpError, AcpForkSession, AcpInitializeRequest, AcpLoadSession, AcpNewSession,
@@ -57,6 +58,21 @@ fn malformed_lifecycle_requests_are_rejected_without_runtime_mutation() {
         }),
         Err(AcpError::UnsupportedProtocol(99))
     ));
+}
+
+#[test]
+fn closed_session_tombstones_stay_bounded() {
+    let agent = AcpAgent::new(EchoTurnDriver::new("answer")).expect("agent starts");
+    let mut state = agent.lock_state().expect("agent state");
+    for index in 0..MAX_CLOSED_SESSIONS.saturating_add(10) {
+        state.tombstone(format!("session-{index:05}"));
+    }
+    assert_eq!(state.sessions.len(), MAX_CLOSED_SESSIONS);
+    assert!(!state.sessions.contains_key("session-00000"));
+    assert!(state.sessions.contains_key(&format!(
+        "session-{:05}",
+        MAX_CLOSED_SESSIONS.saturating_add(9)
+    )));
 }
 
 #[test]
@@ -153,7 +169,7 @@ async fn concurrent_close_and_disconnect_finish_the_single_owned_service() {
     let state = agent.lock_state().expect("agent state");
     assert!(matches!(
         state.sessions.get(&session.session_id),
-        Some(SessionSlot::Closed)
+        Some(SessionSlot::Closed(_))
     ));
     assert!(!state.initialized);
 }

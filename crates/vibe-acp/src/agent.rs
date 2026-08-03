@@ -339,7 +339,7 @@ where
         let working_directory = cwd.map_or_else(current_directory, ToOwned::to_owned);
         let live = self.live_sessions(cwd)?;
         let mut service = self.new_service(&working_directory, &[])?;
-        let scan = self.scan_saved_sessions(&mut service, cwd, &live)?;
+        let scan = self.scan_saved_sessions(&mut service, cwd, offset, &live)?;
         service.shutdown()?;
 
         let mut sessions = scan
@@ -380,14 +380,17 @@ where
         })
     }
 
-    /// Reads every saved session so live sessions absent from the store can be
-    /// appended to the listing.
+    /// Reads saved sessions until the requested page can be served and every
+    /// live session has been located. Live sessions sort first in the store
+    /// (most recently updated), so this normally stops after one page.
     fn scan_saved_sessions(
         &self,
         service: &mut HeadlessService<D>,
         cwd: Option<&str>,
+        offset: usize,
         live: &BTreeMap<String, String>,
     ) -> Result<SavedScan, AcpError> {
+        let needed = offset.saturating_add(SESSION_LIST_PAGE_SIZE);
         let mut scan = SavedScan {
             saved: Vec::new(),
             matched: BTreeSet::new(),
@@ -422,6 +425,9 @@ where
                 scan.complete = true;
                 return Ok(scan);
             };
+            if scan.saved.len() >= needed && scan.matched.len() == live.len() {
+                return Ok(scan);
+            }
             let next_offset = usize::try_from(next_offset).map_err(|_| {
                 AcpError::InvalidResponse("session/list nextOffset overflowed".to_owned())
             })?;

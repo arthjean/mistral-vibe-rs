@@ -330,8 +330,9 @@ where
     Loading,
     Active(Arc<AcpHarness<D>>),
     Closing(Arc<AcpHarness<D>>),
-    /// Retains the closed identity so repeated closes stay idempotent.
-    Closed,
+    /// Retains the closed identity so repeated closes stay idempotent. The
+    /// sequence bounds retention: the oldest tombstone is evicted first.
+    Closed(u64),
 }
 
 impl<D> SessionSlot<D>
@@ -341,7 +342,7 @@ where
     pub(crate) fn harness(&self) -> Option<&Arc<AcpHarness<D>>> {
         match self {
             Self::Active(harness) | Self::Closing(harness) => Some(harness),
-            Self::Loading | Self::Closed => None,
+            Self::Loading | Self::Closed(_) => None,
         }
     }
 }
