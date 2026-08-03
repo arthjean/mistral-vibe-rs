@@ -137,7 +137,19 @@ pub fn draw(
     draw_input(
         frame, input_area, editor, input_mode, theme, context, &composer,
     );
-    draw_footer(frame, footer_area, context.cwd, context.tokens, theme);
+    // Reference `QuitManager.request_confirmation` writes into the path display.
+    let quit_prompt = state
+        .quit_confirmation
+        .pending_key()
+        .map(|key| crate::tui::exit::quit_prompt(key, state.prompt_queue.len()));
+    draw_footer(
+        frame,
+        footer_area,
+        context.cwd,
+        context.tokens,
+        theme,
+        quit_prompt.as_deref(),
+    );
     if let Some(overlay) = &state.overlay {
         draw_overlay(frame, overlay, state.session_delete.as_ref(), theme);
     }
@@ -573,8 +585,9 @@ fn draw_footer(
     cwd: &Path,
     tokens: TokenState,
     theme: ResolvedTheme,
+    quit_prompt: Option<&str>,
 ) {
-    let path = display_path(cwd);
+    let path = quit_prompt.map_or_else(|| display_path(cwd), ToOwned::to_owned);
     let context = format_context_progress(tokens);
     let context_width = u16::try_from(UnicodeWidthStr::width(context.as_str()))
         .unwrap_or(u16::MAX)
@@ -582,8 +595,13 @@ fn draw_footer(
     let [path_area, context_area] =
         Layout::horizontal([Constraint::Min(1), Constraint::Length(context_width)]).areas(area);
     frame.render_widget(
-        Paragraph::new(truncate_width(&path, usize::from(path_area.width)))
-            .style(muted_style(theme)),
+        Paragraph::new(truncate_width(&path, usize::from(path_area.width))).style(
+            if quit_prompt.is_some() {
+                warning_style(theme)
+            } else {
+                muted_style(theme)
+            },
+        ),
         path_area,
     );
     frame.render_widget(

@@ -1222,6 +1222,21 @@ pub enum ToolIoError {
     Request(String),
 }
 
+/// Suspends this process the way `Ctrl+Z` does in a shell job.
+///
+/// The caller is responsible for restoring the terminal first: the process stops
+/// where the signal is delivered and resumes on the following line.
+#[cfg(unix)]
+pub fn suspend_current_process() -> Result<(), String> {
+    nix::sys::signal::kill(nix::unistd::Pid::this(), nix::sys::signal::Signal::SIGTSTP)
+        .map_err(|error| format!("suspend failed: {error}"))
+}
+
+#[cfg(not(unix))]
+pub fn suspend_current_process() -> Result<(), String> {
+    Err("suspend is unsupported on this platform".to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex as StdMutex;

@@ -393,17 +393,29 @@ pub(super) async fn handle_overlay_key(
             if let Some(effect) = remote_project_escape_effect(kind) {
                 return OverlayKeyResult::Effect(effect);
             }
+            // Reference `ThemePickerApp.Cancelled`: cancelling restores the
+            // persisted theme, discarding every preview.
+            if kind == OverlayKind::Theme
+                && let Some(runtime) = runtime.as_mut()
+            {
+                let persisted = configured_value(runtime, "theme")
+                    .and_then(|value| value.as_str().map(ToOwned::to_owned))
+                    .unwrap_or_else(|| crate::tui::themes::AUTO_THEME.to_owned());
+                crate::tui::preview_theme(&persisted, theme);
+            }
             state.overlay = None;
         }
         KeyCode::Up | KeyCode::Char('k') if key.modifiers.is_empty() => {
             if let Some(overlay) = state.overlay.as_mut() {
                 overlay.move_selection(-1);
             }
+            preview_selected_theme(kind, state, theme);
         }
         KeyCode::Down | KeyCode::Char('j') if key.modifiers.is_empty() => {
             if let Some(overlay) = state.overlay.as_mut() {
                 overlay.move_selection(1);
             }
+            preview_selected_theme(kind, state, theme);
         }
         KeyCode::Backspace if kind == OverlayKind::McpDetail && key.modifiers.is_empty() => {
             return OverlayKeyResult::Effect(OverlayEffect::Mcp(McpEffect::Show { filter: None }));
@@ -412,6 +424,7 @@ pub(super) async fn handle_overlay_key(
             if let Some(overlay) = state.overlay.as_mut() {
                 overlay.pop_query();
             }
+            preview_selected_theme(kind, state, theme);
         }
         KeyCode::Char('r')
             if matches!(kind, OverlayKind::Mcp | OverlayKind::McpDetail)
@@ -462,10 +475,26 @@ pub(super) async fn handle_overlay_key(
             if let Some(overlay) = state.overlay.as_mut() {
                 overlay.push_query(character);
             }
+            preview_selected_theme(kind, state, theme);
         }
         _ => {}
     }
     OverlayKeyResult::Handled
+}
+
+/// Reference `on_option_list_option_highlighted`: the highlighted theme previews
+/// immediately, without touching the configuration.
+fn preview_selected_theme(kind: OverlayKind, state: &TuiState, theme: &mut ResolvedTheme) {
+    if kind != OverlayKind::Theme {
+        return;
+    }
+    if let Some(selected) = state
+        .overlay
+        .as_ref()
+        .and_then(super::interaction::Overlay::selected_item)
+    {
+        crate::tui::preview_theme(&selected.id, theme);
+    }
 }
 
 pub(super) fn handle_remote_project_create_key(

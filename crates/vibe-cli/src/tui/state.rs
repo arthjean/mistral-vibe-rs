@@ -159,6 +159,8 @@ pub struct TuiState {
     pub show_reasoning: bool,
     /// Reference `autocopy_to_clipboard`: copy on pointer release.
     pub autocopy_to_clipboard: bool,
+    /// Reference `ask_confirmation_on_exit`: `Ctrl+D` needs a second press.
+    pub ask_confirmation_on_exit: bool,
     pub callback: Option<CallbackPresentation>,
     pub callback_scroll_offset: isize,
     pub plan_review: Option<PlanReviewState>,
@@ -210,6 +212,7 @@ impl TuiState {
             tools_collapsed: true,
             show_reasoning: true,
             autocopy_to_clipboard: false,
+            ask_confirmation_on_exit: true,
             callback: None,
             callback_scroll_offset: 0,
             plan_review: None,
@@ -328,6 +331,7 @@ impl TuiState {
     /// Refreshes the live turn progress. Idle work clears it immediately, so a
     /// stale indicator can never outlive the turn it described.
     pub fn sync_activity(&mut self, now_ms: u64) {
+        self.quit_confirmation.expire(now_ms);
         if !self.waiting {
             self.turn_started_ms = None;
             self.activity = None;
@@ -411,6 +415,7 @@ impl TuiState {
         replacement.tools_collapsed = self.tools_collapsed;
         replacement.show_reasoning = self.show_reasoning;
         replacement.autocopy_to_clipboard = self.autocopy_to_clipboard;
+        replacement.ask_confirmation_on_exit = self.ask_confirmation_on_exit;
         replacement.callback = self.callback.take();
         replacement.callback_scroll_offset = self.callback_scroll_offset;
         replacement.plan_review = self.plan_review.take();

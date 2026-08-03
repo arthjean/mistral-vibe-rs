@@ -43,6 +43,12 @@ async fn main() -> ExitCode {
                 Ok(exit) => {
                     let session_started = exit.session_started;
                     let initialization_error = exit.initialization_error;
+                    if let Some(summary) = &exit.summary {
+                        let mut stdout = std::io::stdout().lock();
+                        for line in vibe_cli::tui::exit::session_resume_lines(summary) {
+                            let _ = writeln!(stdout, "{line}");
+                        }
+                    }
                     if session_started
                         && let Some(worktree) = worktree
                         && let Err(error) = worktree.cleanup_terminal()

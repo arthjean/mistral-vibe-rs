@@ -363,12 +363,13 @@ pub fn thinking_overlay(current: &str) -> Overlay {
     )
 }
 
+/// Reference `ThemePickerApp`: the full catalog, automatic entry first.
 #[must_use]
 pub fn theme_overlay(current: &str) -> Overlay {
     fixed_choice_overlay(
         OverlayKind::Theme,
-        "Select theme",
-        &["system", "light", "dark"],
+        "Select Theme",
+        &crate::tui::themes::sorted_theme_names(),
         current,
     )
 }
@@ -616,7 +617,7 @@ fn compact_value(value: &Value) -> String {
     }
 }
 
-fn to_camel_case(value: &str) -> String {
+pub(super) fn to_camel_case(value: &str) -> String {
     let mut output = String::new();
     let mut uppercase = false;
     for character in value.chars() {

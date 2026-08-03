@@ -5,7 +5,8 @@ use serde_json::Value;
 
 use super::attachments::{PreparedSubmission, PromptDraft};
 
-const QUIT_CONFIRMATION_WINDOW_MS: u64 = 1_000;
+/// Reference `QUIT_CONFIRM_DELAY`.
+pub const QUIT_CONFIRMATION_WINDOW_MS: u64 = 1_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayKind {
@@ -498,6 +499,15 @@ impl QuitConfirmation {
     pub fn cancel(&mut self) {
         self.key = None;
         self.requested_at_ms = None;
+    }
+
+    /// Reference `QuitManager` clears its prompt once the window closes.
+    pub fn expire(&mut self, now_ms: u64) {
+        if self.requested_at_ms.is_some_and(|requested| {
+            now_ms.saturating_sub(requested) >= QUIT_CONFIRMATION_WINDOW_MS
+        }) {
+            self.cancel();
+        }
     }
 
     #[must_use]

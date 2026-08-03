@@ -26,6 +26,36 @@ const TRANSACTION_FILE: &str = ".config-transaction.json";
 const LOCK_FILE: &str = ".config.lock";
 const MAX_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 
+/// Every accepted `theme` value: the reference `sorted_theme_names()` catalog
+/// plus the native polarity values this port already persisted.
+pub const THEME_VALUES: [&str; 25] = [
+    "system",
+    "light",
+    "dark",
+    "auto",
+    "ansi-light",
+    "atom-one-light",
+    "catppuccin-latte",
+    "rose-pine-dawn",
+    "solarized-light",
+    "textual-light",
+    "ansi-dark",
+    "atom-one-dark",
+    "catppuccin-frappe",
+    "catppuccin-macchiato",
+    "catppuccin-mocha",
+    "dracula",
+    "flexoki",
+    "gruvbox",
+    "monokai",
+    "nord",
+    "rose-pine",
+    "rose-pine-moon",
+    "solarized-dark",
+    "textual-dark",
+    "tokyo-night",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfigLayerKind {
@@ -707,7 +737,7 @@ impl LayeredConfig {
             "properties": {
                 "active_model": {"type": "string", "default": "", "description": "Model used for new turns."},
                 "thinking": {"enum": ["off", "low", "medium", "high", "max"], "default": "off", "description": "Reasoning effort for the active model."},
-                "theme": {"enum": ["system", "light", "dark"], "default": "system", "description": "Terminal color theme."},
+                "theme": {"enum": THEME_VALUES, "default": "system", "description": "Terminal color theme."},
                 "notifications": {
                     "enum": ["off", "unfocused", "always"],
                     "default": "unfocused",

@@ -327,6 +327,9 @@ pub(in crate::tui) fn apply_render_preferences(
     state.autocopy_to_clipboard = configured_value(runtime, "autocopy_to_clipboard")
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
+    state.ask_confirmation_on_exit = configured_value(runtime, "ask_confirmation_on_exit")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(true);
     state
         .notifier
         .set_policy(crate::tui::attention::NotificationPolicy::from_config(

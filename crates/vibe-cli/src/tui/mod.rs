@@ -12,6 +12,7 @@ mod composer_layout;
 pub mod controls;
 pub mod debug_console;
 pub mod diagnostics;
+pub mod exit;
 mod external_action;
 mod feedback;
 pub mod history;
@@ -38,6 +39,7 @@ pub mod startup;
 pub mod state;
 mod switching;
 pub mod terminal;
+pub mod themes;
 pub mod transcript;
 pub mod transcript_view;
 pub mod updates;
@@ -381,6 +383,8 @@ impl Default for BannerMetrics {
 pub struct InteractiveExit {
     pub session_started: bool,
     pub initialization_error: Option<CliError>,
+    /// Reference `SessionExitSummary`, printed after the terminal is restored.
+    pub summary: Option<exit::SessionExitSummary>,
 }
 
 const MAX_FATAL_INPUT_DRAIN: usize = 256;
@@ -449,12 +453,14 @@ pub async fn run_interactive(
         return Ok(InteractiveExit {
             session_started: false,
             initialization_error: None,
+            summary: None,
         });
     }
     if !startup::resolve_location_safety(trust.dangerous_warning.as_deref())? {
         return Ok(InteractiveExit {
             session_started: false,
             initialization_error: None,
+            summary: None,
         });
     }
     match startup::resolve_bare_resume(&arguments, &startup_host)? {
@@ -468,6 +474,7 @@ pub async fn run_interactive(
             return Ok(InteractiveExit {
                 session_started: false,
                 initialization_error: None,
+                summary: None,
             });
         }
     }
@@ -499,6 +506,7 @@ pub async fn run_interactive(
         return Ok(InteractiveExit {
             session_started: false,
             initialization_error: None,
+            summary: None,
         });
     }
     let update_checks_enabled = startup::update_checks_enabled(&release3);
@@ -1005,6 +1013,8 @@ pub async fn run_interactive(
     let telemetry = runtime
         .as_ref()
         .and_then(|runtime| runtime.telemetry.clone());
+    // Reference `exit_summary`, read before the session closes.
+    let summary = runtime.as_mut().map(session_exit_summary);
     let (close_result, shutdown_result) = if let Some(mut runtime) = runtime {
         let session_id = runtime.session_id.clone();
         let close = runtime
@@ -1030,7 +1040,33 @@ pub async fn run_interactive(
     result.map(|()| InteractiveExit {
         session_started,
         initialization_error,
+        summary,
     })
+}
+
+/// Reference `AppServerSession.exit_summary`: the session identity plus the
+/// tokens spent since the session baseline.
+fn session_exit_summary(runtime: &mut InteractiveRuntime) -> exit::SessionExitSummary {
+    let stats = runtime
+        .service
+        .public_call("stats/read", json!({"sessionId": runtime.session_id}))
+        .ok()
+        .and_then(|result| result.get("stats").cloned())
+        .unwrap_or(Value::Null);
+    let tokens = |key: &str| {
+        stats
+            .get(key)
+            .or_else(|| stats.get(pickers::to_camel_case(key).as_str()))
+            .and_then(Value::as_u64)
+            .unwrap_or_default()
+    };
+    exit::SessionExitSummary {
+        session_id: Some(runtime.session_id.clone()),
+        usage: exit::SessionUsage {
+            input_tokens: tokens("session_prompt_tokens"),
+            output_tokens: tokens("session_completion_tokens"),
+        },
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1456,11 +1492,12 @@ async fn handle_key(
                         .await;
                     return Ok(false);
                 }
-                if state.quit_confirmation.request("Ctrl+C", unix_millis()) {
-                    return Ok(true);
-                }
-                state.push_diagnostic("Press Ctrl+C again within one second to quit");
-                return Ok(false);
+                return Ok(exit::resolve_quit(
+                    "Ctrl+C",
+                    state.ask_confirmation_on_exit,
+                    &mut state.quit_confirmation,
+                    unix_millis(),
+                ));
             }
             KeyCode::Char('d') => {
                 if !input.editor().text().is_empty() {
@@ -1469,10 +1506,16 @@ async fn handle_key(
                     }
                     return Ok(false);
                 }
-                if state.quit_confirmation.request("Ctrl+D", unix_millis()) {
-                    return Ok(true);
-                }
-                state.push_diagnostic("Press Ctrl+D again within one second to quit");
+                return Ok(exit::resolve_quit(
+                    "Ctrl+D",
+                    state.ask_confirmation_on_exit,
+                    &mut state.quit_confirmation,
+                    unix_millis(),
+                ));
+            }
+            // Reference `action_suspend_with_message`.
+            KeyCode::Char('z') => {
+                suspend_session(terminal_guard, terminal, state)?;
                 return Ok(false);
             }
             KeyCode::Char('o') => {
@@ -2472,11 +2515,18 @@ fn configured_theme(runtime: Option<&mut InteractiveRuntime>) -> Option<Theme> {
 }
 
 fn parse_theme(value: &str) -> Option<Theme> {
-    match value {
-        "system" | "default" => Some(Theme::System),
-        "light" => Some(Theme::Light),
-        "dark" => Some(Theme::Dark),
-        _ => None,
+    themes::theme_polarity(value)
+}
+
+/// Reference `ThemePreviewed`: a highlighted theme applies before acceptance and
+/// is never persisted.
+pub(in crate::tui) fn preview_theme(value: &str, theme: &mut ResolvedTheme) {
+    if let Some(preference) = parse_theme(value) {
+        *theme = resolve_theme(
+            preference,
+            EnvironmentThemeDetector.detect(),
+            !theme.colors_enabled,
+        );
     }
 }
 
@@ -2488,7 +2538,10 @@ fn update_theme(
     theme: &mut ResolvedTheme,
 ) {
     let Some(preference) = parse_theme(value) else {
-        state.push_diagnostic("Usage: /theme <system|light|dark>");
+        state.push_diagnostic(format!(
+            "Usage: /theme <{}>",
+            themes::accepted_theme_values().join("|")
+        ));
         return;
     };
     if persist_setting(
@@ -3729,6 +3782,39 @@ fn drain_update_receiver(
         }
     }
     false
+}
+
+/// Reference `action_suspend_with_message`: restore the terminal, print the
+/// resume hint, stop, and repaint on return. Unsupported platforms do nothing.
+fn suspend_session(
+    terminal_guard: &mut TerminalGuard<CrosstermOps<std::io::Stdout>>,
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    state: &mut TuiState,
+) -> Result<(), CliError> {
+    if !cfg!(unix) {
+        return Ok(());
+    }
+    terminal_guard
+        .restore()
+        .map_err(|error| CliError::Terminal(error.to_string()))?;
+    println!("{}", exit::SUSPEND_MESSAGE);
+    let suspended = vibe_core::process::suspend_current_process();
+    terminal_guard
+        .resume()
+        .map_err(|error| CliError::Terminal(error.to_string()))?;
+    // Reference `_on_driver_signal_resume` forces a full repaint. Resizing to
+    // the current size clears the viewport and both buffers without asking the
+    // terminal for its cursor, which a resumed session may never answer.
+    let area = terminal
+        .size()
+        .map_err(|error| CliError::Terminal(error.to_string()))?;
+    terminal
+        .resize(area.into())
+        .map_err(|error| CliError::Terminal(error.to_string()))?;
+    if let Err(error) = suspended {
+        state.push_diagnostic(format!("Suspend is unavailable: {error}"));
+    }
+    Ok(())
 }
 
 /// Reference `_try_interrupt_no_job_steps`: `Esc` and `Ctrl+C` stop narration
