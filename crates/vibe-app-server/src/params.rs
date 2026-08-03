@@ -73,6 +73,20 @@ pub(crate) fn required_object<'a>(
         .ok_or_else(|| ParamError(format!("{key} must be an object")))
 }
 
+pub(crate) fn optional_u64(
+    params: &BTreeMap<String, Value>,
+    key: &str,
+) -> Result<Option<u64>, ParamError> {
+    params
+        .get(key)
+        .map(|value| {
+            value
+                .as_u64()
+                .ok_or_else(|| ParamError(format!("{key} must be an integer")))
+        })
+        .transpose()
+}
+
 /// Reads a bounded index or count, falling back to `default` when absent.
 pub(crate) fn usize_param(
     params: &BTreeMap<String, Value>,

@@ -5,6 +5,9 @@ use std::fs::OpenOptions;
 use std::future::Future;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+
+use crate::host::{self, now_seconds};
+use crate::params;
 use std::pin::Pin;
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -41,6 +44,15 @@ pub const RELEASE4_METHODS: &[&str] = &[
     "vibeCode/teleport/start",
 ];
 
+/// Methods that reach Vibe Code over the network. They are always dispatched on
+/// the asynchronous path so a slow cloud call never blocks the caller's loop.
+const DEFERRED_RELEASE4_METHODS: &[&str] = &[
+    "vibeCode/projects/create",
+    "vibeCode/projects/loadMore",
+    "vibeCode/projects/open",
+    "vibeCode/teleport/push/respond",
+    "vibeCode/teleport/start",
+];
 const MIN_LOOP_INTERVAL_SECONDS: u64 = 30;
 const MAX_LOOPS_PER_SESSION: usize = 50;
 const PROJECT_PAGE_LIMIT: usize = 100;
@@ -1051,23 +1063,7 @@ impl CommandGitProbe {
         timeout: Duration,
         action: &str,
     ) -> Result<GitCommandResult, CloudError> {
-        self.runner
-            .run(
-                &self.git_program,
-                working_directory,
-                args,
-                &[],
-                timeout,
-                MAX_GIT_OUTPUT_BYTES,
-            )
-            .map_err(|error| match error {
-                GitCommandError::Timeout => CloudError::Git(format!(
-                    "timed out while trying to {action}; local state is unchanged"
-                )),
-                GitCommandError::Io => CloudError::Git(format!(
-                    "could not run Git to {action}; install Git and retry"
-                )),
-            })
+        self.run_git_with_environment(working_directory, args, &[], timeout, action)
     }
 
     fn run_git_with_environment(
@@ -1809,43 +1805,6 @@ impl Release4Service {
         }
     }
 
-    fn project_list_all_sync(&self) -> Result<ProjectPage, Release4Error> {
-        let cloud = self.sync_project_cloud()?;
-        let mut projects = Vec::new();
-        let mut cursor = None;
-        let mut seen_cursors = BTreeSet::new();
-        let mut pages_loaded = 0_usize;
-        loop {
-            if pages_loaded >= MAX_HEADLESS_PROJECT_PAGES {
-                return Err(Release4Error::Conflict(format!(
-                    "Vibe Code project pagination exceeded {MAX_HEADLESS_PROJECT_PAGES} pages"
-                )));
-            }
-            let page = cloud
-                .list(cursor.as_deref())
-                .map_err(Release4Error::Cloud)?;
-            pages_loaded += 1;
-            if projects.len().saturating_add(page.projects.len()) > MAX_HEADLESS_PROJECTS {
-                return Err(Release4Error::Conflict(format!(
-                    "Vibe Code project pagination exceeded {MAX_HEADLESS_PROJECTS} projects"
-                )));
-            }
-            projects.extend(page.projects);
-            let Some(next_cursor) = page.next_cursor else {
-                return Ok(ProjectPage {
-                    projects,
-                    next_cursor: None,
-                });
-            };
-            if !seen_cursors.insert(next_cursor.clone()) {
-                return Err(Release4Error::Conflict(
-                    "Vibe Code project pagination repeated a cursor".to_owned(),
-                ));
-            }
-            cursor = Some(next_cursor);
-        }
-    }
-
     async fn project_list_all(&self) -> Result<ProjectPage, Release4Error> {
         let mut projects = Vec::new();
         let mut cursor = None;
@@ -2025,7 +1984,7 @@ impl Release4Service {
             }))
     }
 
-    fn finish_headless_project_open_sync(
+    async fn finish_headless_project_open(
         &self,
         session_id: &str,
         mut opened: Release4Dispatch,
@@ -2061,48 +2020,6 @@ impl Release4Service {
                 ("pickerId".to_owned(), json!(picker_id)),
                 ("name".to_owned(), json!(project_name)),
                 ("defaultBranch".to_owned(), json!(default_branch)),
-            ]))?
-        };
-        finish_headless_project_open(&mut opened, action)?;
-        Ok(opened)
-    }
-
-    async fn finish_headless_project_open(
-        &self,
-        session_id: &str,
-        mut opened: Release4Dispatch,
-        project_name: String,
-        default_branch: Option<String>,
-    ) -> Result<Release4Dispatch, Release4Error> {
-        if opened
-            .result
-            .get("resolvedProjectId")
-            .is_some_and(|project_id| !project_id.is_null())
-        {
-            return Ok(opened);
-        }
-        let picker_id = opened
-            .result
-            .get("pickerId")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                Release4Error::Conflict("project picker omitted its identifier".to_owned())
-            })?
-            .to_owned();
-        let matched_project_id = self.single_headless_project_match(session_id, &picker_id)?;
-        let action = if let Some(project_id) = matched_project_id {
-            self.project_select(&BTreeMap::from([
-                ("sessionId".to_owned(), json!(session_id)),
-                ("pickerId".to_owned(), json!(picker_id)),
-                ("projectId".to_owned(), json!(project_id)),
-            ]))?
-        } else {
-            let default_branch = headless_default_branch(default_branch)?;
-            self.project_create_deferred(&BTreeMap::from([
-                ("sessionId".to_owned(), json!(session_id)),
-                ("pickerId".to_owned(), json!(picker_id)),
-                ("name".to_owned(), json!(project_name)),
-                ("defaultBranch".to_owned(), json!(default_branch)),
             ]))
             .await?
         };
@@ -2126,7 +2043,7 @@ impl Release4Service {
         Ok(matched.filter(|_| matches.next().is_none()))
     }
 
-    async fn project_open_deferred(
+    async fn project_open(
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<Release4Dispatch, Release4Error> {
@@ -2161,7 +2078,7 @@ impl Release4Service {
             .await
     }
 
-    async fn project_create_deferred(
+    async fn project_create(
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<Release4Dispatch, Release4Error> {
@@ -2210,7 +2127,7 @@ impl Release4Service {
         ]))
     }
 
-    async fn project_load_more_deferred(
+    async fn project_load_more(
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<Release4Dispatch, Release4Error> {
@@ -2276,7 +2193,7 @@ impl Release4Service {
         ]))
     }
 
-    async fn teleport_start_deferred(
+    async fn teleport_start(
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<Release4Dispatch, Release4Error> {
@@ -2408,7 +2325,7 @@ impl Release4Service {
         ))
     }
 
-    async fn teleport_push_respond_deferred(
+    async fn teleport_push_respond(
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<Release4Dispatch, Release4Error> {
@@ -2533,21 +2450,25 @@ impl Release4Service {
         Ok(self)
     }
 
+    /// Dispatches the methods that only touch local state.
+    ///
+    /// Cloud-backed methods reach the network and are served by
+    /// [`Self::dispatch_deferred`]; calling them here is a routing mistake.
     pub fn dispatch(
         &self,
         method: &str,
         params: &BTreeMap<String, Value>,
     ) -> Result<Release4Dispatch, Release4Error> {
+        if DEFERRED_RELEASE4_METHODS.contains(&method) {
+            return Err(Release4Error::Conflict(format!(
+                "`{method}` reaches Vibe Code and must be dispatched asynchronously"
+            )));
+        }
         match method {
-            "vibeCode/projects/create" => self.project_create(params),
-            "vibeCode/projects/open" => self.project_open(params),
             "vibeCode/projects/recover" => self.project_recover(params),
             "vibeCode/projects/select" => self.project_select(params),
-            "vibeCode/projects/loadMore" => self.project_load_more(params),
             "vibeCode/projects/unlink" => self.project_unlink(params),
             "vibeCode/projects/cancel" => self.project_cancel(params),
-            "vibeCode/teleport/start" => self.teleport_start(params),
-            "vibeCode/teleport/push/respond" => self.teleport_push_respond(params),
             "vibeCode/teleport/cancel" => self.teleport_cancel(params),
             "loops/create" => self.loop_create(params),
             "loops/list" => self.loop_list(params),
@@ -2559,18 +2480,7 @@ impl Release4Service {
 
     #[must_use]
     pub fn requires_deferred_dispatch(&self, method: &str) -> bool {
-        (matches!(self.project_cloud, ProjectCloudBackend::Async(_))
-            && matches!(
-                method,
-                "vibeCode/projects/create"
-                    | "vibeCode/projects/loadMore"
-                    | "vibeCode/projects/open"
-            ))
-            || (matches!(self.teleport_cloud, TeleportCloudBackend::Async(_))
-                && matches!(
-                    method,
-                    "vibeCode/teleport/push/respond" | "vibeCode/teleport/start"
-                ))
+        DEFERRED_RELEASE4_METHODS.contains(&method)
     }
 
     pub async fn dispatch_deferred(
@@ -2579,11 +2489,11 @@ impl Release4Service {
         params: &BTreeMap<String, Value>,
     ) -> Result<Release4Dispatch, Release4Error> {
         match method {
-            "vibeCode/projects/create" => self.project_create_deferred(params).await,
-            "vibeCode/projects/loadMore" => self.project_load_more_deferred(params).await,
-            "vibeCode/projects/open" => self.project_open_deferred(params).await,
-            "vibeCode/teleport/start" => self.teleport_start_deferred(params).await,
-            "vibeCode/teleport/push/respond" => self.teleport_push_respond_deferred(params).await,
+            "vibeCode/projects/create" => self.project_create(params).await,
+            "vibeCode/projects/loadMore" => self.project_load_more(params).await,
+            "vibeCode/projects/open" => self.project_open(params).await,
+            "vibeCode/teleport/start" => self.teleport_start(params).await,
+            "vibeCode/teleport/push/respond" => self.teleport_push_respond(params).await,
             _ => self.dispatch(method, params),
         }
     }
@@ -2719,84 +2629,6 @@ impl Release4Service {
         Ok(())
     }
 
-    fn project_create(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
-        let session_id = required_string(params, "sessionId")?;
-        let picker_id = required_string(params, "pickerId")?;
-        let name = required_string(params, "name")?;
-        let default_branch = required_string(params, "defaultBranch")?;
-        let (repo_url, before) = {
-            let state = self.lock_projects()?;
-            let picker = picker(&state, picker_id, session_id)?;
-            (picker.repo_url.clone(), state.clone())
-        };
-        let project = self
-            .sync_project_cloud()?
-            .create(name, &repo_url, default_branch)
-            .map_err(Release4Error::Cloud)?;
-        let mut state = self.lock_projects()?;
-        let (repo_root, link, view) = {
-            let picker = picker_mut(&mut state, picker_id, session_id)?;
-            picker
-                .projects
-                .insert(project.project_id.clone(), project.clone());
-            picker.selected = Some(project.project_id.clone());
-            let link = SavedProjectLink {
-                repo_url: picker.repo_url.clone(),
-                project_id: project.project_id.clone(),
-                project_name: project.name.clone(),
-            };
-            picker.saved_link = Some(link.clone());
-            picker.saved_project_link_cleared = false;
-            picker.project_repo_remote_changed = false;
-            (picker.repo_root.clone(), link, project_view(picker))
-        };
-        state.linked_projects.insert(repo_root, link);
-        if let Err(error) = self.persist_project_links(&state.linked_projects) {
-            *state = before;
-            return Err(error);
-        }
-        Ok(Release4Dispatch::result([
-            ("view", view),
-            ("project", serde_json::to_value(project)?),
-        ]))
-    }
-
-    fn project_open(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
-        let session_id = required_string(params, "sessionId")?.to_owned();
-        let purpose = project_picker_purpose(params)?;
-        let working_directory =
-            optional_string(params, "workingDirectory")?.unwrap_or_else(|| ".".into());
-        let git = self
-            .git
-            .inspect_project(Path::new(&working_directory))
-            .map_err(Release4Error::Cloud)?;
-        if purpose == ProjectPickerPurpose::Configure {
-            let page = self
-                .sync_project_cloud()?
-                .list(None)
-                .map_err(Release4Error::Cloud)?;
-            return self.install_project_picker(session_id, git, page);
-        }
-        let project_name = suggested_project_name(&git);
-        let default_branch = git.branch.clone();
-        let page = if self.has_matching_saved_project_link(&git)? {
-            ProjectPage {
-                projects: Vec::new(),
-                next_cursor: None,
-            }
-        } else {
-            self.project_list_all_sync()?
-        };
-        let opened = self.install_project_picker(session_id.clone(), git, page)?;
-        self.finish_headless_project_open_sync(&session_id, opened, project_name, default_branch)
-    }
-
     fn project_recover(
         &self,
         params: &BTreeMap<String, Value>,
@@ -2903,75 +2735,6 @@ impl Release4Service {
         ]))
     }
 
-    fn project_load_more(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
-        let session_id = required_string(params, "sessionId")?;
-        let picker_id = required_string(params, "pickerId")?;
-        let requested_cursor = {
-            let state = self.lock_projects()?;
-            picker(&state, picker_id, session_id)?.next_cursor.clone()
-        };
-        let Some(requested_cursor) = requested_cursor else {
-            let state = self.lock_projects()?;
-            let picker = picker(&state, picker_id, session_id)?;
-            return Ok(Release4Dispatch::result([
-                ("view", project_view(picker)),
-                ("focusOptionId", Value::Null),
-            ]));
-        };
-        let repo_url = {
-            let state = self.lock_projects()?;
-            picker(&state, picker_id, session_id)?.repo_url.clone()
-        };
-        let cloud = self.sync_project_cloud()?;
-        let mut cursor = Some(requested_cursor.clone());
-        let mut pages = Vec::new();
-        let mut focus = None;
-        let mut seen = BTreeSet::new();
-        while let Some(page_cursor) = cursor.take() {
-            if pages.len() >= MAX_HEADLESS_PROJECT_PAGES || !seen.insert(page_cursor.clone()) {
-                return Err(Release4Error::Conflict(
-                    "Vibe Code project pagination did not terminate safely".to_owned(),
-                ));
-            }
-            let page = cloud
-                .list(Some(&page_cursor))
-                .map_err(Release4Error::Cloud)?;
-            focus = page
-                .projects
-                .iter()
-                .find(|project| project_is_selectable(project, &repo_url))
-                .map(|project| project.project_id.clone());
-            cursor.clone_from(&page.next_cursor);
-            pages.push(page);
-            if focus.is_some() {
-                break;
-            }
-        }
-        let mut state = self.lock_projects()?;
-        let picker = picker_mut(&mut state, picker_id, session_id)?;
-        if picker.next_cursor.as_deref() != Some(&requested_cursor) {
-            return Err(Release4Error::Conflict(
-                "project picker changed while loading the next page".to_owned(),
-            ));
-        }
-        for page in pages {
-            for project in page.projects {
-                picker.projects.insert(project.project_id.clone(), project);
-            }
-            picker.next_cursor = page.next_cursor;
-        }
-        Ok(Release4Dispatch::result([
-            ("view", project_view(picker)),
-            (
-                "focusOptionId",
-                focus.map_or(Value::Null, |id| json!(format!("project:{id}"))),
-            ),
-        ]))
-    }
-
     fn project_unlink(
         &self,
         params: &BTreeMap<String, Value>,
@@ -3013,158 +2776,6 @@ impl Release4Service {
         }
         state.pickers.remove(picker_id);
         Ok(Release4Dispatch::result([] as [(&str, Value); 0]))
-    }
-
-    fn teleport_start(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
-        let session_id = required_string(params, "sessionId")?;
-        let operation_id = required_string(params, "operationId")?.to_owned();
-        let picker_id = required_string(params, "pickerId")?;
-        let project_id = required_string(params, "projectId")?;
-        {
-            let state = self.lock_projects()?;
-            let picker = picker(&state, picker_id, session_id)?;
-            if !picker.projects.contains_key(project_id) {
-                return Err(Release4Error::NotFound(format!(
-                    "project `{project_id}` is not available in picker `{picker_id}`"
-                )));
-            }
-            if picker.selected.as_deref() != Some(project_id) {
-                return Err(Release4Error::Conflict(format!(
-                    "project `{project_id}` is not selected in picker `{picker_id}`"
-                )));
-            }
-        }
-        let summary = optional_string(params, "prompt")?
-            .filter(|prompt| !prompt.trim().is_empty())
-            .unwrap_or_else(|| "Continue this session in Vibe Code".to_owned());
-        let working_directory = PathBuf::from(
-            optional_string(params, "workingDirectory")?.unwrap_or_else(|| ".".to_owned()),
-        );
-        if self.lock_teleports()?.contains_key(&operation_id) {
-            return Err(Release4Error::Conflict(format!(
-                "Teleport operation `{operation_id}` already exists"
-            )));
-        }
-        let mut operation = TeleportOperation {
-            id: operation_id.clone(),
-            session_id: session_id.to_owned(),
-            project_id: project_id.to_owned(),
-            working_directory,
-            summary,
-            repository: TeleportRepository {
-                repo_url: String::new(),
-                branch: None,
-                commit_sha: None,
-                diff: None,
-            },
-            state: TeleportState::SummarizingContext,
-            push_response: None,
-            unpushed_count: 0,
-            branch_not_pushed: false,
-            url: None,
-            error: None,
-        };
-        let mut notifications = vec![teleport_notification(&operation)];
-        operation.state = TeleportState::CheckingGit;
-        notifications.push(teleport_notification(&operation));
-        let (snapshot, repository, push_status) =
-            match self.git.inspect_for_teleport(&operation.working_directory) {
-                Ok(inspection) => inspection,
-                Err(error) => {
-                    operation.state = TeleportState::Failed;
-                    operation.error = Some(error.to_string());
-                    notifications.push(teleport_notification(&operation));
-                    self.lock_teleports()?
-                        .insert(operation_id.clone(), operation);
-                    return Ok(Release4Dispatch::with_notifications(
-                        [("operationId", json!(operation_id))],
-                        notifications,
-                    ));
-                }
-            };
-        operation.repository = repository;
-        if snapshot.unpushed {
-            operation.state = TeleportState::PushRequired;
-            operation.unpushed_count = push_status.unpushed_count;
-            operation.branch_not_pushed = push_status.branch_not_pushed;
-            notifications.push(teleport_notification(&operation));
-        } else {
-            complete_teleport(
-                self.sync_teleport_cloud()?,
-                &mut operation,
-                &mut notifications,
-            );
-        }
-        self.lock_teleports()?
-            .insert(operation_id.clone(), operation);
-        Ok(Release4Dispatch::with_notifications(
-            [("operationId", json!(operation_id))],
-            notifications,
-        ))
-    }
-
-    fn teleport_push_respond(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
-        let session_id = required_string(params, "sessionId")?;
-        let operation_id = required_string(params, "operationId")?;
-        let accepted = required_bool(params, "approved")?;
-        let mut teleports = self.lock_teleports()?;
-        let operation = teleports.get_mut(operation_id).ok_or_else(|| {
-            Release4Error::NotFound(format!("Teleport operation `{operation_id}` was not found"))
-        })?;
-        if operation.session_id != session_id {
-            return Err(Release4Error::NotFound(format!(
-                "Teleport operation `{operation_id}` is not owned by session `{session_id}`"
-            )));
-        }
-        if let Some(previous) = operation.push_response {
-            if previous == accepted {
-                return Ok(Release4Dispatch::result([] as [(&str, Value); 0]));
-            }
-            return Err(Release4Error::Conflict(
-                "Teleport push response conflicts with the recorded answer".to_owned(),
-            ));
-        }
-        if operation.state != TeleportState::PushRequired {
-            return Err(Release4Error::Conflict(
-                "Teleport operation is not waiting for a push response".to_owned(),
-            ));
-        }
-        operation.push_response = Some(accepted);
-        let mut notifications = Vec::new();
-        if !accepted {
-            operation.state = TeleportState::Failed;
-            operation.error = Some(
-                "Git push was denied; the local session and working tree were not changed"
-                    .to_owned(),
-            );
-            notifications.push(teleport_notification(operation));
-            return Ok(Release4Dispatch::with_notifications(
-                [] as [(&str, Value); 0],
-                notifications,
-            ));
-        }
-        operation.state = TeleportState::Pushing;
-        notifications.push(teleport_notification(operation));
-        if let Err(error) = self.git.push(&operation.working_directory) {
-            operation.state = TeleportState::Failed;
-            operation.error = Some(error.to_string());
-            notifications.push(teleport_notification(operation));
-            return Ok(Release4Dispatch::with_notifications(
-                [] as [(&str, Value); 0],
-                notifications,
-            ));
-        }
-        complete_teleport(self.sync_teleport_cloud()?, operation, &mut notifications);
-        Ok(Release4Dispatch::with_notifications(
-            [] as [(&str, Value); 0],
-            notifications,
-        ))
     }
 
     fn teleport_cancel(
@@ -3338,24 +2949,6 @@ impl Release4Service {
         )
     }
 
-    fn sync_project_cloud(&self) -> Result<&dyn ProjectCloud, Release4Error> {
-        match &self.project_cloud {
-            ProjectCloudBackend::Sync(cloud) => Ok(cloud.as_ref()),
-            ProjectCloudBackend::Async(_) => Err(Release4Error::Cloud(CloudError::Unavailable(
-                "Vibe Code cloud work must run through the deferred app-server path".to_owned(),
-            ))),
-        }
-    }
-
-    fn sync_teleport_cloud(&self) -> Result<&dyn TeleportCloud, Release4Error> {
-        match &self.teleport_cloud {
-            TeleportCloudBackend::Sync(cloud) => Ok(cloud.as_ref()),
-            TeleportCloudBackend::Async(_) => Err(Release4Error::Cloud(CloudError::Unavailable(
-                "Teleport cloud work must run through the deferred app-server path".to_owned(),
-            ))),
-        }
-    }
-
     fn lock_projects(&self) -> Result<std::sync::MutexGuard<'_, ProjectState>, Release4Error> {
         self.projects
             .lock()
@@ -3377,47 +2970,8 @@ impl Release4Service {
     }
 
     fn persist_loops(&self, loops: &BTreeMap<String, ScheduledLoop>) -> Result<(), Release4Error> {
-        let path = &self.loop_store;
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(Release4Error::Persistence)?;
-        }
-        let sequence = NEXT_LOOP_TEMP_FILE.fetch_add(1, Ordering::Relaxed);
-        let file_name = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("scheduled-loops.json");
-        let temporary = path.with_file_name(format!(
-            ".{file_name}.tmp-{}-{sequence}",
-            std::process::id()
-        ));
-        let contents = serde_json::to_vec_pretty(loops)?;
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let write_result = (|| {
-            let mut file = options.open(&temporary)?;
-            file.write_all(&contents)?;
-            file.sync_all()
-        })();
-        if let Err(error) = write_result {
-            let _ = fs::remove_file(&temporary);
-            return Err(Release4Error::Persistence(error));
-        }
-        if let Err(error) = replace_file(&temporary, path) {
-            let _ = fs::remove_file(&temporary);
-            return Err(Release4Error::Persistence(error));
-        }
-        #[cfg(unix)]
-        if let Some(parent) = path.parent() {
-            fs::File::open(parent)
-                .and_then(|directory| directory.sync_all())
-                .map_err(Release4Error::Persistence)?;
-        }
-        Ok(())
+        persist_json_atomically(&self.loop_store, loops, &NEXT_LOOP_TEMP_FILE)
+            .map_err(Release4Error::Persistence)
     }
 
     fn persist_project_links(
@@ -3553,28 +3107,6 @@ fn headless_default_branch(branch: Option<String>) -> Result<String, Release4Err
         })
 }
 
-fn complete_teleport(
-    cloud: &dyn TeleportCloud,
-    operation: &mut TeleportOperation,
-    notifications: &mut Vec<Release4Notification>,
-) {
-    let request = teleport_start_request(operation);
-    match cloud.start(&request) {
-        Ok(url) => {
-            operation.state = TeleportState::StartingWorkflow;
-            notifications.push(teleport_notification(operation));
-            operation.url = Some(url);
-            operation.state = TeleportState::Complete;
-            notifications.push(teleport_notification(operation));
-        }
-        Err(error) => {
-            operation.error = Some(error.to_string());
-            operation.state = TeleportState::Failed;
-            notifications.push(teleport_notification(operation));
-        }
-    }
-}
-
 fn teleport_start_request(operation: &TeleportOperation) -> TeleportStartRequest {
     TeleportStartRequest {
         project_id: operation.project_id.clone(),
@@ -3667,30 +3199,24 @@ fn notification<const N: usize>(method: &str, entries: [(&str, Value); N]) -> Re
     }
 }
 
+fn invalid_params(error: params::ParamError) -> Release4Error {
+    Release4Error::InvalidParams(error.message())
+}
+
 fn required_string<'a>(
-    params: &'a BTreeMap<String, Value>,
+    values: &'a BTreeMap<String, Value>,
     key: &str,
 ) -> Result<&'a str, Release4Error> {
-    params
-        .get(key)
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| Release4Error::InvalidParams(format!("{key} must be a non-empty string")))
+    params::required_string(values, key).map_err(invalid_params)
 }
 
 fn optional_string(
-    params: &BTreeMap<String, Value>,
+    values: &BTreeMap<String, Value>,
     key: &str,
 ) -> Result<Option<String>, Release4Error> {
-    params
-        .get(key)
-        .map(|value| {
-            value
-                .as_str()
-                .map(ToOwned::to_owned)
-                .ok_or_else(|| Release4Error::InvalidParams(format!("{key} must be a string")))
-        })
-        .transpose()
+    params::optional_string(values, key)
+        .map(|value| value.map(ToOwned::to_owned))
+        .map_err(invalid_params)
 }
 
 fn project_picker_purpose(
@@ -3705,22 +3231,15 @@ fn project_picker_purpose(
     }
 }
 
-fn required_bool(params: &BTreeMap<String, Value>, key: &str) -> Result<bool, Release4Error> {
-    params
-        .get(key)
-        .and_then(Value::as_bool)
-        .ok_or_else(|| Release4Error::InvalidParams(format!("{key} must be a boolean")))
+fn required_bool(values: &BTreeMap<String, Value>, key: &str) -> Result<bool, Release4Error> {
+    params::required_bool(values, key).map_err(invalid_params)
 }
 
-fn optional_u64(params: &BTreeMap<String, Value>, key: &str) -> Result<Option<u64>, Release4Error> {
-    params
-        .get(key)
-        .map(|value| {
-            value
-                .as_u64()
-                .ok_or_else(|| Release4Error::InvalidParams(format!("{key} must be an integer")))
-        })
-        .transpose()
+fn optional_u64(
+    values: &BTreeMap<String, Value>,
+    key: &str,
+) -> Result<Option<u64>, Release4Error> {
+    params::optional_u64(values, key).map_err(invalid_params)
 }
 
 fn load_loops(path: &Path) -> Result<BTreeMap<String, ScheduledLoop>, Release4Error> {
@@ -3823,23 +3342,11 @@ fn next_loop_sequence(loops: &BTreeMap<String, ScheduledLoop>) -> u64 {
 }
 
 fn default_loop_store() -> PathBuf {
-    default_vibe_home().join("scheduled-loops.json")
+    host::vibe_home().join("scheduled-loops.json")
 }
 
 fn default_project_link_store() -> PathBuf {
-    default_vibe_home().join("vibe-code-project-links.json")
-}
-
-fn default_vibe_home() -> PathBuf {
-    std::env::var_os("VIBE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .map(|home| home.join(".vibe"))
-        })
-        .or_else(|| std::env::current_dir().ok().map(|cwd| cwd.join(".vibe")))
-        .unwrap_or_else(|| PathBuf::from(".vibe"))
+    host::vibe_home().join("vibe-code-project-links.json")
 }
 
 fn replace_file(source: &Path, destination: &Path) -> std::io::Result<()> {
@@ -3848,12 +3355,6 @@ fn replace_file(source: &Path, destination: &Path) -> std::io::Result<()> {
         fs::remove_file(destination)?;
     }
     fs::rename(source, destination)
-}
-
-fn now_seconds() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs())
 }
 
 #[derive(Debug, Error)]
@@ -4442,8 +3943,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn dirty_only_teleport_starts_with_a_diff_and_never_pushes() {
+    #[tokio::test]
+    async fn dirty_only_teleport_starts_with_a_diff_and_never_pushes() {
         let git = Arc::new(DirtyOnlyGit {
             pushed: AtomicBool::new(false),
         });
@@ -4453,11 +3954,11 @@ mod tests {
             teleport.clone(),
             git.clone(),
         );
-        let picker_id = open_picker(&service, "session-dirty");
+        let picker_id = open_picker(&service, "session-dirty").await;
         select_project(&service, "session-dirty", &picker_id, "page-first");
 
         let started = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/teleport/start",
                 &params(json!({
                     "sessionId": "session-dirty",
@@ -4468,6 +3969,7 @@ mod tests {
                     "prompt": "continue",
                 })),
             )
+            .await
             .expect("dirty-only Teleport starts");
 
         assert!(
@@ -4555,12 +4057,13 @@ mod tests {
             .expect("headless project opens")
     }
 
-    fn open_picker(service: &Release4Service, session_id: &str) -> String {
+    async fn open_picker(service: &Release4Service, session_id: &str) -> String {
         service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({"sessionId": session_id})),
             )
+            .await
             .expect("picker opens")
             .result["pickerId"]
             .as_str()
@@ -4586,8 +4089,8 @@ mod tests {
             .expect("project selects");
     }
 
-    #[test]
-    fn session_rebind_transfers_project_teleport_and_loop_ownership() {
+    #[tokio::test]
+    async fn session_rebind_transfers_project_teleport_and_loop_ownership() {
         let temporary = tempdir().expect("temporary directory");
         let git = Arc::new(FixtureGit {
             snapshot: GitSnapshot {
@@ -4603,10 +4106,10 @@ mod tests {
         let service = fixture_service(git, teleport)
             .with_loop_store(temporary.path().join("loops.json"))
             .expect("loop store");
-        let picker_id = open_picker(&service, "session-old");
+        let picker_id = open_picker(&service, "session-old").await;
         select_project(&service, "session-old", &picker_id, "page-first");
         let teleport = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/teleport/start",
                 &params(json!({
                     "sessionId": "session-old",
@@ -4617,6 +4120,7 @@ mod tests {
                     "prompt": "context"
                 })),
             )
+            .await
             .expect("teleport starts");
         let operation_id = teleport.result["operationId"]
             .as_str()
@@ -4660,7 +4164,7 @@ mod tests {
             )
             .expect("new session owns picker");
         service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/teleport/push/respond",
                 &params(json!({
                     "sessionId": "session-new",
@@ -4668,6 +4172,7 @@ mod tests {
                     "approved": false
                 })),
             )
+            .await
             .expect("new session owns teleport");
         let listed = service
             .dispatch("loops/list", &params(json!({"sessionId": "session-new"})))
@@ -4965,8 +4470,8 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn projects_mutate_local_selection_only_after_cloud_success() {
+    #[tokio::test]
+    async fn projects_mutate_local_selection_only_after_cloud_success() {
         let git = Arc::new(FixtureGit {
             snapshot: GitSnapshot {
                 repository: "fixture".to_owned(),
@@ -4980,10 +4485,11 @@ mod tests {
         });
         let service = fixture_service(git, teleport);
         let opened = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({"sessionId": "session-1"})),
             )
+            .await
             .expect("picker opens");
         let picker_id = opened.result["pickerId"].as_str().expect("picker id");
         assert!(matches!(
@@ -5012,27 +4518,29 @@ mod tests {
             Value::Null
         );
         let exhausted = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/loadMore",
                 &params(json!({
                     "sessionId": "session-1",
                     "pickerId": picker_id
                 })),
             )
+            .await
             .expect("next page loads");
         assert_eq!(exhausted.result["view"]["state"]["nextCursor"], Value::Null);
         let repeated = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/loadMore",
                 &params(json!({
                     "sessionId": "session-1",
                     "pickerId": picker_id
                 })),
             )
+            .await
             .expect("exhausted picker is stable");
         assert_eq!(repeated.result["view"]["state"]["nextCursor"], Value::Null);
         let created = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/create",
                 &params(json!({
                     "sessionId": "session-1",
@@ -5041,6 +4549,7 @@ mod tests {
                     "defaultBranch": "main"
                 })),
             )
+            .await
             .expect("project create");
         assert_eq!(
             created.result["project"]["projectId"],
@@ -5056,10 +4565,11 @@ mod tests {
 
         let unavailable = Release4Service::default();
         assert!(matches!(
-            unavailable.dispatch(
+            unavailable.dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({"sessionId": "session-2"}))
-            ),
+            )
+            .await,
             Err(Release4Error::Cloud(CloudError::Git(_)))
         ));
         assert!(matches!(
@@ -5075,8 +4585,8 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn project_links_resolve_by_repo_root_for_open_recover_and_teleport() {
+    #[tokio::test]
+    async fn project_links_resolve_by_repo_root_for_open_recover_and_teleport() {
         let git = Arc::new(FixtureGit {
             snapshot: GitSnapshot {
                 repository: "fixture".to_owned(),
@@ -5090,25 +4600,27 @@ mod tests {
         });
         let service = fixture_service(git, teleport);
         let pending = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({
                     "sessionId": "session-pending",
                     "workingDirectory": "/workspace/repo"
                 })),
             )
+            .await
             .expect("pending picker opens");
         let pending_picker_id = pending.result["pickerId"]
             .as_str()
             .expect("pending picker ID");
         let source = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({
                     "sessionId": "session-source",
                     "workingDirectory": "/workspace/repo"
                 })),
             )
+            .await
             .expect("source picker opens");
         let source_picker_id = source.result["pickerId"]
             .as_str()
@@ -5131,20 +4643,21 @@ mod tests {
         );
 
         let reopened = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({
                     "sessionId": "session-teleport",
                     "workingDirectory": "/workspace/repo"
                 })),
             )
+            .await
             .expect("linked picker reopens");
         assert_eq!(reopened.result["resolvedProjectId"], json!("page-first"));
         let reopened_picker_id = reopened.result["pickerId"]
             .as_str()
             .expect("reopened picker ID");
         service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/teleport/start",
                 &params(json!({
                     "sessionId": "session-teleport",
@@ -5153,6 +4666,7 @@ mod tests {
                     "projectId": "page-first"
                 })),
             )
+            .await
             .expect("resolved link satisfies Teleport validation");
 
         service
@@ -5165,19 +4679,20 @@ mod tests {
             )
             .expect("project unlinks");
         let unlinked = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({
                     "sessionId": "session-unlinked",
                     "workingDirectory": "/workspace/repo"
                 })),
             )
+            .await
             .expect("unlinked picker reopens");
         assert_eq!(unlinked.result["resolvedProjectId"], Value::Null);
     }
 
-    #[test]
-    fn project_links_survive_service_restart() {
+    #[tokio::test]
+    async fn project_links_survive_service_restart() {
         let temporary = tempdir().expect("project link store");
         let link_store = temporary.path().join("project-links.json");
         let git = Arc::new(FixtureGit {
@@ -5195,13 +4710,14 @@ mod tests {
             .with_project_link_store(link_store.clone())
             .expect("project link store");
         let picker_id = first
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({
                     "sessionId": "session-first",
                     "workingDirectory": "/workspace/repo",
                 })),
             )
+            .await
             .expect("picker opens")
             .result["pickerId"]
             .as_str()
@@ -5214,19 +4730,20 @@ mod tests {
             .with_project_link_store(link_store)
             .expect("reloaded project link store");
         let opened = restarted
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({
                     "sessionId": "session-restarted",
                     "workingDirectory": "/workspace/repo",
                 })),
             )
+            .await
             .expect("picker reopens");
         assert_eq!(opened.result["resolvedProjectId"], "page-first");
     }
 
-    #[test]
-    fn project_links_use_canonical_root_and_clear_changed_remotes() {
+    #[tokio::test]
+    async fn project_links_use_canonical_root_and_clear_changed_remotes() {
         let repository = committed_github_repository();
         let nested = repository.path().join("nested/deeper");
         fs::create_dir_all(&nested).expect("nested directory");
@@ -5240,13 +4757,14 @@ mod tests {
             .with_project_link_store(link_store)
             .expect("project link store");
         let root_picker = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({
                     "sessionId": "session-root",
                     "workingDirectory": repository.path(),
                 })),
             )
+            .await
             .expect("root picker")
             .result["pickerId"]
             .as_str()
@@ -5255,13 +4773,14 @@ mod tests {
         select_project(&service, "session-root", &root_picker, "page-first");
 
         let nested_open = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({
                     "sessionId": "session-nested",
                     "workingDirectory": nested,
                 })),
             )
+            .await
             .expect("nested picker");
         assert_eq!(nested_open.result["resolvedProjectId"], "page-first");
         assert_eq!(
@@ -5285,13 +4804,14 @@ mod tests {
             ],
         );
         let changed = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/projects/open",
                 &params(json!({
                     "sessionId": "session-changed",
                     "workingDirectory": repository.path(),
                 })),
             )
+            .await
             .expect("changed remote picker");
         assert_eq!(changed.result["resolvedProjectId"], Value::Null);
         assert_eq!(
@@ -5305,8 +4825,8 @@ mod tests {
         assert_eq!(changed.result["view"]["context"]["savedLink"], Value::Null);
     }
 
-    #[test]
-    fn teleport_push_answer_is_idempotent_and_failures_are_actionable() {
+    #[tokio::test]
+    async fn teleport_push_answer_is_idempotent_and_failures_are_actionable() {
         let git = Arc::new(FixtureGit {
             snapshot: GitSnapshot {
                 repository: "fixture".to_owned(),
@@ -5319,10 +4839,10 @@ mod tests {
             fail: AtomicBool::new(false),
         });
         let service = fixture_service(git.clone(), teleport.clone());
-        let picker_id = open_picker(&service, "session-1");
+        let picker_id = open_picker(&service, "session-1").await;
         select_project(&service, "session-1", &picker_id, "page-first");
         let started = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/teleport/start",
                 &params(json!({
                     "sessionId": "session-1",
@@ -5333,6 +4853,7 @@ mod tests {
                     "prompt": "context"
                 })),
             )
+            .await
             .expect("start");
         let operation_id = started.result["operationId"]
             .as_str()
@@ -5342,7 +4863,7 @@ mod tests {
             json!("push_required")
         );
         let completed = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/teleport/push/respond",
                 &params(json!({
                     "sessionId": "session-1",
@@ -5350,6 +4871,7 @@ mod tests {
                     "approved": true
                 })),
             )
+            .await
             .expect("push response");
         assert_eq!(
             completed
@@ -5361,7 +4883,7 @@ mod tests {
         );
         assert!(git.pushed.load(AtomicOrdering::Relaxed));
         let duplicate = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/teleport/push/respond",
                 &params(json!({
                     "sessionId": "session-1",
@@ -5369,25 +4891,27 @@ mod tests {
                     "approved": true
                 })),
             )
+            .await
             .expect("identical retry");
         assert!(duplicate.result.is_empty());
         assert!(matches!(
-            service.dispatch(
+            service.dispatch_deferred(
                 "vibeCode/teleport/push/respond",
                 &params(json!({
                     "sessionId": "session-1",
                     "operationId": operation_id,
                     "approved": false
                 }))
-            ),
+            )
+            .await,
             Err(Release4Error::Conflict(_))
         ));
 
         teleport.fail.store(true, AtomicOrdering::Relaxed);
-        let picker_id = open_picker(&service, "session-2");
+        let picker_id = open_picker(&service, "session-2").await;
         select_project(&service, "session-2", &picker_id, "page-first");
         let pending = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/teleport/start",
                 &params(json!({
                     "sessionId": "session-2",
@@ -5398,9 +4922,10 @@ mod tests {
                     "prompt": "context"
                 })),
             )
+            .await
             .expect("Teleport waits for push approval");
         let failed = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/teleport/push/respond",
                 &params(json!({
                     "sessionId": "session-2",
@@ -5408,6 +4933,7 @@ mod tests {
                     "approved": true
                 })),
             )
+            .await
             .expect("typed cloud failure");
         assert_eq!(
             failed.notifications.last().expect("failure event").params["event"]["kind"],
@@ -5415,8 +4941,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn teleport_requires_an_owned_selected_project_and_cancel_is_silent() {
+    #[tokio::test]
+    async fn teleport_requires_an_owned_selected_project_and_cancel_is_silent() {
         let git = Arc::new(FixtureGit {
             snapshot: GitSnapshot {
                 repository: "fixture".to_owned(),
@@ -5429,10 +4955,10 @@ mod tests {
             fail: AtomicBool::new(false),
         });
         let service = fixture_service(git, teleport);
-        let picker_id = open_picker(&service, "session-1");
+        let picker_id = open_picker(&service, "session-1").await;
 
         assert!(matches!(
-            service.dispatch(
+            service.dispatch_deferred(
                 "vibeCode/teleport/start",
                 &params(json!({
                     "sessionId": "session-1",
@@ -5440,13 +4966,14 @@ mod tests {
                     "operationId": "operation-unselected",
                     "projectId": "page-first"
                 }))
-            ),
+            )
+            .await,
             Err(Release4Error::Conflict(message))
                 if message.contains("selected")
         ));
         select_project(&service, "session-1", &picker_id, "page-first");
         assert!(matches!(
-            service.dispatch(
+            service.dispatch_deferred(
                 "vibeCode/teleport/start",
                 &params(json!({
                     "sessionId": "session-2",
@@ -5454,11 +4981,12 @@ mod tests {
                     "operationId": "operation-foreign",
                     "projectId": "page-first"
                 }))
-            ),
+            )
+            .await,
             Err(Release4Error::NotFound(_))
         ));
         assert!(matches!(
-            service.dispatch(
+            service.dispatch_deferred(
                 "vibeCode/teleport/start",
                 &params(json!({
                     "sessionId": "session-1",
@@ -5466,12 +4994,13 @@ mod tests {
                     "operationId": "operation-missing-project",
                     "projectId": "missing"
                 }))
-            ),
+            )
+            .await,
             Err(Release4Error::NotFound(_))
         ));
 
         let started = service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/teleport/start",
                 &params(json!({
                     "sessionId": "session-1",
@@ -5480,6 +5009,7 @@ mod tests {
                     "projectId": "page-first"
                 })),
             )
+            .await
             .expect("valid Teleport starts");
         assert_eq!(
             started.notifications.last().expect("push event").params["event"]["kind"],
@@ -5498,8 +5028,8 @@ mod tests {
         assert!(cancelled.notifications.is_empty());
     }
 
-    #[test]
-    fn teleport_cancel_rejects_irreversible_work() {
+    #[tokio::test]
+    async fn teleport_cancel_rejects_irreversible_work() {
         let git = Arc::new(FixtureGit {
             snapshot: GitSnapshot {
                 repository: "fixture".to_owned(),
@@ -5512,10 +5042,10 @@ mod tests {
             fail: AtomicBool::new(false),
         });
         let service = fixture_service(git, teleport);
-        let picker_id = open_picker(&service, "session-1");
+        let picker_id = open_picker(&service, "session-1").await;
         select_project(&service, "session-1", &picker_id, "page-first");
         service
-            .dispatch(
+            .dispatch_deferred(
                 "vibeCode/teleport/start",
                 &params(json!({
                     "sessionId": "session-1",
@@ -5524,6 +5054,7 @@ mod tests {
                     "projectId": "page-first"
                 })),
             )
+            .await
             .expect("Teleport waits for push approval");
 
         for state in [TeleportState::Pushing, TeleportState::StartingWorkflow] {
@@ -5676,8 +5207,8 @@ mod tests {
         assert_eq!(kept.result["loops"].as_array().map(Vec::len), Some(1));
     }
 
-    #[test]
-    fn session_removal_token_restores_exact_transient_state_and_loops_durably() {
+    #[tokio::test]
+    async fn session_removal_token_restores_exact_transient_state_and_loops_durably() {
         let temporary = tempdir().expect("session rollback store");
         let loop_path = temporary.path().join("loops.json");
         let git = Arc::new(FixtureGit {
@@ -5694,7 +5225,7 @@ mod tests {
         let mut service = fixture_service(git, teleport)
             .with_loop_store(loop_path.clone())
             .expect("loop store");
-        let picker_id = open_picker(&service, "session-rollback");
+        let picker_id = open_picker(&service, "session-rollback").await;
         let original_picker_view = {
             let projects = service.lock_projects().expect("project state");
             project_view(projects.pickers.get(&picker_id).expect("original picker"))

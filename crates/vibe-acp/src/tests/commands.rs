@@ -77,7 +77,7 @@ async fn teleport_command_streams_public_cloud_events_and_completion_url() {
         Arc::new(CleanFixtureGit),
     );
     let open = release4
-        .dispatch(
+        .dispatch_deferred(
             "vibeCode/projects/open",
             &serde_json::from_value(json!({
                 "sessionId": "link-seed",
@@ -86,6 +86,7 @@ async fn teleport_command_streams_public_cloud_events_and_completion_url() {
             }))
             .expect("project open params"),
         )
+        .await
         .expect("project picker");
     let picker_id = open.result["pickerId"]
         .as_str()

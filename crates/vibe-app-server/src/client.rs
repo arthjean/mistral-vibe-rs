@@ -4778,7 +4778,7 @@ command = "/must-not-run"
             .expect("session starts");
 
         let picker = service
-            .public_call(
+            .public_call_async(
                 "vibeCode/projects/open",
                 json!({
                     "sessionId": session_id,
@@ -4786,7 +4786,9 @@ command = "/must-not-run"
                     "purpose": "configure",
                 }),
             )
-            .expect("project picker opens");
+            .await
+            .expect("project picker opens")
+            .result;
         let picker_id = picker["pickerId"].as_str().expect("picker ID");
         service
             .public_call(
@@ -4817,7 +4819,7 @@ command = "/must-not-run"
             ]
         ));
         let teleport = service
-            .public_call_with_notifications(
+            .public_call_async(
                 "vibeCode/teleport/start",
                 json!({
                     "sessionId": session_id,
@@ -4827,6 +4829,7 @@ command = "/must-not-run"
                     "workingDirectory": workspace.path(),
                 }),
             )
+            .await
             .expect("response and notifications decode together");
         assert_eq!(
             teleport.result["operationId"],
