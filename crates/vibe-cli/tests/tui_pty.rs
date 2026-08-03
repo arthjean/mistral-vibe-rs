@@ -18,6 +18,7 @@ use std::time::{Duration, Instant};
 use nix::pty::{Winsize, openpty};
 use nix::sys::signal::{Signal, kill};
 use nix::sys::termios::{LocalFlags, tcgetattr};
+use nix::sys::wait::{WaitPidFlag, WaitStatus, waitpid};
 use nix::unistd::Pid;
 use vibe_core::events::ModelMessage;
 use vibe_core::storage::SessionStore;
@@ -142,6 +143,8 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
         .env("HOME", &home)
         .env("VIBE_HOME", home.join(".vibe"))
         .env("MISTRAL_API_KEY", "fixture")
+        // Update discovery must never leave the machine during tests.
+        .env("VIBE_UPDATE_BASE_URL", "http://127.0.0.1:9")
         .env("NO_COLOR", "1")
         .env("TERM", "xterm-256color")
         .stdin(Stdio::from(slave.try_clone().expect("PTY stdin clones")))
@@ -362,6 +365,8 @@ impl PtyProcess {
             .env("HOME", vibe_home)
             .env("VIBE_HOME", vibe_home.join(".vibe"))
             .env("MISTRAL_API_KEY", "fixture")
+            // Update discovery must never leave the machine during tests.
+            .env("VIBE_UPDATE_BASE_URL", "http://127.0.0.1:9")
             .env("NO_COLOR", "1")
             .env("TERM", "xterm-256color")
             .stdin(Stdio::from(slave.try_clone().expect("PTY stdin clones")))
@@ -464,6 +469,25 @@ impl PtyProcess {
     fn interrupt(&self) {
         let pid = i32::try_from(self.child.id()).expect("child pid fits platform pid");
         kill(Pid::from_raw(pid), Signal::SIGINT).expect("SIGINT reaches TUI");
+    }
+
+    /// Reports whether the child stopped itself with `SIGTSTP`. A sandboxed
+    /// run leaves the child in an orphaned process group, where POSIX discards
+    /// stop signals, so this is observed rather than required.
+    fn stopped(&self) -> bool {
+        let pid = i32::try_from(self.child.id()).expect("child pid fits platform pid");
+        matches!(
+            waitpid(
+                Pid::from_raw(pid),
+                Some(WaitPidFlag::WUNTRACED | WaitPidFlag::WNOHANG)
+            ),
+            Ok(WaitStatus::Stopped(_, Signal::SIGTSTP))
+        )
+    }
+
+    fn resume(&self) {
+        let pid = i32::try_from(self.child.id()).expect("child pid fits platform pid");
+        kill(Pid::from_raw(pid), Signal::SIGCONT).expect("SIGCONT reaches TUI");
     }
 
     fn wait(mut self, timeout: Duration) -> (ExitStatus, Vec<u8>) {
@@ -824,4 +848,146 @@ command = "/must-not-run"
     process.write(b"/exit\r");
     let (status, _) = process.wait(Duration::from_secs(3));
     assert!(status.success(), "recoverable MCP failure blocked exit");
+}
+
+#[test]
+fn ctrl_z_suspends_the_session_and_resumes_a_restored_terminal() {
+    let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
+    let mut process = PtyProcess::spawn(
+        &workspace,
+        &home,
+        &["--trust", "--api-base", "http://127.0.0.1:9"],
+    );
+    process.wait_for(b"\x1b[?1049h", Duration::from_secs(5));
+    process.write(b"\x1a");
+    // The reference restores the terminal, prints the resume hint, and only
+    // then stops, so both observations precede the stop.
+    let suspended = process.wait_for(
+        b"Mistral Vibe has been suspended. Run fg to bring Mistral Vibe back.",
+        Duration::from_secs(5),
+    );
+    assert!(
+        suspended
+            .windows(b"\x1b[?1049l".len())
+            .any(|window| window == b"\x1b[?1049l"),
+        "suspend did not leave the alternate screen first"
+    );
+    std::thread::sleep(Duration::from_millis(200));
+    let _stopped = process.stopped();
+    process.resume();
+    std::thread::sleep(Duration::from_millis(200));
+    process.write(b"\x04\x04");
+    let (status, transcript) = process.wait(Duration::from_secs(10));
+
+    assert!(status.success(), "suspended session exited with {status}");
+    for (sequence, expected, label) in [
+        (b"\x1b[?1049h".as_slice(), 2, "alternate screen entries"),
+        (
+            b"\x1b[?1049l".as_slice(),
+            2,
+            "alternate screen restorations",
+        ),
+    ] {
+        let seen = transcript
+            .windows(sequence.len())
+            .filter(|window| *window == sequence)
+            .count();
+        assert!(
+            seen >= expected,
+            "suspend and resume must each produce {label}, saw {seen}: {}",
+            String::from_utf8_lossy(&transcript)
+        );
+    }
+}
+
+#[test]
+fn confirmed_exit_prints_the_reference_session_summary() {
+    let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
+    let mut process = PtyProcess::spawn(
+        &workspace,
+        &home,
+        &["--trust", "--api-base", "http://127.0.0.1:9"],
+    );
+    process.wait_for(b"\x1b[?1049h", Duration::from_secs(5));
+    process.write(b"\x04");
+    process.wait_for_visible("Press Ctrl+D again to quit", Duration::from_secs(5));
+    process.write(b"\x04");
+    let (status, transcript) = process.wait(Duration::from_secs(5));
+
+    assert!(status.success(), "confirmed exit failed with {status}");
+    let text = String::from_utf8_lossy(&transcript);
+    assert!(
+        text.contains("Total tokens used this session: input=0 output=0 (total=0)"),
+        "exit omitted the reference usage summary: {text}"
+    );
+    assert!(
+        text.contains("To continue this session, run: vibe --continue"),
+        "exit omitted the reference resume command: {text}"
+    );
+    assert!(
+        text.contains("Or: vibe --resume "),
+        "exit omitted the short resume identifier: {text}"
+    );
+}
+
+#[test]
+fn focus_events_restore_the_reference_terminal_title() {
+    let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
+    let mut process = PtyProcess::spawn(
+        &workspace,
+        &home,
+        &["--trust", "--api-base", "http://127.0.0.1:9"],
+    );
+    process.wait_for(b"\x1b[?1049h", Duration::from_secs(5));
+    // Reference `on_app_blur` records focus silently; `on_app_focus` restores
+    // the default title, which is the observable half of the contract.
+    process.write(b"\x1b[O");
+    process.write(b"\x1b[I");
+    process.wait_for(b"\x1b]0;Vibe\x07", Duration::from_secs(5));
+    let transcript = process.kill();
+    assert!(
+        transcript
+            .windows(b"\x1b[?1004h".len())
+            .any(|window| window == b"\x1b[?1004h"),
+        "focus reporting was never enabled: {}",
+        String::from_utf8_lossy(&transcript)
+    );
+}
+
+#[test]
+fn check_upgrade_reports_the_reference_failure_without_starting_a_session() {
+    let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
+    let process = PtyProcess::spawn(&workspace, &home, &["--check-upgrade"]);
+    let (status, transcript) = process.wait(Duration::from_secs(10));
+
+    let text = String::from_utf8_lossy(&transcript);
+    assert!(
+        text.contains("Update check failed: Network error while checking for updates."),
+        "check-upgrade omitted the reference failure: {text}"
+    );
+    assert_eq!(
+        status.code(),
+        Some(1),
+        "the reference exits non-zero after a failed check"
+    );
+    assert!(
+        !home.join(".vibe/sessions").exists(),
+        "check-upgrade started session discovery"
+    );
 }

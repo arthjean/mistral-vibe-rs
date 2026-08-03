@@ -1,0 +1,945 @@
+{
+  "oracle": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "deterministicRuns": 10,
+    "engine": "python-reference-capture"
+  },
+  "oracleProbe": {
+    "expected": {
+      "notificationThrottleSeconds": 1.0,
+      "notificationTitles": {
+        "action_required": "Action Required",
+        "complete": "Task Complete"
+      },
+      "quitConfirmDelaySeconds": 1.0,
+      "shortSessionId": "01234567",
+      "suspendMessage": "Mistral Vibe has been suspended. Run fg to bring Mistral Vibe back.",
+      "themes": {
+        "auto": "auto",
+        "dark": {
+          "ansi-dark": true,
+          "ansi-light": false,
+          "atom-one-dark": true,
+          "atom-one-light": false,
+          "catppuccin-frappe": true,
+          "catppuccin-latte": false,
+          "catppuccin-macchiato": true,
+          "catppuccin-mocha": true,
+          "dracula": true,
+          "flexoki": true,
+          "gruvbox": true,
+          "monokai": true,
+          "nord": true,
+          "rose-pine": true,
+          "rose-pine-dawn": false,
+          "rose-pine-moon": true,
+          "solarized-dark": true,
+          "solarized-light": false,
+          "textual-dark": true,
+          "textual-light": false,
+          "tokyo-night": true
+        },
+        "names": [
+          "auto",
+          "ansi-light",
+          "atom-one-light",
+          "catppuccin-latte",
+          "rose-pine-dawn",
+          "solarized-light",
+          "textual-light",
+          "ansi-dark",
+          "atom-one-dark",
+          "catppuccin-frappe",
+          "catppuccin-macchiato",
+          "catppuccin-mocha",
+          "dracula",
+          "flexoki",
+          "gruvbox",
+          "monokai",
+          "nord",
+          "rose-pine",
+          "rose-pine-moon",
+          "solarized-dark",
+          "textual-dark",
+          "tokyo-night"
+        ]
+      },
+      "usageLine": "Total tokens used this session: input=1,234 output=567 (total=1,801)"
+    },
+    "script": "ep011-python-oracle.py"
+  },
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "sourceFiles": [
+      "vibe/cli/cli.py",
+      "vibe/cli/session_exit.py",
+      "vibe/cli/narrator_manager/narrator_manager.py",
+      "vibe/cli/textual_ui/app.py",
+      "vibe/cli/textual_ui/quit_manager.py",
+      "vibe/cli/textual_ui/message_queue.py",
+      "vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py",
+      "vibe/cli/textual_ui/widgets/theme_picker.py",
+      "vibe/cli/update_notifier/update.py",
+      "vibe/cli/update_notifier/whats_new.py",
+      "vibe/cli/update_notifier/adapters/pypi_update_gateway.py",
+      "vibe/setup/update_prompt/update_prompt_dialog.py"
+    ],
+    "version": "2.23.2"
+  },
+  "schemaVersion": 1,
+  "traces": [
+    {
+      "events": [
+        {
+          "cache": null,
+          "currentVersion": "2.23.1",
+          "fetch": {
+            "version": "2.24.0"
+          },
+          "force": false,
+          "kind": "update_check",
+          "now": 1000
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 1000
+          },
+          "currentVersion": "2.23.1",
+          "fetch": {},
+          "force": false,
+          "kind": "update_check",
+          "now": 1100
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 1000
+          },
+          "currentVersion": "2.23.1",
+          "fetch": {
+            "cause": "request_failed"
+          },
+          "force": true,
+          "kind": "update_check",
+          "now": 1100
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 0
+          },
+          "currentVersion": "2.23.1",
+          "fetch": {
+            "version": "2.23.1"
+          },
+          "force": false,
+          "kind": "update_check",
+          "now": 200000
+        },
+        {
+          "cache": null,
+          "currentVersion": "2.23.1",
+          "fetch": {
+            "version": "banana"
+          },
+          "force": true,
+          "kind": "update_check",
+          "now": 5
+        },
+        {
+          "cache": null,
+          "currentVersion": "not-a-version",
+          "fetch": {
+            "version": "2.24.0"
+          },
+          "force": true,
+          "kind": "update_check",
+          "now": 5
+        },
+        {
+          "cache": {
+            "dismissedVersion": "2.24.0",
+            "latestVersion": "2.24.0",
+            "seenWhatsNewVersion": "2.23.1",
+            "storedAtTimestamp": 1
+          },
+          "currentVersion": "2.23.1",
+          "fetch": {
+            "cause": "too_many_requests"
+          },
+          "force": true,
+          "kind": "update_check",
+          "now": 7
+        }
+      ],
+      "expected": [
+        "update|available|2.24.0|notify=1|cache=2.24.0|1000|-|-",
+        "update|available|2.24.0|notify=0|cache=2.24.0|1000|-|-",
+        "update|error|Network error while checking for updates.|cache=2.23.1|1100|-|-",
+        "update|none|cache=2.23.1|200000|-|-",
+        "update|none|cache=none",
+        "update|none|cache=none",
+        "update|error|Rate limit exceeded while checking for updates.|cache=2.23.1|7|2.23.1|2.24.0"
+      ],
+      "id": "update-discovery",
+      "reference": [
+        "update|available|2.24.0|notify=1|cache=2.24.0|1000|-|-",
+        "update|available|2.24.0|notify=0|cache=2.24.0|1000|-|-",
+        "update|error|Network error while checking for updates.|cache=2.23.1|1100|-|-",
+        "update|none|cache=2.23.1|200000|-|-",
+        "update|none|cache=none",
+        "update|none|cache=none",
+        "update|error|Rate limit exceeded while checking for updates.|cache=2.23.1|7|2.23.1|2.24.0"
+      ],
+      "story": "US-037"
+    },
+    {
+      "events": [
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 10
+          },
+          "currentVersion": "2.23.1",
+          "kind": "pending_update"
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 10
+          },
+          "currentVersion": "2.23.1",
+          "dismiss": "2.24.0",
+          "kind": "pending_update"
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 10
+          },
+          "currentVersion": "2.24.0",
+          "kind": "pending_update"
+        },
+        {
+          "cache": null,
+          "currentVersion": "2.23.1",
+          "kind": "pending_update"
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 10
+          },
+          "currentVersion": "2.23.1",
+          "kind": "whats_new"
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "seenWhatsNewVersion": "2.23.1",
+            "storedAtTimestamp": 10
+          },
+          "currentVersion": "2.23.1",
+          "kind": "whats_new"
+        },
+        {
+          "cache": null,
+          "currentVersion": "2.23.1",
+          "kind": "whats_new"
+        }
+      ],
+      "expected": [
+        "pending|2.24.0|cache=2.24.0|10|-|-",
+        "pending|none|cache=2.24.0|10|-|2.24.0",
+        "pending|none|cache=2.24.0|10|-|-",
+        "pending|none|cache=none",
+        "whatsnew|1|cache=2.24.0|10|2.23.1|-",
+        "whatsnew|0|cache=2.24.0|10|2.23.1|-",
+        "whatsnew|0|cache=none"
+      ],
+      "id": "update-cache-state",
+      "reference": [
+        "pending|2.24.0|cache=2.24.0|10|-|-",
+        "pending|none|cache=2.24.0|10|-|2.24.0",
+        "pending|none|cache=2.24.0|10|-|-",
+        "pending|none|cache=none",
+        "whatsnew|1|cache=2.24.0|10|2.23.1|-",
+        "whatsnew|0|cache=2.24.0|10|2.23.1|-",
+        "whatsnew|0|cache=none"
+      ],
+      "story": "US-037"
+    },
+    {
+      "events": [
+        {
+          "kind": "version_order",
+          "left": "2.23.1",
+          "right": "2.23.2"
+        },
+        {
+          "kind": "version_order",
+          "left": "2.24",
+          "right": "2.23.9"
+        },
+        {
+          "kind": "version_order",
+          "left": "2.23",
+          "right": "2.23.0"
+        },
+        {
+          "kind": "version_order",
+          "left": "2.23.1rc1",
+          "right": "2.23.1"
+        },
+        {
+          "kind": "version_order",
+          "left": "2.23.1.dev4",
+          "right": "2.23.1rc1"
+        },
+        {
+          "kind": "version_order",
+          "left": "2.23.1.post1",
+          "right": "2.23.1"
+        },
+        {
+          "kind": "version_order",
+          "left": "2.23.1-dev",
+          "right": "2.23.1"
+        },
+        {
+          "kind": "version_order",
+          "left": "banana",
+          "right": "2.23.1"
+        },
+        {
+          "kind": "version_order",
+          "left": "2.23.1",
+          "right": ""
+        }
+      ],
+      "expected": [
+        "version|<|00",
+        "version|>|00",
+        "version|==|00",
+        "version|<|00",
+        "version|<|00",
+        "version|>|00",
+        "version|>|00",
+        "version|invalid|10",
+        "version|invalid|01"
+      ],
+      "id": "update-versions",
+      "reference": [
+        "version|<|00",
+        "version|>|00",
+        "version|==|00",
+        "version|<|00",
+        "version|<|00",
+        "version|>|00",
+        "version|>|00",
+        "version|invalid|10",
+        "version|invalid|01"
+      ],
+      "story": "US-037"
+    },
+    {
+      "events": [
+        {
+          "cause": "too_many_requests",
+          "kind": "gateway_message"
+        },
+        {
+          "cause": "forbidden",
+          "kind": "gateway_message"
+        },
+        {
+          "cause": "not_found",
+          "kind": "gateway_message"
+        },
+        {
+          "cause": "request_failed",
+          "kind": "gateway_message"
+        },
+        {
+          "cause": "error_response",
+          "kind": "gateway_message"
+        },
+        {
+          "cause": "invalid_response",
+          "kind": "gateway_message"
+        },
+        {
+          "cause": "unknown",
+          "kind": "gateway_message"
+        },
+        {
+          "kind": "pypi",
+          "payload": {
+            "files": [
+              {
+                "filename": "mistral_vibe-2.23.1-py3-none-any.whl",
+                "yanked": false
+              },
+              {
+                "filename": "mistral_vibe-2.24.0-py3-none-any.whl",
+                "yanked": true
+              },
+              {
+                "filename": "mistral_vibe-2.24.0.tar.gz",
+                "yanked": true
+              }
+            ],
+            "versions": [
+              "2.23.1",
+              "2.24.0",
+              "2.25.0",
+              "nonsense"
+            ]
+          }
+        },
+        {
+          "kind": "pypi",
+          "payload": {
+            "files": [
+              {
+                "filename": "mistral_vibe-2.23.1.tar.gz",
+                "yanked": false
+              },
+              {
+                "filename": "mistral_vibe-2.24.0.tar.gz",
+                "yanked": false
+              }
+            ],
+            "versions": [
+              "2.23.1",
+              "2.24.0"
+            ]
+          }
+        },
+        {
+          "kind": "pypi",
+          "payload": {}
+        },
+        {
+          "kind": "pypi",
+          "payload": {},
+          "status": 404
+        },
+        {
+          "kind": "pypi",
+          "payload": {},
+          "status": 429
+        },
+        {
+          "kind": "pypi",
+          "payload": {},
+          "status": 500
+        }
+      ],
+      "expected": [
+        "gateway|Rate limit exceeded while checking for updates.",
+        "gateway|Request was forbidden while checking for updates.",
+        "gateway|Unable to fetch the releases. Please check your permissions.",
+        "gateway|Network error while checking for updates.",
+        "gateway|Unexpected response received while checking for updates.",
+        "gateway|Received an invalid response while checking for updates.",
+        "gateway|Unable to determine whether an update is available.",
+        "pypi|2.23.1",
+        "pypi|2.24.0",
+        "pypi|none",
+        "pypi|error|not_found",
+        "pypi|error|too_many_requests",
+        "pypi|error|error_response"
+      ],
+      "id": "update-gateway",
+      "reference": [
+        "gateway|Rate limit exceeded while checking for updates.",
+        "gateway|Request was forbidden while checking for updates.",
+        "gateway|Unable to fetch the releases. Please check your permissions.",
+        "gateway|Network error while checking for updates.",
+        "gateway|Unexpected response received while checking for updates.",
+        "gateway|Received an invalid response while checking for updates.",
+        "gateway|Unable to determine whether an update is available.",
+        "pypi|2.23.1",
+        "pypi|2.24.0",
+        "pypi|none",
+        "pypi|error|not_found",
+        "pypi|error|too_many_requests",
+        "pypi|error|error_response"
+      ],
+      "story": "US-037"
+    },
+    {
+      "events": [
+        {
+          "currentVersion": "2.23.1",
+          "kind": "check_upgrade_output",
+          "outcome": "up_to_date"
+        },
+        {
+          "currentVersion": "2.23.1",
+          "kind": "check_upgrade_output",
+          "outcome": "check_failed",
+          "reason": "Network error while checking for updates."
+        },
+        {
+          "currentVersion": "2.23.1",
+          "kind": "check_upgrade_output",
+          "outcome": "cache_failed"
+        },
+        {
+          "currentVersion": "2.23.1",
+          "kind": "check_upgrade_output",
+          "outcome": "update_failed"
+        },
+        {
+          "currentVersion": "2.23.1",
+          "kind": "update_dialog",
+          "latestVersion": "2.24.0",
+          "mode": "startup"
+        },
+        {
+          "currentVersion": "2.23.1",
+          "kind": "update_dialog",
+          "latestVersion": "2.24.0",
+          "mode": "check_upgrade"
+        }
+      ],
+      "expected": [
+        "output|Vibe is already up to date (2.23.1).",
+        "output|✗ Update check failed: Network error while checking for updates.",
+        "output|✗ Update check failed while writing the update cache.",
+        "output|Vibe could not update automatically.⏎  Update manually with your package manager (for example uv tool upgrade mistral-vibe), or keep using the current version (2.23.1) for now.",
+        "dialog|A new Vibe release is available|2.23.1 → 2.24.0|Update now|Continue with current version",
+        "dialog|A new Vibe release is available|2.23.1 → 2.24.0|Update now|Cancel upgrade"
+      ],
+      "id": "update-presentation",
+      "reference": [
+        "output|Vibe is already up to date (2.23.1).",
+        "output|✗ Update check failed: Network error while checking for updates.",
+        "output|✗ Update check failed while writing the update cache.",
+        "output|Vibe could not update automatically.⏎  Update manually with your package manager (for example uv tool upgrade mistral-vibe), or keep using the current version (2.23.1) for now.",
+        "dialog|A new Vibe release is available|2.23.1 → 2.24.0|Update now|Continue with current version",
+        "dialog|A new Vibe release is available|2.23.1 → 2.24.0|Update now|Cancel upgrade"
+      ],
+      "story": "US-037"
+    },
+    {
+      "events": [
+        {
+          "action": "notify",
+          "context": "complete",
+          "kind": "attention",
+          "nowMs": 500
+        },
+        {
+          "action": "blur",
+          "kind": "attention"
+        },
+        {
+          "action": "notify",
+          "context": "action_required",
+          "kind": "attention",
+          "nowMs": 1000
+        },
+        {
+          "action": "notify",
+          "context": "complete",
+          "kind": "attention",
+          "nowMs": 1999
+        },
+        {
+          "action": "notify",
+          "context": "complete",
+          "kind": "attention",
+          "nowMs": 2000
+        },
+        {
+          "action": "focus",
+          "kind": "attention"
+        },
+        {
+          "action": "notify",
+          "context": "complete",
+          "kind": "attention",
+          "nowMs": 4000
+        }
+      ],
+      "expected": [
+        "attention|bells=0|writes=",
+        "attention|bells=0|writes=",
+        "attention|bells=1|writes=\u001b]0;Vibe - Action Required\u0007",
+        "attention|bells=1|writes=\u001b]0;Vibe - Action Required\u0007",
+        "attention|bells=2|writes=\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007",
+        "attention|bells=2|writes=\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe\u0007",
+        "attention|bells=2|writes=\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe\u0007"
+      ],
+      "id": "attention-unfocused",
+      "reference": [
+        "attention|bells=0|writes=",
+        "attention|bells=0|writes=",
+        "attention|bells=1|writes=\u001b]0;Vibe - Action Required\u0007",
+        "attention|bells=1|writes=\u001b]0;Vibe - Action Required\u0007",
+        "attention|bells=2|writes=\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007",
+        "attention|bells=2|writes=\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe\u0007",
+        "attention|bells=2|writes=\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe\u0007"
+      ],
+      "story": "US-038"
+    },
+    {
+      "events": [
+        {
+          "action": "policy",
+          "enabled": false,
+          "kind": "attention",
+          "policy": "off"
+        },
+        {
+          "action": "blur",
+          "kind": "attention"
+        },
+        {
+          "action": "notify",
+          "context": "action_required",
+          "kind": "attention",
+          "nowMs": 1000
+        },
+        {
+          "action": "policy",
+          "enabled": true,
+          "kind": "attention",
+          "policy": "unfocused"
+        },
+        {
+          "action": "notify",
+          "context": "action_required",
+          "kind": "attention",
+          "nowMs": 2000
+        }
+      ],
+      "expected": [
+        "attention|bells=0|writes=",
+        "attention|bells=0|writes=",
+        "attention|bells=0|writes=",
+        "attention|bells=0|writes=",
+        "attention|bells=1|writes=\u001b]0;Vibe - Action Required\u0007"
+      ],
+      "id": "attention-disabled",
+      "reference": [
+        "attention|bells=0|writes=",
+        "attention|bells=0|writes=",
+        "attention|bells=0|writes=",
+        "attention|bells=0|writes=",
+        "attention|bells=1|writes=\u001b]0;Vibe - Action Required\u0007"
+      ],
+      "story": "US-038"
+    },
+    {
+      "divergences": [
+        {
+          "event": 1,
+          "reason": "The `always` notification policy is a Rust-only superset of the reference boolean, so a focused terminal still receives the effect."
+        },
+        {
+          "event": 2,
+          "reason": "The Rust-only `always` policy already notified while focused, so the blur observation carries that extra effect."
+        },
+        {
+          "event": 3,
+          "reason": "The Rust-only `always` policy already notified while focused, so the unfocused observation carries that extra effect."
+        }
+      ],
+      "events": [
+        {
+          "action": "policy",
+          "enabled": true,
+          "kind": "attention",
+          "policy": "always"
+        },
+        {
+          "action": "notify",
+          "context": "complete",
+          "kind": "attention",
+          "nowMs": 1000
+        },
+        {
+          "action": "blur",
+          "kind": "attention"
+        },
+        {
+          "action": "notify",
+          "context": "complete",
+          "kind": "attention",
+          "nowMs": 3000
+        }
+      ],
+      "expected": [
+        "attention|bells=0|writes=",
+        "attention|bells=1|writes=\u001b]0;Vibe - Task Complete\u0007",
+        "attention|bells=1|writes=\u001b]0;Vibe - Task Complete\u0007",
+        "attention|bells=2|writes=\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe - Task Complete\u0007"
+      ],
+      "id": "attention-always",
+      "reference": [
+        "attention|bells=0|writes=",
+        "attention|bells=0|writes=",
+        "attention|bells=0|writes=",
+        "attention|bells=1|writes=\u001b]0;Vibe - Task Complete\u0007"
+      ],
+      "story": "US-038"
+    },
+    {
+      "events": [
+        {
+          "action": "turn_start",
+          "kind": "narrator",
+          "text": "write the parser"
+        },
+        {
+          "action": "user_message",
+          "id": "message-1",
+          "kind": "narrator"
+        },
+        {
+          "action": "assistant_text",
+          "kind": "narrator",
+          "text": "first "
+        },
+        {
+          "action": "assistant_text",
+          "kind": "narrator",
+          "text": ""
+        },
+        {
+          "action": "assistant_text",
+          "kind": "narrator",
+          "text": "second"
+        },
+        {
+          "action": "turn_end",
+          "kind": "narrator",
+          "summary": "wrote the parser"
+        },
+        {
+          "action": "settle",
+          "kind": "narrator"
+        },
+        {
+          "action": "playback_finished",
+          "kind": "narrator"
+        },
+        {
+          "action": "turn_start",
+          "kind": "narrator",
+          "text": "deploy"
+        },
+        {
+          "action": "turn_cancel",
+          "kind": "narrator"
+        },
+        {
+          "action": "turn_end",
+          "kind": "narrator",
+          "summary": "never spoken"
+        },
+        {
+          "action": "settle",
+          "kind": "narrator"
+        }
+      ],
+      "expected": [
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|summarizing",
+        "narrator|speaking",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle"
+      ],
+      "id": "narrator-lifecycle",
+      "reference": [
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|summarizing",
+        "narrator|speaking",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle"
+      ],
+      "story": "US-038"
+    },
+    {
+      "events": [
+        {
+          "action": "turn_start",
+          "kind": "narrator",
+          "text": "summarize"
+        },
+        {
+          "action": "turn_error",
+          "kind": "narrator",
+          "message": "Rate limits exceeded."
+        },
+        {
+          "action": "turn_end",
+          "kind": "narrator",
+          "summary": null
+        },
+        {
+          "action": "settle",
+          "kind": "narrator"
+        },
+        {
+          "action": "turn_start",
+          "kind": "narrator",
+          "text": "again"
+        },
+        {
+          "action": "turn_end",
+          "kind": "narrator",
+          "summary": "spoken"
+        },
+        {
+          "action": "cancel",
+          "kind": "narrator"
+        },
+        {
+          "action": "settle",
+          "kind": "narrator"
+        },
+        {
+          "action": "disable",
+          "kind": "narrator"
+        },
+        {
+          "action": "turn_start",
+          "kind": "narrator",
+          "text": "after disabling"
+        },
+        {
+          "action": "turn_end",
+          "kind": "narrator",
+          "summary": "never"
+        },
+        {
+          "action": "settle",
+          "kind": "narrator"
+        }
+      ],
+      "expected": [
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|summarizing",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|summarizing",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle"
+      ],
+      "id": "narrator-recovery",
+      "reference": [
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|summarizing",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|summarizing",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle",
+        "narrator|idle"
+      ],
+      "story": "US-038"
+    },
+    {
+      "events": [
+        {
+          "key": "Ctrl+C",
+          "kind": "quit_prompt",
+          "queued": 0
+        },
+        {
+          "key": "Ctrl+D",
+          "kind": "quit_prompt",
+          "queued": 1
+        },
+        {
+          "key": "Ctrl+C",
+          "kind": "quit_prompt",
+          "queued": 3
+        },
+        {
+          "input": 1234,
+          "kind": "session_summary",
+          "output": 567,
+          "sessionId": "0123456789abcdef"
+        },
+        {
+          "input": 0,
+          "kind": "session_summary",
+          "output": 0,
+          "sessionId": null
+        },
+        {
+          "input": 0,
+          "kind": "session_summary",
+          "output": 0,
+          "sessionId": "abcdef01"
+        }
+      ],
+      "expected": [
+        "quit|Press Ctrl+C again to quit",
+        "quit|Press Ctrl+D again to quit (1 queued message will be discarded)",
+        "quit|Press Ctrl+C again to quit (3 queued messages will be discarded)",
+        "summary|⏎Total tokens used this session: input=1,234 output=567 (total=1,801)⏎⏎To continue this session, run: vibe --continue⏎Or: vibe --resume 01234567",
+        "summary|",
+        "summary|⏎Total tokens used this session: input=0 output=0 (total=0)⏎⏎To continue this session, run: vibe --continue⏎Or: vibe --resume abcdef01"
+      ],
+      "id": "exit-contract",
+      "reference": [
+        "quit|Press Ctrl+C again to quit",
+        "quit|Press Ctrl+D again to quit (1 queued message will be discarded)",
+        "quit|Press Ctrl+C again to quit (3 queued messages will be discarded)",
+        "summary|⏎Total tokens used this session: input=1,234 output=567 (total=1,801)⏎⏎To continue this session, run: vibe --continue⏎Or: vibe --resume 01234567",
+        "summary|",
+        "summary|⏎Total tokens used this session: input=0 output=0 (total=0)⏎⏎To continue this session, run: vibe --continue⏎Or: vibe --resume abcdef01"
+      ],
+      "story": "US-039"
+    }
+  ],
+  "unavailable": [
+    {
+      "dimension": "narrator speech synthesis and audio playback",
+      "reason": "The pinned reference speaks summaries through the Mistral SDK audio API and a native audio player. This port exposes no speech transport, so the narrator settles after summarizing and reports one bounded notice instead."
+    },
+    {
+      "dimension": "stale summary delivery",
+      "reason": "The reference cancels the summary task on cancellation instead of delivering a late result, so no reference trace can observe generation-based rejection. Rust reducer tests cover it directly."
+    },
+    {
+      "dimension": "automatic update installation",
+      "reason": "Installing updates is a declared PRD non-goal, so the `Update now` choice reports the reference UPDATE_FAILED guidance instead of running the reference update commands."
+    },
+    {
+      "dimension": "theme colour palettes",
+      "reason": "The reference renders Textual theme palettes; this port renders light and dark polarity, so only the catalog, order, current marker, and polarity are comparable."
+    }
+  ]
+}
