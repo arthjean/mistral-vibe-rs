@@ -104,7 +104,7 @@ pub(super) async fn select_overlay_item(
                 } else {
                     let target =
                         selected_config_target(runtime).unwrap_or_else(|| "user".to_owned());
-                    composer.replace_text(format!("/settings set --target {target} {key} "));
+                    composer.replace_text(format!("/config set --target {target} {key} "));
                     state.overlay = None;
                 }
             }

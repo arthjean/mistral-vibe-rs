@@ -71,7 +71,7 @@ pub(super) fn set_config_value(
     let (target, arguments) = if let Some(arguments) = arguments.strip_prefix("--target ") {
         let Some((target, arguments)) = arguments.split_once(char::is_whitespace) else {
             state.push_diagnostic(
-                "Usage: /settings set --target <user|project> <path> <JSON-or-text-value>",
+                "Usage: /config set --target <user|project> <path> <JSON-or-text-value>",
             );
             return;
         };
@@ -85,7 +85,7 @@ pub(super) fn set_config_value(
     }
     let Some((path, raw)) = arguments.split_once(char::is_whitespace) else {
         state.push_diagnostic(
-            "Usage: /settings set [--target user|project] <path> <JSON-or-text-value>",
+            "Usage: /config set [--target user|project] <path> <JSON-or-text-value>",
         );
         return;
     };
@@ -207,7 +207,7 @@ pub(super) fn reset_config_value_at(
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>();
     if path.is_empty() {
-        state.push_diagnostic("Usage: /settings reset <path>");
+        state.push_diagnostic("Usage: /config reset <path>");
         return;
     }
     let snapshot = match runtime

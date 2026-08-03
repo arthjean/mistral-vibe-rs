@@ -133,7 +133,7 @@ pub(super) async fn dispatch_command(
     };
     match command_id {
         CommandId::Config => {
-            show_config(runtime, state);
+            apply_config_command(&command_arguments, runtime, state, composer);
             Ok(CommandAction::Handled)
         }
         CommandId::Model => {
@@ -480,6 +480,31 @@ pub(super) async fn handle_overlay_key(
         _ => {}
     }
     OverlayKeyResult::Handled
+}
+
+/// `/config` opens the browser; `/config set` and `/config reset` write, so the
+/// value editor the overlay prefills is reachable through a parseable alias.
+///
+/// A bare subcommand still reaches its own usage message rather than silently
+/// opening the browser.
+fn apply_config_command(
+    command_arguments: &str,
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+    composer: &mut ChatInputState,
+) {
+    let (subcommand, rest) = command_arguments
+        .split_once(char::is_whitespace)
+        .unwrap_or((command_arguments, ""));
+    match subcommand {
+        "set" => set_config_value(rest, runtime, state),
+        "reset" => reset_config_value(rest, runtime, state),
+        _ => {
+            show_config(runtime, state);
+            return;
+        }
+    }
+    sync_voice_preference(runtime, composer);
 }
 
 /// Reference `on_option_list_option_highlighted`: the highlighted theme previews
