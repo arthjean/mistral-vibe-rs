@@ -19,4 +19,5 @@ pub mod shell;
 pub mod storage;
 pub mod telemetry;
 pub mod tools;
+pub mod updates;
 pub mod workspace;
