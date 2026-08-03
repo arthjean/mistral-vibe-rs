@@ -14,6 +14,7 @@ use callbacks::*;
 use projection::*;
 use registry::SessionRegistry;
 
+use crate::host::now_millis;
 use crate::release3::{RELEASE3_METHODS, Release3Error, Release3Service, RuntimeAttachment};
 use crate::release4::{
     LoopFire, RELEASE4_METHODS, Release4Dispatch, Release4Error, Release4Service,
@@ -3650,14 +3651,6 @@ fn object(value: Value) -> BTreeMap<String, Value> {
         .unwrap_or_default()
 }
 
-
-fn now_millis() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |duration| {
-            u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
-        })
-}
 
 fn generated_session_id(sequence: u64) -> String {
     format!("session-{}-{sequence}", now_millis())

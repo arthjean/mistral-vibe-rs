@@ -3219,14 +3219,7 @@ impl LiveTurnDriver {
             source: ExtensionSource::Builtin,
             path: None,
         };
-        let vibe_home = std::env::var_os("VIBE_HOME")
-            .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("HOME")
-                    .map(PathBuf::from)
-                    .map(|home| home.join(".vibe"))
-            })
-            .unwrap_or_else(|| PathBuf::from(".vibe"));
+        let vibe_home = crate::host::vibe_home();
         let catalog = discover_extensions(
             &DiscoveryRoots {
                 configured: Vec::new(),
@@ -3995,15 +3988,7 @@ fn now_millis() -> Result<u64, DriverError> {
 }
 
 fn default_session_root() -> Option<PathBuf> {
-    std::env::var_os("VIBE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .map(|home| home.join(".vibe"))
-        })
-        .or_else(|| std::env::current_dir().ok().map(|cwd| cwd.join(".vibe")))
-        .map(|vibe_home| vibe_home.join("sessions"))
+    Some(crate::host::vibe_home().join("sessions"))
 }
 
 #[cfg(test)]
