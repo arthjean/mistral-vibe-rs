@@ -375,7 +375,7 @@ fn effect_region(entry: &TranscriptEntry) -> EffectRegion {
     let status = effect_status(state);
     let settled = settled_display(kind, tool_name, &call, state, status);
     let (verb, message, suffix) = settled.as_ref().map_or_else(
-        || (call.verb.clone(), call.message.clone(), call.suffix.clone()),
+        || (call.verb.to_owned(), call.message.clone(), String::new()),
         |display| {
             (
                 display.verb.clone(),
@@ -447,32 +447,54 @@ pub struct ResultDisplay {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CallDisplay {
+    /// The collapsed one-line form.
     summary: String,
-    suffix: String,
-    verb: String,
+    /// What is being acted on. The live and settled headers share it, so a
+    /// finished call never renames its own subject.
     message: String,
-    settled_verb: String,
-    settled_message: String,
+    verb: &'static str,
+    settled_verb: &'static str,
 }
 
-/// Reference `ToolUIDataAdapter.get_call_display`, including the `Running`,
-/// `Ran`, and summary fallbacks it applies to every tool.
+/// Reference `ToolUIDataAdapter.get_call_display` verbs. `Todo` is absent
+/// because its `action` argument, not its kind, decides what is happening.
+const EFFECT_VERBS: &[(EffectKind, &str, &str)] = &[
+    (EffectKind::Shell, "Running", "Ran"),
+    (EffectKind::FileRead, "Reading", "Read"),
+    (EffectKind::FileWrite, "Creating", "Created"),
+    (EffectKind::FileEdit, "Editing", "Edited"),
+    (EffectKind::FileSearch, "Searching", "Searched"),
+    (EffectKind::UserQuestion, "Asking", "Asked"),
+    (EffectKind::WebSearch, "Searching", "Searched"),
+    (EffectKind::WebFetch, "Fetching", "Fetched"),
+    (EffectKind::Skill, "Loading", "Loaded"),
+    (EffectKind::Subagent, "Running", "Ran"),
+];
+
+/// Reference fallback for a tool with no presentation of its own.
+const DEFAULT_VERBS: (&str, &str) = ("Running", "Ran");
+
+fn effect_verbs(kind: EffectKind) -> (&'static str, &'static str) {
+    EFFECT_VERBS
+        .iter()
+        .find(|(candidate, _, _)| *candidate == kind)
+        .map_or(DEFAULT_VERBS, |(_, verb, settled)| (*verb, *settled))
+}
+
+/// Reference `ToolUIDataAdapter.get_call_display`, including the summary
+/// fallback it applies to a call whose arguments are missing.
 fn call_display(kind: EffectKind, tool_name: &str, arguments: &Value) -> CallDisplay {
-    let mut display = match kind {
+    if kind == EffectKind::Todo {
+        return todo_call_display(arguments);
+    }
+    let (verb, settled_verb) = effect_verbs(kind);
+    let (summary, message) = match kind {
         EffectKind::Shell => {
             let command = string_argument(arguments, &["command", "cmd"]);
-            CallDisplay {
-                summary: format!("bash: {command}"),
-                suffix: String::new(),
-                verb: "Running".to_owned(),
-                message: command.clone(),
-                settled_verb: "Ran".to_owned(),
-                settled_message: command,
-            }
+            (format!("bash: {command}"), command)
         }
         EffectKind::FileRead => {
-            let path = string_argument(arguments, &["file_path", "filePath", "path"]);
-            let mut message = path.clone();
+            let mut message = string_argument(arguments, &["file_path", "filePath", "path"]);
             let mut extras = Vec::new();
             if let Some(offset) = number_argument(arguments, &["offset", "startLine", "start_line"])
                 && offset > 0
@@ -485,39 +507,18 @@ fn call_display(kind: EffectKind, tool_name: &str, arguments: &Value) -> CallDis
             if !extras.is_empty() {
                 message = format!("{message} ({})", extras.join(", "));
             }
-            CallDisplay {
-                summary: format!("Reading {message}"),
-                suffix: String::new(),
-                verb: "Reading".to_owned(),
-                message: message.clone(),
-                settled_verb: "Read".to_owned(),
-                settled_message: message,
-            }
+            (format!("Reading {message}"), message)
         }
         EffectKind::FileWrite => {
             let path = string_argument(arguments, &["file_path", "filePath", "path"]);
-            CallDisplay {
-                summary: format!("Writing {path}"),
-                suffix: String::new(),
-                verb: "Creating".to_owned(),
-                message: path.clone(),
-                settled_verb: "Created".to_owned(),
-                settled_message: path,
-            }
+            (format!("Writing {path}"), path)
         }
         EffectKind::FileEdit => {
             let name = file_name(&string_argument(
                 arguments,
                 &["file_path", "filePath", "path"],
             ));
-            CallDisplay {
-                summary: format!("Editing {name}"),
-                suffix: String::new(),
-                verb: "Editing".to_owned(),
-                message: name.clone(),
-                settled_verb: "Edited".to_owned(),
-                settled_message: name,
-            }
+            (format!("Editing {name}"), name)
         }
         EffectKind::FileSearch => {
             let pattern = string_argument(arguments, &["pattern", "query"]);
@@ -529,151 +530,100 @@ fn call_display(kind: EffectKind, tool_name: &str, arguments: &Value) -> CallDis
             if let Some(max) = number_argument(arguments, &["max_matches", "maxMatches"]) {
                 message = format!("{message} (max {max} matches)");
             }
-            CallDisplay {
-                summary: format!("Grepping {message}"),
-                suffix: String::new(),
-                verb: "Searching".to_owned(),
-                message: message.clone(),
-                settled_verb: "Searched".to_owned(),
-                settled_message: message,
-            }
-        }
-        EffectKind::Todo => {
-            let action = string_argument(arguments, &["action"]);
-            match action.as_str() {
-                "read" => CallDisplay {
-                    summary: "Reading todos".to_owned(),
-                    suffix: String::new(),
-                    verb: "Retrieving".to_owned(),
-                    message: "todos".to_owned(),
-                    settled_verb: "Retrieved".to_owned(),
-                    settled_message: "todos".to_owned(),
-                },
-                "write" => {
-                    let count = arguments
-                        .get("todos")
-                        .and_then(Value::as_array)
-                        .map_or(0, Vec::len);
-                    CallDisplay {
-                        summary: format!("Writing {count} todos"),
-                        suffix: String::new(),
-                        verb: "Updating".to_owned(),
-                        message: format!("{count} todos"),
-                        settled_verb: "Updated".to_owned(),
-                        settled_message: format!("{count} todos"),
-                    }
-                }
-                action => CallDisplay {
-                    summary: format!("Unknown action: {action}"),
-                    suffix: String::new(),
-                    verb: "Running".to_owned(),
-                    message: format!("unknown todo action: {action}"),
-                    settled_verb: "Ran".to_owned(),
-                    settled_message: format!("unknown todo action: {action}"),
-                },
-            }
+            (format!("Grepping {message}"), message)
         }
         EffectKind::UserQuestion => {
             let questions = arguments
                 .get("questions")
                 .and_then(Value::as_array)
-                .cloned()
+                .map(Vec::as_slice)
                 .unwrap_or_default();
-            let message = if questions.len() == 1 {
-                questions[0]
-                    .get("question")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned()
-            } else {
-                format!("{} questions", questions.len())
-            };
-            CallDisplay {
-                summary: if questions.len() == 1 {
-                    format!("Asking: {message}")
-                } else {
-                    format!("Asking {message}")
-                },
-                suffix: String::new(),
-                verb: "Asking".to_owned(),
-                message: message.clone(),
-                settled_verb: "Asked".to_owned(),
-                settled_message: message,
+            match questions {
+                [only] => {
+                    let message = only
+                        .get("question")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned();
+                    (format!("Asking: {message}"), message)
+                }
+                many => {
+                    let message = format!("{} questions", many.len());
+                    (format!("Asking {message}"), message)
+                }
             }
         }
         EffectKind::WebSearch => {
             let query = string_argument(arguments, &["query"]);
             let message = format!("the web: '{query}'");
-            CallDisplay {
-                summary: format!("Searching {message}"),
-                suffix: String::new(),
-                verb: "Searching".to_owned(),
-                message: message.clone(),
-                settled_verb: "Searched".to_owned(),
-                settled_message: message,
-            }
+            (format!("Searching {message}"), message)
         }
         EffectKind::WebFetch => {
-            let url = string_argument(arguments, &["url"]);
-            let message = host_of(&url);
-            CallDisplay {
-                summary: format!("Fetching: {message}"),
-                suffix: String::new(),
-                verb: "Fetching".to_owned(),
-                message: message.clone(),
-                settled_verb: "Fetched".to_owned(),
-                settled_message: message,
-            }
+            let message = host_of(&string_argument(arguments, &["url"]));
+            (format!("Fetching: {message}"), message)
         }
         EffectKind::Skill => {
-            let name = string_argument(arguments, &["name"]);
-            CallDisplay {
-                summary: format!("Loading skill: {name}"),
-                suffix: String::new(),
-                verb: "Loading".to_owned(),
-                message: format!("skill: {name}"),
-                settled_verb: "Loaded".to_owned(),
-                settled_message: format!("skill: {name}"),
-            }
+            let message = format!("skill: {}", string_argument(arguments, &["name"]));
+            (format!("Loading {message}"), message)
         }
         EffectKind::Subagent => {
-            let agent = string_argument(arguments, &["agent"]);
-            let task = string_argument(arguments, &["task"]);
-            let message = format!("{agent} agent: {task}");
-            CallDisplay {
-                summary: format!("Running {message}"),
-                suffix: String::new(),
-                verb: "Running".to_owned(),
-                message: message.clone(),
-                settled_verb: "Ran".to_owned(),
-                settled_message: message,
-            }
+            let message = format!(
+                "{} agent: {}",
+                string_argument(arguments, &["agent"]),
+                string_argument(arguments, &["task"])
+            );
+            (format!("Running {message}"), message)
         }
-        EffectKind::Tool => {
+        // A tool with no presentation of its own shows its arguments, and the
+        // summary is all there is to show.
+        EffectKind::Tool | EffectKind::Todo => {
             let summary = generic_call_summary(tool_name, arguments);
-            CallDisplay {
-                summary: summary.clone(),
-                suffix: String::new(),
-                verb: String::new(),
-                message: String::new(),
-                settled_verb: String::new(),
-                settled_message: String::new(),
-            }
+            (summary.clone(), summary)
         }
     };
-    if display.message.is_empty() {
-        display.message.clone_from(&display.summary);
+    // A call whose arguments never arrived would otherwise render a bare verb.
+    let message = if message.is_empty() {
+        summary.clone()
+    } else {
+        message
+    };
+    CallDisplay {
+        summary,
+        message,
+        verb,
+        settled_verb,
     }
-    if display.verb.is_empty() {
-        display.verb = "Running".to_owned();
+}
+
+/// The todo effect names its own verbs: the same kind reads, writes, or fails
+/// to recognise its action.
+fn todo_call_display(arguments: &Value) -> CallDisplay {
+    match string_argument(arguments, &["action"]).as_str() {
+        "read" => CallDisplay {
+            summary: "Reading todos".to_owned(),
+            message: "todos".to_owned(),
+            verb: "Retrieving",
+            settled_verb: "Retrieved",
+        },
+        "write" => {
+            let count = arguments
+                .get("todos")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len);
+            CallDisplay {
+                summary: format!("Writing {count} todos"),
+                message: format!("{count} todos"),
+                verb: "Updating",
+                settled_verb: "Updated",
+            }
+        }
+        action => CallDisplay {
+            summary: format!("Unknown action: {action}"),
+            message: format!("unknown todo action: {action}"),
+            verb: "Running",
+            settled_verb: "Ran",
+        },
     }
-    if display.settled_message.is_empty() {
-        display.settled_message.clone_from(&display.summary);
-    }
-    if display.settled_verb.is_empty() {
-        display.settled_verb = "Ran".to_owned();
-    }
-    display
 }
 
 /// Reference `ToolUIDataAdapter.get_call_display` fallback for tools without
@@ -706,9 +656,9 @@ fn settled_display(
         EntryStatus::Pending | EntryStatus::Streaming | EntryStatus::Blocked => None,
         EntryStatus::Failed => Some(ResultDisplay {
             success: false,
-            verb: call.settled_verb.clone(),
-            message: call.settled_message.clone(),
-            suffix: call.suffix.clone(),
+            verb: call.settled_verb.to_owned(),
+            message: call.message.clone(),
+            suffix: String::new(),
             warnings: Vec::new(),
         }),
         EntryStatus::Cancelled | EntryStatus::Skipped => Some(ResultDisplay {
@@ -774,7 +724,7 @@ fn completed_display(kind: EffectKind, call: &CallDisplay, state: &Value) -> Res
             (
                 "Ran".to_owned(),
                 if command.is_empty() {
-                    call.settled_message.clone()
+                    call.message.clone()
                 } else {
                     command
                 },
@@ -902,21 +852,9 @@ fn completed_display(kind: EffectKind, call: &CallDisplay, state: &Value) -> Res
                 },
             )
         }
-        EffectKind::Skill => (
-            "Loaded".to_owned(),
-            call.settled_message.clone(),
-            String::new(),
-        ),
-        EffectKind::Subagent => (
-            "Completed".to_owned(),
-            call.settled_message.clone(),
-            String::new(),
-        ),
-        EffectKind::Tool => (
-            "Ran".to_owned(),
-            call.settled_message.clone(),
-            String::new(),
-        ),
+        EffectKind::Skill => ("Loaded".to_owned(), call.message.clone(), String::new()),
+        EffectKind::Subagent => ("Completed".to_owned(), call.message.clone(), String::new()),
+        EffectKind::Tool => ("Ran".to_owned(), call.message.clone(), String::new()),
     };
     ResultDisplay {
         success: true,
