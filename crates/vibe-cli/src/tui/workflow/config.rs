@@ -321,6 +321,9 @@ pub(super) fn apply_render_preferences(runtime: &mut InteractiveRuntime, state: 
     state.show_reasoning = configured_value(runtime, "show_thinking_nodes")
         .and_then(|value| value.as_bool())
         .unwrap_or(true);
+    state.autocopy_to_clipboard = configured_value(runtime, "autocopy_to_clipboard")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
 }
 
 fn config_schema_at<'a>(schema: &'a Value, path: &[&str]) -> Option<&'a Value> {

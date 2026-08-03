@@ -7,10 +7,12 @@ use thiserror::Error;
 use tokio::sync::{mpsc, watch};
 
 use super::controls::CallbackPresentation;
+use super::debug_console::DebugConsole;
 use super::diagnostics::{Activity, ErrorLog};
 use super::interaction::{Overlay, PromptQueue, QuitConfirmation};
 use super::rewind::RewindState;
 use super::session_picker::SessionDeleteState;
+use super::transcript_view::TranscriptView;
 
 const MAX_DIAGNOSTICS: usize = 100;
 
@@ -153,6 +155,8 @@ pub struct TuiState {
     pub rewind_confirmation: QuitConfirmation,
     pub tools_collapsed: bool,
     pub show_reasoning: bool,
+    /// Reference `autocopy_to_clipboard`: copy on pointer release.
+    pub autocopy_to_clipboard: bool,
     pub callback: Option<CallbackPresentation>,
     pub callback_scroll_offset: isize,
     pub plan_review: Option<PlanReviewState>,
@@ -160,6 +164,10 @@ pub struct TuiState {
     pub activity: Option<Activity>,
     /// Failures already surfaced, so a retried turn cannot repeat itself.
     pub errors: ErrorLog,
+    /// Live log paging, present only while the debug console is open.
+    pub debug_console: Option<DebugConsole>,
+    /// What the last frame painted, and what the operator selected in it.
+    pub transcript_view: TranscriptView,
     turn_started_ms: Option<u64>,
     scroll_line_limit: usize,
     diagnostics: VecDeque<String>,
@@ -193,11 +201,14 @@ impl TuiState {
             // until the operator expands them.
             tools_collapsed: true,
             show_reasoning: true,
+            autocopy_to_clipboard: false,
             callback: None,
             callback_scroll_offset: 0,
             plan_review: None,
             activity: None,
             errors: ErrorLog::default(),
+            debug_console: None,
+            transcript_view: TranscriptView::default(),
             turn_started_ms: None,
             scroll_line_limit: 0,
             diagnostics: VecDeque::new(),
@@ -388,9 +399,17 @@ impl TuiState {
         replacement.rewind_confirmation = std::mem::take(&mut self.rewind_confirmation);
         replacement.tools_collapsed = self.tools_collapsed;
         replacement.show_reasoning = self.show_reasoning;
+        replacement.autocopy_to_clipboard = self.autocopy_to_clipboard;
         replacement.callback = self.callback.take();
         replacement.callback_scroll_offset = self.callback_scroll_offset;
         replacement.plan_review = self.plan_review.take();
+        // Locally owned observability: a canonical resync replaces history, not
+        // what the operator is watching, selected, or was already told.
+        replacement.activity = self.activity.take();
+        replacement.turn_started_ms = self.turn_started_ms;
+        replacement.errors = std::mem::take(&mut self.errors);
+        replacement.debug_console = self.debug_console.take();
+        replacement.transcript_view = std::mem::take(&mut self.transcript_view);
         replacement.diagnostics = self.diagnostics.clone();
         replacement.local_sequence = self.local_sequence;
         replacement.local_entries = self.local_entries.clone();
@@ -762,6 +781,54 @@ mod tests {
         assert_eq!(
             state.diagnostics().collect::<Vec<_>>(),
             vec!["keep this diagnostic"]
+        );
+    }
+
+    #[test]
+    fn a_resync_replaces_history_without_disturbing_local_observability() {
+        let mut state = TuiState::new("session");
+        state.waiting = true;
+        state.sync_activity(5_000);
+        state.debug_console = Some(super::super::debug_console::DebugConsole::default());
+        state
+            .transcript_view
+            .publish(3, vec!["See https://ratatui.rs".to_owned()]);
+        state
+            .transcript_view
+            .begin_selection(super::super::transcript_view::Cell { line: 0, column: 0 });
+        state
+            .transcript_view
+            .extend_selection(super::super::transcript_view::Cell { line: 0, column: 3 });
+        assert!(state.transcript_view.has_selection());
+
+        let mut replacement = TuiState::new("session");
+        replacement
+            .apply(ServerEvent::Snapshot(TuiSnapshot {
+                session_id: "session".to_owned(),
+                event_id: 2,
+                entries: vec![entry("canonical", 1, "new", EntryStatus::Completed)],
+                cursor_before: None,
+                cursor_after: None,
+                waiting: true,
+            }))
+            .expect("canonical state");
+        state
+            .replace_projection_preserving_diagnostics(replacement)
+            .expect("same-session replacement");
+
+        assert!(state.debug_console.is_some(), "the console stayed open");
+        assert!(
+            state.transcript_view.has_selection(),
+            "the operator's selection survived the resync"
+        );
+        // The turn clock keeps running: the resync did not restart the turn.
+        state.sync_activity(9_000);
+        assert_eq!(
+            state
+                .activity
+                .as_ref()
+                .map(|activity| activity.elapsed_seconds),
+            Some(4)
         );
     }
 

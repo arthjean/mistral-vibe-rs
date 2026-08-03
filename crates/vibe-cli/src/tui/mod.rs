@@ -9,6 +9,7 @@ pub mod completion;
 mod composer;
 mod composer_layout;
 pub mod controls;
+pub mod debug_console;
 pub mod diagnostics;
 mod external_action;
 mod feedback;
@@ -36,6 +37,7 @@ pub mod state;
 mod switching;
 pub mod terminal;
 pub mod transcript;
+pub mod transcript_view;
 mod voice;
 mod workflow;
 
@@ -644,6 +646,14 @@ pub async fn run_interactive(
             plan_review_monitor.sync(plan_path, &mut state).await;
             sync_callback_presentation(&controls, &mut state, now_ms);
             state.sync_activity(now_ms);
+            if state
+                .debug_console
+                .as_ref()
+                .is_some_and(|console| console.poll_due(now_ms))
+                && let Some(runtime) = runtime.as_mut()
+            {
+                workflow::refresh_debug_console(runtime, &mut state, now_ms);
+            }
             if !path_normalization.has_pending()
                 && let Some(key) = deferred_enter.take()
             {
@@ -1052,7 +1062,16 @@ async fn handle_terminal_event(
                         working_directory,
                         state,
                     );
+                } else if let Some(cell) = state.transcript_view.cell_at(mouse.column, mouse.row) {
+                    if matches!(mouse.kind, MouseEventKind::Drag(_)) {
+                        state.transcript_view.extend_selection(cell);
+                    } else {
+                        state.transcript_view.begin_selection(cell);
+                    }
                 }
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                settle_transcript_pointer(state, mouse.column, mouse.row).await;
             }
             _ => {}
         },
@@ -1330,8 +1349,12 @@ async fn handle_key(
     }
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         match key.code {
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                copy_prompt_selection(input.editor(), state);
+            // Reference `action_copy_selection`: the transcript selection wins
+            // when one exists, otherwise the composer keeps the shortcut.
+            KeyCode::Char('c' | 'C') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                if !copy_transcript_selection(state) {
+                    copy_prompt_selection(input.editor(), state);
+                }
                 return Ok(false);
             }
             KeyCode::Char('c') => {
@@ -1395,8 +1418,10 @@ async fn handle_key(
                 });
                 return Ok(false);
             }
-            KeyCode::Char('y') => {
-                copy_prompt_selection(input.editor(), state);
+            KeyCode::Char('y' | 'Y') => {
+                if !copy_transcript_selection(state) {
+                    copy_prompt_selection(input.editor(), state);
+                }
                 return Ok(false);
             }
             KeyCode::Char('g') => {
@@ -1785,6 +1810,14 @@ async fn handle_key(
                 }
             }
         }
+        // Transcript selection stays reachable without a pointer, so copying
+        // history never requires mouse reporting.
+        KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
+            state.transcript_view.move_selection(1);
+        }
+        KeyCode::Down if key.modifiers.contains(KeyModifiers::ALT) => {
+            state.transcript_view.move_selection(-1);
+        }
         KeyCode::PageUp if key.modifiers.contains(KeyModifiers::ALT) => {
             state.prompt_queue.scroll(-5);
         }
@@ -1792,6 +1825,14 @@ async fn handle_key(
             state.prompt_queue.scroll(5);
         }
         KeyCode::PageUp => {
+            if state
+                .overlay
+                .as_ref()
+                .is_some_and(|overlay| overlay.kind == interaction::OverlayKind::Debug)
+            {
+                page_older_debug_logs(runtime.as_mut(), state);
+                return Ok(false);
+            }
             state.scroll_up(10);
             page_older_history(runtime.as_mut(), state);
         }
@@ -2844,6 +2885,65 @@ fn overlay_latest_saved_history(
         }))
         .map_err(|error| CliError::Terminal(error.to_string()))?;
     Ok(())
+}
+
+/// Releasing the pointer over the transcript either activates the link under a
+/// plain click or settles a drag selection, auto-copying it when the reference
+/// preference is on. Every external effect is scoped: a failure is reported and
+/// the selection survives it.
+async fn settle_transcript_pointer(state: &mut TuiState, column: u16, row: u16) {
+    let Some(cell) = state.transcript_view.cell_at(column, row) else {
+        return;
+    };
+    if state.transcript_view.is_click() {
+        state.transcript_view.clear_selection();
+        let Some(url) = state.transcript_view.link_at(cell) else {
+            return;
+        };
+        if let Err(error) =
+            workflow::UrlOpenerPort::open(&workflow::SystemUrlOpener, url.clone()).await
+        {
+            state.push_diagnostic(format!("Could not open {url}: {error}"));
+        }
+        return;
+    }
+    state.transcript_view.extend_selection(cell);
+    if state.autocopy_to_clipboard {
+        copy_transcript_selection(state);
+    }
+}
+
+/// Reference `action_copy_selection`: copies the transcript selection when one
+/// exists, and reports a clipboard refusal without discarding it.
+fn copy_transcript_selection(state: &mut TuiState) -> bool {
+    let Some(selection) = state.transcript_view.selected_text() else {
+        return false;
+    };
+    match clipboard::SystemClipboardPort::copy_text(&clipboard::SystemClipboard, &selection) {
+        Ok(()) => push_local_notice(
+            state,
+            "Selection copied to clipboard",
+            EntryStatus::Completed,
+        ),
+        Err(_) => state.push_diagnostic("Failed to copy: clipboard not available"),
+    }
+    true
+}
+
+/// Reference `_try_load_previous`: reveals the page above the debug window and
+/// leaves it pinned there until the console is reopened.
+fn page_older_debug_logs(runtime: Option<&mut InteractiveRuntime>, state: &mut TuiState) {
+    let Some(console) = state.debug_console.as_mut() else {
+        return;
+    };
+    if !console.load_older() {
+        return;
+    }
+    let Some(runtime) = runtime else {
+        state.push_diagnostic("Debug logs are unavailable until setup completes");
+        return;
+    };
+    workflow::refresh_debug_console(runtime, state, unix_millis());
 }
 
 fn page_older_history(runtime: Option<&mut InteractiveRuntime>, state: &mut TuiState) {

@@ -495,36 +495,6 @@ pub fn status_overlay(result: &Value) -> Overlay {
     )
 }
 
-#[must_use]
-pub fn debug_overlay(result: &Value) -> Overlay {
-    let mut items = result
-        .pointer("/logs/entries")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .rev()
-        .take(100)
-        .enumerate()
-        .map(|(index, log)| {
-            let level = log.get("level").and_then(Value::as_str).unwrap_or("log");
-            let message = log
-                .get("message")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            OverlayItem::new(format!("log:{index}"), level, message, true)
-        })
-        .collect::<Vec<_>>();
-    if items.is_empty() {
-        items.push(OverlayItem::new(
-            "empty",
-            "No debug events",
-            "The runtime log buffer is empty",
-            true,
-        ));
-    }
-    Overlay::new(OverlayKind::Debug, "Debug console", items)
-}
-
 fn fixed_choice_overlay(
     kind: OverlayKind,
     title: &str,

@@ -418,7 +418,34 @@ fn draw_transcript(
             std::iter::repeat_with(Line::default).take(visible_height - lines.len()),
         );
     }
+    // Interaction resolves against what was painted, so the frame publishes its
+    // visible text before handing the lines to the widget.
+    let painted = lines.iter().map(ToString::to_string).collect::<Vec<_>>();
+    state.transcript_view.publish(area.y, painted.clone());
+    for (index, from, to) in state.transcript_view.selection_ranges() {
+        let (Some(line), Some(text)) = (lines.get_mut(index), painted.get(index)) else {
+            continue;
+        };
+        *line = selected_line(text, from, to);
+    }
     frame.render_widget(Paragraph::new(Text::from(lines)), area);
+}
+
+/// Repaints one painted line with its selected range reversed, the way the
+/// reference marks a transcript selection.
+fn selected_line(text: &str, from: usize, to: usize) -> Line<'static> {
+    let characters = text.chars().collect::<Vec<_>>();
+    let slice = |range: std::ops::Range<usize>| -> String {
+        characters.get(range).unwrap_or_default().iter().collect()
+    };
+    Line::from(vec![
+        Span::raw(slice(0..from)),
+        Span::styled(
+            slice(from..to),
+            Style::default().add_modifier(Modifier::REVERSED),
+        ),
+        Span::raw(slice(to..characters.len())),
+    ])
 }
 
 fn banner_lines(banner: BannerContext<'_>, theme: ResolvedTheme) -> Vec<Line<'static>> {
@@ -1549,7 +1576,55 @@ mod tests {
             }
             // A collapsible result folds into its header; a diff never does.
             assert!(!rendered.contains("│ ok"), "shell body expanded at {width}");
+            assert!(
+                state
+                    .transcript_view
+                    .lines()
+                    .iter()
+                    .any(|line| line.contains("Edited lib.rs")),
+                "the frame did not publish its painted transcript at {width}"
+            );
         }
+    }
+
+    #[test]
+    fn a_keyboard_selection_is_visible_and_survives_a_streaming_repaint() {
+        let mut state = TuiState::new("session");
+        state.ready = true;
+        state.entries.push(TranscriptEntry {
+            id: "assistant".to_owned(),
+            revision: 1,
+            kind: TranscriptKind::AssistantMessage,
+            text: "deployed".to_owned(),
+            status: EntryStatus::Streaming,
+            details: serde_json::Value::Null,
+        });
+        let editor = PromptEditor::default();
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).expect("test terminal");
+        terminal
+            .draw(|frame| draw_test(frame, &mut state, &editor, false))
+            .expect("first frame paints the transcript");
+        assert!(state.transcript_view.move_selection(1));
+        assert_eq!(
+            state.transcript_view.selected_text().as_deref(),
+            Some("  deployed")
+        );
+
+        // The reference reverses the selected cells; a repaint keeps them.
+        for text in ["deployed", "deployed twice"] {
+            state.entries[0].text = text.to_owned();
+            terminal
+                .draw(|frame| draw_test(frame, &mut state, &editor, false))
+                .expect("repaint keeps the selection");
+        }
+        let reversed = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .filter(|cell| cell.modifier.contains(Modifier::REVERSED))
+            .count();
+        assert!(reversed > 0, "the selection was not marked on screen");
     }
 
     #[test]

@@ -11,10 +11,11 @@ use super::chat_input::ChatInputState;
 use super::clipboard::{SystemClipboard, SystemClipboardPort};
 use super::commands::{CommandId, parse_command_in};
 use super::controls::ControlState;
+use super::debug_console::{DebugConsole, PAGE_SIZE as DEBUG_PAGE_SIZE};
 use super::interaction::{Overlay, OverlayKind, RemoteProjectAction, TeleportPushAction};
 use super::pickers::{
-    config_overlay, debug_overlay, help_overlay, model_overlay, proxy_overlay, rewind_state,
-    sessions_overlay, status_overlay, theme_overlay, thinking_overlay, voice_overlay,
+    config_overlay, help_overlay, model_overlay, proxy_overlay, rewind_state, sessions_overlay,
+    status_overlay, theme_overlay, thinking_overlay, voice_overlay,
 };
 use super::rewind::{RewindEffect, reduce_key as reduce_rewind_key};
 use super::session_picker::{
@@ -26,7 +27,7 @@ use super::switching::{self, SwitchRequest};
 use super::{
     Arguments, CliError, InteractiveRuntime, adopt_hydrated_session, call_runtime,
     metadata_session_id, parse_runtime_skills, push_local_notice, refresh_server_banner_metrics,
-    sync_runtime_intent,
+    sync_runtime_intent, unix_millis,
 };
 pub(super) use config::apply_thinking;
 use config::{
@@ -34,7 +35,7 @@ use config::{
     selected_config_target, set_config_value, update_proxy_value,
 };
 pub(in crate::tui) use mcp::{McpEffect, McpPendingOperation, apply_pending_operation};
-pub(super) use mcp::{SystemUrlOpener, execute_mcp_effect};
+pub(super) use mcp::{SystemUrlOpener, UrlOpenerPort, execute_mcp_effect};
 use mcp::{handle_mcp, refresh_selected_mcp, set_selected_mcp};
 #[cfg(test)]
 pub(in crate::tui) use mcp::{reduce_auth_action, valid_auth_url};
@@ -721,15 +722,48 @@ fn show_debug(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
         .is_some_and(|overlay| overlay.kind == OverlayKind::Debug)
     {
         state.overlay = None;
+        state.debug_console = None;
         return;
     }
-    if let Some(result) = call_runtime(
-        runtime,
+    state.debug_console = Some(DebugConsole::default());
+    refresh_debug_console(runtime, state, unix_millis());
+}
+
+/// Reads the next log page and rebuilds the console overlay. A read failure is
+/// reported once and leaves the console open on what it already loaded.
+pub(in crate::tui) fn refresh_debug_console(
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+    now_ms: u64,
+) {
+    let Some(console) = state.debug_console.as_mut() else {
+        return;
+    };
+    let offset = console.next_offset();
+    let selected = state
+        .overlay
+        .as_ref()
+        .filter(|overlay| overlay.kind == OverlayKind::Debug)
+        .and_then(Overlay::selected_item)
+        .map(|item| item.id.clone());
+    match runtime.service.public_call(
         "diagnostics/logs/read",
-        json!({"offset": 0, "limit": 100}),
-        state,
+        json!({"offset": offset, "limit": DEBUG_PAGE_SIZE}),
     ) {
-        state.overlay = Some(debug_overlay(&map_value(result)));
+        Ok(result) => {
+            let page = map_value(result);
+            let Some(console) = state.debug_console.as_mut() else {
+                return;
+            };
+            console.absorb(&page, now_ms);
+            let overlay = console.overlay(selected.as_deref());
+            state.overlay = Some(overlay);
+        }
+        Err(error) => {
+            let console = console.clone();
+            state.push_diagnostic(format!("Debug log read failed: {error}"));
+            state.overlay = Some(console.overlay(selected.as_deref()));
+        }
     }
 }
 
