@@ -9,7 +9,8 @@ use url::Url;
 
 use super::{
     MAX_MCP_DISCOVERY_PAGES, MAX_MCP_TOOLS_PER_SERVER, MCP_PROTOCOL_VERSION, McpError, McpFuture,
-    McpPeer, McpPeerFactory, McpServerConfig, McpTransportConfig, RemoteTool, validate_config,
+    McpPeer, McpPeerFactory, McpServerConfig, McpTransportConfig, RemoteTool, decode_tool_result,
+    validate_config,
 };
 use crate::tools::{ToolExecutionOutput, ToolOutputSink};
 
@@ -338,11 +339,8 @@ impl HttpMcpPeer {
 }
 
 impl McpPeer for HttpMcpPeer {
-    fn discover<'a>(&'a self, max_response_bytes: usize) -> McpFuture<'a, Vec<u8>> {
-        Box::pin(async move {
-            let tools = self.list_tools(max_response_bytes).await?;
-            serde_json::to_vec(&tools).map_err(|error| McpError::Tool(error.to_string()))
-        })
+    fn discover<'a>(&'a self, max_response_bytes: usize) -> McpFuture<'a, Vec<RemoteTool>> {
+        Box::pin(self.list_tools(max_response_bytes))
     }
 
     fn call<'a>(
@@ -351,24 +349,11 @@ impl McpPeer for HttpMcpPeer {
         arguments: Value,
         max_response_bytes: usize,
         output: ToolOutputSink,
-    ) -> McpFuture<'a, Vec<u8>> {
+    ) -> McpFuture<'a, ToolExecutionOutput> {
         Box::pin(async move {
-            let result = self
-                .call_tool(name, arguments, max_response_bytes, &output)
-                .await?;
-            let encoded =
-                serde_json::to_vec(&result).map_err(|error| McpError::Tool(error.to_string()))?;
-            if encoded.len() > max_response_bytes {
-                return Err(McpError::Tool(
-                    "MCP tool result exceeded its byte budget".to_owned(),
-                ));
-            }
-            Ok(encoded)
+            self.call_tool(name, arguments, max_response_bytes, &output)
+                .await
         })
-    }
-
-    fn refresh<'a>(&'a self, max_response_bytes: usize) -> McpFuture<'a, Vec<u8>> {
-        self.discover(max_response_bytes)
     }
 
     fn close<'a>(&'a self) -> McpFuture<'a, ()> {
@@ -528,78 +513,9 @@ fn parse_event(event: &[u8]) -> Result<Vec<Value>, McpError> {
         .map_err(|error| McpError::Transport(format!("invalid MCP event data: {error}")))
 }
 
-fn decode_tool_result(result: Value) -> Result<ToolExecutionOutput, McpError> {
-    let content = result
-        .get("content")
-        .and_then(Value::as_array)
-        .ok_or_else(|| McpError::Tool("tools/call omitted content".to_owned()))?;
-    if content.iter().any(|block| {
-        block.get("type").and_then(Value::as_str) == Some("text")
-            && !block.get("text").is_some_and(Value::is_string)
-    }) {
-        return Err(McpError::Tool(
-            "tools/call returned malformed text content".to_owned(),
-        ));
-    }
-    if result
-        .get("structuredContent")
-        .is_some_and(|value| !value.is_object())
-    {
-        return Err(McpError::Tool(
-            "tools/call structuredContent must be an object".to_owned(),
-        ));
-    }
-    if result
-        .get("isError")
-        .is_some_and(|value| !value.is_boolean())
-    {
-        return Err(McpError::Tool(
-            "tools/call isError must be a boolean".to_owned(),
-        ));
-    }
-    let mut model_text = content
-        .iter()
-        .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
-        .filter_map(|block| block.get("text").and_then(Value::as_str))
-        .collect::<Vec<_>>()
-        .join("\n");
-    if model_text.is_empty() {
-        model_text = match result.get("structuredContent") {
-            Some(structured) => serde_json::to_string(structured),
-            None => serde_json::to_string(content),
-        }
-        .map_err(|error| McpError::Tool(error.to_string()))?;
-    }
-    if result
-        .get("isError")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
-        return Err(McpError::Tool(if model_text.is_empty() {
-            "remote MCP tool reported an error".to_owned()
-        } else {
-            crate::integrations::redact(&model_text)
-        }));
-    }
-    let typed_result = result
-        .get("structuredContent")
-        .cloned()
-        .unwrap_or_else(|| json!({"content": content}));
-    Ok(ToolExecutionOutput {
-        typed_result,
-        model_text,
-        display: json!({
-            "kind": "mcp",
-            "isError": false,
-        }),
-        chunks: Vec::new(),
-    })
-}
-
 fn bounded_error(error: &Value) -> String {
-    let mut encoded = serde_json::to_string(error).unwrap_or_else(|_| "unknown error".to_owned());
-    encoded.truncate(4_096);
-    crate::integrations::redact(&encoded)
+    let encoded = serde_json::to_string(error).unwrap_or_else(|_| "unknown error".to_owned());
+    crate::integrations::redact(crate::text::truncate_utf8(&encoded, 4_096))
 }
 
 #[cfg(test)]
@@ -659,12 +575,7 @@ mod tests {
             .await
             .expect("discovery must not wait for SSE EOF")
             .expect("tools discover");
-        assert_eq!(
-            serde_json::from_slice::<Vec<RemoteTool>>(&tools)
-                .expect("tool payload")
-                .len(),
-            1
-        );
+        assert_eq!(tools.len(), 1);
         peer.close().await.expect("session terminates");
         assert!(deleted.load(Ordering::SeqCst));
     }

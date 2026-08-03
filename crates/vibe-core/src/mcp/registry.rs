@@ -218,13 +218,12 @@ impl McpRegistry {
             (state.peers.remove(alias), tool_names, tools)
         };
         if let Some(tools) = tools {
-            for tool_name in tool_names {
-                let _ = tools.set_availability(
-                    &tool_name,
-                    ToolSource::Mcp,
-                    ToolAvailability::Unavailable,
-                );
-            }
+            let _ = set_all(
+                &tools,
+                ToolSource::Mcp,
+                &tool_names,
+                ToolAvailability::Unavailable,
+            );
         }
         match peer {
             Some(peer) => timeout_operation(peer.close())
@@ -255,7 +254,7 @@ impl McpRegistry {
         };
         if state.configs.values().any(|existing| {
             transport_url(&existing.transport)
-                .is_some_and(|existing| canonical_resource(existing) == canonical_resource(url))
+                .is_some_and(|existing| canonical_url(existing) == canonical_url(url))
         }) {
             return Err(McpError::InvalidConfig(
                 "an MCP server with this URL is already registered".to_owned(),
@@ -289,20 +288,18 @@ impl McpRegistry {
                 state.runtime.as_ref().map(|runtime| runtime.tools.clone()),
             )
         };
-        if let Some(tools) = tools {
-            let updates = tool_names
-                .iter()
-                .cloned()
-                .map(|tool| (tool, ToolAvailability::Disabled))
-                .collect::<Vec<_>>();
-            if !tools
-                .set_availabilities(ToolSource::Mcp, &updates)
-                .map_err(|error| McpError::Tool(error.to_string()))?
-            {
-                return Err(McpError::Tool(
-                    "MCP tool registry changed during server disable".to_owned(),
-                ));
-            }
+        if let Some(tools) = tools
+            && !set_all(
+                &tools,
+                ToolSource::Mcp,
+                &tool_names,
+                ToolAvailability::Disabled,
+            )
+            .map_err(|error| McpError::Tool(error.to_string()))?
+        {
+            return Err(McpError::Tool(
+                "MCP tool registry changed during server disable".to_owned(),
+            ));
         }
         let peer = {
             let mut state = self.state.lock().await;
@@ -368,11 +365,8 @@ impl McpRegistry {
                 "MCP server `{alias}` has no tool `{tool_name}`"
             )));
         }
-        let availability = if enabled {
-            ToolAvailability::Available
-        } else {
-            ToolAvailability::Disabled
-        };
+        let availability =
+            tool_availability(enabled, &BTreeSet::new(), ProviderReach::Ready, tool_name);
         if !tools
             .set_availability(tool_name, ToolSource::Mcp, availability)
             .map_err(|error| McpError::Tool(error.to_string()))?
@@ -496,17 +490,17 @@ impl McpRegistry {
             )
         };
         let remote = timeout_operation_for(
-            peer.refresh(MAX_MCP_DISCOVERY_BYTES),
+            peer.discover(MAX_MCP_DISCOVERY_BYTES),
             config.tool_timeout_ms,
         )
-        .await
-        .and_then(decode_remote_tools)?;
-        for tool_name in old_tools {
-            runtime
-                .tools
-                .set_availability(&tool_name, ToolSource::Mcp, ToolAvailability::Unavailable)
-                .map_err(|error| McpError::Tool(error.to_string()))?;
-        }
+        .await?;
+        set_all(
+            &runtime.tools,
+            ToolSource::Mcp,
+            &old_tools,
+            ToolAvailability::Unavailable,
+        )
+        .map_err(|error| McpError::Tool(error.to_string()))?;
         let (mut registered, diagnostics) = register_remote_tools(
             self.state.clone(),
             alias,
@@ -626,10 +620,12 @@ impl McpRegistry {
             (peers, tools, tool_names)
         };
         if let Some(tools) = tools {
-            for tool_name in tool_names {
-                let _ =
-                    tools.set_availability(&tool_name, ToolSource::Mcp, ToolAvailability::Disabled);
-            }
+            let _ = set_all(
+                &tools,
+                ToolSource::Mcp,
+                &tool_names,
+                ToolAvailability::Disabled,
+            );
         }
         let mut diagnostics = Vec::new();
         for (alias, peer) in peers {
@@ -650,13 +646,8 @@ fn reconcile_disabled_tools(
         .into_iter()
         .filter(|tool| registered.contains(tool))
         .collect::<BTreeSet<_>>();
-    let updates = disabled
-        .iter()
-        .cloned()
-        .map(|tool| (tool, ToolAvailability::Disabled))
-        .collect::<Vec<_>>();
-    if !tools
-        .set_availabilities(ToolSource::Mcp, &updates)
+    let names = disabled.iter().cloned().collect::<Vec<_>>();
+    if !set_all(tools, ToolSource::Mcp, &names, ToolAvailability::Disabled)
         .map_err(|error| McpError::Tool(error.to_string()))?
     {
         return Err(McpError::Tool(
@@ -677,7 +668,7 @@ fn normalize_disabled_tools(
             if registered.contains(tool) {
                 return Some(tool.clone());
             }
-            let public = format!("mcp_{}_{}", sanitize_name(alias), sanitize_name(tool));
+            let public = public_tool_name(ToolSource::Mcp, alias, tool);
             registered.contains(&public).then_some(public)
         })
         .collect()
@@ -697,11 +688,7 @@ fn register_remote_tools(
     let mut registered = Vec::new();
     let mut diagnostics = Vec::new();
     for remote in remote_tools {
-        let public_name = format!(
-            "mcp_{}_{}",
-            sanitize_name(alias),
-            sanitize_name(&remote.name)
-        );
+        let public_name = public_tool_name(ToolSource::Mcp, alias, &remote.name);
         if let Err(error) = validate_remote_tool(&remote, &config.transport) {
             diagnostics.push(canonical_diagnostic(alias, &error));
             continue;
@@ -761,44 +748,13 @@ fn register_remote_tools(
                             tool_timeout_ms,
                         ) => result,
                     };
-                    let response = match call_result {
-                        Ok(response) => response,
+                    peer_guard.disarm();
+                    match call_result {
+                        Ok(result) => Ok(result),
                         Err(error) => {
-                            peer_guard.disarm();
                             let diagnostic = canonical_diagnostic(&alias, &error);
                             retire_failed_peer(state, alias, peer, diagnostic).await;
-                            return Err(ToolError::Execution(error.to_string()));
-                        }
-                    };
-                    if response.len() > output.remaining_bytes() {
-                        peer_guard.disarm();
-                        retire_failed_peer(
-                            state,
-                            alias,
-                            peer,
-                            "MCP invocation exceeded its output budget".to_owned(),
-                        )
-                        .await;
-                        return Err(ToolError::OutputTooLarge {
-                            actual: response.len(),
-                            limit: output.remaining_bytes(),
-                        });
-                    }
-                    match serde_json::from_slice(&response) {
-                        Ok(result) => {
-                            peer_guard.disarm();
-                            Ok(result)
-                        }
-                        Err(error) => {
-                            peer_guard.disarm();
-                            retire_failed_peer(
-                                state,
-                                alias,
-                                peer,
-                                "MCP invocation returned an invalid result".to_owned(),
-                            )
-                            .await;
-                            Err(ToolError::InvalidResult(error.to_string()))
+                            Err(ToolError::Execution(error.to_string()))
                         }
                     }
                 })
@@ -917,10 +873,12 @@ async fn retire_failed_peer(
         (tool_names, tools, removed)
     };
     if let Some(tools) = tools {
-        for tool_name in tool_names {
-            let _ =
-                tools.set_availability(&tool_name, ToolSource::Mcp, ToolAvailability::Unavailable);
-        }
+        let _ = set_all(
+            &tools,
+            ToolSource::Mcp,
+            &tool_names,
+            ToolAvailability::Unavailable,
+        );
     }
     if removed {
         let _ = timeout_operation(peer.close()).await;
@@ -946,10 +904,7 @@ async fn discover_peer(
     peer: Arc<dyn McpPeer>,
     timeout_ms: u64,
 ) -> Result<(Arc<dyn McpPeer>, Vec<RemoteTool>), McpError> {
-    match timeout_operation_for(peer.discover(MAX_MCP_DISCOVERY_BYTES), timeout_ms)
-        .await
-        .and_then(decode_remote_tools)
-    {
+    match timeout_operation_for(peer.discover(MAX_MCP_DISCOVERY_BYTES), timeout_ms).await {
         Ok(remote) => Ok((peer, remote)),
         Err(discovery_error) => match timeout_operation(peer.close()).await {
             Ok(()) => Err(discovery_error),
@@ -958,20 +913,4 @@ async fn discover_peer(
             ))),
         },
     }
-}
-
-fn decode_remote_tools(response: Vec<u8>) -> Result<Vec<RemoteTool>, McpError> {
-    if response.len() > MAX_MCP_DISCOVERY_BYTES {
-        return Err(McpError::Tool(format!(
-            "MCP discovery response exceeds {MAX_MCP_DISCOVERY_BYTES} bytes"
-        )));
-    }
-    let tools = serde_json::from_slice::<Vec<RemoteTool>>(&response)
-        .map_err(|error| McpError::Tool(format!("invalid MCP discovery response: {error}")))?;
-    if tools.len() > MAX_MCP_TOOLS_PER_SERVER {
-        return Err(McpError::Tool(format!(
-            "MCP discovery returned more than {MAX_MCP_TOOLS_PER_SERVER} tools"
-        )));
-    }
-    Ok(tools)
 }

@@ -1205,7 +1205,7 @@ mod tests {
             _arguments: Value,
             _max_response_bytes: usize,
         ) -> vibe_core::integrations::ConnectorFuture<'a> {
-            Box::pin(async { Ok(br#"{}"#.to_vec()) })
+            Box::pin(async { Ok(vibe_core::tools::ToolExecutionOutput::text("{}")) })
         }
     }
 

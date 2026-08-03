@@ -6,6 +6,9 @@ use thiserror::Error;
 use super::{
     ConnectorAuthState, ConnectorDefinition, ConnectorTool, ConnectorView, MAX_CONNECTOR_TOOLS,
 };
+pub(super) use crate::remote_tools::normalize_alias;
+use crate::remote_tools::{ProviderReach, public_tool_name, tool_availability};
+use crate::text::truncate_utf8;
 use crate::tools::{ToolAvailability, ToolPresentationKind, ToolSource, ToolSpec};
 
 const MAX_PUBLIC_LOG_MESSAGE: usize = 2_048;
@@ -27,7 +30,7 @@ pub enum IntegrationError {
 }
 
 pub fn redact(message: &str) -> String {
-    let bounded = bounded_text(message, MAX_PUBLIC_LOG_MESSAGE);
+    let bounded = truncate_utf8(message, MAX_PUBLIC_LOG_MESSAGE);
     let lowered = bounded.to_ascii_lowercase();
     let sensitive = [
         "authorization:",
@@ -54,11 +57,7 @@ pub fn redact(message: &str) -> String {
     if uri_userinfo || sensitive.iter().any(|marker| lowered.contains(marker)) {
         return "[redacted sensitive error]".to_owned();
     }
-    bounded
-}
-
-pub(super) fn bounded_text(message: &str, max_chars: usize) -> String {
-    message.chars().take(max_chars).collect()
+    bounded.to_owned()
 }
 
 pub(super) fn push_bounded<T>(values: &mut Vec<T>, limit: usize, value: T) {
@@ -100,7 +99,7 @@ pub(super) fn validate_definition(
 }
 
 pub(super) fn connector_tool_spec(view: &ConnectorView, remote: &ConnectorTool) -> ToolSpec {
-    let name = format!("connector_{}_{}", view.alias, normalize_alias(&remote.name));
+    let name = public_tool_name(ToolSource::Connector, &view.alias, &remote.name);
     ToolSpec {
         availability: connector_tool_availability(view, &name),
         name,
@@ -148,28 +147,13 @@ pub(super) fn connector_availability_updates(
 }
 
 pub(super) fn connector_tool_availability(view: &ConnectorView, name: &str) -> ToolAvailability {
-    if !view.enabled || view.disabled_tools.contains(name) {
-        ToolAvailability::Disabled
-    } else if matches!(
+    let reach = if matches!(
         view.auth_state,
         ConnectorAuthState::Connected | ConnectorAuthState::NotRequired
     ) {
-        ToolAvailability::Available
+        ProviderReach::Ready
     } else {
-        ToolAvailability::Unavailable
-    }
-}
-
-pub(super) fn normalize_alias(value: &str) -> String {
-    let normalized = value
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character.to_ascii_lowercase()
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    normalized.trim_matches('_').to_owned()
+        ProviderReach::Unreachable
+    };
+    tool_availability(view.enabled, &view.disabled_tools, reach, name)
 }

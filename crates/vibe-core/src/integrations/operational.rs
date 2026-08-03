@@ -2,7 +2,8 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
-use super::shared::{IntegrationError, bounded_text, push_bounded, redact};
+use super::shared::{IntegrationError, push_bounded, redact};
+use crate::text::truncate_utf8;
 
 const MAX_DIAGNOSTICS: usize = 1_024;
 const MAX_LOG_RECORDS: usize = 4_096;
@@ -104,9 +105,9 @@ impl OperationalResources {
             &mut state.diagnostics,
             MAX_DIAGNOSTICS,
             Diagnostic {
-                code: bounded_text(&code.into(), 128),
+                code: truncate_utf8(&code.into(), 128).to_owned(),
                 message: redact(message),
-                source: bounded_text(&source.into(), 128),
+                source: truncate_utf8(&source.into(), 128).to_owned(),
             },
         );
         Ok(())
@@ -136,7 +137,7 @@ impl OperationalResources {
             MAX_LOG_RECORDS,
             LogRecord {
                 timestamp,
-                level: bounded_text(&level.into(), 32),
+                level: truncate_utf8(&level.into(), 32).to_owned(),
                 message: redact(message),
             },
         );

@@ -22,9 +22,11 @@ use shared::{
 };
 
 use crate::policy::{ApprovalAgent, PermissionRequirement, PermissionStore, PolicyGuardedTool};
+use crate::remote_tools::{public_tool_name, set_all};
+use crate::text::canonical_url;
 use crate::tools::{
-    OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolHandler, ToolInvocation,
-    ToolOutputSink, ToolRegistry, ToolSource,
+    OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler,
+    ToolInvocation, ToolOutputSink, ToolRegistry, ToolSource,
 };
 
 const CONNECTOR_CACHE_TTL_MS: u64 = 600_000;
@@ -33,7 +35,7 @@ const MAX_CONNECTOR_TOOLS: usize = 256;
 const CONNECTOR_CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub type ConnectorFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<Vec<u8>, IntegrationError>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<ToolExecutionOutput, IntegrationError>> + Send + 'a>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -94,12 +96,6 @@ pub struct ConnectorView {
 
 const fn default_connector_enabled() -> bool {
     true
-}
-
-fn canonical_connector_url(url: &Url) -> String {
-    let mut url = url.clone();
-    url.set_fragment(None);
-    url.to_string().trim_end_matches('/').to_owned()
 }
 
 pub trait ConnectorBackend: Send + Sync {
@@ -199,7 +195,7 @@ impl ConnectorRegistry {
                     "connector alias `{base_alias}` appears more than once"
                 )));
             }
-            if !resources.insert(canonical_connector_url(&definition.base_url)) {
+            if !resources.insert(canonical_url(&definition.base_url)) {
                 return Err(IntegrationError::InvalidConnector(
                     "connector URL appears more than once".to_owned(),
                 ));
@@ -218,7 +214,7 @@ impl ConnectorRegistry {
             let mut tool_names = definition
                 .tools
                 .iter()
-                .map(|tool| format!("connector_{alias}_{}", normalize_alias(&tool.name)))
+                .map(|tool| public_tool_name(ToolSource::Connector, &alias, &tool.name))
                 .collect::<Vec<_>>();
             tool_names.sort();
             let disabled_tools = previous
@@ -257,13 +253,13 @@ impl ConnectorRegistry {
             next_definitions.insert(definition.id.clone(), definition);
         }
         if let Some(tools) = old_tools {
-            let updates = old_names
-                .into_iter()
-                .map(|name| (name, ToolAvailability::Unavailable))
-                .collect::<Vec<_>>();
-            let reconciled = tools
-                .set_availabilities(ToolSource::Connector, &updates)
-                .map_err(|error| IntegrationError::Tool(error.to_string()))?;
+            let reconciled = set_all(
+                &tools,
+                ToolSource::Connector,
+                &old_names,
+                ToolAvailability::Unavailable,
+            )
+            .map_err(|error| IntegrationError::Tool(error.to_string()))?;
             if !reconciled {
                 return Err(IntegrationError::Tool(
                     "connector tool registry is out of sync with the live catalog".to_owned(),
@@ -552,7 +548,7 @@ impl ConnectorRegistry {
                                     "connector `{connector}` is not authenticated"
                                 )));
                             }
-                            let response = tokio::time::timeout(
+                            tokio::time::timeout(
                                 CONNECTOR_CALL_TIMEOUT,
                                 backend.call(
                                     &connector,
@@ -567,15 +563,7 @@ impl ConnectorRegistry {
                                     "connector request exceeded its deadline".to_owned(),
                                 )
                             })?
-                            .map_err(|error| ToolError::Execution(error.to_string()))?;
-                            if response.len() > output.remaining_bytes() {
-                                return Err(ToolError::OutputTooLarge {
-                                    actual: response.len(),
-                                    limit: output.remaining_bytes(),
-                                });
-                            }
-                            serde_json::from_slice(&response)
-                                .map_err(|error| ToolError::InvalidResult(error.to_string()))
+                            .map_err(|error| ToolError::Execution(error.to_string()))
                         })
                     },
                 );
@@ -630,15 +618,14 @@ mod tests {
             max_response_bytes: usize,
         ) -> ConnectorFuture<'a> {
             Box::pin(async move {
-                let bytes =
-                    serde_json::to_vec(&ToolExecutionOutput::text(format!("{tool} complete")))
-                        .map_err(|error| IntegrationError::Tool(error.to_string()))?;
-                if bytes.len() > max_response_bytes {
+                let output = ToolExecutionOutput::text(format!("{tool} complete"));
+                // A real backend rejects the payload against the wire budget.
+                if output.model_text.len() > max_response_bytes {
                     return Err(IntegrationError::Tool(
                         "connector response exceeded budget".to_owned(),
                     ));
                 }
-                Ok(bytes)
+                Ok(output)
             })
         }
     }
