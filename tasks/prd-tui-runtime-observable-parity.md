@@ -446,9 +446,9 @@ Project canonical history into truthful semantic regions with actionable errors,
 
 **Acceptance Criteria:**
 
-- [ ] Given added or updated history, when projected, then user, assistant, reasoning, shell, read, write, edit, grep, todo, question, web, diff, hook, loop, compaction, context, Teleport, checkpoint, and notice regions appear in reference order with equivalent labels and grouping.
-- [ ] Given pending, running, blocked, completed, failed, cancelled, skipped, or expired effects, when rendered, then the authoritative nested state determines status and default collapse behavior matches Python.
-- [ ] Given duplicate, out-of-order, malformed, unknown, resync, or late terminal events, when reduced, then known content is not duplicated or dropped and no failed, cancelled, or unknown effect is represented as success.
+- [x] Given added or updated history, when projected, then user, assistant, reasoning, shell, read, write, edit, grep, todo, question, web, diff, hook, loop, compaction, context, Teleport, checkpoint, and notice regions appear in reference order with equivalent labels and grouping.
+- [x] Given pending, running, blocked, completed, failed, cancelled, skipped, or expired effects, when rendered, then the authoritative nested state determines status and default collapse behavior matches Python.
+- [x] Given duplicate, out-of-order, malformed, unknown, resync, or late terminal events, when reduced, then known content is not duplicated or dropped and no failed, cancelled, or unknown effect is represented as success.
 
 #### US-035: Render actionable errors, live activity, and live context usage
 
@@ -463,9 +463,9 @@ Project canonical history into truthful semantic regions with actionable errors,
 
 **Acceptance Criteria:**
 
-- [ ] Given cancellation, context exhaustion, refusal, auth, rate limit, transport, model, server, shell, or tool failure, when rendered, then severity, deduplication, muting, message, and recovery hint match the reference semantic class.
-- [ ] Given streaming stats and effect updates, when they arrive, then activity text, active effect, token count, context percentage, warning state, and loading visibility update before turn completion.
-- [ ] Given unknown error code, malformed details, duplicate tool and turn error, retry, resume, or resync, when handled, then no secret or raw payload leaks, important failure remains visible, and stale loading state clears without deleting evidence.
+- [x] Given cancellation, context exhaustion, refusal, auth, rate limit, transport, model, server, shell, or tool failure, when rendered, then severity, deduplication, muting, message, and recovery hint match the reference semantic class.
+- [x] Given streaming stats and effect updates, when they arrive, then activity text, active effect, token count, context percentage, warning state, and loading visibility update before turn completion.
+- [x] Given unknown error code, malformed details, duplicate tool and turn error, retry, resume, or resync, when handled, then no secret or raw payload leaks, important failure remains visible, and stale loading state clears without deleting evidence.
 
 #### US-036: Match transcript interaction and live debug diagnostics
 
@@ -480,9 +480,9 @@ Project canonical history into truthful semantic regions with actionable errors,
 
 **Acceptance Criteria:**
 
-- [ ] Given a transcript larger than the viewport, when keyboard or mouse scroll, collapse, selection, copy, auto-copy, load-more, or resize occurs, then anchor, bounds, focus, selected text, and visible status match Python.
-- [ ] Given a safe URL, file result, tool output, or debug entry, when activated, then link opening or copy occurs only through validated effects; debug logs poll, paginate older entries, and preserve selection.
-- [ ] Given a tiny viewport, invalid URL, missing opener, clipboard denial, disappearing entry, log read failure, or resize during streaming, when handled, then state remains valid and the scoped error does not discard selection or history.
+- [x] Given a transcript larger than the viewport, when keyboard or mouse scroll, collapse, selection, copy, auto-copy, load-more, or resize occurs, then anchor, bounds, focus, selected text, and visible status match Python.
+- [x] Given a safe URL, file result, tool output, or debug entry, when activated, then link opening or copy occurs only through validated effects; debug logs poll, paginate older entries, and preserve selection.
+- [x] Given a tiny viewport, invalid URL, missing opener, clipboard denial, disappearing entry, log read failure, or resize during streaming, when handled, then state remains valid and the scoped error does not discard selection or history.
 
 ---
 
