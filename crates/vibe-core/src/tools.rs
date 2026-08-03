@@ -13,9 +13,10 @@ use serde_json::{Map, Value, json};
 use thiserror::Error;
 
 use crate::engine::{ToolExecutor, ToolFuture, ToolStreamSink};
+use crate::text::truncate_utf8;
 
 pub const DEFAULT_MAX_TOOL_OUTPUT_BYTES: usize = 1_048_576;
-const MAX_TOOL_ERROR_BYTES: usize = 16_384;
+pub(crate) const MAX_TOOL_ERROR_BYTES: usize = 16_384;
 
 pub type ToolHandlerFuture<'a> =
     Pin<Box<dyn Future<Output = Result<ToolExecutionOutput, ToolError>> + Send + 'a>>;
@@ -397,10 +398,9 @@ impl ToolRegistry {
                     limit: self.max_output_bytes,
                 });
             }
-            return Err(ToolError::InvalidResult(bounded_string(
-                error.to_string(),
-                MAX_TOOL_ERROR_BYTES,
-            )));
+            return Err(ToolError::InvalidResult(
+                truncate_utf8(&error.to_string(), MAX_TOOL_ERROR_BYTES).to_owned(),
+            ));
         }
         let total_bytes = non_json_bytes.saturating_add(encoded.written);
         if total_bytes > self.max_output_bytes {
@@ -486,10 +486,10 @@ impl ToolError {
     fn bounded(self) -> Self {
         match self {
             Self::Execution(message) => {
-                Self::Execution(bounded_string(message, MAX_TOOL_ERROR_BYTES))
+                Self::Execution(truncate_utf8(&message, MAX_TOOL_ERROR_BYTES).to_owned())
             }
             Self::InvalidResult(message) => {
-                Self::InvalidResult(bounded_string(message, MAX_TOOL_ERROR_BYTES))
+                Self::InvalidResult(truncate_utf8(&message, MAX_TOOL_ERROR_BYTES).to_owned())
             }
             error => error,
         }
@@ -525,18 +525,6 @@ impl Write for LimitedWriter {
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
-}
-
-fn bounded_string(mut value: String, max_bytes: usize) -> String {
-    if value.len() <= max_bytes {
-        return value;
-    }
-    let mut end = max_bytes;
-    while !value.is_char_boundary(end) {
-        end = end.saturating_sub(1);
-    }
-    value.truncate(end);
-    value
 }
 
 fn validate_tool_name(name: &str) -> Result<(), ToolError> {

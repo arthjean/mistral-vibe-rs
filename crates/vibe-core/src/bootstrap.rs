@@ -225,7 +225,31 @@ impl CredentialResolver for InMemoryCredentialResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fakes::FakeTlsReader;
+
+    /// Serves exactly one certificate path, and nothing else.
+    #[derive(Default)]
+    struct FakeTlsReader {
+        certificate_path: Option<String>,
+    }
+
+    impl FakeTlsReader {
+        fn with_certificate(path: &str) -> Self {
+            Self {
+                certificate_path: Some(path.to_owned()),
+            }
+        }
+    }
+
+    impl TlsMaterialReader for FakeTlsReader {
+        fn read(&self, path: &str) -> Result<Option<String>, String> {
+            if self.certificate_path.as_deref() == Some(path) {
+                return Ok(Some(
+                    "-----BEGIN CERTIFICATE-----\nmaterial\n-----END CERTIFICATE-----".to_owned(),
+                ));
+            }
+            Ok(None)
+        }
+    }
 
     fn input(reference: CredentialRef) -> BootstrapInput {
         BootstrapInput {
