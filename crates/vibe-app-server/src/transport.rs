@@ -105,32 +105,40 @@ where
     D: TurnDriver + 'static,
 {
     let mut connection = server.connect(vibe_protocol::TransportKind::Stdio);
-    let (completed_tx, mut completed_rx) = mpsc::unbounded_channel::<DeferredTaskEvent>();
+    let (events, mut incoming_events) = mpsc::unbounded_channel::<ServeEvent>();
     let mut tasks = JoinSet::new();
     let mut active = BTreeSet::<(String, String)>::new();
     let mut failure = None;
     'serve: loop {
         tokio::select! {
-            event = completed_rx.recv(), if !active.is_empty() => {
-                let Some(event) = event else {
-                    break;
-                };
-                let bytes = match event {
-                    DeferredTaskEvent::Notification(bytes) => bytes,
-                    DeferredTaskEvent::Completion(completion) => {
-                        active.remove(&(completion.session_id, completion.turn_id));
-                        match completion.notification {
-                            Ok(bytes) => bytes,
+            event = incoming_events.recv() => {
+                let Some(event) = event else { break };
+                match event {
+                    ServeEvent::Frame(bytes) => {
+                        if let Err(error) = transport.send(&bytes).await {
+                            failure = Some(error);
+                            break 'serve;
+                        }
+                    }
+                    ServeEvent::TurnSettled { session_id, turn_id, notification } => {
+                        active.remove(&(session_id, turn_id));
+                        match notification {
+                            Ok(bytes) => {
+                                if let Err(error) = transport.send(&bytes).await {
+                                    failure = Some(error);
+                                    break 'serve;
+                                }
+                            }
                             Err(error) => {
                                 failure = Some(TransportError::Server(error));
                                 break 'serve;
                             }
                         }
                     }
-                };
-                if let Err(error) = transport.send(&bytes).await {
-                    failure = Some(error);
-                    break 'serve;
+                    ServeEvent::Failed(error) => {
+                        failure = Some(error);
+                        break 'serve;
+                    }
                 }
                 while tasks.try_join_next().is_some() {}
             }
@@ -154,308 +162,26 @@ where
                 }
                 let close_after_work = batch.close_after_flush;
                 for work in batch.deferred {
-                    match work {
-                        DeferredWork::RunTurn {
-                            session_id,
-                            turn_id,
-                            prompt,
-                            input,
-                            client_user_message_id,
-                            auto_title,
-                            user_display_content,
-                            mention_stats,
-                        } => {
-                            let session = match server.session(&session_id) {
-                                Ok(session) => session,
-                                Err(error) => {
-                                    failure = Some(TransportError::Server(error));
-                                    break 'serve;
-                                }
-                            };
-                            let tools = match server.tool_registry(&session_id) {
-                                Ok(tools) => tools,
-                                Err(error) => {
-                                    failure = Some(TransportError::Server(error));
-                                    break 'serve;
-                                }
-                            };
-                            let reservation = TurnReservation {
-                                session_id: session_id.clone(),
-                                turn_id: turn_id.clone(),
-                                prompt,
-                                input,
-                                prepared_images: None,
-                                client_user_message_id,
-                                auto_title,
-                                user_display_content,
-                                mention_stats,
-                                working_directory: session.working_directory,
-                                intent: session.intent,
-                                tools,
-                            };
-                            active.insert((session_id.clone(), turn_id.clone()));
-                            let task_server = server.clone();
-                            let task_driver = Arc::clone(&driver);
-                            let task_tx = completed_tx.clone();
-                            tasks.spawn(async move {
-                                match task_server.turn_started(
-                                    &reservation.session_id,
-                                    &reservation.turn_id,
-                                ) {
-                                    Ok(bytes) => {
-                                        let _ = task_tx
-                                            .send(DeferredTaskEvent::Notification(bytes));
-                                    }
-                                    Err(error) => {
-                                        let _ = task_tx.send(DeferredTaskEvent::Completion(
-                                            DeferredCompletion {
-                                                session_id,
-                                                turn_id,
-                                                notification: Err(error),
-                                            },
-                                        ));
-                                        return;
-                                    }
-                                }
-                                let (observer, mut updates) =
-                                    app_server_update_channel_for_turn(
-                                        reservation.session_id.clone(),
-                                        reservation.turn_id.clone(),
-                                    );
-                                let mut turn = Box::pin(
-                                    task_driver.run_observed(&reservation, observer),
-                                );
-                                let outcome = loop {
-                                    tokio::select! {
-                                        outcome = &mut turn => break outcome,
-                                        update = updates.recv() => {
-                                            if let Some(update) = update {
-                                                match app_server_notification(&task_server, update) {
-                                                    Ok(bytes) => {
-                                                        let _ = task_tx.send(
-                                                            DeferredTaskEvent::Notification(bytes),
-                                                        );
-                                                    }
-                                                    Err(error) => {
-                                                        let _ = task_tx.send(
-                                                            DeferredTaskEvent::Completion(
-                                                                DeferredCompletion {
-                                                                    session_id,
-                                                                    turn_id,
-                                                                    notification: Err(error),
-                                                                },
-                                                            ),
-                                                        );
-                                                        return;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                };
-                                while let Ok(update) = updates.try_recv() {
-                                    match app_server_notification(&task_server, update) {
-                                        Ok(bytes) => {
-                                            let _ = task_tx
-                                                .send(DeferredTaskEvent::Notification(bytes));
-                                        }
-                                        Err(error) => {
-                                            let _ = task_tx.send(
-                                                DeferredTaskEvent::Completion(DeferredCompletion {
-                                                    session_id,
-                                                    turn_id,
-                                                    notification: Err(error),
-                                                }),
-                                            );
-                                            return;
-                                        }
-                                    }
-                                }
-                                let notification = match outcome {
-                                    Ok(outcome) => {
-                                        let stop_reason = matches!(
-                                            outcome.stop_reason,
-                                            crate::client::PublicTurnStopReason::MaxSteps
-                                                | crate::client::PublicTurnStopReason::TokenLimit
-                                                | crate::client::PublicTurnStopReason::PriceLimit
-                                        )
-                                        .then_some(vibe_core::events::PublicTurnStopReason::Limit);
-                                        let error = public_turn_error(&outcome.stop_reason);
-                                        task_server.complete_turn_with_details(
-                                            &reservation.session_id,
-                                            &reservation.turn_id,
-                                            outcome.snapshot,
-                                            stop_reason,
-                                            error,
-                                        )
-                                    }
-                                    Err(error) => task_server.fail_turn(
-                                        &reservation.session_id,
-                                        &reservation.turn_id,
-                                        &error.to_string(),
-                                    ),
-                                };
-                                let _ = task_tx.send(DeferredTaskEvent::Completion(
-                                    DeferredCompletion {
-                                        session_id,
-                                        turn_id,
-                                        notification,
-                                    },
-                                ));
-                            });
-                        }
-                        DeferredWork::InterruptTurn {
-                            session_id,
-                            turn_id,
-                        } => {
-                            if let Err(error) = driver.interrupt(&session_id, &turn_id) {
-                                let notification = server
-                                    .fail_turn(&session_id, &turn_id, &error.to_string())
-                                    .map_err(TransportError::Server);
-                                match notification {
-                                    Ok(bytes) => {
-                                        if let Err(error) = transport.send(&bytes).await {
-                                            failure = Some(error);
-                                            break 'serve;
-                                        }
-                                    }
-                                    Err(error) => {
-                                        failure = Some(error);
-                                        break 'serve;
-                                    }
-                                }
-                            }
-                        }
-                        DeferredWork::SteerTurn {
-                            session_id,
-                            turn_id,
-                            content,
-                        } => {
-                            if let Err(error) = driver.steer(&session_id, &turn_id, &content) {
-                                failure = Some(TransportError::Driver(error));
-                                break 'serve;
-                            }
-                        }
-                        DeferredWork::InjectContext {
-                            session_id,
-                            content,
-                            as_message,
-                        } => {
-                            if let Err(error) = driver.inject_context(
-                                &session_id,
-                                &content,
-                                as_message,
-                            ) {
-                                failure = Some(TransportError::Driver(error));
-                                break 'serve;
-                            }
-                        }
-                        DeferredWork::ResolveCallback {
-                            session_id,
-                            turn_id,
-                            callback_id,
-                            accepted,
-                            value,
-                        } => {
-                            if let Err(error) = driver.resolve_callback(
-                                &session_id,
-                                &turn_id,
-                                &callback_id,
-                                accepted,
-                                value.as_deref(),
-                            ) {
-                                failure = Some(TransportError::Driver(error));
-                                break 'serve;
-                            }
-                        }
-                        DeferredWork::ResourceRequest {
-                            request_id,
-                            session_id,
-                            command,
-                        } => {
-                            let response = server
-                                .execute_resource_request(request_id, session_id, command)
-                                .await;
-                            for outbound in response.outbound {
-                                if let Err(error) = transport.send(&outbound).await {
-                                    failure = Some(error);
-                                    break 'serve;
-                                }
-                            }
-                        }
-                        DeferredWork::CloudRequest {
-                            request_id,
-                            method,
-                            params,
-                        } => {
-                            let response = server
-                                .execute_cloud_request(request_id, method, params)
-                                .await;
-                            for outbound in response.outbound {
-                                if let Err(error) = transport.send(&outbound).await {
-                                    failure = Some(error);
-                                    break 'serve;
-                                }
-                            }
-                        }
-                        DeferredWork::ConfigureMcp {
-                            session_id,
-                            configs,
-                        } => {
-                            let notification = match server
-                                .configure_mcp_servers(&session_id, configs)
-                                .await
-                            {
-                                Ok(notification) => notification,
-                                Err(error) => {
-                                    failure = Some(TransportError::Server(error));
-                                    break 'serve;
-                                }
-                            };
-                            if let Err(error) = transport.send(&notification).await {
+                    match dispatch_deferred_work(
+                        work,
+                        &server,
+                        &driver,
+                        &events,
+                        &mut tasks,
+                        &mut active,
+                    )
+                    .await
+                    {
+                        Ok(Some(bytes)) => {
+                            if let Err(error) = transport.send(&bytes).await {
                                 failure = Some(error);
                                 break 'serve;
                             }
                         }
-                        DeferredWork::CompactSession {
-                            request_id,
-                            session_id,
-                            extra_instructions,
-                        } => {
-                            let batch = match driver
-                                .compact(&session_id, &extra_instructions)
-                                .await
-                            {
-                                Ok(compaction) => server.complete_manual_compaction(
-                                    request_id,
-                                    &session_id,
-                                    &compaction.new_session_id,
-                                    &compaction.summary,
-                                    compaction.hydrated,
-                                ),
-                                Err(error) => server.fail_manual_compaction(
-                                    request_id,
-                                    &session_id,
-                                    &error.to_string(),
-                                ),
-                            };
-                            for outbound in batch.outbound {
-                                if let Err(error) = transport.send(&outbound).await {
-                                    failure = Some(error);
-                                    break 'serve;
-                                }
-                            }
-                        }
-                        DeferredWork::CloseResources {
-                            session_id,
-                            generation,
-                        } => {
-                            if let Err(error) =
-                                server.close_resource_session(&session_id, generation).await
-                            {
-                                failure = Some(TransportError::Server(error));
-                                break 'serve;
-                            }
+                        Ok(None) => {}
+                        Err(error) => {
+                            failure = Some(error);
+                            break 'serve;
                         }
                     }
                 }
@@ -496,15 +222,298 @@ where
     }
 }
 
-struct DeferredCompletion {
-    session_id: String,
-    turn_id: String,
-    notification: Result<Vec<u8>, ServerError>,
+/// Performs one unit of deferred work.
+///
+/// Anything that can block on I/O is spawned so a slow backend never stalls the
+/// read loop or the notifications of a turn that is already streaming. The
+/// driver controls are cheap and stay inline, where their errors are still
+/// fatal to the connection.
+///
+/// Returns a frame the caller must flush before reading the next request.
+async fn dispatch_deferred_work<D>(
+    work: DeferredWork,
+    server: &AppServer,
+    driver: &Arc<D>,
+    events: &mpsc::UnboundedSender<ServeEvent>,
+    tasks: &mut JoinSet<()>,
+    active: &mut BTreeSet<(String, String)>,
+) -> Result<Option<Vec<u8>>, TransportError>
+where
+    D: TurnDriver + 'static,
+{
+    match work {
+        DeferredWork::RunTurn {
+            session_id,
+            turn_id,
+            prompt,
+            input,
+            client_user_message_id,
+            auto_title,
+            user_display_content,
+            mention_stats,
+        } => {
+            let session = server.session(&session_id).map_err(TransportError::Server)?;
+            let tools = server
+                .tool_registry(&session_id)
+                .map_err(TransportError::Server)?;
+            let reservation = TurnReservation {
+                session_id: session_id.clone(),
+                turn_id: turn_id.clone(),
+                prompt,
+                input,
+                prepared_images: None,
+                client_user_message_id,
+                auto_title,
+                user_display_content,
+                mention_stats,
+                working_directory: session.working_directory,
+                intent: session.intent,
+                tools,
+            };
+            active.insert((session_id, turn_id));
+            let server = server.clone();
+            let driver = Arc::clone(driver);
+            let events = events.clone();
+            tasks.spawn(async move { run_turn(server, driver, reservation, events).await });
+            Ok(None)
+        }
+        DeferredWork::InterruptTurn {
+            session_id,
+            turn_id,
+        } => match driver.interrupt(&session_id, &turn_id) {
+            Ok(()) => Ok(None),
+            Err(error) => server
+                .fail_turn(&session_id, &turn_id, &error.to_string())
+                .map(Some)
+                .map_err(TransportError::Server),
+        },
+        DeferredWork::SteerTurn {
+            session_id,
+            turn_id,
+            content,
+        } => driver
+            .steer(&session_id, &turn_id, &content)
+            .map(|()| None)
+            .map_err(TransportError::Driver),
+        DeferredWork::InjectContext {
+            session_id,
+            content,
+            as_message,
+        } => driver
+            .inject_context(&session_id, &content, as_message)
+            .map(|()| None)
+            .map_err(TransportError::Driver),
+        DeferredWork::ResolveCallback {
+            session_id,
+            turn_id,
+            callback_id,
+            accepted,
+            value,
+        } => driver
+            .resolve_callback(
+                &session_id,
+                &turn_id,
+                &callback_id,
+                accepted,
+                value.as_deref(),
+            )
+            .map(|()| None)
+            .map_err(TransportError::Driver),
+        DeferredWork::ResourceRequest {
+            request_id,
+            session_id,
+            command,
+        } => {
+            let server = server.clone();
+            spawn_frames(tasks, events.clone(), async move {
+                Ok(server
+                    .execute_resource_request(request_id, session_id, command)
+                    .await
+                    .outbound)
+            });
+            Ok(None)
+        }
+        DeferredWork::CloudRequest {
+            request_id,
+            method,
+            params,
+        } => {
+            let server = server.clone();
+            spawn_frames(tasks, events.clone(), async move {
+                Ok(server
+                    .execute_cloud_request(request_id, method, params)
+                    .await
+                    .outbound)
+            });
+            Ok(None)
+        }
+        DeferredWork::ConfigureMcp {
+            session_id,
+            configs,
+        } => {
+            let server = server.clone();
+            spawn_frames(tasks, events.clone(), async move {
+                server
+                    .configure_mcp_servers(&session_id, configs)
+                    .await
+                    .map(|notification| vec![notification])
+                    .map_err(TransportError::Server)
+            });
+            Ok(None)
+        }
+        DeferredWork::CompactSession {
+            request_id,
+            session_id,
+            extra_instructions,
+        } => {
+            let server = server.clone();
+            let driver = Arc::clone(driver);
+            spawn_frames(tasks, events.clone(), async move {
+                let batch = match driver.compact(&session_id, &extra_instructions).await {
+                    Ok(compaction) => server.complete_manual_compaction(
+                        request_id,
+                        &session_id,
+                        &compaction.new_session_id,
+                        &compaction.summary,
+                        compaction.hydrated,
+                    ),
+                    Err(error) => {
+                        server.fail_manual_compaction(request_id, &session_id, &error.to_string())
+                    }
+                };
+                Ok(batch.outbound)
+            });
+            Ok(None)
+        }
+        DeferredWork::CloseResources {
+            session_id,
+            generation,
+        } => server
+            .close_resource_session(&session_id, generation)
+            .await
+            .map(|()| None)
+            .map_err(TransportError::Server),
+    }
 }
 
-enum DeferredTaskEvent {
-    Notification(Vec<u8>),
-    Completion(DeferredCompletion),
+/// Runs background work whose frames are flushed by the serve loop, in the
+/// order the work completes.
+fn spawn_frames<F>(tasks: &mut JoinSet<()>, events: mpsc::UnboundedSender<ServeEvent>, work: F)
+where
+    F: Future<Output = Result<Vec<Vec<u8>>, TransportError>> + Send + 'static,
+{
+    tasks.spawn(async move {
+        match work.await {
+            Ok(frames) => {
+                for frame in frames {
+                    if events.send(ServeEvent::Frame(frame)).is_err() {
+                        return;
+                    }
+                }
+            }
+            Err(error) => {
+                let _ = events.send(ServeEvent::Failed(error));
+            }
+        }
+    });
+}
+
+/// Drives one turn to its terminal state, streaming live history updates as the
+/// engine produces them.
+async fn run_turn<D>(
+    server: AppServer,
+    driver: Arc<D>,
+    reservation: TurnReservation,
+    events: mpsc::UnboundedSender<ServeEvent>,
+) where
+    D: TurnDriver + 'static,
+{
+    let settle = |notification| ServeEvent::TurnSettled {
+        session_id: reservation.session_id.clone(),
+        turn_id: reservation.turn_id.clone(),
+        notification,
+    };
+    match server.turn_started(&reservation.session_id, &reservation.turn_id) {
+        Ok(bytes) => {
+            let _ = events.send(ServeEvent::Frame(bytes));
+        }
+        Err(error) => {
+            let _ = events.send(settle(Err(error)));
+            return;
+        }
+    }
+    let (observer, mut updates) = app_server_update_channel_for_turn(
+        reservation.session_id.clone(),
+        reservation.turn_id.clone(),
+    );
+    let mut turn = Box::pin(driver.run_observed(&reservation, observer));
+    let outcome = loop {
+        tokio::select! {
+            outcome = &mut turn => break outcome,
+            update = updates.recv() => {
+                let Some(update) = update else { continue };
+                match app_server_notification(&server, update) {
+                    Ok(bytes) => {
+                        let _ = events.send(ServeEvent::Frame(bytes));
+                    }
+                    Err(error) => {
+                        let _ = events.send(settle(Err(error)));
+                        return;
+                    }
+                }
+            }
+        }
+    };
+    while let Ok(update) = updates.try_recv() {
+        match app_server_notification(&server, update) {
+            Ok(bytes) => {
+                let _ = events.send(ServeEvent::Frame(bytes));
+            }
+            Err(error) => {
+                let _ = events.send(settle(Err(error)));
+                return;
+            }
+        }
+    }
+    let notification = match outcome {
+        Ok(outcome) => {
+            let stop_reason = matches!(
+                outcome.stop_reason,
+                crate::client::PublicTurnStopReason::MaxSteps
+                    | crate::client::PublicTurnStopReason::TokenLimit
+                    | crate::client::PublicTurnStopReason::PriceLimit
+            )
+            .then_some(vibe_core::events::PublicTurnStopReason::Limit);
+            let error = public_turn_error(&outcome.stop_reason);
+            server.complete_turn_with_details(
+                &reservation.session_id,
+                &reservation.turn_id,
+                outcome.snapshot,
+                stop_reason,
+                error,
+            )
+        }
+        Err(error) => server.fail_turn(
+            &reservation.session_id,
+            &reservation.turn_id,
+            &error.to_string(),
+        ),
+    };
+    let _ = events.send(settle(notification));
+}
+
+/// Something the serve loop must act on once background work reports back.
+enum ServeEvent {
+    /// A frame to flush to the client.
+    Frame(Vec<u8>),
+    /// A turn reached a terminal state; its completion frame is attached.
+    TurnSettled {
+        session_id: String,
+        turn_id: String,
+        notification: Result<Vec<u8>, ServerError>,
+    },
+    /// Background work failed fatally for this connection.
+    Failed(TransportError),
 }
 
 
@@ -607,7 +616,6 @@ mod tests {
         }
     }
 
-
     #[tokio::test]
     async fn stdio_transport_frames_json_by_newline_and_reports_eof() {
         let (mut client, server) = duplex(1024);
@@ -640,7 +648,6 @@ mod tests {
             })
         ));
     }
-
 
     #[tokio::test]
     async fn stdio_server_flushes_turn_response_before_deferred_notification() {
