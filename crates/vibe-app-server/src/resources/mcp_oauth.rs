@@ -53,8 +53,9 @@ impl McpPeerFactory for AuthenticatedMcpPeerFactory {
                     .authorization_header(&config.alias, &resource)
                     .await
                     .map_err(|error| McpError::Transport(redact(&error.to_string())))?
+                && let Some(headers) = transport_headers_mut(&mut config.transport)
             {
-                transport_headers_mut(&mut config.transport).insert(
+                headers.insert(
                     "Authorization".to_owned(),
                     header.expose_secret().to_owned(),
                 );
@@ -194,7 +195,7 @@ impl ProductionMcpAuth {
             .filter_map(|value| value.to_str().ok())
             .find_map(|value| bearer_parameter(value, "resource_metadata"))
             .and_then(|value| Url::parse(value).ok());
-        let protected_url = advertised.unwrap_or(protected_resource_metadata_url(resource)?);
+        let protected_url = advertised.unwrap_or_else(|| protected_resource_metadata_url(resource));
         require_https(&protected_url, "protected-resource metadata")?;
         let protected = self
             .client
@@ -214,7 +215,7 @@ impl ProductionMcpAuth {
                 )
             })?;
         require_https(&issuer, "authorization server")?;
-        let metadata_url = authorization_metadata_url(&issuer)?;
+        let metadata_url = authorization_metadata_url(&issuer);
         let response = self
             .client
             .get(metadata_url)
@@ -637,7 +638,7 @@ fn bearer_parameter<'a>(header: &'a str, name: &str) -> Option<&'a str> {
         .map(|value| value.trim_matches('"'))
 }
 
-fn protected_resource_metadata_url(resource: &Url) -> Result<Url, ResourceError> {
+fn protected_resource_metadata_url(resource: &Url) -> Url {
     let mut url = resource.clone();
     let resource_path = resource.path().trim_end_matches('/');
     url.set_path(&format!(
@@ -645,10 +646,10 @@ fn protected_resource_metadata_url(resource: &Url) -> Result<Url, ResourceError>
     ));
     url.set_query(None);
     url.set_fragment(None);
-    Ok(url)
+    url
 }
 
-fn authorization_metadata_url(issuer: &Url) -> Result<Url, ResourceError> {
+fn authorization_metadata_url(issuer: &Url) -> Url {
     let mut url = issuer.clone();
     let issuer_path = issuer.path().trim_end_matches('/');
     url.set_path(&format!(
@@ -656,7 +657,7 @@ fn authorization_metadata_url(issuer: &Url) -> Result<Url, ResourceError> {
     ));
     url.set_query(None);
     url.set_fragment(None);
-    Ok(url)
+    url
 }
 
 fn validate_authorization_issuer(
@@ -709,10 +710,10 @@ fn transport_headers(transport: &McpTransportConfig) -> &BTreeMap<String, String
 
 static EMPTY_HEADERS: BTreeMap<String, String> = BTreeMap::new();
 
-fn transport_headers_mut(transport: &mut McpTransportConfig) -> &mut BTreeMap<String, String> {
+fn transport_headers_mut(transport: &mut McpTransportConfig) -> Option<&mut BTreeMap<String, String>> {
     match transport {
-        McpTransportConfig::StreamableHttp { headers, .. } => headers,
-        McpTransportConfig::Stdio { .. } => unreachable!("HTTP transport was checked"),
+        McpTransportConfig::StreamableHttp { headers, .. } => Some(headers),
+        McpTransportConfig::Stdio { .. } => None,
     }
 }
 
@@ -817,16 +818,12 @@ mod tests {
     fn authorization_metadata_preserves_issuer_path() {
         let issuer = Url::parse("https://auth.test/tenant").expect("issuer");
         assert_eq!(
-            authorization_metadata_url(&issuer)
-                .expect("metadata URL")
-                .as_str(),
+            authorization_metadata_url(&issuer).as_str(),
             "https://auth.test/.well-known/oauth-authorization-server/tenant"
         );
         let resource = Url::parse("https://mcp.test/tenant/rpc").expect("resource");
         assert_eq!(
-            protected_resource_metadata_url(&resource)
-                .expect("protected metadata URL")
-                .as_str(),
+            protected_resource_metadata_url(&resource).as_str(),
             "https://mcp.test/.well-known/oauth-protected-resource/tenant/rpc"
         );
         assert!(validate_authorization_issuer(&issuer, &issuer).is_ok());
