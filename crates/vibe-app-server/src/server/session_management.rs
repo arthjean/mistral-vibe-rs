@@ -24,7 +24,7 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
         .then(|| {
             target_session_id.as_deref().and_then(|session_id| {
                 connection.server.lock_sessions().ok().and_then(|sessions| {
-                    session_by_id_or_alias(&sessions, session_id).map(|session| {
+                    sessions.get(session_id).map(|session| {
                         (
                             PathBuf::from(&session.working_directory),
                             session.intent.trusted,
@@ -145,7 +145,7 @@ fn mutation_conflict(
         Ok(sessions) => sessions,
         Err(error) => return Some(internal_error_batch(request.id.clone(), &error)),
     };
-    session_by_id_or_alias(&sessions, session_id)
+    sessions.get(session_id)
         .is_some_and(|session| session.active_turn.is_some())
         .then(|| {
             error_batch(
@@ -169,7 +169,7 @@ fn delete_session(
         );
     };
     let attached = match connection.server.lock_sessions() {
-        Ok(sessions) => session_by_id_or_alias(&sessions, session_id)
+        Ok(sessions) => sessions.get(session_id)
             .is_some_and(|session| session.attachments > 0),
         Err(error) => return internal_error_batch(request.id, &error),
     };
@@ -205,7 +205,7 @@ fn enrich_rewind_targets(
 ) -> Result<(), ServerError> {
     let sessions = connection.server.lock_sessions()?;
     let review = {
-        session_by_id_or_alias(&sessions, session_id).and_then(|session| session.review.clone())
+        sessions.get(session_id).and_then(|session| session.review.clone())
     };
     drop(sessions);
     let Some(review) = review else {
@@ -248,7 +248,7 @@ fn update_runtime_agent(connection: &ServerConnection, request: &ServerRequest) 
         return;
     };
     if let Ok(mut sessions) = connection.server.lock_sessions()
-        && let Some(session) = session_mut_by_id_or_alias(&mut sessions, session_id)
+        && let Some(session) = sessions.get_mut(session_id)
     {
         session.intent.agent = Some(agent.to_owned());
         session.updated_at = now_millis();
@@ -289,7 +289,7 @@ impl RewindTransaction {
             .lock_sessions()
             .map_err(|error| internal_error_batch(request.id.clone(), &error))?;
         let review = {
-            session_by_id_or_alias(&sessions, session_id).and_then(|session| session.review.clone())
+            sessions.get(session_id).and_then(|session| session.review.clone())
         };
         drop(sessions);
         let rewound_review = review

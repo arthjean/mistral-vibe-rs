@@ -6,11 +6,13 @@ use std::sync::{Arc, Mutex};
 mod batch;
 mod callbacks;
 mod projection;
+mod registry;
 mod session_management;
 
 use batch::*;
 use callbacks::*;
 use projection::*;
+use registry::SessionRegistry;
 
 use crate::release3::{RELEASE3_METHODS, Release3Error, Release3Service, RuntimeAttachment};
 use crate::release4::{
@@ -280,7 +282,7 @@ impl DispatchBatch {
 
 #[derive(Clone)]
 pub struct AppServer {
-    sessions: Arc<Mutex<BTreeMap<String, SessionRuntime>>>,
+    sessions: Arc<Mutex<SessionRegistry>>,
     resources: Arc<Mutex<ResourceService>>,
     resource_backend: Option<Arc<dyn ResourceBackend>>,
     release3: Arc<Release3Service>,
@@ -296,7 +298,7 @@ pub struct AppServer {
 impl Default for AppServer {
     fn default() -> Self {
         Self {
-            sessions: Arc::new(Mutex::new(BTreeMap::new())),
+            sessions: Arc::new(Mutex::new(SessionRegistry::default())),
             resources: Arc::new(Mutex::new(ResourceService::default())),
             resource_backend: Some(Arc::new(CoreResourceBackend::default())),
             release3: Arc::new(Release3Service::default()),
@@ -423,7 +425,7 @@ impl AppServer {
 
     pub fn turn_started(&self, session_id: &str, turn_id: &str) -> Result<Vec<u8>, ServerError> {
         let mut sessions = self.lock_sessions()?;
-        let session = session_mut_by_id_or_alias(&mut sessions, session_id)
+        let session = sessions.get_mut(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
@@ -453,7 +455,7 @@ impl AppServer {
     ) -> Result<Option<ScheduledLoopWork>, ServerError> {
         let (canonical_session_id, idle) = {
             let sessions = self.lock_sessions()?;
-            let session = session_by_id_or_alias(&sessions, session_id)
+            let session = sessions.get(session_id)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
             (
                 session.id.clone(),
@@ -477,7 +479,7 @@ impl AppServer {
             .fire_loop_for_session(&loop_id, &canonical_session_id, now_seconds, true)
             .map_err(|error| ServerError::Release4(error.to_string()))?;
         let mut sessions = self.lock_sessions()?;
-        let session = session_mut_by_id_or_alias(&mut sessions, &canonical_session_id)
+        let session = sessions.get_mut(&canonical_session_id)
             .ok_or_else(|| ServerError::SessionNotFound(canonical_session_id.clone()))?;
         if session.active_turn.is_some()
             || session.compaction_pending
@@ -583,16 +585,24 @@ impl AppServer {
         error: Option<PublicError>,
     ) -> Result<Vec<u8>, ServerError> {
         let mut sessions = self.lock_sessions()?;
-        let source_key = session_key_by_id_or_alias(&sessions, session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        let session = sessions
-            .get(&source_key)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if session.active_turn.as_deref() != Some(turn_id) {
-            return Err(ServerError::StaleTurn(turn_id.to_owned()));
-        }
-        let was_closed = session.status == SessionStatus::Closed;
-        let started_at = session.active_turn_started_at.unwrap_or_default();
+        let source_key = sessions
+            .key(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
+            .to_owned();
+        let (was_closed, started_at, active_scheduled_loop, review) = {
+            let session = sessions
+                .get(&source_key)
+                .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+            if session.active_turn.as_deref() != Some(turn_id) {
+                return Err(ServerError::StaleTurn(turn_id.to_owned()));
+            }
+            (
+                session.status == SessionStatus::Closed,
+                session.active_turn_started_at.unwrap_or_default(),
+                session.active_scheduled_loop.clone(),
+                session.review.clone(),
+            )
+        };
         if !matches!(
             snapshot.lifecycle,
             LifecycleState::Completed | LifecycleState::Cancelled | LifecycleState::Failed
@@ -600,7 +610,10 @@ impl AppServer {
             return Err(ServerError::NonTerminalCompletion(snapshot.lifecycle));
         }
         let target_session_id = snapshot.session_id.clone();
-        if target_session_id != source_key && sessions.contains_key(&target_session_id) {
+        if sessions
+            .key(&target_session_id)
+            .is_some_and(|existing| existing != source_key)
+        {
             return Err(ServerError::SessionConflict(target_session_id));
         }
         let status = match snapshot.lifecycle {
@@ -610,12 +623,12 @@ impl AppServer {
             _ => return Err(ServerError::NonTerminalCompletion(snapshot.lifecycle)),
         };
         let completed_at = now_millis();
-        if let Some(loop_id) = &session.active_scheduled_loop {
+        if let Some(loop_id) = &active_scheduled_loop {
             self.release4
                 .finish_loop_fire(loop_id, completed_at / 1_000)
                 .map_err(|error| ServerError::Release4(error.to_string()))?;
         }
-        if let Some(review) = &session.review {
+        if let Some(review) = &review {
             review
                 .seal_turn()
                 .map_err(|error| ServerError::Resource(error.to_string()))?;
@@ -635,12 +648,12 @@ impl AppServer {
             }),
             stop_reason,
         };
-        let mut session = sessions
-            .remove(&source_key)
+        sessions.alias(&source_key, session_id);
+        sessions.rename(&source_key, &target_session_id)?;
+        let session = sessions
+            .get_mut(&source_key)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        cancel_pending_callback(&mut session, "Turn completed before callback was answered");
-        session.aliases.insert(session_id.to_owned());
-        session.id.clone_from(&target_session_id);
+        cancel_pending_callback(session, "Turn completed before callback was answered");
         session.active_turn = None;
         session.active_turn_started_at = None;
         session.active_scheduled_loop = None;
@@ -660,8 +673,7 @@ impl AppServer {
         ));
         session.latest_turn = Some(turn.clone());
         session.updated_at = completed_at;
-        let event_id = next_event_id(&mut session);
-        sessions.insert(target_session_id.clone(), session);
+        let event_id = next_event_id(session);
         encode_notification(
             "turn/completed",
             result_map([
@@ -680,7 +692,7 @@ impl AppServer {
         message: &str,
     ) -> Result<Vec<u8>, ServerError> {
         let mut sessions = self.lock_sessions()?;
-        let session = session_mut_by_id_or_alias(&mut sessions, session_id)
+        let session = sessions.get_mut(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
@@ -815,7 +827,7 @@ impl AppServer {
             .and_then(Value::as_str)
             .map(str::to_owned);
         let mut sessions = self.lock_sessions()?;
-        let session = session_mut_by_id_or_alias(&mut sessions, session_id)
+        let session = sessions.get_mut(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
@@ -883,7 +895,7 @@ impl AppServer {
         turn_id: &str,
     ) -> Result<ProjectionSnapshot, ServerError> {
         let sessions = self.lock_sessions()?;
-        let session = session_by_id_or_alias(&sessions, session_id)
+        let session = sessions.get(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
@@ -913,7 +925,7 @@ impl AppServer {
         snapshot: ProjectionSnapshot,
     ) -> Result<u64, ServerError> {
         let mut sessions = self.lock_sessions()?;
-        let session = session_mut_by_id_or_alias(&mut sessions, session_id)
+        let session = sessions.get_mut(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
@@ -943,26 +955,30 @@ impl AppServer {
             return Err(ServerError::SessionConflict(new_session_id.to_owned()));
         }
         let mut sessions = self.lock_sessions()?;
-        let source_key = session_key_by_id_or_alias(&sessions, old_session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(old_session_id.to_owned()))?;
-        if source_key != new_session_id && sessions.contains_key(new_session_id) {
-            return Err(ServerError::SessionConflict(new_session_id.to_owned()));
-        }
-        let mut session = sessions
-            .remove(&source_key)
-            .ok_or_else(|| ServerError::SessionNotFound(old_session_id.to_owned()))?;
-        if session.active_turn.as_deref() != Some(turn_id) {
-            sessions.insert(source_key, session);
-            return Err(ServerError::StaleTurn(turn_id.to_owned()));
-        }
+        let source_key = sessions
+            .key(old_session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(old_session_id.to_owned()))?
+            .to_owned();
+        let previous_id = {
+            let session = sessions
+                .get(&source_key)
+                .ok_or_else(|| ServerError::SessionNotFound(old_session_id.to_owned()))?;
+            if session.active_turn.as_deref() != Some(turn_id) {
+                return Err(ServerError::StaleTurn(turn_id.to_owned()));
+            }
+            session.id.clone()
+        };
+        sessions.rename(&source_key, new_session_id)?;
         self.release4
-            .rebind_session(&session.id, new_session_id)
+            .rebind_session(&previous_id, new_session_id)
             .map_err(|error| ServerError::Release4(error.to_string()))?;
         for entry in &mut snapshot.history {
             entry.rebind_session(new_session_id);
         }
-        session.aliases.insert(old_session_id.to_owned());
-        session.id = new_session_id.to_owned();
+        sessions.alias(&source_key, old_session_id);
+        let session = sessions
+            .get_mut(&source_key)
+            .ok_or_else(|| ServerError::SessionNotFound(old_session_id.to_owned()))?;
         session.intent.resume = Some(new_session_id.to_owned());
         session.snapshot = Some(snapshot);
         session.updated_at = now_millis();
@@ -973,9 +989,8 @@ impl AppServer {
         if let Some(callback) = session.pending_callback.as_mut() {
             callback.entry.rebind_session(new_session_id);
         }
-        let event_id = next_event_id(&mut session);
-        let state = public_session_state(&session);
-        sessions.insert(new_session_id.to_owned(), session);
+        let event_id = next_event_id(session);
+        let state = public_session_state(session);
         encode_notification(
             "session/compacted",
             result_map([
@@ -1003,59 +1018,72 @@ impl AppServer {
                 Ok(sessions) => sessions,
                 Err(error) => return internal_error_batch(request_id, &error),
             };
-            let Some(source_key) = session_key_by_id_or_alias(&sessions, old_session_id) else {
+            let Some(source_key) = sessions.key(old_session_id).map(ToOwned::to_owned) else {
                 return error_batch(
                     request_id,
                     ProtocolErrorCode::NotFound,
                     "Session was not found",
                 );
             };
-            if source_key != new_session_id && sessions.contains_key(new_session_id) {
+            let clear_reservation = |sessions: &mut SessionRegistry| {
                 if let Some(session) = sessions.get_mut(&source_key) {
                     session.compaction_pending = false;
                 }
+            };
+            if sessions
+                .key(new_session_id)
+                .is_some_and(|existing| existing != source_key)
+            {
+                clear_reservation(&mut sessions);
                 return error_batch(
                     request_id,
                     ProtocolErrorCode::Conflict,
                     "Compaction target session already exists",
                 );
             }
-            let mut session = match sessions.remove(&source_key) {
-                Some(session) => session,
-                None => {
+            let previous_id = {
+                let Some(session) = sessions.get(&source_key) else {
                     return error_batch(
                         request_id,
                         ProtocolErrorCode::NotFound,
                         "Session was not found",
                     );
+                };
+                if !session.compaction_pending || session.active_turn.is_some() {
+                    return error_batch(
+                        request_id,
+                        ProtocolErrorCode::Conflict,
+                        "Compaction reservation is stale",
+                    );
                 }
+                session.id.clone()
             };
-            if !session.compaction_pending || session.active_turn.is_some() {
-                sessions.insert(source_key, session);
-                return error_batch(
-                    request_id,
-                    ProtocolErrorCode::Conflict,
-                    "Compaction reservation is stale",
-                );
-            }
             if hydrated.metadata.id != new_session_id
                 || hydrated.metadata.parent_session_id.as_deref() != Some(old_session_id)
             {
-                session.compaction_pending = false;
-                sessions.insert(source_key, session);
+                clear_reservation(&mut sessions);
                 return error_batch(
                     request_id,
                     ProtocolErrorCode::CompactionFailed,
                     "Compaction produced an invalid session handoff",
                 );
             }
-            if let Err(error) = self.release4.rebind_session(&session.id, new_session_id) {
-                session.compaction_pending = false;
-                sessions.insert(source_key, session);
+            if let Err(error) = self.release4.rebind_session(&previous_id, new_session_id) {
+                clear_reservation(&mut sessions);
                 return internal_error_batch(request_id, &ServerError::Release4(error.to_string()));
             }
-            session.aliases.insert(old_session_id.to_owned());
-            session.id = new_session_id.to_owned();
+            if let Err(error) = sessions.rename(&source_key, new_session_id) {
+                clear_reservation(&mut sessions);
+                return internal_error_batch(request_id, &error);
+            }
+            sessions.alias(&source_key, old_session_id);
+            let Some(session) = sessions.get_mut(&source_key) else {
+                return error_batch(
+                    request_id,
+                    ProtocolErrorCode::NotFound,
+                    "Session was not found",
+                );
+            };
             session.intent.resume = Some(new_session_id.to_owned());
             session.status = SessionStatus::Idle;
             session.compaction_pending = false;
@@ -1077,11 +1105,9 @@ impl AppServer {
             if let Some(turn) = session.latest_turn.as_mut() {
                 turn.session_id = new_session_id.to_owned();
             }
-            let event_id = next_event_id(&mut session);
-            let state = public_session_state(&session);
-            let emitted_at = now_millis();
-            sessions.insert(new_session_id.to_owned(), session);
-            (state, event_id, emitted_at)
+            let event_id = next_event_id(session);
+            let state = public_session_state(session);
+            (state, event_id, now_millis())
         };
         let result = result_map([
             ("summary", json!(summary)),
@@ -1120,7 +1146,7 @@ impl AppServer {
         reason: &str,
     ) -> DispatchBatch {
         if let Ok(mut sessions) = self.lock_sessions()
-            && let Some(session) = session_mut_by_id_or_alias(&mut sessions, session_id)
+            && let Some(session) = sessions.get_mut(session_id)
         {
             session.compaction_pending = false;
             session.updated_at = now_millis();
@@ -1134,7 +1160,7 @@ impl AppServer {
         reason: &str,
     ) -> Result<Vec<DeferredWork>, ServerError> {
         let mut sessions = self.lock_sessions()?;
-        let session = session_mut_by_id_or_alias(&mut sessions, &route.session_id)
+        let session = sessions.get_mut(&route.session_id)
             .ok_or_else(|| ServerError::SessionNotFound(route.session_id.clone()))?;
         if session.active_turn.as_deref() != Some(&route.turn_id) {
             return Err(ServerError::StaleTurn(route.turn_id.clone()));
@@ -1173,14 +1199,14 @@ impl AppServer {
 
     pub fn session(&self, session_id: &str) -> Result<SessionView, ServerError> {
         let sessions = self.lock_sessions()?;
-        session_by_id_or_alias(&sessions, session_id)
+        sessions.get(session_id)
             .map(SessionView::from)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))
     }
 
     pub(crate) fn tool_registry(&self, session_id: &str) -> Result<ToolRegistry, ServerError> {
         let sessions = self.lock_sessions()?;
-        session_by_id_or_alias(&sessions, session_id)
+        sessions.get(session_id)
             .map(|session| session.tools.clone())
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))
     }
@@ -1193,7 +1219,7 @@ impl AppServer {
     ) -> Result<ToolExecutionOutput, ServerError> {
         let tools = {
             let sessions = self.lock_sessions()?;
-            session_by_id_or_alias(&sessions, session_id)
+            sessions.get(session_id)
                 .map(|session| session.tools.clone())
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
         };
@@ -1291,14 +1317,12 @@ impl AppServer {
         session_id: &str,
     ) -> Result<Option<u64>, ServerError> {
         let sessions = self.lock_sessions()?;
-        Ok(session_by_id_or_alias(&sessions, session_id)
+        Ok(sessions.get(session_id)
             .filter(|session| session.attachments == 0)
             .map(|session| session.resource_generation))
     }
 
-    fn lock_sessions(
-        &self,
-    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, SessionRuntime>>, ServerError> {
+    fn lock_sessions(&self) -> Result<std::sync::MutexGuard<'_, SessionRegistry>, ServerError> {
         self.sessions.lock().map_err(|_| ServerError::StatePoisoned)
     }
 
@@ -1362,7 +1386,7 @@ impl AppServer {
             now_millis(),
         );
         session.persisted = Some(attachment.hydrated.clone());
-        sessions.insert(attachment.id.clone(), session);
+        sessions.insert(session);
         self.open_session_resources(
             &mut sessions,
             ResourceSession {
@@ -1413,7 +1437,7 @@ impl AppServer {
     /// already in the map, removing it again if either backend refuses.
     fn open_session_resources(
         &self,
-        sessions: &mut BTreeMap<String, SessionRuntime>,
+        sessions: &mut SessionRegistry,
         session: ResourceSession,
     ) -> Result<(), ResourceError> {
         let session_id = session.session_id.clone();
@@ -1463,8 +1487,7 @@ impl AppServer {
         session.updated_at = now_millis();
         drop(sessions);
         if let Err(error) = self.refresh_session_workspace_tools(&attachment.id) {
-            self.lock_sessions()?
-                .insert(attachment.id.clone(), previous);
+            self.lock_sessions()?.insert(previous);
             if let Err(rollback) = self.refresh_session_workspace_tools(&attachment.id) {
                 return Err(ServerError::Resource(format!(
                     "{error}; runtime rollback failed ({rollback})"
@@ -1783,39 +1806,48 @@ impl ServerConnection {
             return Err(ServerError::NotInitialized);
         }
         let mut sessions = self.server.lock_sessions()?;
-        let session = session_mut_by_id_or_alias(&mut sessions, session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if attached_key(session, &self.attached_sessions).is_none() {
-            if session.attachments == 0
-                && let Some(backend) = &self.server.resource_backend
-            {
-                let generation = session.resource_generation.checked_add(1).ok_or_else(|| {
-                    ServerError::Resource("resource session generation was exhausted".to_owned())
-                })?;
-                backend
-                    .open_session(ResourceSession {
-                        session_id: session.id.clone(),
-                        generation,
-                        working_directory: session.working_directory.clone(),
-                        project_trusted: session.intent.trusted,
-                        policy: session.policy.clone(),
-                        tools: session.tools.clone(),
-                    })
-                    .map_err(|error| ServerError::Resource(error.to_string()))?;
-                session.resource_generation = generation;
-            }
-            session.attachments = session.attachments.saturating_add(1);
-            self.attached_sessions.insert(session.id.clone());
+        let key = sessions
+            .key(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
+            .to_owned();
+        if self.attached_sessions.contains(&key) {
+            return Ok(());
         }
+        let session = sessions
+            .get_mut(&key)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        if session.attachments == 0
+            && let Some(backend) = &self.server.resource_backend
+        {
+            let generation = session.resource_generation.checked_add(1).ok_or_else(|| {
+                ServerError::Resource("resource session generation was exhausted".to_owned())
+            })?;
+            backend
+                .open_session(ResourceSession {
+                    session_id: session.id.clone(),
+                    generation,
+                    working_directory: session.working_directory.clone(),
+                    project_trusted: session.intent.trusted,
+                    policy: session.policy.clone(),
+                    tools: session.tools.clone(),
+                })
+                .map_err(|error| ServerError::Resource(error.to_string()))?;
+            session.resource_generation = generation;
+        }
+        session.attachments = session.attachments.saturating_add(1);
+        self.attached_sessions.insert(key);
         Ok(())
     }
 
     pub fn detach_session(&mut self, session_id: &str) -> Result<(), ServerError> {
         let mut sessions = self.server.lock_sessions()?;
-        let session = session_mut_by_id_or_alias(&mut sessions, session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if let Some(key) = attached_key(session, &self.attached_sessions) {
-            self.attached_sessions.remove(&key);
+        let key = sessions
+            .key(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
+            .to_owned();
+        if self.attached_sessions.remove(&key)
+            && let Some(session) = sessions.get_mut(&key)
+        {
             session.attachments = session.attachments.saturating_sub(1);
         }
         Ok(())
@@ -1824,7 +1856,7 @@ impl ServerConnection {
     pub fn close(&mut self) {
         if let Ok(mut sessions) = self.server.lock_sessions() {
             for session_id in &self.attached_sessions {
-                if let Some(session) = session_mut_by_id_or_alias(&mut sessions, session_id) {
+                if let Some(session) = sessions.get_mut(session_id) {
                     session.attachments = session.attachments.saturating_sub(1);
                 }
             }
@@ -2189,7 +2221,7 @@ impl ServerConnection {
             Ok(sessions) => sessions,
             Err(error) => return internal_error_batch(request.id, &error),
         };
-        if sessions.contains_key(&session_id) {
+        if sessions.contains(&session_id) {
             return error_batch(
                 request.id,
                 ProtocolErrorCode::Conflict,
@@ -2210,7 +2242,7 @@ impl ServerConnection {
         session.snapshot = initial_snapshot;
         session.aliases = aliases;
         session.persisted = persisted;
-        sessions.insert(session_id.clone(), session);
+        sessions.insert(session);
         if let Err(error) = self.server.open_session_resources(
             &mut sessions,
             ResourceSession {
@@ -2251,7 +2283,7 @@ impl ServerConnection {
         }
         match self.server.session(&params.session_id) {
             Ok(_) => match self.server.lock_sessions() {
-                Ok(sessions) => match session_by_id_or_alias(&sessions, &params.session_id) {
+                Ok(sessions) => match sessions.get(&params.session_id) {
                     Some(session) => success_batch(
                         request.id,
                         result_map([("state", public_session_state(session))]),
@@ -2283,7 +2315,10 @@ impl ServerConnection {
             Ok(sessions) => sessions,
             Err(error) => return internal_error_batch(request.id, &error),
         };
-        let Some(session) = session_mut_by_id_or_alias(&mut sessions, &params.session_id) else {
+        let Some(key) = sessions.key(&params.session_id).map(ToOwned::to_owned) else {
+            return error_batch(request.id, ProtocolErrorCode::NotFound, "Session not found");
+        };
+        let Some(session) = sessions.get_mut(&key) else {
             return error_batch(request.id, ProtocolErrorCode::NotFound, "Session not found");
         };
         if session.compaction_pending {
@@ -2314,8 +2349,7 @@ impl ServerConnection {
         if cancel_pending_callback(session, "Session was closed") {
             next_event_id(session);
         }
-        if let Some(key) = attached_key(session, &self.attached_sessions) {
-            self.attached_sessions.remove(&key);
+        if self.attached_sessions.remove(&key) {
             session.attachments = session.attachments.saturating_sub(1);
         }
         let session_id = canonical_session_id;
@@ -2402,7 +2436,7 @@ impl ServerConnection {
                 Ok(sessions) => sessions,
                 Err(error) => return internal_error_batch(request.id, &error),
             };
-            let Some(session) = session_by_id_or_alias(&sessions, &params.session_id) else {
+            let Some(session) = sessions.get(&params.session_id) else {
                 return error_batch(
                     request.id,
                     ProtocolErrorCode::NotFound,
@@ -2453,7 +2487,7 @@ impl ServerConnection {
             Ok(sessions) => sessions,
             Err(error) => return internal_error_batch(request.id, &error),
         };
-        let Some(session) = session_mut_by_id_or_alias(&mut sessions, &params.session_id) else {
+        let Some(session) = sessions.get_mut(&params.session_id) else {
             return error_batch(
                 request.id,
                 ProtocolErrorCode::NotFound,
@@ -2512,7 +2546,7 @@ impl ServerConnection {
                 Ok(sessions) => sessions,
                 Err(error) => return internal_error_batch(request.id, &error),
             };
-            let Some(session) = session_mut_by_id_or_alias(&mut sessions, &params.session_id)
+            let Some(session) = sessions.get_mut(&params.session_id)
             else {
                 return error_batch(
                     request.id,
@@ -2563,7 +2597,7 @@ impl ServerConnection {
                 Ok(sessions) => sessions,
                 Err(error) => return internal_error_batch(request.id, &error),
             };
-            let Some(session) = session_by_id_or_alias(&sessions, session_id) else {
+            let Some(session) = sessions.get(session_id) else {
                 return error_batch(
                     request.id,
                     ProtocolErrorCode::NotFound,
@@ -3051,7 +3085,7 @@ impl ServerConnection {
                 );
             };
             let working_directory = match self.server.lock_sessions() {
-                Ok(sessions) => session_by_id_or_alias(&sessions, session_id)
+                Ok(sessions) => sessions.get(session_id)
                     .map(|session| session.working_directory.clone()),
                 Err(error) => return internal_error_batch(request.id, &error),
             };
@@ -3086,7 +3120,7 @@ impl ServerConnection {
                 .lock_sessions()
                 .ok()
                 .and_then(|sessions| {
-                    session_by_id_or_alias(&sessions, session_id)
+                    sessions.get(session_id)
                         .map(|session| session.active_turn.is_some())
                 })
                 .unwrap_or(false)
@@ -3118,7 +3152,7 @@ impl ServerConnection {
                 Ok(sessions) => sessions,
                 Err(error) => return internal_error_batch(request.id, &error),
             };
-            let Some(session) = session_mut_by_id_or_alias(&mut sessions, &session_id) else {
+            let Some(session) = sessions.get_mut(&session_id) else {
                 return error_batch(
                     request.id,
                     ProtocolErrorCode::NotFound,
@@ -3201,8 +3235,9 @@ impl ServerConnection {
             Ok(sessions) => sessions,
             Err(error) => return Some(internal_error_batch(request_id, &error)),
         };
-        let attached = session_by_id_or_alias(&sessions, session_id)
-            .is_some_and(|session| attached_key(session, &self.attached_sessions).is_some());
+        let attached = sessions
+            .key(session_id)
+            .is_some_and(|key| self.attached_sessions.contains(key));
         (!attached).then(|| {
             error_batch(
                 request_id,
@@ -3661,56 +3696,9 @@ fn result_map<const N: usize>(entries: [(&str, Value); N]) -> BTreeMap<String, V
         .collect()
 }
 
-fn session_mut_by_id_or_alias<'a>(
-    sessions: &'a mut BTreeMap<String, SessionRuntime>,
-    session_id: &str,
-) -> Option<&'a mut SessionRuntime> {
-    if sessions.contains_key(session_id) {
-        sessions.get_mut(session_id)
-    } else {
-        sessions
-            .values_mut()
-            .find(|session| session.aliases.contains(session_id))
-    }
-}
-
-fn session_by_id_or_alias<'a>(
-    sessions: &'a BTreeMap<String, SessionRuntime>,
-    session_id: &str,
-) -> Option<&'a SessionRuntime> {
-    sessions.get(session_id).or_else(|| {
-        sessions
-            .values()
-            .find(|session| session.aliases.contains(session_id))
-    })
-}
-
-fn session_key_by_id_or_alias(
-    sessions: &BTreeMap<String, SessionRuntime>,
-    session_id: &str,
-) -> Option<String> {
-    if sessions.contains_key(session_id) {
-        Some(session_id.to_owned())
-    } else {
-        sessions
-            .iter()
-            .find(|(_, session)| session.aliases.contains(session_id))
-            .map(|(key, _)| key.clone())
-    }
-}
-
 fn next_event_id(session: &mut SessionRuntime) -> u64 {
     session.event_watermark = session.event_watermark.saturating_add(1);
     session.event_watermark
-}
-
-fn attached_key(session: &SessionRuntime, attached_sessions: &BTreeSet<String>) -> Option<String> {
-    attached_sessions
-        .iter()
-        .find(|attached| {
-            attached.as_str() == session.id || session.aliases.contains(attached.as_str())
-        })
-        .cloned()
 }
 
 fn object(value: Value) -> BTreeMap<String, Value> {
