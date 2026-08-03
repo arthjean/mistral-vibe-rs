@@ -1,0 +1,581 @@
+{
+  "oracle": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "deterministicRuns": 10,
+    "engine": "python-textual-capture"
+  },
+  "oracleProbe": {
+    "expected": {
+      "hookIcons": {
+        "error": "✗",
+        "ok": "✓",
+        "warning": "⚠"
+      },
+      "indicatorGlyphs": {
+        "error": "✕",
+        "muted": "□",
+        "success": "✓"
+      },
+      "nonGroupedKinds": [
+        "file_edit",
+        "file_write"
+      ]
+    },
+    "script": "ep010-python-oracle.py"
+  },
+  "reference": {
+    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "sourceFiles": [
+      "vibe/cli/textual_ui/handlers/event_handler.py",
+      "vibe/cli/textual_ui/widgets/tools.py",
+      "vibe/cli/textual_ui/widgets/tool_widgets.py",
+      "vibe/cli/textual_ui/widgets/messages.py",
+      "vibe/cli/textual_ui/widgets/status_message.py",
+      "vibe/cli/textual_ui/widgets/context_progress.py",
+      "vibe/cli/textual_ui/widgets/loading.py",
+      "vibe/cli/textual_ui/widgets/debug_console.py",
+      "vibe/cli/textual_ui/widgets/links.py",
+      "vibe/cli/textual_ui/app.py",
+      "vibe/core/tools/ui.py"
+    ],
+    "version": "mistral-vibe pinned runtime oracle"
+  },
+  "schemaVersion": 1,
+  "traces": [
+    {
+      "divergences": [],
+      "events": [
+        {
+          "arguments": {
+            "command": "cargo test"
+          },
+          "kind": "effect",
+          "outcome": {
+            "result": {
+              "command": "cargo test",
+              "returncode": 0,
+              "stderr": "",
+              "stdout": "running 3 tests\nok"
+            },
+            "status": "completed"
+          },
+          "tool": "bash"
+        },
+        {
+          "arguments": {
+            "file_path": "crates/vibe-cli/src/lib.rs",
+            "offset": 10
+          },
+          "kind": "effect",
+          "outcome": {
+            "result": {
+              "content": "   10→use std::io;\n   11→fn main() {}",
+              "file_path": "crates/vibe-cli/src/lib.rs",
+              "num_lines": 2,
+              "start_line": 10,
+              "total_lines": 40,
+              "was_truncated": false
+            },
+            "status": "completed"
+          },
+          "tool": "read_file"
+        },
+        {
+          "arguments": {
+            "content": "hello",
+            "file_path": "docs/readme.md"
+          },
+          "kind": "effect",
+          "outcome": {
+            "result": {
+              "bytes_written": 5,
+              "content": "hello",
+              "file_path": "docs/readme.md"
+            },
+            "status": "completed"
+          },
+          "tool": "write_file"
+        },
+        {
+          "arguments": {
+            "file_path": "crates/vibe-cli/src/lib.rs",
+            "new_string": "new",
+            "old_string": "old"
+          },
+          "kind": "effect",
+          "outcome": {
+            "result": {
+              "file": "crates/vibe-cli/src/lib.rs",
+              "message": "edited",
+              "new_string": "new",
+              "old_string": "old"
+            },
+            "status": "completed"
+          },
+          "tool": "edit"
+        },
+        {
+          "arguments": {
+            "path": "crates",
+            "pattern": "todo"
+          },
+          "kind": "effect",
+          "outcome": {
+            "result": {
+              "match_count": 1,
+              "matches": "crates/vibe-cli/src/lib.rs:4:// todo",
+              "pattern": "todo",
+              "was_truncated": false
+            },
+            "status": "completed"
+          },
+          "tool": "grep"
+        },
+        {
+          "arguments": {
+            "action": "write",
+            "todos": [
+              {
+                "content": "ship",
+                "id": "1",
+                "status": "completed"
+              },
+              {
+                "content": "review",
+                "id": "2",
+                "status": "in_progress"
+              }
+            ]
+          },
+          "kind": "effect",
+          "outcome": {
+            "result": {
+              "todos": [
+                {
+                  "content": "ship",
+                  "id": "1",
+                  "status": "completed"
+                },
+                {
+                  "content": "review",
+                  "id": "2",
+                  "status": "in_progress"
+                }
+              ],
+              "total_count": 2,
+              "verb": "Updated"
+            },
+            "status": "completed"
+          },
+          "tool": "todo"
+        },
+        {
+          "arguments": {
+            "questions": [
+              {
+                "header": "Release",
+                "multi_select": false,
+                "options": [
+                  {
+                    "description": "",
+                    "label": "Yes"
+                  },
+                  {
+                    "description": "",
+                    "label": "No"
+                  }
+                ],
+                "question": "Ship it?"
+              }
+            ]
+          },
+          "kind": "effect",
+          "outcome": {
+            "result": {
+              "answers": [
+                {
+                  "answer": "Yes",
+                  "is_other": false,
+                  "question": "Ship it?"
+                }
+              ],
+              "cancelled": false
+            },
+            "status": "completed"
+          },
+          "tool": "ask_user_question"
+        },
+        {
+          "arguments": {
+            "query": "ratatui"
+          },
+          "kind": "effect",
+          "outcome": {
+            "result": {
+              "answer": "A Rust TUI library.",
+              "query": "ratatui",
+              "sources": [
+                {
+                  "title": "Ratatui",
+                  "url": "https://ratatui.rs"
+                }
+              ]
+            },
+            "status": "completed"
+          },
+          "tool": "web_search"
+        },
+        {
+          "arguments": {
+            "url": "https://example.com/page"
+          },
+          "kind": "effect",
+          "outcome": {
+            "result": {
+              "content": "body text",
+              "content_type": "text/html; charset=utf-8",
+              "url": "https://example.com/page",
+              "was_truncated": false
+            },
+            "status": "completed"
+          },
+          "tool": "web_fetch"
+        }
+      ],
+      "expected": [
+        "effect|shell|success|Ran|cargo test||collapsible=1|grouped=1|body=running 3 tests⏎ok",
+        "effect|file_read|success|Read|2 lines from lib.rs|(truncated)|collapsible=1|grouped=1|body=use std::io;⏎fn main() {}",
+        "effect|file_write|success|Created|readme.md||collapsible=0|grouped=0|body=hello",
+        "effect|file_edit|success|Edited|lib.rs||collapsible=0|grouped=0|body=- old⏎+ new",
+        "effect|file_search|success|Searched|todo (1 match)||collapsible=1|grouped=1|body=crates/vibe-cli/src/lib.rs:4:// todo",
+        "effect|todo|success|Updated|2 todos||collapsible=1|grouped=1|body=☐ review⏎☑ ship",
+        "effect|user_question|success|Answered|\"Ship it?\" → Yes||collapsible=0|grouped=1|body=",
+        "effect|web_search|success|Searched|'ratatui' (1 source)||collapsible=1|grouped=1|body=query: ratatui⏎answer: A Rust TUI library.⏎  • Ratatui",
+        "effect|web_fetch|success|Fetched|https://example.com/page (9 chars, text/html)||collapsible=1|grouped=1|body=body text"
+      ],
+      "id": "us034-effect-kinds",
+      "reference": [
+        "effect|shell|success|Ran|cargo test||collapsible=1|grouped=1|body=running 3 tests⏎ok",
+        "effect|file_read|success|Read|2 lines from lib.rs|(truncated)|collapsible=1|grouped=1|body=use std::io;⏎fn main() {}",
+        "effect|file_write|success|Created|readme.md||collapsible=0|grouped=0|body=hello",
+        "effect|file_edit|success|Edited|lib.rs||collapsible=0|grouped=0|body=- old⏎+ new",
+        "effect|file_search|success|Searched|todo (1 match)||collapsible=1|grouped=1|body=crates/vibe-cli/src/lib.rs:4:// todo",
+        "effect|todo|success|Updated|2 todos||collapsible=1|grouped=1|body=☐ review⏎☑ ship",
+        "effect|user_question|success|Answered|\"Ship it?\" → Yes||collapsible=0|grouped=1|body=",
+        "effect|web_search|success|Searched|'ratatui' (1 source)||collapsible=1|grouped=1|body=query: ratatui⏎answer: A Rust TUI library.⏎  • Ratatui",
+        "effect|web_fetch|success|Fetched|https://example.com/page (9 chars, text/html)||collapsible=1|grouped=1|body=body text"
+      ],
+      "story": "US-034"
+    },
+    {
+      "divergences": [],
+      "events": [
+        {
+          "arguments": {
+            "command": "cargo build"
+          },
+          "kind": "effect",
+          "outcome": {
+            "status": "pending"
+          },
+          "tool": "bash"
+        },
+        {
+          "arguments": {
+            "command": "cargo build"
+          },
+          "kind": "effect",
+          "outcome": {
+            "outputText": "compiling\nlinking\n",
+            "status": "running"
+          },
+          "tool": "bash"
+        },
+        {
+          "arguments": {
+            "command": "cargo build"
+          },
+          "kind": "effect",
+          "outcome": {
+            "callbackId": "callback-1",
+            "status": "blocked"
+          },
+          "tool": "bash"
+        },
+        {
+          "arguments": {
+            "command": "cargo build"
+          },
+          "kind": "effect",
+          "outcome": {
+            "error": "exit status 101",
+            "status": "failed"
+          },
+          "tool": "bash"
+        },
+        {
+          "arguments": {
+            "command": "rm -rf /"
+          },
+          "kind": "effect",
+          "outcome": {
+            "reason": "denied by the operator",
+            "status": "skipped"
+          },
+          "tool": "bash"
+        },
+        {
+          "arguments": {
+            "command": "sleep 60"
+          },
+          "kind": "effect",
+          "outcome": {
+            "reason": "interrupted",
+            "status": "cancelled"
+          },
+          "tool": "bash"
+        },
+        {
+          "arguments": {
+            "file_path": "missing.rs"
+          },
+          "kind": "effect",
+          "outcome": {
+            "status": "completed"
+          },
+          "tool": "read_file"
+        }
+      ],
+      "expected": [
+        "effect|shell|running|Running|cargo build||collapsible=1|grouped=1|body=",
+        "effect|shell|running|Running|cargo build||collapsible=1|grouped=1|body=",
+        "effect|shell|running|Running|cargo build||collapsible=1|grouped=1|body=",
+        "effect|shell|error|Ran|cargo build||collapsible=1|grouped=1|body=Error: exit status 101",
+        "effect|shell|muted||bash: skipped||collapsible=1|grouped=1|body=Skipped: denied by the operator",
+        "effect|shell|muted||bash: skipped||collapsible=1|grouped=1|body=Skipped: interrupted",
+        "effect|file_read|error||No result||collapsible=1|grouped=1|body="
+      ],
+      "id": "us034-terminal-statuses",
+      "reference": [
+        "effect|shell|running|Running|cargo build||collapsible=1|grouped=1|body=",
+        "effect|shell|running|Running|cargo build||collapsible=1|grouped=1|body=",
+        "effect|shell|running|Running|cargo build||collapsible=1|grouped=1|body=",
+        "effect|shell|error|Ran|cargo build||collapsible=1|grouped=1|body=Error: exit status 101",
+        "effect|shell|muted||bash: skipped||collapsible=1|grouped=1|body=Skipped: denied by the operator",
+        "effect|shell|muted||bash: skipped||collapsible=1|grouped=1|body=Skipped: interrupted",
+        "effect|file_read|error||No result||collapsible=1|grouped=1|body="
+      ],
+      "story": "US-034"
+    },
+    {
+      "divergences": [],
+      "events": [
+        {
+          "content": "reformatted 2 files",
+          "hookName": "format",
+          "kind": "hook",
+          "severity": "ok"
+        },
+        {
+          "content": "3 warnings",
+          "hookName": "lint",
+          "kind": "hook",
+          "severity": "warning"
+        },
+        {
+          "content": "blocked the write",
+          "hookName": "guard",
+          "kind": "hook",
+          "severity": "error"
+        }
+      ],
+      "expected": [
+        "hook|✓|[format] reformatted 2 files",
+        "hook|⚠|[lint] 3 warnings",
+        "hook|✗|[guard] blocked the write"
+      ],
+      "id": "us034-hook-notices",
+      "reference": [
+        "hook|✓|[format] reformatted 2 files",
+        "hook|⚠|[lint] 3 warnings",
+        "hook|✗|[guard] blocked the write"
+      ],
+      "story": "US-034"
+    },
+    {
+      "divergences": [],
+      "events": [
+        {
+          "code": "rate_limit",
+          "kind": "turn_error",
+          "message": "429"
+        },
+        {
+          "code": "rate_limit",
+          "kind": "turn_error",
+          "message": "429",
+          "upgradeAvailable": true
+        },
+        {
+          "code": "context_too_long",
+          "kind": "turn_error",
+          "message": "context overflow"
+        },
+        {
+          "code": "refusal",
+          "details": {
+            "category": "policy",
+            "explanation": "Not supported."
+          },
+          "kind": "turn_error",
+          "message": "refused"
+        },
+        {
+          "code": "transport",
+          "kind": "turn_error",
+          "message": "connection reset"
+        }
+      ],
+      "expected": [
+        "error|Rate limits exceeded. Please wait a moment before trying again.",
+        "error|Rate limits exceeded. Please wait a moment before trying again, or upgrade to Pro for higher rate limits and uninterrupted access.",
+        "error|The conversation context exceeds the model's maximum limit. The last messages and output of agent actions went above the allowed size.⏎⏎To recover:⏎1. Use /rewind to undo recent messages and tool outputs⏎2. Then use /compact to summarize the remaining conversation⏎⏎This will free up context space so you can continue working.",
+        "error|The model declined to respond and stopped early (refusal).⏎Category: policy.⏎⏎Not supported.",
+        "error|connection reset"
+      ],
+      "id": "us035-turn-errors",
+      "reference": [
+        "error|Rate limits exceeded. Please wait a moment before trying again.",
+        "error|Rate limits exceeded. Please wait a moment before trying again, or upgrade to Pro for higher rate limits and uninterrupted access.",
+        "error|The conversation context exceeds the model's maximum limit. The last messages and output of agent actions went above the allowed size.⏎⏎To recover:⏎1. Use /rewind to undo recent messages and tool outputs⏎2. Then use /compact to summarize the remaining conversation⏎⏎This will free up context space so you can continue working.",
+        "error|The model declined to respond and stopped early (refusal).⏎Category: policy.⏎⏎Not supported.",
+        "error|connection reset"
+      ],
+      "story": "US-035"
+    },
+    {
+      "divergences": [],
+      "events": [
+        {
+          "currentTokens": 0,
+          "kind": "context",
+          "maxTokens": 0
+        },
+        {
+          "currentTokens": 64000,
+          "kind": "context",
+          "maxTokens": 128000
+        },
+        {
+          "currentTokens": 999999,
+          "kind": "context",
+          "maxTokens": 1000000
+        },
+        {
+          "elapsedSeconds": 9,
+          "kind": "activity",
+          "queued": 0,
+          "status": "Reading file"
+        },
+        {
+          "elapsedSeconds": 75,
+          "kind": "activity",
+          "queued": 2,
+          "status": "Generating"
+        },
+        {
+          "elapsedSeconds": 3725,
+          "kind": "activity",
+          "queued": 0,
+          "status": "Generating"
+        }
+      ],
+      "expected": [
+        "context|",
+        "context|64k/128k tokens (50%)",
+        "context|999k/1.0M tokens (100%)",
+        "activity|Reading file|9s|(9s Esc/Ctrl+C to interrupt)",
+        "activity|Generating|1m15s|(1m15s Esc to interrupt · Ctrl+C to cancel last queued message)",
+        "activity|Generating|1h2m5s|(1h2m5s Esc/Ctrl+C to interrupt)"
+      ],
+      "id": "us035-live-activity",
+      "reference": [
+        "context|",
+        "context|64k/128k tokens (50%)",
+        "context|999k/1.0M tokens (100%)",
+        "activity|Reading file|9s|(9s Esc/Ctrl+C to interrupt)",
+        "activity|Generating|1m15s|(1m15s Esc to interrupt · Ctrl+C to cancel last queued message)",
+        "activity|Generating|1h2m5s|(1h2m5s Esc/Ctrl+C to interrupt)"
+      ],
+      "story": "US-035"
+    },
+    {
+      "divergences": [],
+      "events": [
+        {
+          "id": "log-1",
+          "kind": "debug_log",
+          "level": "ERROR",
+          "message": "transport closed",
+          "timestamp": 1754179200
+        },
+        {
+          "id": "log-2",
+          "kind": "debug_log",
+          "level": "INFO",
+          "message": "session opened",
+          "timestamp": 1754179201
+        },
+        {
+          "kind": "link",
+          "text": "See https://ratatui.rs for details",
+          "url": "https://ratatui.rs"
+        },
+        {
+          "kind": "link",
+          "text": "Run file:///etc/passwd now",
+          "url": "file:///etc/passwd"
+        },
+        {
+          "kind": "link",
+          "text": "Try javascript:alert(1) instead",
+          "url": "javascript:alert(1)"
+        }
+      ],
+      "expected": [
+        "log|red|2025-08-03 00:00:00 ERROR    transport closed",
+        "log|cyan|2025-08-03 00:00:01 INFO     session opened",
+        "link|safe=1|spans=1",
+        "link|safe=0|spans=0",
+        "link|safe=0|spans=0"
+      ],
+      "id": "us036-diagnostics-and-links",
+      "reference": [
+        "log|red|2025-08-03 00:00:00 ERROR    transport closed",
+        "log|cyan|2025-08-03 00:00:01 INFO     session opened",
+        "link|safe=1|spans=1",
+        "link|safe=0|spans=0",
+        "link|safe=0|spans=0"
+      ],
+      "story": "US-036"
+    }
+  ],
+  "unavailable": [
+    {
+      "dimension": "multi-line edit diff context",
+      "reason": "The reference computes occurrence diffs with difflib and keeps two context lines; the port renders the replaced and replacing lines, which coincide whenever an occurrence shares no line with its replacement."
+    },
+    {
+      "dimension": "syntax highlighting inside file and command output",
+      "reason": "The reference wraps read, write, and shell output in a Markdown code fence whose highlighting is produced by Rich at paint time; the oracle can pin the fenced content but not the per-token colours."
+    },
+    {
+      "dimension": "tool result expansion by mouse click",
+      "reason": "The reference expands a collapsible result through a Textual click handler on a mounted section; the terminal port exposes the same content through its keyboard collapse toggle instead."
+    },
+    {
+      "dimension": "tool stream delta",
+      "reason": "The reference streams the JSON-patch delta appended to `state.outputText`; the port has no patch channel and shows the newest output line instead, so the two cannot be compared token for token."
+    }
+  ]
+}
