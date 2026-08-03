@@ -339,26 +339,6 @@ impl AppServer {
     }
 
     #[must_use]
-    pub fn with_approval_factory(factory: Arc<dyn ApprovalAgentFactory>) -> Self {
-        Self {
-            approval_factory: factory,
-            ..Self::default()
-        }
-    }
-
-    #[must_use]
-    pub fn with_surface_factories(
-        approval_factory: Arc<dyn ApprovalAgentFactory>,
-        session_tool_factory: Arc<dyn SessionToolFactory>,
-    ) -> Self {
-        Self {
-            approval_factory,
-            session_tool_factory,
-            ..Self::default()
-        }
-    }
-
-    #[must_use]
     pub fn using_release3_service(mut self, service: Release3Service) -> Self {
         self.release3 = Arc::new(service);
         self
@@ -367,12 +347,6 @@ impl AppServer {
     #[must_use]
     pub fn using_release4_service(mut self, service: Release4Service) -> Self {
         self.release4 = Arc::new(service);
-        self
-    }
-
-    #[must_use]
-    pub fn using_approval_factory(mut self, factory: Arc<dyn ApprovalAgentFactory>) -> Self {
-        self.approval_factory = factory;
         self
     }
 
@@ -1664,40 +1638,10 @@ impl ServerConnection {
         kind: EngineCallbackKind,
         prompt: impl Into<String>,
     ) -> Result<(String, Vec<u8>), ServerError> {
-        if self.state != ConnectionState::Ready {
-            return Err(ServerError::NotInitialized);
-        }
-        let supported = match kind {
-            EngineCallbackKind::Approval => self
-                .capabilities
-                .callback_kinds
-                .contains(&CallbackKind::Approval),
-            EngineCallbackKind::UserInput => self
-                .capabilities
-                .callback_kinds
-                .contains(&CallbackKind::UserInput),
-            EngineCallbackKind::ConnectorAuth => false,
-        };
-        if !supported {
-            return Err(ServerError::UnsupportedClientCallbackKind(kind));
-        }
-        let (callback_id, bytes) = self
-            .server
-            .request_callback(session_id, turn_id, kind, prompt)?;
-        let request_id = match decode_frame(&bytes)? {
-            Envelope::Request(request) => request.id,
-            _ => return Err(ServerError::InvalidCallbackRequest),
-        };
-        self.pending_server_requests.insert(
-            request_id,
-            CallbackRoute {
-                session_id: session_id.to_owned(),
-                turn_id: turn_id.to_owned(),
-                callback_id: callback_id.clone(),
-                answered: false,
-            },
-        );
-        Ok((callback_id, bytes))
+        let prompt = prompt.into();
+        self.deliver_callback(session_id, turn_id, kind, |server| {
+            server.request_callback(session_id, turn_id, kind, prompt)
+        })
     }
 
     pub fn request_callback_with_detail(
@@ -1708,26 +1652,35 @@ impl ServerConnection {
         title: impl Into<String>,
         detail: Value,
     ) -> Result<(String, Vec<u8>), ServerError> {
+        let title = title.into();
+        self.deliver_callback(session_id, turn_id, kind, |server| {
+            server.request_callback_with_detail(session_id, turn_id, kind, title, detail)
+        })
+    }
+
+    /// Mints a callback through `request` and routes the client's answer back
+    /// to the turn that is waiting for it.
+    fn deliver_callback(
+        &mut self,
+        session_id: &str,
+        turn_id: &str,
+        kind: EngineCallbackKind,
+        request: impl FnOnce(&AppServer) -> Result<(String, Vec<u8>), ServerError>,
+    ) -> Result<(String, Vec<u8>), ServerError> {
         if self.state != ConnectionState::Ready {
             return Err(ServerError::NotInitialized);
         }
         let supported = match kind {
-            EngineCallbackKind::Approval => self
-                .capabilities
-                .callback_kinds
-                .contains(&CallbackKind::Approval),
-            EngineCallbackKind::UserInput => self
-                .capabilities
-                .callback_kinds
-                .contains(&CallbackKind::UserInput),
-            EngineCallbackKind::ConnectorAuth => false,
+            EngineCallbackKind::Approval => CallbackKind::Approval,
+            EngineCallbackKind::UserInput => CallbackKind::UserInput,
+            EngineCallbackKind::ConnectorAuth => {
+                return Err(ServerError::UnsupportedClientCallbackKind(kind));
+            }
         };
-        if !supported {
+        if !self.capabilities.callback_kinds.contains(&supported) {
             return Err(ServerError::UnsupportedClientCallbackKind(kind));
         }
-        let (callback_id, bytes) = self
-            .server
-            .request_callback_with_detail(session_id, turn_id, kind, title, detail)?;
+        let (callback_id, bytes) = request(&self.server)?;
         let request_id = match decode_frame(&bytes)? {
             Envelope::Request(request) => request.id,
             _ => return Err(ServerError::InvalidCallbackRequest),
@@ -1998,7 +1951,6 @@ impl ServerConnection {
                 return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
             }
         };
-        let _session_open_options = (params.headless, params.history_limit);
         if !(1..=500).contains(&params.history_limit) {
             return error_batch(
                 request.id,
@@ -2791,11 +2743,6 @@ impl ServerConnection {
         let session_id = params.session_id.clone();
         let turn_id = params.expected_turn_id.clone();
         let content = content_text(&params.input);
-        let _steering_metadata = (
-            &params.client_user_message_id,
-            params.inject_invoked_skill,
-            &params.mention_stats,
-        );
         let expected_turn_id = params.expected_turn_id.clone();
         let lookup_turn_id = expected_turn_id.clone();
         self.mutate_active_turn(request.id, &params.session_id, &lookup_turn_id, |session| {
@@ -2826,7 +2773,6 @@ impl ServerConnection {
             return batch;
         }
         let content = content_text(&params.input);
-        let _injection_metadata = (params.inject_invoked_skill, &params.mention_stats);
         let mut sessions = match self.server.lock_sessions() {
             Ok(sessions) => sessions,
             Err(error) => return internal_error_batch(request.id, &error),
@@ -3053,78 +2999,33 @@ impl ServerConnection {
     }
 
     fn resource_request(&mut self, mut request: ServerRequest) -> DispatchBatch {
-        let session_value = request.params.get("sessionId");
-        let session_id = session_value
+        let Some(session_id) = request
+            .params
+            .get("sessionId")
             .and_then(Value::as_str)
             .filter(|session_id| !session_id.is_empty())
-            .map(str::to_owned);
-        let requires_session = true;
-        if (requires_session && session_id.is_none())
-            || (session_value.is_some() && session_id.is_none())
-        {
+            .map(str::to_owned)
+        else {
             return error_batch(
                 request.id,
                 ProtocolErrorCode::InvalidParams,
                 "sessionId must be a non-empty string",
             );
+        };
+        if let Some(batch) = self.attachment_error(request.id.clone(), &session_id) {
+            return batch;
         }
-        if let Some(session_id) = &session_id
-            && let Some(batch) = self.attachment_error(request.id.clone(), session_id)
+        if request.method.starts_with("workspace/trust/")
+            && let Some(batch) = self.confine_trust_request(&mut request, &session_id)
         {
             return batch;
         }
-        if matches!(
-            request.method.as_str(),
-            "workspace/trust/decision" | "workspace/trust/status"
-        ) {
-            let Some(session_id) = &session_id else {
-                return error_batch(
-                    request.id,
-                    ProtocolErrorCode::InvalidParams,
-                    "sessionId must be a non-empty string",
-                );
-            };
-            let working_directory = match self.server.lock_sessions() {
-                Ok(sessions) => sessions.get(session_id)
-                    .map(|session| session.working_directory.clone()),
-                Err(error) => return internal_error_batch(request.id, &error),
-            };
-            let Some(working_directory) = working_directory else {
-                return error_batch(
-                    request.id,
-                    ProtocolErrorCode::NotFound,
-                    "Session was not found",
-                );
-            };
-            let requested = request
-                .params
-                .entry("cwd".to_owned())
-                .or_insert_with(|| json!(working_directory));
-            let Some(requested) = requested.as_str() else {
-                return error_batch(
-                    request.id,
-                    ProtocolErrorCode::InvalidParams,
-                    "cwd must be a string",
-                );
-            };
-            if !same_filesystem_path(requested, &working_directory) {
-                return error_batch(
-                    request.id,
-                    ProtocolErrorCode::Forbidden,
-                    "Workspace trust can only change the attached session root",
-                );
-            }
-        }
-        let session_active = session_id.as_deref().is_some_and(|session_id| {
-            self.server
-                .lock_sessions()
-                .ok()
-                .and_then(|sessions| {
-                    sessions.get(session_id)
-                        .map(|session| session.active_turn.is_some())
-                })
-                .unwrap_or(false)
-        });
+        let session_active = match self.server.lock_sessions() {
+            Ok(sessions) => sessions
+                .get(&session_id)
+                .is_some_and(|session| session.active_turn.is_some()),
+            Err(error) => return internal_error_batch(request.id, &error),
+        };
         if BACKEND_RESOURCE_METHODS.contains(&request.method.as_str())
             && self.server.resource_backend.is_some()
         {
@@ -3140,45 +3041,11 @@ impl ServerConnection {
                 outbound: Vec::new(),
                 deferred: vec![DeferredWork::ResourceRequest {
                     request_id: request.id,
-                    session_id: session_id.unwrap_or_default(),
+                    session_id,
                     command,
                 }],
                 close_after_flush: false,
             };
-        }
-        if request.method == "workspace/trust/decision" {
-            let session_id = session_id.unwrap_or_default();
-            let mut sessions = match self.server.lock_sessions() {
-                Ok(sessions) => sessions,
-                Err(error) => return internal_error_batch(request.id, &error),
-            };
-            let Some(session) = sessions.get_mut(&session_id) else {
-                return error_batch(
-                    request.id,
-                    ProtocolErrorCode::NotFound,
-                    "Session was not found",
-                );
-            };
-            let result = match self.server.resources.lock() {
-                Ok(mut resources) => {
-                    resources.dispatch(&request.method, &request.params, session_active)
-                }
-                Err(_) => {
-                    return error_batch(
-                        request.id,
-                        ProtocolErrorCode::InternalError,
-                        "Resource state lock is poisoned",
-                    );
-                }
-            };
-            if result.is_ok() {
-                session.intent.trusted = request
-                    .params
-                    .get("decision")
-                    .and_then(Value::as_str)
-                    .is_some_and(|decision| matches!(decision, "trust_repo" | "trust_cwd"));
-            }
-            return resource_result_batch(request.id, result);
         }
         let result = match self.server.resources.lock() {
             Ok(mut resources) => {
@@ -3192,7 +3059,65 @@ impl ServerConnection {
                 );
             }
         };
+        if request.method == "workspace/trust/decision" && result.is_ok() {
+            let trusted = request
+                .params
+                .get("decision")
+                .and_then(Value::as_str)
+                .is_some_and(|decision| matches!(decision, "trust_repo" | "trust_cwd"));
+            match self.server.lock_sessions() {
+                Ok(mut sessions) => {
+                    if let Some(session) = sessions.get_mut(&session_id) {
+                        session.intent.trusted = trusted;
+                    }
+                }
+                Err(error) => return internal_error_batch(request.id, &error),
+            }
+        }
         resource_result_batch(request.id, result)
+    }
+
+    /// Pins a workspace-trust request to the attached session root.
+    ///
+    /// The request may omit `cwd`, in which case the session root is filled in;
+    /// naming any other directory is refused, so a connection cannot grant trust
+    /// outside the workspace it is attached to.
+    fn confine_trust_request(
+        &self,
+        request: &mut ServerRequest,
+        session_id: &str,
+    ) -> Option<DispatchBatch> {
+        let working_directory = match self.server.lock_sessions() {
+            Ok(sessions) => sessions
+                .get(session_id)
+                .map(|session| session.working_directory.clone()),
+            Err(error) => return Some(internal_error_batch(request.id.clone(), &error)),
+        };
+        let Some(working_directory) = working_directory else {
+            return Some(error_batch(
+                request.id.clone(),
+                ProtocolErrorCode::NotFound,
+                "Session was not found",
+            ));
+        };
+        let requested = request
+            .params
+            .entry("cwd".to_owned())
+            .or_insert_with(|| json!(working_directory));
+        let Some(requested) = requested.as_str() else {
+            return Some(error_batch(
+                request.id.clone(),
+                ProtocolErrorCode::InvalidParams,
+                "cwd must be a string",
+            ));
+        };
+        (!same_filesystem_path(requested, &working_directory)).then(|| {
+            error_batch(
+                request.id.clone(),
+                ProtocolErrorCode::Forbidden,
+                "Workspace trust can only change the attached session root",
+            )
+        })
     }
 
     fn mutate_active_turn(
@@ -3443,6 +3368,9 @@ struct SessionStartParams {
     resume: Option<String>,
     #[serde(default, rename = "continue")]
     continue_session: bool,
+    /// Accepted for wire compatibility. The server behaves the same either
+    /// way, so nothing reads it yet.
+    #[allow(dead_code)]
     #[serde(default)]
     headless: bool,
     #[serde(default = "default_history_limit")]
@@ -3546,10 +3474,15 @@ struct TurnSteerParams {
     session_id: String,
     expected_turn_id: String,
     input: Vec<PublicContentBlock>,
+    /// Accepted for wire compatibility. Steering does not create a history
+    /// entry, so none of these three reach the engine yet.
+    #[allow(dead_code)]
     #[serde(default)]
     client_user_message_id: Option<String>,
+    #[allow(dead_code)]
     #[serde(default = "default_true")]
     inject_invoked_skill: bool,
+    #[allow(dead_code)]
     #[serde(default)]
     mention_stats: Option<Value>,
 }
@@ -3561,10 +3494,14 @@ struct ContextInjectParams {
     input: Vec<PublicContentBlock>,
     #[serde(default)]
     as_message: bool,
+    /// Accepted for wire compatibility; injection does not resolve skills or
+    /// mentions yet.
+    #[allow(dead_code)]
     #[serde(default)]
     inject_invoked_skill: bool,
     #[serde(default)]
     client_user_message_id: Option<String>,
+    #[allow(dead_code)]
     #[serde(default)]
     mention_stats: Option<Value>,
 }
@@ -3714,10 +3651,6 @@ fn object(value: Value) -> BTreeMap<String, Value> {
 }
 
 
-fn generated_session_id(sequence: u64) -> String {
-    format!("session-{}-{sequence}", now_millis())
-}
-
 fn now_millis() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -3725,6 +3658,11 @@ fn now_millis() -> u64 {
             u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
         })
 }
+
+fn generated_session_id(sequence: u64) -> String {
+    format!("session-{}-{sequence}", now_millis())
+}
+
 
 #[cfg(test)]
 mod tests {
