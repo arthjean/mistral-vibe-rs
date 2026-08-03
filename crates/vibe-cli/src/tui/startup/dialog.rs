@@ -13,6 +13,9 @@ use vibe_app_server::startup::{
 
 use super::super::session_picker::{SessionDeleteDecision, SessionDeleteState};
 use super::super::terminal::{CrosstermOps, TerminalGuard};
+use super::super::updates::{
+    UPDATE_DIALOG_TITLE, UpdateChoice, UpdatePromptMode, UpdatePromptResult, version_line,
+};
 use super::StartupError;
 use super::session::ResumeResolution;
 
@@ -30,6 +33,7 @@ pub(super) fn run_trust_dialog(
         DialogResult::Abort
         | DialogResult::Continue
         | DialogResult::StartNew
+        | DialogResult::Update(_)
         | DialogResult::Resume(_) => Ok(None),
     }
 }
@@ -40,6 +44,29 @@ pub(super) fn run_location_warning_dialog(warning: &str) -> Result<bool, Startup
         run_dialog(&mut dialog, None)?,
         DialogResult::Continue
     ))
+}
+
+pub(super) fn run_update_dialog(
+    current_version: &str,
+    latest_version: &str,
+    mode: UpdatePromptMode,
+) -> Result<UpdatePromptResult, StartupError> {
+    let mut dialog = StartupDialog::Update {
+        current_version,
+        latest_version,
+        mode,
+        selected: 0,
+    };
+    Ok(match run_dialog(&mut dialog, None)? {
+        DialogResult::Update(UpdateChoice::Update) => UpdatePromptResult::UpdateUnavailable,
+        DialogResult::Update(UpdateChoice::Continue) | DialogResult::Continue => {
+            UpdatePromptResult::Continue
+        }
+        DialogResult::Abort
+        | DialogResult::StartNew
+        | DialogResult::Resume(_)
+        | DialogResult::Trust(_) => UpdatePromptResult::Quit,
+    })
 }
 
 pub(super) fn run_resume_dialog(
@@ -56,9 +83,10 @@ pub(super) fn run_resume_dialog(
     match run_dialog(&mut dialog, Some(host))? {
         DialogResult::Resume(id) => Ok(ResumeResolution::Resume(id)),
         DialogResult::StartNew => Ok(ResumeResolution::StartNew),
-        DialogResult::Abort | DialogResult::Continue | DialogResult::Trust(_) => {
-            Ok(ResumeResolution::Abort)
-        }
+        DialogResult::Abort
+        | DialogResult::Continue
+        | DialogResult::Update(_)
+        | DialogResult::Trust(_) => Ok(ResumeResolution::Abort),
     }
 }
 
@@ -77,6 +105,12 @@ enum StartupDialog<'a> {
     LocationWarning {
         warning: &'a str,
     },
+    Update {
+        current_version: &'a str,
+        latest_version: &'a str,
+        mode: UpdatePromptMode,
+        selected: usize,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,6 +120,7 @@ enum DialogResult {
     StartNew,
     Continue,
     Abort,
+    Update(UpdateChoice),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,6 +252,24 @@ fn reduce_dialog(dialog: &mut StartupDialog<'_>, key: KeyEvent) -> Option<Dialog
                 Some(DialogStep::Complete(DialogResult::Continue))
             }
             KeyCode::Esc | KeyCode::Char('n') => Some(DialogStep::Complete(DialogResult::Abort)),
+            _ => None,
+        },
+        // Reference `UpdatePromptDialog`: only left, right, and Enter act, and
+        // Ctrl+C or Ctrl+Q quits without touching the installed version.
+        StartupDialog::Update { selected, .. } => match key.code {
+            KeyCode::Left => {
+                *selected = (*selected + UpdateChoice::ORDER.len() - 1) % UpdateChoice::ORDER.len();
+                None
+            }
+            KeyCode::Right => {
+                *selected = (*selected + 1) % UpdateChoice::ORDER.len();
+                None
+            }
+            KeyCode::Enter => UpdateChoice::ORDER
+                .get(*selected)
+                .copied()
+                .map(DialogResult::Update)
+                .map(DialogStep::Complete),
             _ => None,
         },
     }
@@ -351,6 +404,31 @@ fn draw_startup_dialog(frame: &mut ratatui::Frame<'_>, dialog: &StartupDialog<'_
             ],
             "Enter/y continue  n/Esc/Ctrl+C abort",
         ),
+        StartupDialog::Update {
+            current_version,
+            latest_version,
+            mode,
+            selected,
+        } => {
+            let mut lines = vec![
+                Line::from(UPDATE_DIALOG_TITLE),
+                Line::from(version_line(current_version, latest_version)),
+                Line::from(""),
+            ];
+            lines.extend(
+                UpdateChoice::ORDER
+                    .iter()
+                    .enumerate()
+                    .map(|(index, choice)| {
+                        selected_line(index, *selected, choice.label(*mode).to_owned())
+                    }),
+            );
+            (
+                " Update available ",
+                lines,
+                "Left/Right navigate  Enter select  Ctrl+C quit",
+            )
+        }
     };
     frame.render_widget(
         Paragraph::new(Text::from(lines))

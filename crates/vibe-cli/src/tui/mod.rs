@@ -38,6 +38,7 @@ mod switching;
 pub mod terminal;
 pub mod transcript;
 pub mod transcript_view;
+pub mod updates;
 mod voice;
 mod workflow;
 
@@ -209,6 +210,7 @@ struct InteractiveRuntime {
     pending_switch: Option<switching::SwitchRequest>,
     telemetry: Option<Arc<CliTelemetryObserver>>,
     voice: VoiceManager,
+    update_store: vibe_core::updates::UpdateCacheStore,
 }
 
 #[derive(Debug, Clone)]
@@ -485,6 +487,19 @@ pub async fn run_interactive(
     let release3 = startup_host
         .into_release3(arguments.trust)
         .map_err(startup::StartupError::from)?;
+    if !startup::resolve_startup_update_prompt(
+        &arguments,
+        &working_directory,
+        &release3,
+        env!("CARGO_PKG_VERSION"),
+        &mut std::io::stdout().lock(),
+    )? {
+        return Ok(InteractiveExit {
+            session_started: false,
+            initialization_error: None,
+        });
+    }
+    let update_checks_enabled = startup::update_checks_enabled(&release3);
     let fallback_banner = banner_metrics_from_release3(&release3, &arguments, &working_directory);
     let mut runtime = match initial_credential {
         Some(credential) => Some(start_runtime(
@@ -523,6 +538,18 @@ pub async fn run_interactive(
             "Upgrade discovery is unavailable in this build; the current session can continue",
         );
     }
+    announce_release_notes(&arguments, &working_directory, &mut state);
+    // Reference `_schedule_update_notification`: refresh the cache for the next
+    // startup without rendering anything or blocking input.
+    let update_check = update_checks_enabled
+        .then(startup::production_update_gateway)
+        .flatten()
+        .map(|gateway| {
+            let store = startup::update_cache_store(&arguments, &working_directory);
+            tokio::spawn(async move {
+                startup::refresh_update_cache(&gateway, &store, env!("CARGO_PKG_VERSION")).await;
+            })
+        });
     let mut controls = ControlState::new(session_id);
     if let Some(runtime) = runtime.as_mut() {
         sync_active_callbacks(runtime, &mut state, &mut controls);
@@ -963,6 +990,10 @@ pub async fn run_interactive(
         .await
         .map_err(CliError::Terminal);
     path_normalization.shutdown();
+    // A discovery still in flight never delays the exit the operator asked for.
+    if let Some(update_check) = update_check {
+        update_check.abort();
+    }
     let telemetry = runtime
         .as_ref()
         .and_then(|runtime| runtime.telemetry.clone());
@@ -2228,14 +2259,14 @@ async fn handle_runtime_command(
                 .unwrap_or_default();
             update_theme(runtime, value, None, state, theme);
         }
-        CommandId::Update => push_local_notice(
-            state,
-            &format!(
-                "Mistral Vibe {} is installed. Update discovery is unavailable in this build; the current session remains usable.",
-                env!("CARGO_PKG_VERSION")
-            ),
-            EntryStatus::Completed,
-        ),
+        CommandId::Update => {
+            let report = run_update_discovery(runtime).await;
+            let status = match report {
+                updates::UpdateCommandReport::Failed { .. } => EntryStatus::Failed,
+                _ => EntryStatus::Completed,
+            };
+            push_local_notice(state, report.message(), status);
+        }
         CommandId::Trust => {
             if call_runtime_async(
                 runtime,
@@ -2267,6 +2298,45 @@ async fn handle_runtime_command(
         _ => return false,
     }
     true
+}
+
+/// Reference `_run_check_upgrade`, reported inside the session: the forced check
+/// reuses the same cache and messages as `--check-upgrade`.
+async fn run_update_discovery(runtime: &InteractiveRuntime) -> updates::UpdateCommandReport {
+    let version = env!("CARGO_PKG_VERSION");
+    let Some(gateway) = startup::production_update_gateway() else {
+        return updates::UpdateCommandReport::Disabled {
+            message: updates::check_failed_message("the update client is unavailable"),
+        };
+    };
+    let result = vibe_core::updates::get_update_if_available(
+        &gateway,
+        &runtime.update_store,
+        version,
+        startup::unix_seconds(),
+        true,
+    )
+    .await;
+    updates::classify_update_command(result, version)
+}
+
+/// Reference `_check_and_show_whats_new`: release notes appear once per version,
+/// and the version is marked as seen even when no notes ship.
+fn announce_release_notes(arguments: &Arguments, working_directory: &Path, state: &mut TuiState) {
+    let version = env!("CARGO_PKG_VERSION");
+    let store = startup::update_cache_store(arguments, working_directory);
+    let cache = store.load();
+    if !vibe_core::updates::should_show_whats_new(cache.as_ref(), version) {
+        return;
+    }
+    if let Some(content) = updates::whats_new_content() {
+        push_local_notice(state, content, EntryStatus::Completed);
+    }
+    let seen =
+        vibe_core::updates::mark_version_as_seen(cache.as_ref(), version, startup::unix_seconds());
+    if store.store(&seen).is_err() {
+        state.push_diagnostic("Release notes could not be marked as seen");
+    }
 }
 
 fn call_runtime(
@@ -3253,6 +3323,7 @@ fn start_runtime(
         pending_switch: None,
         telemetry,
         voice,
+        update_store: startup::update_cache_store(arguments, working_directory),
     })
 }
 
@@ -4136,6 +4207,9 @@ mod tests {
                 false,
             )
             .expect("test voice manager"),
+            update_store: vibe_core::updates::UpdateCacheStore::new(
+                &std::env::temp_dir().join("vibe-cli-test-home"),
+            ),
         }
     }
 

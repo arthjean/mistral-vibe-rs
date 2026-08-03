@@ -17,6 +17,23 @@ async fn main() -> ExitCode {
         }
     };
     match invocation {
+        PreparedInvocation::CheckUpgrade(arguments) => {
+            let mut stdout = std::io::stdout().lock();
+            match vibe_cli::tui::startup::run_check_upgrade(
+                &arguments,
+                env!("CARGO_PKG_VERSION"),
+                &mut stdout,
+            )
+            .await
+            {
+                Ok(false) => ExitCode::SUCCESS,
+                Ok(true) => ExitCode::FAILURE,
+                Err(error) => {
+                    eprintln!("{error}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         PreparedInvocation::Interactive(invocation) => {
             let worktree = invocation.workspace.worktree.clone();
             if let Some(worktree) = &worktree {

@@ -3,6 +3,7 @@ mod invocation;
 mod mounted;
 mod session;
 mod trust;
+mod update;
 mod worktree;
 
 use std::path::{Path, PathBuf};
@@ -21,6 +22,11 @@ pub(super) use mounted::{MountedStartup, complete_mounted_startup};
 pub use session::{ResumeResolution, resolve_bare_resume};
 pub use trust::{
     TrustResolution, dangerous_directory_warning, resolve_location_safety, resolve_workspace_trust,
+};
+pub use update::resolve_startup_update_prompt;
+pub use update::{
+    production_update_gateway, refresh_update_cache, run_check_upgrade, unix_seconds,
+    update_cache_store, update_checks_enabled,
 };
 pub use worktree::{CleanupOutcome, LaunchWorkspace, PreparedWorktree, WorktreeCleanupState};
 

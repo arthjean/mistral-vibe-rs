@@ -11,6 +11,8 @@ use super::{LaunchWorkspace, StartupError};
 pub enum InvocationRoute {
     Interactive,
     Programmatic,
+    /// Reference `run_cli`: forced update discovery replaces the session.
+    CheckUpgrade,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -34,23 +36,31 @@ pub struct ProgrammaticInvocation {
 pub enum PreparedInvocation {
     Interactive(InteractiveInvocation),
     Programmatic(ProgrammaticInvocation),
+    CheckUpgrade(Box<Arguments>),
 }
 
 impl PreparedInvocation {
     pub fn prepare(mut arguments: Arguments) -> Result<Self, StartupError> {
+        // The reference resolves forced update discovery before it reads stdin,
+        // prepares a workspace, or loads any project configuration.
+        if InvocationIntent::from_arguments(&arguments).route == InvocationRoute::CheckUpgrade {
+            return Ok(Self::CheckUpgrade(Box::new(arguments)));
+        }
         populate_piped_prompt(&mut arguments)?;
         let workspace = LaunchWorkspace::prepare(&mut arguments)?;
         let intent = InvocationIntent::from_arguments(&arguments);
         Ok(match intent.route {
-            InvocationRoute::Interactive => Self::Interactive(InteractiveInvocation {
-                arguments,
-                workspace,
-                post_mount_action: intent.post_mount_action,
-            }),
             InvocationRoute::Programmatic => Self::Programmatic(ProgrammaticInvocation {
                 arguments,
                 workspace,
             }),
+            InvocationRoute::Interactive | InvocationRoute::CheckUpgrade => {
+                Self::Interactive(InteractiveInvocation {
+                    arguments,
+                    workspace,
+                    post_mount_action: intent.post_mount_action,
+                })
+            }
         })
     }
 
@@ -59,6 +69,7 @@ impl PreparedInvocation {
         match self {
             Self::Interactive(_) => InvocationRoute::Interactive,
             Self::Programmatic(_) => InvocationRoute::Programmatic,
+            Self::CheckUpgrade(_) => InvocationRoute::CheckUpgrade,
         }
     }
 }
@@ -71,6 +82,13 @@ struct InvocationIntent {
 
 impl InvocationIntent {
     fn from_arguments(arguments: &Arguments) -> Self {
+        // Reference `run_cli` runs onboarding before update discovery.
+        if arguments.check_upgrade && !arguments.setup {
+            return Self {
+                route: InvocationRoute::CheckUpgrade,
+                post_mount_action: None,
+            };
+        }
         if arguments.prompt.is_some() {
             return Self {
                 route: InvocationRoute::Programmatic,
