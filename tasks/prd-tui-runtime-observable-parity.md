@@ -507,9 +507,9 @@ Close update, notification, narration, theme, suspend, and exit-contract gaps wi
 
 **Acceptance Criteria:**
 
-- [ ] Given `--check-upgrade`, when discovery resolves, then Rust reports current or available version through the reference prompt and exits without starting a session.
-- [ ] Given background discovery or unseen release notes, when the TUI settles, then cached and fresh state, current/latest version, What's New message, dismissal, and `/update` affordance match Python without blocking input.
-- [ ] Given offline operation, timeout, malformed version, corrupt cache, gateway failure, dismissed or current version, or update-command failure, when handled, then startup remains usable and no stale or invalid version becomes authoritative.
+- [x] Given `--check-upgrade`, when discovery resolves, then Rust reports current or available version through the reference prompt and exits without starting a session.
+- [x] Given background discovery or unseen release notes, when the TUI settles, then cached and fresh state, current/latest version, What's New message, dismissal, and `/update` affordance match Python without blocking input.
+- [x] Given offline operation, timeout, malformed version, corrupt cache, gateway failure, dismissed or current version, or update-command failure, when handled, then startup remains usable and no stale or invalid version becomes authoritative.
 
 #### US-038: Implement focus-aware notifications and narrator lifecycle
 
@@ -524,9 +524,9 @@ Close update, notification, narration, theme, suspend, and exit-contract gaps wi
 
 **Acceptance Criteria:**
 
-- [ ] Given notifications enabled and focus lost, when a turn completes or requests action, then the reference title, bell, context, throttle, and focus reset effects occur exactly once; focused or disabled states emit none.
-- [ ] Given narrator enabled and an eligible turn lifecycle, when user and assistant events arrive, then Idle, Summarizing, Speaking, stop, cancel, disable, and shutdown behavior matches Python with identity-based late-result rejection.
-- [ ] Given missing focus support, terminal write failure, rapid focus changes, summarizer failure, audio device or permission failure, or shutdown, when handled, then the core turn remains successful, terminal escape state stays valid, and prompts, audio, and secrets do not leak to diagnostics.
+- [x] Given notifications enabled and focus lost, when a turn completes or requests action, then the reference title, bell, context, throttle, and focus reset effects occur exactly once; focused or disabled states emit none.
+- [x] Given narrator enabled and an eligible turn lifecycle, when user and assistant events arrive, then Idle, Summarizing, Speaking, stop, cancel, disable, and shutdown behavior matches Python with identity-based late-result rejection.
+- [x] Given missing focus support, terminal write failure, rapid focus changes, summarizer failure, audio device or permission failure, or shutdown, when handled, then the core turn remains successful, terminal escape state stays valid, and prompts, audio, and secrets do not leak to diagnostics.
 
 #### US-039: Match themes, suspend, exit confirmation, and session summary
 
@@ -541,9 +541,9 @@ Close update, notification, narration, theme, suspend, and exit-contract gaps wi
 
 **Acceptance Criteria:**
 
-- [ ] Given theme selection, when the picker opens, then every supported reference theme is searchable or navigable, previews before confirmation, persists on acceptance, and restores the original theme on cancellation.
-- [ ] Given Unix suspend capability, exit preference, active work, or normal completion, when `Ctrl+Z`, `Ctrl+D`, quit, or host completion occurs, then suspend, confirmation ladder, cleanup, token summary, and resume command match Python.
-- [ ] Given unsupported suspend, terminal failure, summary calculation failure, repeated exit, signal, panic, or cleanup adapter failure, when handled, then no duplicate exit effect occurs and every enabled terminal mode is restored before bounded diagnostics print.
+- [x] Given theme selection, when the picker opens, then every supported reference theme is searchable or navigable, previews before confirmation, persists on acceptance, and restores the original theme on cancellation.
+- [x] Given Unix suspend capability, exit preference, active work, or normal completion, when `Ctrl+Z`, `Ctrl+D`, quit, or host completion occurs, then suspend, confirmation ladder, cleanup, token summary, and resume command match Python.
+- [x] Given unsupported suspend, terminal failure, summary calculation failure, repeated exit, signal, panic, or cleanup adapter failure, when handled, then no duplicate exit effect occurs and every enabled terminal mode is restored before bounded diagnostics print.
 
 ## Functional Requirements
 
@@ -667,7 +667,7 @@ Close update, notification, narration, theme, suspend, and exit-contract gaps wi
 
 - Can the current trust resource construct a new immutable project context after the pre-session decision? Owner: US-020 implementer, due before US-020 leaves TODO. A negative result permits the smallest app-server boundary change backed by the fixture.
 - Which current public resource must change to support MCP OAuth and per-tool toggles? Owner: US-032 implementer, due before implementation. The answer must cite a failing reference trace and keep secrets out of history and diagnostics.
-- Can current audio and model ports express narrator summarization, playback, cancellation, and late-result identity without a new dependency? Owner: US-038 implementer, due before its implementation slice. A negative result requires a separate dependency or boundary decision.
-- Which native terminals form the final focus, title, bell, suspend, opener, and clipboard matrix? Owner: release owner, due before EP-011 completion. Linux PTY remains mandatory; native validation is added only where adapters cannot prove behavior.
+- Can current audio and model ports express narrator summarization, playback, cancellation, and late-result identity without a new dependency? Answered by US-038: summarization, cancellation, and late-result identity reuse the existing `narration/summarize` resource and a local reducer; playback cannot, because this port has no speech transport and the pinned reference synthesizes through the Mistral SDK audio API. The narrator therefore settles after summarizing and reports one bounded notice, recorded as an unavailable dimension in `crates/vibe-cli/tests/runtime-parity/terminal-services-ep011.json`. Restoring spoken output requires a separate speech-transport decision.
+- Which native terminals form the final focus, title, bell, suspend, opener, and clipboard matrix? Owner: release owner, still open after EP-011. Linux PTY now covers focus reporting, the OSC title, suspend, exit, and restoration; `SIGTSTP` delivery itself stays environment-dependent because POSIX discards stop signals in an orphaned process group, so a native terminal check remains the only proof for real job control.
 - Which Python behavior wins after the pinned revision changes? Owner: release owner, due when detected. Default: keep the pin, open a scoped parity update, and never regenerate fixtures silently.
 [/PRD]

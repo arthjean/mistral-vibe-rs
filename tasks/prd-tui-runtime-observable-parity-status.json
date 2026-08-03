@@ -3,7 +3,7 @@
     "file": "tasks/prd-tui-runtime-observable-parity.md",
     "title": "TUI Runtime Observable Parity",
     "created_at": "2026-08-02",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     { "id": "EP-006", "title": "Secure Startup and Invocation", "status": "DONE", "priority": "P0", "stories_total": 4, "stories_done": 4 },
@@ -11,7 +11,7 @@
     { "id": "EP-008", "title": "Reversible Session Management", "status": "DONE", "priority": "P0", "stories_total": 2, "stories_done": 2 },
     { "id": "EP-009", "title": "Configuration and External Integrations", "status": "DONE", "priority": "P0", "stories_total": 3, "stories_done": 3 },
     { "id": "EP-010", "title": "Semantic Transcript and Observability", "status": "DONE", "priority": "P0", "stories_total": 3, "stories_done": 3 },
-    { "id": "EP-011", "title": "Terminal Services and Lifecycle", "status": "TODO", "priority": "P1", "stories_total": 3, "stories_done": 0 }
+    { "id": "EP-011", "title": "Terminal Services and Lifecycle", "status": "DONE", "priority": "P1", "stories_total": 3, "stories_done": 3 }
   ],
   "stories": [
     { "id": "US-020", "title": "Gate startup on workspace trust and location safety", "epic": "EP-006", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-003"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },
@@ -31,8 +31,8 @@
     { "id": "US-034", "title": "Render semantic history and authoritative terminal statuses", "epic": "EP-010", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-028"], "started_at": "2026-08-03", "completed_at": "2026-08-03", "reviewed_at": "2026-08-03" },
     { "id": "US-035", "title": "Render actionable errors, live activity, and live context usage", "epic": "EP-010", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-034"], "started_at": "2026-08-03", "completed_at": "2026-08-03", "reviewed_at": "2026-08-03" },
     { "id": "US-036", "title": "Match transcript interaction and live debug diagnostics", "epic": "EP-010", "status": "DONE", "priority": "P1", "size": "L", "blocked_by": ["US-034", "US-005"], "started_at": "2026-08-03", "completed_at": "2026-08-03", "reviewed_at": "2026-08-03" },
-    { "id": "US-037", "title": "Implement update discovery and What's New behavior", "epic": "EP-011", "status": "TODO", "priority": "P1", "size": "M", "blocked_by": ["US-023", "US-034"], "started_at": null, "completed_at": null, "reviewed_at": null },
-    { "id": "US-038", "title": "Implement focus-aware notifications and narrator lifecycle", "epic": "EP-011", "status": "TODO", "priority": "P1", "size": "L", "blocked_by": ["US-028", "US-034"], "started_at": null, "completed_at": null, "reviewed_at": null },
-    { "id": "US-039", "title": "Match themes, suspend, exit confirmation, and session summary", "epic": "EP-011", "status": "TODO", "priority": "P2", "size": "L", "blocked_by": ["US-031", "US-038"], "started_at": null, "completed_at": null, "reviewed_at": null }
+    { "id": "US-037", "title": "Implement update discovery and What's New behavior", "epic": "EP-011", "status": "DONE", "priority": "P1", "size": "M", "blocked_by": ["US-023", "US-034"], "started_at": "2026-08-03", "completed_at": "2026-08-03", "reviewed_at": "2026-08-03" },
+    { "id": "US-038", "title": "Implement focus-aware notifications and narrator lifecycle", "epic": "EP-011", "status": "DONE", "priority": "P1", "size": "L", "blocked_by": ["US-028", "US-034"], "started_at": "2026-08-03", "completed_at": "2026-08-03", "reviewed_at": "2026-08-03" },
+    { "id": "US-039", "title": "Match themes, suspend, exit confirmation, and session summary", "epic": "EP-011", "status": "DONE", "priority": "P2", "size": "L", "blocked_by": ["US-031", "US-038"], "started_at": "2026-08-03", "completed_at": "2026-08-03", "reviewed_at": "2026-08-03" }
   ]
 }
