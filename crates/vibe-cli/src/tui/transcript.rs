@@ -250,6 +250,24 @@ pub fn region(entry: &TranscriptEntry) -> Region {
     }
 }
 
+/// Reference loading status: the newest unsettled effect names what the
+/// runtime is doing, reasoning reads as thinking, and anything else falls back
+/// to the default generation status.
+#[must_use]
+pub fn activity_status(entries: &[TranscriptEntry]) -> String {
+    for entry in entries.iter().rev() {
+        if entry.status.is_terminal() {
+            continue;
+        }
+        match region(entry) {
+            Region::Effect(effect) => return effect.kind.status_text().to_owned(),
+            Region::Reasoning => return "Thinking".to_owned(),
+            _ => {}
+        }
+    }
+    super::diagnostics::DEFAULT_ACTIVITY_STATUS.to_owned()
+}
+
 /// Reference `_entry_keeps_tool_group`: effects other than writes and edits,
 /// reasoning, and hook notices stay inside the current tool group.
 #[must_use]

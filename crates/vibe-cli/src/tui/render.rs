@@ -515,17 +515,10 @@ fn activity_text(state: &TuiState) -> Option<(String, bool)> {
     if !state.connected || state.resync_required {
         return Some(("! Connection lost".to_owned(), true));
     }
-    state.waiting.then(|| {
-        let queued = state.prompt_queue.len();
-        (
-            if queued == 0 {
-                "⠋ Working…".to_owned()
-            } else {
-                format!("⠋ Working… · {queued} queued")
-            },
-            false,
-        )
-    })
+    state
+        .activity
+        .as_ref()
+        .map(|activity| (activity.line(), false))
 }
 
 fn draw_activity(frame: &mut Frame<'_>, area: Rect, state: &TuiState, theme: ResolvedTheme) {
@@ -569,7 +562,9 @@ fn draw_footer(
     );
 }
 
-fn format_context_progress(tokens: TokenState) -> String {
+/// Reference `ContextProgress.watch_tokens`.
+#[must_use]
+pub fn format_context_progress(tokens: TokenState) -> String {
     if tokens.max_tokens == 0 {
         return String::new();
     }

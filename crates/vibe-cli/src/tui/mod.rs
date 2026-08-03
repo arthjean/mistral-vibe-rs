@@ -9,6 +9,7 @@ pub mod completion;
 mod composer;
 mod composer_layout;
 pub mod controls;
+pub mod diagnostics;
 mod external_action;
 mod feedback;
 pub mod history;
@@ -642,6 +643,7 @@ pub async fn run_interactive(
                 });
             plan_review_monitor.sync(plan_path, &mut state).await;
             sync_callback_presentation(&controls, &mut state, now_ms);
+            state.sync_activity(now_ms);
             if !path_normalization.has_pending()
                 && let Some(key) = deferred_enter.take()
             {
@@ -3521,7 +3523,7 @@ async fn finish_active(
                     .fail_reserved(&reservation, &error.to_string())?;
                 controls.complete_turn(&turn_id, "Turn failed");
                 state.waiting = false;
-                state.push_diagnostic(error.to_string());
+                report_turn_failure(state, &error);
                 false
             }
         }
@@ -3558,6 +3560,42 @@ async fn finish_active(
         feedback::maybe_activate(runtime, input, state).await;
     }
     Ok(())
+}
+
+/// Renders a failed turn the way the reference does: one classified message in
+/// the transcript, never the raw driver payload, and never twice in a row.
+fn report_turn_failure(state: &mut TuiState, error: &DriverError) {
+    let classified = diagnostics::classify(
+        diagnostics::driver_error_code(error),
+        &error.to_string(),
+        &Value::Null,
+        false,
+    );
+    if !state.errors.record(&classified) {
+        return;
+    }
+    let status = match classified.severity {
+        diagnostics::Severity::Notice => EntryStatus::Cancelled,
+        diagnostics::Severity::Warning | diagnostics::Severity::Error => EntryStatus::Failed,
+    };
+    let level = match classified.severity {
+        diagnostics::Severity::Notice => "info",
+        diagnostics::Severity::Warning => "warning",
+        diagnostics::Severity::Error => "error",
+    };
+    let entry = TranscriptEntry {
+        id: String::new(),
+        revision: 1,
+        kind: TranscriptKind::Notice,
+        text: classified.message,
+        status,
+        details: json!({
+            "type": "notice",
+            "level": level,
+            "detail": {"kind": "turn_failed", "class": classified.class.label()},
+        }),
+    };
+    state.append_local(entry);
 }
 
 fn settle_cancelled_reservation(
@@ -3779,6 +3817,80 @@ mod tests {
         ));
         assert_eq!(live, Some(4_096));
         assert_eq!(state.watermark, 1, "usage must not consume the sequence");
+    }
+
+    #[test]
+    fn activity_reports_the_running_effect_and_clears_the_moment_work_settles() {
+        let mut state = TuiState::new("session");
+        state.waiting = true;
+        state.entries.push(TranscriptEntry {
+            id: "effect".to_owned(),
+            revision: 1,
+            kind: TranscriptKind::Effect,
+            text: "read".to_owned(),
+            status: EntryStatus::Streaming,
+            details: json!({
+                "type": "effect",
+                "detail": {"toolName": "read_file", "arguments": {"file_path": "a.rs"}},
+                "state": {"status": "running", "outputText": ""},
+            }),
+        });
+        state.sync_activity(1_000);
+        let activity = state.activity.clone().expect("an active turn reports work");
+        assert_eq!(activity.status, "Reading file");
+        assert_eq!(activity.elapsed_seconds, 0);
+
+        state.sync_activity(4_000);
+        let activity = state.activity.clone().expect("the turn is still active");
+        assert_eq!(activity.elapsed_seconds, 3);
+        assert_eq!(activity.hint(), "(3s Esc/Ctrl+C to interrupt)");
+
+        state.waiting = false;
+        state.sync_activity(9_000);
+        assert_eq!(state.activity, None, "a settled turn leaves no indicator");
+
+        // The next turn restarts its own clock instead of resuming the old one.
+        state.waiting = true;
+        state.entries.clear();
+        state.sync_activity(20_000);
+        let activity = state.activity.clone().expect("the next turn reports work");
+        assert_eq!(activity.elapsed_seconds, 0);
+        assert_eq!(activity.status, diagnostics::DEFAULT_ACTIVITY_STATUS);
+    }
+
+    #[test]
+    fn a_failed_turn_reports_one_classified_message_without_the_driver_payload() {
+        let mut state = TuiState::new("session");
+        let refusal = DriverError::Provider(vibe_core::provider::ProviderError::Refusal(
+            "internal policy token 42".to_owned(),
+        ));
+        report_turn_failure(&mut state, &refusal);
+        report_turn_failure(&mut state, &refusal);
+        assert_eq!(
+            state.entries.len(),
+            1,
+            "one turn must not report the same failure twice"
+        );
+        let entry = &state.entries[0];
+        assert_eq!(entry.kind, TranscriptKind::Notice);
+        assert_eq!(entry.status, EntryStatus::Failed);
+        assert!(entry.text.starts_with("The model declined to respond"));
+        assert!(!entry.text.contains("internal policy token 42"));
+
+        report_turn_failure(
+            &mut state,
+            &DriverError::Transport(vibe_core::provider::TransportError::Connection(
+                "reset".to_owned(),
+            )),
+        );
+        assert_eq!(state.entries.len(), 2, "a distinct failure stays visible");
+        assert_eq!(state.entries[1].details["detail"]["class"], "transport");
+
+        // The next turn starts from a clean slate, so a repeat is real news.
+        state.waiting = true;
+        state.sync_activity(0);
+        report_turn_failure(&mut state, &refusal);
+        assert_eq!(state.entries.len(), 3, "a later turn reports again");
     }
 
     #[test]

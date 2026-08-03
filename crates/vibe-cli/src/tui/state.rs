@@ -7,6 +7,7 @@ use thiserror::Error;
 use tokio::sync::{mpsc, watch};
 
 use super::controls::CallbackPresentation;
+use super::diagnostics::{Activity, ErrorLog};
 use super::interaction::{Overlay, PromptQueue, QuitConfirmation};
 use super::rewind::RewindState;
 use super::session_picker::SessionDeleteState;
@@ -155,6 +156,11 @@ pub struct TuiState {
     pub callback: Option<CallbackPresentation>,
     pub callback_scroll_offset: isize,
     pub plan_review: Option<PlanReviewState>,
+    /// Live turn progress, refreshed on every loop tick while work is active.
+    pub activity: Option<Activity>,
+    /// Failures already surfaced, so a retried turn cannot repeat itself.
+    pub errors: ErrorLog,
+    turn_started_ms: Option<u64>,
     scroll_line_limit: usize,
     diagnostics: VecDeque<String>,
     entry_indexes: BTreeMap<String, usize>,
@@ -190,6 +196,9 @@ impl TuiState {
             callback: None,
             callback_scroll_offset: 0,
             plan_review: None,
+            activity: None,
+            errors: ErrorLog::default(),
+            turn_started_ms: None,
             scroll_line_limit: 0,
             diagnostics: VecDeque::new(),
             entry_indexes: BTreeMap::new(),
@@ -292,6 +301,27 @@ impl TuiState {
 
     pub fn resize(&mut self, width: u16, height: u16) {
         self.viewport = (width.max(1), height.max(1));
+    }
+
+    /// Refreshes the live turn progress. Idle work clears it immediately, so a
+    /// stale indicator can never outlive the turn it described.
+    pub fn sync_activity(&mut self, now_ms: u64) {
+        if !self.waiting {
+            self.turn_started_ms = None;
+            self.activity = None;
+            return;
+        }
+        if self.turn_started_ms.is_none() {
+            // Failure muting is scoped to one turn: the same failure repeated
+            // by a later turn is new information and must be shown again.
+            self.errors.clear();
+        }
+        let started = *self.turn_started_ms.get_or_insert(now_ms);
+        self.activity = Some(Activity::new(
+            super::transcript::activity_status(&self.entries),
+            now_ms.saturating_sub(started) / 1_000,
+            self.prompt_queue.len(),
+        ));
     }
 
     pub fn scroll_up(&mut self, rows: usize) -> bool {
