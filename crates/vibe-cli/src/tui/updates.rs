@@ -125,46 +125,6 @@ pub enum UpdatePromptResult {
     Quit,
 }
 
-/// The in-session `/update` report, which never blocks the composer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum UpdateCommandReport {
-    UpToDate { message: String },
-    Available { message: String },
-    Failed { message: String },
-    Disabled { message: String },
-}
-
-impl UpdateCommandReport {
-    #[must_use]
-    pub fn message(&self) -> &str {
-        match self {
-            Self::UpToDate { message }
-            | Self::Available { message }
-            | Self::Failed { message }
-            | Self::Disabled { message } => message,
-        }
-    }
-}
-
-/// Reference `_run_check_upgrade` messages, reported inside the session because
-/// the pinned client has no in-session update command.
-#[must_use]
-pub fn classify_update_command(
-    result: Result<Option<UpdateAvailability>, UpdateError>,
-    current_version: &str,
-) -> UpdateCommandReport {
-    match classify_check_upgrade(result, current_version) {
-        CheckUpgradeOutcome::UpToDate { message } => UpdateCommandReport::UpToDate { message },
-        CheckUpgradeOutcome::Prompt { latest_version } => UpdateCommandReport::Available {
-            message: format!(
-                "{UPDATE_DIALOG_TITLE}: {}",
-                version_line(current_version, &latest_version)
-            ),
-        },
-        CheckUpgradeOutcome::Failed { message } => UpdateCommandReport::Failed { message },
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use vibe_core::updates::UpdateAvailability;
@@ -235,25 +195,5 @@ mod tests {
         let content = whats_new_content().expect("release notes ship with the binary");
         assert!(content.starts_with("# What's new in v"));
         assert!(!content.ends_with('\n'));
-    }
-
-    #[test]
-    fn in_session_update_reports_stay_non_blocking() {
-        assert_eq!(
-            classify_update_command(
-                Ok(Some(UpdateAvailability {
-                    latest_version: "2.24.0".to_owned(),
-                    should_notify: true,
-                })),
-                "2.23.1"
-            ),
-            UpdateCommandReport::Available {
-                message: "A new Vibe release is available: 2.23.1 → 2.24.0".to_owned()
-            }
-        );
-        assert_eq!(
-            classify_update_command(Ok(None), "2.23.1").message(),
-            "Vibe is already up to date (2.23.1)."
-        );
     }
 }

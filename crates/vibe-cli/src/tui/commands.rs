@@ -1,5 +1,11 @@
 use std::collections::BTreeSet;
 
+/// Every identifier a submitted line can parse into.
+///
+/// The variants and [`COMMANDS`] are one closed set: a variant absent from the
+/// table can never be produced by [`parse_command_in`], so its handlers would be
+/// unreachable. [`CommandId::ALL`] and `command_ids_and_definitions_agree` keep
+/// the two in step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CommandId {
     Help,
@@ -19,7 +25,6 @@ pub enum CommandId {
     RemoteProject,
     ProxySetup,
     Resume,
-    Continue,
     Rename,
     Mcp,
     Voice,
@@ -29,24 +34,39 @@ pub enum CommandId {
     Loop,
     DataRetention,
     Theme,
-    Approve,
-    Deny,
-    Fork,
-    History,
-    Setup,
-    Settings,
-    Trust,
-    Update,
 }
 
 impl CommandId {
-    #[must_use]
-    pub const fn changes_session_projection(self) -> bool {
-        matches!(
-            self,
-            Self::Clear | Self::Compact | Self::Continue | Self::Fork | Self::Resume | Self::Rewind
-        )
-    }
+    /// Every variant, in declaration order. Adding a variant without extending
+    /// this list fails `command_ids_and_definitions_agree`.
+    pub const ALL: &'static [Self] = &[
+        Self::Help,
+        Self::Config,
+        Self::Model,
+        Self::Thinking,
+        Self::Reload,
+        Self::Clear,
+        Self::Copy,
+        Self::PasteImage,
+        Self::Log,
+        Self::Debug,
+        Self::Compact,
+        Self::Exit,
+        Self::Status,
+        Self::Teleport,
+        Self::RemoteProject,
+        Self::ProxySetup,
+        Self::Resume,
+        Self::Rename,
+        Self::Mcp,
+        Self::Voice,
+        Self::InstallLean,
+        Self::UninstallLean,
+        Self::Rewind,
+        Self::Loop,
+        Self::DataRetention,
+        Self::Theme,
+    ];
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,11 +136,8 @@ pub struct ParsedCommand<'a> {
     pub arguments: &'a str,
 }
 
-/// Commands exposed by the pinned Python reference.
-///
-/// Rust-only operational IDs remain in [`CommandId`] for internal actions,
-/// but are deliberately absent here so they cannot be discovered or parsed
-/// through the parity surface.
+/// Commands exposed by the pinned Python reference, and the sole source of
+/// parseable aliases. Every [`CommandId`] appears here exactly once.
 pub const COMMANDS: &[CommandDefinition] = &[
     command(CommandId::Help, "help", &["/help"], "Show help message"),
     command(
@@ -346,5 +363,30 @@ pub fn command_available_in(command: &CommandDefinition, context: &CommandContex
         CommandId::PasteImage => context.clipboard_image_supported,
         CommandId::Teleport | CommandId::RemoteProject => context.vibe_code_enabled,
         _ => true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A [`CommandId`] absent from [`COMMANDS`] can never be parsed, so every
+    /// handler behind it would be dead code.
+    #[test]
+    fn command_ids_and_definitions_agree() {
+        for id in CommandId::ALL {
+            assert!(
+                COMMANDS.iter().any(|command| command.id == *id),
+                "{id:?} has no alias, so its handlers are unreachable"
+            );
+        }
+        for command in COMMANDS {
+            assert!(
+                CommandId::ALL.contains(&command.id),
+                "{:?} is missing from CommandId::ALL",
+                command.id
+            );
+        }
+        assert_eq!(CommandId::ALL.len(), COMMANDS.len());
     }
 }

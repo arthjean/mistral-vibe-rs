@@ -91,6 +91,7 @@ mod tests {
     use std::fs;
 
     use super::*;
+    use crate::tui::chat_input;
     use crate::tui::path_normalization::PathNormalizationManager;
 
     #[tokio::test]
@@ -137,5 +138,52 @@ mod tests {
             input.editor().text(),
             format!("@'{}'", image.to_string_lossy())
         );
+    }
+
+    #[test]
+    fn production_adapter_routes_keys_completion_and_mouse_through_chat_input_state() {
+        let temporary = tempfile::tempdir().expect("workspace");
+        let mut state = TuiState::new("session");
+        let mut input = ChatInputState::new();
+
+        for character in "select me".chars() {
+            let event =
+                normalized_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE))
+                    .expect("character is normalised");
+            apply_event(&mut input, event, temporary.path(), &mut state);
+        }
+        apply_event(
+            &mut input,
+            InputEvent::Mouse {
+                x: 2,
+                y: 0,
+                extend_selection: false,
+            },
+            temporary.path(),
+            &mut state,
+        );
+        apply_event(
+            &mut input,
+            InputEvent::Mouse {
+                x: 7,
+                y: 0,
+                extend_selection: true,
+            },
+            temporary.path(),
+            &mut state,
+        );
+        assert_eq!(input.observe().selection, Some([2, 7]));
+
+        let mut external = ChatInputState::new();
+        apply_event(
+            &mut external,
+            InputEvent::ExternalEditor {
+                text: Some("/c".to_owned()),
+            },
+            temporary.path(),
+            &mut state,
+        );
+        assert_eq!(external.mode(), chat_input::InputMode::Prompt);
+        assert!(external.completion().view().is_some());
     }
 }

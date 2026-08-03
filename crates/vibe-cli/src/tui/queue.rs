@@ -6,8 +6,9 @@ use serde_json::json;
 use super::clipboard_images::ClipboardImageManager;
 use super::interaction::{QueuedIntent, QueuedIntentKind};
 use super::prompt::{PromptContext, prepare_prompt_for_runtime, start_prompt_with_client_id};
+use super::shell::start_shell;
 use super::state::TuiState;
-use super::{CliError, InteractiveRuntime, start_shell};
+use super::{CliError, InteractiveRuntime};
 
 enum BatchOutcome {
     Complete,

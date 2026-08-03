@@ -7,9 +7,8 @@ use vibe_app_server::client::PublicDispatch;
 use super::cloud_workflow::ProjectSelection;
 use super::interaction::RemoteProjectAction;
 use super::pickers::remote_projects_overlay;
-use super::{
-    EntryStatus, InteractiveRuntime, TuiState, UiOperation, push_local_notice, schedule_ui_call,
-};
+use super::runtime::schedule_ui_call;
+use super::{EntryStatus, InteractiveRuntime, TuiState, UiOperation, push_local_notice};
 
 #[derive(Debug, Clone)]
 pub(in crate::tui) enum ProjectPendingOperation {
@@ -583,8 +582,14 @@ fn with_optional_prompt(mut params: Value, prompt: Option<&str>) -> Value {
 mod tests {
     use std::collections::BTreeMap;
 
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use serde_json::json;
     use vibe_app_server::client::PublicNotification;
 
+    use super::super::interaction::Overlay;
+    use super::super::runtime::interactive_test_runtime;
+    use super::super::state::TuiState;
+    use super::super::{interaction, pickers, workflow};
     use super::*;
 
     #[test]
@@ -611,6 +616,114 @@ mod tests {
         assert_eq!(
             with_optional_prompt(Value::Null, Some("ignored")),
             Value::Null
+        );
+    }
+
+    #[test]
+    fn remote_project_create_draft_survives_failure_and_clears_on_success_or_cancel() {
+        let draft = interaction::RemoteProjectDraft {
+            name: "vibe-rs".to_owned(),
+            default_branch: "main".to_owned(),
+        };
+        let picker = Overlay::new(
+            interaction::OverlayKind::RemoteProjects,
+            "Projects",
+            Vec::new(),
+        );
+        let mut runtime = interactive_test_runtime("remote-project-create");
+        runtime
+            .cloud
+            .configure_project("picker".to_owned())
+            .expect("picker starts");
+        runtime.remote_project_overlay = Some(picker.clone());
+        runtime.remote_project_draft = Some(draft.clone());
+        let mut state = TuiState::new("remote-project-create");
+        let mut create_overlay = pickers::remote_project_create_overlay(&draft);
+        create_overlay.select_by_id("remote-project:create:submit");
+        state.overlay = Some(create_overlay);
+        let mut submitting_runtime = Some(runtime);
+
+        assert!(matches!(
+            workflow::handle_remote_project_create_key(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+                &mut submitting_runtime,
+                &mut state,
+            ),
+            workflow::OverlayKeyResult::Effect(workflow::OverlayEffect::RemoteProject(
+                interaction::RemoteProjectAction::Create { .. }
+            ))
+        ));
+        assert_eq!(
+            submitting_runtime
+                .as_ref()
+                .expect("runtime remains mounted")
+                .remote_project_draft,
+            Some(draft.clone())
+        );
+
+        let mut runtime = interactive_test_runtime("remote-project-create-failure");
+        runtime.remote_project_overlay = Some(picker.clone());
+        runtime.remote_project_draft = Some(draft.clone());
+        state.overlay = Some(pickers::remote_project_create_overlay(&draft));
+        apply_pending_operation(
+            ProjectPendingOperation::Create {
+                working_directory: PathBuf::from("/workspace"),
+                requested_name: draft.name.clone(),
+            },
+            Err("creation failed".to_owned()),
+            &mut runtime,
+            &mut state,
+        );
+        assert_eq!(runtime.remote_project_draft, Some(draft.clone()));
+        assert_eq!(
+            state.overlay.as_ref().map(|overlay| overlay.kind),
+            Some(interaction::OverlayKind::RemoteProjectCreate)
+        );
+
+        runtime
+            .cloud
+            .configure_project("picker".to_owned())
+            .expect("picker restarts");
+        apply_pending_operation(
+            ProjectPendingOperation::Create {
+                working_directory: PathBuf::from("/workspace"),
+                requested_name: draft.name.clone(),
+            },
+            Ok(PublicDispatch {
+                result: BTreeMap::from([(
+                    "project".to_owned(),
+                    json!({"projectId": "project-1", "name": "vibe-rs"}),
+                )]),
+                notifications: Vec::new(),
+            }),
+            &mut runtime,
+            &mut state,
+        );
+        assert!(runtime.remote_project_draft.is_none());
+        assert!(state.overlay.is_none());
+
+        runtime.remote_project_overlay = Some(picker);
+        runtime.remote_project_draft = Some(draft.clone());
+        state.overlay = Some(pickers::remote_project_create_overlay(&draft));
+        let mut runtime = Some(runtime);
+        assert_eq!(
+            workflow::handle_remote_project_create_key(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+                &mut runtime,
+                &mut state,
+            ),
+            workflow::OverlayKeyResult::Handled
+        );
+        assert!(
+            runtime
+                .as_ref()
+                .expect("runtime remains mounted")
+                .remote_project_draft
+                .is_none()
+        );
+        assert_eq!(
+            state.overlay.as_ref().map(|overlay| overlay.kind),
+            Some(interaction::OverlayKind::RemoteProjects)
         );
     }
 }

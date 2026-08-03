@@ -890,6 +890,14 @@ fn settle_open_callback_notices(state: &mut TuiState, status: EntryStatus) {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use vibe_app_server::client::PublicHistoryEntry;
+
+    use super::super::controls::ControlFocus;
+    use super::super::hydration::canonical_session_projection;
+    use super::super::runtime::interactive_test_runtime;
+    use super::super::state::PlanReviewState;
     use super::*;
 
     #[test]
@@ -954,6 +962,205 @@ mod tests {
         assert_eq!(
             pending_callback_from_entry(&entry),
             Err("plan review callback omitted its file path".to_owned())
+        );
+    }
+
+    #[test]
+    fn callback_absence_fails_an_unsettled_notice_closed() {
+        let mut state = TuiState::new("session");
+        state.append_local(TranscriptEntry {
+            id: String::new(),
+            revision: 1,
+            kind: TranscriptKind::Notice,
+            text: "approval pending".to_owned(),
+            status: EntryStatus::Streaming,
+            details: json!({"callbackId": "callback"}),
+        });
+
+        fail_inactive_callback_notices(&mut state, None);
+
+        assert_eq!(state.entries[0].status, EntryStatus::Failed);
+    }
+
+    #[test]
+    fn canonical_multi_question_callbacks_preserve_structure() {
+        let entry = serde_json::from_value::<PublicHistoryEntry>(json!({
+            "type": "callback",
+            "id": "callback-entry",
+            "sessionId": "session",
+            "turnId": "turn",
+            "createdAt": 1,
+            "updatedAt": 1,
+            "generationStatus": "in_progress",
+            "callbackId": "callback-1",
+            "title": "Need input\u{1b}[31m",
+            "detail": {
+                "kind": "user_input",
+                "request": {
+                    "questions": [
+                        {
+                            "header": "Runtime",
+                            "question": "Choose runtimes",
+                            "options": [
+                                {"label": "Rust", "description": "Native"},
+                                {"label": "Python", "description": "Portable"}
+                            ],
+                            "multiSelect": true,
+                            "hideOther": true
+                        },
+                        {
+                            "header": "Constraint",
+                            "question": "Any constraints? \u{4e16}\u{754c}",
+                            "options": [
+                                {"label": "Fast", "description": ""},
+                                {"label": "Small", "description": ""}
+                            ],
+                            "multiSelect": false,
+                            "hideOther": false
+                        }
+                    ],
+                    "footerNote": "All answers are submitted together."
+                }
+            },
+            "state": {"status": "open"}
+        }))
+        .expect("callback fixture");
+        let pending = pending_callback_from_entry(&entry)
+            .expect("callback is valid")
+            .expect("callback is active");
+        let CallbackRequest::UserInput { questions, .. } = &pending.request else {
+            panic!("expected user-input callback");
+        };
+        assert_eq!(questions.len(), 2);
+        assert!(questions[0].multi_select);
+        assert!(
+            pending
+                .prompt
+                .contains("All answers are submitted together.")
+        );
+    }
+
+    #[test]
+    fn plan_approval_fails_closed_until_the_live_file_is_readable_and_nonempty() {
+        let mut state = TuiState::new("session");
+        assert!(plan_approval_error(&state).is_some());
+        state.plan_review = Some(PlanReviewState {
+            path: PathBuf::from("plan.md"),
+            content: String::new(),
+            error: Some("missing".to_owned()),
+        });
+        assert!(plan_approval_error(&state).is_some());
+        state.plan_review = Some(PlanReviewState {
+            path: PathBuf::from("plan.md"),
+            content: "# Ready".to_owned(),
+            error: None,
+        });
+        assert_eq!(plan_approval_error(&state), None);
+    }
+
+    #[tokio::test]
+    async fn plan_callback_stays_open_when_code_mode_cannot_be_committed() {
+        let mut runtime = interactive_test_runtime("plan-settings-failure");
+        runtime.mode = "plan".to_owned();
+        let session_id = runtime.session_id.clone();
+        runtime
+            .service
+            .close_session(&session_id)
+            .await
+            .expect("session closes");
+        let mut state = TuiState::new(&session_id);
+        state.plan_review = Some(PlanReviewState {
+            path: PathBuf::from("plan.md"),
+            content: "# Ready".to_owned(),
+            error: None,
+        });
+        let mut controls = ControlState::new(&session_id);
+        controls.begin_turn("turn").expect("turn begins");
+        let pending = PendingCallback {
+            callback_id: "plan-callback".to_owned(),
+            session_id,
+            turn_id: "turn".to_owned(),
+            prompt: "Approve plan?".to_owned(),
+            request: CallbackRequest::PlanReview {
+                questions: vec![CallbackQuestion {
+                    header: "Plan".to_owned(),
+                    question: "Approve?".to_owned(),
+                    options: vec![CallbackOption {
+                        id: "manual".to_owned(),
+                        label: "Yes, and request approval for edits".to_owned(),
+                        description: String::new(),
+                    }],
+                    allows_free_text: true,
+                    multi_select: false,
+                }],
+                footer_note: None,
+                plan_path: PathBuf::from("plan.md"),
+            },
+        };
+        controls
+            .present_callback(pending.clone())
+            .expect("plan callback presents");
+
+        respond_to_pending_callback(
+            &mut runtime,
+            &mut controls,
+            &pending,
+            CallbackChoice::Option {
+                id: "manual".to_owned(),
+            },
+            &mut state,
+        );
+
+        assert_eq!(runtime.mode, "plan");
+        assert!(controls.contains_callback("plan-callback"));
+        assert!(
+            state
+                .diagnostics()
+                .any(|message| message.contains("Cannot approve the plan"))
+        );
+    }
+
+    #[test]
+    fn committed_callback_driver_error_reconciles_stale_controls() {
+        let mut runtime = interactive_test_runtime("callback-race-session");
+        let session_id = runtime.session_id.clone();
+        let mut state = canonical_session_projection(&mut runtime, &session_id, false)
+            .expect("initial projection");
+        let mut controls = ControlState::new(&session_id);
+        controls.begin_turn("turn").expect("turn begins");
+        controls
+            .present_callback(PendingCallback {
+                callback_id: "committed-callback".to_owned(),
+                session_id,
+                turn_id: "turn".to_owned(),
+                prompt: "Approve?".to_owned(),
+                request: CallbackRequest::Approval {
+                    options: Vec::new(),
+                    effect: CallbackEffect {
+                        tool_name: "test".to_owned(),
+                        summary: String::new(),
+                        content: String::new(),
+                        permissions: Vec::new(),
+                    },
+                },
+            })
+            .expect("local callback presents");
+        assert_eq!(controls.focus, ControlFocus::Callback);
+
+        recover_from_callback_response_error(
+            &mut runtime,
+            &mut controls,
+            &mut state,
+            "committed-callback",
+            "driver failed after commit",
+        );
+
+        assert!(controls.pending_callback().is_none());
+        assert_eq!(controls.focus, ControlFocus::Prompt);
+        assert!(
+            state
+                .diagnostics()
+                .any(|diagnostic| diagnostic.contains("driver failed after commit"))
         );
     }
 }

@@ -99,3 +99,32 @@ pub(super) fn apply_pending(
     }
     let _ = composer.apply(InputEvent::Switching { active: false });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::runtime::interactive_test_runtime;
+    use super::*;
+
+    #[test]
+    fn switching_state_spans_the_scheduler_boundary() {
+        let mut runtime = interactive_test_runtime("switch-session");
+        let mut input = ChatInputState::default();
+        let mut state = TuiState::new("switch-session");
+
+        request(
+            &mut runtime,
+            &mut input,
+            &mut state,
+            SwitchRequest::Agent("default".to_owned()),
+        );
+        assert!(input.switching());
+        assert_eq!(
+            runtime.pending_switch,
+            Some(SwitchRequest::Agent("default".to_owned()))
+        );
+
+        apply_pending(&mut runtime, &mut input, &mut state);
+        assert!(!input.switching());
+        assert!(runtime.pending_switch.is_none());
+    }
+}

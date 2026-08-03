@@ -108,6 +108,9 @@ fn feedback_action(effects: &[InputEffect]) -> Option<FeedbackAction> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::chat_input::{self, InputEvent};
+    use super::super::runtime::interactive_test_runtime;
+    use super::super::state::TuiState;
     use super::*;
 
     #[test]
@@ -116,5 +119,55 @@ mod tests {
             feedback_action(&[InputEffect::FeedbackRating { rating: 3 }]),
             Some(FeedbackAction::Rating(3))
         );
+    }
+
+    #[tokio::test]
+    async fn feedback_activation_and_response_use_the_existing_resource_boundary() {
+        let mut runtime = interactive_test_runtime("feedback-session");
+        let mut input = ChatInputState::default();
+        let mut state = TuiState::new("feedback-session");
+
+        maybe_activate(&mut runtime, &mut input, &mut state).await;
+        assert!(
+            input.feedback_active(),
+            "feedback diagnostics: {:?}",
+            state.diagnostics().collect::<Vec<_>>()
+        );
+        let effects = input.apply(InputEvent::Key {
+            key: chat_input::KeyName::Char,
+            char: Some('2'),
+            mods: Vec::new(),
+        });
+        let mut runtime = Some(runtime);
+        handle_effects(&effects, &mut runtime, &mut input, &mut state).await;
+        assert!(!input.feedback_active());
+        assert_eq!(state.diagnostics().count(), 0);
+
+        maybe_activate(
+            runtime.as_mut().expect("runtime remains available"),
+            &mut input,
+            &mut state,
+        )
+        .await;
+        assert!(!input.feedback_active(), "feedback is not asked twice");
+    }
+
+    #[tokio::test]
+    async fn unavailable_feedback_persistence_exits_transient_state_once() {
+        let mut runtime = None;
+        let mut input = ChatInputState::default();
+        let mut state = TuiState::new("feedback-session");
+        let _ = input.apply(InputEvent::Feedback { active: true });
+
+        handle_effects(
+            &[InputEffect::FeedbackSnooze],
+            &mut runtime,
+            &mut input,
+            &mut state,
+        )
+        .await;
+
+        assert!(!input.feedback_active());
+        assert_eq!(state.diagnostics().count(), 1);
     }
 }

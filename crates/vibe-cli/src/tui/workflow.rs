@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 mod config;
 mod mcp;
 mod overlay;
+mod runtime;
 
 use super::chat_input::ChatInputState;
 use super::clipboard::{SystemClipboard, SystemClipboardPort};
@@ -25,12 +26,11 @@ use super::setup::ResolvedTheme;
 use super::state::{EntryStatus, TranscriptKind, TuiState};
 use super::switching::{self, SwitchRequest};
 use super::{
-    Arguments, CliError, InteractiveRuntime, adopt_hydrated_session, call_runtime,
-    metadata_session_id, parse_runtime_skills, push_local_notice, refresh_server_banner_metrics,
-    sync_runtime_intent, unix_millis,
+    Arguments, InteractiveRuntime, adopt_hydrated_session, call_runtime, metadata_session_id,
+    parse_runtime_skills, push_local_notice, refresh_server_banner_metrics, sync_runtime_intent,
+    unix_millis,
 };
 pub(in crate::tui) use config::apply_render_preferences;
-pub(super) use config::apply_thinking;
 use config::{
     configured_value, reset_config_value, reset_config_value_at, selected_config_target,
     set_config_value, update_proxy_value,
@@ -41,6 +41,7 @@ use mcp::{handle_mcp, refresh_selected_mcp, set_selected_mcp};
 #[cfg(test)]
 pub(in crate::tui) use mcp::{reduce_auth_action, valid_auth_url};
 use overlay::select_overlay_item;
+pub(in crate::tui) use runtime::handle_runtime_command;
 
 const DATA_RETENTION_MESSAGE: &str = "\
 ## Your Data Helps Improve Mistral AI
@@ -55,13 +56,34 @@ pub(super) enum CommandAction {
     RejectedBusy,
     ClipboardImageRequested,
     Exit,
-    Setup,
     Runtime(RuntimeCommand),
 }
 
-pub(super) struct RuntimeCommand {
-    pub id: CommandId,
-    pub arguments: String,
+/// A parsed command whose execution needs the session runtime rather than the
+/// overlay layer. Arguments are carried by the variant that consumes them, so
+/// no handler re-parses a command line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum RuntimeCommand {
+    Clear,
+    Compact(String),
+    Rename(String),
+    Resume(String),
+    Rewind(String),
+    Loop(String),
+    Teleport(String),
+    RemoteProject(String),
+    Model(String),
+    Thinking(String),
+    Theme(String),
+}
+
+impl RuntimeCommand {
+    pub(super) const fn changes_session_projection(&self) -> bool {
+        matches!(
+            self,
+            Self::Clear | Self::Compact(_) | Self::Resume(_) | Self::Rewind(_)
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,99 +100,102 @@ pub(super) enum OverlayKeyResult {
     Effect(OverlayEffect),
 }
 
-impl RuntimeCommand {
-    fn new(id: CommandId, arguments: String) -> Self {
-        Self { id, arguments }
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn dispatch_command(
     command_line: &str,
     arguments: &Arguments,
     working_directory: &Path,
     runtime: &mut Option<InteractiveRuntime>,
     state: &mut TuiState,
-    _controls: &mut ControlState,
     composer: &mut ChatInputState,
-    _theme: &mut ResolvedTheme,
     runtime_busy: bool,
-) -> Result<CommandAction, CliError> {
+) -> CommandAction {
     let command_context = composer.command_context().clone();
     let Some(parsed) = parse_command_in(command_line, &command_context) else {
-        return Ok(CommandAction::Unhandled);
+        return CommandAction::Unhandled;
     };
     let command_id = parsed.id;
     let command_arguments = parsed.arguments.to_owned();
     if runtime_busy {
         state.push_diagnostic("Slash commands cannot be queued while the runtime is busy");
-        return Ok(CommandAction::RejectedBusy);
+        return CommandAction::RejectedBusy;
     }
     match command_id {
-        CommandId::Exit => return Ok(CommandAction::Exit),
-        CommandId::Setup => return Ok(CommandAction::Setup),
+        CommandId::Exit => return CommandAction::Exit,
         CommandId::Help => {
             state.overlay = Some(help_overlay(&command_context));
-            return Ok(CommandAction::Handled);
+            return CommandAction::Handled;
         }
         CommandId::Copy => {
             copy_last_agent_message(state);
-            return Ok(CommandAction::Handled);
+            return CommandAction::Handled;
         }
-        CommandId::PasteImage => {
-            return Ok(CommandAction::ClipboardImageRequested);
-        }
+        CommandId::PasteImage => return CommandAction::ClipboardImageRequested,
         CommandId::DataRetention => {
             push_local_notice(state, DATA_RETENTION_MESSAGE, EntryStatus::Completed);
-            return Ok(CommandAction::Handled);
+            return CommandAction::Handled;
         }
         _ => {}
     }
 
     let Some(runtime) = runtime.as_mut() else {
         state.push_diagnostic("Setup is required before using this command");
-        return Ok(CommandAction::Handled);
+        return CommandAction::Handled;
     };
+    // Commands whose bare form opens a picker and whose argument form is
+    // executed by the runtime layer.
     match command_id {
-        CommandId::Config => {
-            apply_config_command(&command_arguments, runtime, state, composer);
-            Ok(CommandAction::Handled)
+        CommandId::Model if !command_arguments.is_empty() => {
+            return CommandAction::Runtime(RuntimeCommand::Model(command_arguments));
+        }
+        CommandId::Thinking if !command_arguments.is_empty() => {
+            return CommandAction::Runtime(RuntimeCommand::Thinking(command_arguments));
+        }
+        CommandId::Theme if !command_arguments.is_empty() => {
+            return CommandAction::Runtime(RuntimeCommand::Theme(command_arguments));
+        }
+        CommandId::Resume if !command_arguments.is_empty() => {
+            return CommandAction::Runtime(RuntimeCommand::Resume(command_arguments));
+        }
+        CommandId::Rewind if !command_arguments.is_empty() => {
+            return CommandAction::Runtime(RuntimeCommand::Rewind(command_arguments));
+        }
+        _ => {}
+    }
+    match command_id {
+        CommandId::Clear => CommandAction::Runtime(RuntimeCommand::Clear),
+        CommandId::Compact => CommandAction::Runtime(RuntimeCommand::Compact(command_arguments)),
+        CommandId::Rename => CommandAction::Runtime(RuntimeCommand::Rename(command_arguments)),
+        CommandId::Loop => CommandAction::Runtime(RuntimeCommand::Loop(command_arguments)),
+        CommandId::Teleport => CommandAction::Runtime(RuntimeCommand::Teleport(command_arguments)),
+        CommandId::RemoteProject => {
+            CommandAction::Runtime(RuntimeCommand::RemoteProject(command_arguments))
         }
         CommandId::Model => {
-            if command_arguments.is_empty() {
-                show_model(runtime, state);
-                Ok(CommandAction::Handled)
-            } else {
-                Ok(CommandAction::Runtime(RuntimeCommand::new(
-                    CommandId::Settings,
-                    format!("model {command_arguments}"),
-                )))
-            }
+            show_model(runtime, state);
+            CommandAction::Handled
         }
         CommandId::Thinking => {
-            if command_arguments.is_empty() {
-                state.overlay = Some(thinking_overlay(&runtime.thinking));
-                Ok(CommandAction::Handled)
-            } else {
-                Ok(CommandAction::Runtime(RuntimeCommand::new(
-                    CommandId::Settings,
-                    format!("thinking {command_arguments}"),
-                )))
-            }
+            state.overlay = Some(thinking_overlay(&runtime.thinking));
+            CommandAction::Handled
         }
         CommandId::Theme => {
-            if command_arguments.is_empty() {
-                let current = configured_value(runtime, "theme")
-                    .and_then(|value| value.as_str().map(ToOwned::to_owned))
-                    .unwrap_or_else(|| "system".to_owned());
-                state.overlay = Some(theme_overlay(&current));
-                Ok(CommandAction::Handled)
-            } else {
-                Ok(CommandAction::Runtime(RuntimeCommand::new(
-                    CommandId::Theme,
-                    command_arguments,
-                )))
-            }
+            let current = configured_value(runtime, "theme")
+                .and_then(|value| value.as_str().map(ToOwned::to_owned))
+                .unwrap_or_else(|| "system".to_owned());
+            state.overlay = Some(theme_overlay(&current));
+            CommandAction::Handled
+        }
+        CommandId::Resume => {
+            show_sessions(runtime, working_directory, state);
+            CommandAction::Handled
+        }
+        CommandId::Rewind => {
+            show_rewind(runtime, state);
+            CommandAction::Handled
+        }
+        CommandId::Config => {
+            apply_config_command(&command_arguments, runtime, state, composer);
+            CommandAction::Handled
         }
         CommandId::Reload => {
             if call_runtime(runtime, "config/reload", json!({}), state).is_some() {
@@ -198,19 +223,19 @@ pub(super) async fn dispatch_command(
                     EntryStatus::Completed,
                 );
             }
-            Ok(CommandAction::Handled)
+            CommandAction::Handled
         }
         CommandId::Log => {
             show_log_path(arguments, runtime, working_directory, state);
-            Ok(CommandAction::Handled)
+            CommandAction::Handled
         }
         CommandId::Debug => {
             show_debug(runtime, state);
-            Ok(CommandAction::Handled)
+            CommandAction::Handled
         }
         CommandId::Status => {
             show_status(runtime, state);
-            Ok(CommandAction::Handled)
+            CommandAction::Handled
         }
         CommandId::ProxySetup => {
             if command_arguments.is_empty() {
@@ -218,119 +243,56 @@ pub(super) async fn dispatch_command(
             } else {
                 update_proxy_value(&command_arguments, runtime, state);
             }
-            Ok(CommandAction::Handled)
+            CommandAction::Handled
         }
-        CommandId::Resume => {
-            if command_arguments.is_empty() {
-                show_sessions(runtime, working_directory, state);
-                Ok(CommandAction::Handled)
-            } else {
-                Ok(CommandAction::Runtime(RuntimeCommand::new(
-                    CommandId::Resume,
-                    command_arguments,
-                )))
-            }
-        }
-        CommandId::Continue => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Continue,
-            command_arguments,
-        ))),
-        CommandId::Rename => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Rename,
-            command_arguments,
-        ))),
         CommandId::Mcp => {
             handle_mcp(&command_arguments, runtime, state);
-            Ok(CommandAction::Handled)
+            CommandAction::Handled
         }
         CommandId::Voice => {
             show_voice(runtime, state);
-            Ok(CommandAction::Handled)
+            CommandAction::Handled
         }
         CommandId::InstallLean => {
             mutate_lean_agent(runtime, state, true);
-            Ok(CommandAction::Handled)
+            CommandAction::Handled
         }
         CommandId::UninstallLean => {
             mutate_lean_agent(runtime, state, false);
-            Ok(CommandAction::Handled)
+            CommandAction::Handled
         }
-        CommandId::Settings if command_arguments.starts_with("set ") => {
-            set_config_value(&command_arguments[4..], runtime, state);
-            sync_voice_preference(runtime, composer);
-            Ok(CommandAction::Handled)
-        }
-        CommandId::Settings if command_arguments.starts_with("reset ") => {
-            reset_config_value(&command_arguments[6..], runtime, state);
-            sync_voice_preference(runtime, composer);
-            Ok(CommandAction::Handled)
-        }
-        CommandId::Clear => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Clear,
-            command_arguments,
-        ))),
-        CommandId::Compact => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Compact,
-            command_arguments,
-        ))),
-        CommandId::Rewind if command_arguments.is_empty() => {
-            show_rewind(runtime, state);
-            Ok(CommandAction::Handled)
-        }
-        CommandId::Rewind => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Rewind,
-            command_arguments,
-        ))),
-        CommandId::Loop => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Loop,
-            command_arguments,
-        ))),
-        CommandId::Teleport => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Teleport,
-            command_arguments,
-        ))),
-        CommandId::RemoteProject => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::RemoteProject,
-            command_arguments,
-        ))),
-        CommandId::Approve => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Approve,
-            command_arguments,
-        ))),
-        CommandId::Deny => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Deny,
-            command_arguments,
-        ))),
-        CommandId::Fork => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Fork,
-            command_arguments,
-        ))),
-        CommandId::History => {
-            show_sessions(runtime, working_directory, state);
-            Ok(CommandAction::Handled)
-        }
-        CommandId::Settings => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Settings,
-            command_arguments,
-        ))),
-        CommandId::Trust => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Trust,
-            command_arguments,
-        ))),
-        CommandId::Update => Ok(CommandAction::Runtime(RuntimeCommand::new(
-            CommandId::Update,
-            command_arguments,
-        ))),
         CommandId::Exit
-        | CommandId::Setup
         | CommandId::Help
         | CommandId::Copy
         | CommandId::PasteImage
-        | CommandId::DataRetention => Ok(CommandAction::Handled),
+        | CommandId::DataRetention => CommandAction::Handled,
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `/config` opens the browser; `/config set` and `/config reset` write, so the
+/// value editor the overlay prefills is reachable through a parseable alias.
+fn apply_config_command(
+    command_arguments: &str,
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+    composer: &mut ChatInputState,
+) {
+    // A bare subcommand still reaches its own usage message rather than silently
+    // opening the browser.
+    let (subcommand, rest) = command_arguments
+        .split_once(char::is_whitespace)
+        .unwrap_or((command_arguments, ""));
+    match subcommand {
+        "set" => set_config_value(rest, runtime, state),
+        "reset" => reset_config_value(rest, runtime, state),
+        _ => {
+            show_config(runtime, state);
+            return;
+        }
+    }
+    sync_voice_preference(runtime, composer);
+}
+
 pub(super) async fn handle_overlay_key(
     key: KeyEvent,
     runtime: &mut Option<InteractiveRuntime>,
@@ -480,31 +442,6 @@ pub(super) async fn handle_overlay_key(
         _ => {}
     }
     OverlayKeyResult::Handled
-}
-
-/// `/config` opens the browser; `/config set` and `/config reset` write, so the
-/// value editor the overlay prefills is reachable through a parseable alias.
-///
-/// A bare subcommand still reaches its own usage message rather than silently
-/// opening the browser.
-fn apply_config_command(
-    command_arguments: &str,
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-    composer: &mut ChatInputState,
-) {
-    let (subcommand, rest) = command_arguments
-        .split_once(char::is_whitespace)
-        .unwrap_or((command_arguments, ""));
-    match subcommand {
-        "set" => set_config_value(rest, runtime, state),
-        "reset" => reset_config_value(rest, runtime, state),
-        _ => {
-            show_config(runtime, state);
-            return;
-        }
-    }
-    sync_voice_preference(runtime, composer);
 }
 
 /// Reference `on_option_list_option_highlighted`: the highlighted theme previews

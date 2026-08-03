@@ -634,6 +634,9 @@ pub enum MailboxError {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
+    use super::super::diagnostics;
     use super::*;
 
     fn entry(id: &str, revision: u64, text: &str, status: EntryStatus) -> TranscriptEntry {
@@ -951,6 +954,45 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["one", "two", "three", "four"]
         );
+    }
+
+    #[test]
+    fn activity_reports_the_running_effect_and_clears_the_moment_work_settles() {
+        let mut state = TuiState::new("session");
+        state.waiting = true;
+        state.entries.push(TranscriptEntry {
+            id: "effect".to_owned(),
+            revision: 1,
+            kind: TranscriptKind::Effect,
+            text: "read".to_owned(),
+            status: EntryStatus::Streaming,
+            details: json!({
+                "type": "effect",
+                "detail": {"toolName": "read_file", "arguments": {"file_path": "a.rs"}},
+                "state": {"status": "running", "outputText": ""},
+            }),
+        });
+        state.sync_activity(1_000);
+        let activity = state.activity.clone().expect("an active turn reports work");
+        assert_eq!(activity.status, "Reading file");
+        assert_eq!(activity.elapsed_seconds, 0);
+
+        state.sync_activity(4_000);
+        let activity = state.activity.clone().expect("the turn is still active");
+        assert_eq!(activity.elapsed_seconds, 3);
+        assert_eq!(activity.hint(), "(3s Esc/Ctrl+C to interrupt)");
+
+        state.waiting = false;
+        state.sync_activity(9_000);
+        assert_eq!(state.activity, None, "a settled turn leaves no indicator");
+
+        // The next turn restarts its own clock instead of resuming the old one.
+        state.waiting = true;
+        state.entries.clear();
+        state.sync_activity(20_000);
+        let activity = state.activity.clone().expect("the next turn reports work");
+        assert_eq!(activity.elapsed_seconds, 0);
+        assert_eq!(activity.status, diagnostics::DEFAULT_ACTIVITY_STATUS);
     }
 
     #[test]

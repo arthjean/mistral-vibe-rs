@@ -9,10 +9,9 @@ use super::super::interaction::{
     AuthAction, AuthActionKind, IntegrationKind, IntegrationTarget, OverlayAction, OverlayKind,
 };
 use super::super::pickers::{mcp_auth_overlay, mcp_detail_overlay, mcp_overlay};
+use super::super::runtime::{schedule_ui_call, schedule_ui_external};
 use super::super::state::{EntryStatus, TuiState};
-use super::super::{
-    InteractiveRuntime, UiOperation, push_local_notice, schedule_ui_call, schedule_ui_external,
-};
+use super::super::{InteractiveRuntime, UiOperation, push_local_notice};
 use super::map_value;
 
 pub(super) fn handle_mcp(arguments: &str, runtime: &mut InteractiveRuntime, state: &mut TuiState) {
