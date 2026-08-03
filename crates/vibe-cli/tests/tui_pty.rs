@@ -5,6 +5,7 @@
     reason = "PTY integration failures must terminate with their captured terminal transcript"
 )]
 
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -20,6 +21,97 @@ use nix::sys::termios::{LocalFlags, tcgetattr};
 use nix::unistd::Pid;
 use vibe_core::events::ModelMessage;
 use vibe_core::storage::SessionStore;
+
+/// Replays a terminal transcript onto a sparse screen so assertions read what
+/// the operator sees. Only cursor positioning and erasure move content; every
+/// other escape is display state the text assertions do not depend on.
+fn visible_text(transcript: &[u8]) -> String {
+    let text = String::from_utf8_lossy(transcript);
+    let mut screen: BTreeMap<usize, BTreeMap<usize, char>> = BTreeMap::new();
+    let (mut row, mut column) = (1usize, 1usize);
+    let mut characters = text.chars().peekable();
+    while let Some(character) = characters.next() {
+        match character {
+            '\u{1b}' => match characters.next() {
+                Some('[') => {
+                    let mut parameters = String::new();
+                    let mut final_byte = None;
+                    for byte in characters.by_ref() {
+                        if ('\u{40}'..='\u{7e}').contains(&byte) {
+                            final_byte = Some(byte);
+                            break;
+                        }
+                        parameters.push(byte);
+                    }
+                    let numbers = parameters
+                        .trim_start_matches('?')
+                        .split(';')
+                        .map(|value| value.parse::<usize>().unwrap_or(0))
+                        .collect::<Vec<_>>();
+                    match final_byte {
+                        Some('H' | 'f') => {
+                            row = numbers
+                                .first()
+                                .copied()
+                                .filter(|value| *value > 0)
+                                .unwrap_or(1);
+                            column = numbers
+                                .get(1)
+                                .copied()
+                                .filter(|value| *value > 0)
+                                .unwrap_or(1);
+                        }
+                        Some('J') => {
+                            if numbers.first().copied().unwrap_or(0) >= 2 {
+                                screen.clear();
+                            }
+                        }
+                        Some('K') => {
+                            if let Some(line) = screen.get_mut(&row) {
+                                line.retain(|position, _| *position < column);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Some(']') => {
+                    for byte in characters.by_ref() {
+                        if byte == '\u{7}' || byte == '\u{1b}' {
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            },
+            '\n' => {
+                row = row.saturating_add(1);
+                column = 1;
+            }
+            '\r' => column = 1,
+            character if character.is_control() => {}
+            character => {
+                screen.entry(row).or_default().insert(column, character);
+                column = column.saturating_add(1);
+            }
+        }
+    }
+    screen
+        .values()
+        .map(|line| {
+            let mut rendered = String::new();
+            let mut expected = 1usize;
+            for (position, character) in line {
+                for _ in expected..*position {
+                    rendered.push(' ');
+                }
+                rendered.push(*character);
+                expected = position.saturating_add(1);
+            }
+            rendered
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 #[test]
 #[allow(clippy::unwrap_in_result)]
@@ -300,6 +392,37 @@ impl PtyProcess {
         }
     }
 
+    /// Waits for text the terminal has actually painted. Ratatui writes only
+    /// the cells a frame changed, so a rendered phrase is routinely split by
+    /// cursor moves and cannot be matched in the raw byte stream.
+    fn wait_for_visible(&mut self, pattern: &str, timeout: Duration) -> Vec<u8> {
+        let deadline = Instant::now() + timeout;
+        let mut output = Vec::new();
+        while !visible_text(&output).contains(pattern) {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                self.child.kill().expect("timed-out TUI stops");
+                let _ = self.child.wait();
+                panic!(
+                    "PTY output omitted the visible {pattern:?}: {}",
+                    String::from_utf8_lossy(&output)
+                );
+            }
+            match self.receiver.recv_timeout(remaining) {
+                Ok(chunk) => output.extend(chunk),
+                Err(error) => {
+                    self.child.kill().expect("failed TUI stops");
+                    let _ = self.child.wait();
+                    panic!(
+                        "PTY output stopped ({error}) before the visible {pattern:?}: {}",
+                        String::from_utf8_lossy(&output)
+                    );
+                }
+            }
+        }
+        output
+    }
+
     fn wait_for(&mut self, pattern: &[u8], timeout: Duration) -> Vec<u8> {
         let deadline = Instant::now() + timeout;
         let mut output = Vec::new();
@@ -494,18 +617,15 @@ fn positional_prompt_mounts_the_tui_before_dispatch() {
             "hello from startup",
         ],
     );
-    process.wait_for(b"hello from startup", Duration::from_secs(5));
-    let transcript = process.kill();
-    let mounted = transcript
-        .windows(b"\x1b[?1049h".len())
-        .position(|window| window == b"\x1b[?1049h")
-        .expect("TUI mounted");
-    let submitted = transcript
-        .windows(b"hello from startup".len())
-        .position(|window| window == b"hello from startup")
-        .expect("initial prompt rendered");
+    let mounted = process
+        .wait_for(b"\x1b[?1049h", Duration::from_secs(5))
+        .len();
+    let rendered = process
+        .wait_for_visible("hello from startup", Duration::from_secs(5))
+        .len();
+    process.kill();
     assert!(
-        mounted < submitted,
+        mounted <= rendered,
         "prompt appeared before the TUI mounted"
     );
 }
@@ -518,16 +638,13 @@ fn piped_prompt_mounts_before_dispatch_and_keeps_the_tty_interactive() {
     std::fs::create_dir_all(&workspace).expect("workspace");
     std::fs::create_dir_all(&home).expect("home");
     let mut process = PtyProcess::spawn_piped_prompt(&workspace, &home, "hello from piped stdin");
-    let output = process.wait_for(b"hello from piped stdin", Duration::from_secs(5));
-    let mounted = output
-        .windows(b"\x1b[?1049h".len())
-        .position(|window| window == b"\x1b[?1049h")
-        .expect("TUI mounted");
-    let submitted = output
-        .windows(b"hello from piped stdin".len())
-        .position(|window| window == b"hello from piped stdin")
-        .expect("piped prompt rendered");
-    assert!(mounted < submitted, "piped prompt preceded TUI mount");
+    let mounted = process
+        .wait_for(b"\x1b[?1049h", Duration::from_secs(5))
+        .len();
+    let rendered = process
+        .wait_for_visible("hello from piped stdin", Duration::from_secs(5))
+        .len();
+    assert!(mounted <= rendered, "piped prompt preceded TUI mount");
 
     process.write(b"\x04\x04");
     let (status, transcript) = process.wait(Duration::from_secs(3));

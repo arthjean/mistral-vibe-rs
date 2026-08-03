@@ -34,6 +34,7 @@ pub mod startup;
 pub mod state;
 mod switching;
 pub mod terminal;
+pub mod transcript;
 mod voice;
 mod workflow;
 
@@ -3602,7 +3603,7 @@ fn settle_cancelled_reservation(
 fn history_entry(entry: PublicHistoryEntry) -> TranscriptEntry {
     let metadata = entry.metadata().clone();
     let completed = entry.is_completed();
-    let mut details = serde_json::to_value(&entry).unwrap_or(Value::Null);
+    let details = serde_json::to_value(&entry).unwrap_or(Value::Null);
     let (kind, text) = match entry {
         PublicHistoryEntry::Message { role, content, .. } => {
             let kind = match role {
@@ -3620,39 +3621,19 @@ fn history_entry(entry: PublicHistoryEntry) -> TranscriptEntry {
             };
             (TranscriptKind::Reasoning, text)
         }
+        // `details` keeps the canonical entry verbatim: the semantic
+        // presentation is derived from it by `tui::transcript`, so nothing is
+        // flattened or duplicated here.
         PublicHistoryEntry::Effect { title, state, .. } => {
-            let encoded = serde_json::to_value(state).unwrap_or(Value::Null);
-            let output = encoded
-                .get("outputText")
-                .and_then(Value::as_str)
+            let output = serde_json::to_value(state)
+                .ok()
+                .and_then(|encoded| {
+                    encoded
+                        .get("outputText")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned)
+                })
                 .unwrap_or_default();
-            if let Some(object) = details.as_object_mut() {
-                object.insert(
-                    "durationMs".to_owned(),
-                    encoded.get("durationMs").cloned().unwrap_or(Value::Null),
-                );
-                object.insert(
-                    "error".to_owned(),
-                    encoded
-                        .pointer("/error/message")
-                        .cloned()
-                        .unwrap_or(Value::Null),
-                );
-                object.insert(
-                    "presentationKind".to_owned(),
-                    encoded
-                        .pointer("/display/kind")
-                        .cloned()
-                        .unwrap_or(Value::Null),
-                );
-                object.insert(
-                    "diff".to_owned(),
-                    encoded
-                        .pointer("/display/lines")
-                        .cloned()
-                        .unwrap_or(Value::Null),
-                );
-            }
             (
                 TranscriptKind::Effect,
                 if output.is_empty() {
@@ -3671,10 +3652,17 @@ fn history_entry(entry: PublicHistoryEntry) -> TranscriptEntry {
         ),
         PublicHistoryEntry::Notice { message, .. } => (TranscriptKind::Notice, message),
     };
-    let status_name = details.get("status").and_then(Value::as_str);
-    let status = match status_name {
+    // The nested effect or callback state is authoritative: a completed
+    // generation whose effect failed, was cancelled, or was skipped must never
+    // settle as a success.
+    let nested_status = details.pointer("/state/status").and_then(Value::as_str);
+    let status = match nested_status {
         Some("failed") => EntryStatus::Failed,
         Some("cancelled") | Some("expired") => EntryStatus::Cancelled,
+        Some("skipped") => EntryStatus::Skipped,
+        Some("pending") => EntryStatus::Pending,
+        Some("blocked") => EntryStatus::Blocked,
+        Some("running") => EntryStatus::Streaming,
         _ if completed => EntryStatus::Completed,
         _ => EntryStatus::Streaming,
     };

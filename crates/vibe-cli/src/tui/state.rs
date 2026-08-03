@@ -16,16 +16,36 @@ const MAX_DIAGNOSTICS: usize = 100;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntryStatus {
+    Pending,
     Streaming,
+    Blocked,
     Completed,
     Failed,
     Cancelled,
+    Skipped,
 }
 
 impl EntryStatus {
     #[must_use]
     pub fn is_terminal(self) -> bool {
-        matches!(self, Self::Completed | Self::Failed | Self::Cancelled)
+        matches!(
+            self,
+            Self::Completed | Self::Failed | Self::Cancelled | Self::Skipped
+        )
+    }
+
+    /// Reference label for the settled or in-flight state of an entry.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Streaming => "streaming",
+            Self::Blocked => "blocked",
+            Self::Completed => "complete",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+            Self::Skipped => "skipped",
+        }
     }
 }
 
@@ -163,7 +183,9 @@ impl TuiState {
             prompt_queue: PromptQueue::default(),
             quit_confirmation: QuitConfirmation::default(),
             rewind_confirmation: QuitConfirmation::default(),
-            tools_collapsed: false,
+            // The reference folds collapsible tool results into their header
+            // until the operator expands them.
+            tools_collapsed: true,
             show_reasoning: true,
             callback: None,
             callback_scroll_offset: 0,
@@ -239,7 +261,10 @@ impl TuiState {
                 if entry.revision <= current.revision {
                     return Err(StateError::StaleRevision(entry.id));
                 }
-                if !entry.text.starts_with(&current.text) {
+                // Streaming content only ever grows, but a settling effect
+                // replaces its accumulated stream with the authoritative
+                // terminal projection, so that rewrite must not be rejected.
+                if !entry.status.is_terminal() && !entry.text.starts_with(&current.text) {
                     return Err(StateError::NonMonotonicStream(entry.id));
                 }
                 self.watermark = event_id;
@@ -646,6 +671,32 @@ mod tests {
                 .expect("invalid mutation did not consume the sequence"),
             ApplyResult::Applied
         );
+    }
+
+    #[test]
+    fn settling_replaces_streamed_output_while_live_growth_stays_monotonic() {
+        let mut state = TuiState::new("session");
+        state
+            .apply(ServerEvent::EntryAdded {
+                event_id: 1,
+                entry: entry("effect", 1, "shell\npartial", EntryStatus::Streaming),
+            })
+            .expect("effect starts");
+        assert!(matches!(
+            state.apply(ServerEvent::EntryUpdated {
+                event_id: 2,
+                entry: entry("effect", 2, "shell\nrewritten", EntryStatus::Streaming),
+            }),
+            Err(StateError::NonMonotonicStream(_))
+        ));
+        state
+            .apply(ServerEvent::EntryUpdated {
+                event_id: 2,
+                entry: entry("effect", 2, "shell\npermission denied", EntryStatus::Failed),
+            })
+            .expect("terminal projection replaces the stream");
+        assert_eq!(state.entries[0].status, EntryStatus::Failed);
+        assert_eq!(state.entries[0].text, "shell\npermission denied");
     }
 
     #[test]

@@ -20,6 +20,7 @@ use super::rewind::{RewindAction, RewindState};
 use super::session_picker::SessionDeleteState;
 use super::setup::{ResolvedTheme, Theme};
 use super::state::{EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
+use super::transcript;
 use markdown::markdown_lines;
 use rewind::draw_rewind;
 
@@ -360,15 +361,24 @@ fn draw_transcript(
     let mut newest_first = Vec::new();
     let mut rendered_chars = 0usize;
     let mut history_truncated = false;
-    'entries: for entry in state.entries.iter().rev() {
-        if entry.kind == TranscriptKind::Reasoning && !state.show_reasoning {
-            continue;
+    let visible = state
+        .entries
+        .iter()
+        .filter(|entry| entry.kind != TranscriptKind::Reasoning || state.show_reasoning)
+        .collect::<Vec<_>>();
+    'entries: for (index, entry) in visible.iter().enumerate().rev() {
+        // Consecutive tool-group members are packed; anything else opens with a
+        // blank line, exactly as the reference spaces a group from the
+        // surrounding conversation.
+        let packed = transcript::keeps_tool_group(entry)
+            && index
+                .checked_sub(1)
+                .and_then(|previous| visible.get(previous))
+                .is_some_and(|previous| transcript::keeps_tool_group(previous));
+        let mut entry_lines = semantic_lines(entry, area.width, theme, state.tools_collapsed);
+        if !packed {
+            entry_lines.insert(0, Line::default());
         }
-        let entry_lines = if entry.kind == TranscriptKind::Effect && state.tools_collapsed {
-            collapsed_effect_lines(entry, area.width, theme)
-        } else {
-            semantic_lines(entry, area.width, theme)
-        };
         for line in entry_lines.into_iter().rev() {
             let line_chars = line.to_string().chars().count();
             if newest_first.len() >= MAX_RENDER_LINES
@@ -785,88 +795,192 @@ fn editor_text(
     Text::from(lines.into_iter().map(Line::from).collect::<Vec<_>>())
 }
 
-fn semantic_lines(entry: &TranscriptEntry, width: u16, theme: ResolvedTheme) -> Vec<Line<'static>> {
-    if entry.kind == TranscriptKind::UserMessage {
-        return user_message_lines(entry, width, theme);
-    }
-    if entry.kind == TranscriptKind::AssistantMessage {
-        return assistant_message_lines(entry, width, theme);
-    }
-    if entry.kind == TranscriptKind::Notice {
-        return notice_message_lines(entry, width, theme);
-    }
-    let (kind, style) = match entry.kind {
-        TranscriptKind::UserMessage | TranscriptKind::AssistantMessage => {
-            ("MESSAGE", base_style(theme))
+/// Renders one canonical entry into its reference semantic region. The caller
+/// owns the separation between regions, so these lines never open with a blank.
+fn semantic_lines(
+    entry: &TranscriptEntry,
+    width: u16,
+    theme: ResolvedTheme,
+    tools_collapsed: bool,
+) -> Vec<Line<'static>> {
+    match transcript::region(entry) {
+        transcript::Region::UserMessage => user_message_lines(entry, width, theme),
+        transcript::Region::AssistantMessage => assistant_message_lines(entry, width, theme),
+        transcript::Region::Reasoning => {
+            prefixed_lines(&entry.text, "  ⋮ ", width, muted_style(theme), theme, entry)
         }
-        TranscriptKind::Reasoning => ("REASONING", muted_style(theme)),
-        TranscriptKind::Effect => ("TOOL", effect_style(theme)),
-        TranscriptKind::Callback => ("ACTION REQUIRED", warning_style(theme)),
-        TranscriptKind::Checkpoint => ("CHECKPOINT", muted_style(theme)),
-        TranscriptKind::Notice => ("NOTICE", notice_style(theme)),
-        TranscriptKind::Plan => ("PLAN", assistant_style(theme)),
-    };
-    let status = match entry.status {
-        EntryStatus::Streaming => "streaming",
-        EntryStatus::Completed => "complete",
-        EntryStatus::Failed => "failed",
-        EntryStatus::Cancelled => "cancelled",
-    };
-    let mut lines = vec![Line::from(vec![
-        Span::styled(format!("[{kind}]"), style),
-        Span::raw(format!(" ({status})")),
-    ])];
-    let sanitized = sanitize_terminal(&entry.text, RenderLimits::default());
+        transcript::Region::Effect(effect) => effect_lines(&effect, width, theme, tools_collapsed),
+        transcript::Region::Callback { title, detail } => {
+            let mut lines = vec![Line::from(vec![
+                Span::styled("? ", warning_style(theme)),
+                Span::styled(
+                    truncate_width(&sanitize_inline(&title), usize::from(width.max(1))),
+                    warning_style(theme),
+                ),
+            ])];
+            lines.extend(body_lines(&detail, "  ", width, base_style(theme)));
+            append_terminal_status(&mut lines, entry, theme);
+            lines
+        }
+        transcript::Region::Compaction { message } => {
+            let mut lines = vec![Line::styled(
+                truncate_width("Compacting conversation", usize::from(width.max(1))),
+                muted_style(theme),
+            )];
+            lines.extend(body_lines(&message, "  ", width, muted_style(theme)));
+            lines
+        }
+        transcript::Region::Checkpoint { message } => {
+            prefixed_lines(&message, "  ⎔ ", width, muted_style(theme), theme, entry)
+        }
+        transcript::Region::Hook { icon, line } => {
+            let content_width = usize::from(width.saturating_sub(4).max(1));
+            wrapped_terminal_lines(&line, content_width)
+                .into_iter()
+                .enumerate()
+                .map(|(index, text)| {
+                    Line::from(vec![
+                        Span::styled(
+                            if index == 0 {
+                                format!("{icon} ")
+                            } else {
+                                "  ".to_owned()
+                            },
+                            warning_style(theme),
+                        ),
+                        Span::styled(text, muted_style(theme)),
+                    ])
+                })
+                .collect()
+        }
+        transcript::Region::Command { message } => prefixed_lines(
+            &message,
+            "  ▏ ",
+            width,
+            secondary_style(theme),
+            theme,
+            entry,
+        ),
+        transcript::Region::Notice { level, .. } => {
+            notice_message_lines(entry, width, theme, level)
+        }
+        transcript::Region::Plan => prefixed_lines(
+            &entry.text,
+            "  ",
+            width,
+            assistant_style(theme),
+            theme,
+            entry,
+        ),
+    }
+}
+
+fn prefixed_lines(
+    text: &str,
+    prefix: &str,
+    width: u16,
+    style: Style,
+    theme: ResolvedTheme,
+    entry: &TranscriptEntry,
+) -> Vec<Line<'static>> {
+    let mut lines = body_lines(text, prefix, width, style);
+    append_terminal_status(&mut lines, entry, theme);
+    lines
+}
+
+fn body_lines(text: &str, prefix: &str, width: u16, style: Style) -> Vec<Line<'static>> {
+    if text.is_empty() {
+        return Vec::new();
+    }
+    let content_width = usize::from(width).saturating_sub(prefix.width()).max(1);
+    let prefix = prefix.to_owned();
+    wrapped_terminal_lines(text, content_width)
+        .into_iter()
+        .take(MAX_RENDER_LINES)
+        .map(|line| Line::from(vec![Span::raw(prefix.clone()), Span::styled(line, style)]))
+        .collect()
+}
+
+/// Reference tool call and result presentation: one status header carrying the
+/// authoritative indicator, the running stream, and the settled body.
+fn effect_lines(
+    effect: &transcript::EffectRegion,
+    width: u16,
+    theme: ResolvedTheme,
+    tools_collapsed: bool,
+) -> Vec<Line<'static>> {
     let max_width = usize::from(width.max(1));
-    for raw_line in sanitized
-        .lines()
-        .take(MAX_RENDER_LINES.saturating_sub(lines.len()))
-    {
-        lines.push(Line::raw(truncate_width(raw_line, max_width)));
-    }
-    if lines.len() < MAX_RENDER_LINES
-        && let Some(duration) = entry
-            .details
-            .get("durationMs")
-            .and_then(|value| value.as_u64())
-    {
-        lines.push(Line::raw(format!("duration: {duration} ms")));
-    }
-    if lines.len() < MAX_RENDER_LINES
-        && let Some(kind) = entry
-            .details
-            .get("presentationKind")
-            .and_then(|value| value.as_str())
-    {
-        lines.push(Line::raw(truncate_width(
-            &format!("presentation: {}", sanitize_inline(kind)),
-            max_width,
-        )));
-    }
-    if lines.len() < MAX_RENDER_LINES
-        && let Some(error) = entry.details.get("error").and_then(|value| value.as_str())
-    {
-        lines.push(Line::styled(
-            truncate_width(&format!("error: {}", sanitize_inline(error)), max_width),
-            error_style(theme),
+    let indicator_style = match effect.indicator {
+        transcript::Indicator::Running => orange_style(theme),
+        transcript::Indicator::Success => success_style(theme),
+        transcript::Indicator::Error => error_style(theme),
+        transcript::Indicator::Muted => muted_style(theme),
+    };
+    let mut header = vec![Span::styled(
+        format!("{} ", effect.indicator.glyph()),
+        indicator_style,
+    )];
+    if !effect.verb.is_empty() {
+        header.push(Span::styled(
+            format!("{} ", sanitize_inline(&effect.verb)),
+            effect_style(theme),
         ));
     }
-    if let Some(diff) = entry.details.get("diff").and_then(|value| value.as_array()) {
-        for line in diff
-            .iter()
-            .filter_map(|value| value.as_str())
-            .take(MAX_RENDER_LINES.saturating_sub(lines.len()))
-        {
-            let sanitized = truncate_width(&sanitize_inline(line), max_width);
-            let style = if sanitized.starts_with('+') {
-                success_style(theme)
-            } else if sanitized.starts_with('-') {
-                error_style(theme)
-            } else {
-                muted_style(theme)
-            };
-            lines.push(Line::styled(sanitized, style));
-        }
+    header.push(Span::styled(
+        truncate_width(
+            &sanitize_inline(&effect.message),
+            max_width.saturating_sub(12),
+        ),
+        base_style(theme),
+    ));
+    if !effect.suffix.is_empty() {
+        header.push(Span::styled(
+            format!(" {}", sanitize_inline(&effect.suffix)),
+            muted_style(theme),
+        ));
+    }
+    // The reference collapses collapsible results into their header; diff and
+    // question results always render in full.
+    let collapsed = effect.collapsed_by_default && tools_collapsed;
+    if collapsed && !effect.body.is_empty() {
+        header.push(Span::styled(
+            format!(" · {} lines (Ctrl+O)", effect.body.len()),
+            muted_style(theme),
+        ));
+    }
+    let mut lines = vec![Line::from(header)];
+    if let Some(stream) = &effect.stream {
+        lines.push(Line::from(vec![
+            Span::raw("  "),
+            Span::styled(
+                truncate_width(&sanitize_inline(stream), max_width.saturating_sub(2)),
+                muted_style(theme),
+            ),
+        ]));
+    }
+    if collapsed {
+        return lines;
+    }
+    for body in effect
+        .body
+        .iter()
+        .take(MAX_RENDER_LINES.saturating_sub(lines.len()))
+    {
+        let style = match body.style {
+            transcript::BodyStyle::Plain => base_style(theme),
+            transcript::BodyStyle::Added => success_style(theme),
+            transcript::BodyStyle::Removed => error_style(theme),
+            transcript::BodyStyle::Warning => warning_style(theme),
+            transcript::BodyStyle::Error => error_style(theme),
+            transcript::BodyStyle::Muted => muted_style(theme),
+        };
+        lines.push(Line::from(vec![
+            Span::styled("  │ ", muted_style(theme)),
+            Span::styled(
+                truncate_width(&sanitize_inline(&body.text), max_width.saturating_sub(4)),
+                style,
+            ),
+        ]));
     }
     lines
 }
@@ -875,7 +989,13 @@ fn notice_message_lines(
     entry: &TranscriptEntry,
     width: u16,
     theme: ResolvedTheme,
+    level: transcript::NoticeLevel,
 ) -> Vec<Line<'static>> {
+    let content_style = match level {
+        transcript::NoticeLevel::Info => base_style(theme),
+        transcript::NoticeLevel::Warning => warning_style(theme),
+        transcript::NoticeLevel::Error => error_style(theme),
+    };
     let content_width = usize::from(width.saturating_sub(4).max(1));
     let wrapped = wrapped_terminal_lines(&entry.text, content_width);
     let last = wrapped.len().saturating_sub(1);
@@ -888,7 +1008,7 @@ fn notice_message_lines(
                     if index == last { "  ⎣ " } else { "  ⎢ " },
                     muted_style(theme),
                 ),
-                Span::styled(line, base_style(theme)),
+                Span::styled(line, content_style),
             ])
         })
         .collect::<Vec<_>>();
@@ -924,7 +1044,7 @@ fn user_message_lines(
         Modifier::empty()
     });
     let max_width = usize::from(width.saturating_sub(PROMPT_WIDTH).max(1));
-    let mut lines = vec![Line::default()];
+    let mut lines = Vec::new();
     for (index, wrapped_line) in wrapped_terminal_lines(content, max_width)
         .into_iter()
         .take(MAX_RENDER_LINES.saturating_sub(lines.len()))
@@ -955,37 +1075,12 @@ fn assistant_message_lines(
     width: u16,
     theme: ResolvedTheme,
 ) -> Vec<Line<'static>> {
-    let mut lines = vec![Line::default()];
-    lines.extend(
-        markdown_lines(&entry.text, usize::from(width), theme)
-            .into_iter()
-            .take(MAX_RENDER_LINES.saturating_sub(lines.len())),
-    );
+    let mut lines = markdown_lines(&entry.text, usize::from(width), theme)
+        .into_iter()
+        .take(MAX_RENDER_LINES)
+        .collect::<Vec<_>>();
     append_terminal_status(&mut lines, entry, theme);
     lines
-}
-
-fn collapsed_effect_lines(
-    entry: &TranscriptEntry,
-    width: u16,
-    theme: ResolvedTheme,
-) -> Vec<Line<'static>> {
-    let status = match entry.status {
-        EntryStatus::Streaming => "streaming",
-        EntryStatus::Completed => "complete",
-        EntryStatus::Failed => "failed",
-        EntryStatus::Cancelled => "cancelled",
-    };
-    let title = entry.text.lines().next().unwrap_or("Tool call");
-    vec![Line::from(vec![
-        Span::styled("[TOOL]", effect_style(theme)),
-        Span::raw(format!(" ({status}) ")),
-        Span::styled(
-            truncate_width(title, usize::from(width.saturating_sub(30).max(1))),
-            base_style(theme),
-        ),
-        Span::styled(" · collapsed (Ctrl+O)", muted_style(theme)),
-    ])]
 }
 
 fn append_terminal_status(
@@ -999,8 +1094,11 @@ fn append_terminal_status(
             .get("error")
             .and_then(|value| value.as_str())
             .map_or_else(|| "failed".to_owned(), |error| format!("failed: {error}")),
-        EntryStatus::Cancelled => "cancelled".to_owned(),
-        EntryStatus::Streaming | EntryStatus::Completed => return,
+        EntryStatus::Cancelled | EntryStatus::Skipped => entry.status.label().to_owned(),
+        EntryStatus::Pending
+        | EntryStatus::Streaming
+        | EntryStatus::Blocked
+        | EntryStatus::Completed => return,
     };
     lines.push(Line::from(vec![
         Span::raw("  "),
@@ -1147,10 +1245,6 @@ fn effect_style(theme: ResolvedTheme) -> Style {
 
 fn warning_style(theme: ResolvedTheme) -> Style {
     colored(theme, Color::Yellow).add_modifier(Modifier::BOLD)
-}
-
-fn notice_style(theme: ResolvedTheme) -> Style {
-    colored(theme, Color::Blue).add_modifier(Modifier::BOLD)
 }
 
 fn success_style(theme: ResolvedTheme) -> Style {
@@ -1354,7 +1448,117 @@ mod tests {
     }
 
     #[test]
-    fn test_backend_snapshot_distinguishes_status_diff_duration_and_errors() {
+    fn every_semantic_region_renders_at_the_reference_widths() {
+        let entries = vec![
+            TranscriptEntry {
+                id: "user".to_owned(),
+                revision: 1,
+                kind: TranscriptKind::UserMessage,
+                text: "deploy the service".to_owned(),
+                status: EntryStatus::Completed,
+                details: serde_json::Value::Null,
+            },
+            TranscriptEntry {
+                id: "reasoning".to_owned(),
+                revision: 1,
+                kind: TranscriptKind::Reasoning,
+                text: "weighing options".to_owned(),
+                status: EntryStatus::Completed,
+                details: serde_json::Value::Null,
+            },
+            TranscriptEntry {
+                id: "shell".to_owned(),
+                revision: 1,
+                kind: TranscriptKind::Effect,
+                text: "bash".to_owned(),
+                status: EntryStatus::Completed,
+                details: json!({
+                    "type": "effect",
+                    "detail": {"toolName": "bash", "arguments": {"command": "cargo test"}},
+                    "state": {"status": "completed", "output": {"stdout": "ok", "stderr": ""}},
+                }),
+            },
+            TranscriptEntry {
+                id: "edit".to_owned(),
+                revision: 1,
+                kind: TranscriptKind::Effect,
+                text: "edit".to_owned(),
+                status: EntryStatus::Completed,
+                details: json!({
+                    "type": "effect",
+                    "detail": {"toolName": "edit", "arguments": {"file_path": "src/lib.rs"}},
+                    "state": {
+                        "status": "completed",
+                        "output": {"file": "src/lib.rs", "old_string": "old", "new_string": "new"},
+                    },
+                }),
+            },
+            TranscriptEntry {
+                id: "hook".to_owned(),
+                revision: 1,
+                kind: TranscriptKind::Notice,
+                text: "reformatted".to_owned(),
+                status: EntryStatus::Completed,
+                details: json!({
+                    "type": "notice",
+                    "level": "info",
+                    "detail": {"kind": "hook_completed", "hookName": "format", "content": "reformatted", "status": "ok"},
+                }),
+            },
+            TranscriptEntry {
+                id: "compaction".to_owned(),
+                revision: 1,
+                kind: TranscriptKind::Checkpoint,
+                text: "summarised 40 messages".to_owned(),
+                status: EntryStatus::Completed,
+                details: json!({"type": "checkpoint", "kind": "compaction"}),
+            },
+            TranscriptEntry {
+                id: "assistant".to_owned(),
+                revision: 1,
+                kind: TranscriptKind::AssistantMessage,
+                text: "done".to_owned(),
+                status: EntryStatus::Completed,
+                details: serde_json::Value::Null,
+            },
+        ];
+        for width in [40, 80, 120] {
+            let mut state = TuiState::new("session");
+            state.ready = true;
+            state.entries.clone_from(&entries);
+            let backend = TestBackend::new(width, 30);
+            let mut terminal = Terminal::new(backend).expect("test terminal");
+            let editor = PromptEditor::default();
+            terminal
+                .draw(|frame| draw_test(frame, &mut state, &editor, false))
+                .expect("semantic regions render");
+            let rendered = terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect::<String>();
+            for expected in [
+                "deploy the service",
+                "weighing options",
+                "✓ Ran cargo test",
+                "✓ Edited lib.rs",
+                "- old",
+                "+ new",
+                "[format] reformatted",
+                "Compacting conversation",
+                "done",
+            ] {
+                assert!(rendered.contains(expected), "{expected} missing at {width}");
+            }
+            // A collapsible result folds into its header; a diff never does.
+            assert!(!rendered.contains("│ ok"), "shell body expanded at {width}");
+        }
+    }
+
+    #[test]
+    fn failed_effects_render_the_error_indicator_and_never_a_success_header() {
         let backend = TestBackend::new(52, 16);
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut state = TuiState::new("session");
@@ -1363,13 +1567,16 @@ mod tests {
             id: "effect".to_owned(),
             revision: 1,
             kind: TranscriptKind::Effect,
-            text: "Updated src/lib.rs".to_owned(),
+            text: "edit".to_owned(),
             status: EntryStatus::Failed,
             details: json!({
-                "presentationKind": "diff",
-                "durationMs": 17,
-                "error": "permission denied",
-                "diff": [" context", "-old", "+new"],
+                "type": "effect",
+                "detail": {"toolName": "edit", "arguments": {"path": "src/lib.rs"}},
+                "state": {
+                    "status": "failed",
+                    "error": {"message": "permission denied"},
+                    "outputText": "",
+                },
             }),
         });
         let editor = PromptEditor::default();
@@ -1383,11 +1590,9 @@ mod tests {
             .iter()
             .map(|cell| cell.symbol())
             .collect::<String>();
-        assert!(text.contains("[TOOL] (failed)"));
-        assert!(text.contains("duration: 17 ms"));
-        assert!(text.contains("error: permission denied"));
-        assert!(text.contains("-old"));
-        assert!(text.contains("+new"));
+        assert!(text.contains("✕ Edited lib.rs"), "{text}");
+        assert!(text.contains("Error: permission denied"), "{text}");
+        assert!(!text.contains('✓'), "{text}");
     }
 
     #[test]
@@ -1400,7 +1605,7 @@ mod tests {
             status: EntryStatus::Completed,
             details: serde_json::Value::Null,
         };
-        let lines = semantic_lines(&entry, 40, theme(false));
+        let lines = semantic_lines(&entry, 40, theme(false), true);
         assert_eq!(lines[0].to_string(), "  ⎣ scheduled loop fired");
         assert!(!lines[0].to_string().contains("[NOTICE]"));
     }
@@ -1415,16 +1620,16 @@ mod tests {
             status: EntryStatus::Completed,
             details: serde_json::Value::Null,
         };
-        let lines = semantic_lines(&entry, 24, theme(false));
-        assert_eq!(lines[1].to_string(), "/ help");
-        assert_eq!(lines.len(), 2);
+        let lines = semantic_lines(&entry, 24, theme(false), true);
+        assert_eq!(lines[0].to_string(), "/ help");
+        assert_eq!(lines.len(), 1);
         assert!(!lines.iter().any(|line| line.to_string().contains("[USER]")));
 
         let mut prompt = entry;
         prompt.text = "hello".to_owned();
-        let lines = semantic_lines(&prompt, 24, theme(false));
-        assert_eq!(lines[1].to_string(), "> hello");
-        assert_eq!(lines[2].to_string(), "─".repeat(24));
+        let lines = semantic_lines(&prompt, 24, theme(false), true);
+        assert_eq!(lines[0].to_string(), "> hello");
+        assert_eq!(lines[1].to_string(), "─".repeat(24));
     }
 
     #[test]
@@ -1437,11 +1642,11 @@ mod tests {
             status: EntryStatus::Failed,
             details: json!({"error": "network"}),
         };
-        let lines = semantic_lines(&entry, 7, theme(false));
-        assert_eq!(lines[1].to_string(), "  abcde");
-        assert_eq!(lines[2].to_string(), "  fghij");
-        assert_eq!(lines[3].to_string(), "  kl");
-        assert_eq!(lines[4].to_string(), "  (failed: network)");
+        let lines = semantic_lines(&entry, 7, theme(false), true);
+        assert_eq!(lines[0].to_string(), "  abcde");
+        assert_eq!(lines[1].to_string(), "  fghij");
+        assert_eq!(lines[2].to_string(), "  kl");
+        assert_eq!(lines[3].to_string(), "  (failed: network)");
     }
 
     #[test]
