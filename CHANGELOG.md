@@ -9,6 +9,9 @@
   profiles naming the old tools no longer match anything.
 - Take reference argument keys on `edit`: `file_path`, `old_string`,
   `new_string` and `replace_all` replace the previous camelCase keys.
+- Publish `ask_user_question` and `exit_plan_mode` in the reference schema
+  shape, with the question and choice models under `$defs` and no invented
+  constraints.
 - Publish tool argument schemas in the shape the reference emits: `required`
   and `additionalProperties` only where the tool declares them, defaults on
   optional properties, `anyOf` for nullable ones, and nested models under

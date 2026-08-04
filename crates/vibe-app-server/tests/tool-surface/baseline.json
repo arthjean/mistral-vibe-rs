@@ -1,7 +1,7 @@
 {
   "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
   "platform": "linux",
-  "note": "The gap the later stories close: US-045 for the interactive schemas, EP-014 and EP-015 for the missing names. US-043 and US-044 emptied the invented-name set and closed the edit divergence, and both must stay empty. Names and JSON pointers only, because the corpus that carries reference description text stays gitignored.",
+  "note": "The gap the later epics close: EP-014 for skill, task, todo, web_fetch, web_search and write_file, EP-015 for bash. EP-013 emptied the invented-name and schema-divergence sets and they must stay empty. Names and JSON pointers only, because the corpus that carries reference description text stays gitignored.",
   "missingNames": [
     "bash",
     "skill",
@@ -12,20 +12,5 @@
     "write_file"
   ],
   "extraNames": [],
-  "schemaDivergence": {
-    "ask_user_question": [
-      "/$defs",
-      "/properties/footerNote/anyOf",
-      "/properties/footerNote/default",
-      "/properties/footerNote/description",
-      "/properties/footerNote/type",
-      "/properties/questions/description",
-      "/properties/questions/items/$ref",
-      "/properties/questions/items/additionalProperties",
-      "/properties/questions/items/properties",
-      "/properties/questions/items/required",
-      "/properties/questions/items/type"
-    ],
-    "exit_plan_mode": ["/additionalProperties"]
-  }
+  "schemaDivergence": {}
 }

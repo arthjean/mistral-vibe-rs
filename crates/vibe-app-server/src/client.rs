@@ -31,6 +31,7 @@ use vibe_core::provider::{
     HttpTransport, ProviderBackend, ProviderInput, ProviderStyle, RequestLimits, ToolDefinition,
     Usage,
 };
+use vibe_core::schema::{ObjectSchema, Property};
 use vibe_core::storage::{HydratedSession, SessionStore};
 use vibe_core::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler,
@@ -2625,46 +2626,95 @@ fn interactive_plan_options() -> Vec<Value> {
     .collect()
 }
 
+/// Directive coverage for `ask_user_question`, whose reference description
+/// this port must cover without reproducing (`NOTICE`).
+///
+/// | Reference directive | Covered by |
+/// |---|---|
+/// | The question carries structured options rather than free prose | "structured options" in the description |
+/// | One to four questions per call | "one to four questions" |
+/// | Each question has a header, a question text, and its options | the property descriptions plus `minItems` |
+/// | Two to four options per question | "two to four options", `minItems: 2` |
+/// | A free-text "Other" option is appended by the client | "an Other free-text choice is appended" |
+///
+/// The argument shape comes from the reference `UserQuestionRequest`, which is
+/// the one reference model configuring `alias_generator=to_camel` alongside
+/// `extra="forbid"`: its properties are camelCase where every other reference
+/// tool stays snake_case.
 fn interactive_question_spec() -> ToolSpec {
+    let choice = ObjectSchema::new()
+        .required(
+            "label",
+            Property::string().described("A one to five word label for the choice"),
+        )
+        .optional(
+            "description",
+            Property::string()
+                .described("An optional expansion of what the choice means")
+                .with_default(""),
+        )
+        .forbid_extra_properties();
+    let question = ObjectSchema::new()
+        .required(
+            "question",
+            Property::string().described("The text of the question"),
+        )
+        .required(
+            "options",
+            Property::array(Property::reference("QuestionChoice"))
+                .constrained("minItems", 2)
+                .described(
+                    "The choices offered, two to four of them, not counting the Other free-text \
+                     choice the client appends.",
+                ),
+        )
+        .optional(
+            "header",
+            Property::string()
+                .constrained("maxLength", 20)
+                .described("A short chip label for the question, at most 20 characters")
+                .with_default(""),
+        )
+        .optional(
+            "hideOther",
+            Property::boolean()
+                .described("When true, the Other free-text choice is withheld")
+                .with_default(false),
+        )
+        .optional(
+            "multiSelect",
+            Property::boolean()
+                .described("When true, several choices may be selected at once")
+                .with_default(false),
+        )
+        .forbid_extra_properties();
     ToolSpec {
         name: "ask_user_question".to_owned(),
-        description: "Ask the user one or more interactive questions before continuing".to_owned(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "questions": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "question": {"type": "string", "minLength": 1},
-                            "header": {"type": "string", "maxLength": 20},
-                            "options": {
-                                "type": "array",
-                                "minItems": 2,
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "label": {"type": "string", "minLength": 1},
-                                        "description": {"type": "string"}
-                                    },
-                                    "required": ["label"],
-                                    "additionalProperties": false
-                                }
-                            },
-                            "multiSelect": {"type": "boolean"},
-                            "hideOther": {"type": "boolean"}
-                        },
-                        "required": ["question", "options"],
-                        "additionalProperties": false
-                    }
-                },
-                "footerNote": {"type": ["string", "null"]}
-            },
-            "required": ["questions"],
-            "additionalProperties": false
-        }),
+        description: "Put a question to the user with structured options. Send one to four \
+                      questions, each carrying a header, its question text, and two to four \
+                      options; an Other free-text choice is appended for you."
+            .to_owned(),
+        input_schema: ObjectSchema::new()
+            .define("QuestionChoice", choice)
+            .define("UserQuestion", question)
+            .required(
+                "questions",
+                Property::array(Property::reference("UserQuestion"))
+                    .constrained("minItems", 1)
+                    .described(
+                        "The questions to put, one to four of them. Several questions render as \
+                         tabs.",
+                    ),
+            )
+            .optional(
+                "footerNote",
+                Property::string()
+                    .described("An optional quiet note rendered under the question widget.")
+                    .with_default(Value::Null)
+                    .nullable(),
+            )
+            .forbid_extra_properties()
+            .build(),
         output_schema: None,
         config: Value::Null,
         state: Value::Null,
@@ -2675,15 +2725,21 @@ fn interactive_question_spec() -> ToolSpec {
     }
 }
 
+/// Directive coverage for `exit_plan_mode`.
+///
+/// | Reference directive | Covered by |
+/// |---|---|
+/// | The call announces a finished plan ready to implement | "the plan is finished and ready to implement" |
+/// | Call it only once the plan is final | "Call it only once the plan is final" |
+/// | Do not call it while planning continues | "never while planning is still under way or the user wants to keep planning" |
 fn interactive_plan_review_spec() -> ToolSpec {
     ToolSpec {
         name: "exit_plan_mode".to_owned(),
-        description: "Request user approval before leaving plan mode".to_owned(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false
-        }),
+        description: "Announce that the plan is finished and ready to implement. Call it only \
+                      once the plan is final, never while planning is still under way or the \
+                      user wants to keep planning."
+            .to_owned(),
+        input_schema: ObjectSchema::new().build(),
         output_schema: None,
         config: Value::Null,
         state: Value::Null,
@@ -4155,6 +4211,128 @@ mod tests {
         task.await
             .expect("plan review task")
             .expect("plan review completes");
+    }
+
+    /// The two argument conventions the reference publishes side by side.
+    ///
+    /// `ask_user_question` takes its model from `UserQuestionRequest`, the one
+    /// reference argument model configuring `alias_generator=to_camel`, so its
+    /// properties are camelCase. Every other reference tool stays snake_case,
+    /// and both conventions must coexist in one published surface.
+    #[test]
+    fn the_interactive_schema_is_camel_case_while_the_file_tools_stay_snake_case() {
+        let questions = interactive_question_spec().input_schema;
+        let question = &questions["$defs"]["UserQuestion"]["properties"];
+        for camel in ["multiSelect", "hideOther"] {
+            assert!(question.get(camel).is_some(), "missing `{camel}`");
+        }
+        assert!(questions["properties"].get("footerNote").is_some());
+
+        // `footerNote` is nullable through `anyOf`, never an array-form type.
+        let footer = &questions["properties"]["footerNote"];
+        assert_eq!(
+            footer["anyOf"],
+            json!([{"type": "string"}, {"type": "null"}])
+        );
+        assert_eq!(footer["default"], Value::Null);
+        assert!(footer.get("type").is_none());
+
+        // No `minLength` survives: the reference publishes none.
+        assert!(
+            !questions.to_string().contains("minLength"),
+            "the reference publishes no minLength on this schema"
+        );
+
+        // The reference defaults reach the model as published values.
+        assert_eq!(question["header"]["default"], "");
+        assert_eq!(question["multiSelect"]["default"], false);
+        assert_eq!(question["hideOther"]["default"], false);
+        assert_eq!(
+            questions["$defs"]["QuestionChoice"]["properties"]["description"]["default"],
+            ""
+        );
+
+        // The same session publishes snake_case argument keys elsewhere.
+        let directory = tempfile::tempdir().expect("workspace");
+        let workspace =
+            Arc::new(vibe_core::workspace::Workspace::open(directory.path()).expect("workspace"));
+        let review = Arc::new(vibe_core::workspace::ReviewManager::new(workspace.clone()));
+        let tools = ToolRegistry::default();
+        vibe_core::workspace::WorkspaceTools::new(workspace, review)
+            .register(
+                &tools,
+                vibe_core::policy::PermissionStore::default(),
+                Arc::new(DenyEveryApproval),
+            )
+            .expect("workspace tools register");
+        let edit = tools
+            .list()
+            .expect("tools list")
+            .into_iter()
+            .find(|spec| spec.name == "edit")
+            .expect("edit is published");
+        for snake in ["file_path", "old_string", "new_string", "replace_all"] {
+            assert!(
+                edit.input_schema["properties"].get(snake).is_some(),
+                "missing `{snake}`"
+            );
+        }
+    }
+
+    /// `exit_plan_mode` takes no arguments, and the reference publishes that
+    /// as two keys: no `required`, no `additionalProperties`.
+    #[test]
+    fn the_plan_review_schema_is_the_bare_reference_object() {
+        assert_eq!(
+            interactive_plan_review_spec().input_schema,
+            json!({"type": "object", "properties": {}})
+        );
+    }
+
+    /// `minItems: 2` on the options array is what makes an under-specified
+    /// question fail, and the failure names the question that caused it.
+    #[tokio::test]
+    async fn a_question_with_a_single_option_fails_naming_its_index() {
+        let (sender, _receiver) = tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(1);
+        let tools = ToolRegistry::default();
+        InteractiveSessionToolFactory {
+            sender,
+            plan_directory: None,
+        }
+        .register("session", &tools)
+        .expect("question tool registers");
+
+        let error = tools
+            .invoke(
+                "ask_user_question",
+                ToolInvocation {
+                    call_id: "question-1".to_owned(),
+                    arguments: json!({
+                        "questions": [
+                            {"question": "ok?", "options": [{"label": "a"}, {"label": "b"}]},
+                            {"question": "which?", "options": [{"label": "only"}]},
+                        ]
+                    }),
+                },
+            )
+            .await
+            .expect_err("a single-option question is under-specified");
+
+        assert!(
+            error.to_string().contains("$.questions[1].options"),
+            "the failure must name the offending question: {error}"
+        );
+    }
+
+    struct DenyEveryApproval;
+
+    impl vibe_core::policy::ApprovalAgent for DenyEveryApproval {
+        fn request<'a>(
+            &'a self,
+            _request: vibe_core::policy::ApprovalRequest,
+        ) -> vibe_core::policy::ApprovalFuture<'a> {
+            Box::pin(async { Ok(vibe_core::policy::ApprovalDecision::Deny) })
+        }
     }
 
     #[test]
