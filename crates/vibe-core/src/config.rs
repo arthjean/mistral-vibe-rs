@@ -900,6 +900,8 @@ use merge::merge_layer;
 mod merge_tests;
 #[cfg(test)]
 mod registry_tests;
+#[cfg(test)]
+mod surface_parity_tests;
 
 struct PreparedWrite {
     destination: PathBuf,

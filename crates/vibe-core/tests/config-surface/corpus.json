@@ -1,0 +1,1252 @@
+{
+  "fields": [
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "active_model",
+      "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": "name",
+      "name": "providers",
+      "popular": false,
+      "strategy": "union"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": null,
+      "name": "models",
+      "popular": false,
+      "strategy": "deep_merge"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": null,
+      "name": "compaction_model",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "int",
+      "mergeKey": null,
+      "name": "auto_compact_threshold",
+      "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "active_transcribe_model",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": "name",
+      "name": "transcribe_providers",
+      "popular": false,
+      "strategy": "union"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": "alias",
+      "name": "transcribe_models",
+      "popular": false,
+      "strategy": "union"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "active_tts_model",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": "name",
+      "name": "tts_providers",
+      "popular": false,
+      "strategy": "union"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": "alias",
+      "name": "tts_models",
+      "popular": false,
+      "strategy": "union"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": null,
+      "name": "tools",
+      "popular": false,
+      "strategy": "deep_merge"
+    },
+    {
+      "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "tool_paths",
+      "popular": false,
+      "strategy": "concat"
+    },
+    {
+      "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "enabled_tools",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "disabled_tools",
+      "popular": false,
+      "strategy": "concat"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": "name",
+      "name": "mcp_servers",
+      "popular": true,
+      "strategy": "union"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "enable_connectors",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": "name",
+      "name": "connectors",
+      "popular": false,
+      "strategy": "union"
+    },
+    {
+      "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "agent_paths",
+      "popular": false,
+      "strategy": "concat"
+    },
+    {
+      "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "enabled_agents",
+      "popular": false,
+      "strategy": "concat"
+    },
+    {
+      "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "disabled_agents",
+      "popular": false,
+      "strategy": "concat"
+    },
+    {
+      "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "installed_agents",
+      "popular": false,
+      "strategy": "concat"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "default_agent",
+      "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "skill_paths",
+      "popular": false,
+      "strategy": "concat"
+    },
+    {
+      "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "enabled_skills",
+      "popular": false,
+      "strategy": "concat"
+    },
+    {
+      "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "disabled_skills",
+      "popular": false,
+      "strategy": "concat"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "experimental_enable_registry_skills",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "vibe_code_enabled",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "vibe_code_api_key_env_var",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "enable_otel",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "otel_endpoint",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [
+        "default",
+        "none",
+        "strict"
+      ],
+      "kind": "enum",
+      "mergeKey": null,
+      "name": "otel_redaction",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "console_base_url",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "theme",
+      "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "applied_migrations",
+      "popular": false,
+      "strategy": "concat"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "disable_welcome_banner_animation",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "autocopy_to_clipboard",
+      "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "file_watcher_for_autocomplete",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "ask_confirmation_on_exit",
+      "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "displayed_workdir",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "context_warnings",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "voice_mode_enabled",
+      "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "narrator_enabled",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "show_thinking_nodes",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "bypass_tool_permissions",
+      "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "raise_on_compaction_failure",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "enable_telemetry",
+      "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "system_prompt_id",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "compaction_prompt_id",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "include_commit_signature",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "include_model_info",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "include_project_context",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "include_prompt_detail",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "enable_update_checks",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "enable_auto_update",
+      "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "enable_notifications",
+      "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "enable_system_trust_store",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "float",
+      "mergeKey": null,
+      "name": "api_timeout",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "float",
+      "mergeKey": null,
+      "name": "api_retry_max_elapsed_time",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "vibe_base_url",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "vibe_code_sessions_base_url",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": null,
+      "name": "project_context",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": null,
+      "name": "session_logging",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": null,
+      "name": "experiments",
+      "popular": false,
+      "strategy": "replace"
+    }
+  ],
+  "note": "Captured from the pinned reference by scripts/parity/config_surface.py. Field names, merge strategies, merge keys, editor kinds and merged documents are observations; no reference-authored description text is recorded here.",
+  "reference": {
+    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477"
+  },
+  "scenarios": [
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "defaults",
+          "toml": "\ntheme = \"system\"\nenable_telemetry = true\napi_timeout = 30.0\nauto_compact_threshold = 120000\ndisabled_tools = []\n"
+        }
+      ],
+      "merged": {
+        "api_timeout": 30.0,
+        "auto_compact_threshold": 120000,
+        "disabled_tools": [],
+        "enable_telemetry": true,
+        "theme": "system"
+      },
+      "name": "defaults-only"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "disabled_tools = [\"bash\", \"edit\"]\n"
+        }
+      ],
+      "merged": {
+        "disabled_tools": [
+          "bash",
+          "edit"
+        ]
+      },
+      "name": "single-layer-concat"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "disabled_tools = [\"bash\"]\n"
+        },
+        {
+          "name": "project",
+          "toml": "disabled_tools = [\"edit\", \"web_search\"]\n"
+        }
+      ],
+      "merged": {
+        "disabled_tools": [
+          "bash",
+          "edit",
+          "web_search"
+        ]
+      },
+      "name": "concat-two-layers"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "disabled_tools = [\"bash\", \"edit\"]\n"
+        },
+        {
+          "name": "project",
+          "toml": "disabled_tools = [\"bash\"]\n"
+        }
+      ],
+      "merged": {
+        "disabled_tools": [
+          "bash",
+          "edit",
+          "bash"
+        ]
+      },
+      "name": "concat-preserves-duplicates"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "disabled_agents = [\"plan\"]\n"
+        },
+        {
+          "name": "project",
+          "toml": "theme = \"nord\"\n"
+        }
+      ],
+      "merged": {
+        "disabled_agents": [
+          "plan"
+        ],
+        "theme": "nord"
+      },
+      "name": "concat-lower-layer-only"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "theme = \"nord\"\n"
+        },
+        {
+          "name": "project",
+          "toml": "disabled_agents = [\"plan\"]\n"
+        }
+      ],
+      "merged": {
+        "disabled_agents": [
+          "plan"
+        ],
+        "theme": "nord"
+      },
+      "name": "concat-higher-layer-only"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "installed_agents = [\"plan\"]\n"
+        },
+        {
+          "name": "project",
+          "toml": "[installed_agents]\n"
+        }
+      ],
+      "merged": {
+        "installed_agents": [
+          "plan"
+        ]
+      },
+      "name": "concat-empty-table-is-absent"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[installed_agents]\n"
+        },
+        {
+          "name": "project",
+          "toml": "installed_agents = [\"plan\"]\n"
+        }
+      ],
+      "merged": {
+        "installed_agents": [
+          "plan"
+        ]
+      },
+      "name": "concat-empty-table-in-lower-layer"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "tool_paths = [\"~/tools\"]\nagent_paths = [\"~/agents\"]\nskill_paths = [\"~/skills\"]\n"
+        },
+        {
+          "name": "project",
+          "toml": "tool_paths = [\".vibe/tools\"]\nagent_paths = [\".vibe/agents\"]\nskill_paths = [\".vibe/skills\"]\n"
+        }
+      ],
+      "merged": {
+        "agent_paths": [
+          "~/agents",
+          ".vibe/agents"
+        ],
+        "skill_paths": [
+          "~/skills",
+          ".vibe/skills"
+        ],
+        "tool_paths": [
+          "~/tools",
+          ".vibe/tools"
+        ]
+      },
+      "name": "concat-every-path-list"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "applied_migrations = [\"read_only_commands\"]\n"
+        },
+        {
+          "name": "project",
+          "toml": "applied_migrations = [\"tool_rename\"]\n"
+        }
+      ],
+      "merged": {
+        "applied_migrations": [
+          "read_only_commands",
+          "tool_rename"
+        ]
+      },
+      "name": "concat-applied-migrations"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "enabled_agents = [\"custom-*\"]\nenabled_skills = [\"search-*\"]\ndisabled_skills = [\"legacy\"]\n"
+        },
+        {
+          "name": "project",
+          "toml": "enabled_agents = [\"review\"]\nenabled_skills = [\"deploy\"]\ndisabled_skills = [\"legacy\"]\n"
+        }
+      ],
+      "merged": {
+        "disabled_skills": [
+          "legacy",
+          "legacy"
+        ],
+        "enabled_agents": [
+          "custom-*",
+          "review"
+        ],
+        "enabled_skills": [
+          "search-*",
+          "deploy"
+        ]
+      },
+      "name": "concat-agent-and-skill-lists"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "defaults",
+          "toml": "theme = \"system\"\nenable_telemetry = true\napi_timeout = 30.0\n"
+        },
+        {
+          "name": "user",
+          "toml": "theme = \"nord\"\n"
+        },
+        {
+          "name": "project",
+          "toml": "theme = \"dracula\"\napi_timeout = 45.5\n"
+        },
+        {
+          "name": "overrides",
+          "toml": "theme = \"gruvbox\"\n"
+        }
+      ],
+      "merged": {
+        "api_timeout": 45.5,
+        "enable_telemetry": true,
+        "theme": "gruvbox"
+      },
+      "name": "replace-scalars-across-four-layers"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "enabled_tools = [\"bash\", \"edit\"]\n"
+        },
+        {
+          "name": "project",
+          "toml": "enabled_tools = [\"read_file\"]\n"
+        }
+      ],
+      "merged": {
+        "enabled_tools": [
+          "read_file"
+        ]
+      },
+      "name": "replace-enabled-tools-is-not-concat"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[project_context]\nenabled = true\nmax_files = 40\n"
+        },
+        {
+          "name": "project",
+          "toml": "[project_context]\nenabled = false\n"
+        }
+      ],
+      "merged": {
+        "project_context": {
+          "enabled": false
+        }
+      },
+      "name": "replace-nested-table-wholesale"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "defaults",
+          "toml": "enable_otel = false\nauto_compact_threshold = 120000\napi_retry_max_elapsed_time = 60.0\n"
+        },
+        {
+          "name": "user",
+          "toml": "enable_otel = true\nauto_compact_threshold = 90000\napi_retry_max_elapsed_time = 12.5\n"
+        }
+      ],
+      "merged": {
+        "api_retry_max_elapsed_time": 12.5,
+        "auto_compact_threshold": 90000,
+        "enable_otel": true
+      },
+      "name": "replace-booleans-and-numbers"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "defaults",
+          "toml": "[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"MISTRAL_API_KEY\"\n"
+        },
+        {
+          "name": "user",
+          "toml": "[[providers]]\nname = \"mistral\"\napi_base = \"https://proxy.example.test/v1\"\n"
+        }
+      ],
+      "merged": {
+        "providers": [
+          {
+            "api_base": "https://proxy.example.test/v1",
+            "name": "mistral"
+          }
+        ]
+      },
+      "name": "union-providers-same-name-replaces-entry"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "defaults",
+          "toml": "[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\n"
+        },
+        {
+          "name": "user",
+          "toml": "[[providers]]\nname = \"llamacpp\"\napi_base = \"http://127.0.0.1:8080/v1\"\n"
+        }
+      ],
+      "merged": {
+        "providers": [
+          {
+            "api_base": "https://api.mistral.ai/v1",
+            "name": "mistral"
+          },
+          {
+            "api_base": "http://127.0.0.1:8080/v1",
+            "name": "llamacpp"
+          }
+        ]
+      },
+      "name": "union-providers-distinct-names"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "defaults",
+          "toml": "[[providers]]\nname = \"alpha\"\napi_base = \"https://alpha.example.test\"\n\n[[providers]]\nname = \"beta\"\napi_base = \"https://beta.example.test\"\n"
+        },
+        {
+          "name": "user",
+          "toml": "[[providers]]\nname = \"gamma\"\napi_base = \"https://gamma.example.test\"\n\n[[providers]]\nname = \"alpha\"\napi_base = \"https://alpha.override.test\"\n"
+        }
+      ],
+      "merged": {
+        "providers": [
+          {
+            "api_base": "https://alpha.override.test",
+            "name": "alpha"
+          },
+          {
+            "api_base": "https://beta.example.test",
+            "name": "beta"
+          },
+          {
+            "api_base": "https://gamma.example.test",
+            "name": "gamma"
+          }
+        ]
+      },
+      "name": "union-preserves-first-seen-order"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "defaults",
+          "toml": "[[transcribe_models]]\nname = \"voxtral-mini\"\nprovider = \"mistral\"\nalias = \"voxtral-realtime\"\n"
+        },
+        {
+          "name": "user",
+          "toml": "[[transcribe_models]]\nname = \"voxtral-large\"\nprovider = \"mistral\"\nalias = \"voxtral-realtime\"\n\n[[transcribe_models]]\nname = \"voxtral-tiny\"\nprovider = \"mistral\"\nalias = \"tiny\"\n"
+        }
+      ],
+      "merged": {
+        "transcribe_models": [
+          {
+            "alias": "voxtral-realtime",
+            "name": "voxtral-large",
+            "provider": "mistral"
+          },
+          {
+            "alias": "tiny",
+            "name": "voxtral-tiny",
+            "provider": "mistral"
+          }
+        ]
+      },
+      "name": "union-transcribe-models-by-alias"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "defaults",
+          "toml": "[[tts_providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai\"\n\n[[tts_models]]\nname = \"voxtral-mini-tts\"\nprovider = \"mistral\"\nalias = \"voxtral-tts\"\n"
+        },
+        {
+          "name": "user",
+          "toml": "[[tts_providers]]\nname = \"local\"\napi_base = \"http://127.0.0.1:9000\"\n\n[[tts_models]]\nname = \"voxtral-mini-tts\"\nprovider = \"mistral\"\nalias = \"voxtral-tts\"\n"
+        }
+      ],
+      "merged": {
+        "tts_models": [
+          {
+            "alias": "voxtral-tts",
+            "name": "voxtral-mini-tts",
+            "provider": "mistral"
+          }
+        ],
+        "tts_providers": [
+          {
+            "api_base": "https://api.mistral.ai",
+            "name": "mistral"
+          },
+          {
+            "api_base": "http://127.0.0.1:9000",
+            "name": "local"
+          }
+        ]
+      },
+      "name": "union-tts-providers-and-models"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[[transcribe_providers]]\nname = \"mistral\"\napi_base = \"wss://api.mistral.ai\"\n"
+        },
+        {
+          "name": "project",
+          "toml": "[transcribe_providers]\n"
+        }
+      ],
+      "merged": {
+        "transcribe_providers": [
+          {
+            "api_base": "wss://api.mistral.ai",
+            "name": "mistral"
+          }
+        ]
+      },
+      "name": "union-empty-table-is-absent"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[[tts_providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai\"\n"
+        },
+        {
+          "name": "project",
+          "toml": "theme = \"nord\"\n"
+        }
+      ],
+      "merged": {
+        "theme": "nord",
+        "tts_providers": [
+          {
+            "api_base": "https://api.mistral.ai",
+            "name": "mistral"
+          }
+        ]
+      },
+      "name": "union-lower-layer-only"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://mcp.example.test/rpc\"\n"
+        },
+        {
+          "name": "project",
+          "toml": "[[mcp_servers]]\nname = \"local\"\ntransport = \"stdio\"\ncommand = \"/usr/bin/local-mcp\"\n"
+        }
+      ],
+      "merged": {
+        "mcp_servers": [
+          {
+            "name": "docs",
+            "transport": "streamable-http",
+            "url": "https://mcp.example.test/rpc"
+          },
+          {
+            "command": "/usr/bin/local-mcp",
+            "name": "local",
+            "transport": "stdio"
+          }
+        ]
+      },
+      "name": "union-mcp-servers-distinct-names"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[tools.bash]\nallowlist = [\"git status\"]\ntimeout = 30\n\n[tools.edit]\nconfirm = true\n"
+        },
+        {
+          "name": "project",
+          "toml": "[tools.bash]\nallowlist = [\"cargo test\"]\n"
+        }
+      ],
+      "merged": {
+        "tools": {
+          "bash": {
+            "allowlist": [
+              "cargo test"
+            ],
+            "timeout": 30
+          },
+          "edit": {
+            "confirm": true
+          }
+        }
+      },
+      "name": "deep-merge-tools-two-layers"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "defaults",
+          "toml": "[tools.bash]\ntimeout = 30\n"
+        },
+        {
+          "name": "user",
+          "toml": "[tools.bash]\nallowlist = [\"git status\"]\n"
+        },
+        {
+          "name": "project",
+          "toml": "[tools.bash]\ntimeout = 60\n\n[tools.web_search]\nenabled = false\n"
+        }
+      ],
+      "merged": {
+        "tools": {
+          "bash": {
+            "allowlist": [
+              "git status"
+            ],
+            "timeout": 60
+          },
+          "web_search": {
+            "enabled": false
+          }
+        }
+      },
+      "name": "deep-merge-tools-three-layers"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[tools.read_file]\nmax_bytes = 100000\nline_numbers = true\n"
+        },
+        {
+          "name": "project",
+          "toml": "[tools.read_file]\nline_numbers = false\n"
+        }
+      ],
+      "merged": {
+        "tools": {
+          "read_file": {
+            "line_numbers": false,
+            "max_bytes": 100000
+          }
+        }
+      },
+      "name": "deep-merge-preserves-absent-keys"
+    },
+    {
+      "droppedKeys": [
+        "future_key",
+        "future_table"
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "theme = \"nord\"\nfuture_key = \"kept-by-rust\"\n\n[future_table]\nnested = 1\n"
+        }
+      ],
+      "merged": {
+        "theme": "nord"
+      },
+      "name": "unregistered-keys-are-dropped"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "defaults",
+          "toml": "theme = \"system\"\n"
+        },
+        {
+          "name": "empty",
+          "toml": ""
+        },
+        {
+          "name": "user",
+          "toml": "disabled_tools = [\"bash\"]\n"
+        },
+        {
+          "name": "also-empty",
+          "toml": ""
+        },
+        {
+          "name": "project",
+          "toml": "disabled_tools = [\"edit\"]\n"
+        }
+      ],
+      "merged": {
+        "disabled_tools": [
+          "bash",
+          "edit"
+        ],
+        "theme": "system"
+      },
+      "name": "empty-layers-are-skipped"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "defaults",
+          "toml": "theme = \"system\"\ndisabled_tools = [\"dangerous\"]\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\n\n[tools.bash]\ntimeout = 30\n"
+        },
+        {
+          "name": "user",
+          "toml": "theme = \"nord\"\ndisabled_tools = [\"bash\"]\n\n[[providers]]\nname = \"llamacpp\"\napi_base = \"http://127.0.0.1:8080/v1\"\n\n[tools.bash]\nallowlist = [\"git status\"]\n"
+        },
+        {
+          "name": "project",
+          "toml": "disabled_tools = [\"edit\"]\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://proxy.example.test/v1\"\n\n[tools.edit]\nconfirm = true\n"
+        },
+        {
+          "name": "overrides",
+          "toml": "theme = \"gruvbox\"\n"
+        }
+      ],
+      "merged": {
+        "disabled_tools": [
+          "dangerous",
+          "bash",
+          "edit"
+        ],
+        "providers": [
+          {
+            "api_base": "https://proxy.example.test/v1",
+            "name": "mistral"
+          },
+          {
+            "api_base": "http://127.0.0.1:8080/v1",
+            "name": "llamacpp"
+          }
+        ],
+        "theme": "gruvbox",
+        "tools": {
+          "bash": {
+            "allowlist": [
+              "git status"
+            ],
+            "timeout": 30
+          },
+          "edit": {
+            "confirm": true
+          }
+        }
+      },
+      "name": "four-layer-every-strategy"
+    }
+  ],
+  "schemaVersion": 1,
+  "strategies": {
+    "declared": [
+      "concat",
+      "conflict",
+      "deep_merge",
+      "merge",
+      "replace",
+      "union"
+    ],
+    "unused": [
+      "conflict",
+      "merge"
+    ],
+    "used": [
+      "concat",
+      "deep_merge",
+      "replace",
+      "union"
+    ]
+  }
+}
