@@ -15,6 +15,13 @@
   `name` or `alias`, so a higher layer redefining one entry no longer drops the
   others, and an entry missing that key now fails the load naming the field and
   the key rather than being silently kept.
+- Type `VIBE_*` environment overrides by the field they target. A boolean field
+  accepts the usual true and false spellings and rejects anything else, a
+  numeric field rejects text, a string field keeps its value verbatim rather
+  than parsing it as a TOML literal, and a list field is read as JSON. A
+  rejected value fails the load naming the variable and the field without
+  echoing the value. Empty values are still ignored and `__` still maps to
+  nesting.
 - Read `enabled_tools` and `disabled_tools` from `config.toml` and match both
   lists the way the reference does: entries are shell globs (`serena_*`), or
   regular expressions when prefixed with `re:`, and both forms ignore case. An

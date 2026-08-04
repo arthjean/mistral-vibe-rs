@@ -274,3 +274,65 @@ fn an_unregistered_key_survives_the_merge_and_is_reported_as_unregistered() {
         .collect::<Vec<_>>();
     assert_eq!(unregistered, ["future_key"]);
 }
+
+#[test]
+fn environment_overrides_are_typed_by_the_field_they_target() {
+    let typed = environment_table(&BTreeMap::from([
+        ("VIBE_ENABLE_TELEMETRY".to_owned(), "false".to_owned()),
+        ("VIBE_THEME".to_owned(), "1".to_owned()),
+        ("VIBE_AUTO_COMPACT_THRESHOLD".to_owned(), "90000".to_owned()),
+        ("VIBE_API_TIMEOUT".to_owned(), "12.5".to_owned()),
+        (
+            "VIBE_DISABLED_TOOLS".to_owned(),
+            "[\"bash\", \"edit\"]".to_owned(),
+        ),
+        ("VIBE_DISPLAYED_WORKDIR".to_owned(), String::new()),
+    ]))
+    .expect("environment layer builds");
+    assert_eq!(typed["enable_telemetry"].as_bool(), Some(false));
+    assert_eq!(typed["theme"].as_str(), Some("1"));
+    assert_eq!(typed["auto_compact_threshold"].as_integer(), Some(90_000));
+    assert_eq!(typed["api_timeout"].as_float(), Some(12.5));
+    assert_eq!(
+        typed["disabled_tools"][1].as_str(),
+        Some("edit"),
+        "a list override arrives as JSON"
+    );
+    assert!(
+        typed.get("displayed_workdir").is_none(),
+        "an empty value is ignored"
+    );
+}
+
+#[test]
+fn an_environment_override_of_the_wrong_type_fails_without_echoing_the_value() {
+    let error = environment_table(&BTreeMap::from([(
+        "VIBE_API_TIMEOUT".to_owned(),
+        "abc-9f4c".to_owned(),
+    )]))
+    .expect_err("a float field rejects text");
+    assert!(matches!(
+        &error,
+        ConfigError::InvalidEnvironmentValue { variable, field, expected }
+            if variable == "VIBE_API_TIMEOUT" && field == "api_timeout" && *expected == "number"
+    ));
+    assert!(!error.to_string().contains("abc-9f4c"), "{error}");
+
+    assert!(matches!(
+        environment_table(&BTreeMap::from([(
+            "VIBE_ENABLE_TELEMETRY".to_owned(),
+            "maybe".to_owned(),
+        )])),
+        Err(ConfigError::InvalidEnvironmentValue { .. })
+    ));
+}
+
+#[test]
+fn nested_environment_keys_keep_their_local_nesting_behaviour() {
+    let nested = environment_table(&BTreeMap::from([(
+        "VIBE_NESTED__WINNER".to_owned(),
+        "\"environment\"".to_owned(),
+    )]))
+    .expect("environment layer builds");
+    assert_eq!(nested["nested"]["winner"].as_str(), Some("environment"));
+}
