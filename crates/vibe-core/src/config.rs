@@ -19,6 +19,7 @@ use crate::mcp::{
 use crate::text::hex_encode;
 
 mod proxy;
+pub mod registry;
 
 pub use proxy::{ProxyEnvironmentStore, ProxyKey, ProxyKeyError};
 
@@ -782,8 +783,18 @@ impl LayeredConfig {
         }])
     }
 
+    /// The JSON Schema for the published configuration surface, generated from
+    /// [`registry::FIELDS`].
     #[must_use]
     pub fn schema() -> JsonValue {
+        registry::json_schema()
+    }
+
+    /// The schema literal this port published before the registry generated
+    /// it, kept whole as the fixture `registry_tests` diffs against so the
+    /// generated surface is proved unchanged rather than assumed.
+    #[cfg(test)]
+    fn schema_before_the_registry() -> JsonValue {
         json!({
             "type": "object",
             "additionalProperties": true,
@@ -882,6 +893,9 @@ impl LayeredConfig {
 
 mod integrations;
 use integrations::*;
+
+#[cfg(test)]
+mod registry_tests;
 
 struct PreparedWrite {
     destination: PathBuf,
