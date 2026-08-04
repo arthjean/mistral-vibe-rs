@@ -3,16 +3,16 @@
     "file": "tasks/prd-config-parity.md",
     "title": "Configuration Parity",
     "created_at": "2026-08-04",
-    "status": "READY"
+    "status": "IN_PROGRESS"
   },
   "epics": [
     {
       "id": "EP-018",
       "title": "Declarative Merge and the Field Registry",
-      "status": "TODO",
+      "status": "IN_REVIEW",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 3
     },
     {
       "id": "EP-019",
@@ -60,49 +60,50 @@
       "id": "US-059",
       "title": "Declare every configuration field in one registry",
       "epic": "EP-018",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-04",
+      "completed_at": "2026-08-04",
+      "reviewed_at": "2026-08-04"
     },
     {
       "id": "US-060",
       "title": "Merge each field by its declared strategy",
       "epic": "EP-018",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": ["US-059"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-04",
+      "completed_at": "2026-08-04",
+      "reviewed_at": "2026-08-04"
     },
     {
       "id": "US-061",
       "title": "Replay merged configurations against the reference",
       "epic": "EP-018",
-      "status": "TODO",
+      "status": "IN_REVIEW",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-059"],
-      "started_at": null,
+      "started_at": "2026-08-04",
       "completed_at": null,
-      "reviewed_at": null
+      "reviewed_at": "2026-08-04",
+      "pending_manual_proof": "Run `scripts/parity/config_surface.py --reference <checkout>` on a machine holding the pinned reference with its Python dependencies installed, and confirm the regenerated corpus matches the committed one. The Windows checkout at C:\\dev\\mistral-vibe is on the pin but has no interpreter that can import `vibe`, so the live probe skipped and the capture pipeline has never executed."
     },
     {
       "id": "US-062",
       "title": "Coerce environment overrides through the registry",
       "epic": "EP-018",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": ["US-059"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-04",
+      "completed_at": "2026-08-04",
+      "reviewed_at": "2026-08-04"
     },
     {
       "id": "US-063",
