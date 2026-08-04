@@ -251,26 +251,6 @@ pub(super) fn optional_mcp_timeout(
     Ok(milliseconds as u64)
 }
 
-pub(super) fn merge_tables(target: &mut Table, overlay: &Table) {
-    for (key, value) in overlay {
-        match (target.get_mut(key), value) {
-            (Some(Value::Table(target_table)), Value::Table(overlay_table)) => {
-                merge_tables(target_table, overlay_table);
-            }
-            (Some(Value::Array(target_entries)), Value::Array(overlay_entries)) => {
-                if let Some(collection) = IntegrationCollection::from_key(key) {
-                    merge_integration_entries(collection, target_entries, overlay_entries);
-                } else {
-                    target.insert(key.clone(), value.clone());
-                }
-            }
-            _ => {
-                target.insert(key.clone(), value.clone());
-            }
-        }
-    }
-}
-
 /// A configured collection of external tool providers.
 ///
 /// MCP servers and connectors share one persistence shape: an array of tables
@@ -290,14 +270,6 @@ impl IntegrationCollection {
         }
     }
 
-    fn from_key(key: &str) -> Option<Self> {
-        match key {
-            "mcp_servers" => Some(Self::McpServers),
-            "connectors" => Some(Self::Connectors),
-            _ => None,
-        }
-    }
-
     /// The field an entry is identified by, which connectors allow to be `id`.
     pub(super) fn identity(self, table: &Table) -> Option<&str> {
         match self {
@@ -311,31 +283,6 @@ impl IntegrationCollection {
         match self {
             Self::McpServers => ConfigError::InvalidMcp(message.to_owned()),
             Self::Connectors => ConfigError::InvalidIntegration(message.to_owned()),
-        }
-    }
-}
-
-fn merge_integration_entries(
-    collection: IntegrationCollection,
-    target: &mut Vec<Value>,
-    overlay: &[Value],
-) {
-    for entry in overlay {
-        let Some(overlay_table) = entry.as_table() else {
-            target.push(entry.clone());
-            continue;
-        };
-        let identity = collection.identity(overlay_table);
-        let existing = identity.and_then(|identity| {
-            target.iter_mut().find_map(|candidate| {
-                let table = candidate.as_table_mut()?;
-                (collection.identity(table) == Some(identity)).then_some(table)
-            })
-        });
-        if let Some(existing) = existing {
-            merge_tables(existing, overlay_table);
-        } else {
-            target.push(entry.clone());
         }
     }
 }

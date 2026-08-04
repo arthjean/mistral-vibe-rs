@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Merge each configuration key by the strategy the reference declares for it
+  instead of replacing every list. A denylist now extends the one a lower layer
+  set rather than erasing it, which affects `disabled_tools`, `tool_paths`,
+  `agent_paths`, `skill_paths`, `enabled_agents`, `disabled_agents`,
+  `installed_agents`, `enabled_skills`, `disabled_skills` and
+  `applied_migrations`. A tool a lower layer disabled therefore stays disabled
+  when a higher layer disables another one; if you relied on a higher layer
+  replacing the list, move the entries you want to keep into that layer.
+  `enabled_tools` still replaces, as it does upstream. The provider, connector,
+  MCP server, transcribe-model and TTS-model lists merge entry by entry, keyed by
+  `name` or `alias`, so a higher layer redefining one entry no longer drops the
+  others, and an entry missing that key now fails the load naming the field and
+  the key rather than being silently kept.
 - Read `enabled_tools` and `disabled_tools` from `config.toml` and match both
   lists the way the reference does: entries are shell globs (`serena_*`), or
   regular expressions when prefixed with `re:`, and both forms ignore case. An

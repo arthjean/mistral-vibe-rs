@@ -18,6 +18,7 @@ use crate::mcp::{
 };
 use crate::text::hex_encode;
 
+mod merge;
 mod proxy;
 pub mod registry;
 
@@ -453,7 +454,7 @@ impl LayeredConfig {
         ];
         let mut effective = Table::new();
         for layer in &layers {
-            merge_tables(&mut effective, &layer.values);
+            merge_layer(&mut effective, &layer.values)?;
         }
         validate_table(&effective)?;
 
@@ -893,7 +894,10 @@ impl LayeredConfig {
 
 mod integrations;
 use integrations::*;
+use merge::merge_layer;
 
+#[cfg(test)]
+mod merge_tests;
 #[cfg(test)]
 mod registry_tests;
 
@@ -1479,6 +1483,13 @@ pub enum ConfigError {
     NonTableParent(String),
     #[error("invalid VIBE environment key `{0}`")]
     InvalidEnvironmentKey(String),
+    #[error("`{field}` entries require a `{merge_key}`")]
+    MergeKeyMissing { field: String, merge_key: String },
+    #[error("`{field}` cannot be composed by the `{strategy}` strategy across these layers")]
+    MergeType {
+        field: String,
+        strategy: &'static str,
+    },
     #[error("proxy value for `{0}` contains a forbidden control character")]
     InvalidProxyValue(ProxyKey),
     #[error("invalid MCP configuration: {0}")]
