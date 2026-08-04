@@ -51,7 +51,7 @@ use vibe_protocol::{
     CallbackKind, ClientCapabilities, Envelope, ErrorResponse, InitializeParams,
     InitializeResponse, JsonRpcVersion, Notification, ProtocolError, ProtocolErrorCode,
     ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerRequest, SuccessResponse,
-    TransportKind, decode_frame, encode_frame, validate_server_method,
+    TransportKind, decode_frame, encode_frame, is_server_method,
 };
 
 const INITIALIZE_METHOD: &str = "initialize";
@@ -1838,7 +1838,7 @@ impl ServerConnection {
                 "Connection is not initialized",
             );
         }
-        if validate_server_method(&request.method).is_err() {
+        if !is_server_method(&request.method) {
             return error_batch(
                 request.id,
                 ProtocolErrorCode::MethodNotFound,

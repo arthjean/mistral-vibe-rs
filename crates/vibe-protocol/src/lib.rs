@@ -5,7 +5,6 @@ use std::collections::BTreeMap;
 use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 pub const PROTOCOL_VERSION: &str = "1";
@@ -180,50 +179,29 @@ pub enum Envelope {
 pub enum ProtocolValidationError {
     #[error("invalid JSON frame: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("unknown server method: {0}")]
-    UnknownMethod(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ConnectionOutcome {
-    Frame(Envelope),
-    Close {
-        code: ProtocolErrorCode,
-        message: &'static str,
-    },
-}
-
+/// Decodes an inbound frame.
+///
+/// A frame that fails here carries no usable `id`, so the protocol has no way
+/// to answer it: callers close the connection instead of replying.
 pub fn decode_frame(bytes: &[u8]) -> Result<Envelope, ProtocolValidationError> {
     Ok(serde_json::from_slice(bytes)?)
-}
-
-#[must_use]
-pub fn validate_connection_frame(bytes: &[u8]) -> ConnectionOutcome {
-    match decode_frame(bytes) {
-        Ok(frame) => ConnectionOutcome::Frame(frame),
-        Err(ProtocolValidationError::Json(_)) => ConnectionOutcome::Close {
-            code: ProtocolErrorCode::InvalidRequest,
-            message: "Malformed JSON-RPC message",
-        },
-        Err(ProtocolValidationError::UnknownMethod(_)) => ConnectionOutcome::Close {
-            code: ProtocolErrorCode::MethodNotFound,
-            message: "Unknown app-server method",
-        },
-    }
 }
 
 pub fn encode_frame(frame: &Envelope) -> Result<Vec<u8>, ProtocolValidationError> {
     Ok(serde_json::to_vec(frame)?)
 }
 
-pub fn validate_server_method(method: &str) -> Result<(), ProtocolValidationError> {
-    if SERVER_METHODS.contains(&method) {
-        Ok(())
-    } else {
-        Err(ProtocolValidationError::UnknownMethod(method.to_owned()))
-    }
+/// Reports whether `method` is part of the negotiated surface.
+#[must_use]
+pub fn is_server_method(method: &str) -> bool {
+    SERVER_METHODS.contains(&method)
 }
 
+/// JSON Schema description of the wire contract, for external client
+/// generators.
+#[must_use]
 pub fn protocol_schema() -> Value {
     serde_json::json!({
         "protocolVersion": PROTOCOL_VERSION,
@@ -234,22 +212,6 @@ pub fn protocol_schema() -> Value {
         "sessionMcpServer": schema_for!(SessionMcpServer),
         "protocolError": schema_for!(ProtocolError),
     })
-}
-
-pub fn protocol_schema_digest() -> String {
-    let encoded = serde_json::to_vec(&protocol_schema()).unwrap_or_default();
-    format!("sha256:{}", hex_digest(Sha256::digest(encoded)))
-}
-
-fn hex_digest(bytes: impl AsRef<[u8]>) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let bytes = bytes.as_ref();
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(char::from(HEX[usize::from(byte >> 4)]));
-        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    output
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -423,13 +385,6 @@ mod tests {
         ] {
             let encoded = serde_json::to_vec(&value).expect("JSON fixture");
             assert!(decode_frame(&encoded).is_err(), "accepted {value}");
-            assert!(matches!(
-                validate_connection_frame(&encoded),
-                ConnectionOutcome::Close {
-                    code: ProtocolErrorCode::InvalidRequest,
-                    message: "Malformed JSON-RPC message"
-                }
-            ));
         }
     }
 
@@ -456,5 +411,15 @@ mod tests {
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(unique.len(), 81);
         assert_eq!(unique.len(), SERVER_METHODS.len());
+    }
+
+    #[test]
+    fn schema_reports_the_declared_version_and_methods() {
+        let schema = protocol_schema();
+        assert_eq!(schema["protocolVersion"], json!(PROTOCOL_VERSION));
+        assert_eq!(
+            schema["serverMethods"].as_array().map(Vec::len),
+            Some(SERVER_METHODS.len())
+        );
     }
 }
