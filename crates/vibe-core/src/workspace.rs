@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 use std::future::Future;
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -477,14 +477,37 @@ impl Workspace {
                 limit: self.max_read_bytes,
             });
         }
+        // The reference `WriteFileConfig.create_parent_dirs` defaults to true,
+        // so a write into a directory that does not exist yet creates it rather
+        // than failing.
+        if let Some(parent) = relative
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            self.directory
+                .create_dir_all(parent)
+                .map_err(|source| WorkspaceError::Io {
+                    path: parent.to_path_buf(),
+                    source,
+                })?;
+        }
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         let mut file = self
             .directory
             .open_with(&relative, &options)
-            .map_err(|source| WorkspaceError::Io {
-                path: relative.clone(),
-                source,
+            .map_err(|source| {
+                // `create_new` is what refuses an overwrite, and the reference
+                // answers that case by naming `edit` rather than reporting a
+                // raw filesystem error.
+                if source.kind() == io::ErrorKind::AlreadyExists {
+                    WorkspaceError::AlreadyExists(relative.clone())
+                } else {
+                    WorkspaceError::Io {
+                        path: relative.clone(),
+                        source,
+                    }
+                }
             })?;
         file.write_all(content)
             .and_then(|()| file.sync_all())
@@ -796,6 +819,40 @@ impl WorkspaceTools {
                 })
             },
         );
+        let write_review = self.review.clone();
+        let write: Arc<dyn ToolHandler> = Arc::new(
+            move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
+                let review = write_review.clone();
+                let path = invocation.arguments["file_path"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned();
+                let content = invocation.arguments["content"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned();
+                Box::pin(async move {
+                    if path.trim().is_empty() {
+                        return Err(ToolError::Execution(
+                            "write_file file_path cannot be empty".to_owned(),
+                        ));
+                    }
+                    let result = review
+                        .write(&path, content.as_bytes())
+                        .map_err(|error| ToolError::Execution(error.to_string()))?;
+                    Ok(ToolExecutionOutput {
+                        model_text: format!(
+                            "Wrote {} bytes to {}",
+                            result.bytes_written, result.path
+                        ),
+                        display: json!({"kind": "write", "path": result.path}),
+                        typed_result: serde_json::to_value(&result)
+                            .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
+                        chunks: Vec::new(),
+                    })
+                })
+            },
+        );
         let read_root = self.workspace.root().to_path_buf();
         let guarded_read = Arc::new(PolicyGuardedTool::new(
             "read_file",
@@ -826,8 +883,8 @@ impl WorkspaceTools {
         let edit_root = self.workspace.root().to_path_buf();
         let guarded_edit = Arc::new(PolicyGuardedTool::new(
             "edit",
-            policy,
-            approval,
+            policy.clone(),
+            approval.clone(),
             Arc::new(move |invocation| {
                 let path = invocation.arguments["file_path"]
                     .as_str()
@@ -838,10 +895,26 @@ impl WorkspaceTools {
             }),
             edit,
         ));
+        let write_root = self.workspace.root().to_path_buf();
+        let guarded_write = Arc::new(PolicyGuardedTool::new(
+            "write_file",
+            policy,
+            approval,
+            Arc::new(move |invocation| {
+                let path = invocation.arguments["file_path"].as_str().ok_or_else(|| {
+                    ToolError::Execution("write_file file_path is missing".to_owned())
+                })?;
+                Ok(vec![PermissionRequirement::Write {
+                    path: write_root.join(path),
+                }])
+            }),
+            write,
+        ));
         Ok(vec![
             registry.register(read_file_spec(), guarded_read)?,
             registry.register(grep_spec(), guarded_search)?,
             registry.register(edit_spec(), guarded_edit)?,
+            registry.register(write_file_spec(), guarded_write)?,
         ])
     }
 }
@@ -866,6 +939,8 @@ pub enum WorkspaceError {
     DiscoveryLimit(usize),
     #[error("write is {actual} bytes, exceeding the {limit}-byte limit")]
     WriteLimit { actual: usize, limit: usize },
+    #[error("`{0}` already exists; use edit to modify it")]
+    AlreadyExists(PathBuf),
     #[error("invalid search pattern: {0}")]
     InvalidPattern(String),
     #[error("git inspection failed: {0}")]
@@ -1031,6 +1106,43 @@ fn edit_spec() -> ToolSpec {
             .build(),
         output_schema: None,
         config: Value::Null,
+        state: Value::Null,
+        availability: ToolAvailability::Available,
+        presentation: ToolPresentationKind::Diff,
+        source: ToolSource::BuiltIn,
+        selection_priority: 100,
+    }
+}
+
+/// Directive coverage for `write_file`, whose reference description this port
+/// must cover without reproducing (`NOTICE`).
+///
+/// | Reference directive | Covered by |
+/// |---|---|
+/// | The path is absolute | "absolute path" in the `file_path` description |
+/// | An existing file is not overwritten; `edit` modifies it | "never overwrites an existing file: reach for `edit`" |
+/// | Missing parent directories are created | "Missing parent directories are created" |
+/// | The content replaces the whole file | "the whole file content" in the `content` description |
+fn write_file_spec() -> ToolSpec {
+    ToolSpec {
+        name: "write_file".to_owned(),
+        description: "Create a file at an absolute path and write it whole. It never overwrites \
+                      an existing file: reach for `edit` to change one. Missing parent \
+                      directories are created."
+            .to_owned(),
+        input_schema: ObjectSchema::new()
+            .required(
+                "file_path",
+                Property::string()
+                    .described("The absolute path of the file to write, which must not exist yet"),
+            )
+            .required(
+                "content",
+                Property::string().described("The whole file content to write"),
+            )
+            .build(),
+        output_schema: None,
+        config: json!({"maxBytes": DEFAULT_MAX_READ_BYTES}),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Diff,
@@ -1467,7 +1579,7 @@ mod tests {
             .into_iter()
             .map(|spec| spec.name)
             .collect::<Vec<_>>();
-        assert_eq!(names, ["edit", "grep", "read_file"]);
+        assert_eq!(names, ["edit", "grep", "read_file", "write_file"]);
 
         let read = registry
             .invoke(
@@ -1694,7 +1806,7 @@ mod tests {
         assert!(replaced.model_text.contains("+two"));
     }
 
-    /// A trusted workspace with the three tools registered and every approval
+    /// A trusted workspace with the file tools registered and every approval
     /// refused, so anything reaching the approval path fails loudly.
     async fn registered_workspace_tools(root: &Path) -> ToolRegistry {
         let workspace = Arc::new(Workspace::open(root).expect("workspace"));
@@ -1709,5 +1821,132 @@ mod tests {
             .register(&registry, policy, Arc::new(RejectApproval))
             .expect("register");
         registry
+    }
+
+    /// The same, plus the review manager the caller needs to inspect what the
+    /// write captured for rewind.
+    async fn registered_workspace_tools_with_review(
+        root: &Path,
+    ) -> (ToolRegistry, Arc<ReviewManager>) {
+        let workspace = Arc::new(Workspace::open(root).expect("workspace"));
+        let review = Arc::new(ReviewManager::new(workspace.clone()));
+        review.begin_turn("turn-1").expect("turn");
+        let policy = PermissionStore::default();
+        policy
+            .set_trust(root, TrustDecision::Trusted, TrustRootKind::Workspace)
+            .await
+            .expect("trust");
+        let registry = ToolRegistry::default();
+        WorkspaceTools::new(workspace, review.clone())
+            .register(&registry, policy, Arc::new(RejectApproval))
+            .expect("register");
+        (registry, review)
+    }
+
+    /// `write_file` creates a file, creates the parents it needs, and captures
+    /// what it replaced so the turn stays rewindable.
+    #[tokio::test]
+    async fn write_file_creates_missing_parents_and_captures_the_turn_baseline() {
+        let directory = tempdir().expect("tempdir");
+        let (registry, review) = registered_workspace_tools_with_review(directory.path()).await;
+
+        let created = registry
+            .invoke(
+                "write_file",
+                ToolInvocation {
+                    call_id: "write-1".to_owned(),
+                    arguments: json!({"file_path": "nested/deep/new.txt", "content": "alpha\n"}),
+                },
+            )
+            .await
+            .expect("a missing parent directory is created");
+        assert!(
+            created.model_text.contains("nested/deep/new.txt"),
+            "{created:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("nested/deep/new.txt")).expect("file"),
+            "alpha\n"
+        );
+        // A hunk exists only for a path whose pre-write state the review
+        // manager captured, so this is the rewind capture observed from
+        // outside.
+        let hunks = review.view().expect("view").pending_hunks;
+        assert_eq!(
+            hunks
+                .iter()
+                .map(|hunk| hunk.path.as_str())
+                .collect::<Vec<_>>(),
+            ["nested/deep/new.txt"]
+        );
+    }
+
+    /// The reference refuses to overwrite and names `edit` instead, and the
+    /// refusal still runs after the baseline capture, so the turn can rewind.
+    #[tokio::test]
+    async fn write_file_refuses_an_existing_file_and_names_the_edit_tool() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("held.txt"), "original\n").expect("file");
+        let (registry, _review) = registered_workspace_tools_with_review(directory.path()).await;
+
+        let refused = registry
+            .invoke(
+                "write_file",
+                ToolInvocation {
+                    call_id: "write-1".to_owned(),
+                    arguments: json!({"file_path": "held.txt", "content": "replacement\n"}),
+                },
+            )
+            .await
+            .expect_err("an existing file is not overwritten");
+        assert!(refused.to_string().contains("already exists"), "{refused}");
+        assert!(refused.to_string().contains("edit"), "{refused}");
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("held.txt")).expect("file"),
+            "original\n"
+        );
+    }
+
+    /// The path policy and the write limit both bind `write_file`, which is
+    /// what keeps a shell-free tool from reaching outside the workspace.
+    #[tokio::test]
+    async fn write_file_is_bounded_by_the_workspace_root_and_the_write_limit() {
+        let directory = tempdir().expect("tempdir");
+        let (registry, _review) = registered_workspace_tools_with_review(directory.path()).await;
+
+        let escaped = registry
+            .invoke(
+                "write_file",
+                ToolInvocation {
+                    call_id: "write-1".to_owned(),
+                    arguments: json!({"file_path": "../outside.txt", "content": "no"}),
+                },
+            )
+            .await
+            .expect_err("a path outside the root is refused");
+        assert!(
+            escaped.to_string().contains("permission denied"),
+            "{escaped}"
+        );
+        assert!(!directory.path().join("../outside.txt").exists());
+
+        let oversized = registry
+            .invoke(
+                "write_file",
+                ToolInvocation {
+                    call_id: "write-2".to_owned(),
+                    arguments: json!({
+                        "file_path": "big.txt",
+                        "content": "x".repeat(DEFAULT_MAX_READ_BYTES + 1),
+                    }),
+                },
+            )
+            .await
+            .expect_err("a write past the limit is refused");
+        assert!(
+            oversized.to_string().contains("exceeding the"),
+            "{oversized}"
+        );
+        assert!(!directory.path().join("big.txt").exists());
     }
 }

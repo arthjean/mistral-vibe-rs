@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `write_file`, which creates a file and the parent directories it needs
+  and refuses to overwrite an existing one, naming `edit` instead.
 - Rename the file tools to their reference names: `read_file` replaces `read`
   and `grep` replaces `search`. `read_file` takes `file_path`, `offset` and
   `limit`; `grep` always treats its `pattern` as a regular expression and takes
