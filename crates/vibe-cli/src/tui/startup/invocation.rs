@@ -144,7 +144,7 @@ mod tests {
 
     use super::*;
 
-    const REFERENCE_COMMIT: &str = "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9";
+    const REFERENCE_COMMIT: &str = "68ff32e6a92e80a874c8153312f0aa8ae4955477";
 
     #[derive(Debug, Deserialize)]
     #[serde(rename_all = "camelCase", deny_unknown_fields)]

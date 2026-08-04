@@ -3,12 +3,12 @@
     "file": "tasks/prd-tui-runtime-observable-parity.md",
     "title": "TUI Runtime Observable Parity",
     "created_at": "2026-08-02",
-    "status": "DONE"
+    "status": "IN_PROGRESS"
   },
   "epics": [
     { "id": "EP-006", "title": "Secure Startup and Invocation", "status": "DONE", "priority": "P0", "stories_total": 4, "stories_done": 4 },
     { "id": "EP-007", "title": "Callback and Active-Turn Control", "status": "DONE", "priority": "P0", "stories_total": 5, "stories_done": 5 },
-    { "id": "EP-008", "title": "Reversible Session Management", "status": "DONE", "priority": "P0", "stories_total": 2, "stories_done": 2 },
+    { "id": "EP-008", "title": "Reversible Session Management", "status": "IN_PROGRESS", "priority": "P0", "stories_total": 2, "stories_done": 1 },
     { "id": "EP-009", "title": "Configuration and External Integrations", "status": "DONE", "priority": "P0", "stories_total": 3, "stories_done": 3 },
     { "id": "EP-010", "title": "Semantic Transcript and Observability", "status": "DONE", "priority": "P0", "stories_total": 3, "stories_done": 3 },
     { "id": "EP-011", "title": "Terminal Services and Lifecycle", "status": "DONE", "priority": "P1", "stories_total": 3, "stories_done": 3 }
@@ -23,7 +23,7 @@
     { "id": "US-026", "title": "Preserve live plan-review state and editor actions", "epic": "EP-007", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-025"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },
     { "id": "US-027", "title": "Match typed queue, grouping, presentation, and command gating", "epic": "EP-007", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-025", "US-013"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },
     { "id": "US-028", "title": "Finalize cancellation and stream local shell output", "epic": "EP-007", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-027"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },
-    { "id": "US-029", "title": "Match rewind navigation and file restoration choice", "epic": "EP-008", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-028"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },
+    { "id": "US-029", "title": "Match rewind navigation and file restoration choice", "epic": "EP-008", "status": "TODO", "priority": "P0", "size": "L", "blocked_by": ["US-028"], "started_at": "2026-08-02", "completed_at": null, "reviewed_at": "2026-08-04", "reopened_at": "2026-08-04", "reopened_reason": "Re-measured against the reference re-pinned at 68ff32e6 (v2.23.3) by crates/vibe-cli/tests/runtime-parity/ep008-python-oracle.py: the reference replaced the one-step rewind with an action-then-persistence flow emitting RewindConfirmed(restore_files, inplace). The port still dispatches on the first Enter and has no persistence choice, so the trace left the EP-008 corpus for its unavailable entries." },
     { "id": "US-030", "title": "Require confirmed and recoverable session deletion", "epic": "EP-008", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-023"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },
     { "id": "US-031", "title": "Implement typed configuration, layers, and complete proxy settings", "epic": "EP-009", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-020", "US-023"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },
     { "id": "US-032", "title": "Implement MCP and connector lifecycle with authentication", "epic": "EP-009", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-020", "US-031"], "started_at": "2026-08-02", "completed_at": "2026-08-02", "reviewed_at": "2026-08-02" },

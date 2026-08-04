@@ -1,6 +1,6 @@
 {
   "oracle": {
-    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
     "deterministicRuns": 10,
     "engine": "python-reference-capture"
   },
@@ -69,7 +69,7 @@
     "script": "ep011-python-oracle.py"
   },
   "reference": {
-    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
     "sourceFiles": [
       "vibe/cli/cli.py",
       "vibe/cli/session_exit.py",
@@ -84,7 +84,7 @@
       "vibe/cli/update_notifier/adapters/pypi_update_gateway.py",
       "vibe/setup/update_prompt/update_prompt_dialog.py"
     ],
-    "version": "2.23.2"
+    "version": "2.23.3"
   },
   "schemaVersion": 1,
   "traces": [

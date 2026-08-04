@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "reference": {
-    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
-    "version": "2.23.2",
+    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+    "version": "2.23.3",
     "sourceFiles": [
       "vibe/cli/textual_ui/app.py",
       "vibe/cli/textual_ui/handlers/event_handler.py",

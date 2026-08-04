@@ -1,6 +1,6 @@
 {
   "oracle": {
-    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
     "deterministicRuns": 10,
     "engine": "python-textual-capture"
   },
@@ -111,7 +111,7 @@
     "script": "ep009-python-oracle.py"
   },
   "reference": {
-    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
+    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
     "sourceFiles": [
       "vibe/cli/textual_ui/screens/config/config_screen.py",
       "vibe/cli/textual_ui/screens/config/edit.py",

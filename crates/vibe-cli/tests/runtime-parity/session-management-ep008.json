@@ -1,60 +1,61 @@
 {
   "schemaVersion": 2,
   "reference": {
-    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
-    "version": "2.23.2",
+    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+    "version": "2.23.3",
     "sourceFiles": [
       "vibe/cli/textual_ui/app.py",
-      "vibe/cli/textual_ui/widgets/rewind_app.py",
       "vibe/cli/textual_ui/widgets/session_picker.py",
       "vibe/cli/textual_ui/startup.py"
     ]
   },
   "traces": [
     {
-      "id": "rewind-navigation-conditional-actions-and-retry",
-      "story": "US-029",
-      "events": [
-        {
-          "kind": "open_rewind",
-          "targets": [
-            {"messageIndex": 2, "message": "inspect only", "hasFileChanges": false},
-            {"messageIndex": 4, "message": "restore this edit", "hasFileChanges": true}
-          ]
-        },
-        {"kind": "rewind_previous"},
-        {"kind": "rewind_action_down"},
-        {"kind": "rewind_next"},
-        {"kind": "rewind_action_down"},
-        {"kind": "rewind_accept"},
-        {"kind": "rewind_failure"},
-        {"kind": "rewind_cancel"}
-      ],
-      "expected": [
-        "rewind:open:target=4:actions=2:selected=restoreandedit",
-        "rewind:previous:target=2:actions=1:selected=editonly",
-        "rewind:action:target=2:actions=1:selected=editonly",
-        "rewind:next:target=4:actions=2:selected=restoreandedit",
-        "rewind:action:target=4:actions=2:selected=editonly",
-        "rewind:dispatch:4:false",
-        "rewind:failure:retained=true:visible=true",
-        "rewind:cancelled"
-      ]
-    },
-    {
       "id": "active-session-guard-confirmation-and-failure-recovery",
       "story": "US-030",
       "events": [
-        {"kind": "open_sessions", "sessions": ["active", "old"], "current": "active"},
-        {"kind": "select_session", "session_id": "active"},
-        {"kind": "delete_request", "session_id": "active"},
-        {"kind": "select_session", "session_id": "old"},
-        {"kind": "delete_request", "session_id": "old"},
-        {"kind": "delete_request", "session_id": "old"},
-        {"kind": "delete_failure"},
-        {"kind": "delete_request", "session_id": "old"},
-        {"kind": "delete_request", "session_id": "old"},
-        {"kind": "delete_success"}
+        {
+          "kind": "open_sessions",
+          "sessions": [
+            "active",
+            "old"
+          ],
+          "current": "active"
+        },
+        {
+          "kind": "select_session",
+          "session_id": "active"
+        },
+        {
+          "kind": "delete_request",
+          "session_id": "active"
+        },
+        {
+          "kind": "select_session",
+          "session_id": "old"
+        },
+        {
+          "kind": "delete_request",
+          "session_id": "old"
+        },
+        {
+          "kind": "delete_request",
+          "session_id": "old"
+        },
+        {
+          "kind": "delete_failure"
+        },
+        {
+          "kind": "delete_request",
+          "session_id": "old"
+        },
+        {
+          "kind": "delete_request",
+          "session_id": "old"
+        },
+        {
+          "kind": "delete_success"
+        }
       ],
       "expected": [
         "sessions:open:2",
@@ -73,11 +74,28 @@
       "id": "final-startup-session-deletion",
       "story": "US-030",
       "events": [
-        {"kind": "open_sessions", "sessions": ["last"], "current": null},
-        {"kind": "select_session", "session_id": "last"},
-        {"kind": "delete_request", "session_id": "last"},
-        {"kind": "delete_request", "session_id": "last"},
-        {"kind": "delete_success"}
+        {
+          "kind": "open_sessions",
+          "sessions": [
+            "last"
+          ],
+          "current": null
+        },
+        {
+          "kind": "select_session",
+          "session_id": "last"
+        },
+        {
+          "kind": "delete_request",
+          "session_id": "last"
+        },
+        {
+          "kind": "delete_request",
+          "session_id": "last"
+        },
+        {
+          "kind": "delete_success"
+        }
       ],
       "expected": [
         "sessions:open:1",
@@ -88,5 +106,11 @@
       ]
     }
   ],
-  "unavailable": []
+  "unavailable": [
+    {
+      "id": "rewind-navigation-conditional-actions-and-retry",
+      "story": "US-029",
+      "reason": "The reference replaced the one-step rewind with a two-step flow at v2.23.3: ep008-python-oracle.py measures Enter on the action step advancing to a persistence step (rewind:step:target=4:actions=2:selected=inplace) and only a second Enter confirming, as RewindConfirmed(restore_files, inplace). The Rust port still implements the superseded single Enter dispatch, so this trace has no conformant expectation to replay until the port adopts the persistence step."
+    }
+  ]
 }

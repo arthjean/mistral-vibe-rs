@@ -36,7 +36,7 @@ use ratatui::backend::TestBackend;
 use serde::Deserialize;
 use serde_json::Value;
 
-const REFERENCE_COMMIT: &str = "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9";
+const REFERENCE_COMMIT: &str = "68ff32e6a92e80a874c8153312f0aa8ae4955477";
 
 /// The Python reference lives in a checkout outside this repository, so the
 /// live oracle probe can only run on a workstation that holds it at
@@ -751,16 +751,30 @@ fn ep008_corpus_replays_rewind_and_delete_state_machines() {
     assert_eq!(corpus.schema_version, 2);
     assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
     assert!(!corpus.reference.version.is_empty());
-    assert_eq!(corpus.reference.source_files.len(), 4);
-    assert!(corpus.unavailable.is_empty());
+    assert_eq!(corpus.reference.source_files.len(), 3);
     assert_eq!(
         corpus
             .traces
             .iter()
             .map(|trace| trace.story.as_str())
             .collect::<BTreeSet<_>>(),
-        BTreeSet::from(["US-029", "US-030"])
+        BTreeSet::from(["US-030"])
     );
+    // US-029 left the replayable set when the reference moved to a two-step
+    // rewind at v2.23.3, measured by `tests/runtime-parity/ep008-python-oracle.py`.
+    // A dropped trace stays visible: it names the story it covered and why the
+    // corpus carries no expectation for it.
+    for entry in &corpus.unavailable {
+        for field in ["id", "story", "reason"] {
+            assert!(
+                entry
+                    .get(field)
+                    .and_then(Value::as_str)
+                    .is_some_and(|value| !value.trim().is_empty()),
+                "unavailable trace is missing `{field}`: {entry}"
+            );
+        }
+    }
 
     for trace in corpus.traces {
         assert!(!trace.id.is_empty());
