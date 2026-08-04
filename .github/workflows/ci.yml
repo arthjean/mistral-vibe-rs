@@ -26,3 +26,9 @@ jobs:
           cargo +stable check --workspace --all-targets --all-features
           cargo +stable clippy --workspace --all-targets --all-features -- -D warnings
           cargo +stable test --workspace --all-features
+      # The runner has no pinned Python reference, so the surface is diffed
+      # against the committed canonical digest. Rerun with output shown so the
+      # conformance count lands in the job log.
+      - name: Tool-surface conformance
+        run: |
+          cargo +stable test -p vibe-app-server --all-features tool_surface_parity_tests -- --nocapture
