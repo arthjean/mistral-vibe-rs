@@ -11,7 +11,7 @@ use vibe_core::updates::{
     status_cause,
 };
 
-use super::{REFERENCE_COMMIT, Reference};
+use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
 use crate::tui::attention::{
     AttentionNotifier, DEFAULT_TITLE, NotificationContext, NotificationPolicy, THROTTLE_MS,
 };
@@ -604,14 +604,16 @@ fn corpus_replays_update_attention_narration_and_exit_behaviour() {
             "trace {} has an incomplete expectation",
             trace.id
         );
-        let captured = python_expected
-            .get(&trace.id)
-            .unwrap_or_else(|| panic!("Python oracle omitted trace {}", trace.id));
-        assert_eq!(
-            &trace.reference, captured,
-            "checked-in reference for {} drifted from the pinned Python oracle",
-            trace.id
-        );
+        if let Some(python_expected) = &python_expected {
+            let captured = python_expected
+                .get(&trace.id)
+                .unwrap_or_else(|| panic!("Python oracle omitted trace {}", trace.id));
+            assert_eq!(
+                &trace.reference, captured,
+                "checked-in reference for {} drifted from the pinned Python oracle",
+                trace.id
+            );
+        }
         let declared = trace
             .divergences
             .iter()
@@ -657,11 +659,11 @@ fn corpus_replays_update_attention_narration_and_exit_behaviour() {
     }
 }
 
-fn assert_python_oracle_probe(probe: &OracleProbe) -> BTreeMap<String, Vec<String>> {
-    let (observed, traces) = run_python_oracle(probe);
+fn assert_python_oracle_probe(probe: &OracleProbe) -> Option<BTreeMap<String, Vec<String>>> {
+    let (observed, traces) = run_python_oracle(probe)?;
     assert_eq!(observed, probe.expected, "Python EP-011 oracle drifted");
     assert_terminal_service_contracts(&observed);
-    traces
+    Some(traces)
 }
 
 /// The dimensions the reference exposes as values rather than event sequences.
@@ -725,28 +727,16 @@ fn assert_terminal_service_contracts(observed: &Value) {
 }
 
 /// Runs the pinned reference oracle and splits its per-trace observations from
-/// the standalone probe dimensions.
-fn run_python_oracle(probe: &OracleProbe) -> (Value, BTreeMap<String, Vec<String>>) {
-    const ORACLE_ROOT: &str = "/home/arthur/dev/mistral-vibe";
-    let revision = Command::new("git")
-        .args(["-C", ORACLE_ROOT, "rev-parse", "HEAD"])
-        .output()
-        .expect("execute git for the pinned Python oracle");
-    assert!(revision.status.success(), "read the Python oracle revision");
-    assert_eq!(
-        String::from_utf8(revision.stdout)
-            .expect("UTF-8 Python oracle revision")
-            .trim(),
-        REFERENCE_COMMIT,
-        "the Python oracle checkout moved"
-    );
-
+/// the standalone probe dimensions. Returns `None` where the pinned checkout is
+/// unavailable, which is every machine but the reference workstation.
+fn run_python_oracle(probe: &OracleProbe) -> Option<(Value, BTreeMap<String, Vec<String>>)> {
+    let oracle_root = pinned_python_oracle()?;
     let script = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/runtime-parity")
         .join(&probe.script);
-    let output = Command::new(Path::new(ORACLE_ROOT).join(".venv/bin/python"))
+    let output = Command::new(oracle_root.join(".venv/bin/python"))
         .arg(script)
-        .current_dir(ORACLE_ROOT)
+        .current_dir(&oracle_root)
         .output()
         .expect("execute the pinned Python EP-011 oracle");
     assert!(
@@ -760,10 +750,10 @@ fn run_python_oracle(probe: &OracleProbe) -> (Value, BTreeMap<String, Vec<String
         .as_object_mut()
         .and_then(|observed| observed.remove("traceExpected"))
         .expect("Python EP-011 oracle emitted every trace");
-    (
+    Some((
         observed,
         serde_json::from_value(trace_expected).expect("strict Python EP-011 trace observations"),
-    )
+    ))
 }
 
 /// Rewrites the checked-in corpus from the current runtime and the pinned
@@ -780,7 +770,8 @@ fn regenerate_corpus() {
     .expect("strict EP-011 corpus");
     let probe: OracleProbe =
         serde_json::from_value(corpus["oracleProbe"].clone()).expect("strict EP-011 oracle probe");
-    let (observed, captured) = run_python_oracle(&probe);
+    let (observed, captured) =
+        run_python_oracle(&probe).expect("the pinned Python oracle checkout must be available");
     corpus["oracleProbe"]["expected"] = observed;
     for trace in corpus["traces"]
         .as_array_mut()

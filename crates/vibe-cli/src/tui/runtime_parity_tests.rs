@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::Duration;
 
 use super::attachments::{PromptDraft, prepare_submission};
@@ -36,6 +37,35 @@ use serde::Deserialize;
 use serde_json::Value;
 
 const REFERENCE_COMMIT: &str = "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9";
+
+/// The Python reference lives in a checkout outside this repository, so the
+/// live oracle probe can only run on a workstation that holds it at
+/// [`REFERENCE_COMMIT`]. Returns the checkout root when it is usable, and
+/// `None` when it is missing or has moved: every corpus replay still runs
+/// against the reference captured in the checked-in fixtures.
+fn pinned_python_oracle() -> Option<PathBuf> {
+    const ORACLE_ROOT: &str = "/home/arthur/dev/mistral-vibe";
+    let root = PathBuf::from(ORACLE_ROOT);
+    if !root.join(".venv/bin/python").is_file() {
+        return None;
+    }
+    let revision = Command::new("git")
+        .args(["-C", ORACLE_ROOT, "rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    if !revision.status.success() {
+        return None;
+    }
+    let head = String::from_utf8(revision.stdout).ok()?;
+    if head.trim() != REFERENCE_COMMIT {
+        eprintln!(
+            "skipping the live Python oracle probe: {ORACLE_ROOT} is at {}, not the pinned {REFERENCE_COMMIT}",
+            head.trim()
+        );
+        return None;
+    }
+    Some(root)
+}
 
 mod ep009;
 mod ep010;
