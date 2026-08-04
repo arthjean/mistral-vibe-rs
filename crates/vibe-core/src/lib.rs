@@ -17,6 +17,7 @@ pub mod process;
 pub mod prompt;
 pub mod provider;
 mod remote_tools;
+pub mod schema;
 pub mod shell;
 pub mod storage;
 pub mod telemetry;
