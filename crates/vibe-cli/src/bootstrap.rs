@@ -14,7 +14,10 @@ use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::resources::{
     CoreResourceBackend, MistralConnectorClient, production_mcp_adapters,
 };
-use vibe_app_server::server::AppServer;
+use vibe_app_server::server::{AppServer, WebSearchAccess};
+
+use secrecy::SecretString;
+use url::Url;
 
 use crate::{Arguments, CliError, price_per_million_micros};
 
@@ -46,7 +49,7 @@ pub(crate) fn resource_server(
     credential: String,
 ) -> Result<AppServer, CliError> {
     let connector = Arc::new(
-        MistralConnectorClient::new(&arguments.api_base, credential)
+        MistralConnectorClient::new(&arguments.api_base, credential.clone())
             .map_err(|error| CliError::Terminal(error.to_string()))?,
     );
     let (mcp_factory, mcp_auth) =
@@ -63,7 +66,27 @@ pub(crate) fn resource_server(
         )
         .with_connector_auth(connector);
     Ok(AppServer::with_resource_backend(Arc::new(resource_backend))
-        .using_release3_service(release3))
+        .using_release3_service(release3)
+        .using_web_search_access(Some(web_search_access(arguments, credential))))
+}
+
+/// The credential and endpoint `web_search` reaches the conversations API with.
+///
+/// The reference resolves the key from the environment or the OS keyring; the
+/// CLI has already done both by the time it builds the server, so it hands the
+/// resolved key down rather than letting the server retry only the environment.
+fn web_search_access(arguments: &Arguments, credential: String) -> WebSearchAccess {
+    // `api_base` is the chat-completions URL, and the conversations endpoint
+    // sits at the same origin, which is what the reference derives too.
+    let endpoint = Url::parse(&arguments.api_base)
+        .ok()
+        .map(|url| url.origin().ascii_serialization())
+        .unwrap_or_else(|| WebSearchAccess::DEFAULT_ENDPOINT.to_owned());
+    WebSearchAccess {
+        endpoint,
+        model: WebSearchAccess::DEFAULT_MODEL.to_owned(),
+        api_key: SecretString::from(credential),
+    }
 }
 
 pub(crate) fn cloud_service(credential: String) -> Result<Release4Service, CliError> {
