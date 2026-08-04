@@ -1,5 +1,6 @@
 .claude/
 .codex/
+.env
 target/
 .parity/
 .vibe/
