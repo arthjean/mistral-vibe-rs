@@ -145,7 +145,11 @@ pub struct SessionOptions {
     pub agent: Option<String>,
     #[serde(default)]
     pub tool_filters: Vec<String>,
-    #[serde(default)]
+    /// Omitted when empty, because `session/start` reads it as an optional
+    /// allowlist: an absent field leaves the configured `enabled_tools`
+    /// standing, while an empty array replaces it. The reference draws the same
+    /// line, passing `None` for a `--enabled-tools` flag nobody used.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub enabled_tools: Vec<String>,
     #[serde(default)]
     pub disabled_tools: Vec<String>,

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Read `enabled_tools` and `disabled_tools` from `config.toml` and match both
+  lists the way the reference does: entries are shell globs (`serena_*`), or
+  regular expressions when prefixed with `re:`, and both forms ignore case. An
+  allowlist narrows the surface and the denylist is applied last, so a name both
+  lists match is withheld. `--enabled-tools` replaces the configured allowlist
+  and `--disabled-tools` adds to the configured denylist. An entry that is not a
+  valid regular expression is reported on `diagnostics/list` and ignored instead
+  of failing the session.
+- Withhold a tool whose runtime prerequisite is missing rather than publishing
+  it and failing at call time, re-checking the prerequisite at every
+  publication: a Windows shell family whose interpreter is uninstalled while a
+  session runs leaves the surface at the next turn. Withheld tools are named on
+  `diagnostics/list`.
 - Publish the Windows shell families. On Windows, under the
   `VIBE_MANAGED_SHELL_TOOLS` rollout, `git_bash`, `git_bash_output`,
   `git_bash_stdin`, `git_bash_sessions` and `git_bash_log_file` appear when a

@@ -152,6 +152,38 @@ impl ConfigSnapshot {
             .unwrap_or(JsonValue::Null)
     }
 
+    /// The `enabled_tools` allowlist the configuration carries.
+    ///
+    /// Reference `VibeConfigSchema.enabled_tools`: when it holds an entry, only
+    /// the tools it matches are published. Entries are glob or `re:` patterns,
+    /// matched by [`crate::matching::NameFilter`].
+    #[must_use]
+    pub fn enabled_tools(&self) -> Vec<String> {
+        self.string_array("enabled_tools")
+    }
+
+    /// The `disabled_tools` denylist the configuration carries, applied after
+    /// the allowlist as reference `available_tools` applies it.
+    #[must_use]
+    pub fn disabled_tools(&self) -> Vec<String> {
+        self.string_array("disabled_tools")
+    }
+
+    /// The string entries of a top-level array key, skipping anything that is
+    /// not a string so one mistyped entry cannot take the session down.
+    fn string_array(&self, key: &str) -> Vec<String> {
+        self.effective
+            .get(key)
+            .and_then(Value::as_array)
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|entry| entry.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub fn mcp_servers(
         &self,
         working_directory: &Path,
@@ -771,6 +803,18 @@ impl LayeredConfig {
                 "proxy": {"type": ["string", "null"], "format": "uri", "description": "Legacy proxy URL. Prefer /proxy-setup for protocol-specific values."},
                 "tls_ca_path": {"type": ["string", "null"], "description": "Legacy TLS certificate path. Prefer /proxy-setup."},
                 "dotenv_path": {"type": ["string", "null"], "description": "Optional dotenv file loaded by the runtime."},
+                "enabled_tools": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "default": [],
+                    "description": "Tool names or patterns to publish. When set, only matching tools are published. Globs and `re:` regular expressions are supported."
+                },
+                "disabled_tools": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "default": [],
+                    "description": "Tool names or patterns to withhold, applied after `enabled_tools`. Globs and `re:` regular expressions are supported."
+                },
                 "mcp_servers": {
                     "type": "array",
                     "description": "MCP server definitions.",

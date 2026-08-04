@@ -35,6 +35,7 @@ use vibe_core::events::{
 };
 use vibe_core::extensions::{AgentApproval, AgentProfile};
 use vibe_core::integrations::redact;
+use vibe_core::matching::NameFilter;
 use vibe_core::mcp::McpServerConfig;
 pub use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionRequirement,
@@ -63,6 +64,9 @@ const EXIT_NOTIFICATION: &str = "exit";
 /// Where the managed shell rollout is read from, standing in for the reference
 /// experiment variant that has no client in this port.
 const MANAGED_SHELL_VARIABLE: &str = "VIBE_MANAGED_SHELL_TOOLS";
+/// What a tool-surface diagnostic is attributed to: the tool filters and the
+/// availability conditions both come from the configuration the session loaded.
+const CONFIG_FILE_LABEL: &str = "config.toml";
 const MAX_CALLBACK_OUTPUT_BYTES: usize = 64 * 1024;
 const MAX_CALLBACK_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_CALLBACK_ANSWERS: usize = 16;
@@ -1375,9 +1379,25 @@ impl AppServer {
         }
         let policy = PermissionStore::default();
         let tools = ToolRegistry::default();
+        // A resumed session runs under the same configuration a fresh one does,
+        // so its two filter lists are read again here rather than left empty.
+        let (enabled_tools, disabled_tools) = self
+            .release3
+            .tool_filters_for_session(
+                Path::new(&attachment.working_directory),
+                matches!(
+                    policy.try_trust_decision(&attachment.working_directory),
+                    Ok(Some(TrustDecision::Trusted | TrustDecision::SessionTrusted))
+                ),
+            )
+            .unwrap_or_default();
         let mut intent = SessionIntent {
             agent: attachment.agent.clone(),
             resume: Some(attachment.id.clone()),
+            requested_enabled_tools: enabled_tools.clone(),
+            requested_disabled_tools: disabled_tools.clone(),
+            enabled_tools,
+            disabled_tools,
             ..SessionIntent::default()
         };
         apply_persisted_session_settings(&mut intent, &attachment.hydrated);
@@ -2015,6 +2035,41 @@ impl ServerConnection {
         success_batch(request.id, BTreeMap::new())
     }
 
+    /// Reports what the session's tool surface could not honour: a filter entry
+    /// that does not compile, and a registered tool whose runtime prerequisite
+    /// does not hold.
+    ///
+    /// Both are published on `diagnostics/list` rather than failing the session:
+    /// the reference drops an uncompilable pattern and withholds an unavailable
+    /// tool, and neither is a reason to refuse to start.
+    fn record_tool_surface_diagnostics(&self, intent: &SessionIntent, tools: &ToolRegistry) {
+        let mut issues = Vec::new();
+        for entry in NameFilter::new(&intent.enabled_tools).invalid() {
+            issues.push(format!(
+                "enabled_tools entry `{entry}` is not a valid regular expression and is ignored"
+            ));
+        }
+        for entry in NameFilter::new(&intent.disabled_tools).invalid() {
+            issues.push(format!(
+                "disabled_tools entry `{entry}` is not a valid regular expression and is ignored"
+            ));
+        }
+        let withheld = tools.withheld().unwrap_or_default();
+        for name in withheld {
+            issues.push(format!(
+                "tool `{name}` is withheld: its runtime prerequisite is missing"
+            ));
+        }
+        if issues.is_empty() {
+            return;
+        }
+        if let Ok(mut resources) = self.server.resources.lock() {
+            for issue in issues {
+                resources.record_diagnostic(CONFIG_FILE_LABEL, &issue);
+            }
+        }
+    }
+
     fn session_start(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<SessionStartParams>(&request.params) {
             Ok(params) => params,
@@ -2140,13 +2195,29 @@ impl ServerConnection {
             Err(error) => return release3_error_batch(request.id, error),
         };
         let should_persist_agent = attachment.is_none() || params.agent.is_some();
+        let (config_enabled_tools, config_disabled_tools) = match self
+            .server
+            .release3
+            .tool_filters_for_session(Path::new(&working_directory), params.trusted)
+        {
+            Ok(filters) => filters,
+            Err(error) => return release3_error_batch(request.id, error),
+        };
+        // Reference `_session_config_overrides`: an `enabled_tools` the client
+        // sent replaces the configured allowlist, while `disabled_tools`
+        // concatenates onto it.
+        let enabled_tools = params.enabled_tools.unwrap_or(config_enabled_tools);
+        let mut disabled_tools = config_disabled_tools;
+        disabled_tools.extend(params.disabled_tools);
+        disabled_tools.sort();
+        disabled_tools.dedup();
         let mut intent = SessionIntent {
             add_directories: params.add_directories,
             trusted: params.trusted,
             agent: Some(selected_agent),
             tool_filters: params.tool_filters,
-            enabled_tools: params.enabled_tools.unwrap_or_default(),
-            disabled_tools: params.disabled_tools,
+            enabled_tools,
+            disabled_tools,
             requested_enabled_tools: Vec::new(),
             requested_disabled_tools: Vec::new(),
             agent_permission_rules: Vec::new(),
@@ -2219,6 +2290,7 @@ impl ServerConnection {
         {
             return error_batch(request.id, ProtocolErrorCode::InternalError, &error);
         }
+        self.record_tool_surface_diagnostics(&intent, &tools);
         if persisted.is_none() && self.server.release3.persists_runtime_sessions() {
             match self.server.release3.create_runtime_session(
                 &session_id,
@@ -3772,6 +3844,40 @@ mod tests {
                 serde_json::to_value(wire).expect("wire kind"),
                 "{engine:?} and {wire:?} must serialize identically"
             );
+        }
+    }
+
+    /// Registers one tool whose runtime prerequisite never holds, which is what
+    /// a session-scoped tool does when the thing it drives is not there.
+    struct UnavailablePrerequisiteTools;
+
+    impl SessionToolFactory for UnavailablePrerequisiteTools {
+        fn register(&self, _session_id: &str, tools: &ToolRegistry) -> Result<(), String> {
+            tools
+                .register_conditional(
+                    ToolSpec {
+                        name: "fixture_probe".to_owned(),
+                        description: "fixture".to_owned(),
+                        input_schema: vibe_core::schema::ObjectSchema::new().build(),
+                        output_schema: None,
+                        config: Value::Null,
+                        state: Value::Null,
+                        availability: ToolAvailability::Available,
+                        presentation: ToolPresentationKind::Generic,
+                        source: ToolSource::Custom,
+                        selection_priority: 0,
+                    },
+                    Arc::new(
+                        |_invocation: &ToolInvocation,
+                         _output: ToolOutputSink|
+                         -> OwnedToolHandlerFuture {
+                            Box::pin(async { Ok(ToolExecutionOutput::text("unreachable")) })
+                        },
+                    ),
+                    Arc::new(|| false),
+                )
+                .map(drop)
+                .map_err(|error| error.to_string())
         }
     }
 
@@ -5866,6 +5972,264 @@ tool_timeout_sec = 2
             }),
         ));
         assert!(untrusted.deferred.is_empty());
+    }
+
+    /// The configuration file is a shared surface with the reference, so the
+    /// two filter lists it carries reach the session the same way: the
+    /// allowlist stands when the client asks for none, the denylist
+    /// concatenates onto what the client sent, and an entry that does not
+    /// compile is reported rather than applied.
+    #[test]
+    fn session_start_reads_the_configured_tool_filters_and_reports_a_broken_entry() {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        let working_directory = temporary.path().join("workspace");
+        let vibe_home = temporary.path().join("home");
+        fs::create_dir_all(working_directory.join(".vibe")).expect("project config directory");
+        fs::create_dir_all(&vibe_home).expect("user config directory");
+        fs::write(
+            working_directory.join(".vibe/config.toml"),
+            "enabled_tools = [\"read_file\", \"serena_*\"]\n\
+             disabled_tools = [\"re:web_.*\", \"re:[\"]\n",
+        )
+        .expect("project tool filters");
+        let release3 = Release3Service::new(
+            crate::release3::Release3Paths {
+                vibe_home,
+                working_directory: working_directory.clone(),
+                session_root: temporary.path().join("sessions"),
+            },
+            Table::new(),
+            true,
+        )
+        .expect("release-3 service");
+        let server = AppServer::with_release3_service(release3);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({
+                "sessionId": "filtered",
+                "workingDirectory": working_directory,
+                "trustWorkspace": true,
+                "disabledTools": ["exit_plan_mode"]
+            }),
+        ));
+
+        let intent = server
+            .sessions
+            .lock()
+            .expect("sessions")
+            .get("filtered")
+            .map(|session| session.intent.clone())
+            .expect("the session started");
+        assert_eq!(intent.enabled_tools, ["read_file", "serena_*"]);
+        assert_eq!(
+            intent.disabled_tools,
+            ["exit_plan_mode", "re:[", "re:web_.*"]
+        );
+
+        let diagnostics = connection.dispatch(&request(
+            3,
+            "diagnostics/list",
+            json!({"sessionId": "filtered"}),
+        ));
+        let reported = match decode_frame(&diagnostics.outbound[0]).expect("diagnostics response") {
+            Envelope::Success(SuccessResponse { result, .. }) => result["issues"]
+                .as_array()
+                .map(|issues| {
+                    issues
+                        .iter()
+                        .filter_map(|issue| issue["message"].as_str().map(ToOwned::to_owned))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        assert!(
+            reported
+                .iter()
+                .any(|message| message.contains("disabled_tools entry `re:[`")),
+            "the broken entry must be named: {reported:?}"
+        );
+    }
+
+    /// The path the `vibe` binary and the ACP adapter actually take: they build
+    /// a [`crate::client::SessionOptions`] and never a raw params object, so a
+    /// run without `--enabled-tools` must leave the configured allowlist
+    /// standing, the way the reference passes `None` for an absent flag.
+    #[test]
+    fn a_client_that_asks_for_no_allowlist_keeps_the_configured_one() {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        let working_directory = temporary.path().join("workspace");
+        let vibe_home = temporary.path().join("home");
+        fs::create_dir_all(working_directory.join(".vibe")).expect("project config directory");
+        fs::create_dir_all(&vibe_home).expect("user config directory");
+        fs::write(
+            working_directory.join(".vibe/config.toml"),
+            "enabled_tools = [\"read_file\", \"serena_*\"]\n",
+        )
+        .expect("project tool filters");
+        let release3 = Release3Service::new(
+            crate::release3::Release3Paths {
+                vibe_home,
+                working_directory: working_directory.clone(),
+                session_root: temporary.path().join("sessions"),
+            },
+            Table::new(),
+            true,
+        )
+        .expect("release-3 service");
+        let server = AppServer::with_release3_service(release3);
+        let mut client =
+            crate::client::InProcessClient::connect_with_server(server.clone()).expect("client");
+        let session_id = client
+            .start_session(&crate::client::SessionOptions {
+                working_directory: working_directory.to_string_lossy().into_owned(),
+                trusted: true,
+                ..default_session_options()
+            })
+            .expect("the session starts");
+
+        let intent = server
+            .sessions
+            .lock()
+            .expect("sessions")
+            .get(&session_id)
+            .map(|session| session.intent.clone())
+            .expect("the session started");
+        assert_eq!(intent.enabled_tools, ["read_file", "serena_*"]);
+    }
+
+    /// The options a client sends when the operator passed no tool flag.
+    fn default_session_options() -> crate::client::SessionOptions {
+        crate::client::SessionOptions {
+            working_directory: String::new(),
+            session_id: None,
+            add_directories: Vec::new(),
+            trusted: false,
+            agent: None,
+            tool_filters: Vec::new(),
+            enabled_tools: Vec::new(),
+            disabled_tools: Vec::new(),
+            mcp_servers: Vec::new(),
+            model: None,
+            max_turns: None,
+            max_tokens: None,
+            max_price_micros: None,
+            mode: None,
+            thinking: false,
+            reasoning_effort: None,
+            auto_approve: false,
+            resume: None,
+            continue_session: false,
+        }
+    }
+
+    /// A session attached from persisted state runs under the same
+    /// configuration a fresh one does, so the filter lists reach it there too
+    /// rather than only on the `session/start` path.
+    #[test]
+    fn an_attached_runtime_session_carries_the_configured_tool_filters() {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        let working_directory = temporary.path().join("workspace");
+        let session_root = temporary.path().join("sessions");
+        let vibe_home = temporary.path().join("home");
+        fs::create_dir_all(&working_directory).expect("workspace");
+        fs::create_dir_all(&vibe_home).expect("user config directory");
+        // The user file, which applies whatever the workspace trust decision is.
+        fs::write(
+            vibe_home.join("config.toml"),
+            "disabled_tools = [\"serena_*\"]\n",
+        )
+        .expect("user tool filters");
+        vibe_core::storage::SessionStore::new(&session_root)
+            .create("attached", &working_directory.to_string_lossy(), None, 1)
+            .expect("persisted session");
+        let release3 = Release3Service::new(
+            crate::release3::Release3Paths {
+                vibe_home,
+                working_directory: working_directory.clone(),
+                session_root,
+            },
+            Table::new(),
+            true,
+        )
+        .expect("release-3 service");
+        let server = AppServer::with_release3_service(release3);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        // Selecting an agent attaches the persisted session to this connection,
+        // which is the path that rebuilds the intent from stored state.
+        connection.dispatch(&request(
+            2,
+            "session/agent/update",
+            json!({"sessionId": "attached", "name": "default"}),
+        ));
+
+        let intent = server
+            .sessions
+            .lock()
+            .expect("sessions")
+            .get("attached")
+            .map(|session| session.intent.clone())
+            .expect("the session attached");
+        // The default agent adds its own entry, and the configured one survives
+        // the agent overlay rather than being replaced by it.
+        assert_eq!(intent.disabled_tools, ["exit_plan_mode", "serena_*"]);
+    }
+
+    /// Reference edge case: a tool whose prerequisite is missing is absent from
+    /// the surface rather than published and failed at call time, and the
+    /// session says which tool it withheld.
+    #[test]
+    fn a_tool_whose_prerequisite_is_missing_is_withheld_and_named() {
+        let server =
+            AppServer::default().using_session_tool_factory(Arc::new(UnavailablePrerequisiteTools));
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+
+        let published = server
+            .sessions
+            .lock()
+            .expect("sessions")
+            .get("session-1")
+            .map(|session| session.tools.clone())
+            .expect("the session started")
+            .available(&NameFilter::default(), &NameFilter::default())
+            .expect("available")
+            .into_iter()
+            .map(|spec| spec.name)
+            .collect::<Vec<_>>();
+        assert!(
+            !published.contains(&"fixture_probe".to_owned()),
+            "a tool with no prerequisite reached the surface: {published:?}"
+        );
+
+        let diagnostics = connection.dispatch(&request(
+            3,
+            "diagnostics/list",
+            json!({"sessionId": "session-1"}),
+        ));
+        let reported = match decode_frame(&diagnostics.outbound[0]).expect("diagnostics response") {
+            Envelope::Success(SuccessResponse { result, .. }) => result["issues"]
+                .as_array()
+                .map(|issues| {
+                    issues
+                        .iter()
+                        .filter_map(|issue| issue["message"].as_str().map(ToOwned::to_owned))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        assert!(
+            reported
+                .iter()
+                .any(|message| message.contains("tool `fixture_probe` is withheld")),
+            "the withheld tool must be named: {reported:?}"
+        );
     }
 
     #[test]

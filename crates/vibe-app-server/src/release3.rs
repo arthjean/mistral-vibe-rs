@@ -489,6 +489,26 @@ impl Release3Service {
             .map_err(config_error)
     }
 
+    /// The `enabled_tools` and `disabled_tools` lists the configuration carries
+    /// for a session opened in `working_directory`, in that order.
+    ///
+    /// The reference reads them from the same layered configuration the session
+    /// runs under, so the project file of the directory being opened counts,
+    /// not the one the service was constructed with.
+    pub fn tool_filters_for_session(
+        &self,
+        working_directory: &Path,
+        project_trusted: bool,
+    ) -> Result<(Vec<String>, Vec<String>), Release3Error> {
+        let snapshot = self
+            .config
+            .clone()
+            .scoped_to_working_directory(working_directory.to_path_buf(), project_trusted)
+            .load()
+            .map_err(config_error)?;
+        Ok((snapshot.enabled_tools(), snapshot.disabled_tools()))
+    }
+
     fn config_snapshot(&self) -> Result<Release3Dispatch, Release3Error> {
         let snapshot = self.config.load().map_err(config_error)?;
         Ok(Release3Dispatch::result([(
