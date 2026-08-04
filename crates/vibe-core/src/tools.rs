@@ -15,6 +15,8 @@ use thiserror::Error;
 use crate::engine::{ToolExecutor, ToolFuture, ToolStreamSink};
 use crate::text::truncate_utf8;
 
+pub mod builtins;
+
 pub const DEFAULT_MAX_TOOL_OUTPUT_BYTES: usize = 1_048_576;
 pub(crate) const MAX_TOOL_ERROR_BYTES: usize = 16_384;
 
