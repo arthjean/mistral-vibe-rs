@@ -31,7 +31,7 @@ import sys
 import tempfile
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_REFERENCE = Path("/home/arthur/dev/mistral-vibe")
 DEFAULT_OUTPUT = Path(".parity/tool-surface-corpus.json")
 EXPECTED_COMMIT = "68ff32e6a92e80a874c8153312f0aa8ae4955477"
@@ -105,13 +105,16 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
     with tempfile.TemporaryDirectory() as workdir:
         # An empty working directory keeps project-local tool and prompt
         # overrides out of the captured surface.
-        manager = ToolManager(
-            lambda: config,
-            defer_mcp=True,
-            shell_policy=ShellToolPolicy(),
-            cwd=Path(workdir),
-        )
-        available = manager.available_tools
+        def surface(policy: Any) -> dict[str, Any]:
+            manager = ToolManager(
+                lambda: config,
+                defer_mcp=True,
+                shell_policy=policy,
+                cwd=Path(workdir),
+            )
+            return manager.available_tools
+
+        available = surface(ShellToolPolicy())
         tools = [
             {"name": name, "parameters": available[name].get_parameters()}
             for name in sorted(available)
@@ -121,12 +124,30 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
             for name in sorted(available)
             for fixture in argument_fixtures(name, available[name])
         ]
+        # The managed rollout is a second surface, not a second corpus: the
+        # variant it selects for `bash` and the four session tools it adds are
+        # only reachable with the experiment variant resolved to `managed`.
+        managed_available = surface(
+            ShellToolPolicy(
+                managed_tools_enabled=lambda: True,
+                local_managed_tools_enabled=True,
+            )
+        )
+        managed_tools = [
+            {"name": name, "parameters": managed_available[name].get_parameters()}
+            for name in sorted(managed_available)
+        ]
     conditions = {
         "managedShellRollout": False,
+        "managedShellRolloutCaptured": True,
         "enabledTools": list(config.enabled_tools),
         "disabledTools": list(config.disabled_tools),
     }
-    return tools, {"conditions": conditions, "fixtures": fixtures}
+    return tools, {
+        "conditions": conditions,
+        "fixtures": fixtures,
+        "managedTools": managed_tools,
+    }
 
 
 # --------------------------------------------------------------------------
@@ -357,6 +378,7 @@ def main() -> int:
             "python": platform.python_version(),
             "conditions": extra["conditions"],
             "tools": tools,
+            "managedTools": extra["managedTools"],
             "fixtures": extra["fixtures"],
         }
         if arguments.probe_endpoint:
@@ -376,7 +398,8 @@ def main() -> int:
         print(f"tool-surface capture failed: {error}", file=sys.stderr)
         return 1
     print(
-        f"captured {len(tools)} tools and {len(extra['fixtures'])} fixtures "
+        f"captured {len(tools)} tools, {len(extra['managedTools'])} managed tools "
+        f"and {len(extra['fixtures'])} fixtures "
         f"from {reference['commit'][:12]} into {output}"
     )
     if probe := corpus.get("endpointProbe"):

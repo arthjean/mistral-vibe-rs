@@ -36,6 +36,8 @@ use vibe_core::tools::{
 };
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 
+use vibe_core::tools::bash::{ShellRollout, ShellTools};
+
 use crate::client::{InteractiveSessionToolFactory, task_spec};
 use crate::server::SessionToolFactory;
 
@@ -44,6 +46,9 @@ use crate::server::SessionToolFactory;
 const REFERENCE_COMMIT: &str = "68ff32e6a92e80a874c8153312f0aa8ae4955477";
 const REFERENCE_ROOT: &str = "/home/arthur/dev/mistral-vibe";
 const CORPUS_RELATIVE: &str = ".parity/tool-surface-corpus.json";
+/// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
+/// capture script.
+const CORPUS_SCHEMA_VERSION: u32 = 2;
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_surface.py";
 const BASELINE_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/baseline.json";
 /// Stands in for every description string so presence is compared and text is
@@ -57,6 +62,11 @@ struct Corpus {
     reference: Reference,
     platform: String,
     tools: Vec<ReferenceTool>,
+    /// The surface the managed shell rollout selects, which replaces `bash`
+    /// with its eight-property variant and adds the four session tools. It is
+    /// defaulted so an older corpus still parses and reaches the version skip.
+    #[serde(default)]
+    managed_tools: Vec<ReferenceTool>,
     fixtures: Vec<Fixture>,
 }
 
@@ -152,8 +162,8 @@ fn corpus() -> Option<Corpus> {
         return None;
     };
     let corpus: Corpus = serde_json::from_str(&raw).expect("the corpus parses");
-    assert_eq!(corpus.schema_version, 1, "unknown corpus schema version");
-    if let Some(reason) = skip_reason(
+    if let Some(reason) = skip_reason_for(
+        corpus.schema_version,
         &corpus.reference.commit,
         &corpus.platform,
         running_platform(),
@@ -173,7 +183,18 @@ fn running_platform() -> &'static str {
 /// A corpus is only an oracle for the commit it was captured from and for the
 /// platform whose availability rules it recorded, so both mismatches skip with
 /// an explicit message rather than failing or passing silently.
-fn skip_reason(captured_commit: &str, captured_platform: &str, running: &str) -> Option<String> {
+fn skip_reason_for(
+    captured_version: u32,
+    captured_commit: &str,
+    captured_platform: &str,
+    running: &str,
+) -> Option<String> {
+    if captured_version != CORPUS_SCHEMA_VERSION {
+        return Some(format!(
+            "skipping the tool-surface oracle: the corpus is at schema version {captured_version}, \
+             not the expected {CORPUS_SCHEMA_VERSION}; regenerate it with {CAPTURE_SCRIPT}"
+        ));
+    }
     if captured_commit != REFERENCE_COMMIT {
         return Some(format!(
             "skipping the tool-surface oracle: the corpus was captured from {captured_commit}, \
@@ -207,6 +228,10 @@ impl ApprovalAgent for RejectApproval {
 /// availability rule itself is proven by a unit test, because the oracle can
 /// only compare the two surfaces under one configuration at a time.
 async fn published_specs(web_search: bool) -> Vec<ToolSpec> {
+    published_specs_with(web_search, ShellRollout::Legacy).await
+}
+
+async fn published_specs_with(web_search: bool, rollout: ShellRollout) -> Vec<ToolSpec> {
     let directory = tempfile::tempdir().expect("tempdir");
     let workspace = Arc::new(Workspace::open(directory.path()).expect("workspace"));
     let review = Arc::new(ReviewManager::new(workspace.clone()));
@@ -236,8 +261,17 @@ async fn published_specs(web_search: bool) -> Vec<ToolSpec> {
         )
         .expect("universal tools register");
     WorkspaceTools::new(workspace, review)
-        .register(&registry, policy, Arc::new(RejectApproval))
+        .register(&registry, policy.clone(), Arc::new(RejectApproval))
         .expect("workspace tools register");
+    ShellTools::new(directory.path().join("home"), rollout)
+        .register(
+            "session-1",
+            directory.path(),
+            &registry,
+            policy,
+            Arc::new(RejectApproval),
+        )
+        .expect("the shell family registers");
     let (sender, _receiver) = tokio::sync::mpsc::channel(1);
     InteractiveSessionToolFactory {
         sender,
@@ -433,6 +467,85 @@ async fn the_published_tool_surface_matches_the_reference_except_for_the_recorde
     );
 }
 
+/// The managed rollout selects another `bash` and adds four session tools, a
+/// surface the default corpus cannot answer for. It is captured separately and
+/// diffed here under the same rules: names first, then canonicalized schemas.
+#[tokio::test]
+async fn the_managed_shell_surface_matches_the_reference_under_its_rollout() {
+    let Some(corpus) = corpus() else {
+        return;
+    };
+    let reference_names = corpus
+        .tools
+        .iter()
+        .map(|tool| tool.name.clone())
+        .collect::<BTreeSet<_>>();
+    let published = published_specs_with(
+        reference_names.contains("web_search"),
+        ShellRollout::Managed,
+    )
+    .await
+    .into_iter()
+    .map(|spec| (spec.name.clone(), spec))
+    .collect::<BTreeMap<_, _>>();
+
+    let mut report = Vec::new();
+    let mut missing = BTreeSet::new();
+    let mut conformant = 0;
+    for tool in &corpus.managed_tools {
+        let Some(spec) = published.get(&tool.name) else {
+            missing.insert(tool.name.clone());
+            continue;
+        };
+        let mut found = Vec::new();
+        diff(
+            &canonicalize(&tool.parameters),
+            &canonicalize(&spec.input_schema),
+            "",
+            &mut found,
+        );
+        if found.is_empty() {
+            conformant += 1;
+            continue;
+        }
+        for divergence in &found {
+            report.push(format!(
+                "tool `{}` diverges at {}: expected {}, got {}",
+                tool.name, divergence.pointer, divergence.expected, divergence.actual
+            ));
+        }
+    }
+    println!(
+        "managed shell surface: {}/{} names, {conformant}/{} schemas",
+        corpus.managed_tools.len() - missing.len(),
+        corpus.managed_tools.len(),
+        corpus.managed_tools.len()
+    );
+    for line in &report {
+        println!("{line}");
+    }
+    // The four session tools are what the rollout adds, and the epic's whole
+    // point is that they are published rather than named.
+    for name in [
+        "bash",
+        "bash_output",
+        "bash_stdin",
+        "bash_sessions",
+        "bash_log_file",
+    ] {
+        assert!(
+            published.contains_key(name),
+            "the managed rollout must publish `{name}`"
+        );
+    }
+    assert!(
+        missing.is_empty(),
+        "the managed rollout does not publish: {}",
+        missing.into_iter().collect::<Vec<_>>().join(", ")
+    );
+    assert!(report.is_empty(), "{}", report.join("\n"));
+}
+
 #[tokio::test]
 async fn arguments_the_reference_rejects_are_rejected_here_too() {
     let Some(corpus) = corpus() else {
@@ -482,20 +595,39 @@ async fn arguments_the_reference_rejects_are_rejected_here_too() {
 }
 
 #[test]
-fn a_corpus_from_another_commit_or_platform_skips_with_an_explicit_message() {
-    let moved = skip_reason("0123456789abcdef0123456789abcdef01234567", "linux", "linux")
-        .expect("a corpus from another commit cannot answer");
+fn a_corpus_from_another_commit_platform_or_layout_skips_with_an_explicit_message() {
+    let moved = skip_reason_for(
+        CORPUS_SCHEMA_VERSION,
+        "0123456789abcdef0123456789abcdef01234567",
+        "linux",
+        "linux",
+    )
+    .expect("a corpus from another commit cannot answer");
     assert!(moved.contains(REFERENCE_COMMIT), "{moved}");
     assert!(moved.contains("0123456789abcdef"), "{moved}");
 
-    let elsewhere = skip_reason(REFERENCE_COMMIT, "windows", "linux")
+    let elsewhere = skip_reason_for(CORPUS_SCHEMA_VERSION, REFERENCE_COMMIT, "windows", "linux")
         .expect("a corpus from another platform cannot answer");
     assert!(
         elsewhere.contains("windows") && elsewhere.contains("linux"),
         "{elsewhere}"
     );
 
-    assert!(skip_reason(REFERENCE_COMMIT, running_platform(), running_platform()).is_none());
+    // A corpus captured before the managed surface was recorded carries no
+    // answer for it, so it is regenerated rather than partly believed.
+    let stale = skip_reason_for(1, REFERENCE_COMMIT, "linux", "linux")
+        .expect("an older corpus layout cannot answer");
+    assert!(stale.contains(CAPTURE_SCRIPT), "{stale}");
+
+    assert!(
+        skip_reason_for(
+            CORPUS_SCHEMA_VERSION,
+            REFERENCE_COMMIT,
+            running_platform(),
+            running_platform()
+        )
+        .is_none()
+    );
 }
 
 #[test]
