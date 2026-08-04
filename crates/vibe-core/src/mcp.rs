@@ -1244,6 +1244,60 @@ mod tests {
         ));
     }
 
+    /// Reference `_apply_per_source_filtering` keys the denylist by source, so
+    /// two servers exposing the same remote name are filtered independently:
+    /// disabling `search` on one leaves the other's published name in place.
+    #[tokio::test]
+    async fn a_per_source_denylist_only_withholds_that_server_tools() {
+        let peers = ["muted", "loud"]
+            .map(|alias| {
+                let peer: Arc<dyn McpPeer> = Arc::new(FakePeer {
+                    tools: vec![remote_tool()],
+                    fail_calls: false,
+                    oversized: false,
+                    closed: AtomicBool::new(false),
+                });
+                (alias.to_owned(), peer)
+            })
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
+        let mut muted = config("muted");
+        muted.disabled_tools = BTreeSet::from(["search".to_owned()]);
+        let tools = ToolRegistry::default();
+        McpRegistry::default()
+            .discover_all(
+                vec![muted, config("loud")],
+                Arc::new(FakeFactory { peers }),
+                &tools,
+                PermissionStore::default(),
+                Arc::new(AlwaysApprove),
+            )
+            .await;
+
+        let published = tools
+            .available(
+                &crate::matching::NameFilter::default(),
+                &crate::matching::NameFilter::default(),
+            )
+            .expect("available")
+            .into_iter()
+            .map(|spec| spec.name)
+            .collect::<Vec<_>>();
+        assert_eq!(published, ["loud_search".to_owned()]);
+        assert!(matches!(
+            tools
+                .invoke(
+                    "muted_search",
+                    ToolInvocation {
+                        call_id: "muted".to_owned(),
+                        arguments: json!({"query": "rust"}),
+                    },
+                )
+                .await,
+            Err(ToolError::Unavailable(_))
+        ));
+    }
+
     #[tokio::test]
     async fn per_tool_toggle_updates_visible_state_and_registry_availability() {
         let peer: Arc<dyn McpPeer> = Arc::new(FakePeer {

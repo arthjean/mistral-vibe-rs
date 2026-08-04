@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::future::Future;
 use std::io::{self, Write};
@@ -13,6 +13,7 @@ use serde_json::{Map, Value};
 use thiserror::Error;
 
 use crate::engine::{ToolExecutor, ToolFuture, ToolStreamSink};
+use crate::matching::NameFilter;
 use crate::text::truncate_utf8;
 
 pub mod builtins;
@@ -196,6 +197,13 @@ where
     }
 }
 
+/// A runtime prerequisite re-read every time the surface is published.
+///
+/// The reference asks each tool class `is_available` on every `available_tools`
+/// access, so a prerequisite that disappears mid-session withdraws the tool at
+/// the next publication rather than at call time.
+pub type ToolCondition = Arc<dyn Fn() -> bool + Send + Sync>;
+
 #[derive(Clone)]
 struct RegisteredTool {
     spec: ToolSpec,
@@ -203,6 +211,15 @@ struct RegisteredTool {
     discovery_index: u64,
     /// Who published this name, so a second claim on it can name the first.
     origin: String,
+    /// The prerequisite this tool is published under, when it has one.
+    condition: Option<ToolCondition>,
+}
+
+impl RegisteredTool {
+    fn available(&self) -> bool {
+        self.spec.availability == ToolAvailability::Available
+            && self.condition.as_ref().is_none_or(|condition| condition())
+    }
 }
 
 #[derive(Clone)]
@@ -255,7 +272,22 @@ impl ToolRegistry {
         handler: Arc<dyn ToolHandler>,
     ) -> Result<RegistrationOutcome, ToolError> {
         let origin = format!("{:?} tool `{}`", spec.source, spec.name);
-        self.insert(spec, handler, origin, false)
+        self.insert(spec, handler, origin, false, None)
+    }
+
+    /// Registers a tool published only while `condition` holds.
+    ///
+    /// The condition is re-read at publication rather than frozen here, so a
+    /// prerequisite that appears or disappears mid-session moves the tool in and
+    /// out of the surface the way the reference `is_available` does.
+    pub fn register_conditional(
+        &self,
+        spec: ToolSpec,
+        handler: Arc<dyn ToolHandler>,
+        condition: ToolCondition,
+    ) -> Result<RegistrationOutcome, ToolError> {
+        let origin = format!("{:?} tool `{}`", spec.source, spec.name);
+        self.insert(spec, handler, origin, false, Some(condition))
     }
 
     /// Registers a tool that must own its published name outright.
@@ -271,7 +303,7 @@ impl ToolRegistry {
         handler: Arc<dyn ToolHandler>,
         origin: impl Into<String>,
     ) -> Result<RegistrationOutcome, ToolError> {
-        self.insert(spec, handler, origin.into(), true)
+        self.insert(spec, handler, origin.into(), true, None)
     }
 
     fn insert(
@@ -280,6 +312,7 @@ impl ToolRegistry {
         handler: Arc<dyn ToolHandler>,
         origin: String,
         exclusive: bool,
+        condition: Option<ToolCondition>,
     ) -> Result<RegistrationOutcome, ToolError> {
         spec.validate()?;
         let discovery_index = self.next_discovery_index.fetch_add(1, Ordering::Relaxed);
@@ -316,6 +349,7 @@ impl ToolRegistry {
                     handler,
                     discovery_index,
                     origin,
+                    condition,
                 },
             );
             Ok(outcome)
@@ -329,17 +363,38 @@ impl ToolRegistry {
         Ok(tools.values().map(|tool| tool.spec.clone()).collect())
     }
 
+    /// The surface a session publishes: every available tool the filters keep.
+    ///
+    /// Reference `available_tools` narrows with `enabled_tools` only when that
+    /// list carries an entry, and applies `disabled_tools` last, so a name both
+    /// lists match is withheld.
     pub fn available(
         &self,
-        enabled: &BTreeSet<String>,
-        disabled: &BTreeSet<String>,
+        enabled: &NameFilter,
+        disabled: &NameFilter,
     ) -> Result<Vec<ToolSpec>, ToolError> {
-        let tools = self.list()?;
+        let tools = self.tools.read().map_err(|_| ToolError::RegistryPoisoned)?;
         Ok(tools
-            .into_iter()
-            .filter(|spec| spec.availability == ToolAvailability::Available)
-            .filter(|spec| enabled.is_empty() || enabled.contains(&spec.name))
-            .filter(|spec| !disabled.contains(&spec.name))
+            .values()
+            .filter(|tool| tool.available())
+            .map(|tool| tool.spec.clone())
+            .filter(|spec| enabled.is_empty() || enabled.matches(&spec.name))
+            .filter(|spec| !disabled.matches(&spec.name))
+            .collect())
+    }
+
+    /// The registered names no publication can carry, because the prerequisite
+    /// they were registered under does not hold.
+    pub fn withheld(&self) -> Result<Vec<String>, ToolError> {
+        let tools = self.tools.read().map_err(|_| ToolError::RegistryPoisoned)?;
+        Ok(tools
+            .values()
+            .filter(|tool| {
+                tool.condition
+                    .as_ref()
+                    .is_some_and(|condition| !condition())
+            })
+            .map(|tool| tool.spec.name.clone())
             .collect())
     }
 
@@ -408,7 +463,7 @@ impl ToolRegistry {
                 .cloned()
                 .ok_or_else(|| ToolError::Unavailable(name.to_owned()))?
         };
-        if registered.spec.availability != ToolAvailability::Available {
+        if !registered.available() {
             return Err(ToolError::Unavailable(name.to_owned()));
         }
         validate_arguments(&invocation.arguments, &registered.spec.input_schema)?;
@@ -1375,6 +1430,100 @@ mod tests {
             .await
             .expect("invoke");
         assert_eq!(result.typed_result["content"], "second");
+    }
+
+    /// Reference `_select_available_variant` ranks the variants published under
+    /// one name by `(selection_priority, discovery_index)`, so the highest
+    /// priority owns the name whichever order the variants register in.
+    #[tokio::test]
+    async fn the_highest_priority_variant_owns_the_published_name() {
+        for order in [[10, 50], [50, 10]] {
+            let registry = ToolRegistry::default();
+            for (index, priority) in order.into_iter().enumerate() {
+                let content = if priority == 50 { "managed" } else { "legacy" };
+                let outcome = registry
+                    .register(spec(priority), handler(content))
+                    .expect("register");
+                assert_eq!(
+                    outcome,
+                    if index == 0 {
+                        RegistrationOutcome::Inserted
+                    } else if priority == 50 {
+                        RegistrationOutcome::Replaced
+                    } else {
+                        RegistrationOutcome::IgnoredLowerPriority
+                    }
+                );
+            }
+            let result = registry
+                .invoke(
+                    "read",
+                    ToolInvocation {
+                        call_id: "call-1".to_owned(),
+                        arguments: json!({"path": "README.md"}),
+                    },
+                )
+                .await
+                .expect("invoke");
+            assert_eq!(result.typed_result["content"], "managed", "{order:?}");
+        }
+    }
+
+    /// Reference `is_available` is asked again on every `available_tools`
+    /// access, so a prerequisite that comes and goes moves the tool in and out
+    /// of the published surface without a re-registration.
+    #[tokio::test]
+    async fn a_conditional_tool_follows_its_prerequisite_at_publication_time() {
+        let present = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let probe = Arc::clone(&present);
+        let registry = ToolRegistry::default();
+        registry
+            .register_conditional(
+                spec(0),
+                handler("conditional"),
+                Arc::new(move || probe.load(Ordering::Acquire)),
+            )
+            .expect("register");
+        let published = || {
+            registry
+                .available(&NameFilter::default(), &NameFilter::default())
+                .expect("available")
+                .into_iter()
+                .map(|spec| spec.name)
+                .collect::<Vec<_>>()
+        };
+        // Registered, so it is listed, and withheld, so nothing publishes it.
+        assert_eq!(registry.list().expect("list").len(), 1);
+        assert!(published().is_empty());
+        assert_eq!(registry.withheld().expect("withheld"), ["read".to_owned()]);
+        assert!(matches!(
+            registry
+                .invoke(
+                    "read",
+                    ToolInvocation {
+                        call_id: "call-1".to_owned(),
+                        arguments: json!({"path": "README.md"}),
+                    },
+                )
+                .await,
+            Err(ToolError::Unavailable(name)) if name == "read"
+        ));
+
+        present.store(true, Ordering::Release);
+        assert_eq!(published(), ["read".to_owned()]);
+        assert!(registry.withheld().expect("withheld").is_empty());
+        assert!(
+            registry
+                .invoke(
+                    "read",
+                    ToolInvocation {
+                        call_id: "call-2".to_owned(),
+                        arguments: json!({"path": "README.md"}),
+                    },
+                )
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]

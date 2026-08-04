@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::{TempDir, tempdir};
 
 use super::*;
+use crate::matching::NameFilter;
 use crate::policy::{
     ApprovalDecision, ApprovalFuture, ApprovalRequest, TrustDecision, TrustRootKind,
 };
@@ -1056,6 +1057,67 @@ fn family_names(family: ShellFamily) -> Vec<String> {
     names
         .extend(["log_file", "output", "sessions", "stdin"].map(|suffix| family.tool_name(suffix)));
     names
+}
+
+/// Reference `git_bash_shell_available` is re-read on every publication, so a
+/// family whose interpreter is uninstalled while a session runs leaves the
+/// surface at the next turn instead of failing at call time.
+#[tokio::test]
+async fn a_windows_family_leaves_the_surface_when_its_interpreter_goes_away() {
+    let directory = tempdir().expect("tempdir");
+    let installed = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let probe = Arc::clone(&installed);
+    let registry = ToolRegistry::default();
+    let tools = ShellTools::with_host_resolver(
+        directory.path().join("home"),
+        ShellRollout::Managed,
+        Arc::new(move || {
+            if probe.load(Ordering::Acquire) {
+                git_bash_host()
+            } else {
+                windows_host(None, None)
+            }
+        }),
+    );
+    let (approval, _requests) = ScriptedApproval::new(ApprovalDecision::Deny);
+    tools
+        .register(
+            "session-1",
+            directory.path(),
+            &registry,
+            PermissionStore::default(),
+            approval as Arc<dyn ApprovalAgent>,
+        )
+        .expect("the Git Bash family registers");
+    let published = || {
+        registry
+            .available(&NameFilter::default(), &NameFilter::default())
+            .expect("available")
+            .into_iter()
+            .map(|spec| spec.name)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(published(), family_names(ShellFamily::GitBash));
+
+    installed.store(false, Ordering::Release);
+    assert!(
+        published().is_empty(),
+        "an uninstalled interpreter still published: {:?}",
+        published()
+    );
+    assert_eq!(registry.withheld().expect("withheld").len(), 5);
+    assert!(matches!(
+        registry
+            .invoke(
+                "git_bash",
+                ToolInvocation {
+                    call_id: "call-1".to_owned(),
+                    arguments: json!({"command": "echo hi"}),
+                },
+            )
+            .await,
+        Err(ToolError::Unavailable(name)) if name == "git_bash"
+    ));
 }
 
 /// The ten Windows names are absent from a POSIX host under either rollout,

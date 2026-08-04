@@ -44,9 +44,9 @@ use crate::process::{
 use crate::schema::{ObjectSchema, Property};
 use crate::shell::{ShellAnalysis, ShellConfig, ShellFlavor, ShellPolicyContext, analyze_shell};
 use crate::tools::{
-    OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolError, ToolExecutionOutput,
-    ToolHandler, ToolHandlerFuture, ToolInvocation, ToolOutputSink, ToolPresentationKind,
-    ToolRegistry, ToolSource, ToolSpec,
+    OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolCondition, ToolError,
+    ToolExecutionOutput, ToolHandler, ToolHandlerFuture, ToolInvocation, ToolOutputSink,
+    ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
 };
 
 /// Reference `BashToolConfig.default_timeout`.
@@ -380,11 +380,18 @@ fn windows_shell_arguments(executable: &Path) -> Vec<String> {
 /// One instance serves every session, like [`crate::tools::builtins`]: the
 /// managed sessions are keyed by session id so a re-registration after an agent
 /// switch finds the sessions it left running.
+/// What the host offers, re-read on demand.
+///
+/// The reference availability predicates probe the machine on every
+/// publication, so the family a session publishes is a question asked again at
+/// each turn rather than an answer frozen at registration.
+pub type HostResolver = Arc<dyn Fn() -> HostShells + Send + Sync>;
+
 #[derive(Clone)]
 pub struct ShellTools {
     vibe_home: PathBuf,
     rollout: ShellRollout,
-    host: HostShells,
+    host: HostResolver,
     sessions: Arc<StdMutex<BTreeMap<String, Arc<SessionShell>>>>,
 }
 
@@ -394,7 +401,7 @@ impl std::fmt::Debug for ShellTools {
             .debug_struct("ShellTools")
             .field("vibe_home", &self.vibe_home)
             .field("rollout", &self.rollout)
-            .field("host", &self.host)
+            .field("host", &(self.host)())
             .finish_non_exhaustive()
     }
 }
@@ -417,7 +424,7 @@ impl SessionShell {
 impl ShellTools {
     #[must_use]
     pub fn new(vibe_home: impl Into<PathBuf>, rollout: ShellRollout) -> Self {
-        Self::with_host(vibe_home, rollout, HostShells::detect())
+        Self::with_host_resolver(vibe_home, rollout, Arc::new(HostShells::detect))
     }
 
     /// The same tools against a stated host, which is how a POSIX test drives
@@ -427,6 +434,18 @@ impl ShellTools {
         vibe_home: impl Into<PathBuf>,
         rollout: ShellRollout,
         host: HostShells,
+    ) -> Self {
+        Self::with_host_resolver(vibe_home, rollout, Arc::new(move || host.clone()))
+    }
+
+    /// The same tools against a host answered anew at every publication, which
+    /// is what [`ShellTools::new`] installs and what lets a test move the
+    /// machine under a running session.
+    #[must_use]
+    pub fn with_host_resolver(
+        vibe_home: impl Into<PathBuf>,
+        rollout: ShellRollout,
+        host: HostResolver,
     ) -> Self {
         Self {
             vibe_home: vibe_home.into(),
@@ -451,16 +470,37 @@ impl ShellTools {
         policy: PermissionStore,
         approval: Arc<dyn ApprovalAgent>,
     ) -> Result<Vec<RegistrationOutcome>, ToolError> {
-        let Some((family, managed)) = published_family(&self.host, self.rollout) else {
+        let host = (self.host)();
+        let Some((family, managed)) = published_family(&host, self.rollout) else {
             return Ok(Vec::new());
         };
-        let Some(config) = family_config(family, &self.host) else {
+        let Some(config) = family_config(family, &host) else {
             return Ok(Vec::new());
         };
         let shell = self.session_shell(session_id, family)?;
-        let platform = self.host.platform;
+        let platform = host.platform;
         let working_directory = working_directory.to_path_buf();
-        let mut outcomes = vec![registry.register(
+        // Reference `git_bash_shell_available` and `powershell_shell_available`
+        // are re-read on every publication, so a family whose interpreter is
+        // uninstalled mid-session drops out of the surface at the next turn.
+        // The POSIX family has no such probe: reference `Bash.is_available` is
+        // the inherited default.
+        let condition: Option<ToolCondition> = match family {
+            ShellFamily::Bash => None,
+            ShellFamily::GitBash | ShellFamily::PowerShell => {
+                let resolver = self.host.clone();
+                let rollout = self.rollout;
+                Some(Arc::new(move || {
+                    published_family(&resolver(), rollout)
+                        .is_some_and(|(published, _)| published == family)
+                }))
+            }
+        };
+        let publish = |spec, handler| match &condition {
+            Some(condition) => registry.register_conditional(spec, handler, condition.clone()),
+            None => registry.register(spec, handler),
+        };
+        let mut outcomes = vec![publish(
             command_spec(family, false),
             guarded_command(CommandWiring {
                 family,
@@ -476,7 +516,7 @@ impl ShellTools {
         if !managed {
             return Ok(outcomes);
         }
-        outcomes.push(registry.register(
+        outcomes.push(publish(
             command_spec(family, true),
             guarded_command(CommandWiring {
                 family,
@@ -489,20 +529,20 @@ impl ShellTools {
                 managed: true,
             }),
         )?);
-        outcomes.push(registry.register(
+        outcomes.push(publish(
             output_spec(family),
             session_handler(shell.clone(), run_output),
         )?);
-        outcomes.push(registry.register(
+        outcomes.push(publish(
             stdin_spec(family),
             session_handler(shell.clone(), run_stdin),
         )?);
-        outcomes.push(registry.register(
+        outcomes.push(publish(
             sessions_spec(family),
             session_handler(shell.clone(), run_sessions),
         )?);
         let log_shell = shell.clone();
-        outcomes.push(registry.register(
+        outcomes.push(publish(
             log_file_spec(family),
             Arc::new(PolicyGuardedTool::new(
                 family.tool_name("log_file"),

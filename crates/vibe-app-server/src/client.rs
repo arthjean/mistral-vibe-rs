@@ -23,6 +23,7 @@ use vibe_core::extensions::{
     AgentKind, AgentProfile, ChildContext, ChildLoggingPolicy, DelegationRequest, DiscoveryRoots,
     ExtensionSource, SubagentFuture, SubagentManager, SubagentRunner, discover_extensions,
 };
+use vibe_core::matching::NameFilter;
 use vibe_core::mcp::McpServerConfig;
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PolicyError,
@@ -2870,11 +2871,17 @@ impl Compactor for ProviderSessionCompactor {
     }
 }
 
+/// The session's own view of the registry: the two configured filters, plus the
+/// exact names a subagent is confined to.
+///
+/// The filters are compiled once here rather than per call, because the
+/// reference matching rules cover globs and regular expressions and a turn
+/// consults them for every published name and again for every call.
 #[derive(Clone)]
 struct SessionToolExecutor {
     tools: ToolRegistry,
-    enabled: BTreeSet<String>,
-    disabled: BTreeSet<String>,
+    enabled: NameFilter,
+    disabled: NameFilter,
     allowed: Option<BTreeSet<String>>,
 }
 
@@ -2882,8 +2889,8 @@ impl SessionToolExecutor {
     fn new(tools: ToolRegistry, intent: &SessionIntent) -> Self {
         Self {
             tools,
-            enabled: intent.enabled_tools.iter().cloned().collect(),
-            disabled: intent.disabled_tools.iter().cloned().collect(),
+            enabled: NameFilter::new(&intent.enabled_tools),
+            disabled: NameFilter::new(&intent.disabled_tools),
             allowed: None,
         }
     }
@@ -2894,8 +2901,8 @@ impl SessionToolExecutor {
     }
 
     fn permits(&self, name: &str) -> bool {
-        (self.enabled.is_empty() || self.enabled.contains(name))
-            && !self.disabled.contains(name)
+        (self.enabled.is_empty() || self.enabled.matches(name))
+            && !self.disabled.matches(name)
             && self
                 .allowed
                 .as_ref()
@@ -3473,23 +3480,15 @@ impl SubagentRunner for ProviderSubagentRunner {
                 .metadata;
             let parent_executor = SessionToolExecutor::new(self.tools.clone(), &self.parent_intent);
             let settings = context.agent.runtime_settings();
-            let enabled_by_agent =
-                context
-                    .agent
-                    .overrides
-                    .contains_key("enabled_tools")
-                    .then(|| {
-                        settings
-                            .enabled_tools
-                            .iter()
-                            .cloned()
-                            .collect::<BTreeSet<_>>()
-                    });
-            let disabled_by_agent = settings
-                .disabled_tools
-                .iter()
-                .cloned()
-                .collect::<BTreeSet<_>>();
+            // An agent declares its two lists in the same form the session does,
+            // so they are matched by the same reference rules rather than by
+            // exact name.
+            let enabled_by_agent = context
+                .agent
+                .overrides
+                .contains_key("enabled_tools")
+                .then(|| NameFilter::new(&settings.enabled_tools));
+            let disabled_by_agent = NameFilter::new(&settings.disabled_tools);
             let policy_restricted_tools = settings
                 .permission_rules
                 .iter()
@@ -3497,17 +3496,17 @@ impl SubagentRunner for ProviderSubagentRunner {
                 .collect::<BTreeSet<_>>();
             let allowed = self
                 .tools
-                .available(&BTreeSet::new(), &BTreeSet::new())
+                .available(&NameFilter::default(), &NameFilter::default())
                 .map_err(|error| error.to_string())?
                 .into_iter()
                 .filter(|spec| {
                     parent_executor.permits(&spec.name)
                         && spec.name != "task"
-                        && !disabled_by_agent.contains(&spec.name)
+                        && !disabled_by_agent.matches(&spec.name)
                         && !policy_restricted_tools.contains(&spec.name)
                         && enabled_by_agent
                             .as_ref()
-                            .is_none_or(|enabled| enabled.contains(&spec.name))
+                            .is_none_or(|enabled| enabled.matches(&spec.name))
                         && (context.agent.safety != "read_only"
                             || matches!(
                                 spec.presentation,
@@ -5603,6 +5602,120 @@ command = "/must-not-run"
             .expect("live turn completes");
         assert_eq!(outcome.stop_reason, PublicTurnStopReason::Complete);
         assert!(saw_definition.load(Ordering::Acquire));
+    }
+
+    /// A registry carrying the names a filtering test needs to tell apart.
+    fn filtering_registry() -> ToolRegistry {
+        let tools = ToolRegistry::default();
+        for name in [
+            "read_file",
+            "serena_find",
+            "serena_replace",
+            "web_fetch",
+            "web_search",
+        ] {
+            tools
+                .register(
+                    ToolSpec {
+                        name: name.to_owned(),
+                        description: "fixture".to_owned(),
+                        input_schema: ObjectSchema::new().build(),
+                        output_schema: None,
+                        config: Value::Null,
+                        state: Value::Null,
+                        availability: ToolAvailability::Available,
+                        presentation: ToolPresentationKind::Generic,
+                        source: ToolSource::BuiltIn,
+                        selection_priority: 0,
+                    },
+                    Arc::new(
+                        |_invocation: &vibe_core::tools::ToolInvocation,
+                         _output: vibe_core::tools::ToolOutputSink|
+                         -> vibe_core::tools::OwnedToolHandlerFuture {
+                            Box::pin(async { Ok(ToolExecutionOutput::text("fixture")) })
+                        },
+                    ),
+                )
+                .expect("fixture tool registers");
+        }
+        tools
+    }
+
+    /// The names a session publishes to the model under one pair of filters,
+    /// taken from the definitions the turn actually sends.
+    fn published_under(enabled: &[&str], disabled: &[&str]) -> Vec<String> {
+        let executor = SessionToolExecutor::new(
+            filtering_registry(),
+            &SessionIntent {
+                enabled_tools: enabled.iter().map(|entry| (*entry).to_owned()).collect(),
+                disabled_tools: disabled.iter().map(|entry| (*entry).to_owned()).collect(),
+                ..SessionIntent::default()
+            },
+        );
+        executor
+            .definitions()
+            .expect("definitions")
+            .into_iter()
+            .map(|definition| definition.name)
+            .collect()
+    }
+
+    /// Reference `available_tools` matches both filter lists with `name_matches`
+    /// rather than by exact name, so a shared configuration file selects the
+    /// same surface in both clients.
+    #[test]
+    fn configured_tool_filters_match_by_glob_regular_expression_and_case() {
+        assert_eq!(
+            published_under(&[], &["serena_*"]),
+            ["read_file", "web_fetch", "web_search"]
+        );
+        assert_eq!(
+            published_under(&[], &["re:web_.*"]),
+            ["read_file", "serena_find", "serena_replace"]
+        );
+        assert_eq!(
+            published_under(&[], &["SERENA_FIND"]),
+            ["read_file", "serena_replace", "web_fetch", "web_search"]
+        );
+        // An allowlist narrows the surface, and the denylist is applied last, so
+        // a name both lists match is withheld.
+        assert_eq!(
+            published_under(&["serena_*", "read_file"], &[]),
+            ["read_file", "serena_find", "serena_replace"]
+        );
+        assert_eq!(
+            published_under(&["serena_*"], &["serena_find"]),
+            ["serena_replace"]
+        );
+    }
+
+    /// The same rules guard execution, so a name the model remembers from an
+    /// earlier turn cannot be called once a pattern covers it.
+    #[tokio::test]
+    async fn a_pattern_that_hides_a_tool_also_refuses_to_execute_it() {
+        let executor = SessionToolExecutor::new(
+            filtering_registry(),
+            &SessionIntent {
+                disabled_tools: vec!["re:SERENA_.*".to_owned()],
+                ..SessionIntent::default()
+            },
+        );
+        let error = executor
+            .execute("serena_find", "{}")
+            .await
+            .expect_err("a tool a pattern hides cannot execute");
+        assert!(error.contains("disabled for this session"), "{error}");
+        assert!(executor.execute("read_file", "{}").await.is_ok());
+    }
+
+    /// An entry that does not compile is dropped rather than applied, so one
+    /// mistyped expression cannot empty the surface.
+    #[test]
+    fn an_uncompilable_entry_leaves_the_rest_of_the_list_in_force() {
+        assert_eq!(
+            published_under(&[], &["re:[", "serena_*"]),
+            ["read_file", "web_fetch", "web_search"]
+        );
     }
 
     #[tokio::test]
