@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Take the reference argument shape on `task`: `task` is required, `agent`
+  defaults to `explore` instead of enumerating the discovered agents, and an
+  unknown agent is refused with the names that do exist.
 - Publish the reference tools that need no shell in every session: `todo`
   keeps the session task list the transcript renders, `skill` loads a
   discovered skill and names the available ones when it cannot, `web_fetch`

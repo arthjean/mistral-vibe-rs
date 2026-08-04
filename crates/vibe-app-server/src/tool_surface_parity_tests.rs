@@ -30,10 +30,13 @@ use vibe_core::policy::{
     TrustDecision, TrustRootKind,
 };
 use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
-use vibe_core::tools::{ToolError, ToolRegistry, ToolSpec, validate_arguments};
+use vibe_core::tools::{
+    ToolError, ToolHandler, ToolHandlerFuture, ToolInvocation, ToolOutputSink, ToolRegistry,
+    ToolSpec, validate_arguments,
+};
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 
-use crate::client::InteractiveSessionToolFactory;
+use crate::client::{InteractiveSessionToolFactory, task_spec};
 use crate::server::SessionToolFactory;
 
 /// The reference commit the corpus is captured from. A checkout at any other
@@ -196,7 +199,8 @@ impl ApprovalAgent for RejectApproval {
 
 /// The tool definitions a real interactive session publishes: the universal
 /// builtins and the workspace tools the server registers, the interactive tools
-/// its surface extension adds.
+/// its surface extension adds, and `task`, which the live driver registers from
+/// [`task_spec`] once per turn, before it sends the definitions to the model.
 ///
 /// `web_search` is conditional on a Mistral key resolving, so it registers here
 /// exactly when the corpus recorded the reference publishing it. The
@@ -241,7 +245,29 @@ async fn published_specs(web_search: bool) -> Vec<ToolSpec> {
     }
     .register("session-1", &registry)
     .expect("interactive tools register");
+    registry
+        .register(task_spec(), Arc::new(UnreachableHandler))
+        .expect("the subagent tool registers");
     registry.list().expect("list")
+}
+
+/// Stands in for the live driver's subagent handler, which needs a provider and
+/// a session store the oracle has no reason to build: the oracle reads
+/// specifications and never invokes one.
+struct UnreachableHandler;
+
+impl ToolHandler for UnreachableHandler {
+    fn invoke<'a>(
+        &'a self,
+        _invocation: &'a ToolInvocation,
+        _output: ToolOutputSink,
+    ) -> ToolHandlerFuture<'a> {
+        Box::pin(async {
+            Err(ToolError::Unavailable(
+                "the oracle never invokes a tool".to_owned(),
+            ))
+        })
+    }
 }
 
 /// Replaces every description with a sentinel so the diff reports a missing

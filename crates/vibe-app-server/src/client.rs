@@ -3288,7 +3288,7 @@ impl LiveTurnDriver {
             .into_iter()
             .filter(|(_, profile)| profile.kind == AgentKind::Subagent)
             .collect::<BTreeMap<_, _>>();
-        let subagent_names = subagents.keys().cloned().collect::<Vec<_>>();
+        let subagent_names = Arc::new(subagents.keys().cloned().collect::<Vec<_>>());
         let runner = Arc::new(ProviderSubagentRunner {
             provider: self.provider.clone(),
             system_prompt: self.system_prompt.clone(),
@@ -3305,17 +3305,16 @@ impl LiveTurnDriver {
                   -> OwnedToolHandlerFuture {
                 let manager = manager.clone();
                 let subagents = subagents.clone();
+                let subagent_names = subagent_names.clone();
                 let parent_session_id = parent_session_id.clone();
                 let arguments = invocation.arguments.clone();
                 Box::pin(async move {
-                    let agent_name =
-                        arguments
-                            .get("agent")
-                            .and_then(Value::as_str)
-                            .ok_or_else(|| vibe_core::tools::ToolError::SchemaViolation {
-                                path: "/agent".to_owned(),
-                                message: "must be a string".to_owned(),
-                            })?;
+                    // `agent` carries the reference default, applied before the
+                    // handler runs, so an absent key still names `explore`.
+                    let agent_name = arguments
+                        .get("agent")
+                        .and_then(Value::as_str)
+                        .unwrap_or(DEFAULT_SUBAGENT);
                     let task = arguments
                         .get("task")
                         .and_then(Value::as_str)
@@ -3325,8 +3324,15 @@ impl LiveTurnDriver {
                             message: "must be a non-empty string".to_owned(),
                         })?;
                     let agent = subagents.get(agent_name).cloned().ok_or_else(|| {
+                        // A model that guessed the name corrects itself from
+                        // the list rather than from a bare refusal.
                         vibe_core::tools::ToolError::Unavailable(format!(
-                            "subagent `{agent_name}` is unavailable"
+                            "subagent `{agent_name}` is unavailable; available agents: {}",
+                            if subagent_names.is_empty() {
+                                "none".to_owned()
+                            } else {
+                                subagent_names.join(", ")
+                            }
                         ))
                     })?;
                     let effect = manager
@@ -3359,35 +3365,56 @@ impl LiveTurnDriver {
         );
         reservation
             .tools
-            .register(
-                ToolSpec {
-                    name: "task".to_owned(),
-                    description: "Delegate a bounded task to an independent child session"
-                        .to_owned(),
-                    input_schema: json!({
-                        "type": "object",
-                        "properties": {
-                            "agent": {
-                                "type": "string",
-                                "enum": subagent_names
-                            },
-                            "task": {"type": "string", "minLength": 1}
-                        },
-                        "required": ["agent", "task"],
-                        "additionalProperties": false
-                    }),
-                    output_schema: None,
-                    config: Value::Null,
-                    state: Value::Null,
-                    availability: ToolAvailability::Available,
-                    presentation: vibe_core::tools::ToolPresentationKind::Generic,
-                    source: ToolSource::BuiltIn,
-                    selection_priority: 40,
-                },
-                handler,
-            )
+            .register(task_spec(), handler)
             .map(drop)
             .map_err(|error| DriverError::Tool(error.to_string()))
+    }
+}
+
+/// Reference `TaskArgs.agent` default.
+pub(crate) const DEFAULT_SUBAGENT: &str = "explore";
+
+/// Directive coverage for `task`, whose reference description this port must
+/// cover without reproducing (`NOTICE`).
+///
+/// | Reference directive | Covered by |
+/// |---|---|
+/// | The work is handed to a specialised subagent | "Hand a bounded task to a subagent" |
+/// | The subagent runs in its own session and reports back once | "runs in its own session and reports back once" |
+/// | The task text is self-contained, because the subagent sees no history | "state it self-contained: the subagent sees none of this conversation" |
+/// | The agent name selects which specialisation runs | the `agent` description |
+///
+/// The argument shape comes from the reference `TaskArgs`, which configures
+/// `extra="forbid"`: `agent` is a plain string carrying a default rather than
+/// an enum of the discovered names, so a schema built here never depends on
+/// what the local catalog happens to hold.
+pub(crate) fn task_spec() -> ToolSpec {
+    ToolSpec {
+        name: "task".to_owned(),
+        description: "Hand a bounded task to a subagent, which runs in its own session and \
+                      reports back once. State the task self-contained: the subagent sees none \
+                      of this conversation."
+            .to_owned(),
+        input_schema: ObjectSchema::new()
+            .required(
+                "task",
+                Property::string().described("The task for the subagent to perform"),
+            )
+            .optional(
+                "agent",
+                Property::string()
+                    .described("Which specialised subagent runs the task")
+                    .with_default(DEFAULT_SUBAGENT),
+            )
+            .forbid_extra_properties()
+            .build(),
+        output_schema: None,
+        config: Value::Null,
+        state: Value::Null,
+        availability: ToolAvailability::Available,
+        presentation: vibe_core::tools::ToolPresentationKind::Generic,
+        source: ToolSource::BuiltIn,
+        selection_priority: 40,
     }
 }
 
@@ -4670,6 +4697,10 @@ command = "/must-not-run"
         root_calls: AtomicUsize,
         child_calls: AtomicUsize,
         saw_task_definition: AtomicBool,
+        /// What the parent turn actually publishes for `task`, captured so the
+        /// reference argument shape is asserted from the live registration
+        /// rather than from the spec function in isolation.
+        published_task_parameters: std::sync::Mutex<Option<Value>>,
         child_hid_task_definition: AtomicBool,
         child_inherited_restrictions: AtomicBool,
     }
@@ -4752,6 +4783,11 @@ command = "/must-not-run"
                         input.tools.iter().any(|tool| tool.name == "task"),
                         Ordering::Release,
                     );
+                    if let Some(task) = input.tools.iter().find(|tool| tool.name == "task")
+                        && let Ok(mut published) = self.published_task_parameters.lock()
+                    {
+                        *published = Some(task.input_schema.clone());
+                    }
                     Ok(AssistantMessage {
                         text: String::new(),
                         reasoning: None,
@@ -4760,7 +4796,9 @@ command = "/must-not-run"
                         tool_calls: vec![ModelToolCall {
                             id: "delegate-1".to_owned(),
                             name: "task".to_owned(),
-                            arguments: r#"{"agent":"explore","task":"inspect"}"#.to_owned(),
+                            // `agent` is omitted so the reference default has
+                            // to reach the handler for the delegation to run.
+                            arguments: r#"{"task":"inspect"}"#.to_owned(),
                         }],
                         usage: Usage::default(),
                         refusal: None,
@@ -5041,6 +5079,142 @@ command = "/must-not-run"
         assert!(integrations.result["mcp"]["sources"].is_array());
     }
 
+    /// Captures the tools one turn publishes and, when `task` is among them,
+    /// calls it with an agent that does not exist.
+    struct TaskProbeProvider {
+        calls: AtomicUsize,
+        published: std::sync::Mutex<Vec<String>>,
+        delegation_error: std::sync::Mutex<Option<String>>,
+    }
+
+    impl CompletionProvider for TaskProbeProvider {
+        fn complete<'a>(
+            &'a self,
+            input: &'a ProviderInput,
+        ) -> vibe_core::engine::ProviderFuture<'a> {
+            Box::pin(async move {
+                let call = self.calls.fetch_add(1, Ordering::AcqRel);
+                if call == 0 {
+                    if let Ok(mut published) = self.published.lock() {
+                        *published = input.tools.iter().map(|tool| tool.name.clone()).collect();
+                    }
+                    if input.tools.iter().any(|tool| tool.name == "task") {
+                        return Ok(AssistantMessage {
+                            text: String::new(),
+                            reasoning: None,
+                            reasoning_signature: None,
+                            reasoning_state: Vec::new(),
+                            tool_calls: vec![ModelToolCall {
+                                id: "delegate-1".to_owned(),
+                                name: "task".to_owned(),
+                                arguments: r#"{"task":"inspect","agent":"ghost"}"#.to_owned(),
+                            }],
+                            usage: Usage::default(),
+                            refusal: None,
+                            stop_reason: "tool_calls".to_owned(),
+                            correlation_id: None,
+                        });
+                    }
+                }
+                if let Ok(mut observed) = self.delegation_error.lock() {
+                    *observed = input.messages.iter().find_map(|message| match message {
+                        ModelMessage::Tool {
+                            call_id,
+                            content,
+                            is_error: true,
+                        } if call_id == "delegate-1" => Some(content.clone()),
+                        _ => None,
+                    });
+                }
+                Ok(AssistantMessage {
+                    text: "done".to_owned(),
+                    reasoning: None,
+                    reasoning_signature: None,
+                    reasoning_state: Vec::new(),
+                    tool_calls: Vec::new(),
+                    usage: Usage::default(),
+                    refusal: None,
+                    stop_reason: "stop".to_owned(),
+                    correlation_id: None,
+                })
+            })
+        }
+    }
+
+    async fn run_task_probe(session_root: Option<PathBuf>) -> Arc<TaskProbeProvider> {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        let provider = Arc::new(TaskProbeProvider {
+            calls: AtomicUsize::new(0),
+            published: std::sync::Mutex::new(Vec::new()),
+            delegation_error: std::sync::Mutex::new(None),
+        });
+        let driver = LiveTurnDriver::from_provider_for_tests(provider.clone(), "system")
+            .with_session_root_for_tests(session_root);
+        driver
+            .run(&TurnReservation {
+                session_id: "probe".to_owned(),
+                turn_id: "probe-turn".to_owned(),
+                prompt: "delegate".to_owned(),
+                input: vec![PublicContentBlock::Text {
+                    text: "delegate".to_owned(),
+                }],
+                prepared_images: None,
+                client_user_message_id: None,
+                auto_title: None,
+                user_display_content: None,
+                mention_stats: None,
+                working_directory: temporary.path().to_string_lossy().into_owned(),
+                intent: SessionIntent {
+                    trusted: true,
+                    ..SessionIntent::default()
+                },
+                tools: ToolRegistry::default(),
+            })
+            .await
+            .expect("the turn completes");
+        provider
+    }
+
+    /// Without a session store there is no subagent runner, and the reference
+    /// rule is that an unavailable tool is withheld rather than published and
+    /// failed at call time.
+    #[tokio::test]
+    async fn task_is_withheld_when_no_subagent_runner_backs_the_session() {
+        let provider = run_task_probe(None).await;
+        assert!(
+            !provider
+                .published
+                .lock()
+                .expect("published")
+                .contains(&"task".to_owned()),
+            "task must not be published without a runner"
+        );
+    }
+
+    /// An agent name nothing answers to is refused with the names that do
+    /// exist, so a model that guessed can correct itself.
+    #[tokio::test]
+    async fn an_unknown_subagent_is_refused_with_the_available_names() {
+        let temporary = tempfile::tempdir().expect("temporary sessions");
+        let provider = run_task_probe(Some(temporary.path().to_path_buf())).await;
+        assert!(
+            provider
+                .published
+                .lock()
+                .expect("published")
+                .contains(&"task".to_owned()),
+            "task is published once a runner backs the session"
+        );
+        let refused = provider
+            .delegation_error
+            .lock()
+            .expect("observed")
+            .clone()
+            .expect("the delegation failed back to the model");
+        assert!(refused.contains("ghost"), "{refused}");
+        assert!(refused.contains("explore"), "{refused}");
+    }
+
     #[tokio::test]
     async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
         let temporary = tempfile::tempdir().expect("temporary sessions");
@@ -5048,6 +5222,7 @@ command = "/must-not-run"
             root_calls: AtomicUsize::new(0),
             child_calls: AtomicUsize::new(0),
             saw_task_definition: AtomicBool::new(false),
+            published_task_parameters: std::sync::Mutex::new(None),
             child_hid_task_definition: AtomicBool::new(false),
             child_inherited_restrictions: AtomicBool::new(false),
         });
@@ -5123,6 +5298,27 @@ command = "/must-not-run"
             .expect("root and child complete");
         assert_eq!(outcome.stop_reason, PublicTurnStopReason::Complete);
         assert!(provider.saw_task_definition.load(Ordering::Acquire));
+        assert_eq!(
+            provider
+                .published_task_parameters
+                .lock()
+                .expect("published schema")
+                .clone()
+                .expect("the parent turn published `task`"),
+            json!({
+                "type": "object",
+                "properties": {
+                    "task": {"type": "string", "description": "The task for the subagent to perform"},
+                    "agent": {
+                        "type": "string",
+                        "description": "Which specialised subagent runs the task",
+                        "default": "explore",
+                    },
+                },
+                "required": ["task"],
+                "additionalProperties": false,
+            })
+        );
         assert!(provider.child_hid_task_definition.load(Ordering::Acquire));
         assert!(
             provider
