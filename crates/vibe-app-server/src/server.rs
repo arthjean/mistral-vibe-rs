@@ -412,7 +412,7 @@ impl AppServer {
             .ok_or_else(|| ServerError::StaleTurn(turn_id.to_owned()))?;
         let turn = turn.clone();
         let event_id = next_event_id(session);
-        encode_notification(
+        Ok(encode_notification(
             "turn/started",
             result_map([
                 ("eventId", json!(event_id)),
@@ -420,7 +420,7 @@ impl AppServer {
                 ("turn", json!(turn)),
                 ("emittedAt", json!(now_millis())),
             ]),
-        )
+        ))
     }
 
     pub fn reserve_due_loop(
@@ -649,7 +649,7 @@ impl AppServer {
         session.latest_turn = Some(turn.clone());
         session.updated_at = completed_at;
         let event_id = next_event_id(session);
-        encode_notification(
+        Ok(encode_notification(
             "turn/completed",
             result_map([
                 ("eventId", json!(event_id)),
@@ -657,7 +657,7 @@ impl AppServer {
                 ("turn", json!(turn)),
                 ("emittedAt", json!(now_millis())),
             ]),
-        )
+        ))
     }
 
     pub fn fail_turn(
@@ -709,7 +709,7 @@ impl AppServer {
         session.latest_turn = Some(turn.clone());
         session.updated_at = turn.completed_at.unwrap_or(started_at);
         let event_id = next_event_id(session);
-        encode_notification(
+        Ok(encode_notification(
             "turn/completed",
             result_map([
                 ("eventId", json!(event_id)),
@@ -717,7 +717,7 @@ impl AppServer {
                 ("turn", json!(turn)),
                 ("emittedAt", json!(now_millis())),
             ]),
-        )
+        ))
     }
 
     pub fn request_callback(
@@ -860,7 +860,7 @@ impl AppServer {
             id: RequestId::Integer(i64::try_from(callback_sequence).unwrap_or(i64::MAX)),
             method: "callback/call".to_owned(),
             params: result_map([("callback", json!(callback))]),
-        }))?;
+        }));
         Ok((callback_id, request))
     }
 
@@ -966,7 +966,7 @@ impl AppServer {
         }
         let event_id = next_event_id(session);
         let state = public_session_state(session);
-        encode_notification(
+        Ok(encode_notification(
             "session/compacted",
             result_map([
                 ("eventId", json!(event_id)),
@@ -977,7 +977,7 @@ impl AppServer {
                 ("summaryLength", json!(summary_length)),
                 ("emittedAt", json!(emitted_at)),
             ]),
-        )
+        ))
     }
 
     pub fn complete_manual_compaction(
@@ -1089,7 +1089,7 @@ impl AppServer {
             ("state", state.clone()),
             ("sessionLog", json!({"enabled": false})),
         ]);
-        let notification = match encode_notification(
+        let notification = encode_notification(
             "session/compacted",
             result_map([
                 ("eventId", json!(event_id)),
@@ -1100,15 +1100,9 @@ impl AppServer {
                 ("summaryLength", json!(summary.chars().count())),
                 ("emittedAt", json!(emitted_at)),
             ]),
-        ) {
-            Ok(notification) => notification,
-            Err(error) => return internal_error_batch(request_id, &error),
-        };
+        );
         DispatchBatch {
-            outbound: success_bytes(request_id, result)
-                .into_iter()
-                .chain([notification])
-                .collect(),
+            outbound: vec![success_bytes(request_id, result), notification],
             deferred: Vec::new(),
             close_after_flush: false,
         }
@@ -1254,7 +1248,7 @@ impl AppServer {
         &self,
         session_id: &str,
         configs: Vec<McpServerConfig>,
-    ) -> Result<Vec<u8>, ServerError> {
+    ) -> Vec<u8> {
         let Some(backend) = &self.resource_backend else {
             return encode_notification(
                 "mcp/updated",
@@ -2326,9 +2320,7 @@ impl ServerConnection {
             });
         }
         DispatchBatch {
-            outbound: success_bytes(request.id, BTreeMap::new())
-                .into_iter()
-                .collect(),
+            outbound: vec![success_bytes(request.id, BTreeMap::new())],
             deferred,
             close_after_flush: true,
         }
@@ -2692,9 +2684,7 @@ impl ServerConnection {
         };
         session.latest_turn = Some(turn.clone());
         session.updated_at = started_at;
-        let mut outbound = success_bytes(request.id.clone(), result_map([("turn", json!(turn))]))
-            .into_iter()
-            .collect::<Vec<_>>();
+        let mut outbound = vec![success_bytes(request.id, result_map([("turn", json!(turn))]))];
         if let Some((mut notice, fired_at)) = loop_notice {
             let event_id = next_event_id(session);
             notice.params.insert("eventId".to_owned(), json!(event_id));
@@ -2713,10 +2703,7 @@ impl ServerConnection {
                 entry["sessionId"] = json!(canonical_session_id.clone());
                 entry["turnId"] = json!(turn_id.clone());
             }
-            match encode_notification(&notice.method, notice.params) {
-                Ok(notification) => outbound.push(notification),
-                Err(error) => return internal_error_batch(request.id, &error),
-            }
+            outbound.push(encode_notification(&notice.method, notice.params));
         }
         DispatchBatch {
             outbound,
@@ -2820,9 +2807,10 @@ impl ServerConnection {
             }
         };
         DispatchBatch {
-            outbound: success_bytes(request.id, result_map([("entries", json!([entry]))]))
-                .into_iter()
-                .collect(),
+            outbound: vec![success_bytes(
+                request.id,
+                result_map([("entries", json!([entry]))]),
+            )],
             deferred: vec![DeferredWork::InjectContext {
                 session_id: params.session_id,
                 content,
@@ -2885,9 +2873,10 @@ impl ServerConnection {
         cancel_pending_callback(session, "Turn was interrupted");
         next_event_id(session);
         DispatchBatch {
-            outbound: success_bytes(request.id, result_map([("interrupted", json!(true))]))
-                .into_iter()
-                .collect(),
+            outbound: vec![success_bytes(
+                request.id,
+                result_map([("interrupted", json!(true))]),
+            )],
             deferred: vec![DeferredWork::InterruptTurn {
                 session_id: params.session_id,
                 turn_id: params.expected_turn_id,
@@ -2993,7 +2982,7 @@ impl ServerConnection {
             }
         }
         DispatchBatch {
-            outbound: success_bytes(request.id, result).into_iter().collect(),
+            outbound: vec![success_bytes(request.id, result)],
             deferred,
             close_after_flush: false,
         }
@@ -3148,7 +3137,7 @@ impl ServerConnection {
         }
         match mutation(session) {
             Ok((result, deferred)) => DispatchBatch {
-                outbound: success_bytes(request_id, result).into_iter().collect(),
+                outbound: vec![success_bytes(request_id, result)],
                 deferred,
                 close_after_flush: false,
             },
@@ -4705,8 +4694,7 @@ mod tests {
                 ("callbackId", json!(callback_id)),
                 ("accepted", json!(true)),
             ]),
-        }))
-        .expect("callback acknowledgement");
+        }));
         let acknowledgement = connection.dispatch(&acknowledgement);
         assert_eq!(acknowledgement, DispatchBatch::empty());
         let first = connection.dispatch(&request(
@@ -4836,8 +4824,7 @@ mod tests {
                 ("callbackId", json!(callback_id)),
                 ("accepted", json!(false)),
             ]),
-        }))
-        .expect("callback rejection");
+        }));
         let batch = connection.dispatch(&rejection);
         assert_eq!(
             batch.deferred,
@@ -4910,8 +4897,7 @@ mod tests {
                 ("callbackId", json!(callback_id)),
                 ("accepted", json!(true)),
             ]),
-        }))
-        .expect("callback acknowledgement");
+        }));
         assert_eq!(
             connection.dispatch(&acknowledgement),
             DispatchBatch::empty()
@@ -5143,8 +5129,7 @@ mod tests {
                 ("callbackId", json!("callback-1")),
                 ("accepted", json!(false)),
             ]),
-        }))
-        .expect("late rejection");
+        }));
         assert_eq!(connection.dispatch(&late_rejection), DispatchBatch::empty());
         assert_eq!(connection.state(), ConnectionState::Ready);
         assert_eq!(
@@ -5404,8 +5389,7 @@ mod tests {
                 ("callbackId", json!("callback-1")),
                 ("accepted", json!(true)),
             ]),
-        }))
-        .expect("callback acknowledgement");
+        }));
         assert_eq!(
             connection.dispatch(&acknowledgement),
             DispatchBatch::empty()

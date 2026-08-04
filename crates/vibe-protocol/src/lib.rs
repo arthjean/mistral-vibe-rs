@@ -193,8 +193,19 @@ pub fn decode_frame(bytes: &[u8]) -> Result<Envelope, ProtocolValidationError> {
     Ok(serde_json::from_slice(bytes)?)
 }
 
-pub fn encode_frame(frame: &Envelope) -> Result<Vec<u8>, ProtocolValidationError> {
-    Ok(serde_json::to_vec(frame)?)
+/// Serializes an outbound frame.
+///
+/// Every field of [`Envelope`] is JSON-native (strings, `i64`,
+/// [`serde_json::Value`], unit enums and maps keyed by `String`), so
+/// serialization has no failure mode and callers get bytes, not a `Result`
+/// they would have to discard.
+#[must_use]
+#[expect(
+    clippy::expect_used,
+    reason = "Envelope is JSON-native by construction; serialization cannot fail"
+)]
+pub fn encode_frame(frame: &Envelope) -> Vec<u8> {
+    serde_json::to_vec(frame).expect("Envelope serialization is infallible")
 }
 
 /// Reports whether `method` is part of the negotiated surface.
@@ -367,7 +378,7 @@ mod tests {
     fn valid_frames_round_trip_canonically() {
         let input = br#"{"jsonrpc":"2.0","id":"client-1","result":{"ok":true}}"#;
         let first = decode_frame(input).expect("valid fixture");
-        let encoded = encode_frame(&first).expect("serializable fixture");
+        let encoded = encode_frame(&first);
         let second = decode_frame(&encoded).expect("round-trip fixture");
         assert_eq!(first, second);
         assert_eq!(

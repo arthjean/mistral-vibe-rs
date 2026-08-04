@@ -353,11 +353,9 @@ where
         } => {
             let server = server.clone();
             spawn_frames(tasks, events.clone(), async move {
-                server
-                    .configure_mcp_servers(&session_id, configs)
-                    .await
-                    .map(|notification| vec![notification])
-                    .map_err(TransportError::Server)
+                Ok(vec![
+                    server.configure_mcp_servers(&session_id, configs).await,
+                ])
             });
             Ok(None)
         }

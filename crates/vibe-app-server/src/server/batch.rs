@@ -6,16 +6,13 @@ use super::*;
 
 pub(super) fn success_batch(id: RequestId, result: BTreeMap<String, Value>) -> DispatchBatch {
     DispatchBatch {
-        outbound: success_bytes(id, result).into_iter().collect(),
+        outbound: vec![success_bytes(id, result)],
         deferred: Vec::new(),
         close_after_flush: false,
     }
 }
 
-pub(super) fn success_bytes(
-    id: RequestId,
-    result: BTreeMap<String, Value>,
-) -> Result<Vec<u8>, vibe_protocol::ProtocolValidationError> {
+pub(super) fn success_bytes(id: RequestId, result: BTreeMap<String, Value>) -> Vec<u8> {
     encode_frame(&Envelope::Success(SuccessResponse {
         jsonrpc: JsonRpcVersion::V2,
         id,
@@ -34,7 +31,7 @@ pub(super) fn error_batch(id: RequestId, code: ProtocolErrorCode, message: &str)
         },
     });
     DispatchBatch {
-        outbound: encode_frame(&frame).into_iter().collect(),
+        outbound: vec![encode_frame(&frame)],
         deferred: Vec::new(),
         close_after_flush: false,
     }
@@ -46,13 +43,12 @@ pub(super) fn resource_result_batch(
 ) -> DispatchBatch {
     match result {
         Ok(dispatch) => {
-            let mut outbound = success_bytes(id, dispatch.result)
-                .into_iter()
-                .collect::<Vec<_>>();
-            if let Some(notification) = dispatch.notification
-                && let Ok(bytes) = encode_notification(&notification.method, notification.params)
-            {
-                outbound.push(bytes);
+            let mut outbound = vec![success_bytes(id, dispatch.result)];
+            if let Some(notification) = dispatch.notification {
+                outbound.push(encode_notification(
+                    &notification.method,
+                    notification.params,
+                ));
             }
             DispatchBatch {
                 outbound,
@@ -127,14 +123,12 @@ pub(super) fn release4_error_batch(id: RequestId, error: Release4Error) -> Dispa
 }
 
 pub(super) fn release4_dispatch_batch(id: RequestId, dispatch: Release4Dispatch) -> DispatchBatch {
-    let mut outbound = success_bytes(id.clone(), dispatch.result)
-        .into_iter()
-        .collect::<Vec<_>>();
+    let mut outbound = vec![success_bytes(id, dispatch.result)];
     for notification in dispatch.notifications {
-        match encode_notification(&notification.method, notification.params) {
-            Ok(bytes) => outbound.push(bytes),
-            Err(error) => return internal_error_batch(id, &error),
-        }
+        outbound.push(encode_notification(
+            &notification.method,
+            notification.params,
+        ));
     }
     DispatchBatch {
         outbound,
@@ -147,13 +141,10 @@ pub(super) fn internal_error_batch(id: RequestId, error: &ServerError) -> Dispat
     error_batch(id, ProtocolErrorCode::InternalError, &error.to_string())
 }
 
-pub(super) fn encode_notification(
-    method: &str,
-    params: BTreeMap<String, Value>,
-) -> Result<Vec<u8>, ServerError> {
-    Ok(encode_frame(&Envelope::Notification(Notification {
+pub(super) fn encode_notification(method: &str, params: BTreeMap<String, Value>) -> Vec<u8> {
+    encode_frame(&Envelope::Notification(Notification {
         jsonrpc: JsonRpcVersion::V2,
         method: method.to_owned(),
         params,
-    }))?)
+    }))
 }

@@ -829,11 +829,7 @@ impl InProcessClient {
         let Some(configs) = self.pending_mcp.get(session_id).cloned() else {
             return Ok(Vec::new());
         };
-        let notification = self
-            .server
-            .configure_mcp_servers(session_id, configs)
-            .await
-            .map_err(ClientError::Server)?;
+        let notification = self.server.configure_mcp_servers(session_id, configs).await;
         let diagnostics = decode_mcp_update(&notification)?;
         self.pending_mcp.remove(session_id);
         Ok(diagnostics)
