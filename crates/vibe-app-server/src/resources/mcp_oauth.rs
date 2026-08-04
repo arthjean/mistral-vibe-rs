@@ -710,7 +710,9 @@ fn transport_headers(transport: &McpTransportConfig) -> &BTreeMap<String, String
 
 static EMPTY_HEADERS: BTreeMap<String, String> = BTreeMap::new();
 
-fn transport_headers_mut(transport: &mut McpTransportConfig) -> Option<&mut BTreeMap<String, String>> {
+fn transport_headers_mut(
+    transport: &mut McpTransportConfig,
+) -> Option<&mut BTreeMap<String, String>> {
     match transport {
         McpTransportConfig::StreamableHttp { headers, .. } => Some(headers),
         McpTransportConfig::Stdio { .. } => None,

@@ -3235,10 +3235,7 @@ fn required_bool(values: &BTreeMap<String, Value>, key: &str) -> Result<bool, Re
     params::required_bool(values, key).map_err(invalid_params)
 }
 
-fn optional_u64(
-    values: &BTreeMap<String, Value>,
-    key: &str,
-) -> Result<Option<u64>, Release4Error> {
+fn optional_u64(values: &BTreeMap<String, Value>, key: &str) -> Result<Option<u64>, Release4Error> {
     params::optional_u64(values, key).map_err(invalid_params)
 }
 
@@ -4565,11 +4562,12 @@ mod tests {
 
         let unavailable = Release4Service::default();
         assert!(matches!(
-            unavailable.dispatch_deferred(
-                "vibeCode/projects/open",
-                &params(json!({"sessionId": "session-2"}))
-            )
-            .await,
+            unavailable
+                .dispatch_deferred(
+                    "vibeCode/projects/open",
+                    &params(json!({"sessionId": "session-2"}))
+                )
+                .await,
             Err(Release4Error::Cloud(CloudError::Git(_)))
         ));
         assert!(matches!(
@@ -4895,15 +4893,16 @@ mod tests {
             .expect("identical retry");
         assert!(duplicate.result.is_empty());
         assert!(matches!(
-            service.dispatch_deferred(
-                "vibeCode/teleport/push/respond",
-                &params(json!({
-                    "sessionId": "session-1",
-                    "operationId": operation_id,
-                    "approved": false
-                }))
-            )
-            .await,
+            service
+                .dispatch_deferred(
+                    "vibeCode/teleport/push/respond",
+                    &params(json!({
+                        "sessionId": "session-1",
+                        "operationId": operation_id,
+                        "approved": false
+                    }))
+                )
+                .await,
             Err(Release4Error::Conflict(_))
         ));
 
@@ -4973,29 +4972,31 @@ mod tests {
         ));
         select_project(&service, "session-1", &picker_id, "page-first");
         assert!(matches!(
-            service.dispatch_deferred(
-                "vibeCode/teleport/start",
-                &params(json!({
-                    "sessionId": "session-2",
-                    "pickerId": picker_id,
-                    "operationId": "operation-foreign",
-                    "projectId": "page-first"
-                }))
-            )
-            .await,
+            service
+                .dispatch_deferred(
+                    "vibeCode/teleport/start",
+                    &params(json!({
+                        "sessionId": "session-2",
+                        "pickerId": picker_id,
+                        "operationId": "operation-foreign",
+                        "projectId": "page-first"
+                    }))
+                )
+                .await,
             Err(Release4Error::NotFound(_))
         ));
         assert!(matches!(
-            service.dispatch_deferred(
-                "vibeCode/teleport/start",
-                &params(json!({
-                    "sessionId": "session-1",
-                    "pickerId": picker_id,
-                    "operationId": "operation-missing-project",
-                    "projectId": "missing"
-                }))
-            )
-            .await,
+            service
+                .dispatch_deferred(
+                    "vibeCode/teleport/start",
+                    &params(json!({
+                        "sessionId": "session-1",
+                        "pickerId": picker_id,
+                        "operationId": "operation-missing-project",
+                        "projectId": "missing"
+                    }))
+                )
+                .await,
             Err(Release4Error::NotFound(_))
         ));
 

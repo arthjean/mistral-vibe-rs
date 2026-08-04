@@ -400,7 +400,8 @@ impl AppServer {
 
     pub fn turn_started(&self, session_id: &str, turn_id: &str) -> Result<Vec<u8>, ServerError> {
         let mut sessions = self.lock_sessions()?;
-        let session = sessions.get_mut(session_id)
+        let session = sessions
+            .get_mut(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
@@ -430,7 +431,8 @@ impl AppServer {
     ) -> Result<Option<ScheduledLoopWork>, ServerError> {
         let (canonical_session_id, idle) = {
             let sessions = self.lock_sessions()?;
-            let session = sessions.get(session_id)
+            let session = sessions
+                .get(session_id)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
             (
                 session.id.clone(),
@@ -454,7 +456,8 @@ impl AppServer {
             .fire_loop_for_session(&loop_id, &canonical_session_id, now_seconds, true)
             .map_err(|error| ServerError::Release4(error.to_string()))?;
         let mut sessions = self.lock_sessions()?;
-        let session = sessions.get_mut(&canonical_session_id)
+        let session = sessions
+            .get_mut(&canonical_session_id)
             .ok_or_else(|| ServerError::SessionNotFound(canonical_session_id.clone()))?;
         if session.active_turn.is_some()
             || session.compaction_pending
@@ -667,7 +670,8 @@ impl AppServer {
         message: &str,
     ) -> Result<Vec<u8>, ServerError> {
         let mut sessions = self.lock_sessions()?;
-        let session = sessions.get_mut(session_id)
+        let session = sessions
+            .get_mut(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
@@ -802,7 +806,8 @@ impl AppServer {
             .and_then(Value::as_str)
             .map(str::to_owned);
         let mut sessions = self.lock_sessions()?;
-        let session = sessions.get_mut(session_id)
+        let session = sessions
+            .get_mut(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
@@ -870,7 +875,8 @@ impl AppServer {
         turn_id: &str,
     ) -> Result<ProjectionSnapshot, ServerError> {
         let sessions = self.lock_sessions()?;
-        let session = sessions.get(session_id)
+        let session = sessions
+            .get(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
@@ -900,7 +906,8 @@ impl AppServer {
         snapshot: ProjectionSnapshot,
     ) -> Result<u64, ServerError> {
         let mut sessions = self.lock_sessions()?;
-        let session = sessions.get_mut(session_id)
+        let session = sessions
+            .get_mut(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
@@ -1129,7 +1136,8 @@ impl AppServer {
         reason: &str,
     ) -> Result<Vec<DeferredWork>, ServerError> {
         let mut sessions = self.lock_sessions()?;
-        let session = sessions.get_mut(&route.session_id)
+        let session = sessions
+            .get_mut(&route.session_id)
             .ok_or_else(|| ServerError::SessionNotFound(route.session_id.clone()))?;
         if session.active_turn.as_deref() != Some(&route.turn_id) {
             return Err(ServerError::StaleTurn(route.turn_id.clone()));
@@ -1168,14 +1176,16 @@ impl AppServer {
 
     pub fn session(&self, session_id: &str) -> Result<SessionView, ServerError> {
         let sessions = self.lock_sessions()?;
-        sessions.get(session_id)
+        sessions
+            .get(session_id)
             .map(SessionView::from)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))
     }
 
     pub(crate) fn tool_registry(&self, session_id: &str) -> Result<ToolRegistry, ServerError> {
         let sessions = self.lock_sessions()?;
-        sessions.get(session_id)
+        sessions
+            .get(session_id)
             .map(|session| session.tools.clone())
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))
     }
@@ -1188,7 +1198,8 @@ impl AppServer {
     ) -> Result<ToolExecutionOutput, ServerError> {
         let tools = {
             let sessions = self.lock_sessions()?;
-            sessions.get(session_id)
+            sessions
+                .get(session_id)
                 .map(|session| session.tools.clone())
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
         };
@@ -1286,7 +1297,8 @@ impl AppServer {
         session_id: &str,
     ) -> Result<Option<u64>, ServerError> {
         let sessions = self.lock_sessions()?;
-        Ok(sessions.get(session_id)
+        Ok(sessions
+            .get(session_id)
             .filter(|session| session.attachments == 0)
             .map(|session| session.resource_generation))
     }
@@ -2491,8 +2503,7 @@ impl ServerConnection {
                 Ok(sessions) => sessions,
                 Err(error) => return internal_error_batch(request.id, &error),
             };
-            let Some(session) = sessions.get_mut(&params.session_id)
-            else {
+            let Some(session) = sessions.get_mut(&params.session_id) else {
                 return error_batch(
                     request.id,
                     ProtocolErrorCode::NotFound,
@@ -2684,7 +2695,10 @@ impl ServerConnection {
         };
         session.latest_turn = Some(turn.clone());
         session.updated_at = started_at;
-        let mut outbound = vec![success_bytes(request.id, result_map([("turn", json!(turn))]))];
+        let mut outbound = vec![success_bytes(
+            request.id,
+            result_map([("turn", json!(turn))]),
+        )];
         if let Some((mut notice, fired_at)) = loop_notice {
             let event_id = next_event_id(session);
             notice.params.insert("eventId".to_owned(), json!(event_id));
@@ -3314,7 +3328,6 @@ impl From<&SessionRuntime> for SessionView {
     }
 }
 
-
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct SessionStartParams {
@@ -3540,7 +3553,6 @@ const fn default_true() -> bool {
     true
 }
 
-
 fn price_dollars_to_micros(price: f64) -> Option<u64> {
     (price.is_finite() && price >= 0.0 && price <= u64::MAX as f64 / 1_000_000.0)
         .then(|| (price * 1_000_000.0).round() as u64)
@@ -3640,11 +3652,9 @@ fn object(value: Value) -> BTreeMap<String, Value> {
         .unwrap_or_default()
 }
 
-
 fn generated_session_id(sequence: u64) -> String {
     format!("session-{}-{sequence}", now_millis())
 }
-
 
 #[cfg(test)]
 mod tests {

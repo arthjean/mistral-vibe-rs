@@ -145,7 +145,8 @@ fn mutation_conflict(
         Ok(sessions) => sessions,
         Err(error) => return Some(internal_error_batch(request.id.clone(), &error)),
     };
-    sessions.get(session_id)
+    sessions
+        .get(session_id)
         .is_some_and(|session| session.active_turn.is_some())
         .then(|| {
             error_batch(
@@ -169,7 +170,8 @@ fn delete_session(
         );
     };
     let attached = match connection.server.lock_sessions() {
-        Ok(sessions) => sessions.get(session_id)
+        Ok(sessions) => sessions
+            .get(session_id)
             .is_some_and(|session| session.attachments > 0),
         Err(error) => return internal_error_batch(request.id, &error),
     };
@@ -205,7 +207,9 @@ fn enrich_rewind_targets(
 ) -> Result<(), ServerError> {
     let sessions = connection.server.lock_sessions()?;
     let review = {
-        sessions.get(session_id).and_then(|session| session.review.clone())
+        sessions
+            .get(session_id)
+            .and_then(|session| session.review.clone())
     };
     drop(sessions);
     let Some(review) = review else {
@@ -289,7 +293,9 @@ impl RewindTransaction {
             .lock_sessions()
             .map_err(|error| internal_error_batch(request.id.clone(), &error))?;
         let review = {
-            sessions.get(session_id).and_then(|session| session.review.clone())
+            sessions
+                .get(session_id)
+                .and_then(|session| session.review.clone())
         };
         drop(sessions);
         let rewound_review = review

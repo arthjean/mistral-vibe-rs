@@ -83,7 +83,10 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
     })
 }
 
-pub(super) fn persisted_projection(hydrated: &HydratedSession, history_limit: u16) -> ProjectionSnapshot {
+pub(super) fn persisted_projection(
+    hydrated: &HydratedSession,
+    history_limit: u16,
+) -> ProjectionSnapshot {
     let session_id = &hydrated.metadata.id;
     let base_timestamp = hydrated.metadata.created_at_ms;
     let mut tool_names = BTreeMap::<String, (String, usize)>::new();

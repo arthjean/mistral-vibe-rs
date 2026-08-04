@@ -22,7 +22,9 @@ use vibe_core::provider::{
     ProviderChunk, ProviderError, ProviderInput, ProviderStream, RequestLimits,
 };
 
-use crate::live_projection::{AppServerUpdate, app_server_notification, app_server_update_channel_for_turn};
+use crate::live_projection::{
+    AppServerUpdate, app_server_notification, app_server_update_channel_for_turn,
+};
 use crate::server::AppServer;
 
 const STREAMING_P95_TARGET_MICROS: u64 = 20_000;
@@ -323,5 +325,4 @@ mod tests {
         assert_eq!(report.client_visible_event_count, 128);
         assert!(!report.release_gate_passed);
     }
-
 }

@@ -76,7 +76,12 @@ impl MistralConnectorClient {
                 response.status()
             )));
         }
-        bounded_json(response, "connector bootstrap", MAX_CONNECTOR_RESPONSE_BYTES).await
+        bounded_json(
+            response,
+            "connector bootstrap",
+            MAX_CONNECTOR_RESPONSE_BYTES,
+        )
+        .await
     }
 
     fn endpoint(&self, path: &str) -> Result<Url, ResourceError> {
@@ -190,8 +195,12 @@ impl ConnectorAuthBackend for MistralConnectorClient {
                     response.status()
                 )));
             }
-            let payload = bounded_json::<Value>(response, "connector auth response", MAX_CONNECTOR_RESPONSE_BYTES)
-                .await?;
+            let payload = bounded_json::<Value>(
+                response,
+                "connector auth response",
+                MAX_CONNECTOR_RESPONSE_BYTES,
+            )
+            .await?;
             Ok(payload
                 .get("auth_url")
                 .or_else(|| payload.get("authUrl"))

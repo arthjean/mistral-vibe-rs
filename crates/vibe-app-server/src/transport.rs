@@ -252,7 +252,9 @@ where
             user_display_content,
             mention_stats,
         } => {
-            let session = server.session(&session_id).map_err(TransportError::Server)?;
+            let session = server
+                .session(&session_id)
+                .map_err(TransportError::Server)?;
             let tools = server
                 .tool_registry(&session_id)
                 .map_err(TransportError::Server)?;
@@ -513,8 +515,6 @@ enum ServeEvent {
     /// Background work failed fatally for this connection.
     Failed(TransportError),
 }
-
-
 
 async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &str) {
     for work in deferred {

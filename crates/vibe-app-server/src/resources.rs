@@ -5,13 +5,13 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 
+use crate::host::now_millis;
+use crate::params;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use url::Url;
-use crate::host::now_millis;
-use crate::params;
 use vibe_core::config::{ConfigSnapshot, LayeredConfig};
 use vibe_core::integrations::{
     ConnectorAuthKind, ConnectorBackend, ConnectorDefinition, ConnectorRegistry, ConnectorView,
@@ -888,8 +888,7 @@ async fn bounded_json<T: serde::de::DeserializeOwned>(
     label: &str,
     limit: usize,
 ) -> Result<T, ResourceError> {
-    let exceeded =
-        || ResourceError::Unavailable(format!("{label} exceeded its byte budget"));
+    let exceeded = || ResourceError::Unavailable(format!("{label} exceeded its byte budget"));
     if response
         .content_length()
         .is_some_and(|length| length > limit as u64)
