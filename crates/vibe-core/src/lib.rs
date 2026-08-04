@@ -10,6 +10,7 @@ pub mod events;
 pub mod extensions;
 pub mod images;
 pub mod integrations;
+pub mod matching;
 pub mod mcp;
 pub mod platform;
 pub mod policy;
