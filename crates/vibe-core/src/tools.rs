@@ -198,6 +198,8 @@ struct RegisteredTool {
     spec: ToolSpec,
     handler: Arc<dyn ToolHandler>,
     discovery_index: u64,
+    /// Who published this name, so a second claim on it can name the first.
+    origin: String,
 }
 
 #[derive(Clone)]
@@ -249,12 +251,51 @@ impl ToolRegistry {
         spec: ToolSpec,
         handler: Arc<dyn ToolHandler>,
     ) -> Result<RegistrationOutcome, ToolError> {
+        let origin = format!("{:?} tool `{}`", spec.source, spec.name);
+        self.insert(spec, handler, origin, false)
+    }
+
+    /// Registers a tool that must own its published name outright.
+    ///
+    /// Remote providers publish `{alias}_{tool}`, a rule two different
+    /// providers can land on for the same string. Priority-based replacement
+    /// would let the later claim silently shadow the earlier one, so an
+    /// exclusive registration that finds the name taken is rejected and both
+    /// sources are named.
+    pub fn register_exclusive(
+        &self,
+        spec: ToolSpec,
+        handler: Arc<dyn ToolHandler>,
+        origin: impl Into<String>,
+    ) -> Result<RegistrationOutcome, ToolError> {
+        self.insert(spec, handler, origin.into(), true)
+    }
+
+    fn insert(
+        &self,
+        spec: ToolSpec,
+        handler: Arc<dyn ToolHandler>,
+        origin: String,
+        exclusive: bool,
+    ) -> Result<RegistrationOutcome, ToolError> {
         spec.validate()?;
         let discovery_index = self.next_discovery_index.fetch_add(1, Ordering::Relaxed);
         let mut tools = self
             .tools
             .write()
             .map_err(|_| ToolError::RegistryPoisoned)?;
+        // A provider re-registering its own tool is a refresh, not a second
+        // claim on the name, so only a different origin is a duplicate.
+        if exclusive
+            && let Some(existing) = tools.get(&spec.name)
+            && existing.origin != origin
+        {
+            return Err(ToolError::DuplicateName {
+                name: spec.name.clone(),
+                existing: existing.origin.clone(),
+                incoming: origin,
+            });
+        }
         let replace = tools.get(&spec.name).is_none_or(|existing| {
             (spec.selection_priority, discovery_index)
                 > (existing.spec.selection_priority, existing.discovery_index)
@@ -271,6 +312,7 @@ impl ToolRegistry {
                     spec,
                     handler,
                     discovery_index,
+                    origin,
                 },
             );
             Ok(outcome)
@@ -467,6 +509,12 @@ pub enum ToolError {
     RegistryPoisoned,
     #[error("invalid tool name `{0}`")]
     InvalidName(String),
+    #[error("tool `{name}` is published by two sources: {existing}, {incoming}")]
+    DuplicateName {
+        name: String,
+        existing: String,
+        incoming: String,
+    },
     #[error("tool `{0}` is unavailable")]
     Unavailable(String),
     #[error("tool `{0}` panicked during execution")]
@@ -1006,6 +1054,45 @@ mod tests {
                 })
             },
         )
+    }
+
+    /// Remote providers publish `{alias}_{tool}`, a rule two providers can
+    /// land on for the same string. The second claim is rejected and both
+    /// sources are named, rather than one silently shadowing the other.
+    #[test]
+    fn a_second_source_claiming_a_published_name_is_rejected_naming_both() {
+        let tools = ToolRegistry::default();
+        tools
+            .register_exclusive(spec(50), handler("first"), "MCP server `docs` tool `read`")
+            .expect("the first claim wins the name");
+
+        let conflict = tools
+            .register_exclusive(
+                spec(50),
+                handler("second"),
+                "MCP server `docs_read` tool ``",
+            )
+            .expect_err("the second claim cannot take the name");
+
+        let message = conflict.to_string();
+        assert!(
+            message.contains("MCP server `docs` tool `read`"),
+            "{message}"
+        );
+        assert!(
+            message.contains("MCP server `docs_read` tool ``"),
+            "{message}"
+        );
+        assert!(message.contains("read"), "{message}");
+
+        // The same provider re-registering is a refresh, not a duplicate.
+        tools
+            .register_exclusive(
+                spec(50),
+                handler("refreshed"),
+                "MCP server `docs` tool `read`",
+            )
+            .expect("a provider may republish its own tool");
     }
 
     fn reference_shaped_spec(input_schema: Value) -> ToolSpec {

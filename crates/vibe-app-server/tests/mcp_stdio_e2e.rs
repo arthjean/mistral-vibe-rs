@@ -40,7 +40,7 @@ impl CompletionProvider for ModelSelectsMcp {
                     reasoning_state: Vec::new(),
                     tool_calls: vec![ModelToolCall {
                         id: "call-1".to_owned(),
-                        name: "mcp_fixture_echo".to_owned(),
+                        name: "fixture_echo".to_owned(),
                         arguments: r#"{"message":"rust"}"#.to_owned(),
                     }],
                     usage: Usage::default(),
@@ -97,7 +97,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
         .expect("workspace trust");
     policy
         .add_rule(PermissionRule {
-            tool: "mcp_fixture_echo".to_owned(),
+            tool: "fixture_echo".to_owned(),
             scope: "mcp fixture/echo".to_owned(),
             mode: PermissionMode::Always,
             rationale: "fixture server is operator-trusted".to_owned(),
@@ -219,7 +219,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
     );
     {
         let seen = provider.definitions.lock().expect("definitions");
-        assert!(seen[0].iter().any(|tool| tool.name == "mcp_fixture_echo"));
+        assert!(seen[0].iter().any(|tool| tool.name == "fixture_echo"));
     }
 
     backend

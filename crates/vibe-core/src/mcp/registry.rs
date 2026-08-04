@@ -657,6 +657,12 @@ fn reconcile_disabled_tools(
     Ok(disabled)
 }
 
+/// Resolves persisted per-tool disable entries onto the names published today.
+///
+/// An entry may be the published name, the bare remote name, or the
+/// `mcp_{alias}_{tool}` name this port published before it adopted the
+/// reference rule. All three are migrated onto the current published name, so
+/// a preference written by an older build keeps disabling the tool it named.
 fn normalize_disabled_tools(
     alias: &str,
     registered: &[String],
@@ -667,6 +673,12 @@ fn normalize_disabled_tools(
         .filter_map(|tool| {
             if registered.contains(tool) {
                 return Some(tool.clone());
+            }
+            if let Some(migrated) = tool
+                .strip_prefix("mcp_")
+                .filter(|migrated| registered.contains(&(*migrated).to_owned()))
+            {
+                return Some(migrated.to_owned());
             }
             let public = public_tool_name(ToolSource::Mcp, alias, tool);
             registered.contains(&public).then_some(public)
@@ -761,6 +773,7 @@ fn register_remote_tools(
             },
         );
         let server = alias.to_owned();
+        let origin = format!("MCP server `{alias}` tool `{}`", remote.name);
         let remote_permission_name = remote.name.clone();
         let guarded = Arc::new(PolicyGuardedTool::new(
             public_name.clone(),
@@ -786,7 +799,7 @@ fn register_remote_tools(
             source: ToolSource::Mcp,
             selection_priority: 50,
         };
-        match tools.register(spec, guarded) {
+        match tools.register_exclusive(spec, guarded, origin) {
             Ok(_) => registered.push(public_name),
             Err(error) => diagnostics.push(canonical_diagnostic(
                 alias,
@@ -912,5 +925,32 @@ async fn discover_peer(
                 "{discovery_error}; cleanup failed: {cleanup_error}"
             ))),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn persisted_disable_entries_resolve_onto_the_published_name() {
+        let registered = vec!["docs_search".to_owned(), "docs_read".to_owned()];
+        let configured = BTreeSet::from([
+            // The published name, written by a current build.
+            "docs_search".to_owned(),
+            // The bare remote name, which the operator may type.
+            "read".to_owned(),
+            // The `mcp_`-prefixed name this port published before it adopted
+            // the reference naming rule.
+            "mcp_docs_read".to_owned(),
+            // An entry naming no tool of this server.
+            "absent".to_owned(),
+        ]);
+
+        assert_eq!(
+            normalize_disabled_tools("docs", &registered, &configured),
+            BTreeSet::from(["docs_search".to_owned(), "docs_read".to_owned()]),
+            "a preference written before the rename must still disable its tool"
+        );
     }
 }

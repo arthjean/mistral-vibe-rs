@@ -580,7 +580,11 @@ impl ConnectorRegistry {
                     handler,
                 ));
                 tools
-                    .register(spec, guarded)
+                    .register_exclusive(
+                        spec,
+                        guarded,
+                        format!("connector `{connector_id}` tool `{}`", remote.name),
+                    )
                     .map_err(|error| IntegrationError::Tool(error.to_string()))?;
                 registered.push(public_name);
             }
@@ -665,8 +669,10 @@ mod tests {
                 100,
             )
             .await,
+            // The reference alias rule keeps case, so "Issue Tracker" becomes
+            // "Issue_Tracker" rather than being lowercased.
             Err(IntegrationError::InvalidConnector(message))
-                if message.contains("alias `issue_tracker`")
+                if message.contains("alias `Issue_Tracker`")
         ));
         assert!(registry.views().expect("unchanged registry").is_empty());
 
@@ -737,7 +743,7 @@ mod tests {
         assert_eq!(registry.views().expect("preserved views"), initial);
         tools
             .invoke(
-                "connector_tracker_search",
+                "connector_Tracker_search",
                 ToolInvocation {
                     call_id: "after-invalid-refresh".to_owned(),
                     arguments: json!({}),
@@ -787,7 +793,7 @@ mod tests {
         let policy = PermissionStore::default();
         policy
             .add_rule(PermissionRule {
-                tool: "connector_tracker_search".to_owned(),
+                tool: "connector_Tracker_search".to_owned(),
                 scope: "network https://connectors.example/".to_owned(),
                 mode: PermissionMode::Always,
                 rationale: "test connector".to_owned(),
@@ -798,7 +804,7 @@ mod tests {
             .expect("register");
         let output = tools
             .invoke(
-                "connector_tracker_search",
+                "connector_Tracker_search",
                 ToolInvocation {
                     call_id: "call-1".to_owned(),
                     arguments: json!({}),
@@ -828,10 +834,10 @@ mod tests {
             .expect("register");
 
         let disabled = registry
-            .toggle("one", Some("connector_tracker_search"), false)
+            .toggle("one", Some("connector_Tracker_search"), false)
             .await
             .expect("disable tool");
-        assert!(disabled.disabled_tools.contains("connector_tracker_search"));
+        assert!(disabled.disabled_tools.contains("connector_Tracker_search"));
 
         registry.invalidate_cache().expect("invalidate");
         let refreshed = registry
@@ -841,7 +847,7 @@ mod tests {
         assert!(
             refreshed[0]
                 .disabled_tools
-                .contains("connector_tracker_search")
+                .contains("connector_Tracker_search")
         );
         registry
             .register_tools(
@@ -854,7 +860,7 @@ mod tests {
         assert!(matches!(
             tools
                 .invoke(
-                    "connector_tracker_search",
+                    "connector_Tracker_search",
                     ToolInvocation {
                         call_id: "disabled".to_owned(),
                         arguments: json!({}),
@@ -886,11 +892,11 @@ mod tests {
             .expect("register");
 
         registry
-            .toggle("one", Some("connector_tracker_search"), false)
+            .toggle("one", Some("connector_Tracker_search"), false)
             .await
             .expect("disable");
         registry
-            .toggle("one", Some("connector_tracker_search"), true)
+            .toggle("one", Some("connector_Tracker_search"), true)
             .await
             .expect("enable while disconnected");
 
@@ -898,7 +904,7 @@ mod tests {
             .list()
             .expect("tools")
             .into_iter()
-            .find(|tool| tool.name == "connector_tracker_search")
+            .find(|tool| tool.name == "connector_Tracker_search")
             .expect("connector tool");
         assert_eq!(tool.availability, ToolAvailability::Unavailable);
     }
@@ -919,7 +925,7 @@ mod tests {
         let policy = PermissionStore::default();
         policy
             .add_rule(PermissionRule {
-                tool: "connector_tracker_search".to_owned(),
+                tool: "connector_Tracker_search".to_owned(),
                 scope: "network https://connectors.example/".to_owned(),
                 mode: PermissionMode::Always,
                 rationale: "test connector".to_owned(),
@@ -933,7 +939,7 @@ mod tests {
         assert!(matches!(
             tools
                 .invoke(
-                    "connector_tracker_search",
+                    "connector_Tracker_search",
                     ToolInvocation {
                         call_id: "call-logout".to_owned(),
                         arguments: json!({}),

@@ -1065,7 +1065,13 @@ fn resolve_connector(
         .views()
         .map_err(integration_error)?
         .into_iter()
-        .find(|view| view.id == name || view.alias == name || view.name == name)
+        // The alias keeps the case the reference gives it, so an operator
+        // naming a connector in lowercase must still reach it.
+        .find(|view| {
+            [&view.id, &view.alias, &view.name]
+                .into_iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(name))
+        })
         .ok_or_else(|| ResourceError::NotFound(format!("connector `{name}` was not found")))
 }
 
@@ -1710,6 +1716,73 @@ mod tests {
             .expect("connector state")
             .remove(0);
         assert!(view.enabled);
+    }
+
+    /// Connector aliases used to be lowercased and are now published in the
+    /// case the reference keeps, so a preference persisted by an older build
+    /// names `drive` where the session now holds `Drive`. Resolving that entry
+    /// is what stops an upgrade from silently re-enabling a connector the
+    /// operator disabled.
+    #[tokio::test]
+    async fn a_preference_persisted_under_the_lowercased_alias_still_applies() {
+        let temporary = tempfile::tempdir().expect("temporary root");
+        let vibe_home = temporary.path().join("home/.vibe");
+        let workspace = temporary.path().join("workspace");
+        std::fs::create_dir_all(&vibe_home).expect("config directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        std::fs::write(
+            vibe_home.join("config.toml"),
+            "[[connectors]]\nname = \"drive\"\ndisabled = true\ndisabled_tools = [\"search\"]\n",
+        )
+        .expect("preference written by an older build");
+        let store = LayeredConfig::new(
+            vibe_core::config::ConfigPaths {
+                vibe_home,
+                working_directory: workspace.clone(),
+            },
+            toml::Table::new(),
+        );
+        let backend = CoreResourceBackend::default()
+            .with_config(store)
+            .with_connectors(
+                vec![oauth_connector()],
+                Arc::new(FakeConnectorTransport),
+                "credential",
+                Url::parse("https://connectors.example").expect("catalog URL"),
+            );
+        backend
+            .open_session(ResourceSession {
+                session_id: "upgraded".to_owned(),
+                generation: 1,
+                working_directory: workspace.to_string_lossy().into_owned(),
+                project_trusted: false,
+                policy: PermissionStore::default(),
+                tools: ToolRegistry::default(),
+            })
+            .expect("session opens");
+
+        backend
+            .dispatch(backend_request(
+                "upgraded",
+                "connectors/read",
+                BTreeMap::new(),
+            ))
+            .await
+            .expect("connector initializes");
+
+        let view = backend
+            .session("upgraded")
+            .expect("session")
+            .connectors
+            .views()
+            .expect("connector state")
+            .remove(0);
+        assert_eq!(view.alias, "Drive");
+        assert!(
+            !view.enabled,
+            "the persisted disable must survive the alias case change"
+        );
+        assert!(view.disabled_tools.contains("connector_Drive_search"));
     }
 
     #[tokio::test]

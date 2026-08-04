@@ -1070,7 +1070,7 @@ mod tests {
         let policy = PermissionStore::default();
         policy
             .add_rule(PermissionRule {
-                tool: "mcp_good_search".to_owned(),
+                tool: "good_search".to_owned(),
                 scope: "mcp good/search".to_owned(),
                 mode: PermissionMode::Always,
                 rationale: "test server".to_owned(),
@@ -1092,7 +1092,7 @@ mod tests {
         assert_eq!(views[1].status, McpServerStatus::Healthy);
         let output = tools
             .invoke(
-                "mcp_good_search",
+                "good_search",
                 ToolInvocation {
                     call_id: "call-1".to_owned(),
                     arguments: json!({"query": "rust"}),
@@ -1107,7 +1107,7 @@ mod tests {
         assert!(matches!(
             tools
                 .invoke(
-                    "mcp_good_search",
+                    "good_search",
                     ToolInvocation {
                         call_id: "call-2".to_owned(),
                         arguments: json!({"query": "rust"}),
@@ -1183,7 +1183,7 @@ mod tests {
         assert!(matches!(
             tools
                 .invoke(
-                    "mcp_b_search",
+                    "b_search",
                     ToolInvocation {
                         call_id: "retired-call".to_owned(),
                         arguments: json!({"query": "rust"}),
@@ -1228,12 +1228,12 @@ mod tests {
         let enabled = registry.toggle("disabled", true).await.expect("reconnect");
         assert_eq!(
             enabled.disabled_tools,
-            BTreeSet::from(["mcp_disabled_search".to_owned()])
+            BTreeSet::from(["disabled_search".to_owned()])
         );
         assert!(matches!(
             tools
                 .invoke(
-                    "mcp_disabled_search",
+                    "disabled_search",
                     ToolInvocation {
                         call_id: "call-disabled".to_owned(),
                         arguments: json!({"query": "rust"}),
@@ -1267,14 +1267,14 @@ mod tests {
             .await;
 
         let disabled = registry
-            .toggle_tool("tools", "mcp_tools_search", false)
+            .toggle_tool("tools", "tools_search", false)
             .await
             .expect("tool disables");
-        assert!(disabled.disabled_tools.contains("mcp_tools_search"));
+        assert!(disabled.disabled_tools.contains("tools_search"));
         assert!(matches!(
             tools
                 .invoke(
-                    "mcp_tools_search",
+                    "tools_search",
                     ToolInvocation {
                         call_id: "disabled".to_owned(),
                         arguments: json!({"query": "rust"}),
@@ -1285,11 +1285,11 @@ mod tests {
         ));
 
         let refreshed = registry.refresh("tools").await.expect("server refreshes");
-        assert!(refreshed.disabled_tools.contains("mcp_tools_search"));
+        assert!(refreshed.disabled_tools.contains("tools_search"));
         assert!(matches!(
             tools
                 .invoke(
-                    "mcp_tools_search",
+                    "tools_search",
                     ToolInvocation {
                         call_id: "still-disabled".to_owned(),
                         arguments: json!({"query": "rust"}),
@@ -1300,13 +1300,13 @@ mod tests {
         ));
 
         let enabled = registry
-            .toggle_tool("tools", "mcp_tools_search", true)
+            .toggle_tool("tools", "tools_search", true)
             .await
             .expect("tool re-enables");
         assert!(enabled.disabled_tools.is_empty());
         tools
             .invoke(
-                "mcp_tools_search",
+                "tools_search",
                 ToolInvocation {
                     call_id: "enabled".to_owned(),
                     arguments: json!({"query": "rust"}),
@@ -1320,7 +1320,7 @@ mod tests {
         assert!(matches!(
             tools
                 .invoke(
-                    "mcp_tools_search",
+                    "tools_search",
                     ToolInvocation {
                         call_id: "logged-out".to_owned(),
                         arguments: json!({"query": "rust"}),
@@ -1500,7 +1500,7 @@ mod tests {
         let policy = PermissionStore::default();
         policy
             .add_rule(PermissionRule {
-                tool: "mcp_good_search".to_owned(),
+                tool: "good_search".to_owned(),
                 scope: "mcp good/search".to_owned(),
                 mode: PermissionMode::Always,
                 rationale: "test server".to_owned(),
@@ -1523,7 +1523,7 @@ mod tests {
             tokio::spawn(async move {
                 tools
                     .invoke(
-                        "mcp_good_search",
+                        "good_search",
                         ToolInvocation {
                             call_id: "hung".to_owned(),
                             arguments: json!({"query": "rust"}),
@@ -1562,7 +1562,7 @@ mod tests {
         let policy = PermissionStore::default();
         policy
             .add_rule(PermissionRule {
-                tool: "mcp_good_search".to_owned(),
+                tool: "good_search".to_owned(),
                 scope: "mcp good/search".to_owned(),
                 mode: PermissionMode::Always,
                 rationale: "test server".to_owned(),
@@ -1584,7 +1584,7 @@ mod tests {
         assert!(matches!(
             tools
                 .invoke(
-                    "mcp_good_search",
+                    "good_search",
                     ToolInvocation {
                         call_id: "timeout".to_owned(),
                         arguments: json!({"query": "rust"}),
@@ -1608,7 +1608,7 @@ mod tests {
         let policy = PermissionStore::default();
         policy
             .add_rule(PermissionRule {
-                tool: "mcp_good_search".to_owned(),
+                tool: "good_search".to_owned(),
                 scope: "mcp good/search".to_owned(),
                 mode: PermissionMode::Always,
                 rationale: "test server".to_owned(),
@@ -1630,7 +1630,7 @@ mod tests {
             async move {
                 tools
                     .invoke(
-                        "mcp_good_search",
+                        "good_search",
                         ToolInvocation {
                             call_id: "cancelled".to_owned(),
                             arguments: json!({"query": "rust"}),
@@ -1711,7 +1711,7 @@ mod tests {
         assert!(matches!(
             tools
                 .invoke(
-                    "mcp_good_search",
+                    "good_search",
                     ToolInvocation {
                         call_id: "oversized".to_owned(),
                         arguments: json!({"query": "rust"}),

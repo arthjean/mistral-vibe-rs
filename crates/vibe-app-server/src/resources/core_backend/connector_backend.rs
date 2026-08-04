@@ -195,9 +195,16 @@ impl CoreResourceBackend {
         if let Some(store) = session.config() {
             let preferences = store.connector_preferences().map_err(config_error)?;
             for view in session.connectors.views().map_err(integration_error)? {
+                // The alias keeps the case the reference gives it, where this
+                // port used to lowercase it. A preference persisted by an
+                // older build therefore carries the lowercased alias, so the
+                // match ignores case rather than silently dropping it.
                 let Some(preference) = preferences
-                    .get(&view.alias)
-                    .or_else(|| preferences.get(&view.id))
+                    .iter()
+                    .find(|(key, _)| {
+                        key.eq_ignore_ascii_case(&view.alias) || key.eq_ignore_ascii_case(&view.id)
+                    })
+                    .map(|(_, preference)| preference)
                 else {
                     continue;
                 };

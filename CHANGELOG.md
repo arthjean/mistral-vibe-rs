@@ -12,6 +12,12 @@
 - Publish `ask_user_question` and `exit_plan_mode` in the reference schema
   shape, with the question and choice models under `$defs` and no invented
   constraints.
+- Publish MCP tools as `{alias}_{tool}` instead of `mcp_{alias}_{tool}`, and
+  keep connector aliases in the case and hyphenation the reference keeps.
+  Per-tool disable preferences written under the previous MCP names are
+  migrated on load, and connector preferences persisted under the previously
+  lowercased alias still apply. A second source claiming an already published
+  name is now rejected naming both sources instead of shadowing the first.
 - Publish tool argument schemas in the shape the reference emits: `required`
   and `additionalProperties` only where the tool declares them, defaults on
   optional properties, `anyOf` for nullable ones, and nested models under
