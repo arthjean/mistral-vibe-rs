@@ -34,7 +34,8 @@ impl EffectKind {
     #[must_use]
     pub fn from_tool_name(name: &str) -> Self {
         match name {
-            "shell" | "bash" | "windows_shell" | "experimental_bash" | "git_bash" => Self::Shell,
+            "shell" | "bash" | "windows_shell" | "experimental_bash" | "git_bash"
+            | "powershell" => Self::Shell,
             "edit" | "patch" => Self::FileEdit,
             "search" | "grep" => Self::FileSearch,
             "read" | "read_file" => Self::FileRead,
