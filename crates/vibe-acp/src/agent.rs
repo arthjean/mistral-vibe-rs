@@ -692,7 +692,6 @@ where
                         .into_iter()
                         .collect(),
                     client_tools: declared_client_tools(&capabilities),
-                    disabled_notifications: Vec::new(),
                 },
             )?,
         )

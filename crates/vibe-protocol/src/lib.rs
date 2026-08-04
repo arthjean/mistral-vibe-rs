@@ -303,8 +303,6 @@ pub struct ClientCapabilities {
     pub callback_kinds: Vec<CallbackKind>,
     #[serde(default)]
     pub client_tools: Vec<ClientToolCapability>,
-    #[serde(default)]
-    pub disabled_notifications: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
