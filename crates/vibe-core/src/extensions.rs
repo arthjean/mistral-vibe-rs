@@ -279,7 +279,6 @@ fn profile_permission_scope(tool: &str, pattern: &str) -> String {
 fn canonical_tool_name(name: &str) -> &str {
     match name {
         "write" | "write_file" => "edit",
-        "bash" => "shell",
         other => other,
     }
 }
@@ -1710,6 +1709,10 @@ mod tests {
         // Nothing rewrites the reference file-tool names any more.
         assert_eq!(canonical_tool_name("read_file"), "read_file");
         assert_eq!(canonical_tool_name("grep"), "grep");
+        // `bash` is the published name now, so a profile naming it must reach
+        // the tool the registry serves rather than the manual shell resource.
+        assert_eq!(canonical_tool_name("bash"), "bash");
+        assert_eq!(profile_permission_scope("bash", "cargo *"), "shell cargo *");
     }
 
     /// `_plan_overrides` and the accept-edits profile both name `write_file`

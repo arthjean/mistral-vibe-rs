@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Agent profiles naming `bash` now resolve against the published `bash` tool
+  rather than the manual shell surface.
 - Take the reference argument shape on `task`: `task` is required, `agent`
   defaults to `explore` instead of enumerating the discovered agents, and an
   unknown agent is refused with the names that do exist.
