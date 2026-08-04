@@ -31,7 +31,7 @@ import sys
 import tempfile
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_REFERENCE = Path("/home/arthur/dev/mistral-vibe")
 DEFAULT_OUTPUT = Path(".parity/tool-surface-corpus.json")
 EXPECTED_COMMIT = "68ff32e6a92e80a874c8153312f0aa8ae4955477"
@@ -147,7 +147,54 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
         "conditions": conditions,
         "fixtures": fixtures,
         "managedTools": managed_tools,
+        "windowsTools": capture_windows_tools(),
     }
+
+
+# --------------------------------------------------------------------------
+# Windows-only families
+# --------------------------------------------------------------------------
+
+
+def capture_windows_tools() -> list[dict[str, Any]]:
+    """The names and schemas the two Windows-only families publish.
+
+    ``available_tools`` cannot answer for them off Windows: their
+    ``is_available`` reads the running platform and the shell it finds, so a
+    Linux capture would record nothing at all. The declarations are read from
+    the reference classes instead, and the variant per name is resolved the way
+    ``ToolManager._select_available_variant`` resolves it — highest
+    ``selection_priority`` first, discovery order breaking a tie — under the
+    host the classes are written for: Windows, with the family's shell present
+    and the managed backend supported, which is the only state where all five
+    names of a family are available at once.
+    """
+    from vibe.core.tools.base import BaseTool
+    from vibe.core.tools.builtins import git_bash, windows_shell
+
+    captured: list[dict[str, Any]] = []
+    for family, module in (("git_bash", git_bash), ("powershell", windows_shell)):
+        ranked: dict[str, tuple[tuple[int, int], Any]] = {}
+        for index, value in enumerate(vars(module).values()):
+            if (
+                not isinstance(value, type)
+                or not issubclass(value, BaseTool)
+                or value.__module__ != module.__name__
+            ):
+                continue
+            name = value.get_name()
+            rank = (value.selection_priority, index)
+            if name not in ranked or rank > ranked[name][0]:
+                ranked[name] = (rank, value)
+        captured.extend(
+            {
+                "family": family,
+                "name": name,
+                "parameters": tool_class.get_parameters(),
+            }
+            for name, (_rank, tool_class) in sorted(ranked.items())
+        )
+    return captured
 
 
 # --------------------------------------------------------------------------
@@ -379,6 +426,7 @@ def main() -> int:
             "conditions": extra["conditions"],
             "tools": tools,
             "managedTools": extra["managedTools"],
+            "windowsTools": extra["windowsTools"],
             "fixtures": extra["fixtures"],
         }
         if arguments.probe_endpoint:
@@ -398,8 +446,8 @@ def main() -> int:
         print(f"tool-surface capture failed: {error}", file=sys.stderr)
         return 1
     print(
-        f"captured {len(tools)} tools, {len(extra['managedTools'])} managed tools "
-        f"and {len(extra['fixtures'])} fixtures "
+        f"captured {len(tools)} tools, {len(extra['managedTools'])} managed tools, "
+        f"{len(extra['windowsTools'])} Windows tools and {len(extra['fixtures'])} fixtures "
         f"from {reference['commit'][:12]} into {output}"
     )
     if probe := corpus.get("endpointProbe"):

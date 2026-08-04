@@ -36,7 +36,8 @@ use vibe_core::tools::{
 };
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 
-use vibe_core::tools::shell::{ShellRollout, ShellTools};
+use vibe_core::platform::Platform;
+use vibe_core::tools::shell::{HostShells, ShellRollout, ShellTools};
 
 use crate::client::{InteractiveSessionToolFactory, task_spec};
 use crate::server::SessionToolFactory;
@@ -48,7 +49,7 @@ const REFERENCE_ROOT: &str = "/home/arthur/dev/mistral-vibe";
 const CORPUS_RELATIVE: &str = ".parity/tool-surface-corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 2;
+const CORPUS_SCHEMA_VERSION: u32 = 3;
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_surface.py";
 const BASELINE_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/baseline.json";
 /// Stands in for every description string so presence is compared and text is
@@ -67,6 +68,11 @@ struct Corpus {
     /// defaulted so an older corpus still parses and reaches the version skip.
     #[serde(default)]
     managed_tools: Vec<ReferenceTool>,
+    /// The two Windows-only families, read from the reference declarations
+    /// because a Linux host cannot make them available. Defaulted for the same
+    /// reason as `managed_tools`.
+    #[serde(default)]
+    windows_tools: Vec<WindowsTool>,
     fixtures: Vec<Fixture>,
 }
 
@@ -77,6 +83,13 @@ struct Reference {
 
 #[derive(Debug, Deserialize)]
 struct ReferenceTool {
+    name: String,
+    parameters: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct WindowsTool {
+    family: String,
     name: String,
     parameters: Value,
 }
@@ -228,10 +241,24 @@ impl ApprovalAgent for RejectApproval {
 /// availability rule itself is proven by a unit test, because the oracle can
 /// only compare the two surfaces under one configuration at a time.
 async fn published_specs(web_search: bool) -> Vec<ToolSpec> {
-    published_specs_with(web_search, ShellRollout::Legacy).await
+    published_specs_with(web_search, ShellRollout::Legacy, posix_host()).await
 }
 
-async fn published_specs_with(web_search: bool, rollout: ShellRollout) -> Vec<ToolSpec> {
+/// The host every non-Windows case runs against, stated rather than detected so
+/// the surface under test does not depend on the machine running the suite.
+fn posix_host() -> HostShells {
+    HostShells {
+        platform: Platform::Posix,
+        git_bash: None,
+        powershell: None,
+    }
+}
+
+async fn published_specs_with(
+    web_search: bool,
+    rollout: ShellRollout,
+    host: HostShells,
+) -> Vec<ToolSpec> {
     let directory = tempfile::tempdir().expect("tempdir");
     let workspace = Arc::new(Workspace::open(directory.path()).expect("workspace"));
     let review = Arc::new(ReviewManager::new(workspace.clone()));
@@ -263,7 +290,7 @@ async fn published_specs_with(web_search: bool, rollout: ShellRollout) -> Vec<To
     WorkspaceTools::new(workspace, review)
         .register(&registry, policy.clone(), Arc::new(RejectApproval))
         .expect("workspace tools register");
-    ShellTools::new(directory.path().join("home"), rollout)
+    ShellTools::with_host(directory.path().join("home"), rollout, host)
         .register(
             "session-1",
             directory.path(),
@@ -483,6 +510,7 @@ async fn the_managed_shell_surface_matches_the_reference_under_its_rollout() {
     let published = published_specs_with(
         reference_names.contains("web_search"),
         ShellRollout::Managed,
+        posix_host(),
     )
     .await
     .into_iter()
@@ -544,6 +572,136 @@ async fn the_managed_shell_surface_matches_the_reference_under_its_rollout() {
         missing.into_iter().collect::<Vec<_>>().join(", ")
     );
     assert!(report.is_empty(), "{}", report.join("\n"));
+}
+
+/// The two Windows-only families, which no Linux surface can carry.
+///
+/// The corpus records what the reference classes declare, so this diffs the
+/// same names and canonicalized schemas as the other two cases, once per
+/// family, against a session registered on a stated Windows host. The two
+/// families are mutually exclusive there — reference
+/// `_powershell_treatment_available` withholds PowerShell wherever Git Bash
+/// resolves — so each is measured under the host that publishes it.
+#[tokio::test]
+async fn the_windows_families_match_the_reference_on_a_windows_host() {
+    let Some(corpus) = corpus() else {
+        return;
+    };
+    assert!(
+        !corpus.windows_tools.is_empty(),
+        "the corpus carries no Windows family"
+    );
+    let hosts = [
+        (
+            "git_bash",
+            HostShells {
+                platform: Platform::Windows,
+                git_bash: Some(PathBuf::from(r"C:\Program Files\Git\bin\bash.exe")),
+                powershell: Some(PathBuf::from(r"C:\Program Files\PowerShell\7\pwsh.exe")),
+            },
+        ),
+        (
+            "powershell",
+            HostShells {
+                platform: Platform::Windows,
+                git_bash: None,
+                powershell: Some(PathBuf::from(r"C:\Program Files\PowerShell\7\pwsh.exe")),
+            },
+        ),
+    ];
+
+    let mut report = Vec::new();
+    let mut missing = BTreeSet::new();
+    let mut conformant = 0;
+    let mut expected = 0;
+    for (family, host) in hosts {
+        let published = published_specs_with(false, ShellRollout::Managed, host)
+            .await
+            .into_iter()
+            .map(|spec| (spec.name.clone(), spec))
+            .collect::<BTreeMap<_, _>>();
+        for tool in corpus
+            .windows_tools
+            .iter()
+            .filter(|tool| tool.family == family)
+        {
+            expected += 1;
+            let Some(spec) = published.get(&tool.name) else {
+                missing.insert(tool.name.clone());
+                continue;
+            };
+            let mut found = Vec::new();
+            diff(
+                &canonicalize(&tool.parameters),
+                &canonicalize(&spec.input_schema),
+                "",
+                &mut found,
+            );
+            if found.is_empty() {
+                conformant += 1;
+            }
+            for divergence in &found {
+                report.push(format!(
+                    "tool `{}` diverges at {}: expected {}, got {}",
+                    tool.name, divergence.pointer, divergence.expected, divergence.actual
+                ));
+            }
+        }
+        // The other family must stay absent: the host publishes one of them.
+        let other = if family == "git_bash" {
+            "powershell"
+        } else {
+            "git_bash"
+        };
+        for name in corpus
+            .windows_tools
+            .iter()
+            .filter(|tool| tool.family == other)
+            .map(|tool| &tool.name)
+        {
+            assert!(
+                !published.contains_key(name),
+                "a {family} host published `{name}`"
+            );
+        }
+    }
+    println!(
+        "windows shell surface: {}/{expected} names, {conformant}/{expected} schemas",
+        expected - missing.len()
+    );
+    for line in &report {
+        println!("{line}");
+    }
+    assert!(
+        missing.is_empty(),
+        "a Windows host does not publish: {}",
+        missing.into_iter().collect::<Vec<_>>().join(", ")
+    );
+    assert!(report.is_empty(), "{}", report.join("\n"));
+}
+
+/// The same ten names are absent from the surface this host publishes, which
+/// is the other half of the platform gate and the reason they never reach the
+/// recorded gap as invented names.
+#[tokio::test]
+async fn no_windows_family_name_reaches_a_posix_surface() {
+    let Some(corpus) = corpus() else {
+        return;
+    };
+    for rollout in [ShellRollout::Legacy, ShellRollout::Managed] {
+        let published = published_specs_with(false, rollout, posix_host())
+            .await
+            .into_iter()
+            .map(|spec| spec.name)
+            .collect::<BTreeSet<_>>();
+        for tool in &corpus.windows_tools {
+            assert!(
+                !published.contains(&tool.name),
+                "a POSIX host published `{}`",
+                tool.name
+            );
+        }
+    }
 }
 
 #[tokio::test]
