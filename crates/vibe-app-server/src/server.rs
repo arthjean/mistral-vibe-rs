@@ -3664,6 +3664,33 @@ mod tests {
     use std::path::PathBuf;
     use toml::Table;
 
+    /// `SERVER_METHODS` is the contract this build advertises; the routing
+    /// tables are what it actually answers. Nothing else keeps them aligned.
+    #[test]
+    fn advertised_methods_match_routed_methods() {
+        let routed = IMPLEMENTED_METHODS
+            .iter()
+            .chain(RELEASE3_METHODS)
+            .chain(RELEASE4_METHODS)
+            .chain(RESOURCE_METHODS)
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let advertised = vibe_protocol::SERVER_METHODS
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            advertised.difference(&routed).copied().collect::<Vec<_>>(),
+            Vec::<&str>::new(),
+            "declared in SERVER_METHODS but routed nowhere"
+        );
+        assert_eq!(
+            routed.difference(&advertised).copied().collect::<Vec<_>>(),
+            Vec::<&str>::new(),
+            "routed but missing from SERVER_METHODS"
+        );
+    }
+
     struct RejectForkTools;
 
     impl SessionToolFactory for RejectForkTools {

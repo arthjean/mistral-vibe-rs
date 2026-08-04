@@ -9,7 +9,12 @@ use thiserror::Error;
 
 pub const PROTOCOL_VERSION: &str = "1";
 
-pub const SERVER_METHODS: [&str; 81] = [
+/// Every method the app-server routes, sorted and unique.
+///
+/// Lifecycle methods (`initialize`, `initialized`, `shutdown`, `exit`) are
+/// deliberately absent: they are handled before method dispatch and are not
+/// part of the negotiated surface.
+pub const SERVER_METHODS: [&str; 80] = [
     "account/read",
     "agents/install",
     "agents/list",
@@ -53,8 +58,8 @@ pub const SERVER_METHODS: [&str; 81] = [
     "session/agent/update",
     "session/close",
     "session/compact/start",
-    "session/continue",
     "session/context/inject",
+    "session/continue",
     "session/delete",
     "session/fork",
     "session/history/clear",
@@ -73,7 +78,6 @@ pub const SERVER_METHODS: [&str; 81] = [
     "shell/run",
     "skills/list",
     "stats/read",
-    "telemetry/record",
     "tools/list",
     "turn/interrupt",
     "turn/start",
@@ -196,7 +200,7 @@ pub fn encode_frame(frame: &Envelope) -> Result<Vec<u8>, ProtocolValidationError
 /// Reports whether `method` is part of the negotiated surface.
 #[must_use]
 pub fn is_server_method(method: &str) -> bool {
-    SERVER_METHODS.contains(&method)
+    SERVER_METHODS.binary_search(&method).is_ok()
 }
 
 /// JSON Schema description of the wire contract, for external client
@@ -404,13 +408,19 @@ mod tests {
     }
 
     #[test]
-    fn method_inventory_is_complete_and_unique() {
-        let unique = SERVER_METHODS
-            .iter()
-            .copied()
-            .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(unique.len(), 81);
-        assert_eq!(unique.len(), SERVER_METHODS.len());
+    fn method_inventory_is_sorted_and_unique() {
+        assert!(
+            SERVER_METHODS.is_sorted_by(|left, right| left < right),
+            "SERVER_METHODS must stay sorted and duplicate-free for binary_search"
+        );
+        assert!(is_server_method("turn/start"));
+        assert!(!is_server_method("turn/unknown"));
+        for method in ["initialize", "initialized", "shutdown", "exit"] {
+            assert!(
+                !is_server_method(method),
+                "{method} is a lifecycle method and must stay out of the inventory"
+            );
+        }
     }
 
     #[test]
