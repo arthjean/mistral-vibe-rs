@@ -33,10 +33,10 @@
     {
       "id": "EP-015",
       "title": "POSIX Shell Surface",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3
     },
     {
       "id": "EP-016",
@@ -215,43 +215,43 @@
       "id": "US-051",
       "title": "Implement the bash tool",
       "epic": "EP-015",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-041"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-04",
+      "completed_at": "2026-08-04",
+      "reviewed_at": "2026-08-04"
     },
     {
       "id": "US-052",
       "title": "Implement bash_output and bash_stdin",
       "epic": "EP-015",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-051"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-04",
+      "completed_at": "2026-08-04",
+      "reviewed_at": "2026-08-04"
     },
     {
       "id": "US-053",
       "title": "Implement bash_sessions, bash_log_file, and rollout selection",
       "epic": "EP-015",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-052"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-04",
+      "completed_at": "2026-08-04",
+      "reviewed_at": "2026-08-04"
     },
     {
       "id": "US-054",
