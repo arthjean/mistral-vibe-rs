@@ -1,0 +1,1698 @@
+{
+  "managedTools": {
+    "ask_user_question": {
+      "$defs": {
+        "QuestionChoice": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "default": "",
+              "description": "<described>",
+              "type": "string"
+            },
+            "label": {
+              "description": "<described>",
+              "type": "string"
+            }
+          },
+          "required": [
+            "label"
+          ],
+          "type": "object"
+        },
+        "UserQuestion": {
+          "additionalProperties": false,
+          "properties": {
+            "header": {
+              "default": "",
+              "description": "<described>",
+              "maxLength": 20,
+              "type": "string"
+            },
+            "hideOther": {
+              "default": false,
+              "description": "<described>",
+              "type": "boolean"
+            },
+            "multiSelect": {
+              "default": false,
+              "description": "<described>",
+              "type": "boolean"
+            },
+            "options": {
+              "description": "<described>",
+              "items": {
+                "$ref": "#/$defs/QuestionChoice"
+              },
+              "minItems": 2,
+              "type": "array"
+            },
+            "question": {
+              "description": "<described>",
+              "type": "string"
+            }
+          },
+          "required": [
+            "question",
+            "options"
+          ],
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "footerNote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "questions": {
+          "description": "<described>",
+          "items": {
+            "$ref": "#/$defs/UserQuestion"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "questions"
+      ],
+      "type": "object"
+    },
+    "bash": {
+      "properties": {
+        "background": {
+          "default": false,
+          "description": "<described>",
+          "type": "boolean"
+        },
+        "command": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "cwd": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "env": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "hard_timeout": {
+          "default": false,
+          "description": "<described>",
+          "type": "boolean"
+        },
+        "shell": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    "bash_log_file": {
+      "properties": {
+        "action": {
+          "enum": [
+            "read",
+            "write",
+            "append"
+          ],
+          "type": "string"
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_bytes": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "offset": {
+          "default": 0,
+          "description": "<described>",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "relative_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    },
+    "bash_output": {
+      "properties": {
+        "cursor": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "max_bytes": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "wait_seconds": {
+          "default": 0,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "type": "object"
+    },
+    "bash_sessions": {
+      "properties": {
+        "action": {
+          "default": "list",
+          "description": "<described>",
+          "enum": [
+            "list",
+            "inspect",
+            "kill",
+            "reset"
+          ],
+          "type": "string"
+        },
+        "clear_logs": {
+          "default": false,
+          "description": "<described>",
+          "type": "boolean"
+        },
+        "max_bytes": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        }
+      },
+      "type": "object"
+    },
+    "bash_stdin": {
+      "properties": {
+        "bytes_base64": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "control": {
+          "description": "<described>",
+          "items": {
+            "enum": [
+              "ctrl_@",
+              "ctrl_a",
+              "ctrl_b",
+              "ctrl_c",
+              "ctrl_d",
+              "ctrl_e",
+              "ctrl_f",
+              "ctrl_g",
+              "ctrl_h",
+              "ctrl_i",
+              "tab",
+              "ctrl_j",
+              "enter",
+              "return",
+              "ctrl_k",
+              "ctrl_l",
+              "ctrl_m",
+              "ctrl_n",
+              "ctrl_o",
+              "ctrl_p",
+              "ctrl_q",
+              "ctrl_r",
+              "ctrl_s",
+              "ctrl_t",
+              "ctrl_u",
+              "ctrl_v",
+              "ctrl_w",
+              "ctrl_x",
+              "ctrl_y",
+              "ctrl_z",
+              "esc",
+              "escape",
+              "backspace",
+              "delete",
+              "up",
+              "down",
+              "right",
+              "left",
+              "home",
+              "end"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "type": "object"
+    },
+    "edit": {
+      "properties": {
+        "file_path": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "new_string": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "old_string": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "replace_all": {
+          "default": false,
+          "description": "<described>",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "file_path",
+        "old_string",
+        "new_string"
+      ],
+      "type": "object"
+    },
+    "exit_plan_mode": {
+      "properties": {},
+      "type": "object"
+    },
+    "grep": {
+      "properties": {
+        "max_matches": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "path": {
+          "default": ".",
+          "description": "<described>",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "use_default_ignore": {
+          "default": true,
+          "description": "<described>",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pattern"
+      ],
+      "type": "object"
+    },
+    "read_file": {
+      "properties": {
+        "file_path": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "limit": {
+          "default": 2000,
+          "description": "<described>",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    },
+    "skill": {
+      "properties": {
+        "name": {
+          "description": "<described>",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "task": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "default": "explore",
+          "description": "<described>",
+          "type": "string"
+        },
+        "task": {
+          "description": "<described>",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "type": "object"
+    },
+    "todo": {
+      "$defs": {
+        "TodoItem": {
+          "properties": {
+            "content": {
+              "description": "<described>",
+              "type": "string"
+            },
+            "id": {
+              "description": "<described>",
+              "type": "string"
+            },
+            "priority": {
+              "$ref": "#/$defs/TodoPriority",
+              "default": "medium",
+              "description": "<described>"
+            },
+            "status": {
+              "$ref": "#/$defs/TodoStatus",
+              "default": "pending",
+              "description": "<described>"
+            }
+          },
+          "required": [
+            "id",
+            "content"
+          ],
+          "type": "object"
+        },
+        "TodoPriority": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "type": "string"
+        },
+        "TodoStatus": {
+          "enum": [
+            "pending",
+            "in_progress",
+            "completed",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "properties": {
+        "action": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "todos": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TodoItem"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    },
+    "web_fetch": {
+      "properties": {
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "url": {
+          "description": "<described>",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "web_search": {
+      "properties": {
+        "query": {
+          "description": "<described>",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "write_file": {
+      "properties": {
+        "content": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "file_path": {
+          "description": "<described>",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_path",
+        "content"
+      ],
+      "type": "object"
+    }
+  },
+  "note": "Canonical tool-surface digest: published names and schema structure only, with every description replaced by a sentinel so no reference prose is committed. Regenerate with scripts/parity/tool_surface.py --digest when the pinned reference moves.",
+  "platform": "linux",
+  "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+  "schemaVersion": 1,
+  "tools": {
+    "ask_user_question": {
+      "$defs": {
+        "QuestionChoice": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "default": "",
+              "description": "<described>",
+              "type": "string"
+            },
+            "label": {
+              "description": "<described>",
+              "type": "string"
+            }
+          },
+          "required": [
+            "label"
+          ],
+          "type": "object"
+        },
+        "UserQuestion": {
+          "additionalProperties": false,
+          "properties": {
+            "header": {
+              "default": "",
+              "description": "<described>",
+              "maxLength": 20,
+              "type": "string"
+            },
+            "hideOther": {
+              "default": false,
+              "description": "<described>",
+              "type": "boolean"
+            },
+            "multiSelect": {
+              "default": false,
+              "description": "<described>",
+              "type": "boolean"
+            },
+            "options": {
+              "description": "<described>",
+              "items": {
+                "$ref": "#/$defs/QuestionChoice"
+              },
+              "minItems": 2,
+              "type": "array"
+            },
+            "question": {
+              "description": "<described>",
+              "type": "string"
+            }
+          },
+          "required": [
+            "question",
+            "options"
+          ],
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "footerNote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "questions": {
+          "description": "<described>",
+          "items": {
+            "$ref": "#/$defs/UserQuestion"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "questions"
+      ],
+      "type": "object"
+    },
+    "bash": {
+      "properties": {
+        "command": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    "edit": {
+      "properties": {
+        "file_path": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "new_string": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "old_string": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "replace_all": {
+          "default": false,
+          "description": "<described>",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "file_path",
+        "old_string",
+        "new_string"
+      ],
+      "type": "object"
+    },
+    "exit_plan_mode": {
+      "properties": {},
+      "type": "object"
+    },
+    "grep": {
+      "properties": {
+        "max_matches": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "path": {
+          "default": ".",
+          "description": "<described>",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "use_default_ignore": {
+          "default": true,
+          "description": "<described>",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pattern"
+      ],
+      "type": "object"
+    },
+    "read_file": {
+      "properties": {
+        "file_path": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "limit": {
+          "default": 2000,
+          "description": "<described>",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    },
+    "skill": {
+      "properties": {
+        "name": {
+          "description": "<described>",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "task": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "default": "explore",
+          "description": "<described>",
+          "type": "string"
+        },
+        "task": {
+          "description": "<described>",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "type": "object"
+    },
+    "todo": {
+      "$defs": {
+        "TodoItem": {
+          "properties": {
+            "content": {
+              "description": "<described>",
+              "type": "string"
+            },
+            "id": {
+              "description": "<described>",
+              "type": "string"
+            },
+            "priority": {
+              "$ref": "#/$defs/TodoPriority",
+              "default": "medium",
+              "description": "<described>"
+            },
+            "status": {
+              "$ref": "#/$defs/TodoStatus",
+              "default": "pending",
+              "description": "<described>"
+            }
+          },
+          "required": [
+            "id",
+            "content"
+          ],
+          "type": "object"
+        },
+        "TodoPriority": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "type": "string"
+        },
+        "TodoStatus": {
+          "enum": [
+            "pending",
+            "in_progress",
+            "completed",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "properties": {
+        "action": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "todos": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TodoItem"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    },
+    "web_fetch": {
+      "properties": {
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "<described>"
+        },
+        "url": {
+          "description": "<described>",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "web_search": {
+      "properties": {
+        "query": {
+          "description": "<described>",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "write_file": {
+      "properties": {
+        "content": {
+          "description": "<described>",
+          "type": "string"
+        },
+        "file_path": {
+          "description": "<described>",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_path",
+        "content"
+      ],
+      "type": "object"
+    }
+  },
+  "windowsTools": {
+    "git_bash": {
+      "git_bash": {
+        "properties": {
+          "background": {
+            "default": false,
+            "description": "<described>",
+            "type": "boolean"
+          },
+          "command": {
+            "description": "<described>",
+            "type": "string"
+          },
+          "cwd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "env": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "hard_timeout": {
+            "default": false,
+            "description": "<described>",
+            "type": "boolean"
+          },
+          "shell": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "type": "object"
+      },
+      "git_bash_log_file": {
+        "properties": {
+          "action": {
+            "enum": [
+              "read",
+              "write",
+              "append"
+            ],
+            "type": "string"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "max_bytes": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "offset": {
+            "default": 0,
+            "description": "<described>",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "git_bash_output": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "max_bytes": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "wait_seconds": {
+            "default": 0,
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "git_bash_sessions": {
+        "properties": {
+          "action": {
+            "default": "list",
+            "description": "<described>",
+            "enum": [
+              "list",
+              "inspect",
+              "kill",
+              "reset"
+            ],
+            "type": "string"
+          },
+          "clear_logs": {
+            "default": false,
+            "description": "<described>",
+            "type": "boolean"
+          },
+          "max_bytes": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          }
+        },
+        "type": "object"
+      },
+      "git_bash_stdin": {
+        "properties": {
+          "bytes_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "control": {
+            "description": "<described>",
+            "items": {
+              "enum": [
+                "ctrl_@",
+                "ctrl_a",
+                "ctrl_b",
+                "ctrl_c",
+                "ctrl_d",
+                "ctrl_e",
+                "ctrl_f",
+                "ctrl_g",
+                "ctrl_h",
+                "ctrl_i",
+                "tab",
+                "ctrl_j",
+                "enter",
+                "return",
+                "ctrl_k",
+                "ctrl_l",
+                "ctrl_m",
+                "ctrl_n",
+                "ctrl_o",
+                "ctrl_p",
+                "ctrl_q",
+                "ctrl_r",
+                "ctrl_s",
+                "ctrl_t",
+                "ctrl_u",
+                "ctrl_v",
+                "ctrl_w",
+                "ctrl_x",
+                "ctrl_y",
+                "ctrl_z",
+                "esc",
+                "escape",
+                "backspace",
+                "delete",
+                "up",
+                "down",
+                "right",
+                "left",
+                "home",
+                "end"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      }
+    },
+    "powershell": {
+      "powershell": {
+        "properties": {
+          "background": {
+            "default": false,
+            "description": "<described>",
+            "type": "boolean"
+          },
+          "command": {
+            "description": "<described>",
+            "type": "string"
+          },
+          "cwd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "env": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "hard_timeout": {
+            "default": false,
+            "description": "<described>",
+            "type": "boolean"
+          },
+          "shell": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "type": "object"
+      },
+      "powershell_log_file": {
+        "properties": {
+          "action": {
+            "enum": [
+              "read",
+              "write",
+              "append"
+            ],
+            "type": "string"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "max_bytes": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "offset": {
+            "default": 0,
+            "description": "<described>",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "powershell_output": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "max_bytes": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "wait_seconds": {
+            "default": 0,
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
+      "powershell_sessions": {
+        "properties": {
+          "action": {
+            "default": "list",
+            "description": "<described>",
+            "enum": [
+              "list",
+              "inspect",
+              "kill",
+              "reset"
+            ],
+            "type": "string"
+          },
+          "clear_logs": {
+            "default": false,
+            "description": "<described>",
+            "type": "boolean"
+          },
+          "max_bytes": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          }
+        },
+        "type": "object"
+      },
+      "powershell_stdin": {
+        "properties": {
+          "bytes_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          },
+          "control": {
+            "description": "<described>",
+            "items": {
+              "enum": [
+                "ctrl_@",
+                "ctrl_a",
+                "ctrl_b",
+                "ctrl_c",
+                "ctrl_d",
+                "ctrl_e",
+                "ctrl_f",
+                "ctrl_g",
+                "ctrl_h",
+                "ctrl_i",
+                "tab",
+                "ctrl_j",
+                "enter",
+                "return",
+                "ctrl_k",
+                "ctrl_l",
+                "ctrl_m",
+                "ctrl_n",
+                "ctrl_o",
+                "ctrl_p",
+                "ctrl_q",
+                "ctrl_r",
+                "ctrl_s",
+                "ctrl_t",
+                "ctrl_u",
+                "ctrl_v",
+                "ctrl_w",
+                "ctrl_x",
+                "ctrl_y",
+                "ctrl_z",
+                "esc",
+                "escape",
+                "backspace",
+                "delete",
+                "up",
+                "down",
+                "right",
+                "left",
+                "home",
+                "end"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "<described>"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      }
+    }
+  }
+}

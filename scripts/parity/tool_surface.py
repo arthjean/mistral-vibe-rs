@@ -32,8 +32,13 @@ import tempfile
 from typing import Any
 
 SCHEMA_VERSION = 3
+DIGEST_SCHEMA_VERSION = 1
 DEFAULT_REFERENCE = Path("/home/arthur/dev/mistral-vibe")
 DEFAULT_OUTPUT = Path(".parity/tool-surface-corpus.json")
+DEFAULT_DIGEST = Path("crates/vibe-app-server/tests/tool-surface/digest.json")
+#: Stands in for every description string, so the digest records that a
+#: description exists without carrying reference prose into the repository.
+DESCRIBED = "<described>"
 EXPECTED_COMMIT = "68ff32e6a92e80a874c8153312f0aa8ae4955477"
 PROBE_ENDPOINT = "https://api.mistral.ai/v1/chat/completions"
 PROBE_MODEL = "mistral-medium-3.5"
@@ -323,6 +328,58 @@ def argument_fixtures(name: str, tool_class: Any) -> list[dict[str, Any]]:
 
 
 # --------------------------------------------------------------------------
+# Committed digest
+# --------------------------------------------------------------------------
+
+
+def canonicalize(value: Any) -> Any:
+    """The schema with every description replaced by a sentinel.
+
+    ``NOTICE`` forbids shipping reference prose, and the Rust runner already
+    compares descriptions by presence only. Applying the same rule here is what
+    makes the digest committable: it carries names and schema structure, and the
+    only thing it says about a description is that there is one.
+    """
+    if isinstance(value, dict):
+        return {
+            key: DESCRIBED if key == "description" and isinstance(item, str) else canonicalize(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [canonicalize(item) for item in value]
+    return value
+
+
+def build_digest(corpus: dict[str, Any]) -> dict[str, Any]:
+    """The committed conformance target: every published name and its structure.
+
+    CI has no pinned Python checkout, so the corpus cannot be recaptured there.
+    The digest is what the Rust runner diffs the published surface against when
+    no oracle is reachable, which is what makes a schema change fail the
+    pipeline instead of skipping it.
+    """
+    windows: dict[str, dict[str, Any]] = {}
+    for tool in corpus["windowsTools"]:
+        windows.setdefault(tool["family"], {})[tool["name"]] = canonicalize(tool["parameters"])
+    return {
+        "schemaVersion": DIGEST_SCHEMA_VERSION,
+        "referenceCommit": corpus["reference"]["commit"],
+        "platform": corpus["platform"],
+        "note": (
+            "Canonical tool-surface digest: published names and schema structure only, with "
+            "every description replaced by a sentinel so no reference prose is committed. "
+            "Regenerate with scripts/parity/tool_surface.py --digest when the pinned reference "
+            "moves."
+        ),
+        "tools": {tool["name"]: canonicalize(tool["parameters"]) for tool in corpus["tools"]},
+        "managedTools": {
+            tool["name"]: canonicalize(tool["parameters"]) for tool in corpus["managedTools"]
+        },
+        "windowsTools": windows,
+    }
+
+
+# --------------------------------------------------------------------------
 # Live endpoint probe
 # --------------------------------------------------------------------------
 
@@ -403,6 +460,17 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--python", type=Path, default=None)
+    parser.add_argument(
+        "--digest",
+        type=Path,
+        nargs="?",
+        const=DEFAULT_DIGEST,
+        default=None,
+        help=(
+            "also write the committed canonical digest, which CI diffs against when no "
+            f"reference checkout is reachable (default {DEFAULT_DIGEST})"
+        ),
+    )
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     parser.add_argument(
         "--probe-endpoint",
@@ -442,6 +510,16 @@ def main() -> int:
             encoding="utf-8",
         )
         os.replace(staged, output)
+        # Written only on request: the Rust runner recaptures the corpus on
+        # every run, and regenerating the committed digest with it would let a
+        # schema change rewrite its own conformance target.
+        if arguments.digest is not None:
+            arguments.digest.parent.mkdir(parents=True, exist_ok=True)
+            arguments.digest.write_text(
+                json.dumps(build_digest(corpus), indent=2, sort_keys=True, ensure_ascii=False)
+                + "\n",
+                encoding="utf-8",
+            )
     except OracleError as error:
         print(f"tool-surface capture failed: {error}", file=sys.stderr)
         return 1
@@ -450,6 +528,8 @@ def main() -> int:
         f"{len(extra['windowsTools'])} Windows tools and {len(extra['fixtures'])} fixtures "
         f"from {reference['commit'][:12]} into {output}"
     )
+    if arguments.digest is not None:
+        print(f"wrote the canonical digest to {arguments.digest}")
     if probe := corpus.get("endpointProbe"):
         print(f"endpoint probe: {json.dumps(probe, sort_keys=True)}")
     return 0

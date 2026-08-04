@@ -52,6 +52,12 @@ const CORPUS_RELATIVE: &str = ".parity/tool-surface-corpus.json";
 const CORPUS_SCHEMA_VERSION: u32 = 3;
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_surface.py";
 const BASELINE_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/baseline.json";
+/// The committed conformance target, which is what CI diffs against: it has no
+/// pinned Python checkout, so the corpus cannot be recaptured there.
+const DIGEST_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/digest.json";
+/// The digest layout this runner reads, matching `DIGEST_SCHEMA_VERSION` in the
+/// capture script.
+const DIGEST_SCHEMA_VERSION: u32 = 1;
 /// Stands in for every description string so presence is compared and text is
 /// not, keeping the diff inside what `NOTICE` allows.
 const DESCRIBED: &str = "<described>";
@@ -100,6 +106,21 @@ struct Fixture {
     case: String,
     arguments: Value,
     accepted: bool,
+}
+
+/// The committed canonical surface: published names and schema structure, with
+/// every description reduced to [`DESCRIBED`] so no reference prose is stored.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Digest {
+    schema_version: u32,
+    reference_commit: String,
+    platform: String,
+    #[expect(dead_code, reason = "the note documents the file for its readers")]
+    note: String,
+    tools: BTreeMap<String, Value>,
+    managed_tools: BTreeMap<String, Value>,
+    windows_tools: BTreeMap<String, BTreeMap<String, Value>>,
 }
 
 /// The divergence the port still carries, shrunk by the epics that follow.
@@ -481,6 +502,15 @@ async fn the_published_tool_surface_matches_the_reference_except_for_the_recorde
         baseline.reference_commit, REFERENCE_COMMIT,
         "the baseline records another reference commit"
     );
+    // The availability matrix, stated as a count: this host and this
+    // configuration publish exactly as many names as the reference does.
+    if baseline.missing_names.is_empty() && baseline.extra_names.is_empty() {
+        assert_eq!(
+            published_names.len(),
+            reference_names.len(),
+            "the published name count left the reference count"
+        );
+    }
     assert_eq!(baseline.platform, corpus.platform, "baseline platform");
     assert_eq!(
         (missing, extra, schema_divergence),
@@ -786,6 +816,262 @@ fn a_corpus_from_another_commit_platform_or_layout_skips_with_an_explicit_messag
         )
         .is_none()
     );
+}
+
+fn digest() -> Digest {
+    let raw = fs::read_to_string(repo_root().join(DIGEST_RELATIVE)).expect("digest");
+    let digest: Digest = serde_json::from_str(&raw).expect("the digest parses");
+    assert_eq!(
+        digest.schema_version, DIGEST_SCHEMA_VERSION,
+        "the digest is at another layout; regenerate it with {CAPTURE_SCRIPT} --digest"
+    );
+    assert_eq!(
+        digest.reference_commit, REFERENCE_COMMIT,
+        "the digest records another reference commit"
+    );
+    digest
+}
+
+/// Diffs one published surface against its canonical expectation, returning the
+/// number of conformant schemas and every divergence as a reportable line.
+fn diff_surface(
+    label: &str,
+    expected: &BTreeMap<String, Value>,
+    published: &BTreeMap<String, ToolSpec>,
+) -> (usize, Vec<String>) {
+    let mut report = Vec::new();
+    let mut conformant = 0_usize;
+    for (name, parameters) in expected {
+        let Some(spec) = published.get(name) else {
+            report.push(format!(
+                "{label}: `{name}` is in the digest and is not published"
+            ));
+            continue;
+        };
+        let mut found = Vec::new();
+        diff(
+            &canonicalize(parameters),
+            &canonicalize(&spec.input_schema),
+            "",
+            &mut found,
+        );
+        if found.is_empty() {
+            conformant = conformant.saturating_add(1);
+            continue;
+        }
+        for divergence in found {
+            report.push(format!(
+                "{label}: tool `{name}` diverges at {}: expected {}, got {}",
+                divergence.pointer, divergence.expected, divergence.actual
+            ));
+        }
+    }
+    (conformant, report)
+}
+
+async fn published_by_name(
+    web_search: bool,
+    rollout: ShellRollout,
+    host: HostShells,
+) -> BTreeMap<String, ToolSpec> {
+    published_specs_with(web_search, rollout, host)
+        .await
+        .into_iter()
+        .map(|spec| (spec.name.clone(), spec))
+        .collect()
+}
+
+/// The conformance gate CI actually runs.
+///
+/// Unlike the oracle tests above it never skips: the digest is committed, so a
+/// pull request that adds a tool, drops one, or edits a published schema fails
+/// here on a machine that has no reference checkout at all. Regenerating the
+/// digest is a deliberate act (`{CAPTURE_SCRIPT} --digest`) and shows up in the
+/// diff as the intended change.
+#[tokio::test]
+async fn the_published_surface_matches_the_committed_digest() {
+    let digest = digest();
+    let web_search = digest.tools.contains_key("web_search");
+    let mut report = Vec::new();
+    let mut conformant = 0;
+    let mut expected = digest.tools.len() + digest.managed_tools.len();
+
+    for (label, canonical, published) in [
+        (
+            "tool surface",
+            &digest.tools,
+            published_by_name(web_search, ShellRollout::Legacy, posix_host()).await,
+        ),
+        (
+            "managed shell surface",
+            &digest.managed_tools,
+            published_by_name(web_search, ShellRollout::Managed, posix_host()).await,
+        ),
+    ] {
+        let (matched, mut lines) = diff_surface(label, canonical, &published);
+        conformant += matched;
+        for name in published.keys() {
+            if !canonical.contains_key(name) {
+                lines.push(format!(
+                    "{label}: `{name}` is published and is not in the digest"
+                ));
+            }
+        }
+        report.append(&mut lines);
+    }
+
+    // The two Windows families never share a host: Git Bash withholds
+    // PowerShell wherever it resolves, so each is measured under the host that
+    // publishes it.
+    for (family, host) in windows_hosts() {
+        let Some(canonical) = digest.windows_tools.get(family) else {
+            report.push(format!("the digest carries no `{family}` family"));
+            continue;
+        };
+        expected += canonical.len();
+        let published = published_by_name(false, ShellRollout::Managed, host).await;
+        let (matched, mut lines) = diff_surface(family, canonical, &published);
+        conformant += matched;
+        // A Windows-only name is invisible to the two surfaces above, so the
+        // "published and not in the digest" half is checked here too: without
+        // it a sixth family tool would merge with no corpus entry at all.
+        for name in published.keys() {
+            if !canonical.contains_key(name)
+                && !digest.tools.contains_key(name)
+                && !digest.managed_tools.contains_key(name)
+            {
+                lines.push(format!(
+                    "{family}: `{name}` is published and is in no digest surface"
+                ));
+            }
+        }
+        report.append(&mut lines);
+    }
+
+    println!(
+        "tool-surface conformance: {conformant}/{expected} schemas match the committed digest at \
+         {}",
+        &digest.reference_commit[..12]
+    );
+    assert!(report.is_empty(), "{}", report.join("\n"));
+    assert_eq!(
+        conformant, expected,
+        "every digest entry must be published and conformant"
+    );
+}
+
+/// The two Windows hosts, each publishing exactly one family.
+fn windows_hosts() -> [(&'static str, HostShells); 2] {
+    [
+        (
+            "git_bash",
+            HostShells {
+                platform: Platform::Windows,
+                git_bash: Some(PathBuf::from(r"C:\Program Files\Git\bin\bash.exe")),
+                powershell: Some(PathBuf::from(r"C:\Program Files\PowerShell\7\pwsh.exe")),
+            },
+        ),
+        (
+            "powershell",
+            HostShells {
+                platform: Platform::Windows,
+                git_bash: None,
+                powershell: Some(PathBuf::from(r"C:\Program Files\PowerShell\7\pwsh.exe")),
+            },
+        ),
+    ]
+}
+
+/// The digest is only a conformance target while it still says what the
+/// reference says, so a machine that can reach the oracle re-derives it and
+/// refuses a digest that drifted.
+#[test]
+fn the_committed_digest_still_says_what_the_reference_says() {
+    let Some(corpus) = corpus() else {
+        return;
+    };
+    let digest = digest();
+    assert_eq!(digest.platform, corpus.platform, "digest platform");
+    let derived = corpus
+        .tools
+        .iter()
+        .map(|tool| (tool.name.clone(), canonicalize(&tool.parameters)))
+        .collect::<BTreeMap<_, _>>();
+    let recorded = digest
+        .tools
+        .iter()
+        .map(|(name, parameters)| (name.clone(), canonicalize(parameters)))
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(
+        derived, recorded,
+        "the digest drifted from the reference; regenerate it with {CAPTURE_SCRIPT} --digest"
+    );
+    let derived_managed = corpus
+        .managed_tools
+        .iter()
+        .map(|tool| (tool.name.clone(), canonicalize(&tool.parameters)))
+        .collect::<BTreeMap<_, _>>();
+    let recorded_managed = digest
+        .managed_tools
+        .iter()
+        .map(|(name, parameters)| (name.clone(), canonicalize(parameters)))
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(derived_managed, recorded_managed, "managed surface digest");
+    for tool in &corpus.windows_tools {
+        assert_eq!(
+            digest
+                .windows_tools
+                .get(&tool.family)
+                .and_then(|family| family.get(&tool.name))
+                .map(canonicalize),
+            Some(canonicalize(&tool.parameters)),
+            "`{}` diverges from the reference in the digest",
+            tool.name
+        );
+    }
+}
+
+/// What makes the digest committable under `NOTICE`: it records that a
+/// description exists and never what it says.
+#[test]
+fn the_digest_carries_no_reference_prose() {
+    let digest = digest();
+    let surfaces = digest
+        .tools
+        .values()
+        .chain(digest.managed_tools.values())
+        .chain(digest.windows_tools.values().flat_map(BTreeMap::values));
+    for schema in surfaces {
+        let mut offenders = Vec::new();
+        collect_descriptions(schema, "", &mut offenders);
+        assert!(
+            offenders.is_empty(),
+            "the digest carries reference prose at {}",
+            offenders.join(", ")
+        );
+    }
+}
+
+/// Every description in `schema` that is not the sentinel, by JSON pointer.
+fn collect_descriptions(schema: &Value, pointer: &str, offenders: &mut Vec<String>) {
+    match schema {
+        Value::Object(object) => {
+            for (key, value) in object {
+                let child = format!("{pointer}/{key}");
+                if key == "description" && value.as_str().is_some_and(|text| text != DESCRIBED) {
+                    offenders.push(child);
+                } else {
+                    collect_descriptions(value, &child, offenders);
+                }
+            }
+        }
+        Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                collect_descriptions(item, &format!("{pointer}/{index}"), offenders);
+            }
+        }
+        _ => {}
+    }
 }
 
 #[test]
