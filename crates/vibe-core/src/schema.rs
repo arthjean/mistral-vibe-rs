@@ -121,6 +121,15 @@ impl Property {
         Self::of_type("boolean")
     }
 
+    /// An open object, as Pydantic emits for a `dict[str, T]` field: the value
+    /// schema lands under `additionalProperties` rather than in `properties`.
+    pub fn map(values: impl Into<Value>) -> Self {
+        let mut schema = Map::new();
+        schema.insert("additionalProperties".to_owned(), values.into());
+        schema.insert("type".to_owned(), Value::String("object".to_owned()));
+        Self(schema)
+    }
+
     pub fn array(items: impl Into<Value>) -> Self {
         let mut schema = Map::new();
         schema.insert("items".to_owned(), items.into());
