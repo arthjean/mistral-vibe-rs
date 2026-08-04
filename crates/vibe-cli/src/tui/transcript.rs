@@ -1352,6 +1352,8 @@ fn host_of(url: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use serde_json::json;
 
     use super::*;
@@ -1375,6 +1377,74 @@ mod tests {
         match region(entry) {
             Region::Effect(effect) => *effect,
             other => panic!("expected an effect region, got {other:?}"),
+        }
+    }
+
+    /// The transcript renders the payload the `todo` tool actually produces,
+    /// taken from the tool itself rather than from a hand-written fixture, so
+    /// a change to either side breaks here.
+    #[tokio::test]
+    async fn the_todo_tool_result_renders_through_the_todo_effect() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let policy = vibe_core::policy::PermissionStore::default();
+        let registry = vibe_core::tools::ToolRegistry::default();
+        vibe_core::tools::builtins::BuiltinTools::new(directory.path(), None)
+            .register(
+                "session-1",
+                directory.path(),
+                true,
+                &registry,
+                policy,
+                Arc::new(DenyEverything),
+            )
+            .expect("universal tools register");
+        let written = registry
+            .invoke(
+                "todo",
+                vibe_core::tools::ToolInvocation {
+                    call_id: "todo-1".to_owned(),
+                    arguments: json!({
+                        "action": "write",
+                        "todos": [
+                            {"id": "a", "content": "draft", "status": "completed"},
+                            {"id": "b", "content": "ship", "status": "in_progress"}
+                        ],
+                    }),
+                },
+            )
+            .await
+            .expect("write");
+
+        let entry = effect(
+            "todo",
+            json!({"action": "write"}),
+            json!({
+                "status": "completed",
+                "output": written.typed_result,
+                "outputText": written.model_text,
+            }),
+        );
+        assert_eq!(EffectKind::from_tool_name("todo"), EffectKind::Todo);
+        let rendered = effect_of(&entry);
+        // Reference `TodoResultWidget` order: in_progress before completed.
+        assert_eq!(
+            rendered
+                .body
+                .iter()
+                .map(|line| line.text.as_str())
+                .collect::<Vec<_>>(),
+            ["☐ ship", "☑ draft"]
+        );
+    }
+
+    struct DenyEverything;
+
+    impl vibe_core::policy::ApprovalAgent for DenyEverything {
+        fn request<'a>(
+            &'a self,
+            _request: vibe_core::policy::ApprovalRequest,
+        ) -> vibe_core::policy::ApprovalFuture<'a> {
+            Box::pin(async { Ok(vibe_core::policy::ApprovalDecision::Deny) })
         }
     }
 
