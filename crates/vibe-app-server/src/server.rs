@@ -42,6 +42,7 @@ pub use vibe_core::policy::{
 };
 use vibe_core::policy::{PermissionRule, PermissionStore, TrustDecision, TrustRootKind};
 use vibe_core::storage::HydratedSession;
+use vibe_core::tools::bash::{ShellRollout, ShellTools};
 pub use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
 pub use vibe_core::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolInvocation,
@@ -59,6 +60,9 @@ const INITIALIZE_METHOD: &str = "initialize";
 const INITIALIZED_NOTIFICATION: &str = "initialized";
 const SHUTDOWN_METHOD: &str = "shutdown";
 const EXIT_NOTIFICATION: &str = "exit";
+/// Where the managed shell rollout is read from, standing in for the reference
+/// experiment variant that has no client in this port.
+const MANAGED_SHELL_VARIABLE: &str = "VIBE_MANAGED_SHELL_TOOLS";
 const MAX_CALLBACK_OUTPUT_BYTES: usize = 64 * 1024;
 const MAX_CALLBACK_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_CALLBACK_ANSWERS: usize = 16;
@@ -292,6 +296,7 @@ pub struct AppServer {
     approval_factory: Arc<dyn ApprovalAgentFactory>,
     session_tool_factory: Arc<dyn SessionToolFactory>,
     builtin_tools: Arc<BuiltinTools>,
+    shell_tools: Arc<ShellTools>,
     next_session: Arc<AtomicU64>,
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
@@ -315,6 +320,14 @@ impl Default for AppServer {
             builtin_tools: Arc::new(BuiltinTools::new(
                 vibe_home(),
                 WebSearchAccess::from_environment("MISTRAL_API_KEY"),
+            )),
+            // The reference gates the managed shell family on a remote
+            // experiment whose default variant is `legacy`. There is no
+            // experiment client here, so the operator's environment is the
+            // only thing that can ask for the managed variant.
+            shell_tools: Arc::new(ShellTools::new(
+                vibe_home(),
+                ShellRollout::from_environment(MANAGED_SHELL_VARIABLE),
             )),
             next_session: Arc::new(AtomicU64::new(1)),
             next_turn: Arc::new(AtomicU64::new(1)),
@@ -1268,13 +1281,22 @@ impl AppServer {
         session_id: &str,
         generation: u64,
     ) -> Result<(), ServerError> {
-        match &self.resource_backend {
+        // A managed shell session outlives the call that started it, so this is
+        // the only place left that can stop one. A failure there must not skip
+        // the backend teardown, so both run and the first failure is reported.
+        let shell = self
+            .shell_tools
+            .close_session(session_id)
+            .await
+            .map_err(|error| ServerError::Resource(error.to_string()));
+        let backend = match &self.resource_backend {
             Some(backend) => backend
                 .close_session(session_id, generation)
                 .await
                 .map_err(|error| ServerError::Resource(error.to_string())),
             None => Ok(()),
-        }
+        };
+        shell.and(backend)
     }
 
     pub async fn configure_mcp_servers(
@@ -1431,6 +1453,15 @@ impl AppServer {
                 session_id,
                 Path::new(working_directory),
                 intent.trusted,
+                tools,
+                policy.clone(),
+                approval.clone(),
+            )
+            .map_err(|error| ServerError::Resource(error.to_string()))?;
+        self.shell_tools
+            .register(
+                session_id,
+                Path::new(working_directory),
                 tools,
                 policy.clone(),
                 approval.clone(),

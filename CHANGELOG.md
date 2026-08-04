@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Add `bash`, which runs a shell command in the working directory under the
+  existing shell policy: a command the analysis permits outright runs, anything
+  else waits for approval, and a destructive one is refused. Output is bounded
+  and reports its own truncation, a non-zero exit carries the status and both
+  streams, and a command that times out or whose turn is cancelled has its
+  process group terminated.
+- Add the managed shell session family behind the `VIBE_MANAGED_SHELL_TOOLS`
+  rollout, standing in for the reference experiment variant: `bash` gains
+  `background`, `cwd`, `env`, `shell` and the two timeout controls, and
+  `bash_output`, `bash_stdin`, `bash_sessions` and `bash_log_file` poll, feed,
+  list and read the sessions it leaves running. A call that overrides the
+  working directory, the shell or the environment waits for approval whatever
+  the command is, and the request names the override. Sessions stop when the
+  Vibe session closes.
 - Agent profiles naming `bash` now resolve against the published `bash` tool
   rather than the manual shell surface.
 - Take the reference argument shape on `task`: `task` is required, `agent`
