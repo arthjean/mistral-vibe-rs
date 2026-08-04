@@ -3,7 +3,7 @@
     "file": "tasks/prd-tool-surface-parity.md",
     "title": "Tool Surface Parity",
     "created_at": "2026-08-04",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -49,10 +49,10 @@
     {
       "id": "EP-017",
       "title": "Selection, Filtering, and Enforcement",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3
     }
   ],
   "stories": [
@@ -285,44 +285,44 @@
       "id": "US-056",
       "title": "Match reference tool filtering semantics",
       "epic": "EP-017",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-042"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-04",
+      "completed_at": "2026-08-04",
+      "reviewed_at": "2026-08-04"
     },
     {
       "id": "US-057",
       "title": "Match reference availability and variant selection",
       "epic": "EP-017",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-049",
         "US-053"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-04",
+      "completed_at": "2026-08-04",
+      "reviewed_at": "2026-08-04"
     },
     {
       "id": "US-058",
       "title": "Lock tool-surface conformance in CI",
       "epic": "EP-017",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-042"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-04",
+      "completed_at": "2026-08-04",
+      "reviewed_at": "2026-08-04"
     }
   ]
 }
