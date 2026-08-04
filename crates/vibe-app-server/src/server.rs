@@ -3680,6 +3680,27 @@ mod tests {
         );
     }
 
+    /// `vibe-core` and `vibe-protocol` sit in the same dependency layer, so the
+    /// callback vocabulary is spelled twice. Both spellings cross the wire, so
+    /// their JSON forms have to stay identical.
+    #[test]
+    fn callback_kinds_share_one_wire_form() {
+        for (engine, wire) in [
+            (EngineCallbackKind::Approval, CallbackKind::Approval),
+            (EngineCallbackKind::UserInput, CallbackKind::UserInput),
+            (
+                EngineCallbackKind::ConnectorAuth,
+                CallbackKind::ConnectorAuth,
+            ),
+        ] {
+            assert_eq!(
+                serde_json::to_value(engine).expect("engine kind"),
+                serde_json::to_value(wire).expect("wire kind"),
+                "{engine:?} and {wire:?} must serialize identically"
+            );
+        }
+    }
+
     struct RejectForkTools;
 
     impl SessionToolFactory for RejectForkTools {
