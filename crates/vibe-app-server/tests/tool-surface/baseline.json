@@ -1,11 +1,9 @@
 {
   "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
   "platform": "linux",
-  "note": "The gap EP-012 measures and the later epics close: EP-013 for the five published tools, EP-014 and EP-015 for the missing names. Names and JSON pointers only, because the corpus that carries reference description text stays gitignored.",
+  "note": "The gap the later stories close: US-045 for the interactive schemas, EP-014 and EP-015 for the missing names. US-043 and US-044 emptied the invented-name set and closed the edit divergence, and both must stay empty. Names and JSON pointers only, because the corpus that carries reference description text stays gitignored.",
   "missingNames": [
     "bash",
-    "grep",
-    "read_file",
     "skill",
     "task",
     "todo",
@@ -13,7 +11,7 @@
     "web_search",
     "write_file"
   ],
-  "extraNames": ["read", "search"],
+  "extraNames": [],
   "schemaDivergence": {
     "ask_user_question": [
       "/$defs",
@@ -27,19 +25,6 @@
       "/properties/questions/items/properties",
       "/properties/questions/items/required",
       "/properties/questions/items/type"
-    ],
-    "edit": [
-      "/properties/file_path",
-      "/properties/newText",
-      "/properties/new_string",
-      "/properties/oldText",
-      "/properties/old_string",
-      "/properties/path",
-      "/properties/replaceAll",
-      "/properties/replace_all",
-      "/required/0",
-      "/required/1",
-      "/required/2"
     ],
     "exit_plan_mode": ["/additionalProperties"]
   }

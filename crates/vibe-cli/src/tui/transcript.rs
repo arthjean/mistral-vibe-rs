@@ -1431,6 +1431,45 @@ mod tests {
         assert_eq!(blocked.indicator, Indicator::Running);
     }
 
+    /// The rename moved the published names onto `read_file` and `grep`. Both
+    /// must project to the effect kind their predecessor did, and render the
+    /// same header from the reference argument keys, while the old names keep
+    /// working so a persisted transcript still replays.
+    #[test]
+    fn the_renamed_file_tools_render_exactly_as_their_predecessors_did() {
+        assert_eq!(
+            EffectKind::from_tool_name("read_file"),
+            EffectKind::from_tool_name("read")
+        );
+        assert_eq!(
+            EffectKind::from_tool_name("grep"),
+            EffectKind::from_tool_name("search")
+        );
+
+        let output = json!({
+            "status": "completed",
+            "output": {
+                "path": "src/lib.rs",
+                "content": "1|use std;\n2|fn main() {}",
+                "startLine": 1,
+                "endLine": 2,
+            },
+        });
+        let renamed = effect_of(&effect(
+            "read_file",
+            json!({"file_path": "src/lib.rs", "offset": 10}),
+            output.clone(),
+        ));
+        let previous = effect_of(&effect(
+            "read",
+            json!({"path": "src/lib.rs", "offset": 10}),
+            output,
+        ));
+        assert_eq!(renamed.header_text(), previous.header_text());
+        assert_eq!(renamed.body[0].text, previous.body[0].text);
+        assert_eq!(renamed.collapsed_by_default, previous.collapsed_by_default);
+    }
+
     #[test]
     fn every_audited_effect_kind_keeps_its_reference_header_body_and_collapse() {
         let read = effect_of(&effect(

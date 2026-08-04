@@ -147,10 +147,10 @@ impl TurnDriver for ApprovalInvokingDriver {
             reservation
                 .tools
                 .invoke(
-                    "read",
+                    "read_file",
                     ToolInvocation {
                         call_id: "read-for-approval".to_owned(),
-                        arguments: json!({"path": "approval.txt"}),
+                        arguments: json!({"file_path": "approval.txt"}),
                     },
                 )
                 .await

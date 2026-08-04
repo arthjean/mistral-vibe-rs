@@ -561,20 +561,20 @@ fn callback_effect_content(tool_name: &str, value: &Value) -> String {
         "shell" | "bash" if value.get("command").and_then(Value::as_str).is_some() => {
             format!("$ {}", value["command"].as_str().unwrap_or_default())
         }
-        "read" if value.get("path").and_then(Value::as_str).is_some() => {
-            format!("Read {}", value["path"].as_str().unwrap_or_default())
+        "read_file" if value.get("file_path").and_then(Value::as_str).is_some() => {
+            format!("Read {}", value["file_path"].as_str().unwrap_or_default())
         }
-        "write" if value.get("path").and_then(Value::as_str).is_some() => format!(
+        "write_file" if value.get("file_path").and_then(Value::as_str).is_some() => format!(
             "Write {}\n{}",
-            value["path"].as_str().unwrap_or_default(),
+            value["file_path"].as_str().unwrap_or_default(),
             value
                 .get("content")
                 .and_then(Value::as_str)
                 .unwrap_or_default()
         ),
-        "edit" if value.get("path").and_then(Value::as_str).is_some() => format!(
+        "edit" if value.get("file_path").and_then(Value::as_str).is_some() => format!(
             "Edit {}\n{}",
-            value["path"].as_str().unwrap_or_default(),
+            value["file_path"].as_str().unwrap_or_default(),
             serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
         ),
         _ => match value {

@@ -3858,7 +3858,7 @@ mod tests {
             .expect("edit decision");
         let read = approval
             .request(ApprovalRequest {
-                tool: "read".to_owned(),
+                tool: "read_file".to_owned(),
                 input: Value::Null,
                 requirements: vec![PermissionRequirement::Read {
                     path: PathBuf::from("/workspace/file.rs"),
@@ -5919,11 +5919,11 @@ tool_timeout_sec = 2
 
         let invocation = || ToolInvocation {
             call_id: "read-1".to_owned(),
-            arguments: json!({"path": "visible.txt"}),
+            arguments: json!({"file_path": "visible.txt"}),
         };
         assert!(
             server
-                .invoke_tool("session-1", "read", invocation())
+                .invoke_tool("session-1", "read_file", invocation())
                 .await
                 .is_err()
         );
@@ -5940,7 +5940,7 @@ tool_timeout_sec = 2
         assert_eq!(trusted.outbound.len(), 2);
         assert_eq!(
             server
-                .invoke_tool("session-1", "read", invocation())
+                .invoke_tool("session-1", "read_file", invocation())
                 .await
                 .expect("trusted read")
                 .model_text,
@@ -5958,7 +5958,7 @@ tool_timeout_sec = 2
         ));
         assert!(
             server
-                .invoke_tool("session-1", "read", invocation())
+                .invoke_tool("session-1", "read_file", invocation())
                 .await
                 .is_err()
         );
@@ -5984,10 +5984,10 @@ tool_timeout_sec = 2
         let invocation = |call_id: &str| ToolInvocation {
             call_id: call_id.to_owned(),
             arguments: json!({
-                "path": "editable.txt",
-                "oldText": "before",
-                "newText": "after",
-                "replaceAll": false
+                "file_path": "editable.txt",
+                "old_string": "before",
+                "new_string": "after",
+                "replace_all": false
             }),
         };
 

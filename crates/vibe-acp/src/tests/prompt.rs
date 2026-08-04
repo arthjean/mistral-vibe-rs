@@ -213,7 +213,10 @@ async fn canonical_approval_callback_routes_through_the_acp_client() {
         params["options"][0]["kind"],
         Value::String("allow_once".to_owned())
     );
-    assert_eq!(params["toolCall"]["rawInput"]["effect"]["toolName"], "read");
+    assert_eq!(
+        params["toolCall"]["rawInput"]["effect"]["toolName"],
+        "read_file"
+    );
     assert!(
         params["toolCall"]["rawInput"]["requiredPermissions"][0]
             .as_str()

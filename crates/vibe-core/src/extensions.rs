@@ -259,7 +259,7 @@ fn profile_permission_scope(tool: &str, pattern: &str) -> String {
         return "*".to_owned();
     }
     let requirement = match tool {
-        "read" | "search" => "read",
+        "read_file" | "grep" => "read",
         "edit" => "write",
         "shell" | "bash" => "shell",
         _ => return pattern.to_owned(),
@@ -270,10 +270,14 @@ fn profile_permission_scope(tool: &str, pattern: &str) -> String {
     )
 }
 
+/// Maps a profile's tool name onto the name this port publishes.
+///
+/// `read_file` and `grep` used to be rewritten to invented local names; they
+/// are now published verbatim, so only the names this port has not yet aligned
+/// still need a rewrite. Each remaining entry disappears with the story that
+/// publishes the reference name.
 fn canonical_tool_name(name: &str) -> &str {
     match name {
-        "read_file" => "read",
-        "grep" => "search",
         "write" | "write_file" => "edit",
         "bash" => "shell",
         other => other,
@@ -1690,6 +1694,47 @@ mod tests {
         }
     }
 
+    /// The rename moved the profile vocabulary onto the reference names, and
+    /// the permission scope each one maps to has to survive that move.
+    #[test]
+    fn reference_tool_names_keep_the_permission_scope_the_invented_names_produced() {
+        assert_eq!(profile_permission_scope("read_file", "src/*"), "read src *");
+        assert_eq!(profile_permission_scope("grep", "src/*"), "read src *");
+        assert_eq!(
+            profile_permission_scope("read_file", "notes.md"),
+            "read notes.md"
+        );
+        assert_eq!(profile_permission_scope("edit", "src/*"), "write src *");
+        assert_eq!(profile_permission_scope("read_file", "*"), "*");
+
+        // Nothing rewrites the reference file-tool names any more.
+        assert_eq!(canonical_tool_name("read_file"), "read_file");
+        assert_eq!(canonical_tool_name("grep"), "grep");
+    }
+
+    /// `_plan_overrides` and the accept-edits profile both name `write_file`
+    /// and `edit`, so auto-approval has to resolve against those names.
+    #[test]
+    fn auto_approval_resolves_against_the_reference_mutating_tool_names() {
+        let always = |tool: &str| {
+            Table::from_iter([(
+                "tools".to_owned(),
+                toml::Value::Table(Table::from_iter([(
+                    tool.to_owned(),
+                    toml::Value::Table(Table::from_iter([(
+                        "permission".to_owned(),
+                        toml::Value::String("always".to_owned()),
+                    )])),
+                )])),
+            )])
+        };
+
+        assert!(auto_approves_edits(&always("edit")));
+        assert!(auto_approves_edits(&always("write_file")));
+        assert!(!auto_approves_edits(&always("read_file")));
+        assert!(!auto_approves_edits(&always("grep")));
+    }
+
     #[test]
     fn agent_runtime_settings_resolve_profile_policy_without_name_conventions() {
         let mut profile = builtin_agent("custom-reviewer", AgentKind::Agent);
@@ -1738,8 +1783,10 @@ mod tests {
 
         let settings = profile.runtime_settings();
 
-        assert_eq!(settings.enabled_tools, ["read", "edit"]);
-        assert_eq!(settings.disabled_tools, ["search"]);
+        // `read_file` and `grep` are published verbatim now, so a profile
+        // naming them resolves to itself rather than to an invented local name.
+        assert_eq!(settings.enabled_tools, ["read_file", "edit"]);
+        assert_eq!(settings.disabled_tools, ["grep"]);
         assert_eq!(settings.approval, AgentApproval::Edits);
         assert_eq!(settings.model.as_deref(), Some("mistral-review"));
         assert_eq!(settings.thinking, Some(true));

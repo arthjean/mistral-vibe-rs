@@ -83,6 +83,9 @@ pub struct FileRead {
     /// Byte length of `content`, which is the selected line range rather than
     /// the whole file.
     pub content_bytes: usize,
+    /// Lines the file holds, which is what tells an empty selection caused by
+    /// an out-of-range offset apart from an empty file.
+    pub total_lines: usize,
     pub truncated: bool,
 }
 
@@ -282,6 +285,7 @@ impl Workspace {
             numbered_content,
             start_line: start,
             end_line,
+            total_lines: all_lines.len(),
             truncated: byte_truncated || line_truncated,
         })
     }
@@ -317,14 +321,25 @@ impl Workspace {
     }
 
     pub fn discover(&self) -> Result<Vec<FileEntry>, WorkspaceError> {
-        let ignores = self.load_ignores();
-        let mut pending = vec![PathBuf::from(".")];
+        self.discover_under(Path::new("."), &self.load_ignores())
+    }
+
+    /// Walks `root`, skipping every entry matching `ignores`.
+    ///
+    /// `grep` narrows the walk to its `path` argument and chooses its own
+    /// ignore set, which is what `use_default_ignore` selects.
+    fn discover_under(
+        &self,
+        root: &Path,
+        ignores: &[String],
+    ) -> Result<Vec<FileEntry>, WorkspaceError> {
+        let mut pending = vec![root.to_path_buf()];
         let mut output = Vec::new();
         while let Some(directory) = pending.pop() {
             let mut entries = self.list(&directory)?;
             entries.sort_by(|left, right| right.path.cmp(&left.path));
             for entry in entries {
-                if is_ignored(&entry.path, &ignores) {
+                if is_ignored(&entry.path, ignores) {
                     continue;
                 }
                 if output.len() >= self.max_discovered_files {
@@ -340,23 +355,45 @@ impl Workspace {
         Ok(output)
     }
 
+    /// Regex search over `path`, the contract the reference `grep` publishes.
+    ///
+    /// The pattern is always a regular expression, `path` narrows the walk to
+    /// one file or one subtree, and `use_default_ignore` selects whether the
+    /// `.gitignore` entries join the always-excluded directories.
     pub fn search(
         &self,
         pattern: &str,
-        regex: bool,
+        path: impl AsRef<Path>,
         limit: usize,
+        use_default_ignore: bool,
     ) -> Result<Vec<SearchMatch>, WorkspaceError> {
-        let compiled = regex
-            .then(|| Regex::new(pattern))
-            .transpose()
+        let compiled = Regex::new(pattern)
             .map_err(|error| WorkspaceError::InvalidPattern(error.to_string()))?;
+        let relative = self.confined(path.as_ref(), true)?;
+        let is_directory = self
+            .directory
+            .metadata(&relative)
+            .map(|metadata| metadata.is_dir())
+            .unwrap_or(false);
+        let targets = if is_directory {
+            // `use_default_ignore` governs the `.gitignore` entries only: the
+            // reference keeps its own exclusion list applied either way.
+            let ignores = if use_default_ignore {
+                self.load_ignores()
+            } else {
+                vec![".git".to_owned(), "target".to_owned()]
+            };
+            self.discover_under(&relative, &ignores)?
+                .into_iter()
+                .filter(|entry| !entry.is_directory)
+                .map(|entry| entry.path)
+                .collect::<Vec<_>>()
+        } else {
+            vec![path_display(&relative)]
+        };
         let mut matches = Vec::new();
-        for entry in self
-            .discover()?
-            .into_iter()
-            .filter(|entry| !entry.is_directory)
-        {
-            let relative = self.confined(Path::new(&entry.path), true)?;
+        for target in targets {
+            let relative = self.confined(Path::new(&target), true)?;
             // Search the whole file, not just the first page a reader would get.
             let content = match self.read_text(&relative) {
                 Ok((content, _)) => content,
@@ -364,13 +401,9 @@ impl Workspace {
                 Err(error) => return Err(error),
             };
             for (index, line) in content.lines().enumerate() {
-                let is_match = compiled.as_ref().map_or_else(
-                    || line.contains(pattern),
-                    |compiled| compiled.is_match(line),
-                );
-                if is_match {
+                if compiled.is_match(line) {
                     matches.push(SearchMatch {
-                        path: entry.path.clone(),
+                        path: target.clone(),
                         line: index.saturating_add(1),
                         text: line.to_owned(),
                     });
@@ -636,20 +669,27 @@ impl WorkspaceTools {
         let read: Arc<dyn ToolHandler> = Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let workspace = read_workspace.clone();
-                let path = invocation.arguments["path"]
+                let path = invocation.arguments["file_path"]
                     .as_str()
                     .unwrap_or_default()
                     .to_owned();
-                let start_line = invocation.arguments["startLine"].as_u64().unwrap_or(1);
+                // `offset` is nullable and defaults to null, so an absent or
+                // explicitly null offset both mean "start at line one".
+                let start_line = invocation.arguments["offset"].as_u64().unwrap_or(1);
+                let limit = invocation.arguments["limit"]
+                    .as_u64()
+                    .unwrap_or(DEFAULT_READ_LINE_LIMIT);
                 Box::pin(async move {
                     let start_line = usize::try_from(start_line).unwrap_or(usize::MAX);
+                    let limit = usize::try_from(limit).unwrap_or(usize::MAX);
                     let result = workspace
-                        .read(path, start_line, None)
+                        .read(path, start_line, Some(limit))
                         .map_err(|error| ToolError::Execution(error.to_string()))?;
+                    let model_text = read_model_text(&result);
                     Ok(ToolExecutionOutput {
                         typed_result: serde_json::to_value(&result)
                             .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
-                        model_text: result.numbered_content,
+                        model_text,
                         display: json!({"kind": "read", "path": result.path}),
                         chunks: Vec::new(),
                     })
@@ -664,10 +704,23 @@ impl WorkspaceTools {
                     .as_str()
                     .unwrap_or_default()
                     .to_owned();
-                let regex = invocation.arguments["regex"].as_bool().unwrap_or(false);
+                let path = invocation.arguments["path"]
+                    .as_str()
+                    .unwrap_or(".")
+                    .to_owned();
+                // The reference reads `max_matches or default`, so a null and a
+                // zero both fall back to the configured cap.
+                let max_matches = invocation.arguments["max_matches"]
+                    .as_u64()
+                    .filter(|limit| *limit > 0)
+                    .and_then(|limit| usize::try_from(limit).ok())
+                    .unwrap_or(DEFAULT_GREP_MAX_MATCHES);
+                let use_default_ignore = invocation.arguments["use_default_ignore"]
+                    .as_bool()
+                    .unwrap_or(true);
                 Box::pin(async move {
                     let result = workspace
-                        .search(&pattern, regex, 500)
+                        .search(&pattern, path, max_matches, use_default_ignore)
                         .map_err(|error| ToolError::Execution(error.to_string()))?;
                     Ok(ToolExecutionOutput {
                         typed_result: serde_json::to_value(&result)
@@ -687,19 +740,19 @@ impl WorkspaceTools {
         let edit: Arc<dyn ToolHandler> = Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let review = edit_review.clone();
-                let path = invocation.arguments["path"]
+                let path = invocation.arguments["file_path"]
                     .as_str()
                     .unwrap_or_default()
                     .to_owned();
-                let old_text = invocation.arguments["oldText"]
+                let old_text = invocation.arguments["old_string"]
                     .as_str()
                     .unwrap_or_default()
                     .to_owned();
-                let new_text = invocation.arguments["newText"]
+                let new_text = invocation.arguments["new_string"]
                     .as_str()
                     .unwrap_or_default()
                     .to_owned();
-                let replace_all = invocation.arguments["replaceAll"]
+                let replace_all = invocation.arguments["replace_all"]
                     .as_bool()
                     .unwrap_or(false);
                 Box::pin(async move {
@@ -725,13 +778,13 @@ impl WorkspaceTools {
         );
         let read_root = self.workspace.root().to_path_buf();
         let guarded_read = Arc::new(PolicyGuardedTool::new(
-            "read",
+            "read_file",
             policy.clone(),
             approval.clone(),
             Arc::new(move |invocation| {
-                let path = invocation.arguments["path"]
-                    .as_str()
-                    .ok_or_else(|| ToolError::Execution("read path is missing".to_owned()))?;
+                let path = invocation.arguments["file_path"].as_str().ok_or_else(|| {
+                    ToolError::Execution("read_file file_path is missing".to_owned())
+                })?;
                 Ok(vec![PermissionRequirement::Read {
                     path: read_root.join(path),
                 }])
@@ -740,7 +793,7 @@ impl WorkspaceTools {
         ));
         let search_root = self.workspace.root().to_path_buf();
         let guarded_search = Arc::new(PolicyGuardedTool::new(
-            "search",
+            "grep",
             policy.clone(),
             approval.clone(),
             Arc::new(move |_invocation| {
@@ -756,9 +809,9 @@ impl WorkspaceTools {
             policy,
             approval,
             Arc::new(move |invocation| {
-                let path = invocation.arguments["path"]
+                let path = invocation.arguments["file_path"]
                     .as_str()
-                    .ok_or_else(|| ToolError::Execution("edit path is missing".to_owned()))?;
+                    .ok_or_else(|| ToolError::Execution("edit file_path is missing".to_owned()))?;
                 Ok(vec![PermissionRequirement::Write {
                     path: edit_root.join(path),
                 }])
@@ -766,8 +819,8 @@ impl WorkspaceTools {
             edit,
         ));
         Ok(vec![
-            registry.register(read_spec(), guarded_read)?,
-            registry.register(search_spec(), guarded_search)?,
+            registry.register(read_file_spec(), guarded_read)?,
+            registry.register(grep_spec(), guarded_search)?,
             registry.register(edit_spec(), guarded_edit)?,
         ])
     }
@@ -815,13 +868,63 @@ pub enum WorkspaceError {
     LimitOverflow,
 }
 
-fn read_spec() -> ToolSpec {
+/// What the model reads back from a `read_file` call.
+///
+/// An empty selection is not an empty success: the reference distinguishes an
+/// empty file from an offset past the last line, and says so in the text the
+/// model receives rather than returning nothing. It branches on whether any
+/// line was selected, not on whether those lines carry text, so a file holding
+/// one blank line reads back as that blank line.
+fn read_model_text(result: &FileRead) -> String {
+    if result.total_lines == 0 {
+        return format!(
+            "<warning>`{}` exists but holds no content.</warning>",
+            result.path
+        );
+    }
+    if result.start_line > result.total_lines {
+        return format!(
+            "<warning>`{}` holds {} lines, which stops short of the requested offset {}.</warning>",
+            result.path, result.total_lines, result.start_line
+        );
+    }
+    result.numbered_content.clone()
+}
+
+/// Reference `ReadFileArgs.limit` default.
+const DEFAULT_READ_LINE_LIMIT: u64 = 2000;
+/// Reference `GrepToolConfig.default_max_matches`, applied when `max_matches`
+/// stays null.
+const DEFAULT_GREP_MAX_MATCHES: usize = 100;
+
+fn read_file_spec() -> ToolSpec {
     ToolSpec {
-        name: "read".to_owned(),
-        description: "Read a bounded UTF-8 workspace file".to_owned(),
+        name: "read_file".to_owned(),
+        description: "Read one file from an absolute path. Page through a long file with \
+                      `offset` and `limit` instead of reading it whole, reach for `grep` when \
+                      looking for specific content, and leave binary and model-weight files \
+                      (.bin, .safetensors, .pt, .gguf) alone."
+            .to_owned(),
         input_schema: ObjectSchema::new()
-            .required("path", Property::string())
-            .optional("startLine", Property::integer())
+            .required(
+                "file_path",
+                Property::string().described("The absolute path of the file to read"),
+            )
+            .optional(
+                "offset",
+                Property::integer()
+                    .constrained("minimum", 1)
+                    .described("The 1-indexed line the read starts at")
+                    .with_default(Value::Null)
+                    .nullable(),
+            )
+            .optional(
+                "limit",
+                Property::integer()
+                    .constrained("exclusiveMinimum", 0)
+                    .described("How many lines to read at most")
+                    .with_default(DEFAULT_READ_LINE_LIMIT),
+            )
             .build(),
         output_schema: None,
         config: json!({"maxBytes": DEFAULT_MAX_READ_BYTES, "maxLines": DEFAULT_MAX_LINES}),
@@ -833,16 +936,41 @@ fn read_spec() -> ToolSpec {
     }
 }
 
-fn search_spec() -> ToolSpec {
+fn grep_spec() -> ToolSpec {
     ToolSpec {
-        name: "search".to_owned(),
-        description: "Search bounded workspace text".to_owned(),
+        name: "grep".to_owned(),
+        description: "Search file contents against a regular expression, reporting the path, \
+                      the line number and the matching line. Narrow the walk with `path`."
+            .to_owned(),
         input_schema: ObjectSchema::new()
-            .required("pattern", Property::string())
-            .optional("regex", Property::boolean().with_default(false))
+            .required(
+                "pattern",
+                Property::string().described("The regular expression matched against file contents"),
+            )
+            .optional(
+                "path",
+                Property::string()
+                    .described(
+                        "The file or directory the search walks. Defaults to the working directory.",
+                    )
+                    .with_default("."),
+            )
+            .optional(
+                "max_matches",
+                Property::integer()
+                    .described("Raises or lowers the default cap on returned matches.")
+                    .with_default(Value::Null)
+                    .nullable(),
+            )
+            .optional(
+                "use_default_ignore",
+                Property::boolean()
+                    .described("Whether .gitignore and .ignore entries are honoured.")
+                    .with_default(true),
+            )
             .build(),
         output_schema: None,
-        config: json!({"maxMatches": 500}),
+        config: json!({"maxMatches": DEFAULT_GREP_MAX_MATCHES}),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Search,
@@ -854,12 +982,32 @@ fn search_spec() -> ToolSpec {
 fn edit_spec() -> ToolSpec {
     ToolSpec {
         name: "edit".to_owned(),
-        description: "Atomically edit one uniquely matched text span".to_owned(),
+        description: "Replace an exact string in a file. Call `read_file` first, and never carry \
+                      any part of its line-number prefix into `old_string` or `new_string`. When \
+                      `old_string` is absent or matches more than once, add surrounding context \
+                      until it is unique or set `replace_all`. Re-read the file before retrying a \
+                      failed edit."
+            .to_owned(),
         input_schema: ObjectSchema::new()
-            .required("path", Property::string())
-            .required("oldText", Property::string())
-            .required("newText", Property::string())
-            .optional("replaceAll", Property::boolean().with_default(false))
+            .required(
+                "file_path",
+                Property::string().described("The absolute path of the file to modify"),
+            )
+            .required(
+                "old_string",
+                Property::string().described("The text being replaced"),
+            )
+            .required(
+                "new_string",
+                Property::string()
+                    .described("The replacement text, which must differ from old_string"),
+            )
+            .optional(
+                "replace_all",
+                Property::boolean()
+                    .described("Replace every occurrence of old_string instead of a single one")
+                    .with_default(false),
+            )
             .build(),
         output_schema: None,
         config: Value::Null,
@@ -1004,9 +1152,14 @@ mod tests {
         assert!(discovered.iter().all(|entry| entry.path != "ignored.txt"));
         let read = workspace.read("visible.txt", 2, Some(1)).expect("read");
         assert_eq!(read.numbered_content, "2|beta");
-        let matches = workspace.search("alpha", false, 10).expect("search");
+        let matches = workspace.search("alpha", ".", 10, true).expect("search");
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].path, "visible.txt");
+
+        // `use_default_ignore: false` drops the .gitignore entries and keeps
+        // the always-excluded directories, matching the reference split.
+        let unfiltered = workspace.search("alpha", ".", 10, false).expect("search");
+        assert_eq!(unfiltered.len(), 2);
     }
 
     #[test]
@@ -1017,7 +1170,7 @@ mod tests {
         std::fs::write(directory.path().join("long.txt"), content).expect("long file");
         let workspace = Workspace::open(directory.path()).expect("workspace");
 
-        let matches = workspace.search("needle", false, 10).expect("search");
+        let matches = workspace.search("needle", ".", 10, true).expect("search");
 
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].line, DEFAULT_MAX_LINES + 11);
@@ -1256,10 +1409,10 @@ mod tests {
             .expect("register");
         let result = registry
             .invoke(
-                "read",
+                "read_file",
                 ToolInvocation {
                     call_id: "read-1".to_owned(),
-                    arguments: json!({"path": "visible.txt"}),
+                    arguments: json!({"file_path": "visible.txt"}),
                 },
             )
             .await
@@ -1269,14 +1422,272 @@ mod tests {
         policy.revoke_trust(directory.path()).await.expect("revoke");
         let denied = registry
             .invoke(
-                "read",
+                "read_file",
                 ToolInvocation {
                     call_id: "read-2".to_owned(),
-                    arguments: json!({"path": "visible.txt"}),
+                    arguments: json!({"file_path": "visible.txt"}),
                 },
             )
             .await
             .expect_err("revoked trust");
         assert!(denied.to_string().contains("permission denied"));
+    }
+
+    /// The three registered names and the argument keys each one reads, which
+    /// is the contract a model prompted for reference behaviour relies on.
+    #[tokio::test]
+    async fn the_file_tools_publish_the_reference_names_and_argument_keys() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("visible.txt"), "alpha\nbeta\n").expect("file");
+        let registry = registered_workspace_tools(directory.path()).await;
+
+        let names = registry
+            .list()
+            .expect("list")
+            .into_iter()
+            .map(|spec| spec.name)
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["edit", "grep", "read_file"]);
+
+        let read = registry
+            .invoke(
+                "read_file",
+                ToolInvocation {
+                    call_id: "read-1".to_owned(),
+                    arguments: json!({"file_path": "visible.txt", "offset": 2}),
+                },
+            )
+            .await
+            .expect("read_file accepts the reference keys");
+        assert_eq!(read.model_text, "2|beta");
+
+        let grep = registry
+            .invoke(
+                "grep",
+                ToolInvocation {
+                    call_id: "grep-1".to_owned(),
+                    arguments: json!({"pattern": "al.ha"}),
+                },
+            )
+            .await
+            .expect("grep treats its pattern as a regular expression");
+        assert_eq!(grep.model_text, "visible.txt:1:alpha");
+    }
+
+    /// An offset past the last line is an explicit out-of-range answer, never
+    /// an empty success the model would read as an empty file.
+    #[tokio::test]
+    async fn read_file_reports_an_offset_past_the_end_of_the_file() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("short.txt"), "only\n").expect("file");
+        let registry = registered_workspace_tools(directory.path()).await;
+
+        let beyond = registry
+            .invoke(
+                "read_file",
+                ToolInvocation {
+                    call_id: "read-1".to_owned(),
+                    arguments: json!({"file_path": "short.txt", "offset": 9}),
+                },
+            )
+            .await
+            .expect("an out-of-range offset still answers");
+
+        assert!(
+            beyond.model_text.contains("1 lines") && beyond.model_text.contains("offset 9"),
+            "the answer must name the file length and the offset: {}",
+            beyond.model_text
+        );
+    }
+
+    /// The out-of-range answer keys on the selected line count, not on whether
+    /// those lines carry text, so a file holding one blank line reads back as
+    /// that blank line rather than as a file shorter than the offset.
+    #[tokio::test]
+    async fn read_file_returns_a_blank_line_rather_than_an_out_of_range_warning() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("blank.txt"), "\n").expect("file");
+        let registry = registered_workspace_tools(directory.path()).await;
+
+        let blank = registry
+            .invoke(
+                "read_file",
+                ToolInvocation {
+                    call_id: "read-1".to_owned(),
+                    arguments: json!({"file_path": "blank.txt"}),
+                },
+            )
+            .await
+            .expect("a blank line is content");
+
+        assert_eq!(blank.model_text, "1|");
+    }
+
+    /// The reference resolves `max_matches` with `or`, so a zero is not a cap
+    /// of zero: it falls back to the configured default like an absent value.
+    #[tokio::test]
+    async fn grep_treats_a_zero_max_matches_as_the_default_cap() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("visible.txt"), "a\na\na\n").expect("file");
+        let registry = registered_workspace_tools(directory.path()).await;
+
+        let matched = registry
+            .invoke(
+                "grep",
+                ToolInvocation {
+                    call_id: "grep-1".to_owned(),
+                    arguments: json!({"pattern": "a", "max_matches": 0}),
+                },
+            )
+            .await
+            .expect("grep answers");
+
+        assert_eq!(matched.model_text.lines().count(), 3);
+    }
+
+    #[tokio::test]
+    async fn grep_reports_an_invalid_pattern_instead_of_searching() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("visible.txt"), "alpha\n").expect("file");
+        let registry = registered_workspace_tools(directory.path()).await;
+
+        let error = registry
+            .invoke(
+                "grep",
+                ToolInvocation {
+                    call_id: "grep-1".to_owned(),
+                    arguments: json!({"pattern": "alpha("}),
+                },
+            )
+            .await
+            .expect_err("an unparsable pattern cannot search");
+
+        assert!(
+            error.to_string().contains("invalid search pattern"),
+            "the failure must name the pattern error: {error}"
+        );
+    }
+
+    /// The camelCase keys the port used to publish are gone: a call written
+    /// against them fails naming the reference key it left out.
+    #[tokio::test]
+    async fn edit_rejects_the_previous_camel_case_keys() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("file.txt"), "before\n").expect("file");
+        let registry = registered_workspace_tools(directory.path()).await;
+
+        let error = registry
+            .invoke(
+                "edit",
+                ToolInvocation {
+                    call_id: "edit-1".to_owned(),
+                    arguments: json!({
+                        "path": "file.txt",
+                        "oldText": "before",
+                        "newText": "after",
+                    }),
+                },
+            )
+            .await
+            .expect_err("the camelCase keys are no longer the contract");
+
+        assert!(
+            error.to_string().contains("$.file_path")
+                && error.to_string().contains("required property is missing"),
+            "the failure must name the missing reference key: {error}"
+        );
+    }
+
+    /// The stale-edit and ambiguity failures survive the key rename, and the
+    /// write permission is still derived from the renamed path argument.
+    #[tokio::test]
+    async fn edit_keeps_its_failure_modes_and_its_permission_scope_under_the_new_keys() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("file.txt"), "one\none\n").expect("file");
+        let workspace = Arc::new(Workspace::open(directory.path()).expect("workspace"));
+        let review = Arc::new(ReviewManager::new(workspace.clone()));
+        review.begin_turn("turn-1").expect("turn");
+        let policy = PermissionStore::default();
+        policy
+            .set_trust(
+                directory.path(),
+                TrustDecision::Trusted,
+                TrustRootKind::Workspace,
+            )
+            .await
+            .expect("trust");
+        let registry = ToolRegistry::default();
+        WorkspaceTools::new(workspace, review)
+            .register(&registry, policy, Arc::new(RejectApproval))
+            .expect("register");
+
+        let ambiguous = registry
+            .invoke(
+                "edit",
+                ToolInvocation {
+                    call_id: "edit-1".to_owned(),
+                    arguments: json!({
+                        "file_path": "file.txt",
+                        "old_string": "one",
+                        "new_string": "two",
+                    }),
+                },
+            )
+            .await
+            .expect_err("two matches without replace_all stay ambiguous");
+        assert!(
+            ambiguous.to_string().contains("matches 2 locations"),
+            "{ambiguous}"
+        );
+
+        let stale = registry
+            .invoke(
+                "edit",
+                ToolInvocation {
+                    call_id: "edit-2".to_owned(),
+                    arguments: json!({
+                        "file_path": "file.txt",
+                        "old_string": "absent",
+                        "new_string": "two",
+                    }),
+                },
+            )
+            .await
+            .expect_err("a needle that is not there is a stale edit");
+        assert!(stale.to_string().contains("is stale"), "{stale}");
+
+        let replaced = registry
+            .invoke(
+                "edit",
+                ToolInvocation {
+                    call_id: "edit-3".to_owned(),
+                    arguments: json!({
+                        "file_path": "file.txt",
+                        "old_string": "one",
+                        "new_string": "two",
+                        "replace_all": true,
+                    }),
+                },
+            )
+            .await
+            .expect("replace_all resolves the ambiguity");
+        assert!(replaced.model_text.contains("+two"));
+    }
+
+    /// A trusted workspace with the three tools registered and every approval
+    /// refused, so anything reaching the approval path fails loudly.
+    async fn registered_workspace_tools(root: &Path) -> ToolRegistry {
+        let workspace = Arc::new(Workspace::open(root).expect("workspace"));
+        let review = Arc::new(ReviewManager::new(workspace.clone()));
+        let policy = PermissionStore::default();
+        policy
+            .set_trust(root, TrustDecision::Trusted, TrustRootKind::Workspace)
+            .await
+            .expect("trust");
+        let registry = ToolRegistry::default();
+        WorkspaceTools::new(workspace, review)
+            .register(&registry, policy, Arc::new(RejectApproval))
+            .expect("register");
+        registry
     }
 }

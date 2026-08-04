@@ -106,7 +106,7 @@ pub(crate) fn profiles(vibe_home: &Path) -> Vec<AgentProfile> {
             AgentKind::Subagent,
             "safe",
             toml_table([
-                ("enabled_tools", string_array(["search", "read"])),
+                ("enabled_tools", string_array(["grep", "read_file"])),
                 ("system_prompt_id", TomlValue::String("explore".to_owned())),
             ]),
         ),
