@@ -126,7 +126,8 @@ pub enum ProtocolErrorCode {
 pub struct ProtocolError {
     pub code: ProtocolErrorCode,
     pub message: String,
-    #[serde(default)]
+    /// Optional structured detail; omitted from the wire when null.
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub data: Value,
 }
 
@@ -135,6 +136,8 @@ pub struct ProtocolError {
 pub struct Notification {
     pub jsonrpc: JsonRpcVersion,
     pub method: String,
+    /// Payload; absent on the wire is equivalent to empty, per JSON-RPC 2.0.
+    #[serde(default)]
     pub params: BTreeMap<String, Value>,
 }
 
@@ -144,6 +147,8 @@ pub struct ServerRequest {
     pub jsonrpc: JsonRpcVersion,
     pub id: RequestId,
     pub method: String,
+    /// Payload; absent on the wire is equivalent to empty, per JSON-RPC 2.0.
+    #[serde(default)]
     pub params: BTreeMap<String, Value>,
 }
 
@@ -152,6 +157,8 @@ pub struct ServerRequest {
 pub struct SuccessResponse {
     pub jsonrpc: JsonRpcVersion,
     pub id: RequestId,
+    /// Method-specific payload. Required: a response carries `result` or
+    /// `error`, never neither.
     pub result: BTreeMap<String, Value>,
 }
 
@@ -388,6 +395,65 @@ mod tests {
     }
 
     #[test]
+    fn each_envelope_variant_is_decoded_unambiguously() {
+        let cases = [
+            (
+                json!({"jsonrpc": "2.0", "method": "turn/started", "params": {}}),
+                "notification",
+            ),
+            (
+                json!({"jsonrpc": "2.0", "method": "turn/started"}),
+                "notification",
+            ),
+            (
+                json!({"jsonrpc": "2.0", "id": 1, "method": "turn/start", "params": {}}),
+                "request",
+            ),
+            (
+                json!({"jsonrpc": "2.0", "id": 1, "method": "turn/start"}),
+                "request",
+            ),
+            (json!({"jsonrpc": "2.0", "id": 1, "result": {}}), "success"),
+            (
+                json!({"jsonrpc": "2.0", "id": 1, "error": {"code": "not_found", "message": "gone"}}),
+                "error",
+            ),
+        ];
+        for (value, expected) in cases {
+            let encoded = serde_json::to_vec(&value).expect("JSON fixture");
+            let decoded = decode_frame(&encoded).expect("valid frame");
+            let actual = match decoded {
+                Envelope::Notification(_) => "notification",
+                Envelope::Request(_) => "request",
+                Envelope::Success(_) => "success",
+                Envelope::Error(_) => "error",
+            };
+            assert_eq!(actual, expected, "misrouted {value}");
+        }
+    }
+
+    #[test]
+    fn null_error_data_stays_off_the_wire() {
+        let frame = Envelope::Error(ErrorResponse {
+            jsonrpc: JsonRpcVersion::V2,
+            id: RequestId::Integer(1),
+            error: ProtocolError {
+                code: ProtocolErrorCode::NotFound,
+                message: "gone".to_owned(),
+                data: Value::Null,
+            },
+        });
+        assert_eq!(
+            encode_frame(&frame),
+            br#"{"jsonrpc":"2.0","id":1,"error":{"code":"not_found","message":"gone"}}"#
+        );
+        assert_eq!(
+            decode_frame(&encode_frame(&frame)).expect("round trip"),
+            frame
+        );
+    }
+
+    #[test]
     fn malformed_envelopes_are_rejected() {
         for value in [
             json!({"jsonrpc": "2.0", "id": "client-1"}),
@@ -397,6 +463,7 @@ mod tests {
             json!({"jsonrpc": "2.0", "method": "initialized", "params": {}, "extra": true}),
             json!({"jsonrpc": "2.0", "id": true, "result": {}}),
             json!({"jsonrpc": "2.0", "id": 1, "result": []}),
+            json!({"jsonrpc": "1.0", "id": 1, "result": {}}),
         ] {
             let encoded = serde_json::to_vec(&value).expect("JSON fixture");
             assert!(decode_frame(&encoded).is_err(), "accepted {value}");
