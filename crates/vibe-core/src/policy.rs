@@ -574,18 +574,34 @@ fn canonicalize_for_policy(path: &Path) -> Result<PathBuf, PolicyError> {
             source,
         });
     }
-    let parent = path
-        .parent()
-        .ok_or_else(|| PolicyError::Denied("path has no parent".to_owned()))?;
-    let file_name = path
-        .file_name()
-        .ok_or_else(|| PolicyError::Denied("path has no file name".to_owned()))?;
-    let canonical_parent =
-        std::fs::canonicalize(parent).map_err(|source| PolicyError::PathResolution {
-            path: parent.to_path_buf(),
-            source,
-        })?;
-    Ok(canonical_parent.join(file_name))
+    // A write may target a file whose parent directories do not exist yet, so
+    // the decision is anchored at the deepest ancestor that does and the
+    // remaining components are rejoined to it.
+    let mut remainder = Vec::new();
+    let mut cursor = path;
+    loop {
+        let parent = cursor
+            .parent()
+            .ok_or_else(|| PolicyError::Denied("path has no parent".to_owned()))?;
+        let file_name = cursor
+            .file_name()
+            .ok_or_else(|| PolicyError::Denied("path has no file name".to_owned()))?;
+        remainder.push(file_name.to_os_string());
+        if parent.exists() {
+            let canonical_parent =
+                std::fs::canonicalize(parent).map_err(|source| PolicyError::PathResolution {
+                    path: parent.to_path_buf(),
+                    source,
+                })?;
+            return Ok(remainder
+                .iter()
+                .rev()
+                .fold(canonical_parent, |resolved, component| {
+                    resolved.join(component)
+                }));
+        }
+        cursor = parent;
+    }
 }
 
 #[cfg(test)]
@@ -606,6 +622,25 @@ mod tests {
         fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
             Box::pin(async move { Ok(self.0) })
         }
+    }
+
+    /// A write into a directory that does not exist yet resolves against the
+    /// deepest ancestor that does, and a traversal hidden behind that missing
+    /// directory is refused rather than resolved into the trusted root.
+    #[test]
+    fn a_path_below_a_missing_directory_resolves_without_admitting_a_traversal() {
+        let root = tempdir().expect("tempdir");
+        let canonical = std::fs::canonicalize(root.path()).expect("canonical root");
+
+        assert_eq!(
+            canonicalize_for_policy(&canonical.join("missing/deeper/file.txt"))
+                .expect("a missing parent chain resolves"),
+            canonical.join("missing/deeper/file.txt")
+        );
+        assert!(matches!(
+            canonicalize_for_policy(&canonical.join("missing/../../escape.txt")),
+            Err(PolicyError::Denied(_))
+        ));
     }
 
     #[derive(Default)]

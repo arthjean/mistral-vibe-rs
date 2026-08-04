@@ -605,18 +605,38 @@ impl Workspace {
                     source,
                 })?
         } else {
-            let parent = lexical.parent().unwrap_or(Path::new("."));
-            let canonical_parent =
-                self.directory
-                    .canonicalize(parent)
-                    .map_err(|source| WorkspaceError::Io {
-                        path: parent.to_path_buf(),
-                        source,
-                    })?;
-            let file_name = lexical
-                .file_name()
-                .ok_or_else(|| WorkspaceError::OutsideRoot(requested.to_path_buf()))?;
-            canonical_parent.join(file_name)
+            // A write may target a path whose parent directories do not exist
+            // yet, so the canonicalisation anchors at the deepest ancestor
+            // that does and rejoins the components below it. The escape check
+            // below still sees every rejoined component.
+            let mut remainder = Vec::new();
+            let mut cursor = lexical.as_path();
+            loop {
+                let parent = match cursor.parent() {
+                    Some(parent) if !parent.as_os_str().is_empty() => parent,
+                    _ => Path::new("."),
+                };
+                let file_name = cursor
+                    .file_name()
+                    .ok_or_else(|| WorkspaceError::OutsideRoot(requested.to_path_buf()))?;
+                remainder.push(file_name.to_os_string());
+                if parent == Path::new(".") || self.directory.metadata(parent).is_ok() {
+                    let canonical_parent =
+                        self.directory.canonicalize(parent).map_err(|source| {
+                            WorkspaceError::Io {
+                                path: parent.to_path_buf(),
+                                source,
+                            }
+                        })?;
+                    break remainder
+                        .iter()
+                        .rev()
+                        .fold(canonical_parent, |resolved, component| {
+                            resolved.join(component)
+                        });
+                }
+                cursor = parent;
+            }
         };
         if relative.components().any(|component| {
             matches!(
