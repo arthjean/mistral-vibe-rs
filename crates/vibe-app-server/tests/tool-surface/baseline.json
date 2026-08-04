@@ -1,0 +1,46 @@
+{
+  "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+  "platform": "linux",
+  "note": "The gap EP-012 measures and the later epics close: EP-013 for the five published tools, EP-014 and EP-015 for the missing names. Names and JSON pointers only, because the corpus that carries reference description text stays gitignored.",
+  "missingNames": [
+    "bash",
+    "grep",
+    "read_file",
+    "skill",
+    "task",
+    "todo",
+    "web_fetch",
+    "web_search",
+    "write_file"
+  ],
+  "extraNames": ["read", "search"],
+  "schemaDivergence": {
+    "ask_user_question": [
+      "/$defs",
+      "/properties/footerNote/anyOf",
+      "/properties/footerNote/default",
+      "/properties/footerNote/description",
+      "/properties/footerNote/type",
+      "/properties/questions/description",
+      "/properties/questions/items/$ref",
+      "/properties/questions/items/additionalProperties",
+      "/properties/questions/items/properties",
+      "/properties/questions/items/required",
+      "/properties/questions/items/type"
+    ],
+    "edit": [
+      "/properties/file_path",
+      "/properties/newText",
+      "/properties/new_string",
+      "/properties/oldText",
+      "/properties/old_string",
+      "/properties/path",
+      "/properties/replaceAll",
+      "/properties/replace_all",
+      "/required/0",
+      "/required/1",
+      "/required/2"
+    ],
+    "exit_plan_mode": ["/additionalProperties"]
+  }
+}

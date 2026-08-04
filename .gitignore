@@ -1,6 +1,7 @@
 .claude/
 .codex/
 target/
+.parity/
 .vibe/
 __pycache__/
 *.py[cod]
