@@ -10,6 +10,9 @@ Usage::
 
     scripts/parity/oracle.py --python /path/to/reference/.venv/bin/python
 
+``VIBE_REFERENCE`` sets the checkout for machines that do not hold it at the
+default path; ``--reference`` wins over it.
+
 The wrapper re-executes itself with the reference interpreter when the current
 one cannot import ``vibe`` and ``textual``.
 """
@@ -27,7 +30,11 @@ import tempfile
 from typing import Any
 
 SCHEMA_VERSION = 1
-DEFAULT_REFERENCE = Path("/home/arthur/dev/mistral-vibe")
+#: Where the read-only reference checkout lives. ``VIBE_REFERENCE`` overrides the
+#: default for machines that hold it elsewhere, and ``--reference`` wins over both.
+DEFAULT_REFERENCE = Path(
+    os.environ.get("VIBE_REFERENCE") or "/home/arthur/dev/mistral-vibe"
+)
 DEFAULT_OUTPUT = Path("crates/vibe-cli/tests/parity")
 
 

@@ -15,6 +15,9 @@ Usage::
     scripts/parity/tool_surface.py --reference /path/to/reference
     scripts/parity/tool_surface.py --probe-endpoint   # needs MISTRAL_API_KEY
 
+``VIBE_REFERENCE`` sets the checkout for machines that do not hold it at the
+default path; ``--reference`` wins over it.
+
 The wrapper re-executes itself with the reference interpreter when the current
 one cannot import ``vibe``.
 """
@@ -33,7 +36,11 @@ from typing import Any
 
 SCHEMA_VERSION = 3
 DIGEST_SCHEMA_VERSION = 1
-DEFAULT_REFERENCE = Path("/home/arthur/dev/mistral-vibe")
+#: Where the read-only reference checkout lives. ``VIBE_REFERENCE`` overrides the
+#: default for machines that hold it elsewhere, and ``--reference`` wins over both.
+DEFAULT_REFERENCE = Path(
+    os.environ.get("VIBE_REFERENCE") or "/home/arthur/dev/mistral-vibe"
+)
 DEFAULT_OUTPUT = Path(".parity/tool-surface-corpus.json")
 DEFAULT_DIGEST = Path("crates/vibe-app-server/tests/tool-surface/digest.json")
 #: Stands in for every description string, so the digest records that a
