@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Publish the Windows shell families. On Windows, under the
+  `VIBE_MANAGED_SHELL_TOOLS` rollout, `git_bash`, `git_bash_output`,
+  `git_bash_stdin`, `git_bash_sessions` and `git_bash_log_file` appear when a
+  Git Bash is installed, and the matching `powershell_*` names appear when
+  PowerShell is installed and Git Bash is not. Each family drives its own
+  shell, mints its session ids under its own prefix, forces the reference
+  interactivity and pager variables into the child, and decodes UTF-16 console
+  output as text. A POSIX host publishes none of them, and a Windows host with
+  neither shell publishes no shell tool at all.
 - Add `bash`, which runs a shell command in the working directory under the
   existing shell policy: a command the analysis permits outright runs, anything
   else waits for approval, and a destructive one is refused. Output is bounded

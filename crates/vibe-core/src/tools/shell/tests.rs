@@ -1,4 +1,4 @@
-//! What the shell family publishes, refuses, runs and cleans up.
+//! What the shell families publish, refuse, run and clean up.
 //!
 //! Every case here drives the tools through [`ToolRegistry::invoke`], which is
 //! the path a model call takes: schema validation and default application
@@ -54,6 +54,7 @@ struct Harness {
     directory: TempDir,
     registry: ToolRegistry,
     tools: ShellTools,
+    family: ShellFamily,
     requests: Arc<StdMutex<Vec<String>>>,
 }
 
@@ -64,7 +65,7 @@ impl Harness {
 
     fn shell(&self) -> Arc<SessionShell> {
         self.tools
-            .session_shell("session-1")
+            .session_shell("session-1", self.family)
             .expect("session shell")
     }
 
@@ -113,6 +114,34 @@ impl Harness {
 }
 
 async fn harness(rollout: ShellRollout, decision: ApprovalDecision) -> Harness {
+    harness_on(posix_host(), rollout, decision).await
+}
+
+/// A POSIX host, which is what every `bash` case runs against whatever machine
+/// the suite is on.
+fn posix_host() -> HostShells {
+    HostShells {
+        platform: Platform::Posix,
+        git_bash: None,
+        powershell: None,
+    }
+}
+
+/// A Windows host carrying the named executables, which is how the two Windows
+/// families are driven from a POSIX machine.
+fn windows_host(git_bash: Option<&str>, powershell: Option<&str>) -> HostShells {
+    HostShells {
+        platform: Platform::Windows,
+        git_bash: git_bash.map(PathBuf::from),
+        powershell: powershell.map(PathBuf::from),
+    }
+}
+
+async fn harness_on(
+    host: HostShells,
+    rollout: ShellRollout,
+    decision: ApprovalDecision,
+) -> Harness {
     let directory = tempdir().expect("tempdir");
     let policy = PermissionStore::default();
     policy
@@ -125,7 +154,8 @@ async fn harness(rollout: ShellRollout, decision: ApprovalDecision) -> Harness {
         .expect("trust");
     let (approval, requests) = ScriptedApproval::new(decision);
     let registry = ToolRegistry::default();
-    let tools = ShellTools::new(directory.path().join("home"), rollout);
+    let family = published_family(&host, rollout).map_or(ShellFamily::Bash, |(family, _)| family);
+    let tools = ShellTools::with_host(directory.path().join("home"), rollout, host);
     tools
         .register(
             "session-1",
@@ -139,6 +169,7 @@ async fn harness(rollout: ShellRollout, decision: ApprovalDecision) -> Harness {
         directory,
         registry,
         tools,
+        family,
         requests,
     }
 }
@@ -230,7 +261,10 @@ async fn the_managed_rollout_publishes_the_eight_property_bash_and_its_four_sess
 fn the_managed_variant_outranks_the_legacy_one_whatever_the_registration_order() {
     for reversed in [false, true] {
         let registry = ToolRegistry::default();
-        let mut specs = vec![bash_spec(false), bash_spec(true)];
+        let mut specs = vec![
+            command_spec(ShellFamily::Bash, false),
+            command_spec(ShellFamily::Bash, true),
+        ];
         if reversed {
             specs.reverse();
         }
@@ -1004,4 +1038,503 @@ fn every_advertised_control_key_resolves_to_bytes() {
     }
     assert_eq!(counted.load(Ordering::Relaxed), CONTROL_KEYS.len());
     assert!(stdin_bytes(&json!({"control": ["ctrl_shift_q"]})).is_err());
+}
+
+// --------------------------------------------------------------------------
+// The Windows families
+// --------------------------------------------------------------------------
+
+/// A real Git Bash on a POSIX test machine: the executable is a POSIX `bash`,
+/// which is what the argument form keys off, so a Windows-family session runs
+/// a real process here.
+fn git_bash_host() -> HostShells {
+    windows_host(Some("/bin/bash"), None)
+}
+
+fn family_names(family: ShellFamily) -> Vec<String> {
+    let mut names = vec![family.name().to_owned()];
+    names
+        .extend(["log_file", "output", "sessions", "stdin"].map(|suffix| family.tool_name(suffix)));
+    names
+}
+
+/// The ten Windows names are absent from a POSIX host under either rollout,
+/// which is the half of the availability rule this machine can observe
+/// directly.
+#[tokio::test]
+async fn a_posix_host_publishes_no_windows_name() {
+    for rollout in [ShellRollout::Legacy, ShellRollout::Managed] {
+        let harness = harness(rollout, ApprovalDecision::Deny).await;
+        let published = harness.names().join(" ");
+        for name in family_names(ShellFamily::GitBash)
+            .into_iter()
+            .chain(family_names(ShellFamily::PowerShell))
+        {
+            assert!(
+                !published.contains(&name),
+                "a POSIX host published `{name}`: {published}"
+            );
+        }
+    }
+}
+
+/// Reference `GitBash.is_available`: Windows and a resolvable Git Bash. The
+/// five names appear, and the managed variant wins the family name.
+#[tokio::test]
+async fn a_windows_host_with_git_bash_publishes_the_git_bash_family() {
+    let harness = harness_on(
+        git_bash_host(),
+        ShellRollout::Managed,
+        ApprovalDecision::Deny,
+    )
+    .await;
+    assert_eq!(harness.names(), family_names(ShellFamily::GitBash));
+    let mut properties = harness.schema("git_bash")["properties"]
+        .as_object()
+        .expect("properties")
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    properties.sort();
+    assert_eq!(
+        properties,
+        [
+            "background",
+            "command",
+            "cwd",
+            "env",
+            "hard_timeout",
+            "shell",
+            "timeout",
+            "timeout_seconds"
+        ]
+    );
+}
+
+/// Reference `_powershell_treatment_available`: PowerShell publishes only
+/// where no Git Bash resolves, so the same host publishes one family or the
+/// other and never both.
+#[tokio::test]
+async fn git_bash_takes_the_windows_host_from_powershell() {
+    let both = harness_on(
+        windows_host(Some("/bin/bash"), Some("pwsh.exe")),
+        ShellRollout::Managed,
+        ApprovalDecision::Deny,
+    )
+    .await;
+    assert_eq!(both.names(), family_names(ShellFamily::GitBash));
+
+    let powershell_only = harness_on(
+        windows_host(None, Some("pwsh.exe")),
+        ShellRollout::Managed,
+        ApprovalDecision::Deny,
+    )
+    .await;
+    assert_eq!(
+        powershell_only.names(),
+        family_names(ShellFamily::PowerShell)
+    );
+}
+
+/// A Windows host with neither shell installed publishes nothing at all: the
+/// reference availability rule fails for both families, and `bash` is withheld
+/// on Windows once the managed rollout is on.
+#[tokio::test]
+async fn a_windows_host_without_either_shell_publishes_nothing() {
+    let harness = harness_on(
+        windows_host(None, None),
+        ShellRollout::Managed,
+        ApprovalDecision::Deny,
+    )
+    .await;
+    assert!(harness.names().is_empty(), "{:?}", harness.names());
+}
+
+/// Every Windows-family tool carries the reference `managed` rollout, so the
+/// legacy rollout publishes the POSIX `bash` name even on Windows and none of
+/// the ten.
+#[tokio::test]
+async fn the_windows_families_stay_absent_under_the_legacy_rollout() {
+    let harness = harness_on(
+        git_bash_host(),
+        ShellRollout::Legacy,
+        ApprovalDecision::Deny,
+    )
+    .await;
+    assert_eq!(harness.names(), ["bash"]);
+}
+
+/// The legacy Windows variant is registered under the same name and loses to
+/// the managed one, which is what reference `selection_priority` does. Its
+/// schema is `GitBashArgs`: the four overrides without the two session keys.
+#[test]
+fn the_legacy_windows_variant_publishes_the_reference_override_set() {
+    for family in [ShellFamily::GitBash, ShellFamily::PowerShell] {
+        let spec = command_spec(family, false);
+        let properties = spec.input_schema["properties"]
+            .as_object()
+            .expect("properties")
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(
+            properties,
+            [
+                "command",
+                "cwd",
+                "env",
+                "shell",
+                "timeout",
+                "timeout_seconds"
+            ],
+            "{}",
+            family.name()
+        );
+        assert_eq!(spec.selection_priority, LEGACY_SELECTION_PRIORITY);
+        assert_eq!(
+            command_spec(family, true).selection_priority,
+            MANAGED_SELECTION_PRIORITY
+        );
+    }
+}
+
+/// Reference `build_windows_shell_argv` reads the argument form from the
+/// executable, not from the family, so an override that points a family at
+/// another interpreter still gets that interpreter's flags.
+#[test]
+fn the_argument_form_follows_the_resolved_executable() {
+    assert_eq!(
+        windows_shell_arguments(Path::new(r"C:\Program Files\PowerShell\7\pwsh.exe")),
+        ["-NoLogo", "-NoProfile", "-Command"]
+    );
+    assert_eq!(
+        windows_shell_arguments(Path::new(r"C:\Windows\System32\powershell.EXE")),
+        ["-NoLogo", "-NoProfile", "-Command"]
+    );
+    assert_eq!(
+        windows_shell_arguments(Path::new(r"C:\Program Files\Git\bin\bash.exe")),
+        ["-c"]
+    );
+    assert!(
+        windows_shell_arguments(Path::new(r"C:\Windows\System32\cmd.exe")).is_empty(),
+        "the reference passes the command straight to anything it does not know"
+    );
+}
+
+/// The rule reaches the running process, not only the specification: a `shell`
+/// override carries the argument form of the executable it names rather than
+/// the one the session resolved, which is what reference
+/// `build_windows_shell_argv` does with the shell it is handed.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_shell_override_carries_the_argument_form_of_the_executable_it_names() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let harness = harness_on(
+        git_bash_host(),
+        ShellRollout::Managed,
+        ApprovalDecision::ApproveOnce,
+    )
+    .await;
+    // A stand-in for the PowerShell an operator would point a Windows session
+    // at, which reports the argument form it was launched with.
+    let executable = harness.root().join("pwsh.exe");
+    std::fs::write(&executable, "#!/bin/sh\necho \"$@\"\n").expect("the stand-in shell is written");
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))
+        .expect("the stand-in shell is executable");
+
+    let output = harness
+        .call(
+            "git_bash",
+            json!({"command": "report", "shell": executable.to_string_lossy()}),
+        )
+        .await
+        .expect("the overridden shell runs");
+    assert!(
+        output
+            .model_text
+            .contains("-NoLogo -NoProfile -Command report"),
+        "{}",
+        output.model_text
+    );
+}
+
+/// Reference `get_windows_bash_path` scans every `PATH` entry rather than
+/// stopping at the first hit, so a real Git Bash listed after the WSL launcher
+/// still wins, and `WINDOWS_POWERSHELL_DEFAULT_SHELLS` prefers PowerShell 7.
+#[test]
+fn the_windows_shell_search_skips_the_wsl_launcher_and_keeps_the_reference_order() {
+    let root = tempdir().expect("tempdir");
+    let system32 = root.path().join("System32");
+    let git = root.path().join("Git/bin");
+    let seven = root.path().join("pwsh");
+    for directory in [&system32, &git, &seven] {
+        std::fs::create_dir_all(directory).expect("directory");
+    }
+    std::fs::write(system32.join("bash.exe"), b"wsl").expect("wsl stub");
+    std::fs::write(system32.join("powershell.exe"), b"ps").expect("powershell");
+    std::fs::write(git.join("bash.exe"), b"git bash").expect("git bash");
+    std::fs::write(seven.join("pwsh.exe"), b"pwsh").expect("pwsh");
+
+    let directories = [system32.clone(), git.clone(), seven.clone()];
+    assert_eq!(find_git_bash(&directories), Some(git.join("bash.exe")));
+    assert_eq!(find_powershell(&directories), Some(seven.join("pwsh.exe")));
+    assert_eq!(
+        find_git_bash(std::slice::from_ref(&system32)),
+        None,
+        "the WSL launcher is not a Git Bash"
+    );
+    assert_eq!(
+        find_powershell(std::slice::from_ref(&system32)),
+        Some(system32.join("powershell.exe"))
+    );
+    assert!(is_wsl_launcher(Path::new(
+        r"C:\Users\a\AppData\Local\Microsoft\WindowsApps\bash.exe"
+    )));
+}
+
+/// A Git Bash session runs a real command, reports through its own tools, and
+/// mints an id under its own prefix so the two families never collide in the
+/// shared session directory.
+#[tokio::test]
+async fn a_git_bash_session_runs_and_answers_under_its_own_prefix() {
+    let harness = harness_on(
+        git_bash_host(),
+        ShellRollout::Managed,
+        ApprovalDecision::ApproveOnce,
+    )
+    .await;
+    let started = harness
+        .call(
+            "git_bash",
+            json!({"command": "echo from-git-bash", "background": true}),
+        )
+        .await
+        .expect("a Git Bash session starts");
+    let session_id = started.typed_result["sessionId"]
+        .as_str()
+        .expect("session id")
+        .to_owned();
+    assert!(
+        session_id.starts_with("git_bash_"),
+        "the session prefix must be the family's: {session_id}"
+    );
+    assert!(
+        !is_family_session_id(ShellFamily::Bash, &session_id),
+        "a bash tool must not recognise a git_bash session"
+    );
+
+    let polled = harness
+        .call(
+            "git_bash_output",
+            json!({"session_id": session_id, "wait_seconds": 5}),
+        )
+        .await
+        .expect("the session answers");
+    assert!(
+        polled.typed_result["output"]
+            .as_str()
+            .expect("output")
+            .contains("from-git-bash"),
+        "{polled:?}"
+    );
+
+    // The log file tool answers for this family's sessions and refuses the
+    // other's, which is what the shared session directory needs.
+    harness
+        .call(
+            "git_bash_log_file",
+            json!({"action": "read", "session_id": session_id}),
+        )
+        .await
+        .expect("the family reads its own log");
+    let refused = harness
+        .call(
+            "git_bash_log_file",
+            json!({"action": "read", "session_id": "bash_1_00"}),
+        )
+        .await
+        .expect_err("another family's session id is refused");
+    assert!(refused.to_string().contains("git_bash"), "{refused}");
+}
+
+/// The family's environment reaches the process: reference
+/// `_get_git_bash_env_overrides` pins the switches that keep a command from
+/// waiting on a terminal no operator is watching.
+#[tokio::test]
+async fn a_windows_family_forces_its_reference_environment() {
+    let harness = harness_on(
+        git_bash_host(),
+        ShellRollout::Managed,
+        ApprovalDecision::ApproveOnce,
+    )
+    .await;
+    let output = harness
+        .call("git_bash", json!({"command": "echo \"$CI $PAGER $TERM\""}))
+        .await
+        .expect("the command runs");
+    assert!(
+        output.model_text.contains("true cat dumb"),
+        "{}",
+        output.model_text
+    );
+}
+
+/// A turn cancelled while a Windows-family process group is running leaves no
+/// orphan behind.
+///
+/// The family publishes the managed variant, and a managed session is owned by
+/// the Vibe session rather than by the turn that started it, so the guarantee
+/// is delivered where the reference delivers it: the session teardown
+/// terminates the group whichever turn opened it.
+#[tokio::test]
+async fn a_cancelled_windows_family_turn_leaves_no_orphaned_process_group() {
+    let harness = harness_on(
+        git_bash_host(),
+        ShellRollout::Managed,
+        ApprovalDecision::ApproveOnce,
+    )
+    .await;
+    let marker = harness.root().join("after-the-windows-cancel");
+    let invocation = ToolInvocation {
+        call_id: "git_bash-1".to_owned(),
+        arguments: json!({"command": format!("sleep 4; touch {}", marker.display())}),
+    };
+    let dropped = tokio::time::timeout(
+        Duration::from_millis(400),
+        harness.registry.invoke("git_bash", invocation),
+    )
+    .await;
+    assert!(dropped.is_err(), "the call must still be running");
+
+    harness
+        .tools
+        .close_session("session-1")
+        .await
+        .expect("the session closes");
+    assert!(
+        harness.shell().terminals.list().await.is_empty(),
+        "the terminal must be released"
+    );
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert!(
+        !marker.exists(),
+        "no process group may outlive the session that started it"
+    );
+}
+
+/// Reference `decode_safe` reads console output by its byte-order mark, which
+/// is what keeps PowerShell's UTF-16 from reaching the model as interleaved
+/// NULs. An unmarked UTF-16 stream is decoded too; UTF-8 is left alone.
+#[test]
+fn utf16_console_output_is_decoded_rather_than_interleaved_with_nuls() {
+    let marked_le = [b"\xff\xfe".as_slice(), &encode_utf16("hi", true)].concat();
+    let marked_be = [b"\xfe\xff".as_slice(), &encode_utf16("hi", false)].concat();
+    assert_eq!(decode_output(&marked_le), "hi");
+    assert_eq!(decode_output(&marked_be), "hi");
+    assert_eq!(
+        decode_output(&encode_utf16("Directory: C:\\", true)),
+        "Directory: C:\\"
+    );
+    assert_eq!(
+        decode_output(&encode_utf16("Directory: C:\\", false)),
+        "Directory: C:\\"
+    );
+    assert_eq!(decode_output("plain ascii".as_bytes()), "plain ascii");
+    assert_eq!(decode_output("héllo ✓".as_bytes()), "héllo ✓");
+    assert_eq!(decode_output(b"\xef\xbb\xbfmarked utf-8"), "marked utf-8");
+    // Binary output has NULs on both parities, so it is not mistaken for text.
+    assert_eq!(decode_output(&[0, 0, 0, 0, 1, 2]).len(), 6);
+    assert!(!decode_output(&marked_le).contains('\0'));
+}
+
+fn encode_utf16(text: &str, little_endian: bool) -> Vec<u8> {
+    text.encode_utf16()
+        .flat_map(|unit| {
+            if little_endian {
+                unit.to_le_bytes()
+            } else {
+                unit.to_be_bytes()
+            }
+        })
+        .collect()
+}
+
+/// A UTF-16 stream survives the whole path: a real process writes it, the
+/// family captures it, and the model text carries characters rather than NULs.
+#[tokio::test]
+async fn a_command_writing_utf16_reaches_the_model_as_text() {
+    let harness = harness_on(
+        git_bash_host(),
+        ShellRollout::Managed,
+        ApprovalDecision::ApproveOnce,
+    )
+    .await;
+    let output = harness
+        .call(
+            "git_bash",
+            json!({"command": r#"printf '\xff\xfeO\x00K\x00'"#}),
+        )
+        .await
+        .expect("the command runs");
+    assert_eq!(
+        output.typed_result["output"].as_str().unwrap_or_default(),
+        "OK",
+        "{output:?}"
+    );
+}
+
+/// A Git Bash command speaks Git Bash paths while the session root is a
+/// Windows one, so the analysis translates `/c/work` onto `C:\work` and sees
+/// the file as inside the workspace rather than outside it.
+#[test]
+fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
+    let inside = analyse(
+        ShellFlavor::GitBash,
+        Platform::Windows,
+        Path::new(r"C:\work"),
+        "cat /c/work/notes.txt",
+    );
+    assert_eq!(inside.path_operands, ["/c/work/notes.txt"]);
+    assert!(
+        !inside
+            .rationale
+            .iter()
+            .any(|reason| reason.contains("outside")),
+        "a translated path inside the workspace is not an outside-directory ask: {:?}",
+        inside.rationale
+    );
+
+    // Without the translation the same operand is a root-relative Windows path
+    // and lands nowhere near the workspace, which is what the family flavour
+    // exists to prevent.
+    let untranslated = analyse(
+        ShellFlavor::PowerShell,
+        Platform::Windows,
+        Path::new(r"C:\work"),
+        "cat /c/work/notes.txt",
+    );
+    assert!(
+        untranslated
+            .rationale
+            .iter()
+            .any(|reason| reason.contains("outside") || reason.contains("ambiguous")),
+        "{:?}",
+        untranslated.rationale
+    );
+
+    let outside = analyse(
+        ShellFlavor::GitBash,
+        Platform::Windows,
+        Path::new(r"C:\work"),
+        "cat /d/secrets/notes.txt",
+    );
+    assert!(
+        outside
+            .rationale
+            .iter()
+            .any(|reason| reason.contains("outside")),
+        "another drive is outside the workspace: {:?}",
+        outside.rationale
+    );
 }

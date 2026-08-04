@@ -36,7 +36,7 @@ use vibe_core::tools::{
 };
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 
-use vibe_core::tools::bash::{ShellRollout, ShellTools};
+use vibe_core::tools::shell::{ShellRollout, ShellTools};
 
 use crate::client::{InteractiveSessionToolFactory, task_spec};
 use crate::server::SessionToolFactory;

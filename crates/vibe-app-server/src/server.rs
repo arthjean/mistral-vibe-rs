@@ -42,8 +42,8 @@ pub use vibe_core::policy::{
 };
 use vibe_core::policy::{PermissionRule, PermissionStore, TrustDecision, TrustRootKind};
 use vibe_core::storage::HydratedSession;
-use vibe_core::tools::bash::{ShellRollout, ShellTools};
 pub use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
+use vibe_core::tools::shell::{ShellRollout, ShellTools};
 pub use vibe_core::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolInvocation,
     ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,

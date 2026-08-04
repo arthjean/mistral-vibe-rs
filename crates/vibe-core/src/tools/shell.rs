@@ -1,13 +1,20 @@
-//! The POSIX shell tool family.
+//! The shell tool families.
 //!
-//! The reference publishes two `bash` variants and picks between them with a
+//! The reference publishes three of them, one per shell it knows how to drive:
+//! `bash` on a POSIX host, and `git_bash` or `powershell` on Windows. Each
+//! publishes two variants of its command tool and picks between them with a
 //! rollout gate. The legacy one runs a single command to completion; the
 //! managed one starts a session that outlives the call and is polled, fed and
-//! listed through `bash_output`, `bash_stdin`, `bash_sessions` and
-//! `bash_log_file`. Both variants and the four managed tools are built here on
+//! listed through `<family>_output`, `<family>_stdin`, `<family>_sessions` and
+//! `<family>_log_file`. Every variant and every session tool is built here on
 //! [`TerminalManager`], the process abstraction this workspace already owns, so
-//! the shell surface adds a tool family rather than a second way to spawn a
+//! the shell surface adds tool families rather than a second way to spawn a
 //! child.
+//!
+//! Which family a host publishes is data, not a compilation target: a
+//! [`HostShells`] value carries the platform and the executables the Windows
+//! families need, so the surface a Windows operator sees is decided by the same
+//! function on every host and can be proven from a POSIX one.
 //!
 //! Two invariants shape the module. Every command is analysed by
 //! [`analyze_shell`] before it runs, and a command the analysis does not permit
@@ -52,8 +59,6 @@ const MAX_OUTPUT_BYTES: usize = 16_000;
 const DEFAULT_INLINE_BYTES: usize = 30_000;
 /// Reference `DEFAULT_MAX_POLL_SECONDS`.
 const MAX_POLL_SECONDS: u64 = 300;
-/// Reference `TerminalSessionManager.session_prefix` for this family.
-const SESSION_PREFIX: &str = "bash";
 /// Reference `TerminalSessionManager.base_dir`, relative to the Vibe home.
 const LOG_DIRECTORY: &str = "shell-tool";
 /// Reference `TerminalSessionManager.sessions_dir`, relative to [`LOG_DIRECTORY`].
@@ -63,11 +68,11 @@ const PUMP_INTERVAL: Duration = Duration::from_millis(25);
 /// Reference `BaseTool.selection_priority`, carried by the legacy variant.
 const LEGACY_SELECTION_PRIORITY: i32 = 0;
 /// Reference `ExperimentalBash.selection_priority`, which is what makes the
-/// managed variant win the `bash` name when both are registered.
+/// managed variant win the family name when both are registered.
 const MANAGED_SELECTION_PRIORITY: i32 = 10;
 
 /// Reference `ControlKey`, in declaration order, paired with the bytes each one
-/// writes. The schema publishes the names; `bash_stdin` writes the bytes.
+/// writes. The schema publishes the names; the stdin tool writes the bytes.
 const CONTROL_KEYS: [(&str, &[u8]); 40] = [
     ("ctrl_@", b"\x00"),
     ("ctrl_a", b"\x01"),
@@ -111,7 +116,7 @@ const CONTROL_KEYS: [(&str, &[u8]); 40] = [
     ("end", b"\x1b[F"),
 ];
 
-/// Which `bash` variant the session publishes.
+/// Which variant of the host's shell family the session publishes.
 ///
 /// The reference resolves this from a remote experiment whose default variant
 /// is `legacy`, and the Rust port has no experiment client, so the managed
@@ -137,13 +142,236 @@ impl ShellRollout {
             _ => Self::Legacy,
         }
     }
+}
 
-    /// Whether the managed family is published on this host.
+/// The published shell families, each owning five reference names built on its
+/// own prefix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShellFamily {
+    /// Reference `Bash` and `ExperimentalBash`.
+    Bash,
+    /// Reference `GitBash` and `ExperimentalGitBash`.
+    GitBash,
+    /// Reference `WindowsShell` and `ExperimentalWindowsShell`.
+    PowerShell,
+}
+
+impl ShellFamily {
+    /// The name the family's command tool publishes, which is also the prefix
+    /// of its four session tools and of every session id it mints.
+    fn name(self) -> &'static str {
+        match self {
+            Self::Bash => "bash",
+            Self::GitBash => "git_bash",
+            Self::PowerShell => "powershell",
+        }
+    }
+
+    fn tool_name(self, suffix: &str) -> String {
+        format!("{}_{suffix}", self.name())
+    }
+
+    /// What the family forces into a child's environment.
     ///
-    /// Reference `_experimental_bash_enabled` withholds it on Windows, where
-    /// the `powershell_*` family covers the same ground.
-    fn publishes_managed_family(self) -> bool {
-        self == Self::Managed && !cfg!(windows)
+    /// Reference `_get_git_bash_env_overrides` and `_get_windows_env_overrides`
+    /// pin the same three interactivity switches and a pager that exits, so a
+    /// command that would wait for a terminal no operator is watching fails or
+    /// finishes instead of hanging the session. The POSIX family inherits the
+    /// process environment untouched, as the reference `Bash` does.
+    fn environment(self) -> &'static [(&'static str, &'static str)] {
+        match self {
+            Self::Bash => &[],
+            Self::GitBash => &[
+                ("CI", "true"),
+                ("NONINTERACTIVE", "1"),
+                ("NO_TTY", "1"),
+                ("TERM", "dumb"),
+                ("GIT_PAGER", "cat"),
+                ("PAGER", "cat"),
+                ("LESS", "-FX"),
+            ],
+            Self::PowerShell => &[
+                ("CI", "true"),
+                ("NONINTERACTIVE", "1"),
+                ("NO_TTY", "1"),
+                ("GIT_PAGER", "more"),
+                ("PAGER", "more"),
+            ],
+        }
+    }
+}
+
+/// What the host offers the shell families: the platform it runs, and the
+/// executables the two Windows families are published against.
+///
+/// The reference reads all three from the machine (`is_windows`,
+/// `git_bash_shell_available`, `powershell_shell_available`). Carrying them in
+/// one value makes the availability rule a function of data instead of a
+/// compilation target, which is what lets the Windows surface be measured
+/// against the reference from a POSIX host.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostShells {
+    pub platform: Platform,
+    pub git_bash: Option<PathBuf>,
+    pub powershell: Option<PathBuf>,
+}
+
+impl HostShells {
+    /// What this machine offers. Only a Windows host is probed: the reference
+    /// resolvers answer `None` off Windows before looking at anything.
+    #[must_use]
+    pub fn detect() -> Self {
+        if !cfg!(windows) {
+            return Self {
+                platform: Platform::Posix,
+                git_bash: None,
+                powershell: None,
+            };
+        }
+        let directories = std::env::var_os("PATH")
+            .map(|value| std::env::split_paths(&value).collect::<Vec<_>>())
+            .unwrap_or_default();
+        Self {
+            platform: Platform::Windows,
+            git_bash: find_git_bash(&directories),
+            powershell: find_powershell(&directories),
+        }
+    }
+}
+
+/// Reference `get_windows_bash_path`.
+///
+/// Every `PATH` entry is scanned rather than only the first hit, because the
+/// WSL launcher shadows a real Git Bash and forwards into another filesystem;
+/// a Git for Windows install is then found through `git.exe`, and finally at
+/// the usual install roots.
+fn find_git_bash(directories: &[PathBuf]) -> Option<PathBuf> {
+    let scanned = directories
+        .iter()
+        .map(|directory| directory.join("bash.exe"))
+        .find(|candidate| candidate.is_file() && !is_wsl_launcher(candidate));
+    if scanned.is_some() {
+        return scanned;
+    }
+    // Git for Windows lays out `<git>\cmd\git.exe` with bash under `<git>\bin`.
+    if let Some(root) = directories
+        .iter()
+        .map(|directory| directory.join("git.exe"))
+        .find(|candidate| candidate.is_file())
+        .as_deref()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+    {
+        let sibling = ["bin/bash.exe", "usr/bin/bash.exe"]
+            .into_iter()
+            .map(|relative| root.join(relative))
+            .find(|candidate| candidate.is_file());
+        if sibling.is_some() {
+            return sibling;
+        }
+    }
+    ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"]
+        .into_iter()
+        .filter_map(std::env::var_os)
+        .flat_map(|base| {
+            ["Git/bin/bash.exe", "Programs/Git/bin/bash.exe"]
+                .map(|relative| PathBuf::from(&base).join(relative))
+        })
+        .find(|candidate| candidate.is_file())
+}
+
+/// Reference `_is_wsl_launcher`: the stubs that forward into a Linux VM with
+/// its own filesystem, which is not a drop-in shell for the workspace.
+fn is_wsl_launcher(candidate: &Path) -> bool {
+    let normalized = candidate
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_lowercase();
+    normalized.ends_with("/system32/bash.exe")
+        || normalized.ends_with("/system32/bash")
+        || normalized.ends_with("/microsoft/windowsapps/bash.exe")
+        || normalized.ends_with("/microsoft/windowsapps/bash")
+}
+
+/// Reference `WINDOWS_POWERSHELL_DEFAULT_SHELLS`, in its order: PowerShell 7
+/// is preferred over the one Windows ships.
+fn find_powershell(directories: &[PathBuf]) -> Option<PathBuf> {
+    ["pwsh.exe", "powershell.exe"].into_iter().find_map(|name| {
+        directories
+            .iter()
+            .map(|directory| directory.join(name))
+            .find(|candidate| candidate.is_file())
+    })
+}
+
+/// The family a host publishes under a rollout, and whether the managed
+/// variant and its four session tools come with it.
+///
+/// Reference `_is_enabled_for_shell_rollout` decides the first half: the
+/// `legacy` POSIX variant is withheld once the managed rollout is on and the
+/// host is Windows, and every Windows-family tool carries the `managed`
+/// rollout, so none of them publishes under `legacy`. Reference
+/// `_powershell_treatment_available` decides the second: a Windows host that
+/// has Git Bash publishes that family and nothing else, and PowerShell is
+/// reached only where no Git Bash resolves.
+fn published_family(host: &HostShells, rollout: ShellRollout) -> Option<(ShellFamily, bool)> {
+    let managed = rollout == ShellRollout::Managed;
+    if host.platform != Platform::Windows {
+        return Some((ShellFamily::Bash, managed));
+    }
+    if !managed {
+        return Some((ShellFamily::Bash, false));
+    }
+    if host.git_bash.is_some() {
+        return Some((ShellFamily::GitBash, true));
+    }
+    host.powershell
+        .is_some()
+        .then_some((ShellFamily::PowerShell, true))
+}
+
+/// The shell `family` drives on `host`, or `None` when the host carries no
+/// executable for it.
+fn family_config(family: ShellFamily, host: &HostShells) -> Option<ShellConfig> {
+    match family {
+        ShellFamily::Bash => Some(ShellConfig::default_for(host.platform)),
+        ShellFamily::GitBash => host.git_bash.clone().map(|executable| ShellConfig {
+            flavor: ShellFlavor::GitBash,
+            arguments: windows_shell_arguments(&executable),
+            executable,
+        }),
+        ShellFamily::PowerShell => host.powershell.clone().map(|executable| ShellConfig {
+            flavor: ShellFlavor::PowerShell,
+            arguments: windows_shell_arguments(&executable),
+            executable,
+        }),
+    }
+}
+
+/// Reference `build_windows_shell_argv`, which reads the argument form from the
+/// executable's own name rather than from the family that resolved it: an
+/// override pointing a family at another interpreter still gets that
+/// interpreter's flags.
+fn windows_shell_arguments(executable: &Path) -> Vec<String> {
+    // A Windows path reaches this from the reference resolvers, from an
+    // operator's configuration and from a call override, so the basename is
+    // taken on both separators rather than on the host's.
+    let name = executable
+        .to_string_lossy()
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
+        .to_lowercase();
+    match name.as_str() {
+        "pwsh" | "pwsh.exe" | "powershell" | "powershell.exe" => {
+            vec![
+                "-NoLogo".to_owned(),
+                "-NoProfile".to_owned(),
+                "-Command".to_owned(),
+            ]
+        }
+        "bash" | "bash.exe" => vec!["-c".to_owned()],
+        _ => Vec::new(),
     }
 }
 
@@ -156,6 +384,7 @@ impl ShellRollout {
 pub struct ShellTools {
     vibe_home: PathBuf,
     rollout: ShellRollout,
+    host: HostShells,
     sessions: Arc<StdMutex<BTreeMap<String, Arc<SessionShell>>>>,
 }
 
@@ -165,6 +394,7 @@ impl std::fmt::Debug for ShellTools {
             .debug_struct("ShellTools")
             .field("vibe_home", &self.vibe_home)
             .field("rollout", &self.rollout)
+            .field("host", &self.host)
             .finish_non_exhaustive()
     }
 }
@@ -172,6 +402,7 @@ impl std::fmt::Debug for ShellTools {
 /// One Vibe session's shell state: the terminals it opened and the managed
 /// sessions still addressable by the model.
 struct SessionShell {
+    family: ShellFamily,
     terminals: TerminalManager,
     managed: Mutex<BTreeMap<String, Arc<ManagedSession>>>,
     log_root: PathBuf,
@@ -186,19 +417,32 @@ impl SessionShell {
 impl ShellTools {
     #[must_use]
     pub fn new(vibe_home: impl Into<PathBuf>, rollout: ShellRollout) -> Self {
+        Self::with_host(vibe_home, rollout, HostShells::detect())
+    }
+
+    /// The same tools against a stated host, which is how a POSIX test drives
+    /// the Windows families.
+    #[must_use]
+    pub fn with_host(
+        vibe_home: impl Into<PathBuf>,
+        rollout: ShellRollout,
+        host: HostShells,
+    ) -> Self {
         Self {
             vibe_home: vibe_home.into(),
             rollout,
+            host,
             sessions: Arc::new(StdMutex::new(BTreeMap::new())),
         }
     }
 
-    /// Publishes the shell family for one session.
+    /// Publishes this host's shell family for one session.
     ///
-    /// The legacy variant is always registered, matching the reference rollout
-    /// gate, which keeps `legacy` available on every non-Windows host. When the
-    /// managed rollout is on, the managed variant registers too and wins the
-    /// `bash` name by selection priority, and the four session tools join it.
+    /// The legacy variant registers first, matching the reference rollout gate,
+    /// which keeps `legacy` available wherever the managed rollout is off. When
+    /// the managed rollout is on, the managed variant registers too and wins
+    /// the family name by selection priority, and the four session tools join
+    /// it. A host with no family to publish registers nothing.
     pub fn register(
         &self,
         session_id: &str,
@@ -207,13 +451,19 @@ impl ShellTools {
         policy: PermissionStore,
         approval: Arc<dyn ApprovalAgent>,
     ) -> Result<Vec<RegistrationOutcome>, ToolError> {
-        let shell = self.session_shell(session_id)?;
-        let platform = host_platform();
-        let config = ShellConfig::default_for(platform);
+        let Some((family, managed)) = published_family(&self.host, self.rollout) else {
+            return Ok(Vec::new());
+        };
+        let Some(config) = family_config(family, &self.host) else {
+            return Ok(Vec::new());
+        };
+        let shell = self.session_shell(session_id, family)?;
+        let platform = self.host.platform;
         let working_directory = working_directory.to_path_buf();
         let mut outcomes = vec![registry.register(
-            bash_spec(false),
-            guarded_bash(BashWiring {
+            command_spec(family, false),
+            guarded_command(CommandWiring {
+                family,
                 shell: shell.clone(),
                 config: config.clone(),
                 working_directory: working_directory.clone(),
@@ -223,12 +473,13 @@ impl ShellTools {
                 managed: false,
             }),
         )?];
-        if !self.rollout.publishes_managed_family() {
+        if !managed {
             return Ok(outcomes);
         }
         outcomes.push(registry.register(
-            bash_spec(true),
-            guarded_bash(BashWiring {
+            command_spec(family, true),
+            guarded_command(CommandWiring {
+                family,
                 shell: shell.clone(),
                 config,
                 working_directory,
@@ -239,28 +490,28 @@ impl ShellTools {
             }),
         )?);
         outcomes.push(registry.register(
-            bash_output_spec(),
-            session_handler(shell.clone(), run_bash_output),
+            output_spec(family),
+            session_handler(shell.clone(), run_output),
         )?);
         outcomes.push(registry.register(
-            bash_stdin_spec(),
-            session_handler(shell.clone(), run_bash_stdin),
+            stdin_spec(family),
+            session_handler(shell.clone(), run_stdin),
         )?);
         outcomes.push(registry.register(
-            bash_sessions_spec(),
-            session_handler(shell.clone(), run_bash_sessions),
+            sessions_spec(family),
+            session_handler(shell.clone(), run_sessions),
         )?);
         let log_shell = shell.clone();
         outcomes.push(registry.register(
-            bash_log_file_spec(),
+            log_file_spec(family),
             Arc::new(PolicyGuardedTool::new(
-                "bash_log_file",
+                family.tool_name("log_file"),
                 policy,
                 approval,
                 Arc::new(move |invocation| {
                     log_file_requirements(&log_shell, &invocation.arguments)
                 }),
-                session_handler(shell, run_bash_log_file),
+                session_handler(shell, run_log_file),
             )),
         )?);
         Ok(outcomes)
@@ -283,7 +534,11 @@ impl ShellTools {
             .map_err(|error| ToolError::Execution(error.to_string()))
     }
 
-    fn session_shell(&self, session_id: &str) -> Result<Arc<SessionShell>, ToolError> {
+    fn session_shell(
+        &self,
+        session_id: &str,
+        family: ShellFamily,
+    ) -> Result<Arc<SessionShell>, ToolError> {
         let mut sessions = self
             .sessions
             .lock()
@@ -292,6 +547,7 @@ impl ShellTools {
             .entry(session_id.to_owned())
             .or_insert_with(|| {
                 Arc::new(SessionShell {
+                    family,
                     terminals: TerminalManager::default(),
                     managed: Mutex::new(BTreeMap::new()),
                     log_root: self.vibe_home.join(LOG_DIRECTORY),
@@ -308,20 +564,12 @@ impl ShellTools {
     }
 }
 
-fn host_platform() -> Platform {
-    if cfg!(windows) {
-        Platform::Windows
-    } else {
-        Platform::Posix
-    }
-}
-
 // --------------------------------------------------------------------------
 // Specifications
 // --------------------------------------------------------------------------
 
-/// Directive coverage for `bash`, whose reference description this port must
-/// cover without reproducing (`NOTICE`).
+/// Directive coverage for a family's command tool, whose reference description
+/// this port must cover without reproducing (`NOTICE`).
 ///
 /// | Reference directive | Covered by |
 /// |---|---|
@@ -331,12 +579,23 @@ fn host_platform() -> Platform {
 /// | A command that needs approval is paused until the operator answers | "A command the policy does not allow outright waits for approval" |
 /// | The timeout is optional and bounded | the `timeout` description |
 /// | The managed variant can return a live session instead of waiting | the `background` description |
-fn bash_spec(managed: bool) -> ToolSpec {
-    let description = "Run one shell command in the working directory. Reach for read_file and \
-                       grep instead of cat and grep(1), quote every path that carries a space, and \
-                       expect that a command the policy does not allow outright waits for \
-                       approval before it runs."
-        .to_owned();
+/// | The Windows families name the shell they drive | the family sentence |
+///
+/// The legacy Windows variants publish the four overrides the POSIX one does
+/// not, because reference `GitBashArgs` and `WindowsShellArgs` carry them even
+/// though `BashArgs` does not.
+fn command_spec(family: ShellFamily, managed: bool) -> ToolSpec {
+    let description = format!(
+        "Run one {} command in the working directory. Reach for read_file and grep instead of cat \
+         and grep(1), quote every path that carries a space, and expect that a command the policy \
+         does not allow outright waits for approval before it runs.",
+        match family {
+            ShellFamily::Bash => "shell",
+            ShellFamily::GitBash => "Git Bash",
+            ShellFamily::PowerShell => "PowerShell",
+        }
+    );
+    let overrides = managed || family != ShellFamily::Bash;
     let mut schema = ObjectSchema::new().required(
         "command",
         Property::string().described(if managed {
@@ -357,13 +616,15 @@ fn bash_spec(managed: bool) -> ToolSpec {
             .nullable(),
     );
     if managed {
+        schema = schema.optional(
+            "background",
+            Property::boolean()
+                .described("Return a live session immediately instead of waiting for the exit")
+                .with_default(false),
+        );
+    }
+    if overrides {
         schema = schema
-            .optional(
-                "background",
-                Property::boolean()
-                    .described("Return a live session immediately instead of waiting for the exit")
-                    .with_default(false),
-            )
             .optional(
                 "timeout_seconds",
                 Property::number()
@@ -371,13 +632,18 @@ fn bash_spec(managed: bool) -> ToolSpec {
                     .described("How long to wait in the foreground before the session is left running or killed")
                     .with_default(Value::Null)
                     .nullable(),
-            )
-            .optional(
-                "hard_timeout",
-                Property::boolean()
-                    .described("Kill the process group when timeout_seconds expires instead of leaving the session running")
-                    .with_default(false),
-            )
+            );
+    }
+    if managed {
+        schema = schema.optional(
+            "hard_timeout",
+            Property::boolean()
+                .described("Kill the process group when timeout_seconds expires instead of leaving the session running")
+                .with_default(false),
+        );
+    }
+    if overrides {
+        schema = schema
             .optional(
                 "cwd",
                 Property::string()
@@ -401,7 +667,7 @@ fn bash_spec(managed: bool) -> ToolSpec {
             );
     }
     ToolSpec {
-        name: SESSION_PREFIX.to_owned(),
+        name: family.name().to_owned(),
         description,
         input_schema: schema.build(),
         output_schema: None,
@@ -421,20 +687,22 @@ fn bash_spec(managed: bool) -> ToolSpec {
     }
 }
 
-/// Directive coverage for `bash_output`.
+/// Directive coverage for a family's `_output` tool.
 ///
 /// | Reference directive | Covered by |
 /// |---|---|
-/// | Poll a running or finished session for its output | "Read what a bash session has written" |
+/// | Poll a running or finished session for its output | "Read what a session has written" |
 /// | Pass back the cursor to read only what is new | the `cursor` description |
 /// | Waiting is optional and bounded | the `wait_seconds` description |
 /// | A finished session still answers with its last output and status | "A session that has exited still answers" |
-fn bash_output_spec() -> ToolSpec {
+fn output_spec(family: ShellFamily) -> ToolSpec {
     ToolSpec {
-        name: "bash_output".to_owned(),
-        description: "Read what a bash session has written since a cursor. A session that has \
-                      exited still answers, with its final output and its exit status."
-            .to_owned(),
+        name: family.tool_name("output"),
+        description: format!(
+            "Read what a {} session has written since a cursor. A session that has exited still \
+             answers, with its final output and its exit status.",
+            family.name()
+        ),
         input_schema: ObjectSchema::new()
             .required("session_id", Property::string())
             .optional(
@@ -468,22 +736,23 @@ fn bash_output_spec() -> ToolSpec {
     }
 }
 
-/// Directive coverage for `bash_stdin`.
+/// Directive coverage for a family's `_stdin` tool.
 ///
 /// | Reference directive | Covered by |
 /// |---|---|
-/// | Feed a running session's standard input | "Write to a running bash session" |
+/// | Feed a running session's standard input | "Write to a running session" |
 /// | Text is sent verbatim, newline included | the `text` description |
 /// | Control keys are named rather than encoded | the `control` description |
 /// | Raw bytes travel as base64 | the `bytes_base64` description |
 /// | Exactly one of the three inputs is supplied | "Supply exactly one of text, control or bytes_base64" |
-fn bash_stdin_spec() -> ToolSpec {
+fn stdin_spec(family: ShellFamily) -> ToolSpec {
     ToolSpec {
-        name: "bash_stdin".to_owned(),
-        description: "Write to a running bash session. Supply exactly one of text, control or \
-                      bytes_base64; supplying none or several is refused rather than resolved by \
-                      precedence."
-            .to_owned(),
+        name: family.tool_name("stdin"),
+        description: format!(
+            "Write to a running {} session. Supply exactly one of text, control or bytes_base64; \
+             supplying none or several is refused rather than resolved by precedence.",
+            family.name()
+        ),
         input_schema: ObjectSchema::new()
             .required("session_id", Property::string())
             .optional(
@@ -519,7 +788,7 @@ fn bash_stdin_spec() -> ToolSpec {
     }
 }
 
-/// Directive coverage for `bash_sessions`.
+/// Directive coverage for a family's `_sessions` tool.
 ///
 /// | Reference directive | Covered by |
 /// |---|---|
@@ -527,10 +796,10 @@ fn bash_stdin_spec() -> ToolSpec {
 /// | `inspect` and `kill` need a session id and act on that one session | the `action` and `session_id` descriptions |
 /// | `reset` stops every session in the family | the `action` description |
 /// | `clear_logs` only applies to `reset` | the `clear_logs` description |
-fn bash_sessions_spec() -> ToolSpec {
+fn sessions_spec(family: ShellFamily) -> ToolSpec {
     ToolSpec {
-        name: "bash_sessions".to_owned(),
-        description: "Inspect and stop bash sessions.".to_owned(),
+        name: family.tool_name("sessions"),
+        description: format!("Inspect and stop {} sessions.", family.name()),
         input_schema: ObjectSchema::new()
             .optional(
                 "action",
@@ -575,20 +844,22 @@ fn bash_sessions_spec() -> ToolSpec {
     }
 }
 
-/// Directive coverage for `bash_log_file`.
+/// Directive coverage for a family's `_log_file` tool.
 ///
 /// | Reference directive | Covered by |
 /// |---|---|
-/// | Read, write or append a file in the shell-tool directory | "Read, write or append a file the bash sessions keep" |
+/// | Read, write or append a file in the shell-tool directory | "Read, write or append a file the sessions keep" |
 /// | A session id names that session's own log | "session_id names that session's log" |
 /// | A relative path stays inside the shell-tool directory | "a relative path stays inside the session log directory" |
 /// | Reading resumes from an offset and is bounded | the `offset` and `max_bytes` descriptions |
-fn bash_log_file_spec() -> ToolSpec {
+fn log_file_spec(family: ShellFamily) -> ToolSpec {
     ToolSpec {
-        name: "bash_log_file".to_owned(),
-        description: "Read, write or append a file the bash sessions keep. session_id names that \
-                      session's log, and a relative path stays inside the session log directory."
-            .to_owned(),
+        name: family.tool_name("log_file"),
+        description: format!(
+            "Read, write or append a file the {} sessions keep. session_id names that session's \
+             log, and a relative path stays inside the session log directory.",
+            family.name()
+        ),
         input_schema: ObjectSchema::new()
             .required(
                 "action",
@@ -677,8 +948,9 @@ impl ToolHandler for ShellPolicyGuard {
     }
 }
 
-/// What one `bash` variant needs to reach a process under policy.
-struct BashWiring {
+/// What one command variant needs to reach a process under policy.
+struct CommandWiring {
+    family: ShellFamily,
     shell: Arc<SessionShell>,
     config: ShellConfig,
     working_directory: PathBuf,
@@ -688,8 +960,9 @@ struct BashWiring {
     managed: bool,
 }
 
-fn guarded_bash(wiring: BashWiring) -> Arc<dyn ToolHandler> {
-    let BashWiring {
+fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
+    let CommandWiring {
+        family,
         shell,
         config,
         working_directory,
@@ -698,11 +971,15 @@ fn guarded_bash(wiring: BashWiring) -> Arc<dyn ToolHandler> {
         approval,
         managed,
     } = wiring;
-    let inner = bash_handler(shell, config.clone(), working_directory.clone(), managed);
+    let inner = command_handler(shell, config.clone(), working_directory.clone(), managed);
+    // Reference `GitBashArgs` and `WindowsShellArgs` publish `cwd`, `shell` and
+    // `env` on the legacy variant too, so the Windows families answer for them
+    // whichever variant is selected.
+    let overrides = managed || family != ShellFamily::Bash;
     let requirement_root = working_directory.clone();
     let requirement_flavor = config.flavor;
     let guarded = Arc::new(PolicyGuardedTool::new(
-        SESSION_PREFIX,
+        family.name(),
         policy,
         approval,
         Arc::new(move |invocation: &ToolInvocation| {
@@ -724,7 +1001,7 @@ fn guarded_bash(wiring: BashWiring) -> Arc<dyn ToolHandler> {
             if requirements.is_empty() {
                 requirements.push(PermissionRequirement::Shell { command });
             }
-            if managed {
+            if overrides {
                 requirements.extend(override_requirements(
                     &invocation.arguments,
                     &requirement_root,
@@ -744,7 +1021,7 @@ fn guarded_bash(wiring: BashWiring) -> Arc<dyn ToolHandler> {
             // it runs, what interprets it and what it inherits, none of which
             // the analysis of the text can see. So a call carrying one stops
             // being allowed outright and reaches the operator instead.
-            if managed && !override_requirements(arguments, &analysis_root).is_empty() {
+            if overrides && !override_requirements(arguments, &analysis_root).is_empty() {
                 analysis.mode = analysis.mode.min(PermissionMode::Ask);
                 analysis.rationale.push(
                     "the call overrides the working directory, the shell or the environment"
@@ -895,7 +1172,7 @@ fn byte_limit(arguments: &Value, sink: &ToolOutputSink) -> usize {
 }
 
 // --------------------------------------------------------------------------
-// bash
+// The command tool
 // --------------------------------------------------------------------------
 
 /// Owns a terminal until the call gives it up.
@@ -941,7 +1218,7 @@ impl Drop for TerminalGuard {
     }
 }
 
-fn bash_handler(
+fn command_handler(
     shell: Arc<SessionShell>,
     config: ShellConfig,
     working_directory: PathBuf,
@@ -955,16 +1232,18 @@ fn bash_handler(
             let arguments = invocation.arguments.clone();
             Box::pin(async move {
                 if managed {
-                    run_managed_bash(&shell, &config, &working_directory, &arguments, &output).await
+                    run_managed_command(&shell, &config, &working_directory, &arguments, &output)
+                        .await
                 } else {
-                    run_legacy_bash(&shell, &config, &working_directory, &arguments, &output).await
+                    run_legacy_command(&shell, &config, &working_directory, &arguments, &output)
+                        .await
                 }
             })
         },
     )
 }
 
-async fn run_legacy_bash(
+async fn run_legacy_command(
     shell: &SessionShell,
     config: &ShellConfig,
     working_directory: &Path,
@@ -975,7 +1254,13 @@ async fn run_legacy_bash(
     let timeout = timeout_argument(arguments);
     let terminal_id = shell
         .terminals
-        .run(process_spec(config, working_directory, &command, None))
+        .run(process_spec(
+            shell.family,
+            config,
+            working_directory,
+            &command,
+            None,
+        ))
         .await
         .map_err(process_error)?;
     let mut guard = TerminalGuard::new(shell.terminals.clone(), terminal_id.clone());
@@ -1042,6 +1327,7 @@ async fn run_legacy_bash(
 }
 
 fn process_spec(
+    family: ShellFamily,
     config: &ShellConfig,
     working_directory: &Path,
     command: &str,
@@ -1057,6 +1343,12 @@ fn process_spec(
     // Both streams share one budget in the reader, so the spec carries what the
     // two rendered streams may need together.
     spec.max_output_bytes = MAX_OUTPUT_BYTES.saturating_mul(2);
+    // The family's own variables go in first: the reference merges the call's
+    // overrides over them, so a call may still ask for a pager it will read.
+    for (key, value) in family.environment() {
+        spec.environment
+            .insert((*key).to_owned(), (*value).to_owned());
+    }
     if let Some(Value::Object(overrides)) = environment {
         for (key, value) in overrides {
             if let Some(value) = value.as_str() {
@@ -1089,7 +1381,75 @@ fn render_stream(chunks: &[ProcessChunk], stream: ProcessStream, limit: usize) -
     }
     let truncated = bytes.len() > limit;
     bytes.truncate(limit);
-    (String::from_utf8_lossy(&bytes).into_owned(), truncated)
+    (decode_output(&bytes), truncated)
+}
+
+/// Decodes captured console output the way reference `decode_safe` does for a
+/// subprocess: a byte-order mark decides the codec, and anything unmarked is
+/// read as UTF-8 with replacement.
+///
+/// PowerShell emits UTF-16 often enough that this is the difference between
+/// text and a string of interleaved NULs, so a stream that carries no mark but
+/// is plainly UTF-16 is decoded as such too. That is what charset detection
+/// buys the reference, narrowed here to the one encoding a Windows shell
+/// actually produces.
+fn decode_output(bytes: &[u8]) -> String {
+    if let Some(body) = bytes.strip_prefix(b"\xef\xbb\xbf") {
+        return String::from_utf8_lossy(body).into_owned();
+    }
+    if let Some(body) = bytes.strip_prefix(b"\xff\xfe") {
+        return decode_utf16(body, true);
+    }
+    if let Some(body) = bytes.strip_prefix(b"\xfe\xff") {
+        return decode_utf16(body, false);
+    }
+    match utf16_endianness(bytes) {
+        Some(little_endian) => decode_utf16(bytes, little_endian),
+        None => String::from_utf8_lossy(bytes).into_owned(),
+    }
+}
+
+fn decode_utf16(bytes: &[u8], little_endian: bool) -> String {
+    let units = bytes.chunks_exact(2).map(|pair| {
+        let (low, high) = (pair.first().copied(), pair.get(1).copied());
+        let pair = [low.unwrap_or(0), high.unwrap_or(0)];
+        if little_endian {
+            u16::from_le_bytes(pair)
+        } else {
+            u16::from_be_bytes(pair)
+        }
+    });
+    char::decode_utf16(units)
+        .map(|unit| unit.unwrap_or(char::REPLACEMENT_CHARACTER))
+        .collect()
+}
+
+/// Whether an unmarked stream is UTF-16, and in which order.
+///
+/// Text encoded in it leaves a NUL in every other byte, a shape UTF-8 output
+/// never has. Requiring the other parity to carry no NUL at all keeps binary
+/// output, which has them everywhere, from being read as text.
+fn utf16_endianness(bytes: &[u8]) -> Option<bool> {
+    let sampled = bytes.len().min(512) & !1;
+    if sampled < 4 {
+        return None;
+    }
+    let (mut trailing, mut leading) = (0_usize, 0_usize);
+    for (index, byte) in bytes.iter().take(sampled).enumerate() {
+        if *byte == 0 {
+            if index.is_multiple_of(2) {
+                leading += 1;
+            } else {
+                trailing += 1;
+            }
+        }
+    }
+    let expected = sampled / 2;
+    let threshold = expected - expected / 4;
+    if trailing >= threshold && leading == 0 {
+        return Some(true);
+    }
+    (leading >= threshold && trailing == 0).then_some(false)
 }
 
 // --------------------------------------------------------------------------
@@ -1170,7 +1530,7 @@ impl ManagedSession {
     }
 }
 
-async fn run_managed_bash(
+async fn run_managed_command(
     shell: &SessionShell,
     config: &ShellConfig,
     working_directory: &Path,
@@ -1180,12 +1540,17 @@ async fn run_managed_bash(
     let command = command_argument(arguments)?;
     let requested_directory = string_argument(arguments, "cwd")
         .map_or_else(|| working_directory.to_path_buf(), PathBuf::from);
-    let executable = string_argument(arguments, "shell")
-        .map_or_else(|| config.executable.clone(), PathBuf::from);
-    let config = ShellConfig {
-        executable,
-        ..config.clone()
-    };
+    let mut config = config.clone();
+    if let Some(executable) = string_argument(arguments, "shell") {
+        config.executable = PathBuf::from(executable);
+        // Reference `build_windows_shell_argv` derives the argument form from
+        // the executable it was handed, so an override carries its own flags
+        // rather than the ones the family resolved. The POSIX family has no
+        // such rule: its arguments stay whatever the session resolved.
+        if shell.family != ShellFamily::Bash {
+            config.arguments = windows_shell_arguments(&config.executable);
+        }
+    }
     let session = start_managed_session(
         shell,
         &config,
@@ -1208,7 +1573,7 @@ async fn run_managed_bash(
     if session.is_running() {
         if !hard_timeout {
             // A soft timeout leaves the session running: the model polls it
-            // with `bash_output` instead of losing the work.
+            // with the family's output tool instead of losing the work.
             return managed_output(&session, 0, byte_limit(arguments, output));
         }
         kill_managed_session(shell, &session, SessionStatus::TimedOut).await?;
@@ -1250,7 +1615,7 @@ async fn start_managed_session(
             sessions_directory.display()
         ))
     })?;
-    let id = new_session_id();
+    let id = new_session_id(shell.family);
     let log_path = sessions_directory.join(format!("{id}.log"));
     std::fs::write(&log_path, b"").map_err(|error| {
         ToolError::Execution(format!(
@@ -1261,6 +1626,7 @@ async fn start_managed_session(
     let terminal_id = shell
         .terminals
         .run(process_spec(
+            shell.family,
             config,
             working_directory,
             command,
@@ -1298,7 +1664,7 @@ async fn start_managed_session(
 ///
 /// The terminal queue is bounded, so nothing but a reader draining it keeps a
 /// chatty background command from losing output. The log is the cursor's source
-/// of truth, which is what lets `bash_output` and `bash_log_file` answer for a
+/// of truth, which is what lets the output and log-file tools answer for a
 /// session long after it exited.
 fn spawn_pump(terminals: TerminalManager, session: Arc<ManagedSession>) {
     if tokio::runtime::Handle::try_current().is_err() {
@@ -1355,7 +1721,12 @@ fn append_chunks(session: &ManagedSession, chunks: &[ProcessChunk], dropped: boo
     }
 }
 
-fn new_session_id() -> String {
+/// A session id for `family`.
+///
+/// Reference `TerminalSessionManager.session_prefix` is per family, and the
+/// families share one session directory, so the prefix is what keeps one
+/// family's tools from reading, feeding or killing another's session.
+fn new_session_id(family: ShellFamily) -> String {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|since| since.as_millis())
@@ -1367,7 +1738,8 @@ fn new_session_id() -> String {
         suffix = (stamp as u32).to_le_bytes();
     }
     format!(
-        "{SESSION_PREFIX}_{stamp}_{}",
+        "{}_{stamp}_{}",
+        family.name(),
         suffix
             .iter()
             .map(|byte| format!("{byte:02x}"))
@@ -1467,11 +1839,7 @@ fn read_file_window(
     })?;
     buffer.truncate(read);
     let next_cursor = cursor.saturating_add(read as u64);
-    Ok((
-        String::from_utf8_lossy(&buffer).into_owned(),
-        next_cursor,
-        size > next_cursor,
-    ))
+    Ok((decode_output(&buffer), next_cursor, size > next_cursor))
 }
 
 async fn kill_managed_session(
@@ -1495,10 +1863,10 @@ async fn kill_managed_session(
 }
 
 // --------------------------------------------------------------------------
-// bash_output, bash_stdin, bash_sessions, bash_log_file
+// <family>_output, _stdin, _sessions and _log_file
 // --------------------------------------------------------------------------
 
-async fn run_bash_output(
+async fn run_output(
     shell: Arc<SessionShell>,
     arguments: Value,
     output: ToolOutputSink,
@@ -1526,7 +1894,7 @@ fn log_size(path: &Path) -> u64 {
         .unwrap_or_default()
 }
 
-async fn run_bash_stdin(
+async fn run_stdin(
     shell: Arc<SessionShell>,
     arguments: Value,
     _output: ToolOutputSink,
@@ -1560,7 +1928,7 @@ async fn run_bash_stdin(
     })
 }
 
-/// The bytes one `bash_stdin` call writes.
+/// The bytes one stdin call writes.
 ///
 /// The reference model accepts exactly one of the three inputs and rejects
 /// anything else, so there is no precedence to apply.
@@ -1606,7 +1974,7 @@ fn stdin_bytes(arguments: &Value) -> Result<Vec<u8>, ToolError> {
         })
 }
 
-async fn run_bash_sessions(
+async fn run_sessions(
     shell: Arc<SessionShell>,
     arguments: Value,
     output: ToolOutputSink,
@@ -1621,8 +1989,11 @@ async fn run_bash_sessions(
                 .map(|session| session.info())
                 .collect::<Vec<_>>();
             Ok(ToolExecutionOutput {
-                model_text: format!("{} bash sessions", infos.len()),
-                display: json!({"kind": "shell", "command": "bash_sessions list"}),
+                model_text: format!("{} {} sessions", infos.len(), shell.family.name()),
+                display: json!({
+                    "kind": "shell",
+                    "command": shell.family.tool_name("sessions list"),
+                }),
                 typed_result: json!({"action": "list", "sessions": infos}),
                 chunks: Vec::new(),
             })
@@ -1675,14 +2046,18 @@ async fn run_bash_sessions(
                 }
             }
             Ok(ToolExecutionOutput {
-                model_text: format!("Stopped {} bash sessions", killed.len()),
-                display: json!({"kind": "shell", "command": "bash_sessions reset"}),
+                model_text: format!("Stopped {} {} sessions", killed.len(), shell.family.name()),
+                display: json!({
+                    "kind": "shell",
+                    "command": shell.family.tool_name("sessions reset"),
+                }),
                 typed_result: json!({"action": "reset", "sessions": killed}),
                 chunks: Vec::new(),
             })
         }
         other => Err(ToolError::Execution(format!(
-            "unknown bash_sessions action `{other}`; use `list`, `inspect`, `kill` or `reset`"
+            "unknown {} action `{other}`; use `list`, `inspect`, `kill` or `reset`",
+            shell.family.tool_name("sessions")
         ))),
     }
 }
@@ -1701,7 +2076,7 @@ async fn required_session(
     managed_session(shell, session_id).await
 }
 
-async fn run_bash_log_file(
+async fn run_log_file(
     shell: Arc<SessionShell>,
     arguments: Value,
     output: ToolOutputSink,
@@ -1715,7 +2090,10 @@ async fn run_bash_log_file(
             let (content, next_cursor, truncated) = read_file_window(&path, offset, limit)?;
             Ok(ToolExecutionOutput {
                 model_text: content.clone(),
-                display: json!({"kind": "shell", "command": "bash_log_file read"}),
+                display: json!({
+                    "kind": "shell",
+                    "command": shell.family.tool_name("log_file read"),
+                }),
                 typed_result: json!({
                     "action": "read",
                     "path": path.to_string_lossy(),
@@ -1751,7 +2129,10 @@ async fn run_bash_log_file(
             })?;
             Ok(ToolExecutionOutput {
                 model_text: format!("Wrote {} bytes to {}", content.len(), path.display()),
-                display: json!({"kind": "shell", "command": format!("bash_log_file {action}")}),
+                display: json!({
+                    "kind": "shell",
+                    "command": shell.family.tool_name(&format!("log_file {action}")),
+                }),
                 typed_result: json!({
                     "action": action,
                     "path": path.to_string_lossy(),
@@ -1761,12 +2142,13 @@ async fn run_bash_log_file(
             })
         }
         other => Err(ToolError::Execution(format!(
-            "unknown bash_log_file action `{other}`; use `read`, `write` or `append`"
+            "unknown {} action `{other}`; use `read`, `write` or `append`",
+            shell.family.tool_name("log_file")
         ))),
     }
 }
 
-/// The file a `bash_log_file` call addresses.
+/// The file a `<family>_log_file` call addresses.
 ///
 /// A session id resolves to that session's own log. A relative path is joined
 /// to the shell-tool directory and refused before any filesystem access when it
@@ -1775,9 +2157,10 @@ fn resolve_log_path(shell: &SessionShell, arguments: &Value) -> Result<PathBuf, 
     if let Some(session_id) = string_argument(arguments, "session_id") {
         // A session id names a file inside the session directory, so it is held
         // to the same rule as a relative path: one component, this family's.
-        if !is_family_session_id(session_id) {
+        if !is_family_session_id(shell.family, session_id) {
             return Err(ToolError::Execution(format!(
-                "the log path must name a {SESSION_PREFIX} session file"
+                "the log path must name a {} session file",
+                shell.family.name()
             )));
         }
         return Ok(shell.sessions_directory().join(format!("{session_id}.log")));
@@ -1805,21 +2188,22 @@ fn resolve_log_path(shell: &SessionShell, arguments: &Value) -> Result<PathBuf, 
             .file_name()
             .and_then(|name| name.to_str())
             .and_then(|name| name.strip_suffix(".log"))
-            .is_some_and(is_family_session_id)
+            .is_some_and(|name| is_family_session_id(shell.family, name))
     {
         return Err(ToolError::Execution(format!(
-            "the log path must name a {SESSION_PREFIX} session file"
+            "the log path must name a {} session file",
+            shell.family.name()
         )));
     }
     Ok(resolved)
 }
 
-/// Whether `candidate` is one plain name belonging to this shell family.
-fn is_family_session_id(candidate: &str) -> bool {
+/// Whether `candidate` is one plain name belonging to `family`.
+fn is_family_session_id(family: ShellFamily, candidate: &str) -> bool {
     let mut components = Path::new(candidate).components();
     matches!(components.next(), Some(Component::Normal(_)))
         && components.next().is_none()
-        && candidate.starts_with(&format!("{SESSION_PREFIX}_"))
+        && candidate.starts_with(&format!("{}_", family.name()))
 }
 
 async fn refuse_live_session_log(shell: &SessionShell, path: &Path) -> Result<(), ToolError> {
@@ -1828,10 +2212,10 @@ async fn refuse_live_session_log(shell: &SessionShell, path: &Path) -> Result<()
         .values()
         .any(|session| session.log_path == path && session.is_running())
     {
-        return Err(ToolError::Execution(
-            "a live session log cannot be written; use bash_stdin or wait for the session to exit"
-                .to_owned(),
-        ));
+        return Err(ToolError::Execution(format!(
+            "a live session log cannot be written; use {} or wait for the session to exit",
+            shell.family.tool_name("stdin")
+        )));
     }
     Ok(())
 }
