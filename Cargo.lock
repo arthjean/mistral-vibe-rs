@@ -3801,6 +3801,7 @@ dependencies = [
 name = "vibe-core"
 version = "2.23.1"
 dependencies = [
+ "base64 0.23.0",
  "cap-std",
  "command-group",
  "fs2",
