@@ -14,11 +14,12 @@ use serde_json::{Value, json};
 use thiserror::Error;
 
 use crate::policy::{ApprovalAgent, PermissionRequirement, PermissionStore, PolicyGuardedTool};
+use crate::schema::{ObjectSchema, Property};
 use crate::text::matches_wildcard;
 use crate::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolError, ToolExecutionOutput,
     ToolHandler, ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource,
-    ToolSpec, object_schema,
+    ToolSpec,
 };
 
 mod review;
@@ -818,13 +819,10 @@ fn read_spec() -> ToolSpec {
     ToolSpec {
         name: "read".to_owned(),
         description: "Read a bounded UTF-8 workspace file".to_owned(),
-        input_schema: object_schema(
-            [
-                ("path", json!({"type": "string"})),
-                ("startLine", json!({"type": "integer"})),
-            ],
-            ["path"],
-        ),
+        input_schema: ObjectSchema::new()
+            .required("path", Property::string())
+            .optional("startLine", Property::integer())
+            .build(),
         output_schema: None,
         config: json!({"maxBytes": DEFAULT_MAX_READ_BYTES, "maxLines": DEFAULT_MAX_LINES}),
         state: Value::Null,
@@ -839,13 +837,10 @@ fn search_spec() -> ToolSpec {
     ToolSpec {
         name: "search".to_owned(),
         description: "Search bounded workspace text".to_owned(),
-        input_schema: object_schema(
-            [
-                ("pattern", json!({"type": "string"})),
-                ("regex", json!({"type": "boolean"})),
-            ],
-            ["pattern"],
-        ),
+        input_schema: ObjectSchema::new()
+            .required("pattern", Property::string())
+            .optional("regex", Property::boolean().with_default(false))
+            .build(),
         output_schema: None,
         config: json!({"maxMatches": 500}),
         state: Value::Null,
@@ -860,15 +855,12 @@ fn edit_spec() -> ToolSpec {
     ToolSpec {
         name: "edit".to_owned(),
         description: "Atomically edit one uniquely matched text span".to_owned(),
-        input_schema: object_schema(
-            [
-                ("path", json!({"type": "string"})),
-                ("oldText", json!({"type": "string"})),
-                ("newText", json!({"type": "string"})),
-                ("replaceAll", json!({"type": "boolean"})),
-            ],
-            ["path", "oldText", "newText"],
-        ),
+        input_schema: ObjectSchema::new()
+            .required("path", Property::string())
+            .required("oldText", Property::string())
+            .required("newText", Property::string())
+            .optional("replaceAll", Property::boolean().with_default(false))
+            .build(),
         output_schema: None,
         config: Value::Null,
         state: Value::Null,

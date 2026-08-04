@@ -1300,7 +1300,7 @@ impl InProcessClient {
     }
 }
 
-enum InteractiveCallbackRequest {
+pub(crate) enum InteractiveCallbackRequest {
     Approval {
         session_id: String,
         request: ApprovalRequest,
@@ -1372,9 +1372,9 @@ impl ApprovalAgent for InteractiveApprovalAgent {
     }
 }
 
-struct InteractiveSessionToolFactory {
-    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
-    plan_directory: Option<PathBuf>,
+pub(crate) struct InteractiveSessionToolFactory {
+    pub(crate) sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+    pub(crate) plan_directory: Option<PathBuf>,
 }
 
 impl SessionToolFactory for InteractiveSessionToolFactory {
@@ -4000,9 +4000,9 @@ mod tests {
     use crate::server::SessionStatus;
     use vibe_core::events::ModelToolCall;
     use vibe_core::provider::{AssistantMessage, ImageInput, Usage};
+    use vibe_core::schema::{ObjectSchema, Property};
     use vibe_core::tools::{
         ToolAvailability, ToolExecutionOutput, ToolPresentationKind, ToolSource, ToolSpec,
-        object_schema,
     };
 
     use super::*;
@@ -5173,10 +5173,9 @@ command = "/must-not-run"
                 ToolSpec {
                     name: "mcp_fixture_echo".to_owned(),
                     description: "Echo through MCP".to_owned(),
-                    input_schema: object_schema(
-                        [("message", json!({"type": "string"}))],
-                        ["message"],
-                    ),
+                    input_schema: ObjectSchema::new()
+                        .required("message", Property::string())
+                        .build(),
                     output_schema: None,
                     config: Value::Null,
                     state: Value::Null,
@@ -5242,10 +5241,9 @@ command = "/must-not-run"
                 ToolSpec {
                     name: "mcp_fixture_echo".to_owned(),
                     description: "Echo through MCP".to_owned(),
-                    input_schema: object_schema(
-                        [("message", json!({"type": "string"}))],
-                        ["message"],
-                    ),
+                    input_schema: ObjectSchema::new()
+                        .required("message", Property::string())
+                        .build(),
                     output_schema: None,
                     config: Value::Null,
                     state: Value::Null,
