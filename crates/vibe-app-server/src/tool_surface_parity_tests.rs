@@ -22,12 +22,14 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
+use secrecy::SecretString;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore,
     TrustDecision, TrustRootKind,
 };
+use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
 use vibe_core::tools::{ToolError, ToolRegistry, ToolSpec, validate_arguments};
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 
@@ -192,10 +194,15 @@ impl ApprovalAgent for RejectApproval {
     }
 }
 
-/// The tool definitions a real interactive session publishes: the workspace
-/// tools registered by the server plus the interactive tools its surface
-/// extension adds.
-async fn published_specs() -> Vec<ToolSpec> {
+/// The tool definitions a real interactive session publishes: the universal
+/// builtins and the workspace tools the server registers, the interactive tools
+/// its surface extension adds.
+///
+/// `web_search` is conditional on a Mistral key resolving, so it registers here
+/// exactly when the corpus recorded the reference publishing it. The
+/// availability rule itself is proven by a unit test, because the oracle can
+/// only compare the two surfaces under one configuration at a time.
+async fn published_specs(web_search: bool) -> Vec<ToolSpec> {
     let directory = tempfile::tempdir().expect("tempdir");
     let workspace = Arc::new(Workspace::open(directory.path()).expect("workspace"));
     let review = Arc::new(ReviewManager::new(workspace.clone()));
@@ -209,6 +216,21 @@ async fn published_specs() -> Vec<ToolSpec> {
         .await
         .expect("trust");
     let registry = ToolRegistry::default();
+    let access = web_search.then(|| WebSearchAccess {
+        endpoint: WebSearchAccess::DEFAULT_ENDPOINT.to_owned(),
+        model: WebSearchAccess::DEFAULT_MODEL.to_owned(),
+        api_key: SecretString::from("probe"),
+    });
+    BuiltinTools::new(directory.path(), access)
+        .register(
+            "session-1",
+            directory.path(),
+            true,
+            &registry,
+            policy.clone(),
+            Arc::new(RejectApproval),
+        )
+        .expect("universal tools register");
     WorkspaceTools::new(workspace, review)
         .register(&registry, policy, Arc::new(RejectApproval))
         .expect("workspace tools register");
@@ -298,13 +320,13 @@ async fn the_published_tool_surface_matches_the_reference_except_for_the_recorde
     let Some(corpus) = corpus() else {
         return;
     };
-    let published = published_specs().await;
-
     let reference_names = corpus
         .tools
         .iter()
         .map(|tool| tool.name.clone())
         .collect::<BTreeSet<_>>();
+    let published = published_specs(reference_names.contains("web_search")).await;
+
     let published_names = published
         .iter()
         .map(|spec| spec.name.clone())

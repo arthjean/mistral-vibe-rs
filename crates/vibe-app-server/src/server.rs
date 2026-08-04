@@ -14,7 +14,7 @@ use callbacks::*;
 use projection::*;
 use registry::SessionRegistry;
 
-use crate::host::now_millis;
+use crate::host::{now_millis, vibe_home};
 use crate::release3::{RELEASE3_METHODS, Release3Error, Release3Service, RuntimeAttachment};
 use crate::release4::{
     LoopFire, RELEASE4_METHODS, Release4Dispatch, Release4Error, Release4Service,
@@ -42,6 +42,7 @@ pub use vibe_core::policy::{
 };
 use vibe_core::policy::{PermissionRule, PermissionStore, TrustDecision, TrustRootKind};
 use vibe_core::storage::HydratedSession;
+pub use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
 pub use vibe_core::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolInvocation,
     ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
@@ -290,6 +291,7 @@ pub struct AppServer {
     release4: Arc<Release4Service>,
     approval_factory: Arc<dyn ApprovalAgentFactory>,
     session_tool_factory: Arc<dyn SessionToolFactory>,
+    builtin_tools: Arc<BuiltinTools>,
     next_session: Arc<AtomicU64>,
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
@@ -306,6 +308,14 @@ impl Default for AppServer {
             release4: Arc::new(Release4Service::default()),
             approval_factory: Arc::new(DefaultApprovalFactory),
             session_tool_factory: Arc::new(NoAdditionalTools),
+            // The reference resolves the web-search key from the environment or
+            // the OS keyring. Only the environment branch is reachable from
+            // here; a client holding a keyring credential installs it with
+            // [`AppServer::using_web_search_access`].
+            builtin_tools: Arc::new(BuiltinTools::new(
+                vibe_home(),
+                WebSearchAccess::from_environment("MISTRAL_API_KEY"),
+            )),
             next_session: Arc::new(AtomicU64::new(1)),
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
@@ -360,6 +370,18 @@ impl AppServer {
             existing: self.session_tool_factory,
             additional: session_tool_factory,
         });
+        self
+    }
+
+    /// Installs the credential `web_search` reaches the endpoint with, or
+    /// withholds the tool when `None`.
+    ///
+    /// The reference publishes `web_search` only when a Mistral key resolves,
+    /// and a client that read its key from the OS keyring is the only party
+    /// that can hand it down.
+    #[must_use]
+    pub fn using_web_search_access(mut self, access: Option<WebSearchAccess>) -> Self {
+        self.builtin_tools = Arc::new(self.builtin_tools.as_ref().clone().with_web_search(access));
         self
     }
 
@@ -1385,7 +1407,10 @@ impl AppServer {
         .map_err(|error| ServerError::Resource(error.to_string()))
     }
 
-    /// Registers the workspace tool surface for a session root.
+    /// Registers the builtin tool surface for a session root.
+    ///
+    /// The universal tools need nothing from the filesystem root and register
+    /// first; the workspace family registers only when the root opens.
     ///
     /// Returns the review manager that owns the session's file checkpoints, or
     /// `None` when the root is not a usable workspace.
@@ -1398,18 +1423,26 @@ impl AppServer {
         intent: &SessionIntent,
         review: Option<Arc<ReviewManager>>,
     ) -> Result<Option<Arc<ReviewManager>>, ServerError> {
+        let approval =
+            self.approval_factory
+                .for_agent(session_id, intent.approval, intent.auto_approve);
+        self.builtin_tools
+            .register(
+                session_id,
+                Path::new(working_directory),
+                intent.trusted,
+                tools,
+                policy.clone(),
+                approval.clone(),
+            )
+            .map_err(|error| ServerError::Resource(error.to_string()))?;
         let Ok(workspace) = Workspace::open(working_directory) else {
             return Ok(None);
         };
         let workspace = Arc::new(workspace);
         let review = review.unwrap_or_else(|| Arc::new(ReviewManager::new(workspace.clone())));
         WorkspaceTools::new(workspace, review.clone())
-            .register(
-                tools,
-                policy.clone(),
-                self.approval_factory
-                    .for_agent(session_id, intent.approval, intent.auto_approve),
-            )
+            .register(tools, policy.clone(), approval)
             .map_err(|error| ServerError::Resource(error.to_string()))?;
         Ok(Some(review))
     }
@@ -5564,11 +5597,26 @@ mod tests {
 
         let tools =
             connection.dispatch(&request(3, "tools/list", json!({"sessionId": "session-1"})));
-        assert!(matches!(
-            decode_frame(&tools.outbound[0]).expect("tools response"),
-            Envelope::Success(SuccessResponse { result, .. })
-                if result["tools"].as_array().is_some_and(Vec::is_empty)
-        ));
+        // `/workspace` is not a usable root, so the file tools stay unregistered
+        // while the universal tools, which need no root, are still published.
+        let published = match decode_frame(&tools.outbound[0]).expect("tools response") {
+            Envelope::Success(SuccessResponse { result, .. }) => {
+                result["tools"].as_array().map(|published| {
+                    published
+                        .iter()
+                        .filter_map(|tool| tool["name"].as_str().map(ToOwned::to_owned))
+                        .collect::<BTreeSet<_>>()
+                })
+            }
+            _ => None,
+        }
+        .expect("tools/list answers with the published names");
+        for universal in ["skill", "todo", "web_fetch"] {
+            assert!(published.contains(universal), "{published:?}");
+        }
+        for workspace_tool in ["edit", "grep", "read_file", "write_file"] {
+            assert!(!published.contains(workspace_tool), "{published:?}");
+        }
 
         let add = connection.dispatch(&request(
             4,

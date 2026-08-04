@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Publish the reference tools that need no shell in every session: `todo`
+  keeps the session task list the transcript renders, `skill` loads a
+  discovered skill and names the available ones when it cannot, `web_fetch`
+  retrieves a page over http while refusing other schemes, bounding redirects
+  at five hops and truncating a long body, and `web_search` answers from live
+  results whenever a Mistral API key resolves.
 - Add `write_file`, which creates a file and the parent directories it needs
   and refuses to overwrite an existing one, naming `edit` instead.
 - Rename the file tools to their reference names: `read_file` replaces `read`
