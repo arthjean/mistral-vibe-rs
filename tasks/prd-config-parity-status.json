@@ -41,10 +41,10 @@
     {
       "id": "EP-022",
       "title": "MCP Configuration Completeness",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3
     },
     {
       "id": "EP-023",
@@ -240,37 +240,37 @@
       "id": "US-074",
       "title": "Normalize and deduplicate MCP server URLs",
       "epic": "EP-022",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": ["US-063"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-075",
       "title": "Derive and deduplicate MCP server names",
       "epic": "EP-022",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": ["US-074"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-076",
       "title": "Accept every MCP transport and auth form",
       "epic": "EP-022",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": ["US-075"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-077",
