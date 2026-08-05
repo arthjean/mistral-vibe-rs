@@ -1,5 +1,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+#[cfg(test)]
+mod app_server_surface_parity_tests;
 mod builtin_agents;
 pub mod client;
 mod host;

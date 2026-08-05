@@ -39,3 +39,10 @@ jobs:
       - name: Configuration-surface conformance
         run: |
           cargo +stable test -p vibe-core --all-features -- --nocapture config::surface_parity_tests config::mcp_parity_tests
+      # And for the app-server wire surface: the committed corpus is the target,
+      # and a method, notification or response field arriving without one fails
+      # here naming what is unmeasured. Rerun with output shown so the per-family
+      # conforming counts land in the job log.
+      - name: App-server-surface conformance
+        run: |
+          cargo +stable test -p vibe-app-server --all-features app_server_surface_parity_tests -- --nocapture

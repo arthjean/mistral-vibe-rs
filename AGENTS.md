@@ -31,10 +31,11 @@ PRD at commit `68ff32e6a92e80a874c8153312f0aa8ae4955477`. Never write to it. Its
 location is machine-dependent: `C:\dev\mistral-vibe` on Windows and
 `/home/arthur/dev/mistral-vibe` on Linux. The parity scripts default to the Linux
 path and read `VIBE_REFERENCE` as an override, with `--reference` winning over
-both. Among the Rust parity tests only the configuration one reads
-`VIBE_REFERENCE` (`crates/vibe-core/src/config/surface_parity_tests.rs:39`); the
-others still hardcode the Linux path, so their live probe skips on Windows. A new
-parity test reads the variable. Reference paths written in PRDs and comments use
+both. Among the Rust parity tests the configuration one
+(`crates/vibe-core/src/config/surface_parity_tests.rs:39`) and the app-server
+surface one (`crates/vibe-app-server/src/app_server_surface_parity_tests.rs:48`)
+read `VIBE_REFERENCE`; the others still hardcode the Linux path, so their live
+probe skips on Windows. A new parity test reads the variable. Reference paths written in PRDs and comments use
 the Linux form as the canonical spelling; read them relative to whichever checkout
 is local.
 
