@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- Find the project configuration from anywhere inside a repository. The walk
+  starts at the working directory and climbs one parent at a time, taking the
+  nearest `.vibe/config.toml` and stopping before the directory that holds the
+  vibe home, so opening the agent three levels down no longer silently drops the
+  repository's configuration. A discovered file in an untrusted directory is
+  still ignored, and a write with nothing discovered still lands in the working
+  directory's own file.
+- Resolve which configuration sources a session reads and writes. Both the user
+  file and the project file are open by default; a session that opens only the
+  project source refuses a user write, and one that resolves to neither keeps
+  its selection in memory, where writes succeed without reaching disk.
+  Directories opened alongside the working directory are absolutized and
+  deduplicated, and each one is a project root of its own: its `.vibe` extension
+  directories, commands and `hooks.toml` are discovered, ahead of the
+  user-level file.
+- Read `~/.vibe/.env` at startup. An API key kept there is now visible to this
+  binary and to the `VIBE_*` configuration layer, with an exported value winning
+  over the file, an empty value ignored, a FIFO accepted in place of a regular
+  file, and a malformed line skipped without echoing anything it carried. Unlike
+  the reference the process environment itself is not mutated, which Rust
+  forbids here; every reader resolves through the file instead.
+- Bring an older configuration file forward at startup. The bash allowlist gains
+  `find` and loses trailing wildcards, the default read-only commands are
+  unioned in once and recorded in `applied_migrations`, a `devstral-2` model is
+  renamed to `mistral-medium-3.5` with its pricing and thinking level and any
+  `active_model` pointing at it is repointed, and settings under the old `read`
+  and `search_replace` tool names move to `read_file` and `edit` without
+  clobbering a key you already configured. An untrusted or unwritable file is
+  left alone and the load still succeeds, with the reason readable in the
+  configuration's validation warnings.
 - Write configuration through `config/patch`. A client addresses a field by JSON
   Pointer, with `set` and `remove`, and the server decides which file backs it:
   an operation naming no `targetLayer` lands in the file the current selection
