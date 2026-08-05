@@ -243,11 +243,11 @@ fn replay(scenario: &Scenario) {
         scenario.name
     );
 
-    let effective = config
+    let snapshot = config
         .load()
-        .unwrap_or_else(|error| panic!("{}: {error}", scenario.name))
-        .effective;
-    let actual = serde_json::to_value(&effective).expect("effective document serializes");
+        .unwrap_or_else(|error| panic!("{}: {error}", scenario.name));
+    let effective = &snapshot.effective;
+    let actual = serde_json::to_value(effective).expect("effective document serializes");
 
     for (key, expected) in &scenario.merged {
         // TOML has no null, so a field the reference merged to `None` is absent
@@ -286,13 +286,9 @@ fn replay(scenario: &Scenario) {
         scenario.name
     );
 
-    let dropped = effective
-        .keys()
-        .filter(|key| registry::field(key).is_none())
-        .cloned()
-        .collect::<Vec<_>>();
     assert_eq!(
-        dropped, scenario.dropped_keys,
+        snapshot.unregistered_keys(),
+        scenario.dropped_keys,
         "{}: the keys the reference drops and this port preserves changed",
         scenario.name
     );

@@ -154,6 +154,22 @@ impl ConfigSnapshot {
             .unwrap_or(JsonValue::Null)
     }
 
+    /// The effective keys [`registry::FIELDS`] does not declare, in document
+    /// order.
+    ///
+    /// The reference merge drops a key its schema does not know; this port keeps
+    /// it, so a key persisted by a newer client survives a round trip through
+    /// this one. This accessor is how that set is reported rather than silently
+    /// carried.
+    #[must_use]
+    pub fn unregistered_keys(&self) -> Vec<&str> {
+        self.effective
+            .keys()
+            .map(String::as_str)
+            .filter(|key| registry::field(key).is_none())
+            .collect()
+    }
+
     /// The `enabled_tools` allowlist the configuration carries.
     ///
     /// Reference `VibeConfigSchema.enabled_tools`: when it holds an entry, only

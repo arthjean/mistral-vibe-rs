@@ -7,6 +7,10 @@ use super::*;
 
 /// Composes `documents` as successive layers of a real load, lowest first.
 fn compose(documents: &[&str]) -> Result<Table, ConfigError> {
+    compose_snapshot(documents).map(|snapshot| snapshot.effective)
+}
+
+fn compose_snapshot(documents: &[&str]) -> Result<ConfigSnapshot, ConfigError> {
     let temporary = tempfile::tempdir().expect("temporary root");
     let home = temporary.path().join("home/.vibe");
     let project = temporary.path().join("project");
@@ -35,7 +39,7 @@ fn compose(documents: &[&str]) -> Result<Table, ConfigError> {
         config.runtime = document.parse().expect("fixture TOML");
     }
     assert!(layers.next().is_none(), "compose accepts four layers");
-    config.load().map(|snapshot| snapshot.effective)
+    config.load()
 }
 
 fn strings(table: &Table, key: &str) -> Vec<String> {
@@ -264,15 +268,10 @@ disabled = true
 
 #[test]
 fn an_unregistered_key_survives_the_merge_and_is_reported_as_unregistered() {
-    let effective =
-        compose(&["future_key = \"defaults\"", "future_key = \"user\""]).expect("layers compose");
-    assert_eq!(effective["future_key"].as_str(), Some("user"));
-    let unregistered = effective
-        .keys()
-        .filter(|key| registry::field(key).is_none())
-        .cloned()
-        .collect::<Vec<_>>();
-    assert_eq!(unregistered, ["future_key"]);
+    let snapshot = compose_snapshot(&["future_key = \"defaults\"", "future_key = \"user\""])
+        .expect("layers compose");
+    assert_eq!(snapshot.effective["future_key"].as_str(), Some("user"));
+    assert_eq!(snapshot.unregistered_keys(), ["future_key"]);
 }
 
 /// The reference coalesces a union field supplied by one layer alone straight
