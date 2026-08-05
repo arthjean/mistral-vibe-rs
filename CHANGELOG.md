@@ -13,8 +13,8 @@
   `enabled_tools` still replaces, as it does upstream. The provider, connector,
   MCP server, transcribe-model and TTS-model lists merge entry by entry, keyed by
   `name` or `alias`, so a higher layer redefining one entry no longer drops the
-  others, and an entry missing that key now fails the load naming the field and
-  the key rather than being silently kept.
+  others, and when two layers do combine such a list, an entry missing that key
+  fails the load naming the field and the key rather than being silently kept.
 - Type `VIBE_*` environment overrides by the field they target. A boolean field
   accepts the usual true and false spellings and rejects anything else, a
   numeric field rejects text, a string field keeps its value verbatim rather

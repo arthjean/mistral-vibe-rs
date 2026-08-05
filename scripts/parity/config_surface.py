@@ -354,6 +354,17 @@ disabled_tools = []
         ],
     },
     {
+        # One layer alone is coalesced through, so the merge key is never read
+        # and an entry without it still reaches the document.
+        "name": "union-single-layer-entry-without-its-merge-key",
+        "layers": [
+            (
+                "user",
+                '[[mcp_servers]]\ntransport = "stdio"\ncommand = "/usr/bin/nameless-mcp"\n',
+            ),
+        ],
+    },
+    {
         "name": "union-mcp-servers-distinct-names",
         "layers": [
             (

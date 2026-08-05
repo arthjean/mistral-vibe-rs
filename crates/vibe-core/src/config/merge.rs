@@ -87,11 +87,10 @@ fn merge_union(target: &mut Table, key: &str, value: &Value) -> Result<(), Confi
         return Ok(());
     };
     let Some(existing) = target.get(key).and_then(absent_if_empty_table) else {
-        // Validate the incoming entries even when nothing merges, so a missing
-        // merge key fails at the layer that introduced it.
-        for entry in entries(key, overlay, MergeStrategy::Union)? {
-            union_identity(key, entry)?;
-        }
+        // A single operand is coalesced through unkeyed, as the reference does:
+        // nothing is being combined, so an entry that carries no merge key
+        // reaches the consumer that rejects it by name instead of failing the
+        // whole configuration load.
         target.insert(key.to_owned(), overlay.clone());
         return Ok(());
     };

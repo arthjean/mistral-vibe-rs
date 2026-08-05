@@ -275,6 +275,21 @@ fn an_unregistered_key_survives_the_merge_and_is_reported_as_unregistered() {
     assert_eq!(unregistered, ["future_key"]);
 }
 
+/// The reference coalesces a union field supplied by one layer alone straight
+/// through, without ever keying its entries. Failing here instead would take a
+/// whole configuration down for an entry only the MCP reader rejects.
+#[test]
+fn a_single_layer_union_entry_without_its_merge_key_reaches_the_document() {
+    let effective = compose(&[
+        "theme = \"nord\"",
+        "[[mcp_servers]]\ntransport = \"stdio\"\ncommand = \"/usr/bin/nameless-mcp\"\n",
+    ])
+    .expect("a single-layer union field is coalesced through");
+    let entry = effective["mcp_servers"][0].as_table().expect("entry");
+    assert_eq!(entry["command"].as_str(), Some("/usr/bin/nameless-mcp"));
+    assert!(entry.get("name").is_none());
+}
+
 #[test]
 fn environment_overrides_are_typed_by_the_field_they_target() {
     let typed = environment_table(&BTreeMap::from([

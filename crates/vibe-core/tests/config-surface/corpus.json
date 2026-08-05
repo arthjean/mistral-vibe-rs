@@ -1024,6 +1024,24 @@
       "layers": [
         {
           "name": "user",
+          "toml": "[[mcp_servers]]\ntransport = \"stdio\"\ncommand = \"/usr/bin/nameless-mcp\"\n"
+        }
+      ],
+      "merged": {
+        "mcp_servers": [
+          {
+            "command": "/usr/bin/nameless-mcp",
+            "transport": "stdio"
+          }
+        ]
+      },
+      "name": "union-single-layer-entry-without-its-merge-key"
+    },
+    {
+      "droppedKeys": [],
+      "layers": [
+        {
+          "name": "user",
           "toml": "[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://mcp.example.test/rpc\"\n"
         },
         {
