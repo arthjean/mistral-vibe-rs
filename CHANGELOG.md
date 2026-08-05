@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- Start with the reference default configuration instead of an empty one. Every
+  key the reference declares now has its upstream default at every construction
+  site, so behavior you never configured matches between the two clients: the
+  two providers, the three models, the transcription and speech pairs, and every
+  scalar. Four defaults changed as a result. `theme` defaults to `auto` rather
+  than `system`, which resolves identically. `show_thinking_nodes` defaults to
+  off, so reasoning regions are hidden until you turn them on.
+  `autocopy_to_clipboard` defaults to on. `active_model` defaults to
+  `mistral-medium-3.5` instead of being unset. A value you already wrote still
+  wins over all of them.
+- Publish all 64 reference configuration keys through `config/schema`, up from
+  15, so the settings screen renders the full surface with its types, defaults,
+  choices and descriptions. The response now also carries a
+  `configSchemaVersion` token, so a client can cache the surface. The five keys
+  this port declares without an upstream counterpart (`thinking`,
+  `notifications`, `proxy`, `tls_ca_path`, `dotenv_path`) keep working under
+  their own names; they are recorded as divergences rather than mapped onto a
+  reference field, so nothing already on disk is reinterpreted.
+- Read models the way the reference does. A persisted `[[models]]` list is read
+  back keyed by alias, so overriding one model's temperature no longer erases
+  the others, and an entry that names neither an alias nor a name fails the load
+  naming the field. An entry that omits `name` or `provider` is completed from
+  the default model it overrides, a model that sets no compaction threshold
+  inherits the global `auto_compact_threshold`, and an `active_model` naming
+  nothing configured selects the first configured model and records a readable
+  warning instead of failing. A configuration that ends up with no model at all
+  fails the load. Writes still persist the `[[models]]` list form.
 - Merge each configuration key by the strategy the reference declares for it
   instead of replacing every list. A denylist now extends the one a lower layer
   set rather than erasing it, which affects `disabled_tools`, `tool_paths`,
