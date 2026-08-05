@@ -5,16 +5,17 @@
 //! modes could drift apart silently. Keeping them here means a provider, backend,
 //! or session-intent change lands in one place.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use vibe_app_server::client::{LiveDriverConfig, SessionOptions};
+use vibe_app_server::client::{DriverError, LiveDriverConfig, SessionOptions};
 use vibe_app_server::release3::Release3Service;
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::resources::{
     CoreResourceBackend, MistralConnectorClient, production_mcp_adapters,
 };
 use vibe_app_server::server::{AppServer, WebSearchAccess};
+use vibe_core::config::DotenvValues;
 
 use secrecy::SecretString;
 use url::Url;
@@ -22,6 +23,29 @@ use url::Url;
 use crate::{Arguments, CliError, price_per_million_micros};
 
 const SYSTEM_PROMPT: &str = "You are Mistral Vibe.";
+
+/// The variables `{vibe_home}/.env` declares for this invocation.
+///
+/// The reference loads that file into the process environment at startup; this
+/// port resolves through it instead, because mutating the environment is
+/// `unsafe` under edition 2024 and forbidden workspace-wide.
+pub(crate) fn dotenv_values(arguments: &Arguments) -> DotenvValues {
+    let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    DotenvValues::global(&crate::tui::startup::vibe_home_directory(
+        arguments,
+        &working_directory,
+    ))
+}
+
+/// The provider credential: the process environment first, then the global
+/// dotenv file.
+pub(crate) fn credential(arguments: &Arguments) -> Result<String, DriverError> {
+    dotenv_values(arguments)
+        .variable(&arguments.credential_environment)
+        .ok_or_else(|| {
+            DriverError::MissingCredentialEnvironment(arguments.credential_environment.clone())
+        })
+}
 
 pub(crate) fn live_driver_config(
     arguments: &Arguments,

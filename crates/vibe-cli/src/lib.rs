@@ -138,11 +138,7 @@ pub async fn run(
         .await
     } else {
         let config = bootstrap::live_driver_config(&arguments, &arguments.model)?;
-        let credential = std::env::var(&arguments.credential_environment).map_err(|_| {
-            vibe_app_server::client::DriverError::MissingCredentialEnvironment(
-                arguments.credential_environment.clone(),
-            )
-        })?;
+        let credential = bootstrap::credential(&arguments)?;
         let telemetry = telemetry_event_observer(&arguments, &credential, "cli")?;
         let mut driver = LiveTurnDriver::from_credential(config, credential)?;
         if let Some(observer) = telemetry.as_ref() {
@@ -332,13 +328,14 @@ where
 }
 
 fn production_server(arguments: &Arguments) -> Result<AppServer, CliError> {
-    let credential = std::env::var(&arguments.credential_environment).map_err(|_| {
-        vibe_app_server::client::DriverError::MissingCredentialEnvironment(
-            arguments.credential_environment.clone(),
-        )
-    })?;
-    let server =
-        bootstrap::resource_server(arguments, Release3Service::default(), credential.clone())?;
+    let credential = bootstrap::credential(arguments)?;
+    let release3 = Release3Service::default();
+    // The programmatic entry point starts here, so this is where an older
+    // configuration file is brought forward.
+    release3
+        .migrate_configuration()
+        .map_err(|error| CliError::Configuration(error.to_string()))?;
+    let server = bootstrap::resource_server(arguments, release3, credential.clone())?;
     if !arguments.teleport {
         return Ok(server);
     }
@@ -498,6 +495,8 @@ pub enum CliError {
     Startup(#[from] tui::startup::StartupError),
     #[error("telemetry setup failed: {0}")]
     Telemetry(String),
+    #[error("configuration could not be prepared: {0}")]
+    Configuration(String),
     #[error(transparent)]
     Json(serde_json::Error),
     #[error(transparent)]

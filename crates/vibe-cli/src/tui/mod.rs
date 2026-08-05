@@ -216,9 +216,14 @@ pub async fn run_interactive(
     let (initial_credential, keyring_error) = if arguments.setup {
         (None, None)
     } else {
-        let environment_credential = std::env::var(&arguments.credential_environment)
-            .ok()
-            .filter(|credential| !credential.is_empty());
+        // The process environment first, then `{vibe_home}/.env`, then the
+        // keyring: a key the operator keeps in the dotenv file is as usable
+        // here as an exported one.
+        let environment_credential = vibe_core::config::DotenvValues::global(
+            &startup::vibe_home_directory(&arguments, &working_directory),
+        )
+        .variable(&arguments.credential_environment)
+        .filter(|credential| !credential.is_empty());
         match environment_credential {
             Some(credential) => (Some(credential), None),
             None => match credential_store.get(&arguments.credential_environment) {

@@ -71,7 +71,7 @@ pub(super) fn release3_paths(arguments: &Arguments, working_directory: &Path) ->
 }
 
 #[must_use]
-pub(super) fn vibe_home_directory(arguments: &Arguments, working_directory: &Path) -> PathBuf {
+pub(crate) fn vibe_home_directory(arguments: &Arguments, working_directory: &Path) -> PathBuf {
     arguments
         .session_root
         .as_deref()
