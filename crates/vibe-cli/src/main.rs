@@ -9,6 +9,19 @@ use vibe_cli::tui::startup::PreparedInvocation;
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    // `vibe mcp` is a command of its own upstream, decided before the
+    // interactive parser runs so that `mcp` is never read as a prompt.
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if vibe_cli::mcp_command::intercepts(&arguments) {
+        let mut stdout = std::io::stdout().lock();
+        return match vibe_cli::mcp_command::run(&arguments[1..], &mut stdout) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("{error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     let invocation = match PreparedInvocation::prepare(Arguments::parse()) {
         Ok(invocation) => invocation,
         Err(error) => {

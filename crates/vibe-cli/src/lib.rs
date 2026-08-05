@@ -11,6 +11,7 @@
 
 mod bootstrap;
 pub mod distribution;
+pub mod mcp_command;
 pub mod tui;
 
 use std::io::Write;
