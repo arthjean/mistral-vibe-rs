@@ -12,8 +12,8 @@ use serde_json::{Map, Value, json};
 use thiserror::Error;
 use toml::{Table, Value as TomlValue};
 use vibe_core::config::{
-    ConfigMutation, ConfigPaths, ConfigTarget, ConfigWrite, LayeredConfig, ProxyEnvironmentStore,
-    ProxyKey,
+    ConfigMutation, ConfigPatchOp, ConfigPaths, ConfigTarget, ConfigWrite, JsonPointer,
+    LayeredConfig, PatchOperation, ProxyEnvironmentStore, ProxyKey,
 };
 use vibe_core::continuity::SessionContinuity;
 use vibe_core::events::ModelMessage;
@@ -33,6 +33,8 @@ pub const RELEASE3_METHODS: &[&str] = &[
     "agents/list",
     "agents/uninstall",
     "config/batchWrite",
+    "config/fields/read",
+    "config/patch",
     "config/proxy/read",
     "config/proxy/write",
     "config/read",
@@ -408,6 +410,13 @@ impl Release3Service {
                 ),
                 ("schema", LayeredConfig::schema()),
             ])),
+            // Reference `_config_patch`: the client addresses a field by
+            // pointer and never names the file behind it.
+            "config/patch" => self.config_patch(params),
+            "config/fields/read" => self.config_fields_read(),
+            // Retained as a local alias over the same patch core so the callers
+            // that predate `config/patch` keep working. Recorded as a
+            // divergence in `tasks/prd-config-parity.md`.
             "config/batchWrite" => self.config_batch_write(params),
             "config/thinking/write" => self.single_config_write(params, "thinking", "value"),
             "config/proxy/write" => self.proxy_write(params),
@@ -518,6 +527,84 @@ impl Release3Service {
             "snapshot",
             snapshot.public_view(),
         )]))
+    }
+
+    /// Writes one or more addressed fields, routing each to the file the client
+    /// named or, failing that, to the writable target the selection resolves to.
+    ///
+    /// The response splits the two ways a patch can fail the way
+    /// `ConfigPatchResponse` splits them: `rejected` for a request the
+    /// merged-configuration preflight refused, which leaves every file
+    /// byte-identical, and `failures` for a target whose write did not land
+    /// while another one did. `changedKeys` is local to this port, and comes
+    /// off the change bus rather than being recomputed for the wire.
+    ///
+    /// `reloadRuntime` is accepted and has no effect: `config/read` and
+    /// `config/reload` both compose from disk on every call here, so there is no
+    /// cached runtime a patch could leave stale.
+    fn config_patch(
+        &self,
+        params: &BTreeMap<String, Value>,
+    ) -> Result<Release3Dispatch, Release3Error> {
+        let raw = params
+            .get("ops")
+            .and_then(Value::as_array)
+            .ok_or_else(|| Release3Error::InvalidParams("ops must be an array".to_owned()))?;
+        let operations = raw
+            .iter()
+            .map(parse_config_patch_op)
+            .collect::<Result<Vec<_>, _>>()?;
+        let reason = params
+            .get("reason")
+            .and_then(Value::as_str)
+            .unwrap_or("config screen edit");
+        // The changed keys are read off the change bus rather than recomputed,
+        // so the subscription every other component uses is the one the wire
+        // answer is built from. It is cancelled before the response is composed,
+        // so it never outlives the call that registered it. Dispatch is
+        // serialized by the server, so no other patch publishes into it.
+        let observed = Arc::new(Mutex::new(BTreeSet::new()));
+        let recorder = Arc::clone(&observed);
+        let subscription = self.config.subscribe(None, move |event| {
+            if let Ok(mut keys) = recorder.lock() {
+                keys.extend(event.changed_keys.iter().cloned());
+            }
+        });
+        let applied = self.config.apply_patch(&operations, reason);
+        subscription.unsubscribe();
+        let outcome = match applied {
+            Ok(outcome) => outcome,
+            Err(vibe_core::config::ConfigError::PatchRejected(_)) => {
+                let snapshot = self.config.load().map_err(config_error)?;
+                return Ok(Release3Dispatch::result([
+                    ("snapshot", snapshot.public_view()),
+                    ("rejected", Value::Bool(true)),
+                    ("failures", json!([])),
+                    ("changedKeys", json!([])),
+                ]));
+            }
+            Err(error) => return Err(config_error(error)),
+        };
+        let changed_keys = observed
+            .lock()
+            .map(|keys| keys.iter().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+        Ok(Release3Dispatch::result([
+            ("snapshot", outcome.snapshot.public_view()),
+            ("rejected", Value::Bool(false)),
+            ("failures", json!(outcome.failures)),
+            ("changedKeys", json!(changed_keys)),
+        ]))
+    }
+
+    /// Describes every published field so a settings screen renders without
+    /// hard-coding the surface. Reference `_config_fields_read`.
+    fn config_fields_read(&self) -> Result<Release3Dispatch, Release3Error> {
+        let described = self.config.describe_fields().map_err(config_error)?;
+        Ok(Release3Dispatch::result([
+            ("fields", json!(described.fields)),
+            ("targets", json!(described.targets)),
+        ]))
     }
 
     fn config_batch_write(
@@ -1351,6 +1438,44 @@ struct PromptParams {
     supports_images: bool,
 }
 
+/// Reads one `ConfigPatchOpWire`: a `set` or `remove` verb, a JSON Pointer, the
+/// value a `set` carries, and the file a client pinned the operation to.
+fn parse_config_patch_op(value: &Value) -> Result<ConfigPatchOp, Release3Error> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| Release3Error::InvalidParams("each op must be an object".to_owned()))?;
+    let raw_path = object
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| Release3Error::InvalidParams("op.path must be a string".to_owned()))?;
+    let pointer = JsonPointer::parse(raw_path)
+        .map_err(|error| Release3Error::InvalidParams(error.to_string()))?;
+    let target = object
+        .get("targetLayer")
+        .and_then(Value::as_str)
+        .map(parse_target)
+        .transpose()?;
+    let operation = match object.get("op").and_then(Value::as_str) {
+        Some("set") => {
+            let raw = object.get("value").cloned().unwrap_or(Value::Null);
+            PatchOperation::Set(
+                TomlValue::try_from(raw)
+                    .map_err(|error| Release3Error::InvalidParams(error.to_string()))?,
+            )
+        }
+        Some("remove") => PatchOperation::Remove,
+        _ => {
+            return Err(Release3Error::InvalidParams(
+                "op.op must be set or remove".to_owned(),
+            ));
+        }
+    };
+    Ok(ConfigPatchOp {
+        mutation: ConfigMutation::new(pointer, operation),
+        target,
+    })
+}
+
 fn parse_config_write(value: &Value) -> Result<ConfigWrite, Release3Error> {
     let object = value
         .as_object()
@@ -1731,6 +1856,319 @@ mod tests {
                 .result["agents"]
                 .as_array()
                 .is_some_and(|agents| agents.iter().any(|agent| agent["name"] == "reviewer"))
+        );
+    }
+
+    fn patch(ops: Value) -> BTreeMap<String, Value> {
+        BTreeMap::from([
+            ("ops".to_owned(), ops),
+            ("reason".to_owned(), json!("config screen edit")),
+            ("reloadRuntime".to_owned(), json!(false)),
+        ])
+    }
+
+    fn digest(path: &Path) -> Option<Vec<u8>> {
+        fs::read(path).ok()
+    }
+
+    /// Reference `_config_patch`: a client addresses a field by pointer, and the
+    /// server decides which file backs it.
+    #[test]
+    fn config_patch_writes_by_pointer_and_reports_the_keys_it_moved() {
+        let (temporary, service) = service();
+        let user = temporary.path().join("home/config.toml");
+
+        let written = service
+            .dispatch(
+                "config/patch",
+                &patch(json!([
+                    {"op": "set", "path": "/theme", "value": "nord"},
+                    {"op": "set", "path": "/tools/bash/allowlist", "value": ["git status"]},
+                ])),
+            )
+            .expect("patch applies");
+
+        assert_eq!(written.result["rejected"], json!(false));
+        assert_eq!(written.result["failures"], json!([]));
+        assert_eq!(
+            written.result["changedKeys"],
+            json!(["theme", "tools"]),
+            "a table that did not exist before is reported whole, as the reference reports it"
+        );
+        assert_eq!(written.result["snapshot"]["config"]["theme"], json!("nord"));
+        assert_eq!(
+            written.result["snapshot"]["config"]["tools"]["bash"]["allowlist"],
+            json!(["git status"]),
+            "the intermediate tables the leaf needs were created"
+        );
+        assert!(
+            fs::read_to_string(&user)
+                .expect("the user file was written")
+                .contains("nord")
+        );
+
+        let removed = service
+            .dispatch(
+                "config/patch",
+                &patch(json!([{"op": "remove", "path": "/theme"}])),
+            )
+            .expect("removal applies");
+        assert_eq!(removed.result["changedKeys"], json!(["theme"]));
+        assert_eq!(
+            removed.result["snapshot"]["config"]["theme"],
+            json!("auto"),
+            "removing the override falls back to the shipped default"
+        );
+
+        // A table that already exists is diffed down to the leaf that moved.
+        let deepened = service
+            .dispatch(
+                "config/patch",
+                &patch(json!([{"op": "set", "path": "/tools/bash/allowlist", "value": ["git status", "ls"]}])),
+            )
+            .expect("deep set applies");
+        assert_eq!(
+            deepened.result["changedKeys"],
+            json!(["tools/bash/allowlist"])
+        );
+
+        // A patch that writes the value already in place moves nothing, so the
+        // bus stays quiet.
+        let repeated = service
+            .dispatch(
+                "config/patch",
+                &patch(json!([{"op": "set", "path": "/tools/bash/allowlist", "value": ["git status", "ls"]}])),
+            )
+            .expect("repeat applies");
+        assert_eq!(repeated.result["changedKeys"], json!([]));
+        assert_eq!(repeated.result["rejected"], json!(false));
+    }
+
+    /// The preflight runs against the merged configuration and refuses the whole
+    /// request, so nothing reaches disk. Reference `ConfigPatchValidationError`.
+    #[test]
+    fn a_rejected_patch_leaves_every_configuration_file_byte_identical() {
+        let (temporary, service) = service();
+        let user = temporary.path().join("home/config.toml");
+        service
+            .dispatch(
+                "config/patch",
+                &patch(json!([{"op": "set", "path": "/theme", "value": "nord"}])),
+            )
+            .expect("seed applies");
+        let before = digest(&user).expect("the user file exists");
+
+        for ops in [
+            // Leaves no configured model behind.
+            json!([{"op": "set", "path": "/models", "value": {}}]),
+            // Traverses a scalar the merged document already carries.
+            json!([{"op": "set", "path": "/theme/nested", "value": true}]),
+            // Names a list position that does not exist.
+            json!([{"op": "remove", "path": "/providers/9"}]),
+        ] {
+            let rejected = service
+                .dispatch("config/patch", &patch(ops.clone()))
+                .expect("the request is answered rather than raised");
+            assert_eq!(rejected.result["rejected"], json!(true), "{ops}");
+            assert_eq!(rejected.result["failures"], json!([]));
+            assert_eq!(rejected.result["changedKeys"], json!([]));
+            assert_eq!(
+                digest(&user),
+                Some(before.clone()),
+                "{ops} touched the file"
+            );
+        }
+        assert_eq!(
+            service
+                .dispatch("config/read", &BTreeMap::new())
+                .expect("config read")
+                .result["snapshot"]["config"]["theme"],
+            json!("nord")
+        );
+    }
+
+    /// The reference applies each layer on its own once the preflight passes, so
+    /// one file failing is reported rather than undoing the file that worked.
+    #[test]
+    fn a_write_that_cannot_land_is_reported_per_target_beside_one_that_did() {
+        let (temporary, service) = service();
+        let project = temporary.path().join("workspace/.vibe");
+        fs::create_dir_all(&project).expect("project directory");
+        fs::write(project.join("config.toml"), "theme = \"nord\"\n").expect("project fixture");
+
+        let outcome = service
+            .dispatch(
+                "config/patch",
+                &patch(json!([
+                    {"op": "set", "path": "/theme", "value": "dracula", "targetLayer": "project"},
+                    // `displayed_workdir` only exists in the defaults layer, so
+                    // the merged preflight resolves it and the user file cannot.
+                    {"op": "remove", "path": "/displayed_workdir", "targetLayer": "user"},
+                ])),
+            )
+            .expect("the patch is applied per target");
+
+        assert_eq!(outcome.result["rejected"], json!(false));
+        let failures = outcome.result["failures"]
+            .as_array()
+            .expect("failures are reported as a list");
+        assert_eq!(failures.len(), 1, "{failures:?}");
+        assert!(
+            failures[0]
+                .as_str()
+                .is_some_and(|failure| failure.contains("/displayed_workdir")),
+            "{failures:?}"
+        );
+        assert_eq!(
+            outcome.result["snapshot"]["config"]["theme"],
+            json!("dracula"),
+            "the write that succeeded stands"
+        );
+        assert_eq!(outcome.result["changedKeys"], json!(["theme"]));
+
+        // An operation naming no target goes to the file the selection resolves
+        // to, which is the trusted project file now that one exists.
+        service
+            .dispatch(
+                "config/patch",
+                &patch(json!([{"op": "set", "path": "/default_agent", "value": "plan"}])),
+            )
+            .expect("the unrouted patch applies");
+        assert!(
+            fs::read_to_string(project.join("config.toml"))
+                .expect("the project file survives")
+                .contains("plan")
+        );
+        assert!(
+            digest(&temporary.path().join("home/config.toml")).is_none(),
+            "an unrouted operation reached the user file"
+        );
+    }
+
+    #[test]
+    fn a_patch_aimed_at_an_untrusted_project_changes_nothing() {
+        let temporary = tempdir().expect("tempdir");
+        let workspace = temporary.path().join("workspace");
+        fs::create_dir_all(workspace.join(".vibe")).expect("project directory");
+        let service = Release3Service::new(
+            Release3Paths {
+                vibe_home: temporary.path().join("home"),
+                working_directory: workspace.clone(),
+                session_root: temporary.path().join("sessions"),
+            },
+            false,
+        )
+        .expect("untrusted service");
+
+        let error = service
+            .dispatch(
+                "config/patch",
+                &patch(json!([
+                    {"op": "set", "path": "/theme", "value": "nord", "targetLayer": "project"},
+                    {"op": "set", "path": "/default_agent", "value": "plan"},
+                ])),
+            )
+            .expect_err("an untrusted project is refused");
+
+        assert!(
+            matches!(&error, Release3Error::Config(message) if message.contains("trust")),
+            "{error}"
+        );
+        assert!(
+            digest(&workspace.join(".vibe/config.toml")).is_none(),
+            "the project file was created despite the refusal"
+        );
+        assert!(
+            digest(&temporary.path().join("home/config.toml")).is_none(),
+            "the user half of the patch was written despite the refusal"
+        );
+    }
+
+    #[test]
+    fn config_patch_rejects_a_malformed_operation_before_it_reaches_the_store() {
+        let (_temporary, service) = service();
+        for ops in [
+            json!([{"op": "toggle", "path": "/theme", "value": "nord"}]),
+            json!([{"op": "set", "path": "theme", "value": "nord"}]),
+            json!([{"op": "set", "value": "nord"}]),
+            json!([{"op": "set", "path": "/theme", "value": "nord", "targetLayer": "global"}]),
+        ] {
+            let error = service
+                .dispatch("config/patch", &patch(ops.clone()))
+                .expect_err("the operation is refused");
+            assert!(matches!(error, Release3Error::InvalidParams(_)), "{ops}");
+        }
+        assert!(
+            service
+                .dispatch("config/patch", &BTreeMap::new())
+                .is_err_and(|error| matches!(error, Release3Error::InvalidParams(_)))
+        );
+    }
+
+    /// Reference `_config_fields_read`: the settings screen renders from this
+    /// answer alone.
+    #[test]
+    fn config_fields_read_describes_the_published_surface_and_its_targets() {
+        let (_temporary, service) = service();
+        service
+            .dispatch(
+                "config/patch",
+                &patch(json!([{"op": "set", "path": "/theme", "value": "nord"}])),
+            )
+            .expect("seed applies");
+
+        let response = service
+            .dispatch("config/fields/read", &BTreeMap::new())
+            .expect("fields read");
+        let fields = response.result["fields"]
+            .as_array()
+            .expect("the response carries a field list");
+        assert_eq!(response.result["targets"], json!(["user", "project"]));
+        assert!(
+            fields.iter().all(|field| field["name"] != json!("tools")),
+            "per-tool settings have no editor on either side"
+        );
+        assert_eq!(
+            fields.len(),
+            vibe_core::config::registry::FIELDS
+                .iter()
+                .filter(|spec| spec.published && spec.name != "tools")
+                .count()
+        );
+
+        let theme = fields
+            .iter()
+            .find(|field| field["name"] == json!("theme"))
+            .expect("theme is described");
+        assert_eq!(theme["kind"], json!("enum"));
+        assert_eq!(theme["path"], json!("/theme"));
+        assert_eq!(theme["value"], json!("nord"));
+        assert_eq!(theme["popular"], json!(true));
+        assert!(
+            theme["enumChoices"]
+                .as_array()
+                .is_some_and(|choices| choices.contains(&json!("nord")))
+        );
+        assert!(
+            theme["description"]
+                .as_str()
+                .is_some_and(|text| !text.is_empty())
+        );
+        assert_eq!(
+            theme["layerValues"],
+            json!([
+                {"layer": "selected_toml", "value": "nord"},
+                {"layer": "defaults", "value": "auto"},
+            ]),
+            "layer values run from the highest priority down to the defaults"
+        );
+        assert_eq!(
+            fields
+                .iter()
+                .filter(|field| field["popular"] == json!(true))
+                .count(),
+            12,
+            "the popular set is the reference one"
         );
     }
 

@@ -24,13 +24,15 @@ use thiserror::Error;
 /// Lifecycle methods (`initialize`, `initialized`, `shutdown`, `exit`) are
 /// deliberately absent: they are handled before method dispatch and are not
 /// part of the negotiated surface.
-pub const SERVER_METHODS: [&str; 80] = [
+pub const SERVER_METHODS: [&str; 82] = [
     "account/read",
     "agents/install",
     "agents/list",
     "agents/uninstall",
     "callback/respond",
     "config/batchWrite",
+    "config/fields/read",
+    "config/patch",
     "config/proxy/read",
     "config/proxy/write",
     "config/read",
