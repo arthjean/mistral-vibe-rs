@@ -116,7 +116,11 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
         })
         .expect("resource session");
     let fixture = env!("CARGO_BIN_EXE_vibe-mcp-stdio-fixture");
-    let config_home = temporary.path().join("home");
+    // The vibe home sits inside its own parent, as a real one does: project
+    // discovery stops at the directory holding the vibe home, so a home that is
+    // a direct child of the working directory would end the walk before the
+    // project file is seen.
+    let config_home = temporary.path().join("home/.vibe");
     std::fs::create_dir_all(&config_home).expect("config home");
     std::fs::create_dir_all(temporary.path().join(".vibe")).expect("project config directory");
     let config = toml::Table::from_iter([(

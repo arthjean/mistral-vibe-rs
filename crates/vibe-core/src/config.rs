@@ -18,14 +18,19 @@ use crate::mcp::{
 };
 use crate::text::hex_encode;
 
+pub mod dotenv;
 pub mod events;
+pub mod harness;
 pub mod introspect;
 mod merge;
+pub mod migration;
 pub mod patch;
 mod proxy;
 pub mod registry;
 
+pub use dotenv::DotenvValues;
 pub use events::{ConfigChangeBus, ConfigChangeEvent, ConfigSubscription};
+pub use harness::{ConfigSource, HarnessFiles};
 pub use introspect::{ConfigFieldView, ConfigFields, ConfigLayerValue};
 pub use patch::{ConfigMutation, JsonPointer, PatchError, PatchOperation};
 pub use proxy::{ProxyEnvironmentStore, ProxyKey, ProxyKeyError};
@@ -82,6 +87,10 @@ pub enum ConfigLayerKind {
 pub enum ConfigTarget {
     User,
     Project,
+    /// No enabled source resolves to a file: the selection is held in memory
+    /// for the life of the store and no write reaches disk. Reference
+    /// `_select_persistence_layer`, whose last fallback is an ephemeral layer.
+    Ephemeral,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -102,8 +111,27 @@ impl ConfigPaths {
         self.vibe_home.join(CONFIG_FILE)
     }
 
+    /// The project file governing the working directory: the nearest one found
+    /// by walking up, and the working directory's own path when the walk finds
+    /// nothing. Reference `ProjectConfigLayer._target_path`, which writes to the
+    /// discovered file and falls back on the undiscovered one.
     #[must_use]
     pub fn project_config(&self) -> PathBuf {
+        self.discovered_project_config()
+            .unwrap_or_else(|| self.local_project_config())
+    }
+
+    /// The project file the walk found, or `None` when no directory between the
+    /// working directory and the vibe home holds one.
+    #[must_use]
+    pub fn discovered_project_config(&self) -> Option<PathBuf> {
+        harness::discover_project_config(&self.working_directory, &self.vibe_home)
+    }
+
+    /// The project file the working directory would carry itself, whether or
+    /// not it exists.
+    #[must_use]
+    pub fn local_project_config(&self) -> PathBuf {
         self.working_directory
             .join(PROJECT_DIRECTORY)
             .join(CONFIG_FILE)
@@ -358,6 +386,15 @@ pub struct LayeredConfig {
     agent: Table,
     environment: BTreeMap<String, String>,
     project_trusted: bool,
+    sources: BTreeSet<ConfigSource>,
+    additional_roots: Vec<PathBuf>,
+    /// The document behind [`ConfigTarget::Ephemeral`], shared by every clone of
+    /// this store so a write made through one is read back through another.
+    ephemeral: Arc<Mutex<Table>>,
+    migrated: Arc<Mutex<bool>>,
+    /// What [`Self::migrate_sources`] could not write, carried by every
+    /// snapshot the store produces afterwards.
+    migration_warnings: Arc<Mutex<Vec<String>>>,
     transaction_lock: Arc<Mutex<()>>,
     events: Arc<ConfigChangeBus>,
 }
@@ -373,9 +410,45 @@ impl LayeredConfig {
             agent: Table::new(),
             environment: BTreeMap::new(),
             project_trusted: false,
+            sources: ConfigSource::all(),
+            additional_roots: Vec::new(),
+            ephemeral: Arc::new(Mutex::new(Table::new())),
+            migrated: Arc::new(Mutex::new(false)),
+            migration_warnings: Arc::new(Mutex::new(Vec::new())),
             transaction_lock: Arc::new(Mutex::new(())),
             events: Arc::new(ConfigChangeBus::default()),
         }
+    }
+
+    /// Restricts the store to the configuration sources `sources` enables.
+    ///
+    /// Both are enabled by default, which is what every binary in this
+    /// workspace opens with. Dropping [`ConfigSource::User`] refuses every
+    /// write to the user file, matching the reference `persist_allowed` rule.
+    #[must_use]
+    pub fn with_sources(mut self, sources: BTreeSet<ConfigSource>) -> Self {
+        self.sources = sources;
+        self
+    }
+
+    /// Adds the directories opened alongside the working directory, as
+    /// `--add-dir` does upstream.
+    #[must_use]
+    pub fn with_additional_roots(mut self, roots: Vec<PathBuf>) -> Self {
+        self.additional_roots = roots;
+        self
+    }
+
+    /// The file resolution behind this store: the selected file, the open
+    /// project roots and whether a write may persist.
+    #[must_use]
+    pub fn harness_files(&self) -> HarnessFiles {
+        HarnessFiles::new(
+            self.paths.clone(),
+            self.sources.clone(),
+            self.additional_roots.clone(),
+            self.project_trusted,
+        )
     }
 
     /// Registers `callback` for the configuration keys it names, or for every
@@ -444,27 +517,34 @@ impl LayeredConfig {
         recover_transaction(&self.paths)?;
         cleanup_orphan_sidecars(&self.paths)?;
 
+        let harness = self.harness_files();
         let user_path = self.paths.user_config();
         let project_path = self.paths.project_config();
-        let selected_project = self
-            .project_trusted
-            .then_some(project_path.clone())
-            .filter(|path| path.is_file());
-        let (selected_target, selected_path) = selected_project.map_or_else(
-            || (ConfigTarget::User, user_path.clone()),
-            |path| (ConfigTarget::Project, path),
-        );
+        // The selection is the file the enabled sources resolve to: the
+        // discovered project file while the workspace is trusted, the user file
+        // otherwise, and the in-memory document when neither source answers.
+        let (selected_target, selected_path) = harness
+            .config_file()
+            .unwrap_or((ConfigTarget::Ephemeral, PathBuf::new()));
 
-        let user_values = read_table_optional(&user_path)?;
-        let project_values = if self.project_trusted {
-            read_table_optional(&project_path)?
+        let user_values = if self.sources.contains(&ConfigSource::User) {
+            read_table_optional(&user_path)?
         } else {
             Table::new()
         };
-        let target_values = BTreeMap::from([
+        let project_values =
+            if self.project_trusted && self.sources.contains(&ConfigSource::Project) {
+                read_table_optional(&project_path)?
+            } else {
+                Table::new()
+            };
+        let mut target_values = BTreeMap::from([
             (ConfigTarget::User, user_values),
             (ConfigTarget::Project, project_values),
         ]);
+        if selected_target == ConfigTarget::Ephemeral {
+            target_values.insert(ConfigTarget::Ephemeral, self.ephemeral_document()?);
+        }
         let selected = target_values
             .get(&selected_target)
             .cloned()
@@ -501,16 +581,36 @@ impl LayeredConfig {
             merge_layer(&mut effective, &layer.values)?;
         }
         validate_table(&effective)?;
-        let validation_warnings =
-            finalize_effective(&mut effective, &self.paths.vibe_home, &model_order(&layers))?;
+        // What a migration could not write is reported by every snapshot that
+        // follows it, so a client reading the configuration sees why its file
+        // still carries the old shape.
+        let mut validation_warnings = self
+            .migration_warnings
+            .lock()
+            .map_err(|_| ConfigError::LockPoisoned)?
+            .clone();
+        validation_warnings.extend(finalize_effective(
+            &mut effective,
+            &self.paths.vibe_home,
+            &model_order(&layers),
+        )?);
 
-        let fingerprints = BTreeMap::from([
+        let mut fingerprints = BTreeMap::from([
             (
                 ConfigTarget::User,
                 fingerprint_optional(&self.paths.user_config())?,
             ),
             (ConfigTarget::Project, fingerprint_optional(&project_path)?),
         ]);
+        if selected_target == ConfigTarget::Ephemeral {
+            // The in-memory document has no file to stat, so its fingerprint is
+            // taken over the document itself; a concurrent-edit check against it
+            // still compares what the caller last saw.
+            fingerprints.insert(
+                ConfigTarget::Ephemeral,
+                Some(hex_digest(selected.to_string().as_bytes())),
+            );
+        }
         Ok(ConfigSnapshot {
             effective,
             selected_target,
@@ -537,6 +637,7 @@ impl LayeredConfig {
 
         let mut targets = BTreeSet::new();
         let mut prepared = Vec::with_capacity(writes.len());
+        let mut ephemeral = None;
         for write in writes {
             if !targets.insert(write.target) {
                 return Err(ConfigError::DuplicateTarget(write.target));
@@ -544,7 +645,27 @@ impl LayeredConfig {
             if write.target == ConfigTarget::Project && !self.project_trusted {
                 return Err(ConfigError::UntrustedProject);
             }
-            let path = self.target_path(write.target);
+            // A source the session did not enable is never written to, which is
+            // how `persist_allowed` refuses a user write when only the project
+            // source is open.
+            if let Some(source) = source_of(write.target)
+                && !self.sources.contains(&source)
+            {
+                return Err(ConfigError::PersistenceDisabled(write.target));
+            }
+            let Some(path) = self.target_path(write.target) else {
+                let persisted = self.ephemeral_document()?;
+                if Some(hex_digest(persisted.to_string().as_bytes())) != write.expected_fingerprint
+                {
+                    return Err(ConfigError::ConcurrentEdit {
+                        target: write.target,
+                    });
+                }
+                let table = patch_target_document(&persisted, &write.mutations)?;
+                validate_table(&table)?;
+                ephemeral = Some(table);
+                continue;
+            };
             let actual_fingerprint = fingerprint_optional(&path)?;
             if actual_fingerprint != write.expected_fingerprint {
                 return Err(ConfigError::ConcurrentEdit {
@@ -557,6 +678,19 @@ impl LayeredConfig {
             persist_models_as_list(&mut table, &merge::persisted_model_order(&persisted));
             let encoded = toml::to_string_pretty(&table).map_err(ConfigError::Serialize)?;
             prepared.push(PreparedWrite::new(path, encoded.into_bytes())?);
+        }
+
+        if prepared.is_empty() {
+            // Nothing to journal: the write never leaves memory.
+            if let Some(table) = ephemeral {
+                *self
+                    .ephemeral
+                    .lock()
+                    .map_err(|_| ConfigError::LockPoisoned)? = table;
+            }
+            drop(_file_guard);
+            drop(_guard);
+            return self.load();
         }
 
         let journal_path = self.paths.vibe_home.join(TRANSACTION_FILE);
@@ -590,9 +724,75 @@ impl LayeredConfig {
             source,
         })?;
         sync_directory(&self.paths.vibe_home)?;
+        if let Some(table) = ephemeral {
+            *self
+                .ephemeral
+                .lock()
+                .map_err(|_| ConfigError::LockPoisoned)? = table;
+        }
         drop(_file_guard);
         drop(_guard);
         self.load()
+    }
+
+    /// Brings every writable configuration file forward, once per store.
+    ///
+    /// This is a startup step, not part of composing a configuration: the
+    /// reference migrates its layers in `build_default_orchestrator` while
+    /// `ConfigBuilder.build` merges untouched documents, and the committed
+    /// corpus records the unmigrated merge. [`Self::load`] therefore never
+    /// calls this; the binaries do, once, before their first read.
+    ///
+    /// A source the session did not enable, or a project file the workspace
+    /// does not trust, is never rewritten, and the load then reads the
+    /// unmigrated document. A write that fails is reported as a warning, left
+    /// on every later snapshot, and leaves the original file intact.
+    pub fn migrate_sources(&self) -> Result<Vec<String>, ConfigError> {
+        let mut migrated = self
+            .migrated
+            .lock()
+            .map_err(|_| ConfigError::LockPoisoned)?;
+        if *migrated {
+            return Ok(self
+                .migration_warnings
+                .lock()
+                .map_err(|_| ConfigError::LockPoisoned)?
+                .clone());
+        }
+        *migrated = true;
+        let _guard = self
+            .transaction_lock
+            .lock()
+            .map_err(|_| ConfigError::LockPoisoned)?;
+        ensure_private_directory(&self.paths.vibe_home)?;
+        let _file_guard = ConfigFileLock::acquire(&self.paths.vibe_home)?;
+
+        let harness = self.harness_files();
+        let mut files = Vec::new();
+        if harness.persist_allowed() {
+            files.push(self.paths.user_config());
+        }
+        if let Some(path) = harness.trusted_project_config() {
+            files.push(path);
+        }
+        let mut warnings = Vec::new();
+        for path in files {
+            warnings.extend(migrate_file(&path)?);
+        }
+        self.migration_warnings
+            .lock()
+            .map_err(|_| ConfigError::LockPoisoned)?
+            .clone_from(&warnings);
+        Ok(warnings)
+    }
+
+    /// The in-memory document behind [`ConfigTarget::Ephemeral`].
+    fn ephemeral_document(&self) -> Result<Table, ConfigError> {
+        Ok(self
+            .ephemeral
+            .lock()
+            .map_err(|_| ConfigError::LockPoisoned)?
+            .clone())
     }
 
     /// Applies addressed operations to the files that back them.
@@ -701,7 +901,8 @@ impl LayeredConfig {
     fn writable_targets(&self, snapshot: &ConfigSnapshot) -> Vec<ConfigTarget> {
         let mut targets = vec![snapshot.selected_target];
         for target in [ConfigTarget::User, ConfigTarget::Project] {
-            let writable = target != ConfigTarget::Project || self.project_trusted;
+            let enabled = source_of(target).is_some_and(|source| self.sources.contains(&source));
+            let writable = enabled && (target != ConfigTarget::Project || self.project_trusted);
             if writable && !targets.contains(&target) {
                 targets.push(target);
             }
@@ -1060,11 +1261,23 @@ impl LayeredConfig {
         })
     }
 
-    fn target_path(&self, target: ConfigTarget) -> PathBuf {
+    /// The file backing `target`, or `None` for the in-memory selection.
+    fn target_path(&self, target: ConfigTarget) -> Option<PathBuf> {
         match target {
-            ConfigTarget::User => self.paths.user_config(),
-            ConfigTarget::Project => self.paths.project_config(),
+            ConfigTarget::User => Some(self.paths.user_config()),
+            ConfigTarget::Project => Some(self.paths.project_config()),
+            ConfigTarget::Ephemeral => None,
         }
+    }
+}
+
+/// The source a write target belongs to, or `None` when the target is held in
+/// memory and needs no enabled source.
+const fn source_of(target: ConfigTarget) -> Option<ConfigSource> {
+    match target {
+        ConfigTarget::User => Some(ConfigSource::User),
+        ConfigTarget::Project => Some(ConfigSource::Project),
+        ConfigTarget::Ephemeral => None,
     }
 }
 
@@ -1075,11 +1288,17 @@ use merge::merge_layer;
 #[cfg(test)]
 mod defaults_tests;
 #[cfg(test)]
+mod dotenv_tests;
+#[cfg(test)]
 mod events_tests;
+#[cfg(test)]
+mod harness_tests;
 #[cfg(test)]
 mod introspect_tests;
 #[cfg(test)]
 mod merge_tests;
+#[cfg(test)]
+mod migration_tests;
 #[cfg(test)]
 mod patch_tests;
 #[cfg(test)]
@@ -1550,6 +1769,38 @@ fn validate_table(table: &Table) -> Result<(), ConfigError> {
     validate_urls(table, &mut Vec::new())
 }
 
+/// Migrates one configuration file in place, reporting the warning a failed
+/// write produces.
+///
+/// A file that needs no migration is not rewritten, so an untouched
+/// configuration keeps its formatting and its modification time.
+fn migrate_file(path: &Path) -> Result<Option<String>, ConfigError> {
+    let persisted = read_table_optional(path)?;
+    if persisted.is_empty() {
+        return Ok(None);
+    }
+    let mut document = persisted.clone();
+    if let Some(models) = document.get(merge::MODELS_FIELD) {
+        let normalized = merge::normalize_models(models)?;
+        document.insert(merge::MODELS_FIELD.to_owned(), normalized);
+    }
+    if !migration::migrate_document(&mut document) {
+        return Ok(None);
+    }
+    persist_models_as_list(&mut document, &merge::persisted_model_order(&persisted));
+    let encoded = toml::to_string_pretty(&document).map_err(ConfigError::Serialize)?;
+    match write_atomically(path, "config", encoded.as_bytes()) {
+        Ok(()) => Ok(None),
+        // The original file is untouched: the encoded document never replaced
+        // it, so the operator keeps a readable configuration.
+        Err(error) => Ok(Some(format!(
+            "Configuration migration skipped for `{}`: {}",
+            path.display(),
+            ConfigError::from(error)
+        ))),
+    }
+}
+
 /// Writes an alias-keyed model map back as the persisted `[[models]]` list, so
 /// a client that patched the read form does not leave a document the reference
 /// extensions cannot parse. Reference `_canonical_toml_document`.
@@ -1933,6 +2184,11 @@ pub enum ConfigError {
     DuplicateTarget(ConfigTarget),
     #[error("project configuration is unavailable because workspace trust was revoked")]
     UntrustedProject,
+    /// The session did not enable the source backing this target, so writing to
+    /// it would persist to a file the caller opted out of. Reference
+    /// `persist_allowed`.
+    #[error("configuration target `{0:?}` is not an enabled source for this session")]
+    PersistenceDisabled(ConfigTarget),
     #[error("configuration changed concurrently for target `{target:?}`")]
     ConcurrentEdit { target: ConfigTarget },
     #[error(
