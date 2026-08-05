@@ -33,10 +33,10 @@
     {
       "id": "EP-021",
       "title": "Discovery, Harness Files, Dotenv and Migrations",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 4
     },
     {
       "id": "EP-022",
@@ -192,49 +192,49 @@
       "id": "US-070",
       "title": "Discover the project configuration by walking up",
       "epic": "EP-021",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-071",
       "title": "Resolve readable and writable configuration sources",
       "epic": "EP-021",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-070"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-072",
       "title": "Load the global dotenv file",
       "epic": "EP-021",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-073",
       "title": "Migrate older configuration files once",
       "epic": "EP-021",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": ["US-066", "US-071"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-074",
