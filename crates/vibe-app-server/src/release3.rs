@@ -12,8 +12,8 @@ use serde_json::{Map, Value, json};
 use thiserror::Error;
 use toml::{Table, Value as TomlValue};
 use vibe_core::config::{
-    ConfigMutation, ConfigPatchOp, ConfigPaths, ConfigTarget, ConfigWrite, JsonPointer,
-    LayeredConfig, PatchOperation, ProxyEnvironmentStore, ProxyKey,
+    ConfigMutation, ConfigPatchOp, ConfigPaths, ConfigTarget, ConfigWrite, DotenvValues,
+    JsonPointer, LayeredConfig, PatchOperation, ProxyEnvironmentStore, ProxyKey,
 };
 use vibe_core::continuity::SessionContinuity;
 use vibe_core::events::ModelMessage;
@@ -107,6 +107,37 @@ pub struct Release3Service {
     persist_runtime_sessions: bool,
 }
 
+/// The `VIBE_*` variables the environment layer composes: the process
+/// environment with `{vibe_home}/.env` filling in what it does not set.
+///
+/// `VIBE_HOME` is excluded because it selects the home the file was read from
+/// and is not a configuration field.
+fn vibe_environment(vibe_home: &Path) -> BTreeMap<String, String> {
+    DotenvValues::global(vibe_home)
+        .environment()
+        .into_iter()
+        .filter(|(key, _)| key != "VIBE_HOME" && key.starts_with("VIBE_"))
+        .collect()
+}
+
+/// The extension roots the open project directories contribute.
+///
+/// Reference `HarnessFilesManager.project_roots` resolves and deduplicates the
+/// open directories; each one carries its own `.vibe` directory. An untrusted
+/// workspace contributes none, which is the filter [`DiscoveryRoots`] applies
+/// anyway.
+fn project_discovery_roots(config: &LayeredConfig, project_trusted: bool) -> Vec<PathBuf> {
+    if !project_trusted {
+        return Vec::new();
+    }
+    config
+        .harness_files()
+        .project_roots()
+        .into_iter()
+        .map(|root| root.join(".vibe"))
+        .collect()
+}
+
 impl Default for Release3Service {
     fn default() -> Self {
         let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -139,14 +170,12 @@ impl Release3Service {
             },
             defaults.clone(),
         )
-        .with_environment(
-            std::env::vars().filter(|(key, _)| key != "VIBE_HOME" && key.starts_with("VIBE_")),
-        )
+        .with_environment(vibe_environment(&paths.vibe_home))
         .with_project_trusted(project_trusted);
         let user_extensions = paths.vibe_home.join("extensions");
         let discovery_roots = DiscoveryRoots {
             configured: Vec::new(),
-            project: vec![paths.working_directory.join(".vibe")],
+            project: project_discovery_roots(&config, project_trusted),
             user: vec![user_extensions.clone()],
             project_trusted,
         };
@@ -176,6 +205,19 @@ impl Release3Service {
     #[must_use]
     pub fn layered_config(&self) -> LayeredConfig {
         self.config.clone()
+    }
+
+    /// Brings the configuration files this session reads forward, once.
+    ///
+    /// A binary calls this at startup, before its first read, which is where
+    /// the reference runs `migrate_config_layers`. Constructing the service
+    /// does not migrate: a fixture or a test that only composes a
+    /// configuration must never rewrite the operator's files.
+    ///
+    /// The returned warnings name the files a migration could not write; they
+    /// also reach every configuration snapshot afterwards.
+    pub fn migrate_configuration(&self) -> Result<Vec<String>, Release3Error> {
+        self.config.migrate_sources().map_err(config_error)
     }
 
     #[must_use]
@@ -386,9 +428,19 @@ impl Release3Service {
             .to_owned())
     }
 
+    /// Opens `roots` alongside the working directory.
+    ///
+    /// The added directories are project roots in their own right: the
+    /// configuration store deduplicates them and extension discovery reads
+    /// each one's `.vibe` directory, which is what `--add-dir` does upstream.
     #[must_use]
     pub fn with_allowed_roots(mut self, roots: Vec<PathBuf>) -> Self {
         self.allowed_roots.extend(roots);
+        self.config = self
+            .config
+            .clone()
+            .with_additional_roots(self.allowed_roots.clone());
+        self.discovery_roots.project = project_discovery_roots(&self.config, self.project_trusted);
         self
     }
 
@@ -489,9 +541,7 @@ impl Release3Service {
             },
             self.defaults.clone(),
         )
-        .with_environment(
-            std::env::vars().filter(|(key, _)| key != "VIBE_HOME" && key.starts_with("VIBE_")),
-        )
+        .with_environment(vibe_environment(&self.paths.vibe_home))
         .with_runtime_overrides(runtime)
         .with_project_trusted(project_trusted)
         .load()
@@ -2574,6 +2624,160 @@ tool_timeout_sec = 2
                 .expect("array")
                 .len(),
             2
+        );
+    }
+
+    /// US-072: the global dotenv file stands in for a `VIBE_*` variable the
+    /// process does not export, all the way through to the composed
+    /// configuration.
+    #[test]
+    fn the_global_dotenv_file_feeds_the_environment_layer() {
+        let temporary = tempdir().expect("tempdir");
+        let vibe_home = temporary.path().join("home");
+        let workspace = temporary.path().join("workspace");
+        std::fs::create_dir_all(&vibe_home).expect("vibe home");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        std::fs::write(
+            vibe_home.join(".env"),
+            "VIBE_THEME=nord\nMISTRAL_API_KEY=secret\n",
+        )
+        .expect("dotenv fixture");
+
+        let service = Release3Service::new(
+            Release3Paths {
+                vibe_home: vibe_home.clone(),
+                working_directory: workspace,
+                session_root: temporary.path().join("sessions"),
+            },
+            true,
+        )
+        .expect("service");
+        let snapshot = service
+            .dispatch("config/read", &BTreeMap::new())
+            .expect("configuration reads");
+
+        assert_eq!(
+            snapshot.result["snapshot"]["config"]["theme"],
+            json!("nord")
+        );
+        // The credential in the same file is not a configuration field and
+        // never reaches the published document.
+        assert!(
+            !json!(snapshot.result).to_string().contains("secret"),
+            "no dotenv secret reaches the configuration surface"
+        );
+    }
+
+    /// US-073: the startup step brings an older file forward; constructing the
+    /// service does not.
+    #[test]
+    fn the_startup_migration_rewrites_the_user_file() {
+        let temporary = tempdir().expect("tempdir");
+        let vibe_home = temporary.path().join("home");
+        let workspace = temporary.path().join("workspace");
+        std::fs::create_dir_all(&vibe_home).expect("vibe home");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        let user_path = vibe_home.join("config.toml");
+        std::fs::write(&user_path, "disabled_tools = [\"search_replace\"]\n")
+            .expect("user fixture");
+
+        let service = Release3Service::new(
+            Release3Paths {
+                vibe_home,
+                working_directory: workspace,
+                session_root: temporary.path().join("sessions"),
+            },
+            true,
+        )
+        .expect("service");
+        assert_eq!(
+            std::fs::read_to_string(&user_path).expect("user file"),
+            "disabled_tools = [\"search_replace\"]\n",
+            "building the service leaves the file alone"
+        );
+
+        assert!(
+            service
+                .migrate_configuration()
+                .expect("migrations run")
+                .is_empty()
+        );
+
+        assert!(
+            std::fs::read_to_string(&user_path)
+                .expect("user file")
+                .contains("edit")
+        );
+        let snapshot = service
+            .dispatch("config/read", &BTreeMap::new())
+            .expect("configuration reads");
+        assert_eq!(
+            snapshot.result["snapshot"]["config"]["disabled_tools"],
+            json!(["edit"])
+        );
+    }
+
+    /// US-071: an added directory is a project root of its own, so its
+    /// `.vibe/hooks.toml` and the rest of its extensions are read, ahead of the
+    /// user-level file.
+    #[test]
+    fn an_added_directory_contributes_its_own_extension_root() {
+        let temporary = tempdir().expect("tempdir");
+        let workspace = temporary.path().join("workspace");
+        let added = temporary.path().join("library");
+        let vibe_home = temporary.path().join("home");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        std::fs::create_dir_all(added.join(".vibe/commands")).expect("added extensions");
+        std::fs::create_dir_all(vibe_home.join("extensions")).expect("user extensions");
+        std::fs::write(
+            added.join(".vibe/commands/release.md"),
+            "Cut a release build.\n",
+        )
+        .expect("command fixture");
+        let hook = "[[hooks]]\nname = \"%NAME%\"\ntype = \"pre_tool\"\nprogram = \"echo\"\n";
+        std::fs::write(
+            added.join(".vibe/hooks.toml"),
+            hook.replace("%NAME%", "project-hook"),
+        )
+        .expect("project hook fixture");
+        std::fs::write(
+            vibe_home.join("extensions/hooks.toml"),
+            hook.replace("%NAME%", "user-hook"),
+        )
+        .expect("user hook fixture");
+
+        let service = Release3Service::new(
+            Release3Paths {
+                vibe_home,
+                working_directory: workspace.clone(),
+                session_root: temporary.path().join("sessions"),
+            },
+            true,
+        )
+        .expect("service")
+        .with_allowed_roots(vec![added.clone(), added.clone(), workspace]);
+
+        assert_eq!(
+            service.discovery_roots.project,
+            vec![
+                service.paths.working_directory.join(".vibe"),
+                added.join(".vibe")
+            ],
+            "the working directory leads, the added directory follows once"
+        );
+        let catalog = service.catalog();
+        assert!(
+            catalog.commands.contains_key("release"),
+            "the added directory's commands are discovered"
+        );
+        assert_eq!(
+            catalog
+                .hooks
+                .iter()
+                .map(|hook| hook.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["project-hook", "user-hook"],
+            "each open root's hook file is read, then the user-level one"
         );
     }
 

@@ -137,10 +137,20 @@ impl StartupHost {
         }
     }
 
+    /// Builds the session service for an interactive start, bringing the
+    /// configuration files forward first.
+    ///
+    /// This is the startup step the reference runs before its orchestrator
+    /// composes anything. A migration that cannot write is not fatal: its
+    /// warning rides on every later configuration snapshot.
     pub fn into_release3(self, project_trusted: bool) -> Result<Release3Service, StartupHostError> {
-        Release3Service::new(self.paths, project_trusted)
+        let service = Release3Service::new(self.paths, project_trusted)
             .map(Release3Service::with_runtime_session_persistence)
-            .map_err(StartupHostError::Release3)
+            .map_err(StartupHostError::Release3)?;
+        service
+            .migrate_configuration()
+            .map_err(StartupHostError::Release3)?;
+        Ok(service)
     }
 }
 

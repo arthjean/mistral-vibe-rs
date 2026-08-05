@@ -27,6 +27,7 @@ use crate::resources::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use thiserror::Error;
+use vibe_core::config::DotenvValues;
 use vibe_core::events::{
     CallbackKind as EngineCallbackKind, LifecycleState, ModelMessage, ProjectionSnapshot,
     PublicCallbackState, PublicContentBlock, PublicEffectState, PublicEntryGenerationStatus,
@@ -309,6 +310,7 @@ pub struct AppServer {
 
 impl Default for AppServer {
     fn default() -> Self {
+        let home = vibe_home();
         Self {
             sessions: Arc::new(Mutex::new(SessionRegistry::default())),
             resources: Arc::new(Mutex::new(ResourceService::default())),
@@ -320,17 +322,19 @@ impl Default for AppServer {
             // The reference resolves the web-search key from the environment or
             // the OS keyring. Only the environment branch is reachable from
             // here; a client holding a keyring credential installs it with
-            // [`AppServer::using_web_search_access`].
+            // [`AppServer::using_web_search_access`]. The environment includes
+            // `{vibe_home}/.env`, which the reference startup has folded into
+            // the process by this point.
             builtin_tools: Arc::new(BuiltinTools::new(
-                vibe_home(),
-                WebSearchAccess::from_environment("MISTRAL_API_KEY"),
+                home.clone(),
+                WebSearchAccess::from_environment(&DotenvValues::global(&home), "MISTRAL_API_KEY"),
             )),
             // The reference gates the managed shell family on a remote
             // experiment whose default variant is `legacy`. There is no
             // experiment client here, so the operator's environment is the
             // only thing that can ask for the managed variant.
             shell_tools: Arc::new(ShellTools::new(
-                vibe_home(),
+                home,
                 ShellRollout::from_environment(MANAGED_SHELL_VARIABLE),
             )),
             next_session: Arc::new(AtomicU64::new(1)),

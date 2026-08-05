@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use url::Url;
 
+use crate::config::DotenvValues;
 use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
 use crate::policy::{ApprovalAgent, PermissionRequirement, PermissionStore, PolicyGuardedTool};
 use crate::schema::{ObjectSchema, Property};
@@ -82,12 +83,15 @@ impl WebSearchAccess {
     /// Reference `DEFAULT_MISTRAL_API_ENV_KEY`.
     pub const DEFAULT_ENDPOINT: &'static str = "https://api.mistral.ai";
 
-    /// The access an environment-resolved key grants, or `None` when the
-    /// variable is unset or empty, matching the reference `resolve_api_key`
-    /// environment branch.
+    /// The access the ambient key grants, or `None` when the variable is unset
+    /// or empty, matching the reference `resolve_api_key` environment branch.
+    ///
+    /// `dotenv` carries the global dotenv file, which the reference has already
+    /// loaded into the process environment by the time it resolves this key; a
+    /// key kept there therefore enables `web_search` here too.
     #[must_use]
-    pub fn from_environment(variable: &str) -> Option<Self> {
-        let key = std::env::var(variable).ok().filter(|key| !key.is_empty())?;
+    pub fn from_environment(dotenv: &DotenvValues, variable: &str) -> Option<Self> {
+        let key = dotenv.variable(variable).filter(|key| !key.is_empty())?;
         Some(Self {
             endpoint: Self::DEFAULT_ENDPOINT.to_owned(),
             model: Self::DEFAULT_MODEL.to_owned(),
@@ -1060,6 +1064,34 @@ mod tests {
         )
         .await;
         assert_eq!(names(&with), ["skill", "todo", "web_fetch", "web_search"]);
+    }
+
+    /// A key kept in `{vibe_home}/.env` resolves like an exported one, which is
+    /// what the reference sees after its startup folds the file into the
+    /// process environment.
+    #[tokio::test]
+    async fn a_dotenv_key_grants_web_search_access() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(
+            directory.path().join(".env"),
+            "VIBE_WEB_SEARCH_FIXTURE_KEY=from-file\n",
+        )
+        .expect("dotenv fixture");
+        let dotenv = DotenvValues::global(directory.path());
+
+        let access = WebSearchAccess::from_environment(&dotenv, "VIBE_WEB_SEARCH_FIXTURE_KEY")
+            .expect("the file's key resolves");
+        assert_eq!(access.api_key.expose_secret(), "from-file");
+        assert_eq!(access.endpoint, WebSearchAccess::DEFAULT_ENDPOINT);
+        assert_eq!(access.model, WebSearchAccess::DEFAULT_MODEL);
+
+        assert!(
+            WebSearchAccess::from_environment(&dotenv, "VIBE_WEB_SEARCH_ABSENT_KEY").is_none(),
+            "a variable neither the process nor the file sets grants nothing"
+        );
+
+        let registry = registered(directory.path(), Some(access)).await;
+        assert!(names(&registry).contains(&"web_search".to_owned()));
     }
 
     /// The status and priority members and their order, which the model reads
