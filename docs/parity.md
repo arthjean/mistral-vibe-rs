@@ -6,9 +6,9 @@ with the execution order derived from it.
 | Field | Value |
 |---|---|
 | First audit | 2026-08-04, Rust `5617d0c` |
-| Last remeasure | 2026-08-04, Rust `14bb137` plus uncommitted worktree changes |
+| Last remeasure | 2026-08-05, Rust `b2ec4b7` plus the EP-023 worktree changes |
 | Python reference | `68ff32e`, package version 2.23.3 |
-| Weighted score | 74/100 (was 65 at first audit) |
+| Weighted score | 76/100 (was 74 at the last remeasure, 65 at first audit) |
 
 ## Method
 
@@ -27,7 +27,10 @@ Anything measured only by module presence carries more uncertainty than anything
 measured by name-level diff, and the table notes which is which.
 
 Where a differential oracle exists, the score comes from running it rather than
-from reading source. The tool surface is the first part in that category.
+from reading source. The tool surface was the first part in that category; the
+configuration surface is the second, through
+`crates/vibe-core/tests/config-surface/corpus.json` and the two modules that
+replay it.
 
 ### Measured volumes
 
@@ -56,7 +59,7 @@ from reading source. The tool surface is the first part in that category.
 | TUI (composer, transcript, pickers) | 80 | Broad coverage, backed by a dedicated observable-parity harness (JSON traces plus Python oracles). Missing vim navigation, word selection, `load_more`, braille rendering |
 | Review and turn diff | 80 | `review/{state,baseline,hunks,approve,revert,turnDiff}` all present |
 | Sessions, resume, fork, history | 80 | `storage.rs`: metadata, pagination, migration, file locks, handoff journal |
-| app-server protocol | 75 | 86 of 113 methods. Absent: `clientTool/*` (7), `projectLinks/*` (9), `config/patch`, `config/fields/read`, `session/{updated,snapshot,statsUpdated,contextCleared}`, `runtime/updated`, `telemetry/record` |
+| app-server protocol | 78 | 88 of 113 methods. Absent: `clientTool/*` (7), `projectLinks/*` (9), `session/{updated,snapshot,statsUpdated,contextCleared}`, `runtime/updated`, `telemetry/record`. `config/patch` and `config/fields/read` landed with the configuration epics |
 | Hooks | 75 | 1:1 on event types (PreTool, PostTool, PostAgent) with matcher, timeout, retries, strict |
 | System prompt and project context | 75 | `AGENTS.md` walk-up, prompt resolution, skill and subagent summaries. Missing `include_*`, `system_prompt_id`, `project_context` |
 | Agents, subagents, delegation | 75 | `AgentProfile`, `AgentRegistry`, `SubagentManager`, `agents/{list,install,uninstall}`, and `task` now published conformantly |
@@ -69,7 +72,7 @@ from reading source. The tool surface is the first part in that category.
 | Telemetry and observability | 55 | `telemetry.rs` with an intentionally divergent envelope. **OTel absent** (`enable_otel`, `otel_endpoint`, `otel_redaction`), no `telemetry/record`, no log reader |
 | Skills | 55 | `SKILL.md` discovery, injection, `skills/list`, and the `skill` tool now published conformantly. Missing the remote registry (install, manifest, store), the builtin skills, and `enabled/disabled_skills`, `skill_paths` |
 | Checkpoints | 50 | Baseline, hunks and revert exist on the review side. No dedicated file checkpointer (store, recorder, history) |
-| Configuration | 40 | Layers present (Defaults, SelectedToml, Experiments, Environment, Runtime, Agent) but the published schema exposes 13 keys plus `mcp_servers` and `connectors` against ~65 upstream. Missing `config/patch`, `config/fields/read`, the discovered and growthbook layers |
+| Configuration | 95 | **Measured by differential oracle**: 64/64 reference fields declared, published and merged by the strategy the reference declares, 30/30 merge scenarios, 8/8 model-validation scenarios and 22/22 MCP entry scenarios replayed from the committed corpus, plus 8/8 reference `config/*` methods dispatched. Seven layers compose (Defaults, Discovered, SelectedToml, Experiments, Environment, Runtime, Agent). Residual: the GrowthBook layer and the per-layer async state machine are recorded divergences below, the fingerprint token has its own format, and 5 keys this port declares have no upstream counterpart. Declaring a key is not implementing its feature: each arrives with the feature that reads it |
 | Setup, onboarding, authentication | 35 | Linear 6-step flow plus keyring. **No multi-screen TUI onboarding, no browser sign-in** |
 | Experiments and rollouts | 25 | `ConfigLayerKind::Experiments` and an experiments table only. No GrowthBook client, no rollout or experiment-session handling |
 | VS Code extension promo | 10 | Not ported |
@@ -86,7 +89,7 @@ the number of downstream consumers, then user value, then cost.
 | Rank | Part | Status | Why here |
 |---|---|---|---|
 | 1 | Tool names and schemas | DONE | Names were already written into persisted sessions, hook matchers and parity traces, so every deferred week multiplied the migration cost |
-| 2 | Configuration mechanism | NEXT | `config/patch`, `config/fields/read`, extensible schema, discovered layer. The 52 missing keys do not land here: each arrives with the feature that consumes it. Keep this phase short, the trap is turning it into a rewrite |
+| 2 | Configuration mechanism | DONE | `config/patch`, `config/fields/read`, the registry-generated schema and the discovered layer all shipped through `tasks/prd-config-parity.md`, backed by a committed corpus. The 52 keys with no consumer are declared, defaulted, published and merged; each feature still arrives on its own |
 | 3 | Missing protocol notifications | TODO | `session/updated`, `session/snapshot`, `session/statsUpdated`, `session/contextCleared`, `runtime/updated`, `turn/retrying`. Everything written afterwards emits or consumes these. `/retry` falls out of `turn/retrying` for free |
 | 4 | `write_file`, `grep`, the `bash` surface, `todo` | DONE | Shipped with rank 1 |
 | 5 | `task`, `skill` | DONE | Shipped with rank 1 |
@@ -104,15 +107,20 @@ the number of downstream consumers, then user value, then cost.
 
 ## Accepted divergences
 
-Three parts cannot reach 100 through code alone. For these, 100 means a decided
+Some parts cannot reach 100 through code alone. For these, 100 means a decided
 and documented divergence, not a port. Recording the decision early keeps it out
-of every subsequent parity review.
+of every subsequent parity review. Each row names why the divergence stands and
+what in the repository holds it in place.
 
-| Part | Reason |
-|---|---|
-| Telemetry | The envelope already diverges intentionally from the upstream open-properties format (see `CHANGELOG.md`) |
-| Experiments and GrowthBook | Requires access to a third-party Mistral service with credentials this repository does not hold |
-| VS Code extension promo | Advertises an extension that does not target this binary |
+| Part | Reason | Evidence |
+|---|---|---|
+| Telemetry | The envelope already diverges intentionally from the upstream open-properties format | `CHANGELOG.md`, telemetry entry |
+| Experiments and GrowthBook | Requires access to a third-party Mistral service with credentials this repository does not hold. The `experiments` table stays as the injection point | `tasks/prd-config-parity.md`, Non-Goals |
+| VS Code extension promo | Advertises an extension that does not target this binary | No promo surface exists in `crates/`, and the parity table scores the part 10 for that reason |
+| Configuration fingerprint format | Upstream builds the token from `st_dev:st_ino:st_mtime_ns:st_size` (`vibe/core/config/fingerprint.py:30`); this port digests the file contents. The token is opaque, is only ever compared against one produced by the same implementation, and a content digest detects an edit that restores the size and timestamp | `crates/vibe-core/src/config.rs`, `fingerprint_optional` and the concurrent-edit tests |
+| Per-layer async state machine | Upstream caches each layer, forces reloads and transitions trust per layer (`vibe/core/config/layer.py:263`); this port recomposes from disk on every `load()`, which is observably equivalent for every current caller | `tasks/prd-config-parity.md`, Non-Goals |
+| 5 configuration keys with no upstream counterpart | `thinking`, `notifications`, `proxy`, `tls_ca_path` and `dotenv_path` have no lossless reference target, and mapping them would reinterpret values already on disk | `crates/vibe-core/src/config/surface_parity_tests.rs`, which fails if the set changes |
+| An unregistered key survives the merge | The reference merge drops a key its schema does not declare; keeping it lets a file written by a newer client round-trip through this one | `ConfigSnapshot::unregistered_keys`, asserted per corpus scenario |
 
 ## Verification
 
@@ -122,6 +130,19 @@ captures the reference surface from the pinned checkout, diffs it against what a
 real session registers, and reports missing names, invented names and per-name
 schema divergence as JSON pointers. `crates/vibe-app-server/tests/tool-surface/baseline.json`
 holds the conformance target and currently records zero divergence on Linux.
+
+The configuration surface is the second. `scripts/parity/config_surface.py`
+drives the reference `ConfigBuilder` over synthetic layer stacks and records the
+document it merges, the field census with each field's strategy, merge key and
+editor kind, the default document, the model-validation outcomes and the MCP
+entry decisions. `crates/vibe-core/tests/config-surface/corpus.json` is that
+capture, committed because it carries names, pointers and values authored for it
+and no reference-authored prose. `config::surface_parity_tests` and
+`config::mcp_parity_tests` replay it unconditionally; only the probe that
+recaptures from the pinned checkout skips when it is absent. A registry field
+arriving without a corpus entry fails the replay naming the field, which is what
+the `Configuration-surface conformance` CI step reports alongside the conforming
+counts.
 
 Extend the harness before writing each phase, not after.
 
@@ -135,6 +156,8 @@ output oracle, which is a different instrument from the surface diff.
 ## Related
 
 - `tasks/prd-tool-surface-parity.md` (DONE) delivered ranks 1, 4, 5, 6, 7 and 12.
+- `tasks/prd-config-parity.md` delivered rank 2 and the configuration corpus this
+  document's configuration score is measured from.
 - `tasks/prd-chat-input-observable-parity.md` and
   `tasks/prd-tui-runtime-observable-parity.md` established the harness this
   document relies on.
