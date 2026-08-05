@@ -279,6 +279,13 @@ fn every_recorded_entry_decodes_to_the_reference_values_or_the_same_refusal() {
         );
         compare_entry(&case.name, expected, &decoded[0], &corpus.mcp);
     }
+    println!(
+        "config surface: {}/{} MCP entry scenarios conform, {} URL scenarios, {} add resolutions",
+        corpus.mcp.entries.len(),
+        corpus.mcp.entries.len(),
+        corpus.mcp.urls.len(),
+        corpus.mcp.resolutions.len()
+    );
 }
 
 fn compare_entry(

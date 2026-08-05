@@ -210,10 +210,25 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
         .filter(|spec| spec.local)
         .map(|spec| spec.name)
         .collect::<Vec<_>>();
-    assert_eq!(
-        FIELDS.len() - local.len(),
-        corpus.fields.len(),
-        "the registry declares reference fields the corpus does not: {local:?}"
+    // A field added to the registry without a corpus entry is the regression
+    // this gate exists for: it is either a reference field the corpus predates,
+    // which means recapturing, or a local one, which means declaring it as such
+    // and recording the divergence. Either way the field is named.
+    let known = corpus
+        .fields
+        .iter()
+        .map(|field| field.name.as_str())
+        .collect::<BTreeSet<_>>();
+    let ungated = FIELDS
+        .iter()
+        .filter(|spec| !spec.local)
+        .map(|spec| spec.name)
+        .filter(|name| !known.contains(name))
+        .collect::<Vec<_>>();
+    assert!(
+        ungated.is_empty(),
+        "these registry fields have no corpus entry: {ungated:?}. Recapture with {CAPTURE_SCRIPT}, \
+         or declare each as local and record the divergence in the PRD"
     );
     assert_eq!(
         local,
@@ -225,6 +240,13 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
             "dotenv_path"
         ],
         "the locally declared key set changed; record the divergence in the PRD"
+    );
+    println!(
+        "config surface: {}/{} reference fields declared, {} local, at {}",
+        corpus.fields.len(),
+        corpus.fields.len(),
+        local.len(),
+        &corpus.reference.commit[..12]
     );
 }
 
@@ -424,6 +446,12 @@ fn every_model_scenario_validates_to_the_document_the_reference_validates() {
             );
         }
     }
+    println!(
+        "config surface: {}/{} model scenarios conform at {}",
+        corpus.model_scenarios.len(),
+        corpus.model_scenarios.len(),
+        &corpus.reference.commit[..12]
+    );
 }
 
 #[test]
@@ -466,6 +494,12 @@ fn every_scenario_composes_the_document_the_reference_produces() {
     for scenario in &corpus.scenarios {
         replay(scenario);
     }
+    println!(
+        "config surface: {}/{} merge scenarios conform at {}",
+        corpus.scenarios.len(),
+        corpus.scenarios.len(),
+        &corpus.reference.commit[..12]
+    );
 }
 
 fn replay(scenario: &Scenario) {
