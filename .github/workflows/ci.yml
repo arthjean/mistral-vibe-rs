@@ -32,3 +32,10 @@ jobs:
       - name: Tool-surface conformance
         run: |
           cargo +stable test -p vibe-app-server --all-features tool_surface_parity_tests -- --nocapture
+      # Same rule for the configuration surface: the committed corpus is the
+      # target, and a registry field arriving without a corpus entry fails here
+      # naming the field. Rerun with output shown so the conforming field,
+      # scenario and MCP counts land in the job log.
+      - name: Configuration-surface conformance
+        run: |
+          cargo +stable test -p vibe-core --all-features -- --nocapture config::surface_parity_tests config::mcp_parity_tests
