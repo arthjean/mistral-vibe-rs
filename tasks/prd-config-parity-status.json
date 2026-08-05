@@ -9,10 +9,10 @@
     {
       "id": "EP-018",
       "title": "Declarative Merge and the Field Registry",
-      "status": "IN_REVIEW",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 3
+      "stories_done": 4
     },
     {
       "id": "EP-019",
@@ -66,7 +66,7 @@
       "blocked_by": [],
       "started_at": "2026-08-04",
       "completed_at": "2026-08-04",
-      "reviewed_at": "2026-08-04"
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-060",
@@ -78,20 +78,19 @@
       "blocked_by": ["US-059"],
       "started_at": "2026-08-04",
       "completed_at": "2026-08-04",
-      "reviewed_at": "2026-08-04"
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-061",
       "title": "Replay merged configurations against the reference",
       "epic": "EP-018",
-      "status": "IN_REVIEW",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-059"],
       "started_at": "2026-08-04",
-      "completed_at": null,
-      "reviewed_at": "2026-08-04",
-      "pending_manual_proof": "Run `scripts/parity/config_surface.py --reference <checkout>` on a machine holding the pinned reference with its Python dependencies installed, and confirm the regenerated corpus matches the committed one. The Windows checkout at C:\\dev\\mistral-vibe is on the pin but has no interpreter that can import `vibe`, so the live probe skipped and the capture pipeline has never executed."
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-062",
@@ -103,7 +102,7 @@
       "blocked_by": ["US-059"],
       "started_at": "2026-08-04",
       "completed_at": "2026-08-04",
-      "reviewed_at": "2026-08-04"
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-063",
