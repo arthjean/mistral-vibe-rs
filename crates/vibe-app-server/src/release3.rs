@@ -12,8 +12,8 @@ use serde_json::{Map, Value, json};
 use thiserror::Error;
 use toml::{Table, Value as TomlValue};
 use vibe_core::config::{
-    ConfigMutation, ConfigPatchOp, ConfigPaths, ConfigTarget, ConfigWrite, DotenvValues,
-    JsonPointer, LayeredConfig, PatchOperation, ProxyEnvironmentStore, ProxyKey,
+    ConfigDiscovery, ConfigMutation, ConfigPatchOp, ConfigPaths, ConfigTarget, ConfigWrite,
+    DotenvValues, JsonPointer, LayeredConfig, PatchOperation, ProxyEnvironmentStore, ProxyKey,
 };
 use vibe_core::continuity::SessionContinuity;
 use vibe_core::events::ModelMessage;
@@ -27,6 +27,11 @@ use vibe_core::prompt::{
     UserResource, prepare_user_resources,
 };
 use vibe_core::storage::{HydratedSession, SessionStore, StorageError};
+use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
+
+/// The variable the reference reads the web-search credential from, and the one
+/// [`crate::server::AppServer`] resolves it through.
+const MISTRAL_KEY: &str = "MISTRAL_API_KEY";
 
 pub const RELEASE3_METHODS: &[&str] = &[
     "agents/install",
@@ -138,6 +143,28 @@ fn project_discovery_roots(config: &LayeredConfig, project_trusted: bool) -> Vec
         .collect()
 }
 
+/// The runtime discovery pass behind the Discovered configuration layer.
+///
+/// The universal tools declare their own settings, and the layer is where those
+/// settings become addressable rather than buried in the binary:
+/// `tools.web_fetch.timeoutSeconds` in a file wins over the declaration in the
+/// effective document. The handlers still run on the constants they declare, so
+/// an override moves the published value and each tool starts reading its entry
+/// when the option behind it lands. The credential is resolved the way
+/// [`crate::server::AppServer`] resolves it, so the layer describes the tools a
+/// session would actually publish, `web_search` included exactly when it
+/// registers.
+fn tool_discovery(vibe_home: &Path) -> ConfigDiscovery {
+    let vibe_home = vibe_home.to_path_buf();
+    Arc::new(move || {
+        let access =
+            WebSearchAccess::from_environment(&DotenvValues::global(&vibe_home), MISTRAL_KEY);
+        BuiltinTools::new(&vibe_home, access)
+            .discovered_settings()
+            .map_err(|error| error.to_string())
+    })
+}
+
 impl Default for Release3Service {
     fn default() -> Self {
         let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -171,6 +198,7 @@ impl Release3Service {
             defaults.clone(),
         )
         .with_environment(vibe_environment(&paths.vibe_home))
+        .with_discovery(tool_discovery(&paths.vibe_home))
         .with_project_trusted(project_trusted);
         let user_extensions = paths.vibe_home.join("extensions");
         let discovery_roots = DiscoveryRoots {
@@ -1740,6 +1768,54 @@ mod tests {
         (temporary, service)
     }
 
+    /// The Discovered layer reaches a client through the method it reads the
+    /// configuration by, carrying the settings the universal tools declare, and
+    /// a file the operator owns still wins over them.
+    #[test]
+    fn config_read_publishes_the_discovered_tool_settings_a_file_can_override() {
+        let (temporary, service) = service();
+        let home = temporary.path().join("home");
+        fs::create_dir_all(&home).expect("home");
+        fs::write(
+            home.join("config.toml"),
+            "[tools.web_fetch]\nmaxRedirects = 1\n",
+        )
+        .expect("user fixture");
+
+        let snapshot = service
+            .dispatch("config/read", &BTreeMap::new())
+            .expect("config reads")
+            .result["snapshot"]
+            .clone();
+
+        let discovered = snapshot["layerValues"]
+            .as_array()
+            .expect("layer values")
+            .iter()
+            .find(|layer| layer["layer"] == "discovered")
+            .expect("the discovered layer is published under its own name");
+        assert_eq!(
+            snapshot["layers"][1], "discovered",
+            "the layer composes between the defaults and the selected file"
+        );
+        assert!(
+            discovered["values"]["tools"]["web_fetch"]["maxContentBytes"].is_number(),
+            "{discovered}"
+        );
+        assert_eq!(
+            discovered["values"]["tools"]["web_fetch"]["maxRedirects"],
+            5
+        );
+        // The file overrides the one option it names; the rest of the
+        // discovered entry survives the deep merge.
+        assert_eq!(snapshot["config"]["tools"]["web_fetch"]["maxRedirects"], 1);
+        assert!(
+            snapshot["config"]["tools"]["web_fetch"]["maxContentBytes"].is_number(),
+            "{snapshot}"
+        );
+        assert_eq!(snapshot["validationWarnings"], json!([]));
+    }
+
     #[test]
     fn public_config_methods_preserve_unknown_values_and_redact_proxy_secrets() {
         let (_temporary, service) = service();
@@ -1942,8 +2018,9 @@ mod tests {
         assert_eq!(written.result["failures"], json!([]));
         assert_eq!(
             written.result["changedKeys"],
-            json!(["theme", "tools"]),
-            "a table that did not exist before is reported whole, as the reference reports it"
+            json!(["theme", "tools/bash"]),
+            "a subtree that did not exist before is reported whole at the node it appears under, \
+             and `tools` itself already exists because the Discovered layer composes it"
         );
         assert_eq!(written.result["snapshot"]["config"]["theme"], json!("nord"));
         assert_eq!(
