@@ -19,18 +19,21 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-/// Every method the app-server routes, sorted and unique.
+/// Every method the reference declares, sorted and unique.
+///
+/// This is the contract, not the routing table: a name belongs here because the
+/// reference declares it, whether or not this build answers it yet. What a build
+/// actually routes is what it advertises in [`ServerCapabilities::methods`].
 ///
 /// Lifecycle methods (`initialize`, `initialized`, `shutdown`, `exit`) are
 /// deliberately absent: they are handled before method dispatch and are not
 /// part of the negotiated surface.
-pub const SERVER_METHODS: [&str; 82] = [
+pub const SERVER_METHODS: [&str; 89] = [
     "account/read",
     "agents/install",
     "agents/list",
     "agents/uninstall",
     "callback/respond",
-    "config/batchWrite",
     "config/fields/read",
     "config/patch",
     "config/proxy/read",
@@ -42,7 +45,6 @@ pub const SERVER_METHODS: [&str; 82] = [
     "connectors/auth/read",
     "connectors/read",
     "connectors/refresh",
-    "connectors/toggle",
     "diagnostics/list",
     "diagnostics/logs/read",
     "feedback/record",
@@ -53,13 +55,21 @@ pub const SERVER_METHODS: [&str; 82] = [
     "loops/delete",
     "loops/list",
     "mcp/add",
-    "mcp/auth/complete",
     "mcp/login",
     "mcp/logout",
     "mcp/read",
     "mcp/refresh",
     "mcp/toggle",
     "narration/summarize",
+    "projectLinks/create",
+    "projectLinks/inspectRoot",
+    "projectLinks/link",
+    "projectLinks/list",
+    "projectLinks/picker/load",
+    "projectLinks/picker/loadMore",
+    "projectLinks/resolveRoot",
+    "projectLinks/save",
+    "projectLinks/unlink",
     "review/approve",
     "review/baseline",
     "review/hunks",
@@ -90,6 +100,7 @@ pub const SERVER_METHODS: [&str; 82] = [
     "shell/run",
     "skills/list",
     "stats/read",
+    "telemetry/record",
     "tools/list",
     "turn/interrupt",
     "turn/start",
@@ -107,6 +118,20 @@ pub const SERVER_METHODS: [&str; 82] = [
     "workspace/prompt/prepare",
     "workspace/trust/decision",
     "workspace/trust/status",
+];
+
+/// Methods this port routes that the reference does not declare, sorted and
+/// unique.
+///
+/// They stay routable for the clients already calling them, and stay out of
+/// [`SERVER_METHODS`] and out of the advertised capabilities, so a client
+/// written against the reference protocol never learns a name only this
+/// implementation answers. Each one has a row in the Accepted divergences table
+/// of `docs/parity.md`.
+pub const LOCAL_EXTENSION_METHODS: [&str; 3] = [
+    "config/batchWrite",
+    "connectors/toggle",
+    "mcp/auth/complete",
 ];
 
 /// Correlates a request with its response.
@@ -160,6 +185,37 @@ pub struct ProtocolError {
     /// Optional structured detail; omitted from the wire when null.
     #[serde(default, skip_serializing_if = "Value::is_null")]
     pub data: Value,
+}
+
+/// One reason a request was rejected, pointing at the value that caused it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InvalidParamsIssue {
+    /// Field names and array indices leading to the offending value, outermost
+    /// first. Empty when the failure is about the parameter object itself.
+    pub path: Vec<PathSegment>,
+    /// What was wrong with the value at `path`.
+    pub message: String,
+}
+
+/// One step of an [`InvalidParamsIssue`] path: a field name or an array index.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum PathSegment {
+    /// Object key.
+    Field(String),
+    /// Array index.
+    Index(usize),
+}
+
+/// Structured detail carried by an `invalid_params` [`ProtocolError`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct InvalidParamsData {
+    /// How many issues `issues` carries.
+    pub error_count: usize,
+    /// Every issue found, in the order they were detected.
+    pub issues: Vec<InvalidParamsIssue>,
 }
 
 /// A message that expects no response.
@@ -276,6 +332,19 @@ pub fn encode_frame(frame: &Envelope) -> Vec<u8> {
 #[must_use]
 pub fn is_server_method(method: &str) -> bool {
     SERVER_METHODS.binary_search(&method).is_ok()
+}
+
+/// Reports whether `method` is one of this port's local extensions.
+#[must_use]
+pub fn is_local_extension_method(method: &str) -> bool {
+    LOCAL_EXTENSION_METHODS.binary_search(&method).is_ok()
+}
+
+/// Reports whether `method` may be dispatched at all: the reference surface plus
+/// the local extensions.
+#[must_use]
+pub fn is_dispatchable_method(method: &str) -> bool {
+    is_server_method(method) || is_local_extension_method(method)
 }
 
 /// JSON Schema description of the wire contract, for external client
@@ -397,6 +466,13 @@ pub struct ClientCapabilities {
     /// Tools the client exposes back to the server.
     #[serde(default)]
     pub client_tools: Vec<ClientToolCapability>,
+    /// Notification names the client does not want delivered.
+    ///
+    /// The server honours the list for every notification except a sequenced
+    /// event: muting one of those would open a gap in the per-session event
+    /// stream that the client's own projection treats as a fault.
+    #[serde(default)]
+    pub disabled_notifications: Vec<String>,
 }
 
 /// Parameters of the `initialize` request.
@@ -656,6 +732,71 @@ mod tests {
                 "{method} is a lifecycle method and must stay out of the inventory"
             );
         }
+    }
+
+    #[test]
+    fn local_extensions_stay_outside_the_reference_inventory() {
+        assert!(
+            LOCAL_EXTENSION_METHODS.is_sorted_by(|left, right| left < right),
+            "LOCAL_EXTENSION_METHODS must stay sorted and duplicate-free for binary_search"
+        );
+        for method in LOCAL_EXTENSION_METHODS {
+            assert!(
+                !is_server_method(method),
+                "{method} is a local extension and must stay out of SERVER_METHODS"
+            );
+            assert!(is_local_extension_method(method));
+            assert!(is_dispatchable_method(method));
+        }
+        assert!(!is_local_extension_method("turn/start"));
+        assert!(is_dispatchable_method("turn/start"));
+        assert!(!is_dispatchable_method("turn/unknown"));
+    }
+
+    #[test]
+    fn the_handshake_accepts_every_reference_capability_field() {
+        let params = serde_json::from_value::<InitializeParams>(json!({
+            "clientInfo": {"name": "editor", "version": "1"},
+            "capabilities": {
+                "callbackKinds": ["approval"],
+                "clientTools": ["filesystem/read"],
+                "disabledNotifications": ["warning"]
+            }
+        }))
+        .expect("a conforming client completes the handshake");
+        assert_eq!(params.capabilities.disabled_notifications, ["warning"]);
+
+        // A field the reference does not declare still fails, which is what
+        // keeps `deny_unknown_fields` discriminating.
+        assert!(
+            serde_json::from_value::<InitializeParams>(json!({
+                "clientInfo": {"name": "editor", "version": "1"},
+                "capabilities": {"invented": true}
+            }))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn invalid_params_detail_serializes_paths_as_segments() {
+        let data = InvalidParamsData {
+            error_count: 1,
+            issues: vec![InvalidParamsIssue {
+                path: vec![
+                    PathSegment::Field("input".to_owned()),
+                    PathSegment::Index(2),
+                    PathSegment::Field("text".to_owned()),
+                ],
+                message: "invalid type: integer".to_owned(),
+            }],
+        };
+        assert_eq!(
+            serde_json::to_value(&data).expect("detail encodes"),
+            json!({
+                "errorCount": 1,
+                "issues": [{"path": ["input", 2, "text"], "message": "invalid type: integer"}]
+            })
+        );
     }
 
     #[test]

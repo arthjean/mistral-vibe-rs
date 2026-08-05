@@ -121,6 +121,9 @@ what in the repository holds it in place.
 | Per-layer async state machine | Upstream caches each layer, forces reloads and transitions trust per layer (`vibe/core/config/layer.py:263`); this port recomposes from disk on every `load()`, which is observably equivalent for every current caller | `tasks/prd-config-parity.md`, Non-Goals |
 | 5 configuration keys with no upstream counterpart | `thinking`, `notifications`, `proxy`, `tls_ca_path` and `dotenv_path` have no lossless reference target, and mapping them would reinterpret values already on disk | `crates/vibe-core/src/config/surface_parity_tests.rs`, which fails if the set changes |
 | An unregistered key survives the merge | The reference merge drops a key its schema does not declare; keeping it lets a file written by a newer client round-trip through this one | `ConfigSnapshot::unregistered_keys`, asserted per corpus scenario |
+| `config/batchWrite` | Writes several configuration targets in one request, which the reference client does with one `config/patch` per target. `vibe-cli` settings screens already depend on the atomic form; retiring it is its own migration | `LOCAL_EXTENSION_METHODS` in `crates/vibe-protocol/src/lib.rs`, kept out of `SERVER_METHODS` and out of `ServerCapabilities.methods`, asserted by `app_server_surface_parity_tests` |
+| `connectors/toggle` | Enables or disables one connector without the full `config/patch` round trip the reference uses. Live callers in `vibe-cli` | Same as above |
+| `mcp/auth/complete` | Completes the local MCP OAuth callback this port serves itself, which the reference delegates to its own browser flow | Same as above |
 
 ## Verification
 

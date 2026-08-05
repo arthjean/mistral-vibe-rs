@@ -698,6 +698,9 @@ where
                         .into_iter()
                         .collect(),
                     client_tools: declared_client_tools(&capabilities),
+                    // The bridge renders every notification the server sends, so
+                    // it mutes none of them.
+                    disabled_notifications: Vec::new(),
                 },
             )?,
         )

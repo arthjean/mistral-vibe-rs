@@ -21,6 +21,13 @@ pub(super) fn success_bytes(id: RequestId, result: BTreeMap<String, Value>) -> V
 }
 
 pub(super) fn error_batch(id: RequestId, code: ProtocolErrorCode, message: &str) -> DispatchBatch {
+    // Every `invalid_params` carries structured detail, wherever the rejection
+    // was raised: the dispatchers check most parameters by hand rather than
+    // through a deserializer, and a client reads the same shape from all of
+    // them.
+    if code == ProtocolErrorCode::InvalidParams {
+        return invalid_params_batch(id, ParamsRejection::at_root(message.to_owned()));
+    }
     let frame = Envelope::Error(ErrorResponse {
         jsonrpc: JsonRpcVersion::V2,
         id,
@@ -144,7 +151,36 @@ pub(super) fn internal_error_batch(id: RequestId, error: &ServerError) -> Dispat
 pub(super) fn encode_notification(method: &str, params: BTreeMap<String, Value>) -> Vec<u8> {
     encode_frame(&Envelope::Notification(Notification {
         jsonrpc: JsonRpcVersion::V2,
-        method: method.to_owned(),
+        method: notification_method(method).to_owned(),
         params,
     }))
+}
+
+/// Answers a request whose parameters were rejected, naming the value that
+/// caused it.
+///
+/// Every `invalid_params` answer comes through here, whichever dispatcher raised
+/// it, so a client reads the same `errorCount` and `issues` on all of them. Only
+/// a deserialization failure knows a path; a dispatcher's own check reports at
+/// the parameter object. A rejection under any other code carries no detail at
+/// all, and the reference leaves `data` off the wire rather than sending null.
+pub(super) fn invalid_params_batch(id: RequestId, rejection: ParamsRejection) -> DispatchBatch {
+    let detail = InvalidParamsData {
+        error_count: rejection.issues.len(),
+        issues: rejection.issues,
+    };
+    let frame = Envelope::Error(ErrorResponse {
+        jsonrpc: JsonRpcVersion::V2,
+        id,
+        error: ProtocolError {
+            code: ProtocolErrorCode::InvalidParams,
+            message: rejection.message,
+            data: serde_json::to_value(detail).unwrap_or(Value::Null),
+        },
+    });
+    DispatchBatch {
+        outbound: vec![encode_frame(&frame)],
+        deferred: Vec::new(),
+        close_after_flush: false,
+    }
 }

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Complete the handshake with a client that mutes notifications. `initialize`
+  accepts `capabilities.disabledNotifications`, which the reference client
+  library declares and which this port used to answer with `invalid_params`,
+  leaving the connection dead on its first frame. The server honours the list
+  for every notification except a sequenced event: those carry the per-session
+  `eventId` a client counts, so silencing one would open a gap it reads as a
+  fault. Muting a name consumes no event id, so the sequence stays contiguous
+  either way. A capability the protocol does not declare is still rejected.
+- Name the offending value when a request is rejected. Every `invalid_params`
+  answer now carries `data` with `errorCount` and an `issues` array. An issue
+  raised while deserializing carries the `path` to the value that failed, as
+  field names and array indices rather than a flattened string; one raised by a
+  dispatcher's own check reports at the parameter object. A rejection under any
+  other code leaves `data` off the wire.
+- Advertise the reference method inventory. `initialize` reports the methods
+  this build routes from the reference contract and no longer offers
+  `config/batchWrite`, `connectors/toggle` or `mcp/auth/complete`, the three
+  names only this implementation answers. All three stay routable for the
+  clients already calling them and are recorded in the accepted divergences of
+  `docs/parity.md`.
 - Publish the settings a tool declares as a configuration layer. `web_fetch`'s
   content and redirect limits, `web_search`'s and `web_fetch`'s timeouts and
   `todo`'s cap now appear under `tools` in `config/read`, in a `discovered`

@@ -53,9 +53,10 @@ pub use vibe_core::tools::{
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 use vibe_protocol::{
     CallbackKind, ClientCapabilities, Envelope, ErrorResponse, InitializeParams,
-    InitializeResponse, JsonRpcVersion, Notification, ProtocolError, ProtocolErrorCode,
-    ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerRequest, SuccessResponse,
-    TransportKind, decode_frame, encode_frame, is_server_method,
+    InitializeResponse, InvalidParamsData, InvalidParamsIssue, JsonRpcVersion, Notification,
+    PathSegment, ProtocolError, ProtocolErrorCode, ProtocolVersion, RequestId, ServerCapabilities,
+    ServerInfo, ServerRequest, SuccessResponse, TransportKind, decode_frame, encode_frame,
+    is_dispatchable_method, is_server_method,
 };
 
 const INITIALIZE_METHOD: &str = "initialize";
@@ -73,6 +74,64 @@ const MAX_CALLBACK_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_CALLBACK_ANSWERS: usize = 16;
 const MAX_CALLBACK_OPTIONS: usize = 32;
 const MAX_CALLBACK_TEXT_BYTES: usize = 8 * 1024;
+/// Every notification name this build emits, sorted and unique.
+///
+/// [`notification_method`] gates each outbound name against this list, so it is
+/// what the server actually sends rather than a hand-kept description of it. The
+/// app-server surface replay reads it to report notification conformance, and
+/// `docs/parity.md` records the names here that the reference does not declare.
+pub const EMITTED_NOTIFICATIONS: &[&str] = &[
+    "connectors/updated",
+    "history/entryAdded",
+    "history/entryUpdated",
+    "mcp/updated",
+    "session/compacted",
+    "shell/updated",
+    "turn/completed",
+    "turn/started",
+    "vibeCode/teleport/event",
+    "workspace/trust/updated",
+];
+
+/// Every method this build routes, sorted and unique, whether or not the
+/// reference declares it.
+pub(crate) fn routed_methods() -> BTreeSet<&'static str> {
+    IMPLEMENTED_METHODS
+        .iter()
+        .chain(RELEASE3_METHODS)
+        .chain(RELEASE4_METHODS)
+        .chain(RESOURCE_METHODS)
+        .copied()
+        .collect()
+}
+
+/// What `initialize` advertises: the methods this build routes, minus the local
+/// extensions.
+///
+/// A client written against the reference protocol must never learn a name only
+/// this implementation answers, so [`LOCAL_EXTENSION_METHODS`] stays out even
+/// though those methods are dispatched.
+fn advertised_methods() -> Vec<String> {
+    routed_methods()
+        .into_iter()
+        .filter(|method| is_server_method(method))
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+/// Gates a notification name on [`EMITTED_NOTIFICATIONS`] as it leaves.
+///
+/// Both notification funnels pass through here: the frames a dispatch batch
+/// encodes and the frames the live projection builds. A name emitted without
+/// being declared is a surface the conformance replay would never see.
+pub(crate) fn notification_method(method: &str) -> &str {
+    debug_assert!(
+        EMITTED_NOTIFICATIONS.contains(&method),
+        "{method} is emitted but absent from EMITTED_NOTIFICATIONS"
+    );
+    method
+}
+
 const IMPLEMENTED_METHODS: &[&str] = &[
     "account/read",
     "callback/respond",
@@ -1718,12 +1777,41 @@ impl ServerConnection {
                 };
             }
         };
-        match frame {
+        let mut batch = match frame {
             Envelope::Request(request) => self.handle_request(request),
             Envelope::Notification(notification) => self.handle_notification(notification),
             Envelope::Success(response) => self.handle_server_success(response),
             Envelope::Error(response) => self.handle_server_error(response),
+        };
+        batch.outbound.retain(|frame| self.delivers(frame));
+        batch
+    }
+
+    /// Whether a frame may be delivered to this client.
+    ///
+    /// A client can mute notification names during `initialize`, and the server
+    /// honours the list with one exception: a sequenced event carries the
+    /// per-session `eventId` the client's projection counts on, so dropping one
+    /// would open a gap it reads as a fault. Muting a non-event notification
+    /// touches no watermark, so the sequence stays contiguous either way.
+    ///
+    /// Every other frame passes: responses and server requests are answers the
+    /// client asked for, not a stream it can silence.
+    #[must_use]
+    pub fn delivers(&self, frame: &[u8]) -> bool {
+        if self.capabilities.disabled_notifications.is_empty() {
+            return true;
         }
+        let Ok(Envelope::Notification(notification)) = decode_frame(frame) else {
+            return true;
+        };
+        if notification.params.contains_key("eventId") {
+            return true;
+        }
+        !self
+            .capabilities
+            .disabled_notifications
+            .contains(&notification.method)
     }
 
     pub fn request_callback(
@@ -1932,7 +2020,7 @@ impl ServerConnection {
                 "Connection is not initialized",
             );
         }
-        if !is_server_method(&request.method) {
+        if !is_dispatchable_method(&request.method) {
             return error_batch(
                 request.id,
                 ProtocolErrorCode::MethodNotFound,
@@ -1998,8 +2086,8 @@ impl ServerConnection {
         let parsed = from_params::<InitializeParams>(&request.params);
         let params = match parsed {
             Ok(params) => params,
-            Err(message) => {
-                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
             }
         };
         self.capabilities = params.capabilities;
@@ -2011,12 +2099,7 @@ impl ServerConnection {
             },
             protocol_version: ProtocolVersion::V1,
             capabilities: ServerCapabilities {
-                methods: IMPLEMENTED_METHODS
-                    .iter()
-                    .chain(RELEASE3_METHODS)
-                    .chain(RELEASE4_METHODS)
-                    .map(ToString::to_string)
-                    .collect(),
+                methods: advertised_methods(),
                 callback_kinds: vec![CallbackKind::Approval, CallbackKind::UserInput],
                 transports: vec![self.transport],
             },
@@ -2077,8 +2160,8 @@ impl ServerConnection {
     fn session_start(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<SessionStartParams>(&request.params) {
             Ok(params) => params,
-            Err(message) => {
-                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
             }
         };
         if !(1..=500).contains(&params.history_limit) {
@@ -2373,8 +2456,8 @@ impl ServerConnection {
     fn session_read(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<SessionParams>(&request.params) {
             Ok(params) => params,
-            Err(message) => {
-                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
             }
         };
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
@@ -2403,8 +2486,8 @@ impl ServerConnection {
     fn session_close(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<SessionParams>(&request.params) {
             Ok(params) => params,
-            Err(message) => {
-                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
             }
         };
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
@@ -2485,8 +2568,8 @@ impl ServerConnection {
     fn session_settings_update(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<SessionSettingsUpdateParams>(&request.params) {
             Ok(params) => params,
-            Err(message) => {
-                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
             }
         };
         if params.max_turns.is_none()
@@ -2631,8 +2714,8 @@ impl ServerConnection {
     fn session_compact_start(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<SessionCompactParams>(&request.params) {
             Ok(params) => params,
-            Err(message) => {
-                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
             }
         };
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
@@ -2749,8 +2832,8 @@ impl ServerConnection {
     fn turn_start(&mut self, request: ServerRequest) -> DispatchBatch {
         let mut params = match from_params::<TurnStartParams>(&request.params) {
             Ok(params) => params,
-            Err(message) => {
-                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
             }
         };
         let scheduled = match scheduled_loop_turn(&params.user_display_content) {
@@ -2878,8 +2961,8 @@ impl ServerConnection {
     fn turn_steer(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<TurnSteerParams>(&request.params) {
             Ok(params) => params,
-            Err(message) => {
-                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
             }
         };
         let session_id = params.session_id.clone();
@@ -2907,8 +2990,8 @@ impl ServerConnection {
     fn context_inject(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<ContextInjectParams>(&request.params) {
             Ok(params) => params,
-            Err(message) => {
-                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
             }
         };
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
@@ -2977,8 +3060,8 @@ impl ServerConnection {
     fn turn_interrupt(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<TurnParams>(&request.params) {
             Ok(params) => params,
-            Err(message) => {
-                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
             }
         };
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
@@ -3042,8 +3125,8 @@ impl ServerConnection {
     fn callback_respond(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<CallbackResponseParams>(&request.params) {
             Ok(params) => params,
-            Err(message) => {
-                return error_batch(request.id, ProtocolErrorCode::InvalidParams, &message);
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
             }
         };
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
@@ -3756,16 +3839,67 @@ pub enum ServerError {
     Protocol(#[from] vibe_protocol::ProtocolValidationError),
 }
 
+/// Why a request's parameters were rejected, with the path to the value that
+/// caused it.
+///
+/// Serde stops at the first violation, so `issues` carries one entry; the shape
+/// is a list because the contract is a list and a client reads `errorCount`
+/// rather than assuming.
+pub(crate) struct ParamsRejection {
+    message: String,
+    issues: Vec<InvalidParamsIssue>,
+}
+
+impl ParamsRejection {
+    /// A rejection a dispatcher raised by hand rather than through a
+    /// deserializer, so there is no traversal to read a path from and the issue
+    /// sits at the parameter object itself.
+    ///
+    /// The detail is still structured: a client reads `errorCount` and `issues`
+    /// on every `invalid_params`, and an empty path says the failure is about
+    /// the object rather than about a value inside it.
+    fn at_root(message: String) -> Self {
+        Self {
+            issues: vec![InvalidParamsIssue {
+                path: Vec::new(),
+                message: message.clone(),
+            }],
+            message,
+        }
+    }
+}
+
 fn from_params<T: for<'de> Deserialize<'de>>(
     params: &BTreeMap<String, Value>,
-) -> Result<T, String> {
-    serde_json::from_value(Value::Object(
+) -> Result<T, ParamsRejection> {
+    let value = Value::Object(
         params
             .iter()
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect(),
-    ))
-    .map_err(|error| error.to_string())
+    );
+    serde_path_to_error::deserialize(value).map_err(|error| {
+        let path = error
+            .path()
+            .iter()
+            .filter_map(|segment| match segment {
+                serde_path_to_error::Segment::Seq { index } => Some(PathSegment::Index(*index)),
+                serde_path_to_error::Segment::Map { key }
+                | serde_path_to_error::Segment::Enum { variant: key } => {
+                    Some(PathSegment::Field(key.clone()))
+                }
+                serde_path_to_error::Segment::Unknown => None,
+            })
+            .collect();
+        let message = error.into_inner().to_string();
+        ParamsRejection {
+            issues: vec![InvalidParamsIssue {
+                path,
+                message: message.clone(),
+            }],
+            message,
+        }
+    })
 }
 
 fn result_map<const N: usize>(entries: [(&str, Value); N]) -> BTreeMap<String, Value> {
@@ -3802,31 +3936,302 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    /// `SERVER_METHODS` is the contract this build advertises; the routing
-    /// tables are what it actually answers. Nothing else keeps them aligned.
+    /// `SERVER_METHODS` is the reference contract, not this build's routing
+    /// table: a name belongs there whether or not this build answers it. What
+    /// stays enforced here is the other direction, that nothing is routed
+    /// outside the contract plus the declared local extensions, and that the
+    /// advertised set is the routed reference subset.
+    ///
+    /// Which reference methods are still unrouted is a moving backlog, so it is
+    /// tracked where it is measured, in `app_server_surface_parity_tests`.
     #[test]
-    fn advertised_methods_match_routed_methods() {
-        let routed = IMPLEMENTED_METHODS
+    fn every_routed_method_is_declared_or_a_local_extension() {
+        let routed = routed_methods();
+        let undeclared = routed
             .iter()
-            .chain(RELEASE3_METHODS)
-            .chain(RELEASE4_METHODS)
-            .chain(RESOURCE_METHODS)
+            .filter(|method| !is_dispatchable_method(method))
             .copied()
-            .collect::<BTreeSet<_>>();
-        let advertised = vibe_protocol::SERVER_METHODS
+            .collect::<Vec<_>>();
+        assert_eq!(
+            undeclared,
+            Vec::<&str>::new(),
+            "routed but neither declared by the reference nor a local extension"
+        );
+
+        let advertised = advertised_methods();
+        for method in vibe_protocol::LOCAL_EXTENSION_METHODS {
+            assert!(
+                routed.contains(method),
+                "{method} is a local extension but is routed nowhere"
+            );
+            assert!(
+                !advertised.contains(&method.to_owned()),
+                "{method} is a local extension and must not be advertised"
+            );
+        }
+        assert!(advertised.iter().all(|method| is_server_method(method)));
+        assert_eq!(
+            advertised.len(),
+            routed.len() - vibe_protocol::LOCAL_EXTENSION_METHODS.len(),
+            "the advertised set is the routed methods minus the local extensions"
+        );
+    }
+
+    /// A client library written against the reference protocol always may send
+    /// `disabledNotifications`. Rejecting it made the port unreachable for every
+    /// such client, since no second frame is ever sent after a failed
+    /// `initialize`.
+    #[test]
+    fn the_handshake_accepts_the_reference_capability_set() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        let response = initialize_with(
+            &mut connection,
+            json!({
+                "callbackKinds": ["approval"],
+                "clientTools": ["filesystem/read"],
+                "disabledNotifications": ["workspace/trust/updated"]
+            }),
+        );
+        assert_eq!(connection.state(), ConnectionState::Ready);
+
+        let advertised = response["capabilities"]["methods"]
+            .as_array()
+            .expect("the handshake advertises a method list")
             .iter()
-            .copied()
+            .filter_map(|method| method.as_str())
             .collect::<BTreeSet<_>>();
-        assert_eq!(
-            advertised.difference(&routed).copied().collect::<Vec<_>>(),
-            Vec::<&str>::new(),
-            "declared in SERVER_METHODS but routed nowhere"
+        for method in vibe_protocol::LOCAL_EXTENSION_METHODS {
+            assert!(
+                !advertised.contains(method),
+                "{method} is a local extension and must stay unadvertised"
+            );
+        }
+        assert!(
+            advertised.iter().all(|method| is_server_method(method)),
+            "the handshake advertises a name the reference does not declare"
         );
+
+        // A capability the reference does not declare still fails, which is
+        // what keeps `deny_unknown_fields` discriminating the envelope.
+        let mut fresh = server.connect(TransportKind::InProcess);
+        let rejected = fresh.dispatch(&request(
+            1,
+            "initialize",
+            json!({
+                "clientInfo": {"name": "test", "version": "1"},
+                "capabilities": {"invented": true}
+            }),
+        ));
+        assert!(matches!(
+            decode_frame(&rejected.outbound[0]).expect("rejection"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::InvalidParams,
+                    ..
+                },
+                ..
+            })
+        ));
+    }
+
+    /// The mute list silences a notification the client does not want, and stops
+    /// at the sequenced event stream: dropping one of those would open a gap the
+    /// client's own projection reads as a fault.
+    #[test]
+    fn a_muted_notification_is_dropped_and_a_sequenced_event_is_not() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let open_session = |connection: &mut ServerConnection| {
+            let started = connection.dispatch(&request(
+                2,
+                "session/start",
+                json!({"sessionId": "session-1", "workingDirectory": workspace.path()}),
+            ));
+            assert_eq!(started.outbound.len(), 1);
+        };
+        let trust = |connection: &mut ServerConnection| {
+            connection.dispatch(&request(
+                3,
+                "workspace/trust/decision",
+                json!({
+                    "sessionId": "session-1",
+                    "cwd": workspace.path(),
+                    "decision": "trust_cwd"
+                }),
+            ))
+        };
+
+        let server = AppServer::default();
+        let mut listening = server.connect(TransportKind::InProcess);
+        initialize_with(&mut listening, json!({"callbackKinds": ["approval"]}));
+        open_session(&mut listening);
         assert_eq!(
-            routed.difference(&advertised).copied().collect::<Vec<_>>(),
-            Vec::<&str>::new(),
-            "routed but missing from SERVER_METHODS"
+            trust(&mut listening).outbound.len(),
+            2,
+            "an unmuted client receives the response and the notification"
         );
+
+        let server = AppServer::default();
+        let mut muted = server.connect(TransportKind::InProcess);
+        initialize_with(
+            &mut muted,
+            json!({
+                "callbackKinds": ["approval"],
+                "disabledNotifications": ["workspace/trust/updated"]
+            }),
+        );
+        open_session(&mut muted);
+        let batch = trust(&mut muted);
+        assert_eq!(
+            batch.outbound.len(),
+            1,
+            "a muted client receives the response alone"
+        );
+        assert!(matches!(
+            decode_frame(&batch.outbound[0]).expect("trust answer"),
+            Envelope::Success(_)
+        ));
+
+        // The mute consumed no event id, so the first sequenced event still
+        // opens the sequence at one.
+        muted.dispatch(&request(
+            4,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+        let started = server
+            .turn_started("session-1", "turn-1")
+            .expect("the turn starts");
+        assert!(matches!(
+            decode_frame(&started).expect("started notification"),
+            Envelope::Notification(Notification { ref params, .. })
+                if params["eventId"] == json!(1)
+        ));
+        assert!(
+            muted.delivers(&started),
+            "a sequenced event is delivered even when its name is muted"
+        );
+    }
+
+    /// The three local extensions keep answering the clients already calling
+    /// them, while staying outside the advertised contract.
+    #[test]
+    fn a_local_extension_stays_routable() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        for method in vibe_protocol::LOCAL_EXTENSION_METHODS {
+            let batch = connection.dispatch(&request(9, method, json!({"sessionId": "session-1"})));
+            let frame = decode_frame(&batch.outbound[0]).expect("extension answer");
+            if let Envelope::Error(ErrorResponse { error, .. }) = frame {
+                assert_ne!(
+                    error.code,
+                    ProtocolErrorCode::MethodNotFound,
+                    "{method} is routed nowhere: {}",
+                    error.message
+                );
+            }
+        }
+    }
+
+    /// A client that sent the wrong shape has to be told which value was wrong,
+    /// not merely that something was.
+    #[test]
+    fn invalid_params_names_the_offending_value() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        let batch = connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": 7}]}),
+        ));
+        let Envelope::Error(ErrorResponse { error, .. }) =
+            decode_frame(&batch.outbound[0]).expect("rejection")
+        else {
+            unreachable!("a malformed turn input was accepted");
+        };
+        assert_eq!(error.code, ProtocolErrorCode::InvalidParams);
+        assert_eq!(error.data["errorCount"], json!(1));
+        let issue = &error.data["issues"][0];
+        // The path is field names and array indices, not a flattened string.
+        // It stops at the content block rather than reaching `/text`: the block
+        // is an untagged variant, and serde reports the failure where it gave
+        // up on the variant, not inside the one it never selected.
+        assert_eq!(
+            issue["path"],
+            json!(["input", 0]),
+            "the path names the field and index that failed: {}",
+            error.data
+        );
+        assert!(
+            issue["message"].as_str().is_some_and(|m| !m.is_empty()),
+            "the issue carries a message"
+        );
+
+        // A rejection that is not a deserialization failure has no path to
+        // point at, so `data` stays off the wire rather than serializing null.
+        let batch = connection.dispatch(&request(
+            4,
+            "turn/start",
+            json!({"sessionId": "absent", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+        let Envelope::Error(ErrorResponse { error, .. }) =
+            decode_frame(&batch.outbound[0]).expect("rejection")
+        else {
+            unreachable!("an unknown session was accepted");
+        };
+        assert_ne!(error.code, ProtocolErrorCode::InvalidParams);
+        let encoded = serde_json::to_value(&error).expect("error encodes");
+        assert!(
+            encoded.get("data").is_none(),
+            "a non-deserialization rejection carries no data: {encoded}"
+        );
+    }
+
+    /// Most methods are answered by the resource, release3 and release4
+    /// dispatchers, which check their parameters by hand rather than through a
+    /// deserializer. A client reads the same structured detail from those as
+    /// from the handful this module parses itself.
+    #[test]
+    fn a_dispatcher_rejection_carries_the_same_structured_detail() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        // One method per dispatcher family, each missing a required parameter.
+        for (method, params) in [
+            ("tools/list", json!({})),
+            ("session/title/update", json!({"sessionId": "session-1"})),
+            ("loops/delete", json!({"sessionId": "session-1"})),
+        ] {
+            let batch = connection.dispatch(&request(5, method, params));
+            let Envelope::Error(ErrorResponse { error, .. }) =
+                decode_frame(&batch.outbound[0]).expect("rejection")
+            else {
+                unreachable!("{method} accepted parameters it should have rejected");
+            };
+            assert_eq!(
+                error.code,
+                ProtocolErrorCode::InvalidParams,
+                "{method}: {}",
+                error.message
+            );
+            assert_eq!(error.data["errorCount"], json!(1), "{method}");
+            let issue = &error.data["issues"][0];
+            assert!(
+                issue["path"].is_array(),
+                "{method} carries no path: {}",
+                error.data
+            );
+            assert!(
+                issue["message"].as_str().is_some_and(|m| !m.is_empty()),
+                "{method} carries no message: {}",
+                error.data
+            );
+        }
     }
 
     /// `vibe-core` and `vibe-protocol` sit in the same dependency layer, so the
@@ -4003,6 +4408,31 @@ mod tests {
         .expect("initialized fixture");
         assert!(connection.dispatch(&initialized).outbound.is_empty());
         assert_eq!(connection.state(), ConnectionState::Ready);
+    }
+
+    /// Completes the handshake with the capabilities a client declares,
+    /// answering with the `InitializeResponse` the server sent.
+    fn initialize_with(connection: &mut ServerConnection, capabilities: Value) -> Value {
+        let batch = connection.dispatch(&request(
+            1,
+            "initialize",
+            json!({
+                "clientInfo": {"name": "test", "version": "1"},
+                "capabilities": capabilities
+            }),
+        ));
+        let response = match decode_frame(&batch.outbound[0]).expect("handshake answer") {
+            Envelope::Success(success) => Value::Object(success.result.into_iter().collect()),
+            other => unreachable!("the handshake was rejected: {other:?}"),
+        };
+        let initialized = serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }))
+        .expect("initialized fixture");
+        assert!(connection.dispatch(&initialized).outbound.is_empty());
+        response
     }
 
     fn start_session(connection: &mut ServerConnection) {

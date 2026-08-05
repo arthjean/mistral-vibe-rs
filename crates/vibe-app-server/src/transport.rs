@@ -115,7 +115,9 @@ where
                 let Some(event) = event else { break };
                 match event {
                     ServeEvent::Frame(bytes) => {
-                        if let Err(error) = transport.send(&bytes).await {
+                        if connection.delivers(&bytes)
+                            && let Err(error) = transport.send(&bytes).await
+                        {
                             failure = Some(error);
                             break 'serve;
                         }
@@ -124,7 +126,9 @@ where
                         active.remove(&(session_id, turn_id));
                         match notification {
                             Ok(bytes) => {
-                                if let Err(error) = transport.send(&bytes).await {
+                                if connection.delivers(&bytes)
+                                    && let Err(error) = transport.send(&bytes).await
+                                {
                                     failure = Some(error);
                                     break 'serve;
                                 }
@@ -173,7 +177,9 @@ where
                     .await
                     {
                         Ok(Some(bytes)) => {
-                            if let Err(error) = transport.send(&bytes).await {
+                            if connection.delivers(&bytes)
+                                && let Err(error) = transport.send(&bytes).await
+                            {
                                 failure = Some(error);
                                 break 'serve;
                             }

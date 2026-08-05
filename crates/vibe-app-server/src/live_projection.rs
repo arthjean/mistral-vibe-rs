@@ -16,7 +16,7 @@ use vibe_core::events::{
     PublicHistoryEntry,
 };
 
-use crate::server::{AppServer, ServerError};
+use crate::server::{AppServer, ServerError, notification_method};
 
 #[derive(Debug)]
 pub(crate) enum AppServerUpdate {
@@ -260,7 +260,7 @@ pub(crate) fn app_server_notification(
             let event_id = server.apply_live_projection(&session_id, &turn_id, snapshot)?;
             serde_json::json!({
                 "jsonrpc": "2.0",
-                "method": "history/entryAdded",
+                "method": notification_method("history/entryAdded"),
                 "params": {
                     "eventId": event_id,
                     "sessionId": session_id,
@@ -281,7 +281,7 @@ pub(crate) fn app_server_notification(
             let event_id = server.apply_live_projection(&session_id, &turn_id, snapshot)?;
             serde_json::json!({
                 "jsonrpc": "2.0",
-                "method": "history/entryUpdated",
+                "method": notification_method("history/entryUpdated"),
                 "params": {
                     "eventId": event_id,
                     "sessionId": session_id,
