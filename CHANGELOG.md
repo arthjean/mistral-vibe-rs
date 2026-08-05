@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Write configuration through `config/patch`. A client addresses a field by JSON
+  Pointer, with `set` and `remove`, and the server decides which file backs it:
+  an operation naming no `targetLayer` lands in the file the current selection
+  resolves to. A change that would leave an invalid configuration is rejected
+  whole and leaves every file byte-identical, while a target whose write fails
+  after that is reported on its own so the target that succeeded stands. Beyond
+  the reference response, the answer carries the `changedKeys` the write moved.
+  `config/batchWrite` still dispatches and now routes through the same core.
+- Describe the settings surface through `config/fields/read`. Every published
+  field arrives with its editor kind, description, effective value, JSON Pointer,
+  popular flag, choices and per-layer values ordered from the highest-priority
+  layer down to the shipped defaults, together with the configuration files a
+  write can be routed to. Per-tool settings stay out, as they do upstream, and a
+  field whose name is sensitive is redacted in its value and in every layer.
+- Publish configuration changes to in-process subscribers, filtered by key. A
+  subscription on `models` hears about `models/active` and the reverse, a write
+  that changes nothing publishes nothing, and one failing subscriber never
+  silences the others. Published documents are redacted.
 - Start with the reference default configuration instead of an empty one. Every
   key the reference declares now has its upstream default at every construction
   site, so behavior you never configured matches between the two clients: the
