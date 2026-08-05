@@ -4406,7 +4406,6 @@ command = "/must-not-run"
                 working_directory: workspace.clone(),
                 session_root: temporary.path().join("sessions"),
             },
-            toml::Table::new(),
             true,
         )
         .expect("release-3 service");
@@ -4448,7 +4447,6 @@ command = "/must-not-run"
                 working_directory: workspace.clone(),
                 session_root: temporary.path().join("sessions"),
             },
-            toml::Table::new(),
             false,
         )
         .expect("release-3 service");

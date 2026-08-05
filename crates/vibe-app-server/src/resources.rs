@@ -1669,7 +1669,7 @@ mod tests {
                 vibe_home,
                 working_directory: workspace.clone(),
             },
-            toml::Table::new(),
+            vibe_core::config::registry::default_document(),
         );
         let backend = CoreResourceBackend::default()
             .with_config(store)
@@ -1740,7 +1740,7 @@ mod tests {
                 vibe_home,
                 working_directory: workspace.clone(),
             },
-            toml::Table::new(),
+            vibe_core::config::registry::default_document(),
         );
         let backend = CoreResourceBackend::default()
             .with_config(store)

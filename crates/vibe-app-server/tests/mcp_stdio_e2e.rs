@@ -164,7 +164,6 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
             working_directory: temporary.path().to_path_buf(),
             session_root: temporary.path().join("sessions"),
         },
-        toml::Table::new(),
         true,
     )
     .expect("release-3 config service");

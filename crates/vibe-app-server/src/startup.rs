@@ -138,7 +138,7 @@ impl StartupHost {
     }
 
     pub fn into_release3(self, project_trusted: bool) -> Result<Release3Service, StartupHostError> {
-        Release3Service::new(self.paths, toml::Table::new(), project_trusted)
+        Release3Service::new(self.paths, project_trusted)
             .map(Release3Service::with_runtime_session_persistence)
             .map_err(StartupHostError::Release3)
     }

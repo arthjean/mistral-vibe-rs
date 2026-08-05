@@ -115,22 +115,21 @@ impl Default for Release3Service {
                 vibe_home,
                 working_directory,
             },
-            Table::new(),
             false,
         )
     }
 }
 
 impl Release3Service {
-    pub fn new(
-        paths: Release3Paths,
-        defaults: Table,
-        project_trusted: bool,
-    ) -> Result<Self, Release3Error> {
-        Ok(Self::build(paths, defaults, project_trusted))
+    pub fn new(paths: Release3Paths, project_trusted: bool) -> Result<Self, Release3Error> {
+        Ok(Self::build(paths, project_trusted))
     }
 
-    fn build(paths: Release3Paths, defaults: Table, project_trusted: bool) -> Self {
+    fn build(paths: Release3Paths, project_trusted: bool) -> Self {
+        // The Defaults layer is the shipped document at every construction
+        // site: a service built without it composes a configuration the
+        // reference could never produce.
+        let defaults = vibe_core::config::registry::default_document();
         let config = LayeredConfig::new(
             ConfigPaths {
                 vibe_home: paths.vibe_home.clone(),
@@ -199,7 +198,6 @@ impl Release3Service {
                 working_directory: working_directory.into(),
                 session_root,
             },
-            Table::new(),
             false,
         )
         .with_runtime_session_persistence()
@@ -401,10 +399,15 @@ impl Release3Service {
             // `load` always reads from disk, so reading and reloading are the
             // same operation.
             "config/read" | "config/reload" => self.config_snapshot(),
-            "config/schema" => Ok(Release3Dispatch::result([(
-                "schema",
-                LayeredConfig::schema(),
-            )])),
+            // Reference `config_schema_response`: the version token lets a
+            // client cache the surface instead of refetching it.
+            "config/schema" => Ok(Release3Dispatch::result([
+                (
+                    "configSchemaVersion",
+                    Value::from(LayeredConfig::schema_version()),
+                ),
+                ("schema", LayeredConfig::schema()),
+            ])),
             "config/batchWrite" => self.config_batch_write(params),
             "config/thinking/write" => self.single_config_write(params, "thinking", "value"),
             "config/proxy/write" => self.proxy_write(params),
@@ -1556,7 +1559,6 @@ mod tests {
                 working_directory: workspace,
                 session_root: temporary.path().join("sessions"),
             },
-            Table::new(),
             true,
         )
         .expect("service");
@@ -1699,7 +1701,6 @@ mod tests {
                 vibe_home,
                 working_directory: workspace,
             },
-            Table::new(),
             true,
         )
         .expect("restarted service");
@@ -1730,6 +1731,91 @@ mod tests {
                 .result["agents"]
                 .as_array()
                 .is_some_and(|agents| agents.iter().any(|agent| agent["name"] == "reviewer"))
+        );
+    }
+
+    /// Reference `ConfigSchemaReadResponse`: a version token beside the schema
+    /// object, so a client can cache the surface it names.
+    #[test]
+    fn config_schema_publishes_every_declared_field_with_a_version_token() {
+        let (_temporary, service) = service();
+        let response = service
+            .dispatch("config/schema", &BTreeMap::new())
+            .expect("config schema");
+
+        let version = response.result["configSchemaVersion"]
+            .as_str()
+            .expect("the response carries a version token");
+        assert!(version.starts_with("sha256:"), "{version}");
+        let properties = response.result["schema"]["properties"]
+            .as_object()
+            .expect("the schema declares properties");
+        assert_eq!(properties.len(), vibe_core::config::registry::FIELDS.len());
+        for field in vibe_core::config::registry::FIELDS {
+            assert!(
+                properties.contains_key(field.name),
+                "`{}` is not published",
+                field.name
+            );
+        }
+        // A settings screen renders these directly, so their shape is asserted
+        // rather than assumed.
+        assert_eq!(
+            properties["auto_compact_threshold"]["type"],
+            json!("integer")
+        );
+        assert_eq!(
+            properties["auto_compact_threshold"]["default"],
+            json!(200_000)
+        );
+        assert_eq!(properties["api_timeout"]["type"], json!("number"));
+        assert_eq!(
+            properties["otel_redaction"]["enum"],
+            json!(["default", "none", "strict"])
+        );
+
+        let again = service
+            .dispatch("config/schema", &BTreeMap::new())
+            .expect("config schema");
+        assert_eq!(again.result, response.result, "the schema is not cacheable");
+    }
+
+    /// The Defaults layer is the shipped document at every construction site,
+    /// so a session opened without a configuration file still reads the
+    /// reference defaults.
+    #[test]
+    fn config_read_composes_the_shipped_defaults_without_a_configuration_file() {
+        let (_temporary, service) = service();
+        let snapshot = service
+            .dispatch("config/read", &BTreeMap::new())
+            .expect("config read");
+        let config = &snapshot.result["snapshot"]["config"];
+
+        assert_eq!(config["active_model"], json!("mistral-medium-3.5"));
+        assert_eq!(config["theme"], json!("auto"));
+        assert_eq!(config["auto_compact_threshold"], json!(200_000));
+        assert_eq!(
+            config["models"]["local"]["provider"],
+            json!("llamacpp"),
+            "models are read back keyed by alias"
+        );
+        assert_eq!(
+            snapshot.result["snapshot"]["validationWarnings"],
+            json!([]),
+            "the shipped defaults need no repair"
+        );
+        let layers = snapshot.result["snapshot"]["layerValues"]
+            .as_array()
+            .expect("the snapshot lists its layers");
+        let defaults = layers
+            .iter()
+            .find(|layer| layer["layer"] == json!("defaults"))
+            .expect("the defaults layer is composed");
+        assert!(
+            defaults["values"]
+                .as_object()
+                .is_some_and(|values| values.len() > 50),
+            "the defaults layer is empty"
         );
     }
 

@@ -3797,7 +3797,6 @@ mod tests {
     use super::*;
     use std::fs;
     use std::path::PathBuf;
-    use toml::Table;
 
     /// `SERVER_METHODS` is the contract this build advertises; the routing
     /// tables are what it actually answers. Nothing else keeps them aligned.
@@ -5933,7 +5932,6 @@ tool_timeout_sec = 2
                 working_directory: working_directory.clone(),
                 session_root: temporary.path().join("sessions"),
             },
-            Table::new(),
             true,
         )
         .expect("release-3 service");
@@ -5998,7 +5996,6 @@ tool_timeout_sec = 2
                 working_directory: working_directory.clone(),
                 session_root: temporary.path().join("sessions"),
             },
-            Table::new(),
             true,
         )
         .expect("release-3 service");
@@ -6076,7 +6073,6 @@ tool_timeout_sec = 2
                 working_directory: working_directory.clone(),
                 session_root: temporary.path().join("sessions"),
             },
-            Table::new(),
             true,
         )
         .expect("release-3 service");
@@ -6152,7 +6148,6 @@ tool_timeout_sec = 2
                 working_directory: working_directory.clone(),
                 session_root,
             },
-            Table::new(),
             true,
         )
         .expect("release-3 service");
@@ -6298,7 +6293,6 @@ tool_timeout_sec = 2
                 working_directory,
                 session_root,
             },
-            Table::new(),
             false,
         )
         .expect("release-3 service");
