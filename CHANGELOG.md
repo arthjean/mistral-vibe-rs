@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- Accept every MCP entry the reference accepts. `transport = "http"` loads and
+  round-trips beside `streamable-http`, `/mcp add --transport http` is no longer
+  refused, and a stdio `command` may be a list or a quoted string that is split
+  the way a shell splits it, so `command = "npx -y @scope/server"` launches the
+  program it names instead of looking for a file with spaces in its name. An
+  entry's `prompt` now reaches the model as a hint on every tool the server
+  publishes, and `sampling_enabled`, `disabled` and `disabled_tools` carry the
+  reference defaults.
+- Authenticate an MCP server through an `[auth]` block. A static block declares
+  headers, the environment variable holding the token, the header it rides in
+  and its format; the token is read when the request is made, never persisted,
+  and an explicit header of the same name wins. An OAuth block declares the
+  scopes to request, a pre-registered client id or a client-metadata document
+  URL, and the loopback port the callback binds, and the login uses them. The
+  legacy top-level `headers`, `api_key_env`, `api_key_header` and
+  `api_key_format` keys keep working: they are promoted into a static block, and
+  mixing them with an explicit block is refused.
+- Reject an MCP server URL the way the reference rejects it, and add one under
+  the same name. Credentials, a fragment, a missing scheme or host, a scheme
+  other than HTTP or HTTPS, and plaintext HTTP to anything but this machine are
+  all refused without echoing the URL. Two spellings of one endpoint, differing
+  only by case, a default port or a trailing slash, are recognised as the same
+  server and the rejection names the entry that already holds it. An add with no
+  name derives one from the host, dropping a leading `mcp` or `www` label and
+  falling back to the first usable path segment, then numbering it until it is
+  free; a name you asked for is never renamed behind your back.
+- Remove a configured MCP server with `vibe mcp remove <name>`. The entry
+  disappears from the file writes land in, and a name nothing carries is
+  reported as such rather than failing.
 - Find the project configuration from anywhere inside a repository. The walk
   starts at the working directory and climbs one parent at a time, taking the
   nearest `.vibe/config.toml` and stopping before the directory that holds the
