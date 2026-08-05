@@ -13,6 +13,7 @@ use vibe_app_server::client::{HeadlessService, SessionOptions, TurnDriver};
 use vibe_app_server::release3::Release3Service;
 use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
+use vibe_core::config::DotenvValues;
 use vibe_protocol::{
     CallbackKind, ClientCapabilities, ClientEntrypoint, ClientInfo, TerminalEmulator,
 };
@@ -661,13 +662,18 @@ where
             server = server.using_release4_service(release4);
         }
         if let Some(session_root) = &self.session_root {
-            server = server.using_release3_service(
-                Release3Service::for_runtime_session_root(
-                    session_root,
-                    Path::new(working_directory),
-                )
-                .with_allowed_roots(additional_directories.iter().map(PathBuf::from).collect()),
-            );
+            let release3 = Release3Service::for_runtime_session_root(
+                session_root,
+                Path::new(working_directory),
+            )
+            .with_allowed_roots(additional_directories.iter().map(PathBuf::from).collect());
+            // The editor session starts here, so an older configuration file is
+            // brought forward before the first read. A failure to write is
+            // carried by the configuration snapshot, not raised.
+            release3
+                .migrate_configuration()
+                .map_err(|error| AcpError::Configuration(error.to_string()))?;
+            server = server.using_release3_service(release3);
         }
         Ok(
             HeadlessService::new_interactive_shared_with_server_and_client(
@@ -707,8 +713,16 @@ where
         if let Some(service) = cached.as_ref() {
             return Ok(Some(service.clone()));
         }
-        let Some(api_key) = std::env::var(&self.credential_environment)
-            .ok()
+        // The session root sits inside the vibe home, so the global dotenv file
+        // is resolvable here and a key kept there starts the cloud services the
+        // same way an exported one does.
+        let dotenv = self
+            .session_root
+            .as_deref()
+            .and_then(Path::parent)
+            .map_or_else(DotenvValues::default, DotenvValues::global);
+        let Some(api_key) = dotenv
+            .variable(&self.credential_environment)
             .filter(|value| !value.trim().is_empty())
         else {
             return Ok(None);

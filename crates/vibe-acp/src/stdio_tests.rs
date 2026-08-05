@@ -230,16 +230,19 @@ async fn initialize_and_session_lifecycle_do_not_require_provider_credentials() 
         let resolutions = resolutions.clone();
         move || {
             resolutions.fetch_add(1, Ordering::SeqCst);
-            LiveTurnDriver::from_environment(LiveDriverConfig {
-                style: "mistral".to_owned(),
-                endpoint: "http://127.0.0.1:1".to_owned(),
-                model: "test-model".to_owned(),
-                credential_environment: MISSING_CREDENTIAL.to_owned(),
-                system_prompt: "test".to_owned(),
-                session_root: None,
-                input_price_per_million_micros: 0,
-                output_price_per_million_micros: 0,
-            })
+            LiveTurnDriver::from_environment(
+                LiveDriverConfig {
+                    style: "mistral".to_owned(),
+                    endpoint: "http://127.0.0.1:1".to_owned(),
+                    model: "test-model".to_owned(),
+                    credential_environment: MISSING_CREDENTIAL.to_owned(),
+                    system_prompt: "test".to_owned(),
+                    session_root: None,
+                    input_price_per_million_micros: 0,
+                    output_price_per_million_micros: 0,
+                },
+                &DotenvValues::default(),
+            )
         }
     });
     let mut peer = spawn_stdio(driver);

@@ -2990,15 +2990,18 @@ impl LiveTurnDriver {
         self
     }
 
-    pub fn from_environment(config: LiveDriverConfig) -> Result<Self, DriverError> {
-        let credential = std::env::var(&config.credential_environment).map_err(|_| {
-            DriverError::MissingCredentialEnvironment(config.credential_environment.clone())
-        })?;
-        if credential.is_empty() {
-            return Err(DriverError::MissingCredentialEnvironment(
-                config.credential_environment,
-            ));
-        }
+    /// Builds the driver from the ambient credential: the process environment
+    /// first, then the variables `dotenv` read from the global file.
+    pub fn from_environment(
+        config: LiveDriverConfig,
+        dotenv: &vibe_core::config::DotenvValues,
+    ) -> Result<Self, DriverError> {
+        let credential = dotenv
+            .variable(&config.credential_environment)
+            .filter(|credential| !credential.is_empty())
+            .ok_or_else(|| {
+                DriverError::MissingCredentialEnvironment(config.credential_environment.clone())
+            })?;
         Self::from_credential(config, credential)
     }
 

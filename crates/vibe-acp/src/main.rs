@@ -20,6 +20,7 @@ use vibe_app_server::client::{
     LiveTurnDriver, TurnDriver, TurnReservation,
 };
 use vibe_app_server::transport::{MAX_FRAME_BYTES, read_bounded_frame};
+use vibe_core::config::DotenvValues;
 
 const WRITER_QUEUE_CAPACITY: usize = 1_024;
 const MAX_CONCURRENT_REQUESTS: usize = 128;
@@ -270,21 +271,37 @@ async fn main() -> ExitCode {
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let session_root = default_session_root();
-    let credential_environment =
-        std::env::var("VIBE_CREDENTIAL_ENV").unwrap_or_else(|_| "MISTRAL_API_KEY".to_owned());
+    let vibe_home = default_vibe_home();
+    let session_root = vibe_home.join("sessions");
+    // `{vibe_home}/.env` stands in for an unset process variable, which is what
+    // the reference startup leaves behind after loading the file.
+    let dotenv = DotenvValues::global(&vibe_home);
+    let credential_environment = dotenv
+        .variable("VIBE_CREDENTIAL_ENV")
+        .unwrap_or_else(|| "MISTRAL_API_KEY".to_owned());
     let config = LiveDriverConfig {
-        style: std::env::var("VIBE_PROVIDER_STYLE").unwrap_or_else(|_| "mistral".to_owned()),
-        endpoint: std::env::var("VIBE_API_BASE")
-            .unwrap_or_else(|_| "https://api.mistral.ai/v1/chat/completions".to_owned()),
-        model: std::env::var("VIBE_MODEL").unwrap_or_else(|_| "mistral-medium-3.5".to_owned()),
+        style: dotenv
+            .variable("VIBE_PROVIDER_STYLE")
+            .unwrap_or_else(|| "mistral".to_owned()),
+        endpoint: dotenv
+            .variable("VIBE_API_BASE")
+            .unwrap_or_else(|| "https://api.mistral.ai/v1/chat/completions".to_owned()),
+        model: dotenv
+            .variable("VIBE_MODEL")
+            .unwrap_or_else(|| "mistral-medium-3.5".to_owned()),
         credential_environment: credential_environment.clone(),
         system_prompt: "You are Mistral Vibe.".to_owned(),
         session_root: Some(session_root.clone()),
-        input_price_per_million_micros: price_from_environment("VIBE_INPUT_PRICE", 1_500_000)?,
-        output_price_per_million_micros: price_from_environment("VIBE_OUTPUT_PRICE", 7_500_000)?,
+        input_price_per_million_micros: price_from_dotenv(&dotenv, "VIBE_INPUT_PRICE", 1_500_000)?,
+        output_price_per_million_micros: price_from_dotenv(
+            &dotenv,
+            "VIBE_OUTPUT_PRICE",
+            7_500_000,
+        )?,
     };
-    let driver = DeferredTurnDriver::new(move || LiveTurnDriver::from_environment(config.clone()));
+    let driver = DeferredTurnDriver::new(move || {
+        LiveTurnDriver::from_environment(config.clone(), &DotenvValues::global(&vibe_home))
+    });
     run_stdio(
         BufReader::new(tokio::io::stdin()),
         tokio::io::stdout(),
@@ -411,7 +428,7 @@ where
     Ok(())
 }
 
-fn default_session_root() -> PathBuf {
+fn default_vibe_home() -> PathBuf {
     std::env::var_os("VIBE_HOME")
         .map(PathBuf::from)
         .or_else(|| {
@@ -424,7 +441,6 @@ fn default_session_root() -> PathBuf {
                 .unwrap_or_else(|_| PathBuf::from("."))
                 .join(".vibe")
         })
-        .join("sessions")
 }
 
 async fn writer_loop<W>(
@@ -676,11 +692,12 @@ fn scalar_string(value: &Value) -> Result<String, AcpError> {
     }
 }
 
-fn price_from_environment(
+fn price_from_dotenv(
+    dotenv: &DotenvValues,
     name: &str,
     default_micros: u64,
 ) -> Result<u64, Box<dyn std::error::Error>> {
-    let Ok(value) = std::env::var(name) else {
+    let Some(value) = dotenv.variable(name) else {
         return Ok(default_micros);
     };
     let price = value.parse::<f64>()?;
