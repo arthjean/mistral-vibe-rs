@@ -332,24 +332,27 @@ fn a_failed_migration_write_is_reported_and_leaves_the_file_intact() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
     let repository = root.join("work");
-    fs::create_dir_all(&repository).expect("working directory");
+    fs::create_dir_all(repository.join(".vibe")).expect("project directory");
     fs::create_dir_all(vibe_home(root)).expect("vibe home");
-    let user_path = vibe_home(root).join("config.toml");
+    // The blocked file is the project one. `migrate_sources` restores the vibe
+    // home's own mode before it writes anything, so a mode set on that
+    // directory would not survive long enough to block the write.
+    let project_path = repository.join(".vibe/config.toml");
     let original = "active_model = \"devstral-2\"\n";
-    fs::write(&user_path, original).expect("user fixture");
+    fs::write(&project_path, original).expect("project fixture");
 
-    let blocked = block_writes(&user_path);
+    let blocked = block_writes(&project_path);
     if !blocked {
         return;
     }
-    let store = store(root, &repository);
+    let store = store(root, &repository).with_project_trusted(true);
     let warnings = store.migrate_sources().expect("migrations still succeed");
     let snapshot = store.load().expect("the load succeeds");
-    restore_writes(&user_path);
+    restore_writes(&project_path);
     assert_eq!(warnings, snapshot.validation_warnings);
 
     assert_eq!(
-        fs::read_to_string(&user_path).expect("user file"),
+        fs::read_to_string(&project_path).expect("project file"),
         original,
         "the original file survives a failed migration"
     );
