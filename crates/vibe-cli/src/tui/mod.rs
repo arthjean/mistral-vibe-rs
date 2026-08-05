@@ -1552,20 +1552,21 @@ fn startup_preferences(
     };
     let mut image_models = ImageModels::default();
     image_models.insert(DEFAULT_MODEL, true);
+    // Models are keyed by alias in the effective configuration; the entry still
+    // carries its own name, which a provider request is sent under.
     if let Some(models) = config
         .and_then(|config| config.get("models"))
-        .and_then(Value::as_array)
+        .and_then(Value::as_object)
     {
-        for configured in models {
+        for (alias, configured) in models {
             let supports_images = configured
                 .get("supports_images")
                 .or_else(|| configured.get("supportsImages"))
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
-            for key in ["name", "alias"] {
-                if let Some(value) = configured.get(key).and_then(Value::as_str) {
-                    image_models.insert(value, supports_images);
-                }
+            image_models.insert(alias, supports_images);
+            if let Some(name) = configured.get("name").and_then(Value::as_str) {
+                image_models.insert(name, supports_images);
             }
         }
     }
@@ -1694,6 +1695,39 @@ mod tests {
                 Poll::Pending
             }
         }
+    }
+
+    /// The shipped defaults reach the terminal client: with no configuration
+    /// file at all, the session opens on the default model, knows that model
+    /// takes images, and reads the hosted-surface flag from the same document.
+    #[test]
+    fn startup_preferences_read_the_shipped_default_configuration() {
+        let temporary = tempfile::tempdir().expect("temporary home");
+        let release3 = Release3Service::for_runtime_session_root(
+            temporary.path().join(".vibe/sessions"),
+            temporary.path().join("workspace"),
+        );
+        let arguments = <Arguments as clap::Parser>::try_parse_from(["vibe"])
+            .expect("interactive arguments parse");
+
+        let preferences =
+            startup_preferences(&arguments, &release3).expect("preferences read from defaults");
+
+        assert_eq!(preferences.model, DEFAULT_MODEL);
+        assert!(preferences.image_models.get(DEFAULT_MODEL).supports_images);
+        assert!(
+            preferences
+                .image_models
+                .get("mistral-vibe-cli-latest")
+                .supports_images,
+            "the model's own name resolves alongside its alias"
+        );
+        assert!(
+            !preferences.image_models.get("local").supports_images,
+            "a model that takes no image is published as such"
+        );
+        assert!(preferences.vibe_code_enabled);
+        assert_eq!(preferences.reasoning_effort, None);
     }
 
     #[test]

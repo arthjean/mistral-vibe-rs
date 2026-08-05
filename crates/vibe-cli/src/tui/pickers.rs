@@ -316,19 +316,14 @@ pub fn rewind_state(result: &Value) -> Option<RewindState> {
 #[must_use]
 pub fn model_overlay(snapshot: &Value, current: &str) -> Overlay {
     let config = snapshot.get("config").unwrap_or(snapshot);
+    // The effective configuration keys models by alias, as the reference does
+    // once a persisted `[[models]]` list is read back.
     let mut models = config
         .get("models")
-        .and_then(Value::as_array)
+        .and_then(Value::as_object)
         .into_iter()
         .flatten()
-        .filter_map(|model| {
-            model
-                .get("alias")
-                .or_else(|| model.get("name"))
-                .and_then(Value::as_str)
-                .or_else(|| model.as_str())
-        })
-        .map(ToOwned::to_owned)
+        .map(|(alias, _)| alias.clone())
         .collect::<Vec<_>>();
     if !current.is_empty() && !models.iter().any(|model| model == current) {
         models.push(current.to_owned());
@@ -631,4 +626,52 @@ pub(super) fn to_camel_case(value: &str) -> String {
         }
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::model_overlay;
+
+    /// The effective configuration keys models by alias, so the picker lists
+    /// keys rather than list entries.
+    #[test]
+    fn the_model_picker_lists_the_aliases_the_configuration_is_keyed_by() {
+        let snapshot = json!({
+            "config": {
+                "models": {
+                    "mistral-medium-3.5": {"name": "mistral-vibe-cli-latest", "provider": "mistral"},
+                    "local": {"name": "devstral", "provider": "llamacpp"}
+                }
+            }
+        });
+        let overlay = model_overlay(&snapshot, "local");
+        let listed = overlay
+            .items
+            .iter()
+            .map(|item| item.id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(listed, ["local", "mistral-medium-3.5"]);
+        let selected = overlay
+            .items
+            .iter()
+            .find(|item| item.id == "local")
+            .expect("the current model is listed");
+        assert_eq!(selected.description, "current");
+    }
+
+    /// A model the configuration does not declare still has to be selectable,
+    /// so a session started with `--model` keeps showing what it runs on.
+    #[test]
+    fn the_current_model_is_listed_even_when_it_is_not_configured() {
+        let snapshot = json!({"config": {"models": {"local": {"name": "devstral"}}}});
+        let overlay = model_overlay(&snapshot, "scratch");
+        let listed = overlay
+            .items
+            .iter()
+            .map(|item| item.id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(listed, ["local", "scratch"]);
+    }
 }
