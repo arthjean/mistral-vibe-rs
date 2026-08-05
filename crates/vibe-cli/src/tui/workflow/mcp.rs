@@ -88,7 +88,7 @@ pub(super) fn handle_mcp(arguments: &str, runtime: &mut InteractiveRuntime, stat
             &SystemUrlOpener,
         ),
         _ => state.push_diagnostic(
-            "Usage: /mcp [name|status|login <alias>|logout <alias>|add <url> [--name <alias>] [--transport streamable-http]]",
+            "Usage: /mcp [name|status|login <alias>|logout <alias>|add <url> [--name <alias>] [--transport http|streamable-http]]",
         ),
     }
 }
@@ -637,7 +637,7 @@ async fn open_auth_url(url: String) -> Result<(), String> {
 }
 
 fn parse_mcp_add(arguments: &[String], state: &mut TuiState) -> Option<Map<String, Value>> {
-    const USAGE: &str = "Usage: /mcp add <url> [--name <alias>] [--transport streamable-http]";
+    const USAGE: &str = "Usage: /mcp add <url> [--name <alias>] [--transport http|streamable-http]";
     let mut url = None;
     let mut name_seen = false;
     let mut transport_seen = false;
@@ -662,8 +662,8 @@ fn parse_mcp_add(arguments: &[String], state: &mut TuiState) -> Option<Map<Strin
                     return None;
                 }
                 let value = mcp_option_value(arguments, index, "--transport", state)?;
-                if value != "streamable-http" {
-                    state.push_diagnostic("/mcp add transport must be `streamable-http`");
+                if value != "streamable-http" && value != "http" {
+                    state.push_diagnostic("/mcp add transport must be `http` or `streamable-http`");
                     return None;
                 }
                 transport_seen = true;
