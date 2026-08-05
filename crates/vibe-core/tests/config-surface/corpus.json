@@ -715,6 +715,562 @@
       "strategy": "replace"
     }
   ],
+  "mcp": {
+    "entries": [
+      {
+        "decoded": {
+          "apiKeyEnv": "",
+          "apiKeyFormat": "Bearer {token}",
+          "apiKeyHeader": "Authorization",
+          "authType": "static",
+          "disabled": false,
+          "disabledTools": [],
+          "headers": {},
+          "httpHeaders": {},
+          "name": "docs",
+          "prompt": null,
+          "samplingEnabled": true,
+          "startupTimeoutSec": 10.0,
+          "toolTimeoutSec": 60.0,
+          "transport": "streamable-http",
+          "url": "https://docs.example/mcp"
+        },
+        "name": "streamable-http-bare",
+        "rejected": false,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n"
+      },
+      {
+        "decoded": {
+          "apiKeyEnv": "",
+          "apiKeyFormat": "Bearer {token}",
+          "apiKeyHeader": "Authorization",
+          "authType": "static",
+          "disabled": false,
+          "disabledTools": [],
+          "headers": {},
+          "httpHeaders": {},
+          "name": "docs",
+          "prompt": null,
+          "samplingEnabled": true,
+          "startupTimeoutSec": 10.0,
+          "toolTimeoutSec": 60.0,
+          "transport": "http",
+          "url": "https://docs.example/mcp"
+        },
+        "name": "legacy-http-transport",
+        "rejected": false,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"http\"\nurl = \"https://docs.example/mcp\"\n"
+      },
+      {
+        "name": "unknown-transport",
+        "rejected": true,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"sse\"\nurl = \"https://docs.example/mcp\"\n"
+      },
+      {
+        "decoded": {
+          "apiKeyEnv": "VIBE_PARITY_MCP_TOKEN",
+          "apiKeyFormat": "Token {token}",
+          "apiKeyHeader": "X-Api-Key",
+          "authType": "static",
+          "disabled": false,
+          "disabledTools": [],
+          "headers": {
+            "X-Trace": "on"
+          },
+          "httpHeaders": {
+            "X-Api-Key": "Token parity-token",
+            "X-Trace": "on"
+          },
+          "name": "docs",
+          "prompt": null,
+          "samplingEnabled": true,
+          "startupTimeoutSec": 10.0,
+          "toolTimeoutSec": 60.0,
+          "transport": "streamable-http",
+          "url": "https://docs.example/mcp"
+        },
+        "name": "static-auth-block",
+        "rejected": false,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"static\"\napi_key_env = \"VIBE_PARITY_MCP_TOKEN\"\napi_key_header = \"X-Api-Key\"\napi_key_format = \"Token {token}\"\nheaders = { X-Trace = \"on\" }\n"
+      },
+      {
+        "decoded": {
+          "apiKeyEnv": "VIBE_PARITY_MCP_TOKEN",
+          "apiKeyFormat": "Bearer {token:>8}",
+          "apiKeyHeader": "Authorization",
+          "authType": "static",
+          "disabled": false,
+          "disabledTools": [],
+          "headers": {},
+          "httpHeaders": {
+            "Authorization": "Bearer parity-token"
+          },
+          "name": "docs",
+          "prompt": null,
+          "samplingEnabled": true,
+          "startupTimeoutSec": 10.0,
+          "toolTimeoutSec": 60.0,
+          "transport": "streamable-http",
+          "url": "https://docs.example/mcp"
+        },
+        "name": "static-auth-token-format-spec",
+        "rejected": false,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"static\"\napi_key_env = \"VIBE_PARITY_MCP_TOKEN\"\napi_key_format = \"Bearer {token:>8}\"\n"
+      },
+      {
+        "name": "static-auth-escaped-placeholder",
+        "rejected": true,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"static\"\napi_key_format = \"Bearer {{token}}\"\n"
+      },
+      {
+        "name": "static-auth-foreign-placeholder",
+        "rejected": true,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"static\"\napi_key_format = \"Bearer {secret}\"\n"
+      },
+      {
+        "name": "static-auth-invalid-header",
+        "rejected": true,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"static\"\nheaders = { \"Bad Header\" = \"1\" }\n"
+      },
+      {
+        "name": "static-auth-duplicate-header",
+        "rejected": true,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"static\"\nheaders = { Authorization = \"a\", authorization = \"b\" }\n"
+      },
+      {
+        "name": "static-auth-invalid-variable",
+        "rejected": true,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"static\"\napi_key_env = \"2BAD\"\n"
+      },
+      {
+        "decoded": {
+          "apiKeyEnv": "VIBE_PARITY_MCP_TOKEN",
+          "apiKeyFormat": "Bearer {token}",
+          "apiKeyHeader": "Authorization",
+          "authType": "static",
+          "disabled": false,
+          "disabledTools": [],
+          "headers": {
+            "authorization": "Bearer explicit"
+          },
+          "httpHeaders": {
+            "authorization": "Bearer explicit"
+          },
+          "name": "docs",
+          "prompt": null,
+          "samplingEnabled": true,
+          "startupTimeoutSec": 10.0,
+          "toolTimeoutSec": 60.0,
+          "transport": "streamable-http",
+          "url": "https://docs.example/mcp"
+        },
+        "name": "explicit-header-wins-over-token",
+        "rejected": false,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"static\"\napi_key_env = \"VIBE_PARITY_MCP_TOKEN\"\nheaders = { authorization = \"Bearer explicit\" }\n"
+      },
+      {
+        "decoded": {
+          "apiKeyEnv": "VIBE_PARITY_MCP_TOKEN",
+          "apiKeyFormat": "Bearer {token}",
+          "apiKeyHeader": "Authorization",
+          "authType": "static",
+          "disabled": false,
+          "disabledTools": [],
+          "headers": {
+            "X-Trace": "on"
+          },
+          "httpHeaders": {
+            "Authorization": "Bearer parity-token",
+            "X-Trace": "on"
+          },
+          "name": "docs",
+          "prompt": null,
+          "samplingEnabled": true,
+          "startupTimeoutSec": 10.0,
+          "toolTimeoutSec": 60.0,
+          "transport": "streamable-http",
+          "url": "https://docs.example/mcp"
+        },
+        "name": "legacy-auth-promotion",
+        "rejected": false,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\napi_key_env = \"VIBE_PARITY_MCP_TOKEN\"\nheaders = { X-Trace = \"on\" }\n"
+      },
+      {
+        "name": "legacy-auth-mixed-with-block",
+        "rejected": true,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\napi_key_env = \"VIBE_PARITY_MCP_TOKEN\"\n\n[mcp_servers.auth]\ntype = \"static\"\n"
+      },
+      {
+        "decoded": {
+          "authType": "oauth",
+          "clientId": "vibe",
+          "clientMetadataUrl": null,
+          "disabled": false,
+          "disabledTools": [],
+          "httpHeaders": {},
+          "name": "docs",
+          "prompt": null,
+          "redirectPort": 51000,
+          "samplingEnabled": true,
+          "scopes": [
+            "repo",
+            "read"
+          ],
+          "startupTimeoutSec": 10.0,
+          "toolTimeoutSec": 60.0,
+          "transport": "streamable-http",
+          "url": "https://docs.example/mcp"
+        },
+        "name": "oauth-block",
+        "rejected": false,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"oauth\"\nscopes = [\"repo\", \"read\"]\nclient_id = \"vibe\"\nredirect_port = 51000\n"
+      },
+      {
+        "name": "oauth-without-scopes",
+        "rejected": true,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"oauth\"\nclient_id = \"vibe\"\n"
+      },
+      {
+        "name": "oauth-conflicting-identity",
+        "rejected": true,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"oauth\"\nscopes = []\nclient_id = \"vibe\"\nclient_metadata_url = \"https://docs.example/client.json\"\n"
+      },
+      {
+        "name": "oauth-privileged-redirect-port",
+        "rejected": true,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n\n[mcp_servers.auth]\ntype = \"oauth\"\nscopes = []\nredirect_port = 80\n"
+      },
+      {
+        "decoded": {
+          "argv": [
+            "npx",
+            "-y",
+            "@scope/server",
+            "--stdio"
+          ],
+          "cwd": null,
+          "disabled": false,
+          "disabledTools": [],
+          "env": {},
+          "name": "local",
+          "prompt": null,
+          "samplingEnabled": true,
+          "startupTimeoutSec": 10.0,
+          "toolTimeoutSec": 60.0,
+          "transport": "stdio"
+        },
+        "name": "stdio-string-command",
+        "rejected": false,
+        "toml": "\n[[mcp_servers]]\nname = \"local\"\ntransport = \"stdio\"\ncommand = \"npx -y @scope/server\"\nargs = [\"--stdio\"]\n"
+      },
+      {
+        "decoded": {
+          "argv": [
+            "npx",
+            "-y",
+            "@scope/server",
+            "--stdio"
+          ],
+          "cwd": null,
+          "disabled": false,
+          "disabledTools": [],
+          "env": {},
+          "name": "local",
+          "prompt": null,
+          "samplingEnabled": true,
+          "startupTimeoutSec": 10.0,
+          "toolTimeoutSec": 60.0,
+          "transport": "stdio"
+        },
+        "name": "stdio-list-command",
+        "rejected": false,
+        "toml": "\n[[mcp_servers]]\nname = \"local\"\ntransport = \"stdio\"\ncommand = [\"npx\", \"-y\", \"@scope/server\"]\nargs = [\"--stdio\"]\n"
+      },
+      {
+        "decoded": {
+          "apiKeyEnv": "",
+          "apiKeyFormat": "Bearer {token}",
+          "apiKeyHeader": "Authorization",
+          "authType": "static",
+          "disabled": true,
+          "disabledTools": [
+            "search"
+          ],
+          "headers": {},
+          "httpHeaders": {},
+          "name": "docs",
+          "prompt": "Search the handbook first",
+          "samplingEnabled": false,
+          "startupTimeoutSec": 10.0,
+          "toolTimeoutSec": 60.0,
+          "transport": "streamable-http",
+          "url": "https://docs.example/mcp"
+        },
+        "name": "entry-flags",
+        "rejected": false,
+        "toml": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\nprompt = \"Search the handbook first\"\nsampling_enabled = false\ndisabled = true\ndisabled_tools = [\"search\"]\n"
+      },
+      {
+        "decoded": {
+          "apiKeyEnv": "",
+          "apiKeyFormat": "Bearer {token}",
+          "apiKeyHeader": "Authorization",
+          "authType": "static",
+          "disabled": false,
+          "disabledTools": [],
+          "headers": {},
+          "httpHeaders": {},
+          "name": "My_Server",
+          "prompt": null,
+          "samplingEnabled": true,
+          "startupTimeoutSec": 10.0,
+          "toolTimeoutSec": 60.0,
+          "transport": "streamable-http",
+          "url": "https://docs.example/mcp"
+        },
+        "name": "name-normalized-on-read",
+        "rejected": false,
+        "toml": "\n[[mcp_servers]]\nname = \"My Server!\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n"
+      },
+      {
+        "name": "name-without-letters-or-numbers",
+        "rejected": true,
+        "toml": "\n[[mcp_servers]]\nname = \"!!!\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n"
+      }
+    ],
+    "names": [
+      {
+        "input": "docs",
+        "normalized": "docs"
+      },
+      {
+        "input": "My Server!",
+        "normalized": "My_Server"
+      },
+      {
+        "input": "__docs--",
+        "normalized": "docs"
+      },
+      {
+        "input": "h\u00e9llo",
+        "normalized": "h_llo"
+      },
+      {
+        "input": "!!!",
+        "normalized": ""
+      },
+      {
+        "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "normalized": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "input": "UPPER_case-9",
+        "normalized": "UPPER_case-9"
+      }
+    ],
+    "resolutions": [
+      {
+        "existing": [],
+        "rejected": false,
+        "requested": null,
+        "resolved": "github",
+        "url": "https://mcp.github.com/api"
+      },
+      {
+        "existing": [
+          "github"
+        ],
+        "rejected": false,
+        "requested": null,
+        "resolved": "github_2",
+        "url": "https://mcp.github.com/api"
+      },
+      {
+        "existing": [
+          "github",
+          "github_2"
+        ],
+        "rejected": false,
+        "requested": null,
+        "resolved": "github_3",
+        "url": "https://mcp.github.com/api"
+      },
+      {
+        "existing": [
+          "mcp"
+        ],
+        "rejected": false,
+        "requested": null,
+        "resolved": "mcp_2",
+        "url": "https://api.example/api/mcp"
+      },
+      {
+        "existing": [],
+        "rejected": false,
+        "requested": "docs",
+        "resolved": "docs",
+        "url": "https://mcp.github.com/api"
+      },
+      {
+        "existing": [
+          "docs"
+        ],
+        "rejected": true,
+        "requested": "docs",
+        "url": "https://mcp.github.com/api"
+      },
+      {
+        "existing": [],
+        "rejected": false,
+        "requested": "My Server!",
+        "resolved": "My_Server",
+        "url": "https://mcp.github.com/api"
+      },
+      {
+        "existing": [],
+        "rejected": true,
+        "requested": "!!!",
+        "url": "https://mcp.github.com/api"
+      }
+    ],
+    "tokenValue": "parity-token",
+    "tokenVariable": "VIBE_PARITY_MCP_TOKEN",
+    "urls": [
+      {
+        "input": "https://mcp.example.com/tools",
+        "key": "https://mcp.example.com/tools",
+        "normalized": "https://mcp.example.com/tools",
+        "rejected": false,
+        "suggested": "example"
+      },
+      {
+        "input": "HTTPS://MCP.Example.COM:443/Tools",
+        "key": "https://mcp.example.com/Tools",
+        "normalized": "https://mcp.example.com/Tools",
+        "rejected": false,
+        "suggested": "example"
+      },
+      {
+        "input": "https://mcp.example.com/tools/",
+        "key": "https://mcp.example.com/tools",
+        "normalized": "https://mcp.example.com/tools/",
+        "rejected": false,
+        "suggested": "example"
+      },
+      {
+        "input": "https://mcp.example.com",
+        "key": "https://mcp.example.com",
+        "normalized": "https://mcp.example.com",
+        "rejected": false,
+        "suggested": "example"
+      },
+      {
+        "input": "https://mcp.example.com:8443/rpc?version=1",
+        "key": "https://mcp.example.com:8443/rpc?version=1",
+        "normalized": "https://mcp.example.com:8443/rpc?version=1",
+        "rejected": false,
+        "suggested": "example"
+      },
+      {
+        "input": "https://[2001:DB8::1]:8443/rpc",
+        "key": "https://[2001:db8::1]:8443/rpc",
+        "normalized": "https://[2001:db8::1]:8443/rpc",
+        "rejected": false,
+        "suggested": "2001_db8__1"
+      },
+      {
+        "input": "http://localhost:3000/mcp",
+        "key": "http://localhost:3000/mcp",
+        "normalized": "http://localhost:3000/mcp",
+        "rejected": false,
+        "suggested": "localhost"
+      },
+      {
+        "input": "http://127.0.0.1:3000/mcp",
+        "key": "http://127.0.0.1:3000/mcp",
+        "normalized": "http://127.0.0.1:3000/mcp",
+        "rejected": false,
+        "suggested": "127"
+      },
+      {
+        "input": "http://[::1]:3000/mcp",
+        "key": "http://[::1]:3000/mcp",
+        "normalized": "http://[::1]:3000/mcp",
+        "rejected": false,
+        "suggested": "1"
+      },
+      {
+        "input": "http://mcp.example.com/rpc",
+        "rejected": true
+      },
+      {
+        "input": "https://user:secret@mcp.example.com/rpc",
+        "rejected": true
+      },
+      {
+        "input": "https://mcp.example.com/rpc#section",
+        "rejected": true
+      },
+      {
+        "input": "mcp.example.com/rpc",
+        "rejected": true
+      },
+      {
+        "input": "ftp://mcp.example.com/rpc",
+        "rejected": true
+      },
+      {
+        "input": "https://",
+        "rejected": true
+      },
+      {
+        "input": "   ",
+        "rejected": true
+      },
+      {
+        "input": "https://www.example.com/rpc",
+        "key": "https://www.example.com/rpc",
+        "normalized": "https://www.example.com/rpc",
+        "rejected": false,
+        "suggested": "example"
+      },
+      {
+        "input": "https://api.example.com/v1",
+        "key": "https://api.example.com/v1",
+        "normalized": "https://api.example.com/v1",
+        "rejected": false,
+        "suggested": "v1"
+      },
+      {
+        "input": "https://api.example/api/mcp",
+        "key": "https://api.example/api/mcp",
+        "normalized": "https://api.example/api/mcp",
+        "rejected": false,
+        "suggested": "mcp"
+      },
+      {
+        "input": "https://mcp.example/rpc",
+        "key": "https://mcp.example/rpc",
+        "normalized": "https://mcp.example/rpc",
+        "rejected": false,
+        "suggested": "rpc"
+      },
+      {
+        "input": "https://mcp.github.com/api",
+        "key": "https://mcp.github.com/api",
+        "normalized": "https://mcp.github.com/api",
+        "rejected": false,
+        "suggested": "github"
+      },
+      {
+        "input": "https://server.example.com/",
+        "key": "https://server.example.com",
+        "normalized": "https://server.example.com/",
+        "rejected": false,
+        "suggested": "mcp"
+      }
+    ]
+  },
   "modelScenarios": [
     {
       "activeModel": "mistral-medium-3.5",
@@ -1873,7 +2429,7 @@
       "name": "four-layer-every-strategy"
     }
   ],
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "strategies": {
     "declared": [
       "concat",

@@ -36,7 +36,7 @@ import sys
 import tomllib
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 #: Where the read-only reference checkout lives. ``VIBE_REFERENCE`` overrides the
 #: default for machines that hold it elsewhere, and ``--reference`` wins over both.
 DEFAULT_REFERENCE = Path(
@@ -443,6 +443,456 @@ disabled_tools = []
 
 
 # --------------------------------------------------------------------------
+# MCP scenarios
+# --------------------------------------------------------------------------
+
+#: The environment variable the captured ``http_headers`` reads its token from.
+#: Both the name and the value are authored here, so nothing secret is recorded.
+MCP_TOKEN_VARIABLE = "VIBE_PARITY_MCP_TOKEN"
+MCP_TOKEN_VALUE = "parity-token"
+
+#: URLs run through ``normalize_mcp_server_url``, its comparison key and the
+#: name suggested from it. Rejections record only that the URL was refused: the
+#: message is reference-authored prose.
+MCP_URLS: list[str] = [
+    "https://mcp.example.com/tools",
+    "HTTPS://MCP.Example.COM:443/Tools",
+    "https://mcp.example.com/tools/",
+    "https://mcp.example.com",
+    "https://mcp.example.com:8443/rpc?version=1",
+    "https://[2001:DB8::1]:8443/rpc",
+    "http://localhost:3000/mcp",
+    "http://127.0.0.1:3000/mcp",
+    "http://[::1]:3000/mcp",
+    "http://mcp.example.com/rpc",
+    "https://user:secret@mcp.example.com/rpc",
+    "https://mcp.example.com/rpc#section",
+    "mcp.example.com/rpc",
+    "ftp://mcp.example.com/rpc",
+    "https://",
+    "   ",
+    "https://www.example.com/rpc",
+    "https://api.example.com/v1",
+    "https://api.example/api/mcp",
+    "https://mcp.example/rpc",
+    "https://mcp.github.com/api",
+    "https://server.example.com/",
+]
+
+#: Names run through ``normalize_mcp_server_name``.
+MCP_NAMES: list[str] = [
+    "docs",
+    "My Server!",
+    "__docs--",
+    "héllo",
+    "!!!",
+    "a" * 300,
+    "UPPER_case-9",
+]
+
+#: ``(requested name, URL, already configured names)`` triples run through the
+#: name resolution an add performs.
+MCP_NAME_RESOLUTIONS: list[tuple[str | None, str, list[str]]] = [
+    (None, "https://mcp.github.com/api", []),
+    (None, "https://mcp.github.com/api", ["github"]),
+    (None, "https://mcp.github.com/api", ["github", "github_2"]),
+    (None, "https://api.example/api/mcp", ["mcp"]),
+    ("docs", "https://mcp.github.com/api", []),
+    ("docs", "https://mcp.github.com/api", ["docs"]),
+    ("My Server!", "https://mcp.github.com/api", []),
+    ("!!!", "https://mcp.github.com/api", []),
+]
+
+#: Persisted entries run through the transport and auth unions. Every document
+#: is authored for this corpus.
+MCP_ENTRIES: list[tuple[str, str]] = [
+    (
+        "streamable-http-bare",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+""",
+    ),
+    (
+        "legacy-http-transport",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "http"
+url = "https://docs.example/mcp"
+""",
+    ),
+    (
+        "unknown-transport",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "sse"
+url = "https://docs.example/mcp"
+""",
+    ),
+    (
+        "static-auth-block",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "static"
+api_key_env = "VIBE_PARITY_MCP_TOKEN"
+api_key_header = "X-Api-Key"
+api_key_format = "Token {token}"
+headers = { X-Trace = "on" }
+""",
+    ),
+    (
+        "static-auth-token-format-spec",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "static"
+api_key_env = "VIBE_PARITY_MCP_TOKEN"
+api_key_format = "Bearer {token:>8}"
+""",
+    ),
+    (
+        "static-auth-escaped-placeholder",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "static"
+api_key_format = "Bearer {{token}}"
+""",
+    ),
+    (
+        "static-auth-foreign-placeholder",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "static"
+api_key_format = "Bearer {secret}"
+""",
+    ),
+    (
+        "static-auth-invalid-header",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "static"
+headers = { "Bad Header" = "1" }
+""",
+    ),
+    (
+        "static-auth-duplicate-header",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "static"
+headers = { Authorization = "a", authorization = "b" }
+""",
+    ),
+    (
+        "static-auth-invalid-variable",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "static"
+api_key_env = "2BAD"
+""",
+    ),
+    (
+        "explicit-header-wins-over-token",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "static"
+api_key_env = "VIBE_PARITY_MCP_TOKEN"
+headers = { authorization = "Bearer explicit" }
+""",
+    ),
+    (
+        "legacy-auth-promotion",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+api_key_env = "VIBE_PARITY_MCP_TOKEN"
+headers = { X-Trace = "on" }
+""",
+    ),
+    (
+        "legacy-auth-mixed-with-block",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+api_key_env = "VIBE_PARITY_MCP_TOKEN"
+
+[mcp_servers.auth]
+type = "static"
+""",
+    ),
+    (
+        "oauth-block",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "oauth"
+scopes = ["repo", "read"]
+client_id = "vibe"
+redirect_port = 51000
+""",
+    ),
+    (
+        "oauth-without-scopes",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "oauth"
+client_id = "vibe"
+""",
+    ),
+    (
+        "oauth-conflicting-identity",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "oauth"
+scopes = []
+client_id = "vibe"
+client_metadata_url = "https://docs.example/client.json"
+""",
+    ),
+    (
+        "oauth-privileged-redirect-port",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+
+[mcp_servers.auth]
+type = "oauth"
+scopes = []
+redirect_port = 80
+""",
+    ),
+    (
+        "stdio-string-command",
+        """
+[[mcp_servers]]
+name = "local"
+transport = "stdio"
+command = "npx -y @scope/server"
+args = ["--stdio"]
+""",
+    ),
+    (
+        "stdio-list-command",
+        """
+[[mcp_servers]]
+name = "local"
+transport = "stdio"
+command = ["npx", "-y", "@scope/server"]
+args = ["--stdio"]
+""",
+    ),
+    (
+        "entry-flags",
+        """
+[[mcp_servers]]
+name = "docs"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+prompt = "Search the handbook first"
+sampling_enabled = false
+disabled = true
+disabled_tools = ["search"]
+""",
+    ),
+    (
+        "name-normalized-on-read",
+        """
+[[mcp_servers]]
+name = "My Server!"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+""",
+    ),
+    (
+        "name-without-letters-or-numbers",
+        """
+[[mcp_servers]]
+name = "!!!"
+transport = "streamable-http"
+url = "https://docs.example/mcp"
+""",
+    ),
+]
+
+
+def capture_mcp(reference: Path) -> dict[str, Any]:
+    """How the reference names, addresses and decodes an MCP entry."""
+    sys.path.insert(0, str(reference))
+    os.environ[MCP_TOKEN_VARIABLE] = MCP_TOKEN_VALUE
+    from pydantic import TypeAdapter, ValidationError
+
+    from vibe.core.config.mcp_servers import (
+        MCPServerAddError,
+        _resolve_new_server_name,
+        _suggest_server_name,
+        _url_key,
+        normalize_mcp_server_url,
+    )
+    from vibe.core.config.models import MCPServer, MCPStdio, normalize_mcp_server_name
+
+    adapter = TypeAdapter(MCPServer)
+
+    urls: list[dict[str, Any]] = []
+    for raw in MCP_URLS:
+        try:
+            normalized = normalize_mcp_server_url(raw)
+        except MCPServerAddError:
+            urls.append({"input": raw, "rejected": True})
+            continue
+        urls.append({
+            "input": raw,
+            "rejected": False,
+            "normalized": normalized,
+            "key": _url_key(normalized),
+            "suggested": _suggest_server_name(normalized),
+        })
+
+    resolutions: list[dict[str, Any]] = []
+    for requested, url, existing in MCP_NAME_RESOLUTIONS:
+        normalized_request = (
+            normalize_mcp_server_name(requested) if requested is not None else None
+        )
+        entry: dict[str, Any] = {
+            "requested": requested,
+            "url": url,
+            "existing": existing,
+        }
+        if requested is not None and not normalized_request:
+            entry["rejected"] = True
+            resolutions.append(entry)
+            continue
+        try:
+            entry["resolved"] = _resolve_new_server_name(
+                normalized_request, normalize_mcp_server_url(url), set(existing)
+            )
+            entry["rejected"] = False
+        except MCPServerAddError:
+            entry["rejected"] = True
+        resolutions.append(entry)
+
+    entries: list[dict[str, Any]] = []
+    for name, document in MCP_ENTRIES:
+        raw = tomllib.loads(document)["mcp_servers"][0]
+        try:
+            server = adapter.validate_python(raw)
+        except (ValidationError, ValueError):
+            entries.append({"name": name, "toml": document, "rejected": True})
+            continue
+        decoded: dict[str, Any] = {
+            "name": server.name,
+            "transport": server.transport,
+            "prompt": server.prompt,
+            "samplingEnabled": server.sampling_enabled,
+            "disabled": server.disabled,
+            "disabledTools": list(server.disabled_tools),
+            "startupTimeoutSec": server.startup_timeout_sec,
+            "toolTimeoutSec": server.tool_timeout_sec,
+        }
+        if isinstance(server, MCPStdio):
+            decoded["argv"] = server.argv()
+            decoded["env"] = dict(server.env)
+            decoded["cwd"] = server.cwd
+        else:
+            decoded["url"] = server.url
+            decoded["authType"] = server.auth.type
+            decoded["httpHeaders"] = server.http_headers()
+            if server.auth.type == "static":
+                decoded["headers"] = dict(server.auth.headers)
+                decoded["apiKeyEnv"] = server.auth.api_key_env
+                decoded["apiKeyHeader"] = server.auth.api_key_header
+                decoded["apiKeyFormat"] = server.auth.api_key_format
+            else:
+                decoded["scopes"] = list(server.auth.scopes)
+                decoded["clientId"] = server.auth.client_id
+                decoded["clientMetadataUrl"] = (
+                    str(server.auth.client_metadata_url)
+                    if server.auth.client_metadata_url
+                    else None
+                )
+                decoded["redirectPort"] = server.auth.redirect_port
+        entries.append({
+            "name": name,
+            "toml": document,
+            "rejected": False,
+            "decoded": decoded,
+        })
+
+    return {
+        "tokenVariable": MCP_TOKEN_VARIABLE,
+        "tokenValue": MCP_TOKEN_VALUE,
+        "urls": urls,
+        "names": [
+            {"input": name, "normalized": normalize_mcp_server_name(name)}
+            for name in MCP_NAMES
+        ],
+        "resolutions": resolutions,
+        "entries": entries,
+    }
+
+
+# --------------------------------------------------------------------------
 # Capture
 # --------------------------------------------------------------------------
 
@@ -691,6 +1141,7 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
         "defaults": capture_defaults(reference),
         "scenarios": capture_scenarios(reference),
         "modelScenarios": capture_model_scenarios(reference),
+        "mcp": capture_mcp(reference),
     }
 
 
@@ -730,7 +1181,8 @@ def main() -> int:
         f"({len(corpus['fields'])} fields, "
         f"{len(corpus['defaults']['document'])} defaults, "
         f"{len(corpus['scenarios'])} scenarios, "
-        f"{len(corpus['modelScenarios'])} model scenarios)"
+        f"{len(corpus['modelScenarios'])} model scenarios, "
+        f"{len(corpus['mcp']['entries'])} MCP entries)"
     )
     return 0
 

@@ -47,7 +47,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/config_surface.py";
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 2;
+const CORPUS_SCHEMA_VERSION: u32 = 3;
 /// The scenario floor this epic commits to.
 const MINIMUM_SCENARIOS: usize = 24;
 /// What the capture writes where the vibe home is machine-dependent.
@@ -65,6 +65,10 @@ struct Corpus {
     defaults: Defaults,
     scenarios: Vec<Scenario>,
     model_scenarios: Vec<ModelScenario>,
+    /// Replayed by `mcp_parity_tests`, which reads the same file through its
+    /// own view; named here because the corpus denies unknown fields.
+    #[expect(dead_code, reason = "the MCP section is replayed by its own module")]
+    mcp: JsonValue,
 }
 
 #[derive(Debug, Deserialize)]
