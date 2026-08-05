@@ -254,7 +254,12 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
         let Some(found) = actual.get(key) else {
             panic!("`{key}` is missing from the shipped default document");
         };
-        if let Some((pointer, want, got)) = difference(&format!("/{key}"), &expected, found) {
+        // A default the load absolutizes is rendered with the host's path
+        // separator, where the capture ran on the reference's. The two describe
+        // the same directory, so they are compared separator-insensitively.
+        let expected = with_posix_separators(&expected);
+        let found = with_posix_separators(found);
+        if let Some((pointer, want, got)) = difference(&format!("/{key}"), &expected, &found) {
             panic!("the shipped defaults diverge at {pointer}: reference {want}, port {got}");
         }
     }
@@ -301,6 +306,25 @@ fn models_by_alias(models: &JsonValue) -> JsonValue {
             })
             .collect(),
     )
+}
+
+/// Rewrites backslashes as forward slashes so a path rendered by a Windows
+/// host compares equal to the same path rendered by the reference. On a POSIX
+/// host this changes nothing.
+fn with_posix_separators(value: &JsonValue) -> JsonValue {
+    match value {
+        JsonValue::String(text) => JsonValue::String(text.replace('\\', "/")),
+        JsonValue::Object(entries) => JsonValue::Object(
+            entries
+                .iter()
+                .map(|(key, value)| (key.clone(), with_posix_separators(value)))
+                .collect(),
+        ),
+        JsonValue::Array(entries) => {
+            JsonValue::Array(entries.iter().map(with_posix_separators).collect())
+        }
+        value => value.clone(),
+    }
 }
 
 /// Substitutes the machine-dependent vibe home the capture wrote a placeholder for.
