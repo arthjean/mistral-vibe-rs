@@ -25,10 +25,10 @@
     {
       "id": "EP-020",
       "title": "Patch Surface and Settings Introspection",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 4
     },
     {
       "id": "EP-021",
@@ -144,49 +144,49 @@
       "id": "US-066",
       "title": "Address configuration values by JSON Pointer",
       "epic": "EP-020",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": ["US-059"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-067",
       "title": "Write configuration through config/patch",
       "epic": "EP-020",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": ["US-066"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-068",
       "title": "Describe every field through config/fields/read",
       "epic": "EP-020",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": ["US-064"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-069",
       "title": "Publish configuration changes to subscribers",
       "epic": "EP-020",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": ["US-067"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-070",
