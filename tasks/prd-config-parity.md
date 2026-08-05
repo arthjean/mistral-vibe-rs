@@ -579,6 +579,26 @@ Source navigation: [layers/discovered.py](/home/arthur/dev/mistral-vibe/vibe/cor
 - Exposing `tools` in the settings field list. The reference excludes it explicitly, and per-tool editing has no UI on either side.
 - Aligning the fingerprint token on the reference's stat-based format. Recorded as an accepted divergence with the reason in US-078.
 - Removing `config/batchWrite`. It is retained as a local alias over the same core so existing callers keep working; its removal is a separate decision once no caller remains.
+- Mapping the 5 locally invented keys onto reference fields. Decided in US-064 and recorded in the divergence table below; each stays declared, published and merged under its own name, so a value already on disk keeps loading and nothing is silently reinterpreted.
+
+### Recorded divergences from the reference key surface
+
+Each entry is published by `config/schema` and declared in the registry with `local: true`, which keeps it out of the shipped default document so the defaults stay comparable to `create_default_config()` field for field. `crates/vibe-core/src/config/surface_parity_tests.rs` fails if this set changes.
+
+| Key | Reason no mapping exists |
+|---|---|
+| `thinking` | Reasoning effort is per model upstream (`ModelConfig.thinking`); a top-level value would have to pick one model to write to, and reading it back would not round-trip |
+| `notifications` | Tri-state (`off`, `unfocused`, `always`) where upstream `enable_notifications` is a boolean, so `unfocused` has no lossless target |
+| `proxy` | Upstream carries no proxy configuration at all; this port persists one and rejects credential-bearing URLs at load |
+| `tls_ca_path` | Same: no upstream field, and the value feeds this port's own TLS setup |
+| `dotenv_path` | Upstream always reads `~/.vibe/.env` and exposes no field; the configurable path is local. US-072 loads the global file and keeps this key as the override |
+
+Two further divergences are recorded where the port publishes more than the reference rather than something else:
+
+| Divergence | Reason |
+|---|---|
+| `theme` is an `enum` here and `str` upstream | The port ships a theme catalog, so the settings screen offers a picker instead of a free-text field. The accepted values are a superset of the reference catalog |
+| An unregistered key survives the merge | FR-04. The reference merge drops a key its schema does not declare; keeping it lets a file written by a newer client round-trip through this one, and `ConfigSnapshot::unregistered_keys` reports the set |
 
 ## Files NOT to Modify
 
@@ -615,8 +635,9 @@ Framed as questions for engineering input, not mandates:
 
 ## Open Questions
 
-- Should the 5 locally invented keys (`thinking`, `notifications`, `proxy`, `tls_ca_path`, `dotenv_path`) be mapped onto reference fields or kept as documented divergences? `thinking` is per-model upstream and `notifications` is a tri-state where upstream has a boolean, so a lossless mapping may not exist. Owner: Arthur Jean, before US-064 starts, blocks the schema publication story.
+- ~~Should the 5 locally invented keys (`thinking`, `notifications`, `proxy`, `tls_ca_path`, `dotenv_path`) be mapped onto reference fields or kept as documented divergences?~~ Resolved 2026-08-05 by Arthur Jean: all five stay as recorded divergences, written out in the divergence table under Non-Goals. No mapping is lossless, and a mapping would reinterpret values already on disk.
 - Does any external consumer call `config/batchWrite`? If not, it can be deprecated in a follow-up rather than carried indefinitely. Owner: Arthur Jean, before US-067 lands, affects the divergence table only.
-- Should the corpus live under `vibe-core` or beside the existing tool-surface baseline in `vibe-app-server`? Affects where CI looks and how the two counts are reported. Owner: engineering, before US-061 starts.
+- ~~Should the corpus live under `vibe-core` or beside the existing tool-surface baseline in `vibe-app-server`?~~ Resolved in US-061: `crates/vibe-core/tests/config-surface/corpus.json`, beside the merge it proves.
+- ~~Should the internal model map be exposed through `config/read`, or normalized back to the array form for the wire?~~ Resolved in US-065: the map is exposed, as the reference exposes it. The persisted form stays the `[[models]]` list, and the two CLI readers of the array form were redirected to the map in the same change.
 - Is a criterion-style benchmark warranted for the load path, or is the timing assertion in the corpus test sufficient? Owner: engineering, before the NFR is certified in US-078.
 [/PRD]

@@ -17,10 +17,10 @@
     {
       "id": "EP-019",
       "title": "Defaults and the Complete Key Surface",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3
     },
     {
       "id": "EP-020",
@@ -108,37 +108,37 @@
       "id": "US-063",
       "title": "Ship the default configuration document",
       "epic": "EP-019",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-059", "US-061"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-064",
       "title": "Publish all 64 fields through the config schema",
       "epic": "EP-019",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": ["US-063"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-065",
       "title": "Normalize the model map and apply the schema-level model rules",
       "epic": "EP-019",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-060", "US-063"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
     },
     {
       "id": "US-066",
