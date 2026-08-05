@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 use url::Url;
+use vibe_core::config::mcp::{normalize_mcp_server_name, normalize_mcp_server_url};
 
 use super::ResourceError;
 
@@ -121,9 +122,15 @@ pub enum McpCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct McpAddCommand {
-    pub alias: String,
+    /// The alias the caller asked for, already normalized. `None` leaves the
+    /// alias to be derived from the URL and deduplicated against the servers
+    /// this session already knows, which needs the session's own state.
+    pub requested_alias: Option<String>,
     pub transport: McpAddTransport,
     pub enabled: bool,
+    /// OAuth scopes to persist with the entry, as the reference persists what
+    /// the caller asked for.
+    pub scopes: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,6 +143,9 @@ pub enum McpAddTransport {
     },
     Http {
         url: Url,
+        /// Whether the entry was asked for under `http` rather than
+        /// `streamable-http`, which decides the name it is persisted with.
+        legacy: bool,
     },
 }
 
@@ -151,10 +161,9 @@ pub enum ShellCommand {
 }
 
 fn parse_mcp_add(params: &BTreeMap<String, Value>) -> Result<McpAddCommand, ResourceError> {
-    if params.contains_key("scopes") || params.contains_key("login") {
+    if params.contains_key("login") {
         return Err(ResourceError::InvalidParams(
-            "this runtime does not support implicit OAuth scopes or login during MCP add"
-                .to_owned(),
+            "this runtime does not support implicit login during MCP add".to_owned(),
         ));
     }
     let transport = optional_string(params, "transport")?.unwrap_or("streamable-http");
@@ -169,7 +178,14 @@ fn parse_mcp_add(params: &BTreeMap<String, Value>) -> Result<McpAddCommand, Reso
             "environment",
             "workingDirectory",
         ],
-        "streamable-http" => &["sessionId", "transport", "name", "disabled", "url"],
+        "http" | "streamable-http" => &[
+            "sessionId",
+            "transport",
+            "name",
+            "disabled",
+            "url",
+            "scopes",
+        ],
         _ => {
             return Err(ResourceError::InvalidParams(
                 "unsupported MCP transport".to_owned(),
@@ -184,42 +200,45 @@ fn parse_mcp_add(params: &BTreeMap<String, Value>) -> Result<McpAddCommand, Reso
             "unsupported MCP add parameter `{parameter}` for {transport} transport"
         )));
     }
-    let (default_alias, transport) = match transport {
-        "stdio" => {
-            let command = required_string(params, "command")?.to_owned();
-            let alias = mcp_command_alias(&command);
-            (
-                alias,
-                McpAddTransport::Stdio {
-                    command,
-                    arguments: optional_string_list(params, "arguments")?.unwrap_or_default(),
-                    environment: optional_string_map(params, "environment")?.unwrap_or_default(),
-                    working_directory: optional_string(params, "workingDirectory")?
-                        .map(PathBuf::from),
-                },
-            )
+    let transport = match transport {
+        "stdio" => McpAddTransport::Stdio {
+            command: required_string(params, "command")?.to_owned(),
+            arguments: optional_string_list(params, "arguments")?.unwrap_or_default(),
+            environment: optional_string_map(params, "environment")?.unwrap_or_default(),
+            working_directory: optional_string(params, "workingDirectory")?.map(PathBuf::from),
+        },
+        legacy_or_streamable => {
+            // Every rejection an MCP URL can earn lives in the store, so the
+            // same spelling is refused here and by a file written by hand.
+            let normalized =
+                normalize_mcp_server_url(required_string(params, "url")?).map_err(|error| {
+                    ResourceError::InvalidParams(match error {
+                        vibe_core::config::ConfigError::InvalidMcp(message) => message,
+                        error => error.to_string(),
+                    })
+                })?;
+            let url = Url::parse(&normalized).map_err(|_| {
+                ResourceError::InvalidParams("url must be a valid HTTP(S) URL".to_owned())
+            })?;
+            McpAddTransport::Http {
+                url,
+                legacy: legacy_or_streamable == "http",
+            }
         }
-        "streamable-http" => {
-            let url = Url::parse(required_string(params, "url")?)
-                .map_err(|_| ResourceError::InvalidParams("url must be valid HTTPS".to_owned()))?;
-            if url.scheme() != "https" {
+    };
+    let requested_alias = match optional_string(params, "name")? {
+        None => None,
+        Some(name) => {
+            let normalized = normalize_mcp_server_name(name);
+            if normalized.is_empty() {
                 return Err(ResourceError::InvalidParams(
-                    "MCP HTTP endpoints require HTTPS".to_owned(),
+                    "MCP server name must contain letters or numbers".to_owned(),
                 ));
             }
-            let alias = mcp_alias(&url);
-            (alias, McpAddTransport::Http { url })
+            Some(normalized)
         }
-        _ => unreachable!("transport was validated above"),
     };
-    let alias = optional_string(params, "name")?
-        .unwrap_or(&default_alias)
-        .to_owned();
-    if alias.is_empty() {
-        return Err(ResourceError::InvalidParams(
-            "MCP source name cannot be empty".to_owned(),
-        ));
-    }
+    let scopes = optional_string_list(params, "scopes")?.unwrap_or_default();
     let enabled = match params.get("disabled") {
         None | Some(Value::Null) => true,
         Some(Value::Bool(disabled)) => !disabled,
@@ -230,9 +249,10 @@ fn parse_mcp_add(params: &BTreeMap<String, Value>) -> Result<McpAddCommand, Reso
         }
     };
     Ok(McpAddCommand {
-        alias,
+        requested_alias,
         transport,
         enabled,
+        scopes,
     })
 }
 
@@ -318,38 +338,20 @@ fn optional_string_map(
         .map(Some)
 }
 
-fn mcp_alias(url: &Url) -> String {
-    let alias = url
-        .host_str()
-        .unwrap_or("mcp")
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character.to_ascii_lowercase()
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    alias.trim_matches('_').to_owned()
-}
-
-fn mcp_command_alias(command: &str) -> String {
-    PathBuf::from(command)
+/// The alias a stdio server is suggested, which the reference derives from the
+/// executable because a command has no host to name it after.
+pub fn mcp_command_alias(command: &str) -> String {
+    let stem = PathBuf::from(command)
         .file_stem()
         .and_then(|name| name.to_str())
         .unwrap_or("mcp")
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character.to_ascii_lowercase()
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>()
-        .trim_matches('_')
-        .to_owned()
+        .to_lowercase();
+    let normalized = normalize_mcp_server_name(&stem);
+    if normalized.is_empty() {
+        "mcp".to_owned()
+    } else {
+        normalized
+    }
 }
 
 #[cfg(test)]
@@ -373,11 +375,13 @@ mod tests {
         assert_eq!(
             ResourceBackendCommand::parse("mcp/add", &params, false).expect("validated command"),
             ResourceBackendCommand::Mcp(McpCommand::Add(McpAddCommand {
-                alias: "example".to_owned(),
+                requested_alias: Some("example".to_owned()),
                 transport: McpAddTransport::Http {
                     url: Url::parse("https://mcp.example/tools").expect("URL fixture"),
+                    legacy: false,
                 },
                 enabled: true,
+                scopes: Vec::new(),
             }))
         );
     }
@@ -389,13 +393,42 @@ mod tests {
         assert!(matches!(
             ResourceBackendCommand::parse("mcp/add", &params, false),
             Err(ResourceError::InvalidParams(message))
-                if message == "MCP HTTP endpoints require HTTPS"
+                if message == "MCP server URL must use https unless it points to localhost"
         ));
     }
 
+    /// The reference publishes `http` beside `streamable-http`, and the two
+    /// speak the same exchange, so the transport only decides the name the
+    /// entry is persisted under.
     #[test]
-    fn rejects_legacy_sse_transport_instead_of_misrouting_it_as_streamable_http() {
-        for transport in ["http", "sse"] {
+    fn accepts_the_legacy_http_transport_under_its_own_name() {
+        let params = json!({
+            "transport": "http",
+            "url": "https://mcp.example/tools",
+        })
+        .as_object()
+        .expect("params object")
+        .clone()
+        .into_iter()
+        .collect();
+
+        assert_eq!(
+            ResourceBackendCommand::parse("mcp/add", &params, false).expect("validated command"),
+            ResourceBackendCommand::Mcp(McpCommand::Add(McpAddCommand {
+                requested_alias: None,
+                transport: McpAddTransport::Http {
+                    url: Url::parse("https://mcp.example/tools").expect("URL fixture"),
+                    legacy: true,
+                },
+                enabled: true,
+                scopes: Vec::new(),
+            }))
+        );
+    }
+
+    #[test]
+    fn rejects_an_unknown_transport_instead_of_misrouting_it_as_streamable_http() {
+        for transport in ["sse", "websocket"] {
             let params = json!({
                 "transport": transport,
                 "url": "https://mcp.example/tools",
@@ -413,26 +446,28 @@ mod tests {
         }
     }
 
+    /// Scopes are persisted with the entry, as the reference persists them;
+    /// only the login shortcut stays unimplemented here.
     #[test]
-    fn rejects_unimplemented_mcp_oauth_shortcuts_instead_of_dropping_them() {
-        for key in ["scopes", "login"] {
-            let mut params =
-                BTreeMap::from([("url".to_owned(), json!("https://mcp.example/tools"))]);
-            params.insert(
-                key.to_owned(),
-                if key == "scopes" {
-                    json!(["read"])
-                } else {
-                    json!(false)
-                },
-            );
+    fn keeps_requested_oauth_scopes_and_rejects_the_login_shortcut() {
+        let mut params = BTreeMap::from([("url".to_owned(), json!("https://mcp.example/tools"))]);
+        params.insert("scopes".to_owned(), json!(["repo", "read"]));
 
-            assert!(matches!(
-                ResourceBackendCommand::parse("mcp/add", &params, false),
-                Err(ResourceError::InvalidParams(message))
-                    if message.contains("does not support implicit OAuth")
-            ));
-        }
+        let scopes = match ResourceBackendCommand::parse("mcp/add", &params, false)
+            .expect("validated command")
+        {
+            ResourceBackendCommand::Mcp(McpCommand::Add(add)) => add.scopes,
+            other => unreachable!("mcp/add parses into an add command, got {other:?}"),
+        };
+        assert_eq!(scopes, ["repo".to_owned(), "read".to_owned()]);
+
+        params.remove("scopes");
+        params.insert("login".to_owned(), json!(false));
+        assert!(matches!(
+            ResourceBackendCommand::parse("mcp/add", &params, false),
+            Err(ResourceError::InvalidParams(message))
+                if message.contains("does not support implicit login")
+        ));
     }
 
     #[test]

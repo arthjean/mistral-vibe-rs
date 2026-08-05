@@ -374,7 +374,7 @@ impl ResourceService {
             ResourceBackendCommand::Mcp(McpCommand::Add(add)) => {
                 Err(ResourceError::Unavailable(format!(
                     "MCP source `{}` cannot be added because no MCP backend is attached",
-                    add.alias
+                    add.requested_alias.as_deref().unwrap_or("mcp")
                 )))
             }
             ResourceBackendCommand::Mcp(McpCommand::Login { name }) => {
@@ -1333,6 +1333,9 @@ mod tests {
             disabled_tools: Default::default(),
             startup_timeout_ms: vibe_core::mcp::DEFAULT_MCP_STARTUP_TIMEOUT_MS,
             tool_timeout_ms: vibe_core::mcp::DEFAULT_MCP_TOOL_TIMEOUT_MS,
+            auth: Default::default(),
+            prompt: None,
+            sampling_enabled: true,
         }
     }
 

@@ -8,9 +8,9 @@ use tokio::sync::Mutex;
 use url::Url;
 
 use super::{
-    MAX_MCP_DISCOVERY_PAGES, MAX_MCP_TOOLS_PER_SERVER, MCP_PROTOCOL_VERSION, McpError, McpFuture,
-    McpPeer, McpPeerFactory, McpServerConfig, McpTransportConfig, RemoteTool, decode_tool_result,
-    validate_config,
+    MAX_MCP_DISCOVERY_PAGES, MAX_MCP_TOOLS_PER_SERVER, MCP_PROTOCOL_VERSION, McpAuthConfig,
+    McpError, McpFuture, McpPeer, McpPeerFactory, McpServerConfig, McpTransportConfig, RemoteTool,
+    decode_tool_result, validate_config,
 };
 use crate::tools::{ToolExecutionOutput, ToolOutputSink};
 
@@ -46,15 +46,25 @@ impl HttpMcpPeer {
     async fn connect(config: &McpServerConfig) -> Result<Self, McpError> {
         validate_config(config)?;
         let (endpoint, configured_headers) = match &config.transport {
-            McpTransportConfig::StreamableHttp { url, headers } => (url.clone(), headers),
+            McpTransportConfig::Http { url, headers }
+            | McpTransportConfig::StreamableHttp { url, headers } => (url.clone(), headers),
             McpTransportConfig::Stdio { .. } => {
                 return Err(McpError::Transport(
                     "the HTTP MCP peer requires an HTTP transport".to_owned(),
                 ));
             }
         };
+        // The token is read here rather than at decode time, so no resolved
+        // secret is ever held in a value the store could persist.
+        let mut configured_headers = configured_headers.clone();
+        if let McpAuthConfig::Static(statics) = &config.auth
+            && let Some((name, value)) =
+                statics.token_header(&configured_headers, |variable| std::env::var(variable).ok())
+        {
+            configured_headers.insert(name, value);
+        }
         let mut headers = HeaderMap::new();
-        for (name, value) in configured_headers {
+        for (name, value) in &configured_headers {
             let name = HeaderName::from_bytes(name.as_bytes())
                 .map_err(|_| McpError::InvalidConfig("invalid HTTP header name".to_owned()))?;
             let value = HeaderValue::from_str(value)
@@ -564,6 +574,9 @@ mod tests {
             disabled_tools: Default::default(),
             startup_timeout_ms: 2_000,
             tool_timeout_ms: 2_000,
+            auth: Default::default(),
+            prompt: None,
+            sampling_enabled: true,
         };
 
         let peer =
@@ -613,6 +626,9 @@ mod tests {
             disabled_tools: Default::default(),
             startup_timeout_ms: 2_000,
             tool_timeout_ms: 2_000,
+            auth: Default::default(),
+            prompt: None,
+            sampling_enabled: true,
         };
         let peer = HttpMcpPeerFactory
             .connect(&config)

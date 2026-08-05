@@ -14,8 +14,8 @@ use tokio::sync::{Mutex, watch};
 use url::Url;
 use vibe_core::integrations::redact;
 use vibe_core::mcp::{
-    DefaultMcpPeerFactory, McpError, McpFuture, McpPeer, McpPeerFactory, McpServerConfig,
-    McpTransportConfig,
+    DefaultMcpPeerFactory, McpError, McpFuture, McpOAuthConfig, McpPeer, McpPeerFactory,
+    McpServerConfig, McpTransportConfig,
 };
 
 use super::{McpAuthBackend, ResourceError, ResourceFuture};
@@ -105,15 +105,24 @@ impl ProductionMcpAuth {
             ))
         })?;
         let oauth = self.discover(resource).await?;
-        let listener = TcpListener::bind(("127.0.0.1", 0))
-            .await
-            .map_err(|error| ResourceError::Unavailable(error.to_string()))?;
+        let declared = config.auth.oauth();
+        // An entry that declares an OAuth block owns its callback port, as the
+        // reference binds the port it configures; one that declares none keeps
+        // taking whatever port is free.
+        let listener = TcpListener::bind((
+            "127.0.0.1",
+            declared.map_or(0, |declared| declared.redirect_port),
+        ))
+        .await
+        .map_err(|error| ResourceError::Unavailable(error.to_string()))?;
         let port = listener
             .local_addr()
             .map_err(|error| ResourceError::Unavailable(error.to_string()))?
             .port();
         let redirect_uri = format!("http://127.0.0.1:{port}/callback");
-        let client_id = self.register_client(&oauth, &redirect_uri).await?;
+        let client_id = self
+            .client_identity(declared, &oauth, &redirect_uri)
+            .await?;
         let verifier = random_url_token(48)?;
         let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
         let state = random_url_token(32)?;
@@ -128,8 +137,14 @@ impl ProductionMcpAuth {
                 .append_pair("code_challenge_method", "S256")
                 .append_pair("state", &state)
                 .append_pair("resource", resource.as_str());
-            if !oauth.scopes.is_empty() {
-                query.append_pair("scope", &oauth.scopes.join(" "));
+            // The entry decides which scopes are asked for; what the resource
+            // advertises is the fallback for an entry that names none.
+            let scopes = declared
+                .map(|declared| declared.scopes.as_slice())
+                .filter(|scopes| !scopes.is_empty())
+                .unwrap_or(&oauth.scopes);
+            if !scopes.is_empty() {
+                query.append_pair("scope", &scopes.join(" "));
             }
         }
         let (completion, receiver) = watch::channel(None);
@@ -240,7 +255,33 @@ impl ProductionMcpAuth {
             token_endpoint: server.token_endpoint,
             registration_endpoint: server.registration_endpoint,
             scopes: protected.scopes_supported,
+            client_id_metadata_document_supported: server
+                .client_id_metadata_document_supported
+                .unwrap_or(false),
         })
+    }
+
+    /// The client this login identifies as.
+    ///
+    /// A pre-registered client id is used as it is; a client-metadata document
+    /// is the identifier only where the authorization server says it accepts
+    /// one; anything else registers dynamically.
+    async fn client_identity(
+        &self,
+        declared: Option<&McpOAuthConfig>,
+        oauth: &OAuthMetadata,
+        redirect_uri: &str,
+    ) -> Result<String, ResourceError> {
+        if let Some(client_id) = declared.and_then(|declared| declared.client_id.clone()) {
+            return Ok(client_id);
+        }
+        if let Some(document) = declared.and_then(|declared| declared.client_metadata_url.as_ref())
+            && oauth.client_id_metadata_document_supported
+        {
+            require_https(document, "client metadata document")?;
+            return Ok(document.to_string());
+        }
+        self.register_client(oauth, redirect_uri).await
     }
 
     async fn register_client(
@@ -457,6 +498,8 @@ struct AuthorizationServerMetadata {
     registration_endpoint: Option<Url>,
     #[serde(default)]
     code_challenge_methods_supported: Vec<String>,
+    #[serde(default)]
+    client_id_metadata_document_supported: Option<bool>,
 }
 
 struct OAuthMetadata {
@@ -464,6 +507,9 @@ struct OAuthMetadata {
     token_endpoint: Url,
     registration_endpoint: Option<Url>,
     scopes: Vec<String>,
+    /// Whether a client-metadata document URL may stand in for a registered
+    /// client id, which only its holder can decide.
+    client_id_metadata_document_supported: bool,
 }
 
 #[derive(Deserialize)]
@@ -696,14 +742,17 @@ fn random_url_token(bytes: usize) -> Result<String, ResourceError> {
 
 fn transport_url(transport: &McpTransportConfig) -> Option<&Url> {
     match transport {
-        McpTransportConfig::StreamableHttp { url, .. } => Some(url),
+        McpTransportConfig::Http { url, .. } | McpTransportConfig::StreamableHttp { url, .. } => {
+            Some(url)
+        }
         McpTransportConfig::Stdio { .. } => None,
     }
 }
 
 fn transport_headers(transport: &McpTransportConfig) -> &BTreeMap<String, String> {
     match transport {
-        McpTransportConfig::StreamableHttp { headers, .. } => headers,
+        McpTransportConfig::Http { headers, .. }
+        | McpTransportConfig::StreamableHttp { headers, .. } => headers,
         McpTransportConfig::Stdio { .. } => &EMPTY_HEADERS,
     }
 }
@@ -714,7 +763,8 @@ fn transport_headers_mut(
     transport: &mut McpTransportConfig,
 ) -> Option<&mut BTreeMap<String, String>> {
     match transport {
-        McpTransportConfig::StreamableHttp { headers, .. } => Some(headers),
+        McpTransportConfig::Http { headers, .. }
+        | McpTransportConfig::StreamableHttp { headers, .. } => Some(headers),
         McpTransportConfig::Stdio { .. } => None,
     }
 }
@@ -802,6 +852,9 @@ mod tests {
             disabled_tools: Default::default(),
             startup_timeout_ms: 1_000,
             tool_timeout_ms: 1_000,
+            auth: Default::default(),
+            prompt: None,
+            sampling_enabled: true,
         }
     }
 

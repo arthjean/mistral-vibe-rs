@@ -258,84 +258,26 @@ impl ConfigSnapshot {
             let table = entry.as_table().ok_or_else(|| {
                 ConfigError::InvalidMcp("each mcp_servers entry must be a table".to_owned())
             })?;
-            let transport = required_mcp_string(table, "transport")?;
-            let alias = required_mcp_string(table, "name")?.to_owned();
-            if !aliases.insert(alias.clone()) {
+            let server = decode_mcp_server(table, working_directory)?;
+            if !aliases.insert(server.alias.clone()) {
                 return Err(ConfigError::InvalidMcp(
                     "MCP server names must be unique".to_owned(),
                 ));
             }
-            let transport = match transport {
-                "stdio" => {
-                    let command = required_mcp_string(table, "command")?.to_owned();
-                    let arguments = optional_mcp_strings(table, "args")?;
-                    let environment = optional_mcp_environment_at(table, "env")?;
-                    let working_directory = optional_mcp_string(table, "cwd")?
-                        .map(PathBuf::from)
-                        .map(|path| {
-                            if path.is_absolute() {
-                                path
-                            } else {
-                                working_directory.join(path)
-                            }
-                        })
-                        .or_else(|| Some(working_directory.to_path_buf()));
-                    McpTransportConfig::Stdio {
-                        command,
-                        arguments,
-                        environment,
-                        working_directory,
-                    }
-                }
-                "streamable-http" => {
-                    let url = Url::parse(required_mcp_string(table, "url")?).map_err(|_| {
-                        ConfigError::InvalidMcp(
-                            "MCP server field `url` must be a valid URL".to_owned(),
-                        )
-                    })?;
-                    let headers = optional_mcp_environment_at(table, "headers")?;
-                    McpTransportConfig::StreamableHttp { url, headers }
-                }
-                _ => {
-                    return Err(ConfigError::InvalidMcp(
-                        "MCP transport must be stdio or streamable-http".to_owned(),
-                    ));
-                }
-            };
-            let disabled = optional_mcp_bool(table, "disabled")?.unwrap_or(false);
-            let disabled_tools = optional_mcp_strings(table, "disabled_tools")?
-                .into_iter()
-                .collect();
-            servers.push(McpServerConfig {
-                alias,
-                transport,
-                enabled: !disabled,
-                disabled_tools,
-                startup_timeout_ms: optional_mcp_timeout(
-                    table,
-                    "startup_timeout_sec",
-                    DEFAULT_MCP_STARTUP_TIMEOUT_MS,
-                )?,
-                tool_timeout_ms: optional_mcp_timeout(
-                    table,
-                    "tool_timeout_sec",
-                    DEFAULT_MCP_TOOL_TIMEOUT_MS,
-                )?,
-            });
+            servers.push(server);
         }
         Ok(servers)
     }
 
+    /// The alias of every configured server, under the name a reader sees.
     pub fn mcp_aliases(&self) -> Result<BTreeSet<String>, ConfigError> {
         config_array(&self.effective, IntegrationCollection::McpServers)?
             .into_iter()
             .map(|entry| {
                 entry
                     .as_table()
-                    .and_then(|entry| entry.get("name"))
-                    .and_then(Value::as_str)
+                    .and_then(|entry| IntegrationCollection::McpServers.identity_key(entry))
                     .filter(|name| !name.is_empty())
-                    .map(str::to_owned)
                     .ok_or_else(|| {
                         ConfigError::InvalidMcp(
                             "each effective mcp_servers entry requires a non-empty name".to_owned(),
@@ -939,6 +881,51 @@ impl LayeredConfig {
         }])
     }
 
+    /// Drops the entry named `name` from the file writes land in.
+    ///
+    /// A name no entry carries is reported as not removed rather than raised:
+    /// asking twice is not an error, and the second answer says so.
+    pub fn persist_mcp_remove(&self, name: &str) -> Result<mcp::McpRemoval, ConfigError> {
+        let name = mcp::normalize_mcp_server_name(name);
+        if name.is_empty() {
+            return Err(ConfigError::InvalidMcp(
+                "MCP server name must contain letters or numbers".to_owned(),
+            ));
+        }
+        let snapshot = self.load()?;
+        let collection = IntegrationCollection::McpServers;
+        let target = snapshot.selected_target;
+        let entries = config_array_for_target(&snapshot, target, collection)?;
+        let retained = entries
+            .iter()
+            .filter(|entry| {
+                entry
+                    .as_table()
+                    .and_then(|entry| collection.identity(entry))
+                    .map(mcp::normalize_mcp_server_name)
+                    .as_deref()
+                    != Some(name.as_str())
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if retained.len() == entries.len() {
+            return Ok(mcp::McpRemoval {
+                name,
+                removed: false,
+            });
+        }
+        self.replace_array_cas(
+            target,
+            snapshot.fingerprints.get(&target).cloned().flatten(),
+            collection.key(),
+            retained,
+        )?;
+        Ok(mcp::McpRemoval {
+            name,
+            removed: true,
+        })
+    }
+
     pub fn persist_mcp_state(
         &self,
         alias: &str,
@@ -1010,7 +997,7 @@ impl LayeredConfig {
             && !config_array(&snapshot.effective, collection)?
                 .iter()
                 .filter_map(Value::as_table)
-                .any(|entry| collection.identity(entry) == Some(name))
+                .any(|entry| collection.identity_key(entry).as_deref() == Some(name))
         {
             return Err(collection.invalid(&format!("unknown MCP server `{name}`")));
         }
@@ -1020,7 +1007,8 @@ impl LayeredConfig {
             .position(|entry| {
                 entry
                     .as_table()
-                    .and_then(|entry| collection.identity(entry))
+                    .and_then(|entry| collection.identity_key(entry))
+                    .as_deref()
                     == Some(name)
             })
             .unwrap_or_else(|| {
@@ -1282,7 +1270,9 @@ const fn source_of(target: ConfigTarget) -> Option<ConfigSource> {
 }
 
 mod integrations;
+pub mod mcp;
 use integrations::*;
+use mcp::{decode_mcp_server, mcp_server_table, preflight_mcp_add};
 use merge::merge_layer;
 
 #[cfg(test)]
@@ -1295,6 +1285,10 @@ mod events_tests;
 mod harness_tests;
 #[cfg(test)]
 mod introspect_tests;
+#[cfg(test)]
+mod mcp_parity_tests;
+#[cfg(test)]
+mod mcp_tests;
 #[cfg(test)]
 mod merge_tests;
 #[cfg(test)]
@@ -2693,6 +2687,9 @@ disabled_tools = ["admin"]
             disabled_tools: BTreeSet::new(),
             startup_timeout_ms: 1_500,
             tool_timeout_ms: 2_000,
+            auth: Default::default(),
+            prompt: None,
+            sampling_enabled: true,
         };
 
         store.persist_mcp_add(&server).expect("MCP persists");
@@ -2759,6 +2756,9 @@ env = { API_TOKEN = "must-not-be-copied" }
             disabled_tools: BTreeSet::new(),
             startup_timeout_ms: 1_000,
             tool_timeout_ms: 1_000,
+            auth: Default::default(),
+            prompt: None,
+            sampling_enabled: true,
         };
 
         store
@@ -2854,7 +2854,7 @@ command = "must-not-run"
             .mcp_servers(Path::new("/workspace"))
             .expect_err("unsupported transport fails closed")
             .to_string();
-        assert!(error.contains("must be stdio or streamable-http"));
+        assert!(error.contains("`http`, `streamable-http` or `stdio`"));
         assert!(!error.contains("must-not-run"));
     }
 

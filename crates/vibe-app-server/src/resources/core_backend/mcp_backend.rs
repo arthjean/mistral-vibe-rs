@@ -1,4 +1,7 @@
 use super::*;
+use crate::resources::backend_command::{McpAddCommand, mcp_command_alias};
+use vibe_core::config::mcp::{dedupe_mcp_server_name, resolve_new_mcp_server_name};
+use vibe_core::mcp::{McpAuthConfig, McpOAuthConfig};
 
 impl CoreResourceBackend {
     pub(super) async fn dispatch_mcp(
@@ -62,18 +65,37 @@ impl CoreResourceBackend {
                             working_directory: Some(working_directory),
                         }
                     }
-                    McpAddTransport::Http { url } => McpTransportConfig::StreamableHttp {
+                    McpAddTransport::Http { url, legacy: true } => McpTransportConfig::Http {
                         url: url.clone(),
                         headers: BTreeMap::new(),
                     },
+                    McpAddTransport::Http { url, legacy: false } => {
+                        McpTransportConfig::StreamableHttp {
+                            url: url.clone(),
+                            headers: BTreeMap::new(),
+                        }
+                    }
                 };
+                let alias = resolve_add_alias(session, add, &transport).await?;
                 let config = McpServerConfig {
-                    alias: add.alias.clone(),
+                    alias,
                     transport,
                     enabled: add.enabled,
                     disabled_tools: Default::default(),
                     startup_timeout_ms: vibe_core::mcp::DEFAULT_MCP_STARTUP_TIMEOUT_MS,
                     tool_timeout_ms: vibe_core::mcp::DEFAULT_MCP_TOOL_TIMEOUT_MS,
+                    // A remote server added here authenticates through OAuth, as
+                    // it does upstream, so the entry records that intent instead
+                    // of leaving the runtime to infer it.
+                    auth: match &add.transport {
+                        McpAddTransport::Http { .. } => McpAuthConfig::Oauth(McpOAuthConfig {
+                            scopes: add.scopes.clone(),
+                            ..McpOAuthConfig::default()
+                        }),
+                        McpAddTransport::Stdio { .. } => McpAuthConfig::default(),
+                    },
+                    prompt: None,
+                    sampling_enabled: true,
                 };
                 session
                     .mcp
@@ -89,6 +111,7 @@ impl CoreResourceBackend {
                         .await
                         .insert(config.alias.clone());
                 }
+                let alias = config.alias.clone();
                 let diagnostics = session
                     .mcp
                     .discover_all(
@@ -101,7 +124,7 @@ impl CoreResourceBackend {
                     .await;
                 let state = mcp_view(session.mcp.read().await, &session.tools);
                 let mut dispatch = canonical_mutation("mcp", state, "mcp/updated", diagnostics);
-                dispatch.result.insert("name".to_owned(), json!(add.alias));
+                dispatch.result.insert("name".to_owned(), json!(alias));
                 Ok(dispatch)
             }
             McpCommand::Refresh { name } => {
@@ -249,5 +272,52 @@ impl CoreResourceBackend {
                 Ok(canonical_mutation("mcp", state, "mcp/updated", Vec::new()))
             }
         }
+    }
+}
+
+/// The alias a new server is added under.
+///
+/// A name the caller asked for is taken as it is and refused when it collides,
+/// so nothing is silently added under a different one; a name they left out is
+/// derived from the URL, or from the executable for a stdio server, and then
+/// numbered until it is free. Both the configured entries and the servers only
+/// this session knows count as taken.
+async fn resolve_add_alias(
+    session: &CoreResourceSession,
+    add: &McpAddCommand,
+    transport: &McpTransportConfig,
+) -> Result<String, ResourceError> {
+    let mut existing = session
+        .mcp
+        .read()
+        .await
+        .into_iter()
+        .map(|view| view.alias)
+        .collect::<BTreeSet<_>>();
+    if let Some(store) = session.config() {
+        existing.extend(
+            store
+                .load()
+                .and_then(|snapshot| snapshot.mcp_aliases())
+                .map_err(config_error)?,
+        );
+    }
+    match transport {
+        McpTransportConfig::Http { url, .. } | McpTransportConfig::StreamableHttp { url, .. } => {
+            resolve_new_mcp_server_name(add.requested_alias.as_deref(), url.as_str(), &existing)
+                .map_err(config_error)
+        }
+        McpTransportConfig::Stdio { command, .. } => match &add.requested_alias {
+            Some(alias) if existing.contains(alias) => {
+                Err(config_error(vibe_core::config::ConfigError::InvalidMcp(
+                    format!("MCP server name `{alias}` is already configured"),
+                )))
+            }
+            Some(alias) => Ok(alias.clone()),
+            None => Ok(dedupe_mcp_server_name(
+                &mcp_command_alias(command),
+                &existing,
+            )),
+        },
     }
 }

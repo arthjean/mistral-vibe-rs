@@ -149,6 +149,9 @@ impl ConnectorBackend for MistralConnectorClient {
                 disabled_tools: Default::default(),
                 startup_timeout_ms: DEFAULT_MCP_STARTUP_TIMEOUT_MS,
                 tool_timeout_ms: DEFAULT_MCP_TOOL_TIMEOUT_MS,
+                auth: Default::default(),
+                prompt: None,
+                sampling_enabled: true,
             };
             let peer = HttpMcpPeerFactory
                 .connect(&config)

@@ -1,5 +1,4 @@
 use super::*;
-use crate::text::canonical_url;
 
 pub(super) fn config_array(
     table: &Table,
@@ -23,131 +22,6 @@ pub(super) fn config_array_for_target(
         .target_values
         .get(&target)
         .map_or_else(|| Ok(Vec::new()), |table| config_array(table, collection))
-}
-
-pub(super) fn preflight_mcp_add(
-    table: &Table,
-    config: &McpServerConfig,
-) -> Result<(), ConfigError> {
-    for entry in config_array(table, IntegrationCollection::McpServers)? {
-        let entry = entry.as_table().ok_or_else(|| {
-            ConfigError::InvalidMcp("each mcp_servers entry must be a table".to_owned())
-        })?;
-        if entry.get("name").and_then(Value::as_str) == Some(&config.alias) {
-            return Err(ConfigError::InvalidMcp(format!(
-                "MCP server name `{}` is already configured",
-                config.alias
-            )));
-        }
-        let Some(new_url) = mcp_transport_url(&config.transport) else {
-            continue;
-        };
-        let Some(existing_url) = entry.get("url").and_then(Value::as_str) else {
-            continue;
-        };
-        if Url::parse(existing_url)
-            .ok()
-            .is_some_and(|url| canonical_url(&url) == canonical_url(new_url))
-        {
-            return Err(ConfigError::InvalidMcp(
-                "an MCP server with this URL is already configured".to_owned(),
-            ));
-        }
-    }
-    Ok(())
-}
-
-pub(super) fn mcp_transport_url(transport: &McpTransportConfig) -> Option<&Url> {
-    match transport {
-        McpTransportConfig::StreamableHttp { url, .. } => Some(url),
-        McpTransportConfig::Stdio { .. } => None,
-    }
-}
-
-pub(super) fn mcp_server_table(config: &McpServerConfig) -> Result<Table, ConfigError> {
-    let mut table = Table::new();
-    table.insert("name".to_owned(), Value::String(config.alias.clone()));
-    match &config.transport {
-        McpTransportConfig::Stdio {
-            command,
-            arguments,
-            environment,
-            working_directory,
-        } => {
-            table.insert("transport".to_owned(), Value::String("stdio".to_owned()));
-            table.insert("command".to_owned(), Value::String(command.clone()));
-            if !arguments.is_empty() {
-                table.insert(
-                    "args".to_owned(),
-                    Value::Array(arguments.iter().cloned().map(Value::String).collect()),
-                );
-            }
-            if !environment.is_empty() {
-                table.insert(
-                    "env".to_owned(),
-                    Value::Table(
-                        environment
-                            .iter()
-                            .map(|(key, value)| (key.clone(), Value::String(value.clone())))
-                            .collect(),
-                    ),
-                );
-            }
-            if let Some(working_directory) = working_directory {
-                table.insert(
-                    "cwd".to_owned(),
-                    Value::String(working_directory.to_string_lossy().into_owned()),
-                );
-            }
-        }
-        McpTransportConfig::StreamableHttp { url, headers } => {
-            table.insert(
-                "transport".to_owned(),
-                Value::String("streamable-http".to_owned()),
-            );
-            insert_http_mcp_fields(&mut table, url, headers);
-        }
-    }
-    table.insert("disabled".to_owned(), Value::Boolean(!config.enabled));
-    table.insert(
-        "disabled_tools".to_owned(),
-        Value::Array(
-            config
-                .disabled_tools
-                .iter()
-                .cloned()
-                .map(Value::String)
-                .collect(),
-        ),
-    );
-    table.insert(
-        "startup_timeout_sec".to_owned(),
-        Value::Float(config.startup_timeout_ms as f64 / 1_000.0),
-    );
-    table.insert(
-        "tool_timeout_sec".to_owned(),
-        Value::Float(config.tool_timeout_ms as f64 / 1_000.0),
-    );
-    Ok(table)
-}
-
-pub(super) fn insert_http_mcp_fields(
-    table: &mut Table,
-    url: &Url,
-    headers: &BTreeMap<String, String>,
-) {
-    table.insert("url".to_owned(), Value::String(url.to_string()));
-    if !headers.is_empty() {
-        table.insert(
-            "headers".to_owned(),
-            Value::Table(
-                headers
-                    .iter()
-                    .map(|(key, value)| (key.clone(), Value::String(value.clone())))
-                    .collect(),
-            ),
-        );
-    }
 }
 
 pub(super) fn required_mcp_string<'a>(table: &'a Table, key: &str) -> Result<&'a str, ConfigError> {
@@ -277,6 +151,19 @@ impl IntegrationCollection {
             Self::Connectors => table.get("name").or_else(|| table.get("id")),
         }
         .and_then(Value::as_str)
+    }
+
+    /// The identity an entry is matched under.
+    ///
+    /// An MCP server is read under its normalized alias, so it has to be
+    /// addressed under that one too: a persisted `my server` answers to
+    /// `my_server`, which is the only name any reader ever sees.
+    pub(super) fn identity_key(self, table: &Table) -> Option<String> {
+        let identity = self.identity(table)?;
+        Some(match self {
+            Self::McpServers => super::mcp::normalize_mcp_server_name(identity),
+            Self::Connectors => identity.to_owned(),
+        })
     }
 
     pub(super) fn invalid(self, message: &str) -> ConfigError {

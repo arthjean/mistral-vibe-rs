@@ -789,7 +789,14 @@ fn register_remote_tools(
         ));
         let spec = ToolSpec {
             name: public_name.clone(),
-            description: remote.description,
+            // The server's usage hint rides on every tool it publishes, which is
+            // where the model reads it.
+            description: match &config.prompt {
+                Some(prompt) if !prompt.is_empty() => {
+                    format!("{}\nHint: {prompt}", remote.description)
+                }
+                _ => remote.description,
+            },
             input_schema: remote.input_schema,
             output_schema: remote.output_schema,
             config: Value::Null,
