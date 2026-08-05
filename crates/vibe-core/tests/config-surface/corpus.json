@@ -1,4 +1,202 @@
 {
+  "defaults": {
+    "document": {
+      "active_model": "mistral-medium-3.5",
+      "active_transcribe_model": "voxtral-realtime",
+      "active_tts_model": "voxtral-tts",
+      "agent_paths": [],
+      "api_retry_max_elapsed_time": 300.0,
+      "api_timeout": 720.0,
+      "applied_migrations": [],
+      "ask_confirmation_on_exit": true,
+      "auto_compact_threshold": 200000,
+      "autocopy_to_clipboard": true,
+      "bypass_tool_permissions": false,
+      "compaction_prompt_id": "compact",
+      "connectors": [],
+      "console_base_url": "https://console.mistral.ai",
+      "context_warnings": false,
+      "default_agent": "default",
+      "disable_welcome_banner_animation": false,
+      "disabled_agents": [],
+      "disabled_skills": [],
+      "disabled_tools": [],
+      "displayed_workdir": "",
+      "enable_auto_update": true,
+      "enable_connectors": true,
+      "enable_notifications": true,
+      "enable_otel": false,
+      "enable_system_trust_store": false,
+      "enable_telemetry": true,
+      "enable_update_checks": true,
+      "enabled_agents": [],
+      "enabled_skills": [],
+      "enabled_tools": [],
+      "experimental_enable_registry_skills": false,
+      "experiments": {
+        "api_host": "https://experiments.mistral.services/",
+        "client_key": "sdk-OE8yJgTXZY6tj",
+        "enable": true
+      },
+      "file_watcher_for_autocomplete": false,
+      "include_commit_signature": true,
+      "include_model_info": true,
+      "include_project_context": true,
+      "include_prompt_detail": true,
+      "installed_agents": [],
+      "mcp_servers": [],
+      "models": [
+        {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        },
+        {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        }
+      ],
+      "narrator_enabled": false,
+      "otel_endpoint": "",
+      "otel_redaction": "default",
+      "project_context": {
+        "default_commit_count": 5,
+        "timeout_seconds": 2.0
+      },
+      "providers": [
+        {
+          "api_base": "https://api.mistral.ai/v1",
+          "api_key_env_var": "MISTRAL_API_KEY",
+          "api_style": "openai",
+          "backend": "mistral",
+          "browser_auth_api_base_url": "https://console.mistral.ai/api",
+          "browser_auth_base_url": "https://console.mistral.ai",
+          "extra_headers": {},
+          "name": "mistral",
+          "project_id": "",
+          "reasoning_field_name": "reasoning_content",
+          "region": ""
+        },
+        {
+          "api_base": "http://127.0.0.1:8080/v1",
+          "api_key_env_var": "",
+          "api_style": "openai",
+          "backend": "generic",
+          "extra_headers": {},
+          "name": "llamacpp",
+          "project_id": "",
+          "reasoning_field_name": "reasoning_content",
+          "region": ""
+        }
+      ],
+      "raise_on_compaction_failure": false,
+      "session_logging": {
+        "enabled": true,
+        "save_dir": "{vibe_home}/logs/session",
+        "session_prefix": "session"
+      },
+      "show_thinking_nodes": false,
+      "skill_paths": [],
+      "system_prompt_id": "cli",
+      "theme": "auto",
+      "tool_paths": [],
+      "transcribe_models": [
+        {
+          "alias": "voxtral-realtime",
+          "encoding": "pcm_s16le",
+          "language": "en",
+          "name": "voxtral-mini-transcribe-realtime-2602",
+          "provider": "mistral",
+          "sample_rate": 16000,
+          "target_streaming_delay_ms": 500
+        }
+      ],
+      "transcribe_providers": [
+        {
+          "api_base": "wss://api.mistral.ai",
+          "api_key_env_var": "MISTRAL_API_KEY",
+          "client": "mistral",
+          "name": "mistral"
+        }
+      ],
+      "tts_models": [
+        {
+          "alias": "voxtral-tts",
+          "name": "voxtral-mini-tts-latest",
+          "provider": "mistral",
+          "response_format": "wav",
+          "voice": "gb_jane_neutral"
+        }
+      ],
+      "tts_providers": [
+        {
+          "api_base": "https://api.mistral.ai",
+          "api_key_env_var": "MISTRAL_API_KEY",
+          "client": "mistral",
+          "name": "mistral"
+        }
+      ],
+      "vibe_base_url": "https://chat.mistral.ai",
+      "vibe_code_api_key_env_var": "MISTRAL_API_KEY",
+      "vibe_code_enabled": true,
+      "vibe_code_sessions_base_url": "https://chat.mistral.ai",
+      "voice_mode_enabled": false
+    },
+    "toolNames": [
+      "ask_user_question",
+      "bash",
+      "bash_log_file",
+      "bash_output",
+      "bash_sessions",
+      "bash_stdin",
+      "edit",
+      "exit_plan_mode",
+      "git_bash",
+      "git_bash_log_file",
+      "git_bash_output",
+      "git_bash_sessions",
+      "git_bash_stdin",
+      "grep",
+      "powershell",
+      "powershell_log_file",
+      "powershell_output",
+      "powershell_sessions",
+      "powershell_stdin",
+      "read_file",
+      "skill",
+      "task",
+      "todo",
+      "web_fetch",
+      "web_search",
+      "write_file"
+    ]
+  },
   "fields": [
     {
       "choices": [],
@@ -515,6 +713,435 @@
       "name": "experiments",
       "popular": false,
       "strategy": "replace"
+    }
+  ],
+  "modelScenarios": [
+    {
+      "activeModel": "mistral-medium-3.5",
+      "layers": [],
+      "models": {
+        "devstral-small": {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        }
+      },
+      "name": "models-defaults-only",
+      "validationWarnings": 0
+    },
+    {
+      "activeModel": "mistral-medium-3.5",
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[[models]]\nalias = \"local\"\ntemperature = 0.9\n"
+        }
+      ],
+      "models": {
+        "devstral-small": {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.9,
+          "thinking": "off"
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        }
+      },
+      "name": "models-sparse-override-of-a-default-model",
+      "validationWarnings": 0
+    },
+    {
+      "activeModel": "mistral-medium-3.5",
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[models.local]\ntemperature = 0.55\n"
+        }
+      ],
+      "models": {
+        "devstral-small": {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.55,
+          "thinking": "off"
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        }
+      },
+      "name": "models-alias-map-form",
+      "validationWarnings": 0
+    },
+    {
+      "activeModel": "mistral-medium-3.5",
+      "layers": [
+        {
+          "name": "user",
+          "toml": "auto_compact_threshold = 50000\n\n[[models]]\nname = \"scratch\"\nprovider = \"llamacpp\"\n"
+        }
+      ],
+      "models": {
+        "devstral-small": {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        },
+        "scratch": {
+          "alias": "scratch",
+          "auto_compact_threshold": 50000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "scratch",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        }
+      },
+      "name": "models-added-entry-inherits-the-global-threshold",
+      "validationWarnings": 0
+    },
+    {
+      "activeModel": "mistral-medium-3.5",
+      "layers": [
+        {
+          "name": "user",
+          "toml": "auto_compact_threshold = 50000\n\n[[models]]\nname = \"scratch\"\nprovider = \"llamacpp\"\nauto_compact_threshold = 4096\n"
+        }
+      ],
+      "models": {
+        "devstral-small": {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        },
+        "scratch": {
+          "alias": "scratch",
+          "auto_compact_threshold": 4096,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "scratch",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        }
+      },
+      "name": "models-entry-keeps-its-own-threshold",
+      "validationWarnings": 0
+    },
+    {
+      "activeModel": "mistral-medium-3.5",
+      "layers": [
+        {
+          "name": "user",
+          "toml": "active_model = \"not-configured\"\n"
+        }
+      ],
+      "models": {
+        "devstral-small": {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        }
+      },
+      "name": "models-unknown-active-model-falls-back",
+      "validationWarnings": 1
+    },
+    {
+      "activeModel": "scratch",
+      "layers": [
+        {
+          "name": "user",
+          "toml": "active_model = \"scratch\"\n\n[[models]]\nname = \"scratch-latest\"\nprovider = \"llamacpp\"\nalias = \"scratch\"\nsupports_images = true\n"
+        }
+      ],
+      "models": {
+        "devstral-small": {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        },
+        "scratch": {
+          "alias": "scratch",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "scratch-latest",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": true,
+          "temperature": 0.2,
+          "thinking": "off"
+        }
+      },
+      "name": "models-active-model-selects-an-added-entry",
+      "validationWarnings": 0
+    },
+    {
+      "activeModel": "mistral-medium-3.5",
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[[models]]\nalias = \"local\"\ntemperature = 0.4\nthinking = \"low\"\n"
+        },
+        {
+          "name": "project",
+          "toml": "[[models]]\nalias = \"local\"\ntemperature = 0.8\n"
+        }
+      ],
+      "models": {
+        "devstral-small": {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.8,
+          "thinking": "low"
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        }
+      },
+      "name": "models-two-layers-deep-merge-one-entry",
+      "validationWarnings": 0
     }
   ],
   "note": "Captured from the pinned reference by scripts/parity/config_surface.py. Field names, merge strategies, merge keys, editor kinds and merged documents are observations; no reference-authored description text is recorded here.",
@@ -1246,7 +1873,7 @@
       "name": "four-layer-every-strategy"
     }
   ],
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "strategies": {
     "declared": [
       "concat",

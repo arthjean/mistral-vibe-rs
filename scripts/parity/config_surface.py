@@ -36,7 +36,7 @@ import sys
 import tomllib
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 #: Where the read-only reference checkout lives. ``VIBE_REFERENCE`` overrides the
 #: default for machines that hold it elsewhere, and ``--reference`` wins over both.
 DEFAULT_REFERENCE = Path(
@@ -48,6 +48,9 @@ EXPECTED_COMMIT = "68ff32e6a92e80a874c8153312f0aa8ae4955477"
 #: Rust port implements neither. The census asserts this stays true.
 UNREACHABLE_STRATEGIES = ("merge", "conflict")
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
+#: Stands in for the machine-dependent vibe home in the captured default
+#: document, so the corpus stays identical on every workstation.
+VIBE_HOME_PLACEHOLDER = "{vibe_home}"
 
 
 class OracleError(RuntimeError):
@@ -512,6 +515,141 @@ async def merge_scenario(
     return dict(merged), dropped
 
 
+#: Layer stacks replayed on top of the real default layer, recording what the
+#: reference *validates* rather than what it merges. They exist because the
+#: model rules — sparse completion, the global compaction threshold, the unknown
+#: active-model fallback — only run once the merged document is validated.
+MODEL_SCENARIOS: list[dict[str, Any]] = [
+    {
+        "name": "models-defaults-only",
+        "layers": [],
+    },
+    {
+        "name": "models-sparse-override-of-a-default-model",
+        "layers": [("user", '[[models]]\nalias = "local"\ntemperature = 0.9\n')],
+    },
+    {
+        "name": "models-alias-map-form",
+        "layers": [("user", "[models.local]\ntemperature = 0.55\n")],
+    },
+    {
+        "name": "models-added-entry-inherits-the-global-threshold",
+        "layers": [
+            (
+                "user",
+                'auto_compact_threshold = 50000\n\n[[models]]\nname = "scratch"\nprovider = "llamacpp"\n',
+            )
+        ],
+    },
+    {
+        "name": "models-entry-keeps-its-own-threshold",
+        "layers": [
+            (
+                "user",
+                'auto_compact_threshold = 50000\n\n[[models]]\nname = "scratch"\nprovider = "llamacpp"\nauto_compact_threshold = 4096\n',
+            )
+        ],
+    },
+    {
+        "name": "models-unknown-active-model-falls-back",
+        "layers": [("user", 'active_model = "not-configured"\n')],
+    },
+    {
+        "name": "models-active-model-selects-an-added-entry",
+        "layers": [
+            (
+                "user",
+                'active_model = "scratch"\n\n[[models]]\nname = "scratch-latest"\nprovider = "llamacpp"\nalias = "scratch"\nsupports_images = true\n',
+            )
+        ],
+    },
+    {
+        "name": "models-two-layers-deep-merge-one-entry",
+        "layers": [
+            ("user", '[[models]]\nalias = "local"\ntemperature = 0.4\nthinking = "low"\n'),
+            ("project", '[[models]]\nalias = "local"\ntemperature = 0.8\n'),
+        ],
+    },
+]
+
+
+async def validated_models(
+    reference: Path, layers: list[tuple[str, str]]
+) -> dict[str, Any]:
+    sys.path.insert(0, str(reference))
+    from vibe.core.config.builder import ConfigBuilder
+    from vibe.core.config.layers.default import DefaultConfigLayer
+    from vibe.core.config.layers.overrides import OverridesLayer
+    from vibe.core.config.vibe_schema import VibeConfigSchema
+
+    builder = ConfigBuilder(
+        VibeConfigSchema, validation_context={"require_api_key": False}
+    )
+    builder.add_layer(DefaultConfigLayer(schema=VibeConfigSchema))
+    for name, document in layers:
+        builder.add_layer(OverridesLayer(data=tomllib.loads(document), name=name))
+    config = await builder.build()
+    return {
+        "activeModel": config.active_model,
+        "models": {
+            alias: model.model_dump(mode="json")
+            for alias, model in config.models.items()
+        },
+        # Only the count: the warning text is reference-authored prose and
+        # ``NOTICE`` forbids committing it.
+        "validationWarnings": len(config.validation_warnings),
+    }
+
+
+def capture_model_scenarios(reference: Path) -> list[dict[str, Any]]:
+    sys.path.insert(0, str(reference))
+    from vibe.core.config.harness_files import init_harness_files_manager
+
+    # The prompt-id validators reach the harness-files singleton; it resolves
+    # the builtin prompts shipped inside the checkout, so the capture stays
+    # machine-independent.
+    init_harness_files_manager()
+
+    async def run() -> list[dict[str, Any]]:
+        captured: list[dict[str, Any]] = []
+        for scenario in MODEL_SCENARIOS:
+            result = await validated_models(reference, scenario["layers"])
+            captured.append({
+                "name": scenario["name"],
+                "layers": [
+                    {"name": name, "toml": document}
+                    for name, document in scenario["layers"]
+                ],
+                **result,
+            })
+        return captured
+
+    return asyncio.run(run())
+
+
+def capture_defaults(reference: Path) -> dict[str, Any]:
+    """The document ``create_default_config`` ships, minus discovered tools."""
+    sys.path.insert(0, str(reference))
+    from vibe.core.paths import SESSION_LOG_DIR
+    from vibe.core.config.vibe_schema import create_default_config
+
+    document = create_default_config()
+    tools = document.pop("tools", {})
+    logging = document.get("session_logging")
+    if not isinstance(logging, dict):
+        raise OracleError("session_logging is not a table in the default document")
+    if logging.get("save_dir") != str(SESSION_LOG_DIR.path):
+        raise OracleError("the default session log directory moved")
+    logging["save_dir"] = f"{VIBE_HOME_PLACEHOLDER}/logs/session"
+    return {
+        "document": document,
+        # Compared for shape only: both implementations fill `tools` from their
+        # own tool discovery, so only the key set is an observation worth
+        # recording.
+        "toolNames": sorted(tools),
+    }
+
+
 def capture_scenarios(reference: Path) -> list[dict[str, Any]]:
     async def run() -> list[dict[str, Any]]:
         captured: list[dict[str, Any]] = []
@@ -550,7 +688,9 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
         ),
         "strategies": vocabulary,
         "fields": capture_fields(reference),
+        "defaults": capture_defaults(reference),
         "scenarios": capture_scenarios(reference),
+        "modelScenarios": capture_model_scenarios(reference),
     }
 
 
@@ -587,7 +727,10 @@ def main() -> int:
     )
     print(
         f"wrote {arguments.output} "
-        f"({len(corpus['fields'])} fields, {len(corpus['scenarios'])} scenarios)"
+        f"({len(corpus['fields'])} fields, "
+        f"{len(corpus['defaults']['document'])} defaults, "
+        f"{len(corpus['scenarios'])} scenarios, "
+        f"{len(corpus['modelScenarios'])} model scenarios)"
     )
     return 0
 

@@ -113,6 +113,9 @@ pub struct ConfigSnapshot {
     pub fingerprints: BTreeMap<ConfigTarget, Option<String>>,
     pub target_values: BTreeMap<ConfigTarget, Table>,
     pub layer_values: Vec<ConfigLayer>,
+    /// What the load repaired rather than rejected, in the order the repairs
+    /// were made. Reference `VibeConfigSchema.validation_warnings`.
+    pub validation_warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -137,6 +140,9 @@ impl ConfigSnapshot {
                 "layer": layer.kind,
                 "values": redact_table(&layer.values),
             })).collect::<Vec<_>>(),
+            // What the load repaired rather than rejected, so a client can say
+            // so instead of silently running on a different model.
+            "validationWarnings": self.validation_warnings,
         })
     }
 
@@ -473,6 +479,8 @@ impl LayeredConfig {
             merge_layer(&mut effective, &layer.values)?;
         }
         validate_table(&effective)?;
+        let validation_warnings =
+            finalize_effective(&mut effective, &self.paths.vibe_home, &model_order(&layers))?;
 
         let fingerprints = BTreeMap::from([
             (
@@ -488,6 +496,7 @@ impl LayeredConfig {
             fingerprints,
             target_values,
             layer_values: layers,
+            validation_warnings,
         })
     }
 
@@ -525,6 +534,7 @@ impl LayeredConfig {
                 apply_mutation(&mut table, mutation)?;
             }
             validate_table(&table)?;
+            persist_models_as_list(&mut table);
             let encoded = toml::to_string_pretty(&table).map_err(ConfigError::Serialize)?;
             prepared.push(PreparedWrite::new(path, encoded.into_bytes())?);
         }
@@ -807,6 +817,13 @@ impl LayeredConfig {
         registry::json_schema()
     }
 
+    /// The token identifying [`Self::schema`], stable for the life of the
+    /// process so a client can cache the surface it names.
+    #[must_use]
+    pub fn schema_version() -> &'static str {
+        registry::schema_version()
+    }
+
     /// The schema literal this port published before the registry generated
     /// it, kept whole as the fixture `registry_tests` diffs against so the
     /// generated surface is proved unchanged rather than assumed.
@@ -912,6 +929,8 @@ mod integrations;
 use integrations::*;
 use merge::merge_layer;
 
+#[cfg(test)]
+mod defaults_tests;
 #[cfg(test)]
 mod merge_tests;
 #[cfg(test)]
@@ -1395,6 +1414,233 @@ fn validate_table(table: &Table) -> Result<(), ConfigError> {
     validate_urls(table, &mut Vec::new())
 }
 
+/// Writes an alias-keyed model map back as the persisted `[[models]]` list, so
+/// a client that patched the read form does not leave a document the reference
+/// extensions cannot parse. Reference `_canonical_toml_document`.
+///
+/// The reference also drops null-valued fields on the way out; TOML has no
+/// null, so a [`Table`] cannot carry one and nothing has to be dropped here.
+fn persist_models_as_list(table: &mut Table) {
+    if let Some(models) = table.get(merge::MODELS_FIELD)
+        && models.is_table()
+    {
+        let serialized = merge::serialize_models(models);
+        table.insert(merge::MODELS_FIELD.to_owned(), serialized);
+    }
+}
+
+/// The rules the reference applies once the merged document is validated, in
+/// the order its validators run: the session log directory is resolved, an
+/// emptied model set is rejected, the global compaction threshold reaches the
+/// models that set none, and an `active_model` naming nothing configured falls
+/// back to the first model.
+///
+/// Every rule is skipped when the key it governs is absent. A stack composed
+/// without the shipped defaults, which is what a fixture builds, therefore
+/// loads unchanged instead of failing on a document the reference could never
+/// produce.
+fn finalize_effective(
+    effective: &mut Table,
+    vibe_home: &Path,
+    model_order: &[String],
+) -> Result<Vec<String>, ConfigError> {
+    resolve_session_log_dir(effective, vibe_home, user_home_directory())?;
+    require_configured_model(effective)?;
+    complete_model_entries(effective);
+    propagate_auto_compact_threshold(effective);
+    Ok(apply_active_model_fallback(effective, model_order)
+        .into_iter()
+        .collect())
+}
+
+/// Fills each merged model entry with the per-entry defaults the reference
+/// `ModelConfig` supplies, so a sparse entry reaches a consumer complete.
+fn complete_model_entries(effective: &mut Table) {
+    // Unreachable in a passing suite: `registry_tests` parses the literal.
+    let Some(defaults) = serde_json::from_str::<JsonValue>(registry::MODEL_DEFAULTS)
+        .ok()
+        .and_then(|value| Value::try_from(value).ok())
+        .and_then(|value| value.as_table().cloned())
+    else {
+        return;
+    };
+    let Some(models) = effective.get_mut("models").and_then(Value::as_table_mut) else {
+        return;
+    };
+    for (_, entry) in models.iter_mut() {
+        if let Some(model) = entry.as_table_mut() {
+            for (key, value) in &defaults {
+                model.entry(key.clone()).or_insert_with(|| value.clone());
+            }
+        }
+    }
+}
+
+/// Reference `SessionLoggingConfig`: an unset directory falls back to the vibe
+/// home's session log directory, and the result is expanded and absolutized.
+///
+/// `home` is passed in rather than read here so the branch that cannot resolve
+/// one is reachable from a test without mutating the process environment, which
+/// `unsafe_code` being forbidden rules out.
+fn resolve_session_log_dir(
+    effective: &mut Table,
+    vibe_home: &Path,
+    home: Option<PathBuf>,
+) -> Result<(), ConfigError> {
+    const FIELD: &str = "session_logging.save_dir";
+    let Some(logging) = effective
+        .get_mut("session_logging")
+        .and_then(Value::as_table_mut)
+    else {
+        return Ok(());
+    };
+    let configured = logging
+        .get("save_dir")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let candidate = if configured.is_empty() {
+        vibe_home.join("logs").join("session")
+    } else {
+        expand_home(Path::new(configured), home)
+            .ok_or(ConfigError::UnresolvablePath { field: FIELD })?
+    };
+    let resolved = absolutize(candidate).ok_or(ConfigError::UnresolvablePath { field: FIELD })?;
+    let Some(rendered) = resolved.to_str() else {
+        return Err(ConfigError::UnresolvablePath { field: FIELD });
+    };
+    logging.insert("save_dir".to_owned(), Value::String(rendered.to_owned()));
+    Ok(())
+}
+
+/// Replaces a leading `~` with the user's home directory, as the reference
+/// `expanduser` does. `None` when the path needs a home directory the caller
+/// could not resolve.
+fn expand_home(path: &Path, home: Option<PathBuf>) -> Option<PathBuf> {
+    let mut components = path.components();
+    let Some(first) = components.next() else {
+        return Some(path.to_path_buf());
+    };
+    if first.as_os_str() != "~" {
+        return Some(path.to_path_buf());
+    }
+    let mut home = home?;
+    home.extend(components);
+    Some(home)
+}
+
+fn user_home_directory() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .or_else(|| {
+                let mut home = PathBuf::from(std::env::var_os("HOMEDRIVE")?);
+                home.push(std::env::var_os("HOMEPATH")?);
+                Some(home)
+            })
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var_os("HOME").map(PathBuf::from)
+    }
+}
+
+/// Anchors a relative path on the working directory without touching the
+/// filesystem, so a directory that does not exist yet still resolves.
+fn absolutize(path: PathBuf) -> Option<PathBuf> {
+    if path.is_absolute() {
+        return Some(path);
+    }
+    Some(std::env::current_dir().ok()?.join(path))
+}
+
+/// Reference `_non_empty`: a layer that empties the model set leaves a
+/// configuration no turn can run under.
+fn require_configured_model(effective: &Table) -> Result<(), ConfigError> {
+    match effective.get("models") {
+        Some(Value::Table(models)) if models.is_empty() => Err(ConfigError::NoConfiguredModel),
+        Some(Value::Array(models)) if models.is_empty() => Err(ConfigError::NoConfiguredModel),
+        _ => Ok(()),
+    }
+}
+
+/// Reference `_apply_global_auto_compact_threshold`: a model that declares no
+/// threshold inherits the global one, and a model that declares its own keeps it.
+fn propagate_auto_compact_threshold(effective: &mut Table) {
+    let Some(global) = effective
+        .get("auto_compact_threshold")
+        .and_then(Value::as_integer)
+    else {
+        return;
+    };
+    let Some(models) = effective.get_mut("models").and_then(Value::as_table_mut) else {
+        return;
+    };
+    for (_, entry) in models.iter_mut() {
+        if let Some(model) = entry.as_table_mut()
+            && !model.contains_key("auto_compact_threshold")
+        {
+            model.insert("auto_compact_threshold".to_owned(), Value::Integer(global));
+        }
+    }
+}
+
+/// Reference `_apply_active_model_fallback`: an `active_model` naming nothing
+/// configured selects the first configured model and records a warning instead
+/// of failing the load.
+fn apply_active_model_fallback(effective: &mut Table, model_order: &[String]) -> Option<String> {
+    let models = effective.get("models").and_then(Value::as_table)?;
+    if models.is_empty() {
+        return None;
+    }
+    let active = effective.get("active_model").and_then(Value::as_str)?;
+    if models.contains_key(active) {
+        return None;
+    }
+    let unknown = active.to_owned();
+    let fallback = model_order
+        .iter()
+        .find(|alias| models.contains_key(alias.as_str()))
+        .cloned()
+        .or_else(|| models.keys().next().cloned())?;
+    effective.insert("active_model".to_owned(), Value::String(fallback.clone()));
+    Some(format!(
+        "Active model `{unknown}` is not configured; falling back to `{fallback}`."
+    ))
+}
+
+/// The aliases in the order the layers declare them, lowest layer first.
+///
+/// The merged model map is keyed rather than ordered, so the order a persisted
+/// list was written in is recovered here; it is what "the first configured
+/// model" means when an `active_model` has to fall back.
+fn model_order(layers: &[ConfigLayer]) -> Vec<String> {
+    let mut order: Vec<String> = Vec::new();
+    for layer in layers {
+        let aliases = match layer.values.get("models") {
+            Some(Value::Array(entries)) => entries
+                .iter()
+                .filter_map(|entry| {
+                    let table = entry.as_table()?;
+                    table
+                        .get("alias")
+                        .or_else(|| table.get("name"))?
+                        .as_str()
+                        .map(str::to_owned)
+                })
+                .collect::<Vec<_>>(),
+            Some(Value::Table(entries)) => entries.keys().cloned().collect(),
+            _ => Vec::new(),
+        };
+        for alias in aliases {
+            if !order.contains(&alias) {
+                order.push(alias);
+            }
+        }
+    }
+    order
+}
+
 fn validate_urls(table: &Table, path: &mut Vec<String>) -> Result<(), ConfigError> {
     for (key, value) in table {
         path.push(key.clone());
@@ -1583,6 +1829,14 @@ pub enum ConfigError {
     InvalidSensitiveUrl { path: String },
     #[error("credentials are forbidden in sensitive configuration field `{path}`")]
     SensitiveUrlCredentials { path: String },
+    #[error("`models` entries require an `alias` or a `name`")]
+    ModelEntryWithoutAlias,
+    #[error("`models` key `{key}` does not match the entry alias `{alias}`")]
+    ModelAliasMismatch { key: String, alias: String },
+    #[error("no model is configured; define at least one entry under `[[models]]`")]
+    NoConfiguredModel,
+    #[error("`{field}` cannot be resolved to an absolute path")]
+    UnresolvablePath { field: &'static str },
 }
 
 impl From<AtomicWriteError> for ConfigError {
@@ -2001,6 +2255,7 @@ disabled_tools = ["admin"]
             fingerprints: BTreeMap::new(),
             target_values: BTreeMap::new(),
             layer_values: Vec::new(),
+            validation_warnings: Vec::new(),
         };
         let servers = snapshot
             .mcp_servers(&working_directory)
@@ -2170,6 +2425,7 @@ command = "top-secret-command"
             fingerprints: BTreeMap::new(),
             target_values: BTreeMap::new(),
             layer_values: Vec::new(),
+            validation_warnings: Vec::new(),
         };
         let error = snapshot
             .mcp_servers(Path::new("/workspace"))
@@ -2195,6 +2451,7 @@ command = "must-not-run"
             fingerprints: BTreeMap::new(),
             target_values: BTreeMap::new(),
             layer_values: Vec::new(),
+            validation_warnings: Vec::new(),
         };
         let error = snapshot
             .mcp_servers(Path::new("/workspace"))

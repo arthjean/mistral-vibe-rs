@@ -12,12 +12,16 @@
 //! forbids shipping. Replay therefore runs unconditionally; only the live probe
 //! that recaptures from the pinned checkout skips when it is absent.
 //!
-//! Two comparisons are deliberately scoped. The corpus records each field's
-//! editor kind, but this module asserts only the merge strategy and merge key,
-//! which is what composition depends on; kinds and defaults are asserted when
-//! the surface is published, in US-064. And a key the reference schema does not
+//! Three families are replayed. `scenarios` records what `ConfigBuilder`
+//! *merges*, and is compared against a stack composed without the shipped
+//! defaults. `defaults` records the document `create_default_config` ships, and
+//! is compared against a load with no configuration file at all.
+//! `modelScenarios` records what the reference *validates* on top of its own
+//! default layer, because the model rules only run after the merge.
+//!
+//! One comparison is deliberately scoped: a key the reference schema does not
 //! declare is dropped by the reference merge and kept by this one, which FR-04
-//! requires: the corpus records those keys so the divergence is proved rather
+//! requires. The corpus records those keys so the divergence is proved rather
 //! than assumed.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -43,9 +47,11 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/config_surface.py";
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 1;
+const CORPUS_SCHEMA_VERSION: u32 = 2;
 /// The scenario floor this epic commits to.
 const MINIMUM_SCENARIOS: usize = 24;
+/// What the capture writes where the vibe home is machine-dependent.
+const VIBE_HOME_PLACEHOLDER: &str = "{vibe_home}";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -56,7 +62,26 @@ struct Corpus {
     note: String,
     strategies: Strategies,
     fields: Vec<ReferenceField>,
+    defaults: Defaults,
     scenarios: Vec<Scenario>,
+    model_scenarios: Vec<ModelScenario>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Defaults {
+    document: Map<String, JsonValue>,
+    tool_names: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ModelScenario {
+    name: String,
+    layers: Vec<ScenarioLayer>,
+    active_model: String,
+    models: Map<String, JsonValue>,
+    validation_warnings: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,17 +104,8 @@ struct ReferenceField {
     name: String,
     strategy: String,
     merge_key: Option<String>,
-    #[expect(
-        dead_code,
-        reason = "asserted when the surface is published, in US-064"
-    )]
     kind: String,
-    #[expect(
-        dead_code,
-        reason = "asserted when the surface is published, in US-064"
-    )]
     choices: Vec<String>,
-    #[expect(dead_code, reason = "asserted by the settings surface, in US-068")]
     popular: bool,
 }
 
@@ -155,11 +171,231 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
             "field `{}` declares the wrong merge key",
             field.name
         );
+        assert_eq!(
+            spec.popular, field.popular,
+            "field `{}` disagrees with the reference popular set",
+            field.name
+        );
+        // `theme` is the one deliberate kind divergence: the reference types it
+        // as free text, this port as a choice over the theme catalog it ships,
+        // so the settings screen can offer a picker rather than a text field.
+        if field.name == "theme" {
+            assert_eq!(field.kind, "str");
+            assert_eq!(spec.kind.as_str(), "enum");
+            assert_eq!(spec.choices, THEME_VALUES);
+            continue;
+        }
+        assert_eq!(
+            spec.kind.as_str(),
+            field.kind,
+            "field `{}` publishes another editor kind",
+            field.name
+        );
+        assert_eq!(
+            spec.choices, field.choices,
+            "field `{}` publishes another choice set",
+            field.name
+        );
     }
     assert!(
         missing.is_empty(),
         "the registry does not declare these reference fields: {missing:?}"
     );
+    let local = FIELDS
+        .iter()
+        .filter(|spec| spec.local)
+        .map(|spec| spec.name)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        FIELDS.len() - local.len(),
+        corpus.fields.len(),
+        "the registry declares reference fields the corpus does not: {local:?}"
+    );
+    assert_eq!(
+        local,
+        [
+            "thinking",
+            "notifications",
+            "proxy",
+            "tls_ca_path",
+            "dotenv_path"
+        ],
+        "the locally declared key set changed; record the divergence in the PRD"
+    );
+}
+
+/// The shipped defaults are the reference defaults, proved through the real
+/// load rather than by inspecting the declaration.
+#[test]
+fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
+    let corpus = corpus();
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let home = temporary.path().join("home/.vibe");
+    fs::create_dir_all(&home).expect("home directory");
+    let snapshot = LayeredConfig::new(
+        ConfigPaths {
+            vibe_home: home.clone(),
+            working_directory: temporary.path().join("project"),
+        },
+        registry::default_document(),
+    )
+    .load()
+    .expect("the shipped defaults load on their own");
+    let actual = serde_json::to_value(&snapshot.effective).expect("effective serializes");
+
+    for (key, expected) in &corpus.defaults.document {
+        // The reference serializes models as a list on write and reads them
+        // back keyed by alias; the effective document carries the read form.
+        let expected = if key == "models" {
+            models_by_alias(expected)
+        } else {
+            resolve_vibe_home(expected, &home)
+        };
+        let Some(found) = actual.get(key) else {
+            panic!("`{key}` is missing from the shipped default document");
+        };
+        if let Some((pointer, want, got)) = difference(&format!("/{key}"), &expected, found) {
+            panic!("the shipped defaults diverge at {pointer}: reference {want}, port {got}");
+        }
+    }
+
+    let extra = snapshot
+        .effective
+        .keys()
+        .filter(|key| !corpus.defaults.document.contains_key(key.as_str()))
+        .collect::<Vec<_>>();
+    assert!(
+        extra.is_empty(),
+        "the port ships defaults the reference does not: {extra:?}"
+    );
+    assert!(snapshot.validation_warnings.is_empty());
+
+    // `tools` is compared for shape only: both implementations fill it from
+    // their own tool discovery, so only the reference's key set is recorded.
+    assert!(
+        !corpus.defaults.tool_names.is_empty(),
+        "the reference default document carries no discovered tool"
+    );
+    assert!(
+        !snapshot.effective.contains_key("tools"),
+        "tool discovery owns `tools`; the registry must not ship one"
+    );
+}
+
+/// Reads the persisted list form the corpus records into the alias-keyed map
+/// the merge composes, as the reference does when it reads a layer back.
+fn models_by_alias(models: &JsonValue) -> JsonValue {
+    let Some(entries) = models.as_array() else {
+        return models.clone();
+    };
+    JsonValue::Object(
+        entries
+            .iter()
+            .filter_map(|entry| {
+                let alias = entry
+                    .get("alias")
+                    .or_else(|| entry.get("name"))?
+                    .as_str()?
+                    .to_owned();
+                Some((alias, entry.clone()))
+            })
+            .collect(),
+    )
+}
+
+/// Substitutes the machine-dependent vibe home the capture wrote a placeholder for.
+fn resolve_vibe_home(value: &JsonValue, home: &Path) -> JsonValue {
+    match value {
+        JsonValue::String(text) if text.starts_with(VIBE_HOME_PLACEHOLDER) => {
+            JsonValue::String(text.replacen(VIBE_HOME_PLACEHOLDER, &home.display().to_string(), 1))
+        }
+        JsonValue::Object(entries) => JsonValue::Object(
+            entries
+                .iter()
+                .map(|(key, value)| (key.clone(), resolve_vibe_home(value, home)))
+                .collect(),
+        ),
+        JsonValue::Array(entries) => JsonValue::Array(
+            entries
+                .iter()
+                .map(|entry| resolve_vibe_home(entry, home))
+                .collect(),
+        ),
+        value => value.clone(),
+    }
+}
+
+/// The model rules the reference applies once the merged document is validated:
+/// sparse entries completed from the default one, the global compaction
+/// threshold reaching the entries that set none, and the `active_model`
+/// fallback with its warning.
+#[test]
+fn every_model_scenario_validates_to_the_document_the_reference_validates() {
+    let corpus = corpus();
+    assert!(!corpus.model_scenarios.is_empty());
+    for scenario in &corpus.model_scenarios {
+        let temporary = tempfile::tempdir().expect("temporary root");
+        let home = temporary.path().join("home/.vibe");
+        fs::create_dir_all(&home).expect("home directory");
+        let mut documents = scenario.layers.iter().map(|layer| {
+            layer.toml.parse::<Table>().unwrap_or_else(|error| {
+                panic!("{}: layer `{}`: {error}", scenario.name, layer.name)
+            })
+        });
+        let mut config = LayeredConfig::new(
+            ConfigPaths {
+                vibe_home: home.clone(),
+                working_directory: temporary.path().join("project"),
+            },
+            registry::default_document(),
+        );
+        if let Some(selected) = documents.next() {
+            fs::write(home.join(CONFIG_FILE), selected.to_string()).expect("selected fixture");
+        }
+        if let Some(runtime) = documents.next() {
+            config.runtime = runtime;
+        }
+        assert!(
+            documents.next().is_none(),
+            "{}: a model scenario may stack at most two layers over the defaults",
+            scenario.name
+        );
+
+        let snapshot = config
+            .load()
+            .unwrap_or_else(|error| panic!("{}: {error}", scenario.name));
+        assert_eq!(
+            snapshot
+                .effective
+                .get("active_model")
+                .and_then(Value::as_str),
+            Some(scenario.active_model.as_str()),
+            "{}: the active model diverges",
+            scenario.name
+        );
+        assert_eq!(
+            snapshot.validation_warnings.len(),
+            scenario.validation_warnings,
+            "{}: the port recorded {:?}",
+            scenario.name,
+            snapshot.validation_warnings
+        );
+        let models = snapshot
+            .effective
+            .get("models")
+            .unwrap_or_else(|| panic!("{}: the merged document carries no model", scenario.name));
+        let models = serde_json::to_value(models).expect("models serialize");
+        if let Some((pointer, want, got)) = difference(
+            "/models",
+            &JsonValue::Object(scenario.models.clone()),
+            &models,
+        ) {
+            panic!(
+                "{}: the validated models diverge at {pointer}: reference {want}, port {got}",
+                scenario.name
+            );
+        }
+    }
 }
 
 #[test]
@@ -306,6 +542,11 @@ fn difference(
             for (key, value) in expected {
                 let nested = format!("{pointer}/{}", escape_pointer_token(key));
                 let Some(found) = actual.get(key) else {
+                    // TOML has no null, so a field the reference validated to
+                    // `None` is absent here rather than present and empty.
+                    if value.is_null() {
+                        continue;
+                    }
                     return Some((nested, render(key, value), "absent".to_owned()));
                 };
                 if let Some(found) = difference(&nested, value, found) {

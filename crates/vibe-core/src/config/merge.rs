@@ -6,14 +6,27 @@
 //! every key and what an unknown scalar needs; unlike the reference, such a key
 //! survives into the effective document instead of being dropped.
 
+use std::borrow::Cow;
+
 use toml::{Table, Value};
 
 use super::ConfigError;
 use super::registry::{self, ENTRY_MERGED_UNION_FIELDS, MergeStrategy};
 
+/// The one field normalized before it is merged, because its persisted form and
+/// its mergeable form differ. Reference `ConfigBuilder._apply_model_before_validators`
+/// applies the same normalization to this field and no other.
+pub(super) const MODELS_FIELD: &str = "models";
+
 /// Composes `overlay` onto `target`, applying each field's declared strategy.
 pub(super) fn merge_layer(target: &mut Table, overlay: &Table) -> Result<(), ConfigError> {
-    for (key, value) in overlay {
+    for (key, raw) in overlay {
+        let value = if key == MODELS_FIELD {
+            Cow::Owned(normalize_models(raw)?)
+        } else {
+            Cow::Borrowed(raw)
+        };
+        let value = value.as_ref();
         match registry::strategy(key) {
             MergeStrategy::Replace => {
                 target.insert(key.clone(), value.clone());
@@ -24,6 +37,88 @@ pub(super) fn merge_layer(target: &mut Table, overlay: &Table) -> Result<(), Con
         }
     }
     Ok(())
+}
+
+/// Reads the persisted `[[models]]` list, or an already alias-keyed table, into
+/// the alias-keyed map the deep merge composes.
+///
+/// Reference `normalize_model_configs`: an entry declares its alias explicitly
+/// or borrows its name, and a table key that disagrees with the entry's own
+/// alias is a mistake rather than a rename.
+pub(super) fn normalize_models(value: &Value) -> Result<Value, ConfigError> {
+    let mut normalized = Table::new();
+    match value {
+        Value::Array(entries) => {
+            for entry in entries {
+                let alias = model_alias(entry)?;
+                normalized.insert(alias.clone(), model_entry_with_alias(&alias, entry)?);
+            }
+        }
+        Value::Table(entries) => {
+            for (alias, entry) in entries {
+                normalized.insert(alias.clone(), model_entry_with_alias(alias, entry)?);
+            }
+        }
+        // Anything else is left for the strategy to reject by type, as the
+        // reference leaves an unrecognised shape untouched.
+        other => return Ok(other.clone()),
+    }
+    Ok(Value::Table(normalized))
+}
+
+/// The alias a list entry is keyed by: its own, or its name when it declares none.
+fn model_alias(entry: &Value) -> Result<String, ConfigError> {
+    entry
+        .as_table()
+        .and_then(|table| table.get("alias").or_else(|| table.get("name")))
+        .and_then(Value::as_str)
+        .filter(|alias| !alias.is_empty())
+        .map(str::to_owned)
+        .ok_or(ConfigError::ModelEntryWithoutAlias)
+}
+
+fn model_entry_with_alias(alias: &str, entry: &Value) -> Result<Value, ConfigError> {
+    if alias.is_empty() {
+        return Err(ConfigError::ModelEntryWithoutAlias);
+    }
+    let Some(table) = entry.as_table() else {
+        return Ok(entry.clone());
+    };
+    match table.get("alias").and_then(Value::as_str) {
+        Some(declared) if declared != alias => Err(ConfigError::ModelAliasMismatch {
+            key: alias.to_owned(),
+            alias: declared.to_owned(),
+        }),
+        Some(_) => Ok(entry.clone()),
+        None => {
+            let mut completed = table.clone();
+            completed.insert("alias".to_owned(), Value::String(alias.to_owned()));
+            Ok(Value::Table(completed))
+        }
+    }
+}
+
+/// Writes the alias-keyed map back as the persisted `[[models]]` list.
+///
+/// Reference `serialize_model_configs`. Entry order follows the map, which is
+/// the order the persisted document is read back in.
+pub(super) fn serialize_models(value: &Value) -> Value {
+    let Some(entries) = value.as_table() else {
+        return value.clone();
+    };
+    Value::Array(
+        entries
+            .iter()
+            .map(|(alias, entry)| match entry.as_table() {
+                Some(table) if !table.contains_key("alias") => {
+                    let mut completed = table.clone();
+                    completed.insert("alias".to_owned(), Value::String(alias.clone()));
+                    Value::Table(completed)
+                }
+                _ => entry.clone(),
+            })
+            .collect(),
+    )
 }
 
 /// Merges `overlay` into `target` recursively, preserving keys `overlay` omits.
