@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Publish the settings a tool declares as a configuration layer. `web_fetch`'s
+  content and redirect limits, `web_search`'s and `web_fetch`'s timeouts and
+  `todo`'s cap now appear under `tools` in `config/read`, in a `discovered`
+  layer sitting above the shipped defaults and below every file you own, so
+  writing `[tools.web_fetch] maxRedirects = 1` wins over the declaration in the
+  effective document and leaves the rest of the entry standing. The tools
+  themselves still run on the limits they declare; the layer is what makes those
+  limits visible and addressable, and each tool reads its entry when the feature
+  behind that option lands. A tool that does not register declares nothing, and a
+  discovery pass that cannot run leaves the layer empty with the reason readable
+  in the configuration's validation warnings rather than failing the load.
 - Accept every MCP entry the reference accepts. `transport = "http"` loads and
   round-trips beside `streamable-http`, `/mcp add --transport http` is no longer
   refused, and a stdio `command` may be a list or a quoted string that is split
