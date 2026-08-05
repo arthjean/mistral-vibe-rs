@@ -1,0 +1,339 @@
+{
+  "prd": {
+    "file": "tasks/prd-app-server-parity.md",
+    "title": "App-Server Surface Parity",
+    "created_at": "2026-08-05",
+    "status": "IN_PROGRESS"
+  },
+  "epics": [
+    {
+      "id": "EP-024",
+      "title": "The Surface Oracle and the Handshake Contract",
+      "status": "DONE",
+      "priority": "P0",
+      "stories_total": 4,
+      "stories_done": 4,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-025",
+      "title": "The Notification Contract",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 4,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-026",
+      "title": "Typed Entry Details",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-027",
+      "title": "Response Envelopes and Live Runtime",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 4,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-028",
+      "title": "Client Tools",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 2,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-029",
+      "title": "Project Links, Identity, Telemetry and Worktrees",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 3,
+      "stories_done": 0
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-079",
+      "title": "Capture the reference app-server surface into a committed corpus",
+      "epic": "EP-024",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [],
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
+    },
+    {
+      "id": "US-080",
+      "title": "Replay the corpus against the Rust surface in CI",
+      "epic": "EP-024",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-079"
+      ],
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
+    },
+    {
+      "id": "US-081",
+      "title": "Accept the reference handshake and advertise the reference inventory",
+      "epic": "EP-024",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-080"
+      ],
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
+    },
+    {
+      "id": "US-082",
+      "title": "Structure invalid_params detail and bound the local extensions",
+      "epic": "EP-024",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-080"
+      ],
+      "started_at": "2026-08-05",
+      "completed_at": "2026-08-05",
+      "reviewed_at": "2026-08-05"
+    },
+    {
+      "id": "US-083",
+      "title": "Emit session/updated and session/snapshot with a sound event sequence",
+      "epic": "EP-025",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-081"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-084",
+      "title": "Emit session/statsUpdated and publish live token accounting",
+      "epic": "EP-025",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-083"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-085",
+      "title": "Emit session/contextCleared and turn/retrying with their vocabularies",
+      "epic": "EP-025",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-083"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-086",
+      "title": "Emit runtime/updated, mcp/authUrl and warning, and retire the invented names",
+      "epic": "EP-025",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-084"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-087",
+      "title": "Publish the 12-variant EffectDetail with its call display",
+      "epic": "EP-026",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-080"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-088",
+      "title": "Publish the 8-variant NoticeDetail",
+      "epic": "EP-026",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-087"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-089",
+      "title": "Validate the callback detail and output unions",
+      "epic": "EP-026",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-087"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-090",
+      "title": "Report live runtime and statistics",
+      "epic": "EP-027",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-084"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-091",
+      "title": "Publish the complete ConfigView and the reference config envelopes",
+      "epic": "EP-027",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-090"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-092",
+      "title": "Publish the reference MCP and connector vocabularies",
+      "epic": "EP-027",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-090"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-093",
+      "title": "Align the remaining request and response envelopes",
+      "epic": "EP-027",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-090"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-094",
+      "title": "Delegate file reads and writes to the client",
+      "epic": "EP-028",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "L",
+      "blocked_by": [
+        "US-081"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-095",
+      "title": "Delegate terminals to the client",
+      "epic": "EP-028",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "L",
+      "blocked_by": [
+        "US-094"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-096",
+      "title": "Add identity/read, telemetry/record and workspace/worktrees/list",
+      "epic": "EP-029",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-090"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-097",
+      "title": "Add the projectLinks read surface",
+      "epic": "EP-029",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "L",
+      "blocked_by": [
+        "US-096"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-098",
+      "title": "Add the projectLinks mutation surface and re-score parity",
+      "epic": "EP-029",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "L",
+      "blocked_by": [
+        "US-097"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    }
+  ]
+}
