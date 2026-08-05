@@ -18,6 +18,7 @@ use std::time::Duration;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use toml::{Table, Value as TomlValue};
 use url::Url;
 
 use crate::config::DotenvValues;
@@ -223,6 +224,46 @@ impl BuiltinTools {
             )?);
         }
         Ok(outcomes)
+    }
+
+    /// The per-tool settings these tools declare, shaped as the document
+    /// [`crate::config::ConfigLayerKind::Discovered`] composes.
+    ///
+    /// The set is the one [`Self::register`] publishes, `web_search` included
+    /// exactly when a credential resolves for it: a tool that never registers
+    /// has no settings for an operator to override. Each entry lands under
+    /// `tools.<name>`, which the `tools` field deep-merges, so a file setting
+    /// one option of one tool leaves the rest of the discovered document
+    /// standing.
+    ///
+    /// A tool declaring nothing contributes nothing, and a declaration that
+    /// cannot be expressed as a configuration value fails the whole pass rather
+    /// than composing a half-filled tool table.
+    pub fn discovered_settings(&self) -> Result<Table, ToolError> {
+        let mut specs = vec![todo_spec(), skill_spec(), web_fetch_spec()];
+        if self.web_search.is_some() {
+            specs.push(web_search_spec());
+        }
+        let mut tools = Table::new();
+        for spec in &specs {
+            if spec.config.is_null() {
+                continue;
+            }
+            let settings = TomlValue::try_from(&spec.config).map_err(|error| {
+                ToolError::Execution(format!(
+                    "tool `{}` declares settings no configuration can carry: {error}",
+                    spec.name
+                ))
+            })?;
+            tools.insert(spec.name.clone(), settings);
+        }
+        if tools.is_empty() {
+            return Ok(Table::new());
+        }
+        Ok(Table::from_iter([(
+            "tools".to_owned(),
+            TomlValue::Table(tools),
+        )]))
     }
 
     fn todo_handler(&self, session_id: &str) -> Arc<dyn ToolHandler> {

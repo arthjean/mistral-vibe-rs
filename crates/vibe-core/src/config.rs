@@ -75,12 +75,26 @@ pub const THEME_VALUES: [&str; 25] = [
 #[serde(rename_all = "snake_case")]
 pub enum ConfigLayerKind {
     Defaults,
+    /// What a runtime discovery pass contributes, chiefly the per-tool settings
+    /// the published tools declare. Reference `DiscoveredConfigLayer`, whose
+    /// position `build_default_orchestrator` documents as sitting between the
+    /// schema defaults and the selected file, so every file an operator owns
+    /// overrides it.
+    Discovered,
     SelectedToml,
     Experiments,
     Environment,
     Runtime,
     Agent,
 }
+
+/// A runtime discovery pass, run once per [`LayeredConfig::load`].
+///
+/// It answers with the document its layer composes, or with the reason it could
+/// not: a failed pass empties the layer and is reported as a validation
+/// warning rather than failing the load, because a configuration must stay
+/// readable when the thing it describes cannot be enumerated.
+pub type ConfigDiscovery = Arc<dyn Fn() -> Result<Table, String> + Send + Sync>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -323,6 +337,9 @@ pub struct ConfigPatchOutcome {
 pub struct LayeredConfig {
     paths: ConfigPaths,
     defaults: Table,
+    /// The pass behind [`ConfigLayerKind::Discovered`], or `None` when nothing
+    /// discovers anything for this store, which leaves the layer empty.
+    discovery: Option<ConfigDiscovery>,
     experiments: Table,
     runtime: Table,
     agent: Table,
@@ -347,6 +364,7 @@ impl LayeredConfig {
         Self {
             paths,
             defaults,
+            discovery: None,
             experiments: Table::new(),
             runtime: Table::new(),
             agent: Table::new(),
@@ -407,6 +425,17 @@ impl LayeredConfig {
         self.events.subscribe(keys, callback)
     }
 
+    /// Installs the pass composing [`ConfigLayerKind::Discovered`].
+    ///
+    /// The pass runs on every load, because what it enumerates is a property of
+    /// the running process rather than of a file: a tool that becomes available
+    /// between two loads belongs in the second snapshot.
+    #[must_use]
+    pub fn with_discovery(mut self, discovery: ConfigDiscovery) -> Self {
+        self.discovery = Some(discovery);
+        self
+    }
+
     #[must_use]
     pub fn with_experiments(mut self, values: Table) -> Self {
         self.experiments = values;
@@ -447,6 +476,23 @@ impl LayeredConfig {
         scoped.paths.working_directory = working_directory;
         scoped.project_trusted = project_trusted;
         scoped
+    }
+
+    /// The document [`ConfigLayerKind::Discovered`] composes, and the single
+    /// warning a failed pass leaves behind.
+    ///
+    /// A store with no pass installed, and a pass that answers with nothing,
+    /// are the same thing here: an empty layer that leaves the effective
+    /// document as the other layers composed it.
+    fn discovered_layer(&self) -> (Table, Option<String>) {
+        match self.discovery.as_ref().map(|discovery| discovery()) {
+            None => (Table::new(), None),
+            Some(Ok(values)) => (values, None),
+            Some(Err(reason)) => (
+                Table::new(),
+                Some(format!("Runtime discovery is unavailable: {reason}")),
+            ),
+        }
     }
 
     pub fn load(&self) -> Result<ConfigSnapshot, ConfigError> {
@@ -492,10 +538,15 @@ impl LayeredConfig {
             .cloned()
             .unwrap_or_default();
         let environment = environment_table(&self.environment)?;
+        let (discovered, discovery_failure) = self.discovered_layer();
         let layers = vec![
             ConfigLayer {
                 kind: ConfigLayerKind::Defaults,
                 values: self.defaults.clone(),
+            },
+            ConfigLayer {
+                kind: ConfigLayerKind::Discovered,
+                values: discovered,
             },
             ConfigLayer {
                 kind: ConfigLayerKind::SelectedToml,
@@ -531,6 +582,10 @@ impl LayeredConfig {
             .lock()
             .map_err(|_| ConfigError::LockPoisoned)?
             .clone();
+        // One entry, whatever the pass was enumerating: the snapshot reports
+        // that the discovered layer is empty and why, not every item it failed
+        // to reach.
+        validation_warnings.extend(discovery_failure);
         validation_warnings.extend(finalize_effective(
             &mut effective,
             &self.paths.vibe_home,
@@ -1277,6 +1332,8 @@ use merge::merge_layer;
 
 #[cfg(test)]
 mod defaults_tests;
+#[cfg(test)]
+mod discovery_tests;
 #[cfg(test)]
 mod dotenv_tests;
 #[cfg(test)]
