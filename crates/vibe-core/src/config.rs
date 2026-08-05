@@ -18,10 +18,16 @@ use crate::mcp::{
 };
 use crate::text::hex_encode;
 
+pub mod events;
+pub mod introspect;
 mod merge;
+pub mod patch;
 mod proxy;
 pub mod registry;
 
+pub use events::{ConfigChangeBus, ConfigChangeEvent, ConfigSubscription};
+pub use introspect::{ConfigFieldView, ConfigFields, ConfigLayerValue};
+pub use patch::{ConfigMutation, JsonPointer, PatchError, PatchOperation};
 pub use proxy::{ProxyEnvironmentStore, ProxyKey, ProxyKeyError};
 
 const CONFIG_FILE: &str = "config.toml";
@@ -313,34 +319,34 @@ impl ConfigSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ConfigMutation {
-    pub path: Vec<String>,
-    pub value: Option<Value>,
-}
-
-impl ConfigMutation {
-    #[must_use]
-    pub fn set(path: impl IntoIterator<Item = impl Into<String>>, value: Value) -> Self {
-        Self {
-            path: path.into_iter().map(Into::into).collect(),
-            value: Some(value),
-        }
-    }
-
-    #[must_use]
-    pub fn remove(path: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        Self {
-            path: path.into_iter().map(Into::into).collect(),
-            value: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct ConfigWrite {
     pub target: ConfigTarget,
     pub expected_fingerprint: Option<String>,
     pub mutations: Vec<ConfigMutation>,
+}
+
+/// One operation of a `config/patch` request: an addressed change, and the file
+/// it goes to when the client picked one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfigPatchOp {
+    pub mutation: ConfigMutation,
+    /// `None` routes the operation to the target the current selection resolves
+    /// to, as the reference routes an operation carrying no `target_layer`.
+    pub target: Option<ConfigTarget>,
+}
+
+/// What applying a patch did.
+///
+/// Writes are not atomic across targets: the preflight rejects the whole
+/// request, and past that point each target is written independently and its
+/// failure is reported rather than raised. Reference
+/// `ConfigOrchestrator.apply_patch`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfigPatchOutcome {
+    /// The configuration as it stands after the patch.
+    pub snapshot: ConfigSnapshot,
+    /// One entry per target whose write failed, in target order.
+    pub failures: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -353,6 +359,7 @@ pub struct LayeredConfig {
     environment: BTreeMap<String, String>,
     project_trusted: bool,
     transaction_lock: Arc<Mutex<()>>,
+    events: Arc<ConfigChangeBus>,
 }
 
 impl LayeredConfig {
@@ -367,7 +374,22 @@ impl LayeredConfig {
             environment: BTreeMap::new(),
             project_trusted: false,
             transaction_lock: Arc::new(Mutex::new(())),
+            events: Arc::new(ConfigChangeBus::default()),
         }
+    }
+
+    /// Registers `callback` for the configuration keys it names, or for every
+    /// change when it names none, and returns the handle that cancels it.
+    ///
+    /// The bus is shared by every clone of this store, including the
+    /// working-directory scoped ones, so a subscriber registered once hears
+    /// about a write made through any of them.
+    pub fn subscribe(
+        &self,
+        keys: Option<BTreeSet<String>>,
+        callback: impl Fn(&ConfigChangeEvent) + Send + Sync + 'static,
+    ) -> ConfigSubscription {
+        self.events.subscribe(keys, callback)
     }
 
     #[must_use]
@@ -529,12 +551,10 @@ impl LayeredConfig {
                     target: write.target,
                 });
             }
-            let mut table = read_table_optional(&path)?;
-            for mutation in &write.mutations {
-                apply_mutation(&mut table, mutation)?;
-            }
+            let persisted = read_table_optional(&path)?;
+            let mut table = patch_target_document(&persisted, &write.mutations)?;
             validate_table(&table)?;
-            persist_models_as_list(&mut table);
+            persist_models_as_list(&mut table, &merge::persisted_model_order(&persisted));
             let encoded = toml::to_string_pretty(&table).map_err(ConfigError::Serialize)?;
             prepared.push(PreparedWrite::new(path, encoded.into_bytes())?);
         }
@@ -575,6 +595,120 @@ impl LayeredConfig {
         self.load()
     }
 
+    /// Applies addressed operations to the files that back them.
+    ///
+    /// The merged-configuration preflight runs first and rejects the whole
+    /// request, leaving every file byte-identical. Past it the operations are
+    /// grouped by target and each group is written on its own, so one target
+    /// failing is reported in [`ConfigPatchOutcome::failures`] rather than
+    /// undoing the group that succeeded. Reference
+    /// `ConfigOrchestrator.apply_patch`.
+    ///
+    /// A change to the effective document is published to the subscribers
+    /// [`Self::subscribe`] registered; a patch that writes the value already in
+    /// place publishes nothing.
+    pub fn apply_patch(
+        &self,
+        operations: &[ConfigPatchOp],
+        reason: &str,
+    ) -> Result<ConfigPatchOutcome, ConfigError> {
+        let before = self.load()?;
+        if operations.is_empty() {
+            return Ok(ConfigPatchOutcome {
+                snapshot: before,
+                failures: Vec::new(),
+            });
+        }
+        let mutations: Vec<ConfigMutation> = operations
+            .iter()
+            .map(|operation| operation.mutation.clone())
+            .collect();
+        // The preflight patches the merged document, which carries models as
+        // the alias-keyed map a pointer addresses them through. Every way it can
+        // fail is a rejection of the whole request, as the reference rejects on
+        // a pointer error and on a validation error alike.
+        let reject = |error: &dyn std::fmt::Display| ConfigError::PatchRejected(error.to_string());
+        let simulated =
+            patch::apply_all(&before.effective, &mutations).map_err(|error| reject(&error))?;
+        validate_table(&simulated).map_err(|error| reject(&error))?;
+        require_configured_model(&simulated).map_err(|error| reject(&error))?;
+
+        let mut grouped: BTreeMap<ConfigTarget, Vec<ConfigMutation>> = BTreeMap::new();
+        for operation in operations {
+            let target = operation.target.unwrap_or(before.selected_target);
+            // Refused before anything is written, so a revoked workspace cannot
+            // leave half a patch on disk.
+            if target == ConfigTarget::Project && !self.project_trusted {
+                return Err(ConfigError::UntrustedProject);
+            }
+            grouped
+                .entry(target)
+                .or_default()
+                .push(operation.mutation.clone());
+        }
+
+        let target_count = grouped.len();
+        let mut failures = Vec::new();
+        for (target, mutations) in grouped {
+            let write = ConfigWrite {
+                target,
+                expected_fingerprint: before.fingerprints.get(&target).cloned().flatten(),
+                mutations,
+            };
+            if let Err(error) = self.batch_write(&[write]) {
+                failures.push(error.to_string());
+            }
+        }
+
+        let after = self.load()?;
+        // The diff runs on the documents as they are, and only the payload is
+        // redacted: two different secrets both read `[redacted]`, so diffing the
+        // redacted forms would hide a change between them.
+        let changed_keys = events::changed_keys(
+            &serde_json::to_value(&before.effective).map_err(ConfigError::Json)?,
+            &serde_json::to_value(&after.effective).map_err(ConfigError::Json)?,
+        );
+        if failures.len() < target_count && !changed_keys.is_empty() {
+            self.events.publish(&ConfigChangeEvent {
+                changed_keys,
+                before: redact_table(&before.effective),
+                after: redact_table(&after.effective),
+                reason: reason.to_owned(),
+            });
+        }
+        Ok(ConfigPatchOutcome {
+            snapshot: after,
+            failures,
+        })
+    }
+
+    /// The settings surface: every published field with its per-layer values,
+    /// and the targets a write can be routed to.
+    pub fn describe_fields(&self) -> Result<ConfigFields, ConfigError> {
+        let snapshot = self.load()?;
+        let targets = self.writable_targets(&snapshot);
+        Ok(ConfigFields {
+            fields: introspect::describe_fields(&snapshot),
+            targets,
+        })
+    }
+
+    /// The configuration files a write can land in, the one an unrouted
+    /// operation goes to first.
+    ///
+    /// The project file is only writable while the workspace is trusted, which
+    /// is the same rule [`Self::batch_write`] enforces.
+    fn writable_targets(&self, snapshot: &ConfigSnapshot) -> Vec<ConfigTarget> {
+        let mut targets = vec![snapshot.selected_target];
+        for target in [ConfigTarget::User, ConfigTarget::Project] {
+            let writable = target != ConfigTarget::Project || self.project_trusted;
+            if writable && !targets.contains(&target) {
+                targets.push(target);
+            }
+        }
+        targets
+    }
+
     pub fn preflight_mcp_add(&self, config: &McpServerConfig) -> Result<(), ConfigError> {
         let snapshot = self.load()?;
         preflight_mcp_add(&snapshot.effective, config)
@@ -583,16 +717,25 @@ impl LayeredConfig {
     pub fn persist_mcp_add(&self, config: &McpServerConfig) -> Result<ConfigSnapshot, ConfigError> {
         let snapshot = self.load()?;
         preflight_mcp_add(&snapshot.effective, config)?;
+        let collection = IntegrationCollection::McpServers;
         let target = snapshot.selected_target;
-        let mut entries =
-            config_array_for_target(&snapshot, target, IntegrationCollection::McpServers)?;
-        entries.push(mcp_server_value(config)?);
-        self.replace_array_cas(
+        // Rejects a target whose `mcp_servers` is not a list before the upsert
+        // decides to append to it.
+        config_array_for_target(&snapshot, target, collection)?;
+        let mutation = patch::resolve_upsert(
+            snapshot
+                .target_values
+                .get(&target)
+                .and_then(|values| values.get(collection.key())),
+            &JsonPointer::from_segments([collection.key()]),
+            "name",
+            mcp_server_table(config)?,
+        );
+        self.batch_write(&[ConfigWrite {
             target,
-            snapshot.fingerprints.get(&target).cloned().flatten(),
-            IntegrationCollection::McpServers.key(),
-            entries,
-        )
+            expected_fingerprint: snapshot.fingerprints.get(&target).cloned().flatten(),
+            mutations: vec![mutation],
+        }])
     }
 
     pub fn persist_mcp_state(
@@ -932,7 +1075,13 @@ use merge::merge_layer;
 #[cfg(test)]
 mod defaults_tests;
 #[cfg(test)]
+mod events_tests;
+#[cfg(test)]
+mod introspect_tests;
+#[cfg(test)]
 mod merge_tests;
+#[cfg(test)]
+mod patch_tests;
 #[cfg(test)]
 mod registry_tests;
 #[cfg(test)]
@@ -1295,7 +1444,7 @@ fn hex_digest(bytes: &[u8]) -> String {
 }
 
 fn environment_table(environment: &BTreeMap<String, String>) -> Result<Table, ConfigError> {
-    let mut table = Table::new();
+    let mut mutations = Vec::new();
     for (key, raw) in environment {
         let Some(name) = key.strip_prefix("VIBE_") else {
             continue;
@@ -1311,15 +1460,9 @@ fn environment_table(environment: &BTreeMap<String, String>) -> Result<Table, Co
             return Err(ConfigError::InvalidEnvironmentKey(key.clone()));
         }
         let parsed = environment_value(key, &path, raw)?;
-        apply_mutation(
-            &mut table,
-            &ConfigMutation {
-                path,
-                value: Some(parsed),
-            },
-        )?;
+        mutations.push(ConfigMutation::set(path, parsed));
     }
-    Ok(table)
+    Ok(patch::apply_all(&Table::new(), &mutations)?)
 }
 
 /// The value a `VIBE_*` variable contributes, typed by the field it targets.
@@ -1385,29 +1528,22 @@ fn permissive_environment_value(raw: &str) -> Value {
         .unwrap_or_else(|| Value::String(raw.to_owned()))
 }
 
-fn apply_mutation(table: &mut Table, mutation: &ConfigMutation) -> Result<(), ConfigError> {
-    let (last, parents) = mutation
-        .path
-        .split_last()
-        .ok_or(ConfigError::EmptyMutationPath)?;
-    let mut cursor = table;
-    for segment in parents {
-        let value = cursor
-            .entry(segment.clone())
-            .or_insert_with(|| Value::Table(Table::new()));
-        cursor = value
-            .as_table_mut()
-            .ok_or_else(|| ConfigError::NonTableParent(segment.clone()))?;
+/// Applies `mutations` to one target's persisted document.
+///
+/// `models` is normalized to the alias-keyed map first, so a pointer addressing
+/// one model resolves against the same shape the merged document exposes; the
+/// caller writes it back as the persisted list. Reference `_base.py` normalizes
+/// on layer read and serializes on write for exactly this reason.
+fn patch_target_document(
+    persisted: &Table,
+    mutations: &[ConfigMutation],
+) -> Result<Table, ConfigError> {
+    let mut document = persisted.clone();
+    if let Some(models) = document.get(merge::MODELS_FIELD) {
+        let normalized = merge::normalize_models(models)?;
+        document.insert(merge::MODELS_FIELD.to_owned(), normalized);
     }
-    match &mutation.value {
-        Some(value) => {
-            cursor.insert(last.clone(), value.clone());
-        }
-        None => {
-            cursor.remove(last);
-        }
-    }
-    Ok(())
+    Ok(patch::apply_all(&document, mutations)?)
 }
 
 fn validate_table(table: &Table) -> Result<(), ConfigError> {
@@ -1418,13 +1554,16 @@ fn validate_table(table: &Table) -> Result<(), ConfigError> {
 /// a client that patched the read form does not leave a document the reference
 /// extensions cannot parse. Reference `_canonical_toml_document`.
 ///
+/// `persisted_order` is the order the file being rewritten already listed its
+/// models in, which the entries keep; anything the patch added follows.
+///
 /// The reference also drops null-valued fields on the way out; TOML has no
 /// null, so a [`Table`] cannot carry one and nothing has to be dropped here.
-fn persist_models_as_list(table: &mut Table) {
+fn persist_models_as_list(table: &mut Table, persisted_order: &[String]) {
     if let Some(models) = table.get(merge::MODELS_FIELD)
         && models.is_table()
     {
-        let serialized = merge::serialize_models(models);
+        let serialized = merge::serialize_models(models, persisted_order);
         table.insert(merge::MODELS_FIELD.to_owned(), serialized);
     }
 }
@@ -1800,10 +1939,12 @@ pub enum ConfigError {
         "configuration commit failed (`{commit}`) and rollback also failed (`{rollback}`); recovery journal retained"
     )]
     RollbackFailed { commit: String, rollback: String },
-    #[error("configuration mutation path must not be empty")]
-    EmptyMutationPath,
-    #[error("configuration path component `{0}` is not a table")]
-    NonTableParent(String),
+    #[error(transparent)]
+    Patch(#[from] PatchError),
+    /// The merged-configuration preflight refused the request, so nothing was
+    /// written. Reference `ConfigPatchValidationError`.
+    #[error("the configuration change was rejected: {0}")]
+    PatchRejected(String),
     #[error("invalid VIBE environment key `{0}`")]
     InvalidEnvironmentKey(String),
     #[error("environment variable `{variable}` is not a valid {expected} for `{field}`")]

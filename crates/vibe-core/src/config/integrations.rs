@@ -64,7 +64,7 @@ pub(super) fn mcp_transport_url(transport: &McpTransportConfig) -> Option<&Url> 
     }
 }
 
-pub(super) fn mcp_server_value(config: &McpServerConfig) -> Result<Value, ConfigError> {
+pub(super) fn mcp_server_table(config: &McpServerConfig) -> Result<Table, ConfigError> {
     let mut table = Table::new();
     table.insert("name".to_owned(), Value::String(config.alias.clone()));
     match &config.transport {
@@ -128,7 +128,7 @@ pub(super) fn mcp_server_value(config: &McpServerConfig) -> Result<Value, Config
         "tool_timeout_sec".to_owned(),
         Value::Float(config.tool_timeout_ms as f64 / 1_000.0),
     );
-    Ok(Value::Table(table))
+    Ok(table)
 }
 
 pub(super) fn insert_http_mcp_fields(

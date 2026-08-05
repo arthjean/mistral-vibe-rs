@@ -7,6 +7,7 @@
 //! survives into the effective document instead of being dropped.
 
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 
 use toml::{Table, Value};
 
@@ -98,27 +99,61 @@ fn model_entry_with_alias(alias: &str, entry: &Value) -> Result<Value, ConfigErr
     }
 }
 
-/// Writes the alias-keyed map back as the persisted `[[models]]` list.
+/// Writes the alias-keyed map back as the persisted `[[models]]` list, keeping
+/// the order `persisted_order` records and appending anything the patch added.
 ///
-/// Reference `serialize_model_configs`. Entry order follows the map, which is
-/// the order the persisted document is read back in.
-pub(super) fn serialize_models(value: &Value) -> Value {
+/// Reference `serialize_model_configs` walks a dictionary that preserves the
+/// order the file was read in. [`Table`] sorts its keys instead, so the order
+/// the document already had is carried in beside it; without it, writing any
+/// unrelated key would silently re-sort an operator's `[[models]]` entries and
+/// move the model an unknown `active_model` falls back to.
+pub(super) fn serialize_models(value: &Value, persisted_order: &[String]) -> Value {
     let Some(entries) = value.as_table() else {
         return value.clone();
     };
+    let mut emitted: BTreeSet<&str> = BTreeSet::new();
+    let mut ordered: Vec<&String> = Vec::with_capacity(entries.len());
+    for alias in persisted_order {
+        if entries.contains_key(alias) && emitted.insert(alias.as_str()) {
+            ordered.push(alias);
+        }
+    }
+    for alias in entries.keys() {
+        if emitted.insert(alias.as_str()) {
+            ordered.push(alias);
+        }
+    }
     Value::Array(
-        entries
-            .iter()
-            .map(|(alias, entry)| match entry.as_table() {
-                Some(table) if !table.contains_key("alias") => {
-                    let mut completed = table.clone();
-                    completed.insert("alias".to_owned(), Value::String(alias.clone()));
-                    Value::Table(completed)
-                }
-                _ => entry.clone(),
+        ordered
+            .into_iter()
+            .filter_map(|alias| {
+                let entry = entries.get(alias)?;
+                Some(match entry.as_table() {
+                    Some(table) if !table.contains_key("alias") => {
+                        let mut completed = table.clone();
+                        completed.insert("alias".to_owned(), Value::String(alias.clone()));
+                        Value::Table(completed)
+                    }
+                    _ => entry.clone(),
+                })
             })
             .collect(),
     )
+}
+
+/// The aliases a persisted document lists, in the order it lists them.
+///
+/// The alias an entry is keyed by is its own or, failing that, its name, which
+/// is what [`normalize_models`] keys it by.
+pub(super) fn persisted_model_order(persisted: &Table) -> Vec<String> {
+    match persisted.get(MODELS_FIELD) {
+        Some(Value::Array(entries)) => entries
+            .iter()
+            .filter_map(|entry| model_alias(entry).ok())
+            .collect(),
+        Some(Value::Table(entries)) => entries.keys().cloned().collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// Merges `overlay` into `target` recursively, preserving keys `overlay` omits.
