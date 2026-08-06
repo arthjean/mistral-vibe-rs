@@ -353,7 +353,7 @@ pub struct LayeredConfig {
     ephemeral: Arc<Mutex<Table>>,
     migrated: Arc<Mutex<bool>>,
     /// What [`Self::migrate_sources`] could not write, carried by every
-    /// snapshot the store produces afterwards.
+    /// snapshot the store produces afterward.
     migration_warnings: Arc<Mutex<Vec<String>>>,
     transaction_lock: Arc<Mutex<()>>,
     events: Arc<ConfigChangeBus>,

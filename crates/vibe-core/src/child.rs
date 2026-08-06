@@ -139,19 +139,19 @@ impl ChildGroup {
 
     /// Reaps descendants that outlived the group leader.
     ///
-    /// `already_signalled` skips the first SIGTERM when the caller has already
+    /// `already_signaled` skips the first SIGTERM when the caller has already
     /// sent one while shutting the leader down.
     pub(crate) async fn reap_group(
         &mut self,
         grace: Duration,
-        already_signalled: bool,
+        already_signaled: bool,
     ) -> Result<(), TerminationError> {
         #[cfg(unix)]
         {
             if !self.group_alive()? {
                 return Ok(());
             }
-            if !already_signalled {
+            if !already_signaled {
                 self.signal(false)?;
             }
             if self.wait_for_group_exit(grace).await? {
@@ -167,7 +167,7 @@ impl ChildGroup {
         {
             // The job object terminates descendants with the leader, so only the
             // leader itself has to be confirmed dead.
-            if !already_signalled {
+            if !already_signaled {
                 self.signal(true)?;
             }
             self.shut_down(grace, Rung::Wait).await.map(drop)

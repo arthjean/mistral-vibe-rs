@@ -61,7 +61,7 @@ pub(super) fn normalize_models(value: &Value) -> Result<Value, ConfigError> {
             }
         }
         // Anything else is left for the strategy to reject by type, as the
-        // reference leaves an unrecognised shape untouched.
+        // reference leaves an unrecognized shape untouched.
         other => return Ok(other.clone()),
     }
     Ok(Value::Table(normalized))

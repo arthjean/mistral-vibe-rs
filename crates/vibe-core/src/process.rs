@@ -651,7 +651,7 @@ pub trait ClientToolPort: Send + Sync {
 
     /// Whether the connected client declared this capability during
     /// `initialize`. Asked per call rather than snapshotted, so a reconnection
-    /// that changes the declaration is honoured by tools already registered.
+    /// that changes the declaration is honored by tools already registered.
     fn supports(&self, capability: ClientToolCapability) -> bool;
 }
 
@@ -899,7 +899,7 @@ impl ClientToolIo {
                 }
                 Err(_) => {
                     self.cleanup_failures.lock().await.push(format!(
-                        "lifecycle-{lifecycle_id}: cleanup is still awaiting client acknowledgement"
+                        "lifecycle-{lifecycle_id}: cleanup is still awaiting client acknowledgment"
                     ));
                     self.lifecycles
                         .lock()
@@ -1521,11 +1521,11 @@ mod tests {
     #[test]
     fn a_terminal_exit_status_is_read_the_way_the_reference_reads_it() {
         let output = json!({"output": "partial", "truncated": true});
-        let signalled = shell_result(&json!({"exitCode": null, "signal": "SIGKILL"}), &output)
+        let signaled = shell_result(&json!({"exitCode": null, "signal": "SIGKILL"}), &output)
             .expect("a signal is an outcome");
-        assert_eq!(signalled.returncode, -1);
-        assert_eq!(signalled.stderr, "Process terminated by SIGKILL");
-        assert!(signalled.truncated);
+        assert_eq!(signaled.returncode, -1);
+        assert_eq!(signaled.stderr, "Process terminated by SIGKILL");
+        assert!(signaled.truncated);
 
         let exited = shell_result(&json!({"exitCode": 2, "signal": null}), &output)
             .expect("an exit code is an outcome");
@@ -1764,7 +1764,7 @@ mod tests {
         assert!(matches!(
             io.cleanup_all().await,
             Err(ToolIoError::CleanupFailures(failures))
-                if failures.iter().any(|failure| failure.contains("acknowledgement"))
+                if failures.iter().any(|failure| failure.contains("acknowledgment"))
         ));
         assert_eq!(io.lifecycles.lock().await.entries.len(), 1);
         port.finish_create.notify_one();

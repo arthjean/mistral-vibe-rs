@@ -610,7 +610,7 @@ fn fetch_url(arguments: &Value) -> Result<Url, ToolError> {
         });
     }
     // A URL that already carries a scheme is judged on it. Anything else is a
-    // protocol-relative or bare host, which the reference normalises to https
+    // protocol-relative or bare host, which the reference normalizes to https
     // rather than refusing.
     if let Ok(url) = Url::parse(raw) {
         if !matches!(url.scheme(), "http" | "https") {
@@ -1459,11 +1459,11 @@ mod tests {
     }
 
     #[test]
-    fn a_bare_host_is_normalised_to_https_like_the_reference() {
-        let url = fetch_url(&json!({"url": "example.com/page"})).expect("a bare host normalises");
+    fn a_bare_host_is_normalized_to_https_like_the_reference() {
+        let url = fetch_url(&json!({"url": "example.com/page"})).expect("a bare host normalizes");
         assert_eq!(url.as_str(), "https://example.com/page");
         let relative =
-            fetch_url(&json!({"url": "//example.com/page"})).expect("protocol-relative normalises");
+            fetch_url(&json!({"url": "//example.com/page"})).expect("protocol-relative normalizes");
         assert_eq!(relative.as_str(), "https://example.com/page");
     }
 

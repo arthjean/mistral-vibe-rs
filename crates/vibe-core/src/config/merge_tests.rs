@@ -342,7 +342,7 @@ fn an_environment_override_of_the_wrong_type_fails_without_echoing_the_value() {
 }
 
 #[test]
-fn nested_environment_keys_keep_their_local_nesting_behaviour() {
+fn nested_environment_keys_keep_their_local_nesting_behavior() {
     let nested = environment_table(&BTreeMap::from([(
         "VIBE_NESTED__WINNER".to_owned(),
         "\"environment\"".to_owned(),

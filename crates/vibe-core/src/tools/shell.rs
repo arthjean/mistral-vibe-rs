@@ -16,7 +16,7 @@
 //! families need, so the surface a Windows operator sees is decided by the same
 //! function on every host and can be proven from a POSIX one.
 //!
-//! Two invariants shape the module. Every command is analysed by
+//! Two invariants shape the module. Every command is analyzed by
 //! [`analyze_shell`] before it runs, and a command the analysis does not permit
 //! outright reaches the operator as an approval request; nothing executes at a
 //! looser mode than the analysis returns, and an override the analysis of the
@@ -956,16 +956,16 @@ fn control_key_names() -> Vec<&'static str> {
 // --------------------------------------------------------------------------
 
 /// Resolves one call's arguments to the analysis its command runs under.
-type ShellAnalyser = Arc<dyn Fn(&Value) -> Result<ShellAnalysis, ToolError> + Send + Sync>;
+type ShellAnalyzer = Arc<dyn Fn(&Value) -> Result<ShellAnalysis, ToolError> + Send + Sync>;
 
 /// Runs [`analyze_shell`] and routes the call by what it decides.
 ///
 /// The reference resolves a command to `ALWAYS`, `ASK` or `NEVER` before it
-/// runs; this reproduces that split on top of the workspace's own analyser. An
+/// runs; this reproduces that split on top of the workspace's own analyzer. An
 /// `Always` command executes directly, an `Ask` command goes through the
 /// permission store, and a `Never` command is refused before a process exists.
 struct ShellPolicyGuard {
-    analysis: ShellAnalyser,
+    analysis: ShellAnalyzer,
     guarded: Arc<PolicyGuardedTool>,
     inner: Arc<dyn ToolHandler>,
 }
@@ -1036,8 +1036,8 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
         approval,
         Arc::new(move |invocation: &ToolInvocation| {
             let command = command_argument(&invocation.arguments)?;
-            let analysis = analyse(requirement_flavor, platform, &requirement_root, &command);
-            // Every analysed segment is named on its own, so approving one
+            let analysis = analyze(requirement_flavor, platform, &requirement_root, &command);
+            // Every analyzed segment is named on its own, so approving one
             // command does not silently approve the rest of a chain.
             let mut requirements = analysis
                 .commands
@@ -1068,7 +1068,7 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
     Arc::new(ShellPolicyGuard {
         analysis: Arc::new(move |arguments: &Value| {
             let command = command_argument(arguments)?;
-            let mut analysis = analyse(analysis_flavor, platform, &analysis_root, &command);
+            let mut analysis = analyze(analysis_flavor, platform, &analysis_root, &command);
             // The command text is not all that runs: an override decides where
             // it runs, what interprets it and what it inherits, none of which
             // the analysis of the text can see. So a call carrying one stops
@@ -1087,7 +1087,7 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
     })
 }
 
-fn analyse(
+fn analyze(
     flavor: ShellFlavor,
     platform: Platform,
     working_directory: &Path,
@@ -1095,7 +1095,7 @@ fn analyse(
 ) -> ShellAnalysis {
     let Ok(root) = parse_policy_path(platform, &working_directory.to_string_lossy()) else {
         // A working directory the policy cannot parse is not a reason to run
-        // unanalysed: the call falls back to asking.
+        // unanalyzed: the call falls back to asking.
         return ShellAnalysis {
             mode: PermissionMode::Ask,
             rationale: vec!["the working directory is not a policy path".to_owned()],

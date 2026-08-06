@@ -767,7 +767,7 @@ pub fn validate_arguments(arguments: &Value, schema: &Value) -> Result<(), ToolE
 }
 
 /// Fills every absent property that declares a `default`, so a handler reads the
-/// same value the reference model would have materialised.
+/// same value the reference model would have materialized.
 pub fn apply_defaults(arguments: &mut Value, schema: &Value) {
     fill_defaults(arguments, schema, schema, 0);
 }

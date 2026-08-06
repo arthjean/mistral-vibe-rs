@@ -1143,7 +1143,7 @@ fn entry_metadata(
 /// Seals every entry still streaming.
 ///
 /// Entries complete in order, so the scan stops at the first completed entry
-/// walking backwards instead of sweeping the whole history each time.
+/// walking backward instead of sweeping the whole history each time.
 fn complete_streaming_entries(state: &mut ProjectionSnapshot, emitted_at: u64) {
     for entry in state.history.iter_mut().rev() {
         let metadata = entry.metadata_mut();

@@ -527,7 +527,7 @@ fn call_summary(kind: ToolEffectKind, tool_name: &str, arguments: &Value) -> (St
 }
 
 /// The todo effect names its own verbs: the same kind reads, writes, or fails
-/// to recognise its action.
+/// to recognize its action.
 fn todo_call_display(arguments: &Value) -> (String, String, String, String) {
     match string_argument(arguments, &["action"]).as_str() {
         "read" => (

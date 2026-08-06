@@ -3,7 +3,7 @@
 //! MCP servers and connectors have genuinely different lifecycles: one owns a
 //! live peer with an epoch to invalidate in-flight calls, the other resolves a
 //! stateless backend behind a cached catalog. What they do share is how a
-//! remote tool becomes a registry entry: alias normalisation, the reference
+//! remote tool becomes a registry entry: alias normalization, the reference
 //! naming rule each source publishes under, and the rule turning a provider's
 //! state into a [`ToolAvailability`]. Those rules live here so the two
 //! lifecycles cannot drift on the part that is actually common.

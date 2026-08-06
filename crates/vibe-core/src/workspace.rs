@@ -630,7 +630,7 @@ impl Workspace {
                 })?
         } else {
             // A write may target a path whose parent directories do not exist
-            // yet, so the canonicalisation anchors at the deepest ancestor
+            // yet, so the canonicalization anchors at the deepest ancestor
             // that does and rejoins the components below it. The escape check
             // below still sees every rejoined component.
             let mut remainder = Vec::new();
@@ -1255,7 +1255,7 @@ fn grep_spec() -> ToolSpec {
             .optional(
                 "use_default_ignore",
                 Property::boolean()
-                    .described("Whether .gitignore and .ignore entries are honoured.")
+                    .described("Whether .gitignore and .ignore entries are honored.")
                     .with_default(true),
             )
             .build(),
@@ -1761,7 +1761,7 @@ mod tests {
     }
 
     /// The three registered names and the argument keys each one reads, which
-    /// is the contract a model prompted for reference behaviour relies on.
+    /// is the contract a model prompted for reference behavior relies on.
     #[tokio::test]
     async fn the_file_tools_publish_the_reference_names_and_argument_keys() {
         let directory = tempdir().expect("tempdir");

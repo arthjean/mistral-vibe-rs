@@ -359,7 +359,7 @@ async fn the_session_tool_schemas_match_the_reference_shape() {
 // Policy
 // --------------------------------------------------------------------------
 
-/// A command the analyser permits outright runs without an approval round
+/// A command the analyzer permits outright runs without an approval round
 /// trip, matching the reference `ALWAYS` permission context.
 #[tokio::test]
 async fn an_allowlisted_command_runs_without_asking() {
@@ -372,7 +372,7 @@ async fn an_allowlisted_command_runs_without_asking() {
     assert_eq!(harness.approval_count(), 0);
 }
 
-/// A command the analyser does not permit outright is held until the operator
+/// A command the analyzer does not permit outright is held until the operator
 /// answers, and a refusal means no process ever started.
 #[tokio::test]
 async fn a_command_needing_approval_never_runs_when_it_is_refused() {
@@ -456,7 +456,7 @@ async fn a_working_directory_inside_the_session_root_does_not_ask() {
     assert_eq!(harness.approval_count(), 0);
 }
 
-/// The legacy variant publishes none of the overrides and honours none of
+/// The legacy variant publishes none of the overrides and honors none of
 /// them, so a hallucinated key changes neither where it runs nor whether it
 /// asks.
 #[tokio::test]
@@ -911,7 +911,7 @@ async fn a_log_path_that_escapes_the_session_directory_is_refused() {
     assert!(climbing.to_string().contains("session file"), "{climbing}");
 }
 
-/// A refusal names what the analyser objected to, so the model can propose
+/// A refusal names what the analyzer objected to, so the model can propose
 /// something else instead of retrying the same command.
 #[tokio::test]
 async fn a_refused_command_carries_the_analysis_rationale() {
@@ -1386,7 +1386,7 @@ async fn a_git_bash_session_runs_and_answers_under_its_own_prefix() {
     );
     assert!(
         !is_family_session_id(ShellFamily::Bash, &session_id),
-        "a bash tool must not recognise a git_bash session"
+        "a bash tool must not recognize a git_bash session"
     );
 
     let polled = harness
@@ -1554,7 +1554,7 @@ async fn a_command_writing_utf16_reaches_the_model_as_text() {
 /// the file as inside the workspace rather than outside it.
 #[test]
 fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
-    let inside = analyse(
+    let inside = analyze(
         ShellFlavor::GitBash,
         Platform::Windows,
         Path::new(r"C:\work"),
@@ -1571,9 +1571,9 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
     );
 
     // Without the translation the same operand is a root-relative Windows path
-    // and lands nowhere near the workspace, which is what the family flavour
+    // and lands nowhere near the workspace, which is what the family flavor
     // exists to prevent.
-    let untranslated = analyse(
+    let untranslated = analyze(
         ShellFlavor::PowerShell,
         Platform::Windows,
         Path::new(r"C:\work"),
@@ -1588,7 +1588,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         untranslated.rationale
     );
 
-    let outside = analyse(
+    let outside = analyze(
         ShellFlavor::GitBash,
         Platform::Windows,
         Path::new(r"C:\work"),

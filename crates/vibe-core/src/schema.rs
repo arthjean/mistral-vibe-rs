@@ -2,7 +2,7 @@
 //!
 //! The Python reference publishes `tools[].function.parameters` straight from
 //! Pydantic's `model_json_schema()`. That output has properties this crate must
-//! reproduce exactly, because a model prompted for reference behaviour reads
+//! reproduce exactly, because a model prompted for reference behavior reads
 //! them: `required` and `additionalProperties` appear only when the reference
 //! model actually declares them, optional properties carry a `default`,
 //! nullable properties use `anyOf` with an explicit null branch rather than an
