@@ -37,7 +37,9 @@ use vibe_protocol::{
     is_server_method,
 };
 
-use crate::server::{AppServer, EMITTED_NOTIFICATIONS, ServerConnection, routed_methods};
+use crate::server::{
+    AppServer, DeferredWork, DispatchBatch, EMITTED_NOTIFICATIONS, ServerConnection, routed_methods,
+};
 
 /// The reference commit the corpus is captured from. A checkout at any other
 /// revision is not an oracle for this corpus.
@@ -85,29 +87,14 @@ const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[];
 const LOCAL_NOTIFICATIONS: &[(&str, &str)] = &[];
 
 /// Enum vocabularies the reference declares that this port does not model yet.
-const UNMODELLED_ENUMS: &[(&str, &str)] = &[
-    ("AccountActionKind", "US-090"),
-    ("AccountPlanKind", "US-090"),
-    ("AccountStatus", "US-090"),
-    ("AgentSafety", "US-093"),
-    ("AgentType", "US-093"),
-    ("ConfigFieldKind", "US-091"),
-    ("MCPSourceKind", "US-092"),
-    ("MCPSourceStatus", "US-092"),
-    ("TerminalEmulator", "US-081"),
-];
+const UNMODELLED_ENUMS: &[(&str, &str)] = &[("TerminalEmulator", "US-081")];
 
 /// Methods whose probed response does not validate against the census yet, each
 /// with the story that fixes it. A method that starts validating while listed
 /// here fails the replay as a stale entry.
-const DIVERGENT_RESPONSES: &[(&str, &str)] = &[
-    ("agents/list", "US-093"),
-    ("config/read", "US-091"),
-    ("runtime/read", "US-090"),
-    ("session/list", "US-093"),
-    ("skills/list", "US-093"),
-    ("tools/list", "US-093"),
-];
+/// US-093 closed the last one, so a response that stops validating has to earn
+/// an entry here before the replay accepts it.
+const DIVERGENT_RESPONSES: &[(&str, &str)] = &[];
 
 /// Read-only methods the probe calls, with the parameters they take.
 ///
@@ -123,7 +110,7 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
         ("connectors/auth/read", session.clone()),
         ("connectors/read", session.clone()),
         ("diagnostics/list", session.clone()),
-        ("history/list", json!({})),
+        ("history/list", session.clone()),
         ("mcp/read", session.clone()),
         ("review/state", session.clone()),
         ("runtime/read", session.clone()),
@@ -133,9 +120,28 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
         ("skills/list", session.clone()),
         ("stats/read", session.clone()),
         ("tools/list", session.clone()),
-        ("workspace/trust/status", json!({"cwd": "/workspace"})),
+        (
+            "workspace/trust/status",
+            json!({"sessionId": PROBE_SESSION, "cwd": "/workspace"}),
+        ),
     ]
 }
+
+/// Probed methods this build cannot answer from a bare session, each with why.
+///
+/// A method that starts answering while listed here fails the replay as a stale
+/// entry, and one that stops answering has to earn a line here rather than
+/// leaving the conforming count quietly counting fewer methods than it names.
+const UNREACHABLE_PROBES: &[(&str, &str)] = &[
+    (
+        "connectors/auth/read",
+        "no connector is configured in a bare probe session, so there is no name to authorize",
+    ),
+    (
+        "history/list",
+        "the probe session is never written to the store, and the transcript is read from it",
+    ),
+];
 
 // --------------------------------------------------------------------------
 // Corpus
@@ -401,8 +407,9 @@ fn the_handshake_answer_validates_against_the_census() {
 
 #[test]
 fn the_advertised_surface_carries_no_local_extension() {
-    let mut connection = probe_connection();
+    let (server, mut connection) = probe_connection();
     let response = probe(
+        &server,
         &mut connection,
         "runtime/read",
         &json!({"sessionId": PROBE_SESSION}),
@@ -542,10 +549,51 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
 
     // The vocabularies this port already spells. Everything else is in the
     // backlog above until the story that models it lands.
-    let declared: [(&str, Vec<String>); 10] = [
+    let declared: [(&str, Vec<String>); 18] = [
+        (
+            "AccountActionKind",
+            wire_values(&crate::vocabulary::AccountActionKind::ALL),
+        ),
+        (
+            "AccountPlanKind",
+            wire_values(&crate::vocabulary::AccountPlanKind::ALL),
+        ),
+        (
+            "AccountStatus",
+            wire_values(&crate::vocabulary::AccountStatus::ALL),
+        ),
+        (
+            "AgentSafety",
+            wire_values(&crate::vocabulary::AgentSafety::ALL),
+        ),
+        (
+            "AgentType",
+            wire_values(&[
+                vibe_core::extensions::AgentKind::Agent,
+                vibe_core::extensions::AgentKind::Subagent,
+            ]),
+        ),
         (
             "ApprovalDecisionType",
             wire_values(&vibe_core::events::ApprovalDecisionType::ALL),
+        ),
+        (
+            "ConfigFieldKind",
+            // The settings surface spells this vocabulary as an editor control
+            // rather than as a serialized value, so its wire spelling is the
+            // one the field descriptions carry.
+            vibe_core::config::registry::FieldKind::ALL
+                .into_iter()
+                .map(|kind| kind.as_str().to_owned())
+                .collect(),
+        ),
+        (
+            "MCPSourceKind",
+            wire_values(&crate::vocabulary::McpSourceKind::ALL),
+        ),
+        (
+            "MCPSourceStatus",
+            wire_values(&crate::vocabulary::McpSourceStatus::ALL),
         ),
         (
             "HookScope",
@@ -877,12 +925,14 @@ fn every_probed_response_validates_against_the_census() {
         .collect::<BTreeMap<_, _>>();
     let backlog = ledger(DIVERGENT_RESPONSES);
 
-    let mut connection = probe_connection();
+    let (server, mut connection) = probe_connection();
     let mut probed = Vec::new();
+    let mut unreachable = Vec::new();
     let mut conforming = Vec::new();
     let mut divergent = BTreeMap::new();
     for (method, params) in probe_requests() {
-        let Some(result) = probe(&mut connection, method, &params) else {
+        let Some(result) = probe(&server, &mut connection, method, &params) else {
+            unreachable.push(method);
             continue;
         };
         probed.push(method);
@@ -903,6 +953,26 @@ fn every_probed_response_validates_against_the_census() {
         "the probe reached only {} methods, which is too few to measure anything: {probed:?}",
         probed.len()
     );
+    // A method the probe cannot reach is measured by nothing, so it is recorded
+    // rather than dropped: the conforming count above only speaks for what it
+    // actually validated.
+    let unreachable_backlog = ledger(UNREACHABLE_PROBES);
+    let unrecorded_unreachable = unreachable
+        .iter()
+        .filter(|method| !unreachable_backlog.contains_key(**method))
+        .collect::<Vec<_>>();
+    assert!(
+        unrecorded_unreachable.is_empty(),
+        "these probed methods answered with no result and are unrecorded: {unrecorded_unreachable:?}"
+    );
+    let stale_unreachable = unreachable_backlog
+        .keys()
+        .filter(|method| !unreachable.contains(&method.as_str()))
+        .collect::<Vec<_>>();
+    assert!(
+        stale_unreachable.is_empty(),
+        "these methods answer now and their unreachable entry is stale: {stale_unreachable:?}"
+    );
     let unrecorded = divergent
         .iter()
         .filter(|(method, _)| !backlog.contains_key(**method))
@@ -922,11 +992,13 @@ fn every_probed_response_validates_against_the_census() {
         "these entries no longer name a probed divergence and are stale: {stale:?}"
     );
     eprintln!(
-        "app-server surface: responses {}/{} probed methods validate, {} awaiting a story {:?}",
+        "app-server surface: responses {}/{} probed methods validate, {} awaiting a story {:?}, \
+         {} unreachable {unreachable:?}",
         conforming.len(),
         probed.len(),
         divergent.len(),
-        divergent.keys().collect::<Vec<_>>()
+        divergent.keys().collect::<Vec<_>>(),
+        unreachable.len(),
     );
 }
 
@@ -1545,8 +1617,13 @@ fn advertised_methods_from_handshake() -> Vec<String> {
         .collect()
 }
 
-/// A connection with one open session, ready to answer read-only requests.
-fn probe_connection() -> ServerConnection {
+/// A connection with one open session, ready to answer read-only requests,
+/// beside the server that owns it.
+///
+/// The server is handed back because the integration reads answer from the
+/// resource backend rather than inline: their frame is produced by the deferred
+/// work the dispatch returns, and only the server can run it.
+fn probe_connection() -> (AppServer, ServerConnection) {
     let server = AppServer::default();
     let mut connection = server.connect(TransportKind::InProcess);
     handshake_response(&mut connection);
@@ -1570,19 +1647,49 @@ fn probe_connection() -> ServerConnection {
         ),
         "the probe session did not start"
     );
-    connection
+    (server, connection)
 }
 
 /// The result body of one request, or `None` when this build answers with an
 /// error. An error is not a divergence: a method may need a backend the probe
-/// does not stand up.
-fn probe(connection: &mut ServerConnection, method: &str, params: &Value) -> Option<Value> {
+/// does not stand up, which [`UNREACHABLE_PROBES`] records.
+fn probe(
+    server: &AppServer,
+    connection: &mut ServerConnection,
+    method: &str,
+    params: &Value,
+) -> Option<Value> {
     let batch = connection.dispatch(&frame(99, method, params));
-    let frame = batch.outbound.first()?;
-    match decode_frame(frame).ok()? {
+    let batch = match batch.outbound.first() {
+        Some(_) => batch,
+        None => run_deferred(server, batch)?,
+    };
+    match decode_frame(batch.outbound.first()?).ok()? {
         Envelope::Success(success) => Some(Value::Object(success.result.into_iter().collect())),
         _ => None,
     }
+}
+
+/// Runs the resource request a dispatch deferred, so its answer is validated
+/// like an inline one.
+///
+/// `mcp/read` and `connectors/read` are served by the asynchronous resource
+/// backend, so their frame exists only after the deferred work runs. Without
+/// this the two methods US-092 reshaped would leave the probe silently.
+fn run_deferred(server: &AppServer, batch: DispatchBatch) -> Option<DispatchBatch> {
+    let DeferredWork::ResourceRequest {
+        request_id,
+        session_id,
+        command,
+    } = batch.deferred.into_iter().next()?
+    else {
+        return None;
+    };
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .ok()?;
+    Some(runtime.block_on(server.execute_resource_request(request_id, session_id, command)))
 }
 
 fn wire_values<T: serde::Serialize>(values: &[T]) -> Vec<String> {
