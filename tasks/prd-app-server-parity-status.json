@@ -45,10 +45,11 @@
     {
       "id": "EP-028",
       "title": "Client Tools",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 2,
-      "stories_done": 0
+      "stories_done": 2,
+      "stories_in_review": 0
     },
     {
       "id": "EP-029",
@@ -272,29 +273,29 @@
       "id": "US-094",
       "title": "Delegate file reads and writes to the client",
       "epic": "EP-028",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-081"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-095",
       "title": "Delegate terminals to the client",
       "epic": "EP-028",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-094"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-096",
