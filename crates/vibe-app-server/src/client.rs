@@ -12,8 +12,9 @@ use serde_json::{Value, json};
 use thiserror::Error;
 use vibe_core::engine::{
     CancellationToken, CompactionResult, Compactor, CompletionProvider, CompositeEventObserver,
-    ConversationEngine, EngineLimits, NoopEventObserver, SessionStats, SessionTranscriptSink,
-    ToolExecutor, ToolFuture, ToolStreamSink, TurnControl, TurnControlHandle, TurnOutcome,
+    ConversationEngine, EngineError, EngineLimits, NoopEventObserver, SessionStats,
+    SessionTranscriptSink, ToolExecutor, ToolFuture, ToolStreamSink, TurnControl,
+    TurnControlHandle, TurnOutcome,
 };
 use vibe_core::events::{
     ApplyOutcome, CallbackKind as EngineCallbackKind, EventEnvelope, LifecycleState, ModelMessage,
@@ -29,8 +30,8 @@ use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PolicyError,
 };
 use vibe_core::provider::{
-    HttpTransport, ProviderBackend, ProviderInput, ProviderStyle, RequestLimits, ToolDefinition,
-    Usage,
+    HttpTransport, ProviderBackend, ProviderError, ProviderInput, ProviderStyle, RequestLimits,
+    ToolDefinition, TransportError, Usage,
 };
 use vibe_core::schema::{ObjectSchema, Property};
 use vibe_core::storage::{HydratedSession, SessionStore};
@@ -57,7 +58,7 @@ pub use vibe_core::engine::TurnStopReason as PublicTurnStopReason;
 pub use vibe_core::events::CallbackKind as PublicCallbackKind;
 pub use vibe_core::events::{
     PublicCallbackState, PublicContentBlock, PublicEffectState, PublicError, PublicHistoryEntry,
-    PublicMessageRole,
+    PublicMessageRole, TurnErrorCode,
 };
 
 pub type DriverFuture<'a> =
@@ -128,6 +129,20 @@ pub trait TurnDriver: Send + Sync {
         _extra_instructions: &'a str,
     ) -> CompactionDriverFuture<'a> {
         Box::pin(async { Err(DriverError::UnsupportedControl("session/compact/start")) })
+    }
+
+    /// Queues a context clearing on a running turn.
+    ///
+    /// The turn drops its transcript and rotates onto a fresh session at its
+    /// next cycle boundary, continuing from `continuation` alone.
+    fn clear_context(
+        &self,
+        _session_id: &str,
+        _turn_id: &str,
+        _continuation: &str,
+        _plan_file_path: Option<&str>,
+    ) -> Result<(), DriverError> {
+        Err(DriverError::UnsupportedControl("session/context/clear"))
     }
 }
 
@@ -641,54 +656,43 @@ impl EventObserver for ServerProjectionObserver {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct McpUpdatedParams {
-    mcp: McpUpdatedState,
-    #[serde(default)]
-    diagnostics: Vec<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct McpUpdatedState {
-    sources: Vec<McpDiagnosticSource>,
-    #[serde(rename = "discoveryErrors")]
-    _discovery_errors: BTreeMap<String, String>,
-}
-
-#[derive(Deserialize)]
-struct McpDiagnosticSource {
-    diagnostic: Option<String>,
-}
-
-fn decode_mcp_update(frame: &[u8]) -> Result<Vec<String>, ClientError> {
-    let notification = match decode_frame(frame)
-        .map_err(|error| ClientError::InvalidResponse(error.to_string()))?
-    {
-        Envelope::Notification(notification) if notification.method == "mcp/updated" => {
-            notification
-        }
-        _ => {
-            return Err(ClientError::InvalidResponse(
-                "MCP initialization returned an unexpected response".to_owned(),
-            ));
-        }
-    };
-    let params = serde_json::from_value::<McpUpdatedParams>(
-        serde_json::to_value(notification.params)
-            .map_err(|error| ClientError::InvalidResponse(error.to_string()))?,
-    )
-    .map_err(|error| ClientError::InvalidResponse(format!("invalid MCP update: {error}")))?;
-    let mut diagnostics = params.diagnostics;
-    for diagnostic in params
-        .mcp
-        .sources
-        .into_iter()
-        .filter_map(|source| source.diagnostic)
-    {
-        if !diagnostics.contains(&diagnostic) {
-            diagnostics.push(diagnostic);
+/// The problems an MCP configuration reported, out of the frames it published.
+///
+/// Discovery failures cross the wire as `warning`, so this reads the same
+/// vocabulary a reference client reads rather than a shape local to this port.
+fn decode_mcp_warnings(frames: &[Vec<u8>]) -> Result<Vec<String>, ClientError> {
+    let mut diagnostics = Vec::new();
+    for frame in frames {
+        let notification = match decode_frame(frame)
+            .map_err(|error| ClientError::InvalidResponse(error.to_string()))?
+        {
+            Envelope::Notification(notification) => notification,
+            _ => {
+                return Err(ClientError::InvalidResponse(
+                    "MCP initialization returned an unexpected response".to_owned(),
+                ));
+            }
+        };
+        match notification.method.as_str() {
+            "warning" => {
+                let message = notification
+                    .params
+                    .get("warning")
+                    .and_then(|warning| warning.get("message"))
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        ClientError::InvalidResponse("a warning carries no message".to_owned())
+                    })?;
+                if !diagnostics.iter().any(|seen| seen == message) {
+                    diagnostics.push(message.to_owned());
+                }
+            }
+            "runtime/updated" => {}
+            other => {
+                return Err(ClientError::InvalidResponse(format!(
+                    "MCP initialization published {other}"
+                )));
+            }
         }
     }
     Ok(diagnostics)
@@ -797,7 +801,7 @@ impl InProcessClient {
                 "session start unexpectedly closed the connection".to_owned(),
             ));
         }
-        let result = response_result(single_outbound(batch.outbound)?, &request_id)?;
+        let result = response_result(response_frame(batch.outbound)?, &request_id)?;
         let session_id = result
             .get("state")
             .and_then(|state| state.pointer("/session/id"))
@@ -835,8 +839,8 @@ impl InProcessClient {
         let Some(configs) = self.pending_mcp.get(session_id).cloned() else {
             return Ok(Vec::new());
         };
-        let notification = self.server.configure_mcp_servers(session_id, configs).await;
-        let diagnostics = decode_mcp_update(&notification)?;
+        let frames = self.server.configure_mcp_servers(session_id, configs).await;
+        let diagnostics = decode_mcp_warnings(&frames)?;
         self.pending_mcp.remove(session_id);
         Ok(diagnostics)
     }
@@ -873,7 +877,7 @@ impl InProcessClient {
             }),
         )?;
         let batch = self.connection.dispatch(&request);
-        let result = response_result(single_outbound(batch.outbound)?, &request_id)?;
+        let result = response_result(response_frame(batch.outbound)?, &request_id)?;
         let turn_id = result
             .get("turn")
             .and_then(|turn| turn.get("id"))
@@ -1036,9 +1040,10 @@ impl InProcessClient {
         &mut self,
         reservation: &TurnReservation,
         message: &str,
+        code: TurnErrorCode,
     ) -> Result<(), ClientError> {
         self.server
-            .fail_turn(&reservation.session_id, &reservation.turn_id, message)?;
+            .fail_turn(&reservation.session_id, &reservation.turn_id, message, code)?;
         Ok(())
     }
 
@@ -1050,7 +1055,7 @@ impl InProcessClient {
             json!({"sessionId": session_id, "expectedTurnId": turn_id}),
         )?;
         let batch = self.connection.dispatch(&request);
-        response_result(single_outbound(batch.outbound)?, &request_id)?;
+        response_result(response_frame(batch.outbound)?, &request_id)?;
         if batch.deferred
             != vec![DeferredWork::InterruptTurn {
                 session_id: session_id.to_owned(),
@@ -1081,7 +1086,7 @@ impl InProcessClient {
                 "session close did not terminate the connection".to_owned(),
             ));
         }
-        response_result(single_outbound(batch.outbound)?, &request_id)?;
+        response_result(response_frame(batch.outbound)?, &request_id)?;
         let mut interrupt = None;
         for work in batch.deferred {
             match work {
@@ -1296,7 +1301,7 @@ impl InProcessClient {
                 "unexpected dispatch behavior for `{method}`"
             )));
         }
-        response_result(single_outbound(batch.outbound)?, &request_id)
+        response_result(response_frame(batch.outbound)?, &request_id)
     }
 
     fn take_request_id(&mut self) -> RequestId {
@@ -1317,6 +1322,18 @@ pub(crate) enum InteractiveCallbackRequest {
         title: String,
         detail: Value,
         response: tokio::sync::oneshot::Sender<Result<Value, String>>,
+    },
+    /// A tool asking for the transcript to be dropped and the session rotated
+    /// at the running turn's next cycle boundary.
+    ///
+    /// It crosses the same channel as a callback because it needs the same
+    /// thing a callback does: the identifier of the turn the server reserved,
+    /// which a tool handler knows nothing about.
+    ClearContext {
+        session_id: String,
+        continuation: String,
+        plan_file_path: Option<String>,
+        response: tokio::sync::oneshot::Sender<Result<(), String>>,
     },
 }
 
@@ -1721,10 +1738,16 @@ where
         title: impl Into<String>,
         detail: Value,
     ) -> Result<(String, PublicHistoryEntry), ClientError> {
-        let (callback_id, request_bytes) = self
+        let (callback_id, frames) = self
             .client
             .connection
             .request_callback_with_detail(session_id, turn_id, kind, title, detail)?;
+        // The delivery is the last frame; the status update before it is for
+        // the wire, not for this in-process caller.
+        let request_bytes = frames
+            .last()
+            .cloned()
+            .ok_or_else(|| ClientError::InvalidResponse("callback was not delivered".to_owned()))?;
         let request = match decode_frame(&request_bytes).map_err(ServerError::Protocol)? {
             Envelope::Request(request) if request.method == "callback/call" => request,
             _ => {
@@ -1761,6 +1784,41 @@ where
         Ok((callback_id, callback))
     }
 
+    /// Hands a tool's clearing request to the turn it names, and answers the
+    /// tool with what the driver said.
+    fn dispatch_context_clearing(&self, request: InteractiveCallbackRequest) {
+        let InteractiveCallbackRequest::ClearContext {
+            session_id,
+            continuation,
+            plan_file_path,
+            response,
+        } = request
+        else {
+            return;
+        };
+        let outcome = self
+            .client
+            .server
+            .session(&session_id)
+            .map_err(|error| error.to_string())
+            .and_then(|session| {
+                session
+                    .active_turn
+                    .ok_or_else(|| "turn is no longer active".to_owned())
+            })
+            .and_then(|turn_id| {
+                self.driver
+                    .clear_context(
+                        &session_id,
+                        &turn_id,
+                        &continuation,
+                        plan_file_path.as_deref(),
+                    )
+                    .map_err(|error| error.to_string())
+            });
+        let _ = response.send(outcome);
+    }
+
     pub fn drain_callbacks(&mut self) -> Result<Vec<PublicHistoryEntry>, ClientError> {
         let mut requests = std::mem::take(&mut self.interactive_backlog);
         if let Some(receiver) = self.interactive_callbacks.as_mut() {
@@ -1774,6 +1832,13 @@ where
             let Some(request) = requests.pop_front() else {
                 break;
             };
+            // A clearing occupies no callback slot: it names the running turn
+            // and hands it a control, which is why it settles here rather than
+            // queueing behind whatever callback is open.
+            if matches!(request, InteractiveCallbackRequest::ClearContext { .. }) {
+                self.dispatch_context_clearing(request);
+                continue;
+            }
             let (session_id, title, detail, kind) = match &request {
                 InteractiveCallbackRequest::Approval {
                     session_id,
@@ -1796,6 +1861,7 @@ where
                     detail.clone(),
                     EngineCallbackKind::UserInput,
                 ),
+                InteractiveCallbackRequest::ClearContext { .. } => continue,
             };
             if self
                 .pending_interactive_callbacks
@@ -1832,6 +1898,7 @@ where
                         InteractiveCallbackRequest::Tool { response, .. } => {
                             InteractiveCallbackResponse::Tool(response)
                         }
+                        InteractiveCallbackRequest::ClearContext { .. } => continue,
                     };
                     if self
                         .pending_interactive_callbacks
@@ -1882,7 +1949,7 @@ where
                 "callback response closed the connection".to_owned(),
             ));
         }
-        let result = response_result(single_outbound(batch.outbound)?, &request_id)?;
+        let result = response_result(response_frame(batch.outbound)?, &request_id)?;
         for work in batch.deferred {
             let driver_result = match work {
                 DeferredWork::ResolveCallback {
@@ -2055,8 +2122,11 @@ where
         match provider_images(&scheduled.reservation.input).await {
             Ok(images) => scheduled.reservation.prepared_images = Some(images),
             Err(error) => {
-                self.client
-                    .fail_turn(&scheduled.reservation, &error.to_string())?;
+                self.client.fail_turn(
+                    &scheduled.reservation,
+                    &error.to_string(),
+                    turn_error_code(&error),
+                )?;
                 return Err(ClientError::Driver(error));
             }
         }
@@ -2088,12 +2158,15 @@ where
         result
     }
 
+    /// Ends a reserved turn as failed, publishing `code` as the reason a client
+    /// branches on. [`turn_error_code`] classifies a driver failure into it.
     pub fn fail_reserved(
         &mut self,
         reservation: &TurnReservation,
         message: &str,
+        code: TurnErrorCode,
     ) -> Result<(), ClientError> {
-        let result = self.client.fail_turn(reservation, message);
+        let result = self.client.fail_turn(reservation, message, code);
         self.fail_interactive_callbacks(
             Some(&reservation.session_id),
             Some(&reservation.turn_id),
@@ -2112,7 +2185,7 @@ where
         match self.driver.run(&reservation).await {
             Ok(outcome) => self.finish_reserved(&reservation, outcome),
             Err(error) => {
-                self.fail_reserved(&reservation, &error.to_string())?;
+                self.fail_reserved(&reservation, &error.to_string(), turn_error_code(&error))?;
                 Err(ClientError::Driver(error))
             }
         }
@@ -2129,7 +2202,7 @@ where
         match self.driver.run_observed(&reservation, observer).await {
             Ok(outcome) => self.finish_reserved(&reservation, outcome),
             Err(error) => {
-                self.fail_reserved(&reservation, &error.to_string())?;
+                self.fail_reserved(&reservation, &error.to_string(), turn_error_code(&error))?;
                 Err(ClientError::Driver(error))
             }
         }
@@ -2242,7 +2315,8 @@ fn approval_decision_from_output(output: &Value) -> Result<ApprovalDecision, Cli
 fn interactive_request_session_id(request: &InteractiveCallbackRequest) -> &str {
     match request {
         InteractiveCallbackRequest::Approval { session_id, .. }
-        | InteractiveCallbackRequest::Tool { session_id, .. } => session_id,
+        | InteractiveCallbackRequest::Tool { session_id, .. }
+        | InteractiveCallbackRequest::ClearContext { session_id, .. } => session_id,
     }
 }
 
@@ -2252,6 +2326,9 @@ fn reject_interactive_request(request: InteractiveCallbackRequest, message: &str
             let _ = response.send(ApprovalDecision::CancelTurn);
         }
         InteractiveCallbackRequest::Tool { response, .. } => {
+            let _ = response.send(Err(message.to_owned()));
+        }
+        InteractiveCallbackRequest::ClearContext { response, .. } => {
             let _ = response.send(Err(message.to_owned()));
         }
     }
@@ -2389,6 +2466,33 @@ async fn request_interactive_tool_callback(
         .map_err(ToolError::Execution)
 }
 
+/// Asks the surface driving the turn to clear the transcript and rotate the
+/// session, and waits for it to be queued.
+///
+/// Waiting is what makes the answer honest: the tool reports a cleared context
+/// only once the turn actually holds the control that clears it.
+async fn request_context_clearing(
+    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+    session_id: String,
+    continuation: String,
+    plan_file_path: Option<String>,
+) -> Result<(), ToolError> {
+    let (response, receiver) = tokio::sync::oneshot::channel();
+    sender
+        .send(InteractiveCallbackRequest::ClearContext {
+            session_id,
+            continuation,
+            plan_file_path,
+            response,
+        })
+        .await
+        .map_err(|_| ToolError::Execution("interactive callback queue closed".to_owned()))?;
+    receiver
+        .await
+        .map_err(|_| ToolError::Execution("context clearing was abandoned".to_owned()))?
+        .map_err(ToolError::Execution)
+}
+
 fn question_tool_output(
     output: &Value,
     questions: &[InteractiveQuestion],
@@ -2499,16 +2603,25 @@ async fn run_interactive_plan_review(
         "filePath": plan_path,
         "relatedEntryId": null,
     });
-    let output =
-        request_interactive_tool_callback(sender, session_id, QUESTION.to_owned(), detail).await?;
+    let output = request_interactive_tool_callback(
+        sender.clone(),
+        session_id.clone(),
+        QUESTION.to_owned(),
+        detail,
+    )
+    .await?;
     let (answers, cancelled) = user_input_result(&output)?;
-    let (switched, message) = if cancelled {
+    let (switched, clear_context, message) = if cancelled {
         if !answers.is_empty() {
             return Err(ToolError::Execution(
                 "cancelled plan review included an answer".to_owned(),
             ));
         }
-        (false, "User cancelled. Staying in plan mode.".to_owned())
+        (
+            false,
+            false,
+            "User cancelled. Staying in plan mode.".to_owned(),
+        )
     } else {
         if answers.len() != 1 {
             return Err(ToolError::Execution(
@@ -2530,11 +2643,13 @@ async fn run_interactive_plan_review(
             }
             (
                 false,
+                false,
                 format!("Stay in plan mode and incorporate this feedback: {value}"),
             )
         } else {
             match value {
                 "Yes, clear context and auto approve edits" => (
+                    true,
                     true,
                     "Plan approved. Switch to code mode, clear planning context, and auto approve \
                      edits."
@@ -2542,13 +2657,16 @@ async fn run_interactive_plan_review(
                 ),
                 "Yes, and auto approve edits" => (
                     true,
+                    false,
                     "Plan approved. Switch to code mode and auto approve edits.".to_owned(),
                 ),
                 "Yes, and request approval for edits" => (
                     true,
+                    false,
                     "Plan approved. Switch to code mode and request approval for edits.".to_owned(),
                 ),
                 "No" => (
+                    false,
                     false,
                     "Plan rejected. Stay in plan mode and continue refining it.".to_owned(),
                 ),
@@ -2560,6 +2678,17 @@ async fn run_interactive_plan_review(
             }
         }
     };
+    if clear_context {
+        // The clearing lands at the next cycle boundary, so the message this
+        // tool answers with is also the only instruction that survives it.
+        request_context_clearing(
+            sender,
+            session_id,
+            message.clone(),
+            plan_path.to_str().map(str::to_owned),
+        )
+        .await?;
+    }
     Ok(ToolExecutionOutput {
         typed_result: json!({"switched": switched, "message": message}),
         model_text: message,
@@ -2872,6 +3001,17 @@ impl Compactor for ProviderSessionCompactor {
             self.compact_with_instructions(current_session_id, messages, "")
                 .await
         })
+    }
+
+    fn cleared_session_id(&self, current_session_id: &str) -> Result<String, String> {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| "system clock precedes UNIX epoch".to_owned())?
+            .as_millis();
+        let sequence = self.next_session.fetch_add(1, Ordering::Relaxed);
+        Ok(format!(
+            "{current_session_id}-cleared-{timestamp}-{sequence}"
+        ))
     }
 }
 
@@ -3727,6 +3867,23 @@ impl TurnDriver for LiveTurnDriver {
             },
         )
     }
+
+    fn clear_context(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        continuation: &str,
+        plan_file_path: Option<&str>,
+    ) -> Result<(), DriverError> {
+        self.send_control(
+            session_id,
+            turn_id,
+            TurnControl::ClearContext {
+                continuation: continuation.to_owned(),
+                plan_file_path: plan_file_path.map(str::to_owned),
+            },
+        )
+    }
 }
 
 impl LiveTurnDriver {
@@ -3970,21 +4127,18 @@ fn session_stats(metadata: &vibe_core::storage::SessionMetadata) -> SessionStats
 
 pub(crate) fn public_turn_error(reason: &PublicTurnStopReason) -> Option<PublicError> {
     match reason {
-        PublicTurnStopReason::Refusal => Some(PublicError {
-            message: "Provider refused the request".to_owned(),
-            code: Some("provider_refusal".to_owned()),
-            details: Value::Null,
-        }),
-        PublicTurnStopReason::ResponseLength => Some(PublicError {
-            message: "The model's response exceeded the maximum output token limit.".to_owned(),
-            code: Some("response_too_long".to_owned()),
-            details: Value::Null,
-        }),
-        PublicTurnStopReason::Failed => Some(PublicError {
-            message: "Turn failed".to_owned(),
-            code: Some("turn_failed".to_owned()),
-            details: Value::Null,
-        }),
+        PublicTurnStopReason::Refusal => Some(public_turn_failure(
+            TurnErrorCode::Refusal,
+            "Provider refused the request",
+        )),
+        PublicTurnStopReason::ResponseLength => Some(public_turn_failure(
+            TurnErrorCode::ResponseTooLong,
+            "The model's response exceeded the maximum output token limit.",
+        )),
+        PublicTurnStopReason::Failed => Some(public_turn_failure(
+            TurnErrorCode::BackendError,
+            "Turn failed",
+        )),
         PublicTurnStopReason::Complete
         | PublicTurnStopReason::MaxSteps
         | PublicTurnStopReason::TokenLimit
@@ -3993,16 +4147,94 @@ pub(crate) fn public_turn_error(reason: &PublicTurnStopReason) -> Option<PublicE
     }
 }
 
-fn single_outbound(mut outbound: Vec<Vec<u8>>) -> Result<Vec<u8>, ClientError> {
-    if outbound.len() != 1 {
-        return Err(ClientError::InvalidResponse(format!(
-            "expected one response, received {}",
-            outbound.len()
-        )));
+/// The published form of a turn failure: a message for the reader, a code from
+/// the reference vocabulary for the client.
+pub(crate) fn public_turn_failure(code: TurnErrorCode, message: &str) -> PublicError {
+    PublicError {
+        message: message.to_owned(),
+        code: serde_json::to_value(code)
+            .ok()
+            .and_then(|value| value.as_str().map(str::to_owned)),
+        details: Value::Null,
     }
+}
+
+/// Classifies a driver failure into the code a client branches on.
+///
+/// Classification reads the failure's type, never its rendered text: a message
+/// is prose that may be reworded, and a code a client acts on must not move
+/// with it.
+#[must_use]
+pub fn turn_error_code(error: &DriverError) -> TurnErrorCode {
+    match error {
+        DriverError::ImageAttachment(_) => TurnErrorCode::InvalidImageAttachment,
+        DriverError::Compaction(_) => TurnErrorCode::CompactionFailed,
+        DriverError::Transport(_) | DriverError::MissingCredentialEnvironment(_) => {
+            TurnErrorCode::BackendError
+        }
+        DriverError::Provider(provider) => provider_error_code(provider),
+        DriverError::Engine(EngineError::Provider(provider)) => provider_error_code(provider),
+        DriverError::Engine(EngineError::Compaction(_)) => TurnErrorCode::CompactionFailed,
+        DriverError::StaleTurn(_)
+        | DriverError::StatePoisoned
+        | DriverError::UnsupportedControl(_)
+        | DriverError::Observation(_)
+        | DriverError::Tool(_)
+        | DriverError::InvalidSystemTime
+        | DriverError::Storage(_)
+        | DriverError::Engine(_) => TurnErrorCode::InternalError,
+    }
+}
+
+fn provider_error_code(error: &ProviderError) -> TurnErrorCode {
+    match error {
+        ProviderError::ContextOverflow => TurnErrorCode::ContextTooLong,
+        ProviderError::Refusal(_) => TurnErrorCode::Refusal,
+        ProviderError::UnsupportedContentBlock(_) => TurnErrorCode::ImagesNotSupported,
+        ProviderError::Transport(TransportError::ResponseTooLarge { .. }) => {
+            TurnErrorCode::ResponseTooLong
+        }
+        // 429 is the rate limit; every other answered status, exhausted budget
+        // or broken stream is the backend failing rather than this port.
+        ProviderError::HttpStatus { status } | ProviderError::RetryExhausted { status } => {
+            if *status == 429 {
+                TurnErrorCode::RateLimit
+            } else {
+                TurnErrorCode::BackendError
+            }
+        }
+        ProviderError::Transport(_)
+        | ProviderError::Authentication { .. }
+        | ProviderError::ElapsedTimeout
+        | ProviderError::MalformedStream(_)
+        | ProviderError::MissingUsage => TurnErrorCode::BackendError,
+        ProviderError::UnknownStyle(_) | ProviderError::InvalidRequest(_) => {
+            TurnErrorCode::InternalError
+        }
+    }
+}
+
+/// The frame answering a request, out of everything the dispatch produced.
+///
+/// A dispatch may also carry sequenced notifications, which an in-process
+/// caller reads through its observer channel rather than here. Picking the
+/// answer by envelope kind keeps this client working whether or not the request
+/// happened to publish a session event.
+fn response_frame(outbound: Vec<Vec<u8>>) -> Result<Vec<u8>, ClientError> {
+    let received = outbound.len();
     outbound
-        .pop()
-        .ok_or_else(|| ClientError::InvalidResponse("missing response".to_owned()))
+        .into_iter()
+        .find(|frame| {
+            matches!(
+                decode_frame(frame),
+                Ok(Envelope::Success(_) | Envelope::Error(_))
+            )
+        })
+        .ok_or_else(|| {
+            ClientError::InvalidResponse(format!(
+                "no response among the {received} frames the request produced"
+            ))
+        })
 }
 
 fn response_result(
@@ -4133,7 +4365,7 @@ mod tests {
         );
 
         service
-            .fail_reserved(&reservation, "test cleanup")
+            .fail_reserved(&reservation, "test cleanup", TurnErrorCode::InternalError)
             .expect("reservation settles");
     }
 
@@ -4162,7 +4394,7 @@ mod tests {
         );
 
         service
-            .fail_reserved(&reservation, "test cleanup")
+            .fail_reserved(&reservation, "test cleanup", TurnErrorCode::InternalError)
             .expect("reservation settles");
     }
 
@@ -4244,6 +4476,151 @@ mod tests {
         task.await
             .expect("plan review task")
             .expect("plan review completes");
+    }
+
+    /// Accepting a plan with the clearing option raises the clearing on the
+    /// running turn, and the tool only answers once the turn holds it.
+    #[tokio::test]
+    async fn accepting_a_plan_with_clearing_raises_it_before_the_tool_answers() {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(2);
+        let plan_path = PathBuf::from("/runtime/plans/session.md");
+        let task = tokio::spawn(run_interactive_plan_review(
+            sender,
+            "session".to_owned(),
+            plan_path.clone(),
+        ));
+        let request = receiver.recv().await.expect("plan review request");
+        assert!(matches!(request, InteractiveCallbackRequest::Tool { .. }));
+        let InteractiveCallbackRequest::Tool { response, .. } = request else {
+            return;
+        };
+        response
+            .send(Ok(json!({
+                "type": "user_input",
+                "result": {
+                    "answers": [{
+                        "question": "Plan is complete. Switch to code mode and start implementing?",
+                        "answer": "Yes, clear context and auto approve edits",
+                        "isOther": false,
+                    }],
+                    "cancelled": false,
+                },
+            })))
+            .expect("plan review response");
+
+        let raised = receiver.recv().await.expect("clearing request");
+        assert!(
+            matches!(raised, InteractiveCallbackRequest::ClearContext { .. }),
+            "accepting with clearing raises a context clearing"
+        );
+        let InteractiveCallbackRequest::ClearContext {
+            session_id,
+            continuation,
+            plan_file_path,
+            response,
+        } = raised
+        else {
+            return;
+        };
+        assert_eq!(session_id, "session");
+        assert_eq!(plan_file_path.as_deref(), plan_path.to_str());
+        assert!(
+            continuation.contains("clear planning context"),
+            "the continuation is the instruction the cleared turn restarts from: {continuation}"
+        );
+        response.send(Ok(())).expect("clearing acknowledgement");
+
+        let output = task
+            .await
+            .expect("plan review task")
+            .expect("plan review completes");
+        assert_eq!(output.typed_result["switched"], true);
+    }
+
+    /// The other accepting option changes the session settings without touching
+    /// the transcript, so no clearing crosses the channel.
+    #[tokio::test]
+    async fn accepting_a_plan_without_clearing_raises_no_clearing() {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(2);
+        let task = tokio::spawn(run_interactive_plan_review(
+            sender,
+            "session".to_owned(),
+            PathBuf::from("/runtime/plans/session.md"),
+        ));
+        let request = receiver.recv().await.expect("plan review request");
+        assert!(matches!(request, InteractiveCallbackRequest::Tool { .. }));
+        let InteractiveCallbackRequest::Tool { response, .. } = request else {
+            return;
+        };
+        response
+            .send(Ok(json!({
+                "type": "user_input",
+                "result": {
+                    "answers": [{
+                        "question": "Plan is complete. Switch to code mode and start implementing?",
+                        "answer": "Yes, and auto approve edits",
+                        "isOther": false,
+                    }],
+                    "cancelled": false,
+                },
+            })))
+            .expect("plan review response");
+        task.await
+            .expect("plan review task")
+            .expect("plan review completes");
+        assert!(
+            receiver.try_recv().is_err(),
+            "only the clearing option clears the context"
+        );
+    }
+
+    /// A turn error is classified from the failure's type, so rewording a
+    /// message never moves the code a client branches on.
+    #[test]
+    fn driver_failures_classify_into_the_reference_error_vocabulary() {
+        for (error, expected) in [
+            (
+                DriverError::Provider(ProviderError::ContextOverflow),
+                TurnErrorCode::ContextTooLong,
+            ),
+            (
+                DriverError::Provider(ProviderError::Refusal("no".to_owned())),
+                TurnErrorCode::Refusal,
+            ),
+            (
+                DriverError::Provider(ProviderError::HttpStatus { status: 429 }),
+                TurnErrorCode::RateLimit,
+            ),
+            (
+                DriverError::Provider(ProviderError::HttpStatus { status: 503 }),
+                TurnErrorCode::BackendError,
+            ),
+            (
+                DriverError::Provider(ProviderError::Transport(TransportError::ResponseTooLarge {
+                    limit: 8,
+                })),
+                TurnErrorCode::ResponseTooLong,
+            ),
+            (
+                DriverError::ImageAttachment("not an image".to_owned()),
+                TurnErrorCode::InvalidImageAttachment,
+            ),
+            (
+                DriverError::Compaction("no summary".to_owned()),
+                TurnErrorCode::CompactionFailed,
+            ),
+            (
+                DriverError::Engine(EngineError::Compaction("no summary".to_owned())),
+                TurnErrorCode::CompactionFailed,
+            ),
+            (DriverError::StatePoisoned, TurnErrorCode::InternalError),
+        ] {
+            assert_eq!(
+                turn_error_code(&error),
+                expected,
+                "`{error}` classified wrongly"
+            );
+        }
     }
 
     /// The two argument conventions the reference publishes side by side.
@@ -4519,20 +4896,35 @@ command = "/must-not-run"
     }
 
     #[test]
-    fn mcp_initialization_rejects_malformed_diagnostics() {
-        let valid = br#"{"jsonrpc":"2.0","method":"mcp/updated","params":{"mcp":{"sources":[{"diagnostic":"connection failed"}],"discoveryErrors":{}}}}"#;
+    fn mcp_initialization_reads_warnings_and_rejects_anything_else() {
+        let notification = |method: &str, params: serde_json::Value| {
+            serde_json::to_vec(&json!({"jsonrpc": "2.0", "method": method, "params": params}))
+                .expect("notification frame")
+        };
+        let frames = vec![
+            notification("runtime/updated", json!({"sessionId": "s", "runtime": {}})),
+            notification(
+                "warning",
+                json!({"warning": {"message": "connection failed"}}),
+            ),
+            notification(
+                "warning",
+                json!({"warning": {"message": "connection failed"}}),
+            ),
+        ];
         assert_eq!(
-            decode_mcp_update(valid).expect("typed MCP update"),
-            vec!["connection failed"]
+            decode_mcp_warnings(&frames).expect("typed warnings"),
+            vec!["connection failed"],
+            "a repeated diagnostic is reported once"
         );
 
         for malformed in [
-            br#"{"jsonrpc":"2.0","method":"mcp/updated","params":{"diagnostics":[1],"mcp":{"sources":[],"discoveryErrors":{}}}}"#.as_slice(),
-            br#"{"jsonrpc":"2.0","method":"mcp/updated","params":{"mcp":{}}}"#.as_slice(),
-            br#"{"jsonrpc":"2.0","method":"mcp/updated","params":{"mcp":{"sources":[{"diagnostic":7}],"discoveryErrors":{}}}}"#.as_slice(),
+            vec![notification("warning", json!({"warning": {"code": "x"}}))],
+            vec![notification("warning", json!({"warning": {"message": 7}}))],
+            vec![notification("mcp/updated", json!({"mcp": {}}))],
         ] {
             assert!(matches!(
-                decode_mcp_update(malformed),
+                decode_mcp_warnings(&malformed),
                 Err(ClientError::InvalidResponse(_))
             ));
         }
@@ -4601,7 +4993,7 @@ command = "/must-not-run"
 
         assert_eq!(reservation.prepared_images, Some(prepared_images));
         service
-            .fail_reserved(&reservation, "test cleanup")
+            .fail_reserved(&reservation, "test cleanup", TurnErrorCode::InternalError)
             .expect("reservation cleanup");
     }
 
@@ -5069,7 +5461,7 @@ command = "/must-not-run"
                 .notifications
                 .first()
                 .map(|event| event.method.as_str()),
-            Some("workspace/trust/updated")
+            Some("runtime/updated")
         );
         let integrations = service
             .public_call_async(
@@ -5772,6 +6164,127 @@ command = "/must-not-run"
         assert_eq!(executions.load(Ordering::Acquire), 0);
     }
 
+    /// The clearing a tool raises reaches the driver bound to the turn the
+    /// server reserved, which is the identifier the tool cannot know.
+    #[tokio::test]
+    async fn a_raised_clearing_reaches_the_driver_with_the_reserved_turn() {
+        /// One clearing as the driver received it.
+        #[derive(Debug, PartialEq, Eq)]
+        struct RecordedClearing {
+            session_id: String,
+            turn_id: String,
+            continuation: String,
+            plan_file_path: Option<String>,
+        }
+
+        #[derive(Default)]
+        struct RecordingDriver {
+            clearings: Mutex<Vec<RecordedClearing>>,
+        }
+
+        impl TurnDriver for RecordingDriver {
+            fn run<'a>(&'a self, _reservation: &'a TurnReservation) -> DriverFuture<'a> {
+                Box::pin(async { Err(DriverError::UnsupportedControl("turn/start")) })
+            }
+
+            fn clear_context(
+                &self,
+                session_id: &str,
+                turn_id: &str,
+                continuation: &str,
+                plan_file_path: Option<&str>,
+            ) -> Result<(), DriverError> {
+                self.clearings
+                    .lock()
+                    .map_err(|_| DriverError::StatePoisoned)?
+                    .push(RecordedClearing {
+                        session_id: session_id.to_owned(),
+                        turn_id: turn_id.to_owned(),
+                        continuation: continuation.to_owned(),
+                        plan_file_path: plan_file_path.map(str::to_owned),
+                    });
+                Ok(())
+            }
+        }
+
+        let (sender, receiver) =
+            tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(MAX_INTERACTIVE_CALLBACKS);
+        let driver = Arc::new(RecordingDriver::default());
+        let server = AppServer::default().using_surface_extension(
+            Arc::new(InteractiveApprovalFactory {
+                sender: sender.clone(),
+            }),
+            Arc::new(InteractiveSessionToolFactory {
+                sender: sender.clone(),
+                plan_directory: None,
+            }),
+        );
+        let mut service = HeadlessService {
+            client: InProcessClient::connect_with_server_and_client(
+                server,
+                ClientInfo {
+                    name: "clearing-test".to_owned(),
+                    version: "1".to_owned(),
+                    title: None,
+                    entrypoint: ClientEntrypoint::Cli,
+                    terminal_emulator: TerminalEmulator::Unknown,
+                },
+                ClientCapabilities {
+                    callback_kinds: vec![ClientCallbackKind::UserInput],
+                    ..ClientCapabilities::default()
+                },
+            )
+            .expect("client connects"),
+            driver: Arc::clone(&driver),
+            interactive_callbacks: Some(receiver),
+            interactive_backlog: VecDeque::new(),
+            pending_interactive_callbacks: HashMap::new(),
+        };
+        let session_id = service.start_session(&options()).expect("session starts");
+        let reservation = service
+            .reserve_prompt(&session_id, &TurnRequest::text("plan"))
+            .await
+            .expect("turn reserves");
+
+        let (response, acknowledgement) = tokio::sync::oneshot::channel();
+        sender
+            .send(InteractiveCallbackRequest::ClearContext {
+                session_id: session_id.clone(),
+                continuation: "Plan approved.".to_owned(),
+                plan_file_path: Some("/plans/session.md".to_owned()),
+                response,
+            })
+            .await
+            .expect("clearing queues");
+        assert!(
+            service
+                .drain_callbacks()
+                .expect("the clearing drains")
+                .is_empty(),
+            "a clearing is not a callback entry"
+        );
+        acknowledgement
+            .await
+            .expect("the tool is answered")
+            .expect("the driver accepted the clearing");
+        assert_eq!(
+            driver.clearings.lock().expect("clearings").as_slice(),
+            [RecordedClearing {
+                session_id: session_id.clone(),
+                turn_id: reservation.turn_id.clone(),
+                continuation: "Plan approved.".to_owned(),
+                plan_file_path: Some("/plans/session.md".to_owned()),
+            }]
+        );
+        service
+            .fail_reserved(
+                &reservation,
+                "fixture complete",
+                TurnErrorCode::InternalError,
+            )
+            .expect("fixture turn closes");
+    }
+
     #[tokio::test]
     async fn interactive_user_input_callbacks_serialize_and_resolve_through_the_server() {
         let mut service = HeadlessService::new_interactive_shared_with_server(
@@ -5902,7 +6415,11 @@ command = "/must-not-run"
             assert_eq!(output.typed_result["cancelled"], false);
         }
         service
-            .fail_reserved(&reservation, "fixture complete")
+            .fail_reserved(
+                &reservation,
+                "fixture complete",
+                TurnErrorCode::InternalError,
+            )
             .expect("fixture turn closes");
     }
 
@@ -6010,7 +6527,11 @@ command = "/must-not-run"
             ApprovalDecision::ApproveForSession
         );
         service
-            .fail_reserved(&reservation, "fixture complete")
+            .fail_reserved(
+                &reservation,
+                "fixture complete",
+                TurnErrorCode::InternalError,
+            )
             .expect("fixture turn closes");
     }
 

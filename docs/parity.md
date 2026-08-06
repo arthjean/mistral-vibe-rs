@@ -59,7 +59,7 @@ replay it.
 | TUI (composer, transcript, pickers) | 80 | Broad coverage, backed by a dedicated observable-parity harness (JSON traces plus Python oracles). Missing vim navigation, word selection, `load_more`, braille rendering |
 | Review and turn diff | 80 | `review/{state,baseline,hunks,approve,revert,turnDiff}` all present |
 | Sessions, resume, fork, history | 80 | `storage.rs`: metadata, pagination, migration, file locks, handoff journal |
-| app-server protocol | 78 | 88 of 113 methods. Absent: `clientTool/*` (7), `projectLinks/*` (9), `session/{updated,snapshot,statsUpdated,contextCleared}`, `runtime/updated`, `telemetry/record`. `config/patch` and `config/fields/read` landed with the configuration epics |
+| app-server protocol | 78 | 88 of 113 methods. Absent: `clientTool/*` (7), `projectLinks/*` (9), `telemetry/record`. The notification contract is complete: 15 of 15 reference names emitted, 0 invented, replayed from the committed corpus. `config/patch` and `config/fields/read` landed with the configuration epics |
 | Hooks | 75 | 1:1 on event types (PreTool, PostTool, PostAgent) with matcher, timeout, retries, strict |
 | System prompt and project context | 75 | `AGENTS.md` walk-up, prompt resolution, skill and subagent summaries. Missing `include_*`, `system_prompt_id`, `project_context` |
 | Agents, subagents, delegation | 75 | `AgentProfile`, `AgentRegistry`, `SubagentManager`, `agents/{list,install,uninstall}`, and `task` now published conformantly |
@@ -90,7 +90,7 @@ the number of downstream consumers, then user value, then cost.
 |---|---|---|---|
 | 1 | Tool names and schemas | DONE | Names were already written into persisted sessions, hook matchers and parity traces, so every deferred week multiplied the migration cost |
 | 2 | Configuration mechanism | DONE | `config/patch`, `config/fields/read`, the registry-generated schema and the discovered layer all shipped through `tasks/prd-config-parity.md`, backed by a committed corpus. The 52 keys with no consumer are declared, defaulted, published and merged; each feature still arrives on its own |
-| 3 | Missing protocol notifications | TODO | `session/updated`, `session/snapshot`, `session/statsUpdated`, `session/contextCleared`, `runtime/updated`, `turn/retrying`. Everything written afterwards emits or consumes these. `/retry` falls out of `turn/retrying` for free |
+| 3 | Missing protocol notifications | DONE | 15 of 15 reference notifications are emitted and the four invented names are retired, replayed by `cargo test -p vibe-app-server --all-features app_server_surface_parity_tests -- --nocapture`. Accepting a plan with clearing now rotates the session inside the turn, which is what raises `session/contextCleared` |
 | 4 | `write_file`, `grep`, the `bash` surface, `todo` | DONE | Shipped with rank 1 |
 | 5 | `task`, `skill` | DONE | Shipped with rank 1 |
 | 6 | `web_search`, `web_fetch` | DONE | Shipped with rank 1 |

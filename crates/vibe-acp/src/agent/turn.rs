@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use tokio::sync::mpsc::Receiver;
 use vibe_app_server::client::{
     ClientError, EventObserver, ProgrammaticTurn, ProgrammaticUpdate, PublicCallbackState,
-    PublicHistoryEntry, PublicTurnOutcome, TurnDriver, TurnRequest, TurnReservation,
+    PublicHistoryEntry, PublicTurnOutcome, TurnDriver, TurnErrorCode, TurnRequest, TurnReservation,
 };
 
 use crate::agent::AcpAgent;
@@ -185,7 +185,13 @@ where
         ) {
             Ok(channel) => channel,
             Err(error) => {
-                let _ = service.fail_reserved(&reservation, &error.to_string());
+                // The turn never reached the driver: the update channel this
+                // bridge needs is what failed.
+                let _ = service.fail_reserved(
+                    &reservation,
+                    &error.to_string(),
+                    TurnErrorCode::InternalError,
+                );
                 return Err(error.into());
             }
         };
@@ -280,17 +286,21 @@ where
 
     /// Settles a turn that cannot complete. The original error is returned
     /// unchanged so a settlement failure never masks the cause.
+    ///
+    /// The code is coarser here than on the app-server side: this bridge sees
+    /// the driver's failure already rendered to a string, so it can only say
+    /// whether the failure came from the driver or from itself.
     async fn fail_turn(
         &self,
         harness: &Arc<AcpHarness<D>>,
         reserved: &ReservedTurn<D>,
         error: AcpError,
     ) -> AcpError {
-        let _ = harness
-            .service
-            .lock()
-            .await
-            .fail_reserved(&reserved.reservation, &error.to_string());
+        let _ = harness.service.lock().await.fail_reserved(
+            &reserved.reservation,
+            &error.to_string(),
+            acp_error_code(&error),
+        );
         error
     }
 
@@ -450,4 +460,17 @@ fn cancelled_approval_output() -> Value {
         "type": "approval",
         "decision": {"type": "cancel_turn"},
     })
+}
+
+/// Classifies a bridge-side failure into the vocabulary a turn error is drawn
+/// from.
+///
+/// The driver's own failures arrive already rendered to a string, so the split
+/// here is coarse on purpose: what the driver reported is the backend failing,
+/// and anything else is this bridge failing.
+fn acp_error_code(error: &AcpError) -> TurnErrorCode {
+    match error {
+        AcpError::Driver(_) => TurnErrorCode::BackendError,
+        _ => TurnErrorCode::InternalError,
+    }
 }

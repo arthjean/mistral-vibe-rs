@@ -2,13 +2,13 @@
 
 use super::*;
 
-pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
-    let history = session
-        .snapshot
-        .as_ref()
-        .map(|snapshot| snapshot.history.clone())
-        .unwrap_or_default();
-    let status = match session.status {
+/// The session's status as the wire union publishes it.
+///
+/// This is what a `session/updated` patch replaces `/status` with, so it lives
+/// beside the full state rather than inside it: a client reconstructs the same
+/// value from either notification.
+pub(super) fn public_session_status(session: &SessionRuntime) -> Value {
+    match session.status {
         SessionStatus::Idle | SessionStatus::Cancelled => json!({"type": "idle"}),
         SessionStatus::Running => json!({
             "type": "running",
@@ -18,14 +18,36 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
             "type": "blocked",
             "activeTurnId": session.active_turn,
             "callbackId": session.pending_callback.as_ref().map(|callback| &callback.id),
-            "reason": "Waiting for callback",
+            // The reference names the callback kind here, which is what lets a
+            // client explain the block without reading the callback entry.
+            "reason": session
+                .pending_callback
+                .as_ref()
+                .map_or("approval", |callback| match callback.kind {
+                    EngineCallbackKind::Approval => "approval",
+                    EngineCallbackKind::UserInput => "user_input",
+                    EngineCallbackKind::ConnectorAuth => "connector_auth",
+                }),
         }),
         SessionStatus::Failed => json!({
             "type": "failed",
-            "message": "Turn failed",
+            "message": session
+                .latest_turn
+                .as_ref()
+                .and_then(|turn| turn.error.as_ref())
+                .map_or("Turn failed", |error| error.message.as_str()),
         }),
         SessionStatus::Closed => json!({"type": "archived"}),
-    };
+    }
+}
+
+pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
+    let history = session
+        .snapshot
+        .as_ref()
+        .map(|snapshot| snapshot.history.clone())
+        .unwrap_or_default();
+    let status = public_session_status(session);
     let preview =
         history
             .iter()
@@ -67,7 +89,14 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
             "workspaceRoots": session.intent.add_directories,
             "model": null,
             "agent": null,
-            "tokenUsage": null,
+            "tokenUsage": {
+                "inputTokens": session.stats.session_prompt_tokens,
+                "outputTokens": session.stats.session_completion_tokens,
+                "totalTokens": session
+                    .stats
+                    .session_prompt_tokens
+                    .saturating_add(session.stats.session_completion_tokens),
+            },
         },
         "history": {
             "entries": history,

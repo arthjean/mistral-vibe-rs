@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+- Push session status instead of making a client poll for it. Every server-side
+  transition now publishes `session/updated` with a JSON patch replacing
+  `/status` and `/updatedAt`: a running turn names its turn id, a blocked one
+  names the callback and the kind of answer it wants, and a failed one carries
+  the message it failed with. A client attaching to a session is handed the
+  whole state as `session/snapshot`, whose embedded watermark equals the
+  notification's own, followed by any callback still open on that session, so it
+  can answer a question raised before it arrived. The per-session `eventId`
+  sequence is contiguous throughout, which is what a reference client's
+  projection requires of it.
+- Publish token accounting as it accumulates. `session/statsUpdated` carries the
+  whole seventeen-field snapshot the protocol declares, including the cached
+  token counts this port never reported, plus the active model's compaction
+  threshold as `contextWindow`. A published session now reports its real
+  `tokenUsage` rather than null.
+- Clear the planning context inside the turn that accepted the plan. Choosing
+  "Yes, clear context and auto approve edits" now drops the transcript, rotates
+  the session onto a fresh identifier and continues from the approval message
+  alone, publishing `session/contextCleared` with both identifiers, the new
+  state and the plan file the acceptance came from. The clearing used to run
+  between two turns as a plain history reset, which changed the transcript
+  without telling any client that it had. Each clearing writes a new session
+  file, as a compaction already did.
+- Name why a turn failed in the vocabulary the protocol declares. A failing
+  turn now carries one of the nine reference codes, classified from the
+  failure's type rather than from the text it rendered to: a 429 is
+  `rate_limit`, an overflowing context `context_too_long`, a refused answer
+  `refusal`, a failed compaction `compaction_failed`. The port used to answer
+  `turn_failed` or `provider_refusal`, neither of which a client written
+  against the protocol could branch on.
+- Report a retried provider request. `turn/retrying` is emitted while the
+  backend is still waiting, naming the status or connection failure that caused
+  the wait, so a stalling turn can be explained rather than merely looking slow.
+- Retire four notification names this port had invented. `mcp/updated`,
+  `connectors/updated`, `shell/updated` and `workspace/trust/updated` are gone;
+  a mutation that moves runtime state now publishes `runtime/updated` with the
+  full runtime snapshot, a recoverable problem publishes `warning`, an MCP
+  source waiting on authorization publishes `mcp/authUrl`, and a failure that
+  ends a connection publishes `error` before it closes. A client written against
+  the reference protocol no longer has to learn a name only this port spoke.
+
 - Complete the handshake with a client that mutes notifications. `initialize`
   accepts `capabilities.disabledNotifications`, which the reference client
   library declares and which this port used to answer with `invalid_params`,

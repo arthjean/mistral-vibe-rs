@@ -9,15 +9,15 @@ use futures_util::{FutureExt, StreamExt, stream::FuturesUnordered};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, mpsc};
 
 use crate::events::{
     EngineEvent, EventEnvelope, LifecycleState, ModelMessage, ModelToolCall, ProjectionError,
-    ProjectionReducer, ProjectionSnapshot,
+    ProjectionReducer, ProjectionSnapshot, SessionHandoffCause,
 };
 use crate::provider::{
     AssistantMessage, ProviderBackend, ProviderChunk, ProviderError, ProviderInput, ProviderStream,
-    ProviderTransport, TransportError, Usage, aggregate_provider_chunks,
+    ProviderTransport, RetrySink, TransportError, Usage, aggregate_provider_chunks,
 };
 use crate::storage::{SessionMetadata, SessionStore};
 use crate::text::bounded_utf8;
@@ -48,6 +48,19 @@ pub struct SessionStats {
 
 pub trait CompletionProvider: Send + Sync {
     fn complete<'a>(&'a self, input: &'a ProviderInput) -> ProviderFuture<'a>;
+
+    /// Streams one completion, reporting every retry to `retries`.
+    ///
+    /// A provider that does not retry never calls the sink, which is why the
+    /// default forwards to [`CompletionProvider::stream`] instead of requiring
+    /// every implementation to know about retries.
+    fn stream_observed<'a>(
+        &'a self,
+        input: &'a ProviderInput,
+        _retries: &'a (dyn RetrySink + 'a),
+    ) -> ProviderStreamFuture<'a> {
+        self.stream(input)
+    }
 
     fn stream<'a>(&'a self, input: &'a ProviderInput) -> ProviderStreamFuture<'a> {
         Box::pin(async move {
@@ -109,6 +122,14 @@ where
     fn stream<'a>(&'a self, input: &'a ProviderInput) -> ProviderStreamFuture<'a> {
         Box::pin(ProviderBackend::stream(self, input))
     }
+
+    fn stream_observed<'a>(
+        &'a self,
+        input: &'a ProviderInput,
+        retries: &'a (dyn RetrySink + 'a),
+    ) -> ProviderStreamFuture<'a> {
+        Box::pin(ProviderBackend::stream_observed(self, input, retries))
+    }
 }
 
 impl<P> CompletionProvider for Arc<P>
@@ -121,6 +142,26 @@ where
 
     fn stream<'a>(&'a self, input: &'a ProviderInput) -> ProviderStreamFuture<'a> {
         (**self).stream(input)
+    }
+
+    fn stream_observed<'a>(
+        &'a self,
+        input: &'a ProviderInput,
+        retries: &'a (dyn RetrySink + 'a),
+    ) -> ProviderStreamFuture<'a> {
+        (**self).stream_observed(input, retries)
+    }
+}
+
+/// Forwards a retry to the turn that is waiting on the request.
+struct ChannelRetrySink {
+    reasons: mpsc::UnboundedSender<String>,
+}
+
+impl RetrySink for ChannelRetrySink {
+    fn retrying(&self, reason: &str) {
+        // A closed receiver means the turn is gone; the request still finishes.
+        let _ = self.reasons.send(reason.to_owned());
     }
 }
 
@@ -143,6 +184,13 @@ pub trait Compactor: Send + Sync {
         current_session_id: &'a str,
         messages: &'a [ModelMessage],
     ) -> CompactionFuture<'a>;
+
+    /// Mints the identifier a cleared transcript continues under.
+    ///
+    /// Clearing borrows the compactor's naming authority without its summary:
+    /// the transcript is dropped rather than condensed, but the session still
+    /// rotates onto an identifier no other handoff has claimed.
+    fn cleared_session_id(&self, current_session_id: &str) -> Result<String, String>;
 }
 
 pub trait TranscriptSink: Send + Sync {
@@ -208,6 +256,10 @@ impl Compactor for RejectCompaction {
         _messages: &'a [ModelMessage],
     ) -> CompactionFuture<'a> {
         Box::pin(async { Err("compaction is unavailable".to_owned()) })
+    }
+
+    fn cleared_session_id(&self, _current_session_id: &str) -> Result<String, String> {
+        Err("context clearing is unavailable".to_owned())
     }
 }
 
@@ -368,6 +420,20 @@ pub enum TurnControl {
         accepted: bool,
         value: Option<String>,
     },
+    /// Drops the transcript and rotates the session at the next cycle boundary,
+    /// leaving the turn to continue from `continuation` alone.
+    ClearContext {
+        continuation: String,
+        plan_file_path: Option<String>,
+    },
+}
+
+/// What draining the control queue leaves the turn to do.
+enum ControlOutcome {
+    /// The turn continues. `true` when the transcript was cleared and the
+    /// session rotated, which the caller checkpoints before the next request.
+    Continue(bool),
+    Stop(TurnStopReason),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -589,8 +655,16 @@ where
             if let Some(reason) = self.exhausted_budget(&ledger, &cancellation) {
                 break reason;
             }
-            if let Some(reason) = self.apply_controls(&mut recorder, &mut messages, &controls)? {
-                break reason;
+            match self.apply_controls(&mut recorder, &mut messages, &controls)? {
+                ControlOutcome::Stop(reason) => break reason,
+                // A rotated session is only durable once the transcript lands
+                // under its new identifier, so it checkpoints before the next
+                // request rather than at the end of the cycle.
+                ControlOutcome::Continue(true) => {
+                    persist(&self.sink, &messages, recorder.state()).await?;
+                    checkpoints = checkpoints.saturating_add(1);
+                }
+                ControlOutcome::Continue(false) => {}
             }
             input.messages.clone_from(&messages);
             let completion = match self
@@ -724,15 +798,15 @@ where
         None
     }
 
-    /// Drains queued steering, context injection, and callback resolutions.
-    ///
-    /// Returns the stop reason when a control ends the turn.
+    /// Drains queued steering, context injection, callback resolutions and
+    /// context clearings.
     fn apply_controls(
         &self,
         recorder: &mut TurnRecorder<'_>,
         messages: &mut Vec<ModelMessage>,
         controls: &TurnControlHandle,
-    ) -> Result<Option<TurnStopReason>, EngineError> {
+    ) -> Result<ControlOutcome, EngineError> {
+        let mut cleared = false;
         for control in controls.drain()? {
             match control {
                 TurnControl::Steer { content } => {
@@ -766,12 +840,35 @@ where
                         })?;
                     }
                     if !accepted {
-                        return Ok(Some(TurnStopReason::Cancelled));
+                        return Ok(ControlOutcome::Stop(TurnStopReason::Cancelled));
                     }
+                }
+                TurnControl::ClearContext {
+                    continuation,
+                    plan_file_path,
+                } => {
+                    let from_session_id = recorder.state().session_id.clone();
+                    let to_session_id = self
+                        .compactor
+                        .cleared_session_id(&from_session_id)
+                        .map_err(EngineError::Compaction)?;
+                    // The system prompt is the harness, not the conversation:
+                    // clearing drops what was said, and the continuation is the
+                    // only instruction the next request carries.
+                    messages.retain(|message| matches!(message, ModelMessage::System { .. }));
+                    messages.push(ModelMessage::User {
+                        content: continuation,
+                    });
+                    recorder.emit(EngineEvent::SessionHandoff {
+                        from_session_id,
+                        to_session_id,
+                        cause: SessionHandoffCause::ContextCleared { plan_file_path },
+                    })?;
+                    cleared = true;
                 }
             }
         }
-        Ok(None)
+        Ok(ControlOutcome::Continue(cleared))
     }
 
     /// Streams one provider completion, projecting text and reasoning as it arrives.
@@ -781,13 +878,30 @@ where
         input: &ProviderInput,
         cancellation: &CancellationToken,
     ) -> Result<StreamOutcome, EngineError> {
-        let mut stream = tokio::select! {
-            result = self.provider.stream(input) => match result {
-                Ok(stream) => stream,
-                Err(error) => return Ok(StreamOutcome::Completed(Err(error))),
-            },
-            () = cancellation.cancelled() => return Ok(StreamOutcome::Cancelled),
+        // Retries are reported while the request is still waiting: a client
+        // renders the wait, so learning about it once the backend gave up would
+        // be too late to be worth anything.
+        let (retry_sender, mut retry_reasons) = mpsc::unbounded_channel();
+        let retries = ChannelRetrySink {
+            reasons: retry_sender,
         };
+        let mut opening = self.provider.stream_observed(input, &retries);
+        let mut stream = loop {
+            tokio::select! {
+                result = &mut opening => break match result {
+                    Ok(stream) => stream,
+                    Err(error) => return Ok(StreamOutcome::Completed(Err(error))),
+                },
+                Some(reason) = retry_reasons.recv() => {
+                    recorder.emit(EngineEvent::Retrying { reason })?;
+                }
+                () = cancellation.cancelled() => return Ok(StreamOutcome::Cancelled),
+            }
+        };
+        drop(opening);
+        while let Ok(reason) = retry_reasons.try_recv() {
+            recorder.emit(EngineEvent::Retrying { reason })?;
+        }
         let mut chunks = Vec::new();
         loop {
             let next = tokio::select! {
@@ -850,6 +964,7 @@ where
         recorder.emit(EngineEvent::SessionHandoff {
             from_session_id,
             to_session_id: compaction.new_session_id,
+            cause: SessionHandoffCause::Compaction,
         })?;
         *messages = compaction.messages;
         Ok(Some(()))
@@ -1340,6 +1455,10 @@ mod tests {
                 })
             })
         }
+
+        fn cleared_session_id(&self, current_session_id: &str) -> Result<String, String> {
+            Ok(format!("{current_session_id}-cleared"))
+        }
     }
 
     #[derive(Clone, Default)]
@@ -1382,6 +1501,10 @@ mod tests {
                 std::future::pending::<Result<CompactionResult, String>>().await
             })
         }
+
+        fn cleared_session_id(&self, current_session_id: &str) -> Result<String, String> {
+            Ok(format!("{current_session_id}-cleared"))
+        }
     }
 
     #[derive(Clone, Default)]
@@ -1405,6 +1528,55 @@ mod tests {
                 Ok(())
             })
         }
+    }
+
+    /// A provider that reports one retry before answering, the way a backend
+    /// waiting on a retryable status does.
+    struct RetryingProvider {
+        inner: ScriptedProvider,
+    }
+
+    impl CompletionProvider for RetryingProvider {
+        fn complete<'a>(&'a self, input: &'a ProviderInput) -> ProviderFuture<'a> {
+            self.inner.complete(input)
+        }
+
+        fn stream_observed<'a>(
+            &'a self,
+            input: &'a ProviderInput,
+            retries: &'a (dyn RetrySink + 'a),
+        ) -> ProviderStreamFuture<'a> {
+            retries.retrying("provider answered HTTP 503");
+            self.stream(input)
+        }
+    }
+
+    /// A retry is a fact about the wait, so the turn reports it while it is
+    /// still waiting rather than folding it into the outcome.
+    #[tokio::test]
+    async fn a_retried_request_is_reported_as_a_turn_event() {
+        let outcome = ConversationEngine::new(RetryingProvider {
+            inner: ScriptedProvider::new([Ok(completion("answer", Vec::new()))]),
+        })
+        .run_turn(
+            "session-1",
+            provider_input(),
+            "hello",
+            CancellationToken::default(),
+        )
+        .await
+        .expect("turn completes");
+        assert_eq!(
+            outcome
+                .events
+                .iter()
+                .filter_map(|event| match &event.event {
+                    EngineEvent::Retrying { reason } => Some(reason.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            ["provider answered HTTP 503"]
+        );
     }
 
     fn provider_input() -> ProviderInput {
@@ -1605,6 +1777,157 @@ mod tests {
                 .events
                 .iter()
                 .any(|event| matches!(event.event, EngineEvent::SessionHandoff { .. }))
+        );
+    }
+
+    /// A tool that accepts a plan clears the context from inside the turn, the
+    /// way the reference does: the transcript is dropped, the session rotates,
+    /// and the continuation is the only thing the next request carries.
+    #[tokio::test]
+    async fn a_cleared_context_rotates_the_session_and_keeps_only_the_continuation() {
+        struct ClearingTools {
+            controls: TurnControlHandle,
+        }
+
+        impl ToolExecutor for ClearingTools {
+            fn execute<'a>(&'a self, _name: &'a str, _arguments: &'a str) -> ToolFuture<'a> {
+                Box::pin(async move {
+                    self.controls
+                        .send(TurnControl::ClearContext {
+                            continuation: "Plan approved. Switch to code mode.".to_owned(),
+                            plan_file_path: Some("/plans/session-1.md".to_owned()),
+                        })
+                        .map_err(|error| error.to_string())?;
+                    Ok(ToolExecutionOutput::text("plan accepted"))
+                })
+            }
+        }
+
+        let provider = ScriptedProvider::new([
+            Ok(completion(
+                "",
+                vec![ModelToolCall {
+                    id: "call-1".to_owned(),
+                    name: "exit_plan_mode".to_owned(),
+                    arguments: "{}".to_owned(),
+                }],
+            )),
+            Ok(completion("implementing", Vec::new())),
+        ]);
+        let controls = TurnControlHandle::default();
+        let outcome = ConversationEngine::new(provider)
+            .with_tools(ClearingTools {
+                controls: controls.clone(),
+            })
+            .with_compactor(FakeCompactor)
+            .run_turn_controlled(
+                "session-1",
+                provider_input(),
+                "write a plan",
+                CancellationToken::default(),
+                controls,
+            )
+            .await
+            .expect("cleared turn completes");
+
+        assert_eq!(outcome.session_id, "session-1-cleared");
+        assert_eq!(
+            outcome.messages,
+            vec![
+                ModelMessage::System {
+                    content: "system".to_owned(),
+                },
+                ModelMessage::User {
+                    content: "Plan approved. Switch to code mode.".to_owned(),
+                },
+                ModelMessage::Assistant {
+                    content: "implementing".to_owned(),
+                    reasoning: None,
+                    reasoning_signature: None,
+                    reasoning_state: Vec::new(),
+                    tool_calls: Vec::new(),
+                },
+            ],
+            "clearing keeps the harness and the continuation, and nothing that was said"
+        );
+        let handoff = outcome
+            .events
+            .iter()
+            .find_map(|event| match &event.event {
+                EngineEvent::SessionHandoff {
+                    from_session_id,
+                    to_session_id,
+                    cause,
+                } => Some((
+                    from_session_id.clone(),
+                    to_session_id.clone(),
+                    cause.clone(),
+                )),
+                _ => None,
+            })
+            .expect("the clearing publishes a handoff");
+        assert_eq!(
+            handoff,
+            (
+                "session-1".to_owned(),
+                "session-1-cleared".to_owned(),
+                SessionHandoffCause::ContextCleared {
+                    plan_file_path: Some("/plans/session-1.md".to_owned()),
+                },
+            )
+        );
+    }
+
+    /// A compactor that cannot mint a cleared identifier fails the turn instead
+    /// of rotating onto its own name, which a reference projection rejects.
+    #[tokio::test]
+    async fn clearing_without_a_compactor_fails_the_turn() {
+        struct ClearingTools {
+            controls: TurnControlHandle,
+        }
+
+        impl ToolExecutor for ClearingTools {
+            fn execute<'a>(&'a self, _name: &'a str, _arguments: &'a str) -> ToolFuture<'a> {
+                Box::pin(async move {
+                    self.controls
+                        .send(TurnControl::ClearContext {
+                            continuation: "continue".to_owned(),
+                            plan_file_path: None,
+                        })
+                        .map_err(|error| error.to_string())?;
+                    Ok(ToolExecutionOutput::text("plan accepted"))
+                })
+            }
+        }
+
+        let provider = ScriptedProvider::new([
+            Ok(completion(
+                "",
+                vec![ModelToolCall {
+                    id: "call-1".to_owned(),
+                    name: "exit_plan_mode".to_owned(),
+                    arguments: "{}".to_owned(),
+                }],
+            )),
+            Ok(completion("unreachable", Vec::new())),
+        ]);
+        let controls = TurnControlHandle::default();
+        let error = ConversationEngine::new(provider)
+            .with_tools(ClearingTools {
+                controls: controls.clone(),
+            })
+            .run_turn_controlled(
+                "session-1",
+                provider_input(),
+                "write a plan",
+                CancellationToken::default(),
+                controls,
+            )
+            .await
+            .expect_err("a clearing with no compactor cannot rotate the session");
+        assert!(
+            matches!(&error, EngineError::Compaction(message) if message.contains("clearing")),
+            "the failure names what could not be done: {error}"
         );
     }
 

@@ -9,9 +9,9 @@ use tokio::task::JoinSet;
 
 use vibe_protocol::ProtocolValidationError;
 
-use crate::client::{DriverError, TurnDriver, TurnReservation, public_turn_error};
+use crate::client::{DriverError, TurnDriver, TurnReservation, public_turn_error, turn_error_code};
 use crate::live_projection::{app_server_notification, app_server_update_channel_for_turn};
-use crate::server::{AppServer, DeferredWork, ServerError};
+use crate::server::{AppServer, DeferredWork, ServerError, server_error_frame};
 
 pub const MAX_FRAME_BYTES: usize = 8 * 1024 * 1024;
 const TASK_CLEANUP_GRACE: Duration = Duration::from_secs(5);
@@ -125,12 +125,14 @@ where
                     ServeEvent::TurnSettled { session_id, turn_id, notification } => {
                         active.remove(&(session_id, turn_id));
                         match notification {
-                            Ok(bytes) => {
-                                if connection.delivers(&bytes)
-                                    && let Err(error) = transport.send(&bytes).await
-                                {
-                                    failure = Some(error);
-                                    break 'serve;
+                            Ok(frames) => {
+                                for bytes in frames {
+                                    if connection.delivers(&bytes)
+                                        && let Err(error) = transport.send(&bytes).await
+                                    {
+                                        failure = Some(error);
+                                        break 'serve;
+                                    }
                                 }
                             }
                             Err(error) => {
@@ -176,15 +178,16 @@ where
                     )
                     .await
                     {
-                        Ok(Some(bytes)) => {
-                            if connection.delivers(&bytes)
-                                && let Err(error) = transport.send(&bytes).await
-                            {
-                                failure = Some(error);
-                                break 'serve;
+                        Ok(frames) => {
+                            for bytes in frames {
+                                if connection.delivers(&bytes)
+                                    && let Err(error) = transport.send(&bytes).await
+                                {
+                                    failure = Some(error);
+                                    break 'serve;
+                                }
                             }
                         }
-                        Ok(None) => {}
                         Err(error) => {
                             failure = Some(error);
                             break 'serve;
@@ -196,6 +199,13 @@ where
                 }
             }
         }
+    }
+    // The client is told why the stream stops before it does, which is what the
+    // reference sends ahead of dropping a connection its background work broke.
+    if let Some(error) = &failure {
+        let _ = transport
+            .send(&server_error_frame(&error.to_string()))
+            .await;
     }
     let detached_sessions = connection.attached_session_ids();
     connection.close();
@@ -235,7 +245,7 @@ where
 /// driver controls are cheap and stay inline, where their errors are still
 /// fatal to the connection.
 ///
-/// Returns a frame the caller must flush before reading the next request.
+/// Returns the frames the caller must flush before reading the next request.
 async fn dispatch_deferred_work<D>(
     work: DeferredWork,
     server: &AppServer,
@@ -243,7 +253,7 @@ async fn dispatch_deferred_work<D>(
     events: &mpsc::UnboundedSender<ServeEvent>,
     tasks: &mut JoinSet<()>,
     active: &mut BTreeSet<(String, String)>,
-) -> Result<Option<Vec<u8>>, TransportError>
+) -> Result<Vec<Vec<u8>>, TransportError>
 where
     D: TurnDriver + 'static,
 {
@@ -283,17 +293,19 @@ where
             let driver = Arc::clone(driver);
             let events = events.clone();
             tasks.spawn(async move { run_turn(server, driver, reservation, events).await });
-            Ok(None)
+            Ok(Vec::new())
         }
         DeferredWork::InterruptTurn {
             session_id,
             turn_id,
         } => match driver.interrupt(&session_id, &turn_id) {
-            Ok(()) => Ok(None),
-            Err(error) => server
-                .fail_turn(&session_id, &turn_id, &error.to_string())
-                .map(Some)
-                .map_err(TransportError::Server),
+            Ok(()) => Ok(Vec::new()),
+            Err(error) => {
+                let code = turn_error_code(&error);
+                server
+                    .fail_turn(&session_id, &turn_id, &error.to_string(), code)
+                    .map_err(TransportError::Server)
+            }
         },
         DeferredWork::SteerTurn {
             session_id,
@@ -301,7 +313,7 @@ where
             content,
         } => driver
             .steer(&session_id, &turn_id, &content)
-            .map(|()| None)
+            .map(|()| Vec::new())
             .map_err(TransportError::Driver),
         DeferredWork::InjectContext {
             session_id,
@@ -309,7 +321,7 @@ where
             as_message,
         } => driver
             .inject_context(&session_id, &content, as_message)
-            .map(|()| None)
+            .map(|()| Vec::new())
             .map_err(TransportError::Driver),
         DeferredWork::ResolveCallback {
             session_id,
@@ -325,7 +337,7 @@ where
                 accepted,
                 value.as_deref(),
             )
-            .map(|()| None)
+            .map(|()| Vec::new())
             .map_err(TransportError::Driver),
         DeferredWork::ResourceRequest {
             request_id,
@@ -339,7 +351,7 @@ where
                     .await
                     .outbound)
             });
-            Ok(None)
+            Ok(Vec::new())
         }
         DeferredWork::CloudRequest {
             request_id,
@@ -353,7 +365,7 @@ where
                     .await
                     .outbound)
             });
-            Ok(None)
+            Ok(Vec::new())
         }
         DeferredWork::ConfigureMcp {
             session_id,
@@ -361,11 +373,9 @@ where
         } => {
             let server = server.clone();
             spawn_frames(tasks, events.clone(), async move {
-                Ok(vec![
-                    server.configure_mcp_servers(&session_id, configs).await,
-                ])
+                Ok(server.configure_mcp_servers(&session_id, configs).await)
             });
-            Ok(None)
+            Ok(Vec::new())
         }
         DeferredWork::CompactSession {
             request_id,
@@ -389,7 +399,7 @@ where
                 };
                 Ok(batch.outbound)
             });
-            Ok(None)
+            Ok(Vec::new())
         }
         DeferredWork::CloseResources {
             session_id,
@@ -397,7 +407,7 @@ where
         } => server
             .close_resource_session(&session_id, generation)
             .await
-            .map(|()| None)
+            .map(|()| Vec::new())
             .map_err(TransportError::Server),
     }
 }
@@ -440,8 +450,10 @@ async fn run_turn<D>(
         notification,
     };
     match server.turn_started(&reservation.session_id, &reservation.turn_id) {
-        Ok(bytes) => {
-            let _ = events.send(ServeEvent::Frame(bytes));
+        Ok(frames) => {
+            for frame in frames {
+                let _ = events.send(ServeEvent::Frame(frame));
+            }
         }
         Err(error) => {
             let _ = events.send(settle(Err(error)));
@@ -499,11 +511,15 @@ async fn run_turn<D>(
                 error,
             )
         }
-        Err(error) => server.fail_turn(
-            &reservation.session_id,
-            &reservation.turn_id,
-            &error.to_string(),
-        ),
+        Err(error) => {
+            let code = turn_error_code(&error);
+            server.fail_turn(
+                &reservation.session_id,
+                &reservation.turn_id,
+                &error.to_string(),
+                code,
+            )
+        }
     };
     let _ = events.send(settle(notification));
 }
@@ -516,7 +532,7 @@ enum ServeEvent {
     TurnSettled {
         session_id: String,
         turn_id: String,
-        notification: Result<Vec<u8>, ServerError>,
+        notification: Result<Vec<Vec<u8>>, ServerError>,
     },
     /// Background work failed fatally for this connection.
     Failed(TransportError),
@@ -530,7 +546,14 @@ async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &
                 turn_id,
                 ..
             } => {
-                let _ = server.fail_turn(session_id, turn_id, message);
+                // The connection went down before the turn ran; nothing about
+                // the request itself failed, which is what leaves it internal.
+                let _ = server.fail_turn(
+                    session_id,
+                    turn_id,
+                    message,
+                    vibe_core::events::TurnErrorCode::InternalError,
+                );
             }
             DeferredWork::CloseResources {
                 session_id,
@@ -679,77 +702,86 @@ mod tests {
                 .await
                 .expect("request newline");
         }
-        let initialize = responses
-            .next_line()
-            .await
-            .expect("initialize read")
-            .expect("initialize response");
-        let session = responses
-            .next_line()
-            .await
-            .expect("session read")
-            .expect("session response");
-        let turn = responses
-            .next_line()
-            .await
-            .expect("turn read")
-            .expect("turn response");
-        assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&initialize).expect("initialize JSON")["id"],
-            1
-        );
-        assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&session).expect("session JSON")["id"],
-            2
-        );
-        assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&turn).expect("turn JSON")["id"],
-            3
-        );
-
+        // Responses and notifications share one stream, so the frames are read
+        // as they arrive and separated by whether they name a method.
+        let mut responses_seen = Vec::new();
         let mut notifications = Vec::new();
         loop {
-            let notification = responses
+            let frame = responses
                 .next_line()
                 .await
-                .expect("notification read")
-                .expect("notification frame");
-            let notification = serde_json::from_str::<serde_json::Value>(&notification)
-                .expect("notification JSON");
-            let completed = notification["method"] == "turn/completed";
-            notifications.push(notification);
+                .expect("frame read")
+                .expect("frame");
+            let frame = serde_json::from_str::<serde_json::Value>(&frame).expect("frame JSON");
+            let completed = frame["method"] == "turn/completed";
+            if frame["method"].is_string() {
+                notifications.push(frame);
+            } else {
+                responses_seen.push(frame);
+            }
             assert!(
-                notifications.len() <= 8,
-                "turn emitted too many notifications"
+                responses_seen.len() + notifications.len() <= 16,
+                "the turn emitted too many frames"
             );
             if completed {
                 break;
             }
         }
         assert_eq!(
+            responses_seen
+                .iter()
+                .map(|response| response["id"].as_u64())
+                .collect::<Vec<_>>(),
+            vec![Some(1), Some(2), Some(3)]
+        );
+        assert_eq!(
             notifications
                 .iter()
                 .map(|notification| notification["method"].as_str().unwrap_or_default())
                 .collect::<Vec<_>>(),
             vec![
+                "session/snapshot",
                 "turn/started",
+                "session/updated",
                 "history/entryAdded",
                 "history/entryAdded",
                 "history/entryUpdated",
+                "session/statsUpdated",
+                "session/updated",
                 "turn/completed",
             ]
         );
+        // The client's own projection raises on a gap, so the sequence has to
+        // run from one without one.
         assert_eq!(
             notifications
                 .iter()
                 .map(|notification| notification["params"]["eventId"].as_u64())
                 .collect::<Vec<_>>(),
-            vec![Some(1), Some(2), Some(3), Some(4), Some(5)]
+            (1..=9).map(Some).collect::<Vec<_>>()
         );
-        let assistant = &notifications[2]["params"]["entry"];
+        // The snapshot names its own watermark, which is what the reference
+        // projection asserts before it adopts the state.
+        assert_eq!(
+            notifications[0]["params"]["state"]["eventId"],
+            notifications[0]["params"]["eventId"]
+        );
+        assert_eq!(
+            notifications[2]["params"]["patch"][0]["value"]["type"],
+            "running"
+        );
+        assert_eq!(
+            notifications[7]["params"]["patch"][0]["value"]["type"],
+            "idle"
+        );
+        // The settled turn publishes its accounting before its status.
+        let stats = &notifications[6]["params"];
+        assert_eq!(stats["stats"]["steps"], 1);
+        assert!(stats["contextWindow"].is_u64());
+        let assistant = &notifications[4]["params"]["entry"];
         assert_eq!(assistant["role"], "assistant");
         assert_eq!(assistant["generationStatus"], "in_progress");
-        let completion_patch = notifications[3]["params"]["patch"]
+        let completion_patch = notifications[5]["params"]["patch"]
             .as_array()
             .expect("completion patch");
         assert!(completion_patch.iter().any(|operation| {

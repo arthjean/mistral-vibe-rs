@@ -72,27 +72,17 @@ const UNROUTED_METHODS: &[(&str, &str)] = &[
 ];
 
 /// Reference notifications this build does not emit yet.
-const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[
-    ("error", "US-086"),
-    ("mcp/authUrl", "US-086"),
-    ("runtime/updated", "US-086"),
-    ("session/contextCleared", "US-085"),
-    ("session/snapshot", "US-083"),
-    ("session/statsUpdated", "US-084"),
-    ("session/updated", "US-083"),
-    ("turn/retrying", "US-085"),
-    ("warning", "US-086"),
-];
+///
+/// US-085 emitted the last of them, so the list is empty and a notification
+/// that stops being emitted has to earn an entry here before the replay
+/// accepts it.
+const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[];
 
 /// Notification names this build emits that the reference does not declare.
-/// They are retired by US-086, which moves their payloads onto the reference
-/// names.
-const LOCAL_NOTIFICATIONS: &[(&str, &str)] = &[
-    ("connectors/updated", "US-086"),
-    ("mcp/updated", "US-086"),
-    ("shell/updated", "US-086"),
-    ("workspace/trust/updated", "US-086"),
-];
+///
+/// US-086 retired the four this port had invented, so the list is empty and any
+/// new name has to earn an entry here before the replay accepts it.
+const LOCAL_NOTIFICATIONS: &[(&str, &str)] = &[];
 
 /// Enum vocabularies the reference declares that this port does not model yet.
 const UNMODELLED_ENUMS: &[(&str, &str)] = &[
@@ -111,7 +101,6 @@ const UNMODELLED_ENUMS: &[(&str, &str)] = &[
     ("TodoEffectPriority", "US-087"),
     ("TodoEffectStatus", "US-087"),
     ("ToolEffectKind", "US-087"),
-    ("TurnErrorCode", "US-085"),
 ];
 
 /// Methods whose probed response does not validate against the census yet, each
@@ -561,7 +550,7 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
 
     // The vocabularies this port already spells. Everything else is in the
     // backlog above until the story that models it lands.
-    let declared: [(&str, Vec<String>); 3] = [
+    let declared: [(&str, Vec<String>); 4] = [
         (
             "PublicEntryGenerationStatus",
             wire_values(&[
@@ -581,6 +570,20 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
         (
             "PublicTurnStopReason",
             wire_values(&[vibe_core::events::PublicTurnStopReason::Limit]),
+        ),
+        (
+            "TurnErrorCode",
+            wire_values(&[
+                vibe_core::events::TurnErrorCode::RateLimit,
+                vibe_core::events::TurnErrorCode::ContextTooLong,
+                vibe_core::events::TurnErrorCode::ResponseTooLong,
+                vibe_core::events::TurnErrorCode::Refusal,
+                vibe_core::events::TurnErrorCode::InvalidImageAttachment,
+                vibe_core::events::TurnErrorCode::ImagesNotSupported,
+                vibe_core::events::TurnErrorCode::CompactionFailed,
+                vibe_core::events::TurnErrorCode::BackendError,
+                vibe_core::events::TurnErrorCode::InternalError,
+            ]),
         ),
     ];
     for (name, values) in &declared {

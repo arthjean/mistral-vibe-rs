@@ -178,13 +178,11 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
         .configure_mcp("session-1", configs)
         .await
         .expect("production MCP discovery");
-    assert_eq!(
-        dispatch
-            .notification
-            .as_ref()
-            .map(|notification| notification.method.as_str()),
-        Some("mcp/updated")
+    assert!(
+        dispatch.signals.runtime_updated,
+        "discovery moved runtime state, so `runtime/updated` follows the answer"
     );
+    assert!(dispatch.signals.warnings.is_empty());
     assert_eq!(
         dispatch.result["mcp"]["sources"][0]["status"],
         json!("healthy")

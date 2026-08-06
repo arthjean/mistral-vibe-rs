@@ -14,6 +14,7 @@ use callbacks::*;
 use projection::*;
 use registry::SessionRegistry;
 
+use crate::client::public_turn_failure;
 use crate::host::{now_millis, vibe_home};
 use crate::release3::{RELEASE3_METHODS, Release3Error, Release3Service, RuntimeAttachment};
 use crate::release4::{
@@ -22,7 +23,7 @@ use crate::release4::{
 use crate::resources::{
     BACKEND_RESOURCE_METHODS, CoreResourceBackend, RESOURCE_METHODS, ResourceBackend,
     ResourceBackendCommand, ResourceBackendRequest, ResourceDispatch, ResourceError,
-    ResourceService, ResourceSession,
+    ResourceService, ResourceSession, ResourceSignals,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -32,7 +33,7 @@ use vibe_core::events::{
     CallbackKind as EngineCallbackKind, LifecycleState, ModelMessage, ProjectionSnapshot,
     PublicCallbackState, PublicContentBlock, PublicEffectState, PublicEntryGenerationStatus,
     PublicEntryMetadata, PublicError, PublicHistoryEntry, PublicMessageRole, PublicMessageSource,
-    PublicTurn, PublicTurnStatus,
+    PublicTurn, PublicTurnStatus, TurnErrorCode,
 };
 use vibe_core::extensions::{AgentApproval, AgentProfile};
 use vibe_core::integrations::redact;
@@ -81,17 +82,30 @@ const MAX_CALLBACK_TEXT_BYTES: usize = 8 * 1024;
 /// app-server surface replay reads it to report notification conformance, and
 /// `docs/parity.md` records the names here that the reference does not declare.
 pub const EMITTED_NOTIFICATIONS: &[&str] = &[
-    "connectors/updated",
+    "error",
     "history/entryAdded",
     "history/entryUpdated",
-    "mcp/updated",
+    "mcp/authUrl",
+    "runtime/updated",
     "session/compacted",
-    "shell/updated",
+    "session/contextCleared",
+    "session/snapshot",
+    "session/statsUpdated",
+    "session/updated",
     "turn/completed",
+    "turn/retrying",
     "turn/started",
     "vibeCode/teleport/event",
-    "workspace/trust/updated",
+    "warning",
 ];
+
+/// Which handoff notification a session rotation publishes, with the one field
+/// that name adds to the shared handoff body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum HandoffNotice {
+    Compacted { summary_length: usize },
+    ContextCleared { plan_file_path: Option<String> },
+}
 
 /// Every method this build routes, sorted and unique, whether or not the
 /// reference declares it.
@@ -496,11 +510,19 @@ impl AppServer {
         session_id: &str,
         turn_id: &str,
         snapshot: ProjectionSnapshot,
-    ) -> Result<Vec<u8>, ServerError> {
+    ) -> Result<Vec<Vec<u8>>, ServerError> {
         self.complete_turn_with_stop_reason(session_id, turn_id, snapshot, None)
     }
 
-    pub fn turn_started(&self, session_id: &str, turn_id: &str) -> Result<Vec<u8>, ServerError> {
+    /// The frames a started turn puts on the wire, in emission order.
+    ///
+    /// `turn/started` first, then the `session/updated` that moves the session
+    /// to `running`, matching the order the reference emits them in.
+    pub fn turn_started(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Result<Vec<Vec<u8>>, ServerError> {
         let mut sessions = self.lock_sessions()?;
         let session = sessions
             .get_mut(session_id)
@@ -514,8 +536,9 @@ impl AppServer {
             .filter(|turn| turn.id == turn_id)
             .ok_or_else(|| ServerError::StaleTurn(turn_id.to_owned()))?;
         let turn = turn.clone();
+        session.stats.begin_turn();
         let event_id = next_event_id(session);
-        Ok(encode_notification(
+        let started = encode_notification(
             "turn/started",
             result_map([
                 ("eventId", json!(event_id)),
@@ -523,7 +546,8 @@ impl AppServer {
                 ("turn", json!(turn)),
                 ("emittedAt", json!(now_millis())),
             ]),
-        ))
+        );
+        Ok(vec![started, session_updated_frame(session)])
     }
 
     pub fn reserve_due_loop(
@@ -652,10 +676,15 @@ impl AppServer {
         turn_id: &str,
         snapshot: ProjectionSnapshot,
         stop_reason: Option<vibe_core::events::PublicTurnStopReason>,
-    ) -> Result<Vec<u8>, ServerError> {
+    ) -> Result<Vec<Vec<u8>>, ServerError> {
         self.complete_turn_with_details(session_id, turn_id, snapshot, stop_reason, None)
     }
 
+    /// The frames a settled turn puts on the wire, in emission order.
+    ///
+    /// The reference publishes the session's new status before the turn's own
+    /// terminal notification, so a client that renders status from
+    /// `session/updated` never shows a running session after the turn is gone.
     pub fn complete_turn_with_details(
         &self,
         session_id: &str,
@@ -663,7 +692,7 @@ impl AppServer {
         snapshot: ProjectionSnapshot,
         stop_reason: Option<vibe_core::events::PublicTurnStopReason>,
         error: Option<PublicError>,
-    ) -> Result<Vec<u8>, ServerError> {
+    ) -> Result<Vec<Vec<u8>>, ServerError> {
         let mut sessions = self.lock_sessions()?;
         let source_key = sessions
             .key(session_id)
@@ -720,10 +749,8 @@ impl AppServer {
             started_at,
             completed_at: Some(completed_at),
             error: (status == PublicTurnStatus::Failed).then(|| {
-                error.unwrap_or_else(|| PublicError {
-                    message: "Turn failed".to_owned(),
-                    code: Some("turn_failed".to_owned()),
-                    details: Value::Null,
+                error.unwrap_or_else(|| {
+                    public_turn_failure(TurnErrorCode::BackendError, "Turn failed")
                 })
             }),
             stop_reason,
@@ -753,8 +780,11 @@ impl AppServer {
         ));
         session.latest_turn = Some(turn.clone());
         session.updated_at = completed_at;
+        session.stats.last_turn_duration_ms = completed_at.saturating_sub(started_at);
+        let stats = stats_updated_frame(session);
+        let status = session_updated_frame(session);
         let event_id = next_event_id(session);
-        Ok(encode_notification(
+        let completed = encode_notification(
             "turn/completed",
             result_map([
                 ("eventId", json!(event_id)),
@@ -762,7 +792,8 @@ impl AppServer {
                 ("turn", json!(turn)),
                 ("emittedAt", json!(now_millis())),
             ]),
-        ))
+        );
+        Ok(vec![stats, status, completed])
     }
 
     pub fn fail_turn(
@@ -770,7 +801,8 @@ impl AppServer {
         session_id: &str,
         turn_id: &str,
         message: &str,
-    ) -> Result<Vec<u8>, ServerError> {
+        code: TurnErrorCode,
+    ) -> Result<Vec<Vec<u8>>, ServerError> {
         let mut sessions = self.lock_sessions()?;
         let session = sessions
             .get_mut(session_id)
@@ -805,17 +837,19 @@ impl AppServer {
             status: PublicTurnStatus::Failed,
             started_at,
             completed_at: Some(now_millis()),
-            error: Some(PublicError {
-                message: message.to_owned(),
-                code: Some("turn_failed".to_owned()),
-                details: Value::Null,
-            }),
+            error: Some(public_turn_failure(code, message)),
             stop_reason: None,
         };
         session.latest_turn = Some(turn.clone());
         session.updated_at = turn.completed_at.unwrap_or(started_at);
+        session.stats.last_turn_duration_ms = turn
+            .completed_at
+            .unwrap_or(started_at)
+            .saturating_sub(started_at);
+        let stats = stats_updated_frame(session);
+        let status = session_updated_frame(session);
         let event_id = next_event_id(session);
-        Ok(encode_notification(
+        let completed = encode_notification(
             "turn/completed",
             result_map([
                 ("eventId", json!(event_id)),
@@ -823,7 +857,8 @@ impl AppServer {
                 ("turn", json!(turn)),
                 ("emittedAt", json!(now_millis())),
             ]),
-        ))
+        );
+        Ok(vec![stats, status, completed])
     }
 
     pub fn request_callback(
@@ -832,7 +867,7 @@ impl AppServer {
         turn_id: &str,
         kind: EngineCallbackKind,
         prompt: impl Into<String>,
-    ) -> Result<(String, Vec<u8>), ServerError> {
+    ) -> Result<(String, Vec<Vec<u8>>), ServerError> {
         if kind == EngineCallbackKind::ConnectorAuth {
             return Err(ServerError::UnsupportedCallbackKind(kind));
         }
@@ -896,7 +931,7 @@ impl AppServer {
         kind: EngineCallbackKind,
         title: impl Into<String>,
         detail: Value,
-    ) -> Result<(String, Vec<u8>), ServerError> {
+    ) -> Result<(String, Vec<Vec<u8>>), ServerError> {
         if kind == EngineCallbackKind::ConnectorAuth {
             return Err(ServerError::UnsupportedCallbackKind(kind));
         }
@@ -961,14 +996,17 @@ impl AppServer {
         }) {
             snapshot.history.push(callback.clone());
         }
-        next_event_id(session);
+        // The block is published before the callback is delivered, so a client
+        // that renders status from `session/updated` is already showing the
+        // session as blocked when the question arrives.
+        let status = session_updated_frame(session);
         let request = encode_frame(&Envelope::Request(ServerRequest {
             jsonrpc: JsonRpcVersion::V2,
             id: RequestId::Integer(i64::try_from(callback_sequence).unwrap_or(i64::MAX)),
             method: "callback/call".to_owned(),
             params: result_map([("callback", json!(callback))]),
         }));
-        Ok((callback_id, request))
+        Ok((callback_id, vec![status, request]))
     }
 
     pub fn live_projection_seed(
@@ -1001,6 +1039,31 @@ impl AppServer {
         Ok(snapshot)
     }
 
+    /// Records the usage one provider round trip reported and publishes it.
+    ///
+    /// The engine reports usage while the turn runs, which is what lets a client
+    /// show context pressure before the turn settles rather than after.
+    pub fn record_turn_stats(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        context_tokens: u64,
+        input_tokens: u64,
+        output_tokens: u64,
+    ) -> Result<Vec<u8>, ServerError> {
+        let mut sessions = self.lock_sessions()?;
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        if session.active_turn.as_deref() != Some(turn_id) {
+            return Err(ServerError::StaleTurn(turn_id.to_owned()));
+        }
+        session
+            .stats
+            .observe(context_tokens, input_tokens, output_tokens);
+        Ok(stats_updated_frame(session))
+    }
+
     pub fn apply_live_projection(
         &self,
         session_id: &str,
@@ -1026,16 +1089,24 @@ impl AppServer {
         Ok(event_id)
     }
 
+    /// Publishes the handoff of a session running a turn, under the name its
+    /// cause earns.
     pub(crate) fn handoff_active_turn(
         &self,
         old_session_id: &str,
         new_session_id: &str,
         turn_id: &str,
         mut snapshot: ProjectionSnapshot,
-        summary_length: usize,
+        notice: &HandoffNotice,
         emitted_at: u64,
     ) -> Result<Vec<u8>, ServerError> {
         if snapshot.session_id != new_session_id {
+            return Err(ServerError::SessionConflict(new_session_id.to_owned()));
+        }
+        // A reference projection validates a handoff by the two identifiers
+        // differing; one that rotated onto its own name is a state change it
+        // rejects rather than applies.
+        if old_session_id == new_session_id {
             return Err(ServerError::SessionConflict(new_session_id.to_owned()));
         }
         let mut sessions = self.lock_sessions()?;
@@ -1075,15 +1146,25 @@ impl AppServer {
         }
         let event_id = next_event_id(session);
         let state = public_session_state(session);
+        let (method, cause_field) = match notice {
+            HandoffNotice::Compacted { summary_length } => (
+                "session/compacted",
+                ("summaryLength", json!(summary_length)),
+            ),
+            HandoffNotice::ContextCleared { plan_file_path } => (
+                "session/contextCleared",
+                ("planFilePath", json!(plan_file_path)),
+            ),
+        };
         Ok(encode_notification(
-            "session/compacted",
+            method,
             result_map([
                 ("eventId", json!(event_id)),
                 ("sessionId", json!(new_session_id)),
                 ("oldSessionId", json!(old_session_id)),
                 ("state", state),
                 ("sessionLog", json!({"enabled": false})),
-                ("summaryLength", json!(summary_length)),
+                cause_field,
                 ("emittedAt", json!(emitted_at)),
             ]),
         ))
@@ -1236,7 +1317,7 @@ impl AppServer {
         &self,
         route: &CallbackRoute,
         reason: &str,
-    ) -> Result<Vec<DeferredWork>, ServerError> {
+    ) -> Result<(Vec<u8>, Vec<DeferredWork>), ServerError> {
         let mut sessions = self.lock_sessions()?;
         let session = sessions
             .get_mut(&route.session_id)
@@ -1245,7 +1326,7 @@ impl AppServer {
             return Err(ServerError::StaleTurn(route.turn_id.clone()));
         }
         let Some(callback) = &session.pending_callback else {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         };
         if callback.id != route.callback_id {
             return Err(ServerError::CallbackConflict);
@@ -1260,20 +1341,23 @@ impl AppServer {
         session.pending_callback = None;
         session.status = SessionStatus::Cancelled;
         session.updated_at = now_millis();
-        next_event_id(session);
-        Ok(vec![
-            DeferredWork::ResolveCallback {
-                session_id: route.session_id.clone(),
-                turn_id: route.turn_id.clone(),
-                callback_id: route.callback_id.clone(),
-                accepted: false,
-                value: Some(reason.to_owned()),
-            },
-            DeferredWork::InterruptTurn {
-                session_id: route.session_id.clone(),
-                turn_id: route.turn_id.clone(),
-            },
-        ])
+        let status = session_updated_frame(session);
+        Ok((
+            status,
+            vec![
+                DeferredWork::ResolveCallback {
+                    session_id: route.session_id.clone(),
+                    turn_id: route.turn_id.clone(),
+                    callback_id: route.callback_id.clone(),
+                    accepted: false,
+                    value: Some(reason.to_owned()),
+                },
+                DeferredWork::InterruptTurn {
+                    session_id: route.session_id.clone(),
+                    turn_id: route.turn_id.clone(),
+                },
+            ],
+        ))
     }
 
     pub fn session(&self, session_id: &str) -> Result<SessionView, ServerError> {
@@ -1328,7 +1412,13 @@ impl AppServer {
             session_id,
             command,
         };
-        resource_result_batch(request_id, backend.dispatch(request).await)
+        let session_id = request.session_id.clone();
+        resource_result_batch(
+            request_id,
+            self,
+            &session_id,
+            backend.dispatch(request).await,
+        )
     }
 
     pub async fn execute_cloud_request(
@@ -1366,41 +1456,35 @@ impl AppServer {
         shell.and(backend)
     }
 
+    /// Configures a session's MCP sources and publishes what changed.
+    ///
+    /// Discovery is best-effort: a source that will not start is reported as a
+    /// `warning` rather than failing the session, which is why this answers with
+    /// frames instead of a result.
     pub async fn configure_mcp_servers(
         &self,
         session_id: &str,
         configs: Vec<McpServerConfig>,
-    ) -> Vec<u8> {
-        let Some(backend) = &self.resource_backend else {
-            return encode_notification(
-                "mcp/updated",
-                result_map([
-                    ("mcp", json!({"sources": []})),
-                    (
-                        "diagnostics",
-                        json!(["MCP transport backend is not configured"]),
-                    ),
-                ]),
-            );
+    ) -> Vec<Vec<u8>> {
+        let warning = |message: String| ResourceSignals {
+            runtime_updated: false,
+            warnings: vec![message],
+            auth_url: None,
         };
-        match backend.configure_mcp(session_id, configs).await {
-            Ok(dispatch) => match dispatch.notification {
-                Some(notification) => {
-                    encode_notification(&notification.method, notification.params)
-                }
-                None => encode_notification(
-                    "mcp/updated",
-                    result_map([("mcp", json!({"sources": []})), ("diagnostics", json!([]))]),
-                ),
+        let signals = match &self.resource_backend {
+            None => warning("MCP transport backend is not configured".to_owned()),
+            Some(backend) => match backend.configure_mcp(session_id, configs).await {
+                Ok(dispatch) => dispatch.signals,
+                Err(error) => warning(redact(&error.to_string())),
             },
-            Err(error) => encode_notification(
-                "mcp/updated",
-                result_map([
-                    ("mcp", json!({"sources": []})),
-                    ("diagnostics", json!([redact(&error.to_string())])),
-                ]),
-            ),
-        }
+        };
+        signal_frames(self, session_id, &signals)
+    }
+
+    /// The session's runtime as `runtime/updated` publishes it, or `None` when
+    /// the resource state cannot be read.
+    pub(crate) fn runtime_snapshot(&self, session_id: &str) -> Option<Value> {
+        self.resources.lock().ok()?.runtime(session_id).ok()
     }
 
     pub(crate) fn orphaned_resource_generation(
@@ -1494,6 +1578,7 @@ impl AppServer {
             now_millis(),
         );
         session.persisted = Some(attachment.hydrated.clone());
+        session.context_window = self.release3.context_window();
         sessions.insert(session);
         self.open_session_resources(
             &mut sessions,
@@ -1820,7 +1905,7 @@ impl ServerConnection {
         turn_id: &str,
         kind: EngineCallbackKind,
         prompt: impl Into<String>,
-    ) -> Result<(String, Vec<u8>), ServerError> {
+    ) -> Result<(String, Vec<Vec<u8>>), ServerError> {
         let prompt = prompt.into();
         self.deliver_callback(session_id, turn_id, kind, |server| {
             server.request_callback(session_id, turn_id, kind, prompt)
@@ -1834,11 +1919,65 @@ impl ServerConnection {
         kind: EngineCallbackKind,
         title: impl Into<String>,
         detail: Value,
-    ) -> Result<(String, Vec<u8>), ServerError> {
+    ) -> Result<(String, Vec<Vec<u8>>), ServerError> {
         let title = title.into();
         self.deliver_callback(session_id, turn_id, kind, |server| {
             server.request_callback_with_detail(session_id, turn_id, kind, title, detail)
         })
+    }
+
+    /// The frames a completed attachment puts on the wire.
+    ///
+    /// A newly attached client is handed the whole session as a sequenced
+    /// `session/snapshot`, then any callback still open is replayed to it: the
+    /// question was delivered to whoever was attached before, so without the
+    /// replay the new client would wait on a turn it cannot unblock.
+    pub(crate) fn attachment_frames(&mut self, session_id: &str) -> Vec<Vec<u8>> {
+        let Ok(mut sessions) = self.server.lock_sessions() else {
+            return Vec::new();
+        };
+        let Some(session) = sessions.get_mut(session_id) else {
+            return Vec::new();
+        };
+        let mut frames = vec![session_snapshot_frame(session)];
+        let open = session
+            .pending_callback
+            .clone()
+            .zip(session.active_turn.clone())
+            .map(|(callback, turn_id)| (session.id.clone(), callback, turn_id));
+        drop(sessions);
+        let Some((canonical_session_id, callback, turn_id)) = open else {
+            return frames;
+        };
+        let supported = match callback.kind {
+            EngineCallbackKind::Approval => CallbackKind::Approval,
+            EngineCallbackKind::UserInput => CallbackKind::UserInput,
+            // A kind this connection cannot answer is not replayed to it: the
+            // reference refuses to raise one rather than emit a callback the
+            // client has no way to close.
+            EngineCallbackKind::ConnectorAuth => return frames,
+        };
+        if !self.capabilities.callback_kinds.contains(&supported) {
+            return frames;
+        }
+        let sequence = self.server.next_callback.fetch_add(1, Ordering::Relaxed);
+        let request_id = RequestId::Integer(i64::try_from(sequence).unwrap_or(i64::MAX));
+        self.pending_server_requests.insert(
+            request_id.clone(),
+            CallbackRoute {
+                session_id: canonical_session_id,
+                turn_id,
+                callback_id: callback.id.clone(),
+                answered: false,
+            },
+        );
+        frames.push(encode_frame(&Envelope::Request(ServerRequest {
+            jsonrpc: JsonRpcVersion::V2,
+            id: request_id,
+            method: "callback/call".to_owned(),
+            params: result_map([("callback", json!(callback.entry))]),
+        })));
+        frames
     }
 
     /// Mints a callback through `request` and routes the client's answer back
@@ -1848,8 +1987,8 @@ impl ServerConnection {
         session_id: &str,
         turn_id: &str,
         kind: EngineCallbackKind,
-        request: impl FnOnce(&AppServer) -> Result<(String, Vec<u8>), ServerError>,
-    ) -> Result<(String, Vec<u8>), ServerError> {
+        request: impl FnOnce(&AppServer) -> Result<(String, Vec<Vec<u8>>), ServerError>,
+    ) -> Result<(String, Vec<Vec<u8>>), ServerError> {
         if self.state != ConnectionState::Ready {
             return Err(ServerError::NotInitialized);
         }
@@ -1863,8 +2002,10 @@ impl ServerConnection {
         if !self.capabilities.callback_kinds.contains(&supported) {
             return Err(ServerError::UnsupportedClientCallbackKind(kind));
         }
-        let (callback_id, bytes) = request(&self.server)?;
-        let request_id = match decode_frame(&bytes)? {
+        let (callback_id, frames) = request(&self.server)?;
+        // The delivery itself is the last frame: the status update precedes it.
+        let delivery = frames.last().ok_or(ServerError::InvalidCallbackRequest)?;
+        let request_id = match decode_frame(delivery)? {
             Envelope::Request(request) => request.id,
             _ => return Err(ServerError::InvalidCallbackRequest),
         };
@@ -1877,7 +2018,7 @@ impl ServerConnection {
                 answered: false,
             },
         );
-        Ok((callback_id, bytes))
+        Ok((callback_id, frames))
     }
 
     fn handle_server_success(&mut self, response: SuccessResponse) -> DispatchBatch {
@@ -1901,8 +2042,8 @@ impl ServerConnection {
                 .server
                 .reject_callback(&route, "Client did not accept callback delivery")
             {
-                Ok(deferred) => DispatchBatch {
-                    outbound: Vec::new(),
+                Ok((status, deferred)) => DispatchBatch {
+                    outbound: rejection_frames(status),
                     deferred,
                     close_after_flush: false,
                 },
@@ -1919,8 +2060,8 @@ impl ServerConnection {
             return DispatchBatch::empty();
         }
         match self.server.reject_callback(&route, &response.error.message) {
-            Ok(deferred) => DispatchBatch {
-                outbound: Vec::new(),
+            Ok((status, deferred)) => DispatchBatch {
+                outbound: rejection_frames(status),
                 deferred,
                 close_after_flush: false,
             },
@@ -2424,6 +2565,7 @@ impl ServerConnection {
         session.snapshot = initial_snapshot;
         session.aliases = aliases;
         session.persisted = persisted;
+        session.context_window = self.server.release3.context_window();
         sessions.insert(session);
         if let Err(error) = self.server.open_session_resources(
             &mut sessions,
@@ -2443,7 +2585,9 @@ impl ServerConnection {
             .get(&session_id)
             .map(public_session_state)
             .unwrap_or(Value::Null);
+        drop(sessions);
         let mut batch = success_batch(request.id, result_map([("state", state)]));
+        batch.outbound.extend(self.attachment_frames(&session_id));
         if !mcp_configs.is_empty() {
             batch.deferred.push(DeferredWork::ConfigureMcp {
                 session_id,
@@ -2528,9 +2672,8 @@ impl ServerConnection {
         let active_turn = session.active_turn.clone();
         session.status = SessionStatus::Closed;
         session.updated_at = now_millis();
-        if cancel_pending_callback(session, "Session was closed") {
-            next_event_id(session);
-        }
+        cancel_pending_callback(session, "Session was closed");
+        let closed_status = session_updated_frame(session);
         if self.attached_sessions.remove(&key) {
             session.attachments = session.attachments.saturating_sub(1);
         }
@@ -2555,7 +2698,7 @@ impl ServerConnection {
             });
         }
         DispatchBatch {
-            outbound: vec![success_bytes(request.id, BTreeMap::new())],
+            outbound: vec![success_bytes(request.id, BTreeMap::new()), closed_status],
             deferred,
             close_after_flush: true,
         }
@@ -3108,12 +3251,12 @@ impl ServerConnection {
         });
         session.updated_at = completed_at;
         cancel_pending_callback(session, "Turn was interrupted");
-        next_event_id(session);
+        let status = session_updated_frame(session);
         DispatchBatch {
-            outbound: vec![success_bytes(
-                request.id,
-                result_map([("interrupted", json!(true))]),
-            )],
+            outbound: vec![
+                success_bytes(request.id, result_map([("interrupted", json!(true))])),
+                status,
+            ],
             deferred: vec![DeferredWork::InterruptTurn {
                 session_id: params.session_id,
                 turn_id: params.expected_turn_id,
@@ -3197,7 +3340,7 @@ impl ServerConnection {
         );
         session.status = SessionStatus::Running;
         session.updated_at = now_millis();
-        next_event_id(session);
+        let status = session_updated_frame(session);
         let result = result_map([("status", json!("accepted"))]);
         let mut deferred = vec![DeferredWork::ResolveCallback {
             session_id: params.session_id.clone(),
@@ -3219,7 +3362,7 @@ impl ServerConnection {
             }
         }
         DispatchBatch {
-            outbound: vec![success_bytes(request.id, result)],
+            outbound: vec![success_bytes(request.id, result), status],
             deferred,
             close_after_flush: false,
         }
@@ -3301,7 +3444,7 @@ impl ServerConnection {
                 Err(error) => return internal_error_batch(request.id, &error),
             }
         }
-        resource_result_batch(request.id, result)
+        resource_result_batch(request.id, &self.server, &session_id, result)
     }
 
     /// Pins a workspace-trust request to the attached session root.
@@ -3446,6 +3589,10 @@ struct SessionRuntime {
     updated_at: u64,
     latest_turn: Option<PublicTurn>,
     event_watermark: u64,
+    stats: SessionStats,
+    /// The active model's compaction threshold, read once when the session
+    /// opens. Zero means no model declares one.
+    context_window: u64,
     policy: PermissionStore,
     tools: ToolRegistry,
     persisted: Option<HydratedSession>,
@@ -3487,12 +3634,166 @@ impl SessionRuntime {
             updated_at: created_at,
             latest_turn: None,
             event_watermark: 0,
+            stats: SessionStats::default(),
+            context_window: 0,
             policy,
             tools,
             persisted: None,
             review,
         }
     }
+}
+
+/// The token and tool accounting one session publishes.
+///
+/// The reference keeps this on the agent loop and projects it into
+/// `AgentStatsSnapshot`; here it lives on the session because the loop runs in
+/// a driver the server does not own. The tool counters are derived from the
+/// projected history rather than counted twice, so a replayed snapshot and a
+/// live turn report the same numbers.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct SessionStats {
+    session_prompt_tokens: u64,
+    session_completion_tokens: u64,
+    session_cached_tokens: u64,
+    context_tokens: u64,
+    last_turn_prompt_tokens: u64,
+    last_turn_completion_tokens: u64,
+    last_turn_cached_tokens: u64,
+    last_turn_duration_ms: u64,
+    /// Where the running turn started from, so its own usage is the difference.
+    turn_baseline_prompt_tokens: u64,
+    turn_baseline_completion_tokens: u64,
+    turn_baseline_cached_tokens: u64,
+}
+
+impl SessionStats {
+    /// Records the usage one provider round trip reported.
+    fn observe(&mut self, context_tokens: u64, input_tokens: u64, output_tokens: u64) {
+        self.context_tokens = context_tokens;
+        self.session_prompt_tokens = input_tokens;
+        self.session_completion_tokens = output_tokens;
+        self.last_turn_prompt_tokens =
+            input_tokens.saturating_sub(self.turn_baseline_prompt_tokens);
+        self.last_turn_completion_tokens =
+            output_tokens.saturating_sub(self.turn_baseline_completion_tokens);
+        self.last_turn_cached_tokens = self
+            .session_cached_tokens
+            .saturating_sub(self.turn_baseline_cached_tokens);
+    }
+
+    /// Opens a turn: what follows counts against it rather than the session.
+    fn begin_turn(&mut self) {
+        self.turn_baseline_prompt_tokens = self.session_prompt_tokens;
+        self.turn_baseline_completion_tokens = self.session_completion_tokens;
+        self.turn_baseline_cached_tokens = self.session_cached_tokens;
+        self.last_turn_prompt_tokens = 0;
+        self.last_turn_completion_tokens = 0;
+        self.last_turn_cached_tokens = 0;
+        self.last_turn_duration_ms = 0;
+    }
+}
+
+/// The 17-field snapshot `AgentStatsSnapshot` declares.
+///
+/// A session with no completed turn reports zeros rather than omitting the
+/// last-turn fields, because a client renders them as numbers either way.
+fn public_stats(session: &SessionRuntime) -> Value {
+    let history = session
+        .snapshot
+        .as_ref()
+        .map(|snapshot| snapshot.history.as_slice())
+        .unwrap_or_default();
+    let mut steps = 0_u64;
+    let mut succeeded = 0_u64;
+    let mut failed = 0_u64;
+    let mut agreed = 0_u64;
+    let mut rejected = 0_u64;
+    for entry in history {
+        match entry {
+            PublicHistoryEntry::Message {
+                role: PublicMessageRole::Assistant,
+                ..
+            } => steps = steps.saturating_add(1),
+            PublicHistoryEntry::Effect { state, .. } => match state {
+                PublicEffectState::Completed { .. } => succeeded = succeeded.saturating_add(1),
+                PublicEffectState::Failed { .. } => failed = failed.saturating_add(1),
+                _ => {}
+            },
+            PublicHistoryEntry::Callback { state, .. } => match state {
+                PublicCallbackState::Answered { .. } => agreed = agreed.saturating_add(1),
+                PublicCallbackState::Cancelled { .. } | PublicCallbackState::Expired { .. } => {
+                    rejected = rejected.saturating_add(1);
+                }
+                PublicCallbackState::Open => {}
+            },
+            _ => {}
+        }
+    }
+    let stats = &session.stats;
+    let seconds = as_f64(stats.last_turn_duration_ms) / 1_000.0;
+    let tokens_per_second = if seconds > 0.0 {
+        as_f64(stats.last_turn_completion_tokens) / seconds
+    } else {
+        0.0
+    };
+    json!({
+        "steps": steps,
+        "sessionPromptTokens": stats.session_prompt_tokens,
+        "sessionCompletionTokens": stats.session_completion_tokens,
+        "sessionCachedTokens": stats.session_cached_tokens,
+        "inputPricePerMillion": 0.0,
+        "outputPricePerMillion": 0.0,
+        "cachedInputPricePerMillion": null,
+        "toolCallsAgreed": agreed,
+        "toolCallsRejected": rejected,
+        "toolCallsFailed": failed,
+        "toolCallsSucceeded": succeeded,
+        "contextTokens": stats.context_tokens,
+        "lastTurnPromptTokens": stats.last_turn_prompt_tokens,
+        "lastTurnCompletionTokens": stats.last_turn_completion_tokens,
+        "lastTurnCachedTokens": stats.last_turn_cached_tokens,
+        "lastTurnDuration": seconds,
+        "tokensPerSecond": tokens_per_second,
+    })
+}
+
+/// Widens a counter for the float fields the wire declares, saturating rather
+/// than losing precision silently on a value no session reaches.
+fn as_f64(value: u64) -> f64 {
+    u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
+}
+
+/// Publishes a fatal server-side problem as `error`.
+///
+/// The reference sends one before it drops a client whose background work
+/// raised, so the client learns why the stream stopped instead of only that it
+/// did.
+pub(crate) fn server_error_frame(message: &str) -> Vec<u8> {
+    encode_notification(
+        "error",
+        result_map([(
+            "error",
+            json!({"message": redact(message), "code": null, "details": null}),
+        )]),
+    )
+}
+
+/// Publishes the session's accounting as a sequenced `session/statsUpdated`.
+fn stats_updated_frame(session: &mut SessionRuntime) -> Vec<u8> {
+    let stats = public_stats(session);
+    let context_window = session.context_window;
+    let event_id = next_event_id(session);
+    encode_notification(
+        "session/statsUpdated",
+        result_map([
+            ("eventId", json!(event_id)),
+            ("sessionId", json!(session.id)),
+            ("stats", stats),
+            ("contextWindow", json!(context_window)),
+            ("emittedAt", json!(now_millis())),
+        ]),
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3914,6 +4215,64 @@ fn next_event_id(session: &mut SessionRuntime) -> u64 {
     session.event_watermark
 }
 
+/// Publishes the session's status as a sequenced `session/updated`.
+///
+/// Every server-side status transition mints one. The client's projection reads
+/// the per-session `eventId` as a contiguous counter, so a transition that
+/// advanced the watermark without publishing anything would read to it as a gap
+/// rather than as silence.
+fn session_updated_frame(session: &mut SessionRuntime) -> Vec<u8> {
+    let status = public_session_status(session);
+    let updated_at = session.updated_at;
+    let event_id = next_event_id(session);
+    encode_notification(
+        "session/updated",
+        result_map([
+            ("eventId", json!(event_id)),
+            ("sessionId", json!(session.id)),
+            (
+                "patch",
+                json!([
+                    {"op": "replace", "path": "/status", "value": status},
+                    {"op": "replace", "path": "/updatedAt", "value": updated_at},
+                ]),
+            ),
+            ("emittedAt", json!(now_millis())),
+        ]),
+    )
+}
+
+/// Publishes the whole session as a sequenced `session/snapshot`.
+///
+/// The watermark is advanced before the state is projected so the embedded
+/// `state.eventId` equals the notification's own, which the client's projection
+/// asserts before it replaces its state.
+fn session_snapshot_frame(session: &mut SessionRuntime) -> Vec<u8> {
+    let event_id = next_event_id(session);
+    let state = public_session_state(session);
+    encode_notification(
+        "session/snapshot",
+        result_map([
+            ("eventId", json!(event_id)),
+            ("sessionId", json!(session.id)),
+            ("state", state),
+            ("emittedAt", json!(now_millis())),
+        ]),
+    )
+}
+
+/// The outbound frames a rejected callback delivery produces.
+///
+/// [`AppServer::reject_callback`] answers with an empty frame when no callback
+/// was pending, because there was no transition to publish.
+fn rejection_frames(status: Vec<u8>) -> Vec<Vec<u8>> {
+    if status.is_empty() {
+        Vec::new()
+    } else {
+        vec![status]
+    }
+}
+
 fn object(value: Value) -> BTreeMap<String, Value> {
     value
         .as_object()
@@ -3990,7 +4349,7 @@ mod tests {
             json!({
                 "callbackKinds": ["approval"],
                 "clientTools": ["filesystem/read"],
-                "disabledNotifications": ["workspace/trust/updated"]
+                "disabledNotifications": ["runtime/updated"]
             }),
         );
         assert_eq!(connection.state(), ConnectionState::Ready);
@@ -4047,7 +4406,8 @@ mod tests {
                 "session/start",
                 json!({"sessionId": "session-1", "workingDirectory": workspace.path()}),
             ));
-            assert_eq!(started.outbound.len(), 1);
+            // The answer, then the snapshot the attachment publishes.
+            assert_eq!(started.outbound.len(), 2);
         };
         let trust = |connection: &mut ServerConnection| {
             connection.dispatch(&request(
@@ -4077,7 +4437,7 @@ mod tests {
             &mut muted,
             json!({
                 "callbackKinds": ["approval"],
-                "disabledNotifications": ["workspace/trust/updated"]
+                "disabledNotifications": ["runtime/updated"]
             }),
         );
         open_session(&mut muted);
@@ -4092,8 +4452,8 @@ mod tests {
             Envelope::Success(_)
         ));
 
-        // The mute consumed no event id, so the first sequenced event still
-        // opens the sequence at one.
+        // The mute consumed no event id, so the sequence still runs on from the
+        // snapshot the attachment published.
         muted.dispatch(&request(
             4,
             "turn/start",
@@ -4103,13 +4463,176 @@ mod tests {
             .turn_started("session-1", "turn-1")
             .expect("the turn starts");
         assert!(matches!(
-            decode_frame(&started).expect("started notification"),
+            decode_frame(&started[0]).expect("started notification"),
             Envelope::Notification(Notification { ref params, .. })
-                if params["eventId"] == json!(1)
+                if params["eventId"] == json!(2)
         ));
         assert!(
-            muted.delivers(&started),
+            muted.delivers(&started[0]),
             "a sequenced event is delivered even when its name is muted"
+        );
+    }
+
+    /// The status a `session/updated` publishes is the one a client renders,
+    /// so each transition has to name what it is waiting on or what broke.
+    #[test]
+    fn session_updated_names_the_turn_the_callback_and_the_failure() {
+        let patch_status = |frame: &[u8]| -> Value {
+            match decode_frame(frame).expect("status notification") {
+                Envelope::Notification(Notification { method, params, .. }) => {
+                    assert_eq!(method, "session/updated");
+                    assert_eq!(params["sessionId"], json!("session-1"));
+                    assert!(params["emittedAt"].is_u64(), "the status is timestamped");
+                    assert_eq!(params["patch"][1]["path"], json!("/updatedAt"));
+                    assert_eq!(params["patch"][0]["path"], json!("/status"));
+                    params["patch"][0]["value"].clone()
+                }
+                other => unreachable!("expected a status notification: {other:?}"),
+            }
+        };
+
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+        let started = server
+            .turn_started("session-1", "turn-1")
+            .expect("the turn starts");
+        assert_eq!(
+            patch_status(&started[1]),
+            json!({"type": "running", "activeTurnId": "turn-1"})
+        );
+
+        let (callback_id, delivery) = connection
+            .request_callback(
+                "session-1",
+                "turn-1",
+                EngineCallbackKind::Approval,
+                "May I run this?",
+            )
+            .expect("the callback is delivered");
+        assert_eq!(
+            patch_status(&delivery[0]),
+            json!({
+                "type": "blocked",
+                "activeTurnId": "turn-1",
+                "callbackId": callback_id,
+                "reason": "approval",
+            })
+        );
+
+        // A client attaching now is handed the state and the question still
+        // open on it, so it can answer a callback raised before it arrived.
+        let mut arriving = server.connect(TransportKind::InProcess);
+        initialize_with(&mut arriving, json!({"callbackKinds": ["approval"]}));
+        let attachment = arriving.attachment_frames("session-1");
+        assert!(matches!(
+            decode_frame(&attachment[0]).expect("snapshot"),
+            Envelope::Notification(Notification { ref method, ref params, .. })
+                if method == "session/snapshot"
+                    && params["state"]["eventId"] == params["eventId"]
+        ));
+        assert!(matches!(
+            decode_frame(&attachment[1]).expect("redelivered callback"),
+            Envelope::Request(ServerRequest { ref method, ref params, .. })
+                if method == "callback/call"
+                    && params["callback"]["callbackId"] == json!(callback_id)
+        ));
+
+        let failed = server
+            .fail_turn(
+                "session-1",
+                "turn-1",
+                "the provider refused",
+                TurnErrorCode::Refusal,
+            )
+            .expect("the turn fails");
+        assert_eq!(
+            patch_status(&failed[1]),
+            json!({"type": "failed", "message": "the provider refused"})
+        );
+    }
+
+    /// Usage reported mid-turn is pushed as it arrives and lands on the session
+    /// a client reads, so context pressure is visible before the turn settles.
+    #[test]
+    fn stats_updated_carries_the_whole_snapshot_and_the_session_token_usage() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+        server
+            .turn_started("session-1", "turn-1")
+            .expect("the turn starts");
+        let frame = server
+            .record_turn_stats("session-1", "turn-1", 1_200, 900, 300)
+            .expect("the usage is recorded");
+        let Envelope::Notification(Notification { method, params, .. }) =
+            decode_frame(&frame).expect("stats notification")
+        else {
+            unreachable!("the usage is published as a notification");
+        };
+        assert_eq!(method, "session/statsUpdated");
+        assert_eq!(params["sessionId"], json!("session-1"));
+        assert!(params["eventId"].as_u64().is_some_and(|id| id > 0));
+        assert!(params["emittedAt"].is_u64());
+        assert!(params["contextWindow"].is_u64(), "a threshold is published");
+        assert_eq!(
+            params["stats"]
+                .as_object()
+                .expect("the snapshot is an object")
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            [
+                "cachedInputPricePerMillion",
+                "contextTokens",
+                "inputPricePerMillion",
+                "lastTurnCachedTokens",
+                "lastTurnCompletionTokens",
+                "lastTurnDuration",
+                "lastTurnPromptTokens",
+                "outputPricePerMillion",
+                "sessionCachedTokens",
+                "sessionCompletionTokens",
+                "sessionPromptTokens",
+                "steps",
+                "tokensPerSecond",
+                "toolCallsAgreed",
+                "toolCallsFailed",
+                "toolCallsRejected",
+                "toolCallsSucceeded",
+            ],
+            "the reference declares seventeen fields"
+        );
+        assert_eq!(params["stats"]["contextTokens"], json!(1_200));
+        assert_eq!(params["stats"]["sessionPromptTokens"], json!(900));
+        // A session with no completed turn reports zeroes rather than absences.
+        assert_eq!(params["stats"]["lastTurnDuration"], json!(0.0));
+
+        let read = connection.dispatch(&request(
+            4,
+            "session/read",
+            json!({"sessionId": "session-1"}),
+        ));
+        let Envelope::Success(SuccessResponse { result, .. }) =
+            decode_frame(&read.outbound[0]).expect("session state")
+        else {
+            unreachable!("session/read answers");
+        };
+        assert_eq!(
+            result["state"]["session"]["tokenUsage"],
+            json!({"inputTokens": 900, "outputTokens": 300, "totalTokens": 1_200})
         );
     }
 
@@ -4335,10 +4858,10 @@ mod tests {
                         })? = true;
                         Ok(ResourceDispatch {
                             result: result_map([("mcp", json!({"sources": ["example"]}))]),
-                            notification: Some(crate::resources::ResourceNotification {
-                                method: "mcp/updated".to_owned(),
-                                params: result_map([("mcp", json!({"sources": ["example"]}))]),
-                            }),
+                            signals: crate::resources::ResourceSignals {
+                                runtime_updated: true,
+                                ..crate::resources::ResourceSignals::default()
+                            },
                         })
                     }
                     ResourceBackendCommand::Mcp(crate::resources::McpCommand::Read) => {
@@ -4350,7 +4873,7 @@ mod tests {
                                 "mcp",
                                 json!({"sources": if added { vec!["example"] } else { vec![] }}),
                             )]),
-                            notification: None,
+                            signals: crate::resources::ResourceSignals::default(),
                         })
                     }
                     command => Err(ResourceError::MethodNotFound(format!("{command:?}"))),
@@ -4441,7 +4964,13 @@ mod tests {
             "session/start",
             json!({"sessionId": "session-1", "workingDirectory": "/workspace"}),
         ));
-        assert_eq!(batch.outbound.len(), 1);
+        // The answer, then the snapshot the attachment publishes.
+        assert_eq!(batch.outbound.len(), 2);
+        assert!(matches!(
+            decode_frame(&batch.outbound[1]).expect("attachment frame"),
+            Envelope::Notification(Notification { ref method, .. })
+                if method == "session/snapshot"
+        ));
     }
 
     #[tokio::test]
@@ -4807,7 +5336,8 @@ mod tests {
             scheduled.fire.notice.params["entry"]["turnId"],
             scheduled.fire.notice.params["turnId"]
         );
-        assert_eq!(scheduled.fire.notice.params["eventId"], 1);
+        // The attachment snapshot opened the sequence at one.
+        assert_eq!(scheduled.fire.notice.params["eventId"], 2);
         let DeferredWork::RunTurn {
             turn_id, prompt, ..
         } = scheduled.work
@@ -4822,7 +5352,12 @@ mod tests {
                 .is_none()
         );
         server
-            .fail_turn("session-1", &turn_id, "injected interruption")
+            .fail_turn(
+                "session-1",
+                &turn_id,
+                "injected interruption",
+                TurnErrorCode::InternalError,
+            )
             .expect("turn releases");
         server
             .finish_scheduled_loop(&loop_id, 41)
@@ -4987,7 +5522,12 @@ mod tests {
             )
             .expect("persist first live assistant message");
         server
-            .fail_turn("source-session", &first_turn_id, "completed fixture turn")
+            .fail_turn(
+                "source-session",
+                &first_turn_id,
+                "completed fixture turn",
+                TurnErrorCode::InternalError,
+            )
             .expect("first turn seals");
 
         let checkpoint_turn = connection.dispatch(&request(
@@ -5030,6 +5570,7 @@ mod tests {
                 "source-session",
                 &checkpoint_turn_id,
                 "completed checkpoint fixture",
+                TurnErrorCode::InternalError,
             )
             .expect("checkpoint seals");
 
@@ -5306,7 +5847,8 @@ mod tests {
                 .event_watermark,
             event_id_before_callback + 1
         );
-        let callback_request = decode_frame(&callback_request).expect("callback request frame");
+        let callback_request = decode_frame(callback_request.last().expect("callback delivery"))
+            .expect("callback request frame");
         let callback_request_id = match &callback_request {
             Envelope::Request(request) => request.id.clone(),
             _ => RequestId::String("invalid-callback-request".to_owned()),
@@ -5343,7 +5885,8 @@ mod tests {
                 }
             }),
         ));
-        assert_eq!(first.outbound.len(), 1);
+        // The answer, then the `session/updated` the resumed status publishes.
+        assert_eq!(first.outbound.len(), 2);
         assert_eq!(
             server
                 .lock_sessions()
@@ -5445,7 +5988,8 @@ mod tests {
                 "approve?",
             )
             .expect("callback request");
-        let callback_request = decode_frame(&callback_request).expect("callback request frame");
+        let callback_request = decode_frame(callback_request.last().expect("callback delivery"))
+            .expect("callback request frame");
         assert!(matches!(callback_request, Envelope::Request(_)));
         let request_id = match callback_request {
             Envelope::Request(request) => request.id,
@@ -5520,7 +6064,9 @@ mod tests {
                 "continue?",
             )
             .expect("callback request");
-        let request_id = match decode_frame(&callback_request).expect("callback frame") {
+        let request_id = match decode_frame(callback_request.last().expect("callback delivery"))
+            .expect("callback frame")
+        {
             Envelope::Request(request) => request.id,
             _ => return,
         };
@@ -5731,7 +6277,9 @@ mod tests {
                 "first?",
             )
             .expect("first callback");
-        let first_request_id = match decode_frame(&first_delivery).expect("callback delivery") {
+        let first_request_id = match decode_frame(first_delivery.last().expect("callback frame"))
+            .expect("callback delivery")
+        {
             Envelope::Request(request) => request.id,
             _ => return,
         };
@@ -6012,7 +6560,9 @@ mod tests {
                 "approve?",
             )
             .expect("callback request");
-        let request_id = match decode_frame(&callback_request).expect("callback frame") {
+        let request_id = match decode_frame(callback_request.last().expect("callback delivery"))
+            .expect("callback frame")
+        {
             Envelope::Request(request) => request.id,
             _ => return,
         };
@@ -6221,9 +6771,18 @@ mod tests {
                         .as_str()
                         .is_some_and(|message| message.contains("MCP `example`"))
         ));
+        // The change and the problem cross under their reference names.
         assert!(matches!(
             decode_frame(&add.outbound[1]).expect("MCP notification"),
-            Envelope::Notification(Notification { method, .. }) if method == "mcp/updated"
+            Envelope::Notification(Notification { method, .. }) if method == "runtime/updated"
+        ));
+        assert!(matches!(
+            decode_frame(&add.outbound[2]).expect("MCP warning"),
+            Envelope::Notification(Notification { method, ref params, .. })
+                if method == "warning"
+                    && params["warning"]["message"]
+                        .as_str()
+                        .is_some_and(|message| message.contains("MCP `example`"))
         ));
     }
 
@@ -6242,7 +6801,8 @@ mod tests {
                 "workingDirectory": workspace.path()
             }),
         ));
-        assert_eq!(started.outbound.len(), 1);
+        // The answer, then the snapshot the attachment publishes.
+        assert_eq!(started.outbound.len(), 2);
         assert!(
             backend
                 .opened_with_tools
@@ -6287,7 +6847,7 @@ mod tests {
         ));
         assert!(matches!(
             decode_frame(&added.outbound[1]).expect("notification"),
-            Envelope::Notification(Notification { method, .. }) if method == "mcp/updated"
+            Envelope::Notification(Notification { method, .. }) if method == "runtime/updated"
         ));
 
         let read = connection.dispatch(&request(4, "mcp/read", json!({"sessionId": "session-1"})));
@@ -6786,7 +7346,8 @@ tool_timeout_sec = 2
                 "workingDirectory": workspace.path()
             }),
         ));
-        assert_eq!(started.outbound.len(), 1);
+        // The answer, then the snapshot the attachment publishes.
+        assert_eq!(started.outbound.len(), 2);
 
         let invocation = || ToolInvocation {
             call_id: "read-1".to_owned(),
@@ -6851,7 +7412,8 @@ tool_timeout_sec = 2
                 "workingDirectory": workspace.path()
             }),
         ));
-        assert_eq!(started.outbound.len(), 1);
+        // The answer, then the snapshot the attachment publishes.
+        assert_eq!(started.outbound.len(), 2);
         let invocation = |call_id: &str| ToolInvocation {
             call_id: call_id.to_owned(),
             arguments: json!({
@@ -7024,7 +7586,12 @@ tool_timeout_sec = 2
             json!({"sessionId": "session-1", "input": [{"type": "text", "text": "first"}]}),
         ));
         server
-            .fail_turn("session-1", "turn-1", "provider failed")
+            .fail_turn(
+                "session-1",
+                "turn-1",
+                "provider failed",
+                TurnErrorCode::BackendError,
+            )
             .expect("failure finalizes");
         let retry = connection.dispatch(&request(
             4,
@@ -7086,7 +7653,7 @@ tool_timeout_sec = 2
             )
             .expect("limit turn completes");
         assert!(matches!(
-            decode_frame(&notification).expect("completion notification"),
+            decode_frame(notification.last().expect("completion frame")).expect("completion notification"),
             Envelope::Notification(Notification {
                 method,
                 params,
@@ -7147,7 +7714,7 @@ tool_timeout_sec = 2
             )
             .expect("failed turn completes");
         assert!(matches!(
-            decode_frame(&notification).expect("completion notification"),
+            decode_frame(notification.last().expect("completion frame")).expect("completion notification"),
             Envelope::Notification(Notification {
                 method,
                 params,
@@ -7156,6 +7723,104 @@ tool_timeout_sec = 2
                 && params["turn"]["status"] == "failed"
                 && params["turn"]["error"]["code"] == "response_too_long"
         ));
+    }
+
+    /// A handoff onto the session's own name is refused rather than published:
+    /// a reference projection validates a handoff by the two identifiers
+    /// differing, so emitting one would break the client it was meant to serve.
+    #[test]
+    fn a_handoff_onto_the_same_session_is_refused() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "clear"}]}),
+        ));
+        let mut reducer = vibe_core::events::ProjectionReducer::for_turn("session-1", "turn-1");
+        reducer
+            .apply(&vibe_core::events::EventEnvelope {
+                session_id: "session-1".to_owned(),
+                turn_id: Some("turn-1".to_owned()),
+                emitted_at: 1,
+                event_id: 1,
+                event: vibe_core::events::EngineEvent::UserMessage {
+                    content: "clear".to_owned(),
+                },
+            })
+            .expect("the prompt projects");
+        let snapshot = reducer.state().clone();
+        for notice in [
+            HandoffNotice::Compacted { summary_length: 4 },
+            HandoffNotice::ContextCleared {
+                plan_file_path: None,
+            },
+        ] {
+            let error = server
+                .handoff_active_turn(
+                    "session-1",
+                    "session-1",
+                    "turn-1",
+                    snapshot.clone(),
+                    &notice,
+                    1,
+                )
+                .expect_err("a handoff onto the same identifier is refused");
+            assert!(matches!(error, ServerError::SessionConflict(id) if id == "session-1"));
+        }
+    }
+
+    /// Every failing turn names a reason from the reference vocabulary, whether
+    /// the failure arrived with the projection or short-circuited it, so a
+    /// client can branch on the code rather than parse the message.
+    #[test]
+    fn a_failed_turn_publishes_a_reference_error_code() {
+        let vocabulary = [
+            "rate_limit",
+            "context_too_long",
+            "response_too_long",
+            "refusal",
+            "invalid_image_attachment",
+            "images_not_supported",
+            "compaction_failed",
+            "backend_error",
+            "internal_error",
+        ];
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "fail"}]}),
+        ));
+        let notification = server
+            .fail_turn(
+                "session-1",
+                "turn-1",
+                "the provider rejected the request",
+                TurnErrorCode::RateLimit,
+            )
+            .expect("failed turn settles");
+        let Envelope::Notification(Notification { method, params, .. }) =
+            decode_frame(notification.last().expect("completion frame"))
+                .expect("completion notification")
+        else {
+            return;
+        };
+        assert_eq!(method, "turn/completed");
+        assert_eq!(params["turn"]["error"]["code"], "rate_limit");
+        assert!(
+            vocabulary.contains(
+                &params["turn"]["error"]["code"]
+                    .as_str()
+                    .expect("a failing turn names its code")
+            ),
+            "the code must come from the reference vocabulary: {params:?}"
+        );
     }
 
     #[test]
@@ -7188,6 +7853,7 @@ tool_timeout_sec = 2
                 event: vibe_core::events::EngineEvent::SessionHandoff {
                     from_session_id: "session-1".to_owned(),
                     to_session_id: "session-2".to_owned(),
+                    cause: vibe_core::events::SessionHandoffCause::Compaction,
                 },
             },
             vibe_core::events::EventEnvelope {

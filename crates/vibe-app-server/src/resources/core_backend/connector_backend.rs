@@ -88,12 +88,7 @@ impl CoreResourceBackend {
                         .map_err(integration_error)?;
                 }
                 let state = connector_view(session.connectors.views().map_err(integration_error)?);
-                Ok(canonical_mutation(
-                    "connectors",
-                    state,
-                    "connectors/updated",
-                    Vec::new(),
-                ))
+                Ok(canonical_mutation("connectors", state, Vec::new()))
             }
             ConnectorCommand::Toggle {
                 name,
@@ -140,12 +135,7 @@ impl CoreResourceBackend {
                     return Err(error);
                 }
                 let state = connector_view(session.connectors.views().map_err(integration_error)?);
-                Ok(canonical_mutation(
-                    "connectors",
-                    state,
-                    "connectors/updated",
-                    Vec::new(),
-                ))
+                Ok(canonical_mutation("connectors", state, Vec::new()))
             }
         }
     }

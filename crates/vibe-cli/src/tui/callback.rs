@@ -204,7 +204,7 @@ pub(super) fn respond_to_pending_callback(
             return;
         }
     };
-    let previous_settings = if let Some((_, auto_approve)) = plan_transition {
+    let previous_settings = if let Some(auto_approve) = plan_transition {
         let previous = (runtime.mode.clone(), runtime.auto_approve);
         if let Err(error) = update_session_settings(runtime, "code", auto_approve) {
             state.push_diagnostic(format!(
@@ -227,10 +227,9 @@ pub(super) fn respond_to_pending_callback(
                 resync_current_projection(runtime, state);
                 sync_active_callbacks(runtime, state, controls);
             }
-            if let Some((clear_context, auto_approve)) = plan_transition {
+            if let Some(auto_approve) = plan_transition {
                 runtime.mode = "code".to_owned();
                 runtime.auto_approve = auto_approve;
-                runtime.clear_context_after_turn |= clear_context;
             }
             settle_callback_notice(
                 state,
@@ -262,10 +261,9 @@ pub(super) fn respond_to_pending_callback(
                     runtime.mode = mode;
                     runtime.auto_approve = auto_approve;
                 }
-            } else if let Some((clear_context, auto_approve)) = plan_transition {
+            } else if let Some(auto_approve) = plan_transition {
                 runtime.mode = "code".to_owned();
                 runtime.auto_approve = auto_approve;
-                runtime.clear_context_after_turn |= clear_context;
                 settle_callback_notice(
                     state,
                     &pending.callback_id,
@@ -317,11 +315,16 @@ pub(super) fn recover_from_callback_response_error(
     still_pending
 }
 
-pub(super) fn plan_transition(choice: &CallbackChoice) -> Option<(bool, bool)> {
+/// The auto-approval an accepted plan switches the session to, if the choice
+/// accepts it.
+///
+/// Clearing the planning context is not read here: the plan review tool raises
+/// it on the running turn, so the transcript rotates inside the turn rather
+/// than between two of them.
+pub(super) fn plan_transition(choice: &CallbackChoice) -> Option<bool> {
     match choice {
-        CallbackChoice::Option { id } if id == "clear_auto" => Some((true, true)),
-        CallbackChoice::Option { id } if id == "auto" => Some((false, true)),
-        CallbackChoice::Option { id } if id == "manual" => Some((false, false)),
+        CallbackChoice::Option { id } if id == "clear_auto" || id == "auto" => Some(true),
+        CallbackChoice::Option { id } if id == "manual" => Some(false),
         _ => None,
     }
 }
@@ -910,7 +913,15 @@ mod tests {
             plan_transition(&CallbackChoice::Option {
                 id: "manual".to_owned()
             }),
-            Some((false, false))
+            Some(false)
+        );
+        // The clearing choice differs from the plain one only in what the tool
+        // raises on the turn; both switch the session to auto approval.
+        assert_eq!(
+            plan_transition(&CallbackChoice::Option {
+                id: "clear_auto".to_owned()
+            }),
+            Some(true)
         );
         assert_eq!(
             plan_transition(&CallbackChoice::FreeText {

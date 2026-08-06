@@ -325,7 +325,7 @@ impl ResourceBackend for CoreResourceBackend {
                 )
                 .await;
             let state = mcp_view(session.mcp.read().await, &session.tools);
-            Ok(canonical_mutation("mcp", state, "mcp/updated", diagnostics))
+            Ok(canonical_mutation("mcp", state, diagnostics))
         })
     }
 

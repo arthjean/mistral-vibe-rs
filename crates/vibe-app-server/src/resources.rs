@@ -100,13 +100,30 @@ use crate::params::MAX_PARAM_STRING_BYTES as MAX_RESOURCE_STRING_BYTES;
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResourceDispatch {
     pub result: BTreeMap<String, Value>,
-    pub notification: Option<ResourceNotification>,
+    pub signals: ResourceSignals,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ResourceNotification {
-    pub method: String,
-    pub params: BTreeMap<String, Value>,
+/// What a resource dispatch asks the server to publish after its answer.
+///
+/// The reference carries the same three facts on its `DispatchResult`: whether
+/// runtime state moved, what went wrong recoverably, and the authorization URL
+/// a source is waiting on. Naming the facts rather than a notification keeps the
+/// wire vocabulary in one place, where it can stay the reference's.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ResourceSignals {
+    /// The dispatch changed runtime state, so `runtime/updated` follows it.
+    pub runtime_updated: bool,
+    /// Recoverable problems, each published as its own `warning`.
+    pub warnings: Vec<String>,
+    /// An MCP source waiting on authorization, published as `mcp/authUrl`.
+    pub auth_url: Option<McpAuthUrl>,
+}
+
+/// The authorization an MCP source is waiting on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpAuthUrl {
+    pub name: String,
+    pub url: String,
 }
 
 #[derive(Clone)]
@@ -775,18 +792,10 @@ impl ResourceService {
         let cwd = optional_string(params, "cwd")?.unwrap_or(".");
         let session_id = required_string(params, "sessionId")?;
         let decision = required_string(params, "decision")?;
-        let (status, trust, kind) = match decision {
-            "trust_repo" => ("trusted", TrustDecision::Trusted, TrustRootKind::Workspace),
-            "trust_cwd" => (
-                "session",
-                TrustDecision::SessionTrusted,
-                TrustRootKind::Workspace,
-            ),
-            "decline" => (
-                "untrusted",
-                TrustDecision::Untrusted,
-                TrustRootKind::Workspace,
-            ),
+        let (trust, kind) = match decision {
+            "trust_repo" => (TrustDecision::Trusted, TrustRootKind::Workspace),
+            "trust_cwd" => (TrustDecision::SessionTrusted, TrustRootKind::Workspace),
+            "decline" => (TrustDecision::Untrusted, TrustRootKind::Workspace),
             _ => {
                 return Err(ResourceError::InvalidParams(
                     "unsupported trust decision".to_owned(),
@@ -801,15 +810,10 @@ impl ResourceService {
             .map_err(policy_error)?;
         Ok(ResourceDispatch {
             result: BTreeMap::new(),
-            notification: Some(ResourceNotification {
-                method: "workspace/trust/updated".to_owned(),
-                params: [
-                    ("cwd".to_owned(), json!(cwd)),
-                    ("status".to_owned(), json!(status)),
-                ]
-                .into_iter()
-                .collect(),
-            }),
+            signals: ResourceSignals {
+                runtime_updated: true,
+                ..ResourceSignals::default()
+            },
         })
     }
 
@@ -852,7 +856,7 @@ impl ResourceService {
         )
     }
 
-    fn runtime(&self, session_id: &str) -> Result<Value, ResourceError> {
+    pub(crate) fn runtime(&self, session_id: &str) -> Result<Value, ResourceError> {
         Ok(json!({
             "config": empty_config(),
             "baseConfig": empty_config(),
@@ -916,7 +920,7 @@ fn read_only<const N: usize>(entries: [(&str, Value); N]) -> ResourceDispatch {
             .into_iter()
             .map(|(key, value)| (key.to_owned(), value))
             .collect(),
-        notification: None,
+        signals: ResourceSignals::default(),
     }
 }
 
@@ -971,22 +975,23 @@ fn empty_config() -> Value {
     })
 }
 
-fn canonical_mutation(
-    key: &str,
-    state: Value,
-    notification_method: &str,
-    diagnostics: Vec<String>,
-) -> ResourceDispatch {
-    let mut result = BTreeMap::from([(key.to_owned(), state.clone())]);
+/// A mutation that moved runtime state, with whatever it could not do cleanly.
+///
+/// The state stays on the answer; the change itself is published as
+/// `runtime/updated` and each diagnostic as a `warning`, which is how the
+/// reference splits an answer from what a client must be told about.
+fn canonical_mutation(key: &str, state: Value, diagnostics: Vec<String>) -> ResourceDispatch {
+    let mut result = BTreeMap::from([(key.to_owned(), state)]);
     if !diagnostics.is_empty() {
         result.insert("diagnostics".to_owned(), json!(diagnostics));
     }
     ResourceDispatch {
         result,
-        notification: Some(ResourceNotification {
-            method: notification_method.to_owned(),
-            params: BTreeMap::from([(key.to_owned(), state)]),
-        }),
+        signals: ResourceSignals {
+            runtime_updated: true,
+            warnings: diagnostics,
+            auth_url: None,
+        },
     }
 }
 
@@ -1373,18 +1378,11 @@ mod tests {
                 false,
             )
             .expect("trust decision");
-        assert_eq!(
-            dispatch
-                .notification
-                .as_ref()
-                .map(|item| item.method.as_str()),
-            Some("workspace/trust/updated")
-        );
+        // The decision moved runtime state, which the server publishes as
+        // `runtime/updated` rather than a name only this port ever spoke.
+        assert!(dispatch.signals.runtime_updated);
+        assert!(dispatch.signals.warnings.is_empty());
         assert!(dispatch.result.is_empty());
-        assert_eq!(
-            dispatch.notification.expect("notification").params["status"],
-            "session"
-        );
         assert_eq!(
             policy
                 .try_trust_decision(workspace.path())
@@ -1519,6 +1517,15 @@ mod tests {
         assert_eq!(
             login.result["auth"]["url"],
             "https://auth.example/authorize?state=opaque"
+        );
+        // The same URL crosses as `mcp/authUrl`, which is where a reference
+        // client reads it rather than off this caller's answer.
+        assert_eq!(
+            login.signals.auth_url,
+            Some(McpAuthUrl {
+                name: "source-a".to_owned(),
+                url: "https://auth.example/authorize?state=opaque".to_owned(),
+            })
         );
         let completion = backend
             .dispatch(backend_request(
@@ -1894,13 +1901,7 @@ mod tests {
             ))
             .await
             .expect("run shell");
-        assert_eq!(
-            dispatch
-                .notification
-                .as_ref()
-                .map(|notification| notification.method.as_str()),
-            Some("shell/updated")
-        );
+        assert!(dispatch.signals.runtime_updated);
         let (completed, saw_output) =
             tokio::time::timeout(std::time::Duration::from_secs(2), async {
                 let mut saw_output = false;

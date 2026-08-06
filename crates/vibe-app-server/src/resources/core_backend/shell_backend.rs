@@ -58,12 +58,7 @@ impl CoreResourceBackend {
                         "status": status,
                         "output": output,
                     });
-                    return Ok(canonical_mutation(
-                        "shell",
-                        state,
-                        "shell/updated",
-                        Vec::new(),
-                    ));
+                    return Ok(canonical_mutation("shell", state, Vec::new()));
                 }
                 if !matches!(
                     session
@@ -127,12 +122,7 @@ impl CoreResourceBackend {
                     "terminalId": terminal_id,
                     "status": "running"
                 });
-                Ok(canonical_mutation(
-                    "shell",
-                    state,
-                    "shell/updated",
-                    Vec::new(),
-                ))
+                Ok(canonical_mutation("shell", state, Vec::new()))
             }
             ShellCommand::Interrupt { operation_id } => {
                 let terminal_id = session
@@ -162,12 +152,7 @@ impl CoreResourceBackend {
                     "status": status,
                     "output": output,
                 });
-                Ok(canonical_mutation(
-                    "shell",
-                    state,
-                    "shell/updated",
-                    Vec::new(),
-                ))
+                Ok(canonical_mutation("shell", state, Vec::new()))
             }
         }
     }

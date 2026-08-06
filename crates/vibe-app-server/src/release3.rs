@@ -235,6 +235,38 @@ impl Release3Service {
         self.config.clone()
     }
 
+    /// The active model's compaction threshold, or zero when none declares one.
+    ///
+    /// A client renders context pressure against this number, so an unknown
+    /// threshold is published as zero rather than guessed: the reference reports
+    /// zero for the same case.
+    #[must_use]
+    pub fn context_window(&self) -> u64 {
+        let Ok(snapshot) = self.config.load() else {
+            return 0;
+        };
+        let active = snapshot
+            .effective
+            .get("active_model")
+            .and_then(toml::Value::as_str)
+            .unwrap_or_default();
+        snapshot
+            .effective
+            .get("models")
+            .and_then(toml::Value::as_array)
+            .into_iter()
+            .flatten()
+            .find(|model| {
+                ["name", "alias"]
+                    .into_iter()
+                    .any(|key| model.get(key).and_then(toml::Value::as_str) == Some(active))
+            })
+            .and_then(|model| model.get("auto_compact_threshold"))
+            .and_then(toml::Value::as_integer)
+            .and_then(|threshold| u64::try_from(threshold).ok())
+            .unwrap_or_default()
+    }
+
     /// Brings the configuration files this session reads forward, once.
     ///
     /// A binary calls this at startup, before its first read, which is where

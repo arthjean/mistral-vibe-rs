@@ -123,7 +123,7 @@ impl CoreResourceBackend {
                     )
                     .await;
                 let state = mcp_view(session.mcp.read().await, &session.tools);
-                let mut dispatch = canonical_mutation("mcp", state, "mcp/updated", diagnostics);
+                let mut dispatch = canonical_mutation("mcp", state, diagnostics);
                 dispatch.result.insert("name".to_owned(), json!(alias));
                 Ok(dispatch)
             }
@@ -134,7 +134,7 @@ impl CoreResourceBackend {
                     .await
                     .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
                 let state = mcp_view(session.mcp.read().await, &session.tools);
-                Ok(canonical_mutation("mcp", state, "mcp/updated", Vec::new()))
+                Ok(canonical_mutation("mcp", state, Vec::new()))
             }
             McpCommand::Toggle {
                 name,
@@ -198,7 +198,7 @@ impl CoreResourceBackend {
                     return Err(error);
                 }
                 let state = mcp_view(session.mcp.read().await, &session.tools);
-                Ok(canonical_mutation("mcp", state, "mcp/updated", Vec::new()))
+                Ok(canonical_mutation("mcp", state, Vec::new()))
             }
             McpCommand::Login { name } => {
                 if !session
@@ -222,10 +222,18 @@ impl CoreResourceBackend {
                     backend.login(session_id, &config).await?,
                     "MCP OAuth backend",
                 )?;
-                Ok(read_only([(
+                // The URL also crosses as `mcp/authUrl`, which is where a
+                // reference client reads it: the answer serves the caller, the
+                // notification serves whoever else is attached.
+                let mut dispatch = read_only([(
                     "auth",
                     json!({"name": name, "url": url, "status": "waiting"}),
-                )]))
+                )]);
+                dispatch.signals.auth_url = Some(crate::resources::McpAuthUrl {
+                    name: name.clone(),
+                    url,
+                });
+                Ok(dispatch)
             }
             McpCommand::CompleteAuth { name } => {
                 let backend = self.mcp_auth.as_ref().ok_or_else(|| {
@@ -269,7 +277,7 @@ impl CoreResourceBackend {
                     .await
                     .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
                 let state = mcp_view(session.mcp.read().await, &session.tools);
-                Ok(canonical_mutation("mcp", state, "mcp/updated", Vec::new()))
+                Ok(canonical_mutation("mcp", state, Vec::new()))
             }
         }
     }

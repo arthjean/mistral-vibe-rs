@@ -80,6 +80,10 @@ pub enum EngineEvent {
     SessionHandoff {
         from_session_id: String,
         to_session_id: String,
+        /// Why the session rotated. Absent in transcripts written before
+        /// clearing existed, which all recorded a compaction.
+        #[serde(default)]
+        cause: SessionHandoffCause,
     },
     Lifecycle {
         state: LifecycleState,
@@ -92,6 +96,33 @@ pub enum EngineEvent {
         context_tokens: u64,
         input_tokens: u64,
         output_tokens: u64,
+    },
+    /// A provider request the backend is retrying. Like [`EngineEvent::Stats`]
+    /// it carries no history: a client renders it as a transient state, not as
+    /// a transcript entry.
+    Retrying {
+        reason: String,
+    },
+}
+
+/// What rotated the session under an active turn.
+///
+/// Both causes hand the turn a fresh identifier and a shorter transcript, and a
+/// client tells them apart to explain the transcript it just saw shrink: a
+/// compaction summarized it, a clearing dropped it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum SessionHandoffCause {
+    #[default]
+    Compaction,
+    ContextCleared {
+        /// The plan whose acceptance cleared the context, when one did.
+        #[serde(default)]
+        plan_file_path: Option<String>,
     },
 }
 
@@ -241,6 +272,25 @@ pub enum PublicTurnStatus {
 #[serde(rename_all = "snake_case")]
 pub enum PublicTurnStopReason {
     Limit,
+}
+
+/// Why a turn failed, in the vocabulary a client branches on.
+///
+/// A failing turn always carries one of these: the message explains, the code
+/// is what a UI can act on, so it is classified from the failure's type rather
+/// than from the text it rendered to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnErrorCode {
+    RateLimit,
+    ContextTooLong,
+    ResponseTooLong,
+    Refusal,
+    InvalidImageAttachment,
+    ImagesNotSupported,
+    CompactionFailed,
+    BackendError,
+    InternalError,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -913,6 +963,9 @@ fn reduce_event(
         EngineEvent::SessionHandoff {
             from_session_id,
             to_session_id,
+            // The cause names the notification the app-server publishes; the
+            // projection rebinds the same way either way.
+            cause: _,
         } => {
             require_active(state, "session_handoff")?;
             if from_session_id != &state.session_id {
@@ -926,7 +979,7 @@ fn reduce_event(
                 entry.metadata_mut().session_id.clone_from(to_session_id);
             }
         }
-        EngineEvent::Stats { .. } => {}
+        EngineEvent::Stats { .. } | EngineEvent::Retrying { .. } => {}
         EngineEvent::Lifecycle {
             state: next,
             message,
@@ -1173,6 +1226,7 @@ mod tests {
                 EngineEvent::SessionHandoff {
                     from_session_id: "session-1".to_owned(),
                     to_session_id: "session-2".to_owned(),
+                    cause: SessionHandoffCause::Compaction,
                 },
             ),
         ] {

@@ -44,19 +44,22 @@ pub(super) fn error_batch(id: RequestId, code: ProtocolErrorCode, message: &str)
     }
 }
 
+/// Answers a resource dispatch and publishes what it signalled.
+///
+/// The reference emits `runtime/updated` after any response that moved runtime
+/// state, so the notification is built here from the live snapshot rather than
+/// by the backend that raised the signal: the backend knows something changed,
+/// the server knows what the changed runtime looks like.
 pub(super) fn resource_result_batch(
     id: RequestId,
+    server: &AppServer,
+    session_id: &str,
     result: Result<ResourceDispatch, ResourceError>,
 ) -> DispatchBatch {
     match result {
         Ok(dispatch) => {
             let mut outbound = vec![success_bytes(id, dispatch.result)];
-            if let Some(notification) = dispatch.notification {
-                outbound.push(encode_notification(
-                    &notification.method,
-                    notification.params,
-                ));
-            }
+            outbound.extend(signal_frames(server, session_id, &dispatch.signals));
             DispatchBatch {
                 outbound,
                 deferred: Vec::new(),
@@ -65,6 +68,39 @@ pub(super) fn resource_result_batch(
         }
         Err(error) => resource_error_batch(id, error),
     }
+}
+
+/// The notifications a dispatch's signals publish, in the reference's order.
+pub(super) fn signal_frames(
+    server: &AppServer,
+    session_id: &str,
+    signals: &ResourceSignals,
+) -> Vec<Vec<u8>> {
+    let mut frames = Vec::new();
+    if signals.runtime_updated
+        && let Some(runtime) = server.runtime_snapshot(session_id)
+    {
+        frames.push(encode_notification(
+            "runtime/updated",
+            result_map([("sessionId", json!(session_id)), ("runtime", runtime)]),
+        ));
+    }
+    if let Some(auth) = &signals.auth_url {
+        frames.push(encode_notification(
+            "mcp/authUrl",
+            result_map([("name", json!(auth.name)), ("url", json!(auth.url))]),
+        ));
+    }
+    for warning in &signals.warnings {
+        frames.push(encode_notification(
+            "warning",
+            result_map([(
+                "warning",
+                json!({"message": warning, "code": null, "details": null}),
+            )]),
+        ));
+    }
+    frames
 }
 
 pub(super) fn resource_error_batch(id: RequestId, error: ResourceError) -> DispatchBatch {

@@ -59,6 +59,7 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
                 .attachment
                 .as_ref()
                 .map(|attachment| attachment.id.clone());
+            let mut newly_attached = None;
             if let Some(attachment) = &dispatch.attachment {
                 let attached = if connection.attached_sessions.contains(&attachment.id) {
                     connection
@@ -70,6 +71,7 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
                         .attach_release3_runtime(attachment, rewind.review())
                         .map(|()| {
                             connection.attached_sessions.insert(attachment.id.clone());
+                            newly_attached = Some(attachment.id.clone());
                         })
                 };
                 if let Err(error) = attached {
@@ -99,7 +101,16 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
                     .result
                     .insert("restoreErrors".to_owned(), json!([]));
             }
-            success_batch(request.id, dispatch.result)
+            let mut batch = success_batch(request.id, dispatch.result);
+            // The snapshot follows the answer rather than preceding it: the
+            // reference flushes what attachment buffered once the response is
+            // on the wire, so the client reads its state after the call it made.
+            if let Some(session_id) = newly_attached {
+                batch
+                    .outbound
+                    .extend(connection.attachment_frames(&session_id));
+            }
+            batch
         }
         Err(error) => {
             if let Err(rollback) = rewind.rollback_workspace() {

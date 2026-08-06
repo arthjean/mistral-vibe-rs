@@ -280,6 +280,19 @@ impl Default for RetryPolicy {
     }
 }
 
+/// Told when a request is about to be retried, so a turn can report the wait
+/// while it happens rather than after the backend gives up.
+pub trait RetrySink: Send + Sync {
+    fn retrying(&self, reason: &str);
+}
+
+/// The sink a call that observes nothing uses.
+pub struct IgnoredRetries;
+
+impl RetrySink for IgnoredRetries {
+    fn retrying(&self, _reason: &str) {}
+}
+
 pub struct ProviderBackend<T> {
     style: ProviderStyle,
     endpoint: String,
@@ -343,6 +356,16 @@ where
     }
 
     pub async fn stream(&self, input: &ProviderInput) -> Result<ProviderStream, ProviderError> {
+        self.stream_observed(input, &IgnoredRetries).await
+    }
+
+    /// Streams one completion, telling `retries` about every attempt it makes
+    /// after the first.
+    pub async fn stream_observed(
+        &self,
+        input: &ProviderInput,
+        retries: &dyn RetrySink,
+    ) -> Result<ProviderStream, ProviderError> {
         let started = Instant::now();
         let mut delay = self.retry.initial_delay;
         loop {
@@ -363,6 +386,7 @@ where
                     if started.elapsed().saturating_add(delay) > self.retry.max_elapsed {
                         return Err(ProviderError::Transport(error));
                     }
+                    retries.retrying(&format!("connection failed: {error}"));
                     tokio::time::sleep(delay).await;
                     delay = delay.saturating_mul(2);
                     continue;
@@ -375,6 +399,7 @@ where
                         status: response.status,
                     });
                 }
+                retries.retrying(&format!("provider answered HTTP {}", response.status));
                 tokio::time::sleep(delay).await;
                 delay = delay.saturating_mul(2);
                 continue;

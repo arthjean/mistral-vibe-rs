@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use tokio::task::JoinHandle;
 use vibe_app_server::client::{
     DriverError, HeadlessService, InterruptOutcome, LiveTurnDriver, ProgrammaticUpdate,
-    PublicTurnOutcome, TurnDriver, TurnReservation,
+    PublicTurnOutcome, TurnDriver, TurnErrorCode, TurnReservation, turn_error_code,
 };
 
 use super::callback::{
@@ -122,7 +122,12 @@ pub(super) fn settle_unstarted_reservation(
     reservation: &TurnReservation,
     failure: &str,
 ) -> bool {
-    match runtime.service.fail_reserved(reservation, failure) {
+    // The turn never reached the driver, so nothing about the request itself
+    // failed: what went wrong is on this side of the boundary.
+    match runtime
+        .service
+        .fail_reserved(reservation, failure, TurnErrorCode::InternalError)
+    {
         Ok(()) => {
             state.push_diagnostic(failure);
             true
@@ -358,9 +363,11 @@ pub(super) async fn finish_active(
             }
             Err(error) => {
                 fail_open_callback_notices(state);
-                runtime
-                    .service
-                    .fail_reserved(&reservation, &error.to_string())?;
+                runtime.service.fail_reserved(
+                    &reservation,
+                    &error.to_string(),
+                    turn_error_code(&error),
+                )?;
                 controls.complete_turn(&turn_id, "Turn failed");
                 state.waiting = false;
                 state.narrator.on_turn_error(&error.to_string());
@@ -385,27 +392,6 @@ pub(super) async fn finish_active(
         runtime
             .service
             .finish_scheduled_loop(&loop_id, unix_seconds())?;
-    }
-    if runtime.clear_context_after_turn {
-        runtime.clear_context_after_turn = false;
-        match runtime.service.public_call(
-            "session/history/clear",
-            json!({"sessionId": runtime.session_id}),
-        ) {
-            Ok(_) => {
-                runtime.context_tokens = 0;
-                resync_current_projection(runtime, state);
-                sync_active_callbacks(runtime, state, controls);
-                push_local_notice(
-                    state,
-                    "Planning context cleared after switching to code mode",
-                    EntryStatus::Completed,
-                );
-            }
-            Err(error) => state.push_diagnostic(format!(
-                "Code mode is active, but planning context could not be cleared: {error}"
-            )),
-        }
     }
     if turn_completed {
         feedback::maybe_activate(runtime, input, state).await;
@@ -472,18 +458,22 @@ fn settle_cancelled_reservation(
             state.push_diagnostic(format!(
                 "Canonical cancellation retry failed: {canonical_error}"
             ));
-            runtime
-                .service
-                .fail_reserved(reservation, "turn cancelled before canonical settlement")?;
+            runtime.service.fail_reserved(
+                reservation,
+                "turn cancelled before canonical settlement",
+                TurnErrorCode::InternalError,
+            )?;
             Ok(())
         }
         Err(interrupt_error) => {
             state.push_diagnostic(format!(
                 "Cancellation retry was rejected: {interrupt_error}"
             ));
-            runtime
-                .service
-                .fail_reserved(reservation, "turn cancellation could not reach the driver")?;
+            runtime.service.fail_reserved(
+                reservation,
+                "turn cancellation could not reach the driver",
+                TurnErrorCode::InternalError,
+            )?;
             Ok(())
         }
     }

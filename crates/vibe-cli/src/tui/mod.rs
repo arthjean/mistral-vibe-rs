@@ -1383,7 +1383,6 @@ fn start_runtime(
         context_window: arguments.max_tokens.unwrap_or(DEFAULT_CONTEXT_WINDOW),
         auto_approve: session.intent.auto_approve,
         vibe_code_enabled: preferences.vibe_code_enabled,
-        clear_context_after_turn: false,
         config_target: None,
         remote_project_overlay: None,
         remote_project_draft: None,
