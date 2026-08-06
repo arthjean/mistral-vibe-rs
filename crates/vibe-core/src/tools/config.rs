@@ -1282,4 +1282,6 @@ fn render(value: &Value) -> String {
 }
 
 #[cfg(test)]
+mod config_parity_tests;
+#[cfg(test)]
 mod config_tests;
