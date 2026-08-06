@@ -27,6 +27,7 @@ pub mod migration;
 pub mod patch;
 mod proxy;
 pub mod registry;
+mod view;
 
 pub use dotenv::DotenvValues;
 pub use events::{ConfigChangeBus, ConfigChangeEvent, ConfigSubscription};
@@ -1356,6 +1357,8 @@ mod patch_tests;
 mod registry_tests;
 #[cfg(test)]
 mod surface_parity_tests;
+#[cfg(test)]
+mod view_tests;
 
 struct PreparedWrite {
     destination: PathBuf,

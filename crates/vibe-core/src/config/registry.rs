@@ -72,6 +72,17 @@ pub enum FieldKind {
 }
 
 impl FieldKind {
+    /// The whole vocabulary, in the order the wire enumeration declares it.
+    pub const ALL: [Self; 7] = [
+        Self::Bool,
+        Self::Enum,
+        Self::Int,
+        Self::Float,
+        Self::Str,
+        Self::List,
+        Self::Complex,
+    ];
+
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
