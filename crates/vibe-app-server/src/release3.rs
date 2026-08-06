@@ -29,7 +29,7 @@ use vibe_core::prompt::{
     UserResource, prepare_user_resources,
 };
 use vibe_core::storage::{HydratedSession, SessionStore, StorageError};
-use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
+use vibe_core::tools::config::ToolConfigResolver;
 
 /// The variable the reference reads the web-search credential from, and the one
 /// [`crate::server::AppServer`] resolves it through.
@@ -162,6 +162,9 @@ pub struct Release3Service {
     paths: Release3Paths,
     defaults: Table,
     config: LayeredConfig,
+    /// The per-tool configuration every session's tools read through, kept
+    /// current by a subscription on the `tools` key.
+    tool_config: ToolConfigResolver,
     store: SessionStore,
     continuity: SessionContinuity,
     discovery_roots: DiscoveryRoots,
@@ -205,24 +208,16 @@ fn project_discovery_roots(config: &LayeredConfig, project_trusted: bool) -> Vec
 
 /// The runtime discovery pass behind the Discovered configuration layer.
 ///
-/// The universal tools declare their own settings, and the layer is where those
-/// settings become addressable rather than buried in the binary:
-/// `tools.web_fetch.timeoutSeconds` in a file wins over the declaration in the
-/// effective document. The handlers still run on the constants they declare, so
-/// an override moves the published value and each tool starts reading its entry
-/// when the option behind it lands. The credential is resolved the way
-/// [`crate::server::AppServer`] resolves it, so the layer describes the tools a
-/// session would actually publish, `web_search` included exactly when it
-/// registers.
-fn tool_discovery(vibe_home: &Path) -> ConfigDiscovery {
-    let vibe_home = vibe_home.to_path_buf();
-    Arc::new(move || {
-        let access =
-            WebSearchAccess::from_environment(&DotenvValues::global(&vibe_home), MISTRAL_KEY);
-        BuiltinTools::new(&vibe_home, access)
-            .discovered_settings()
-            .map_err(|error| error.to_string())
-    })
+/// Every tool declares its own settings, and the layer is where those settings
+/// become addressable rather than buried in the binary:
+/// `tools.grep.default_max_matches` in a file wins over the declaration in the
+/// effective document, and the handler reads the merged value at its next call.
+/// Reference `create_default_config` fills the same table from
+/// `discover_tool_defaults`, which enumerates declarations rather than the
+/// surface a host publishes, so the Windows-only families appear here on a
+/// POSIX host too.
+fn tool_discovery(resolver: ToolConfigResolver) -> ConfigDiscovery {
+    Arc::new(move || Ok(resolver.discovered_document()))
 }
 
 impl Default for Release3Service {
@@ -258,8 +253,15 @@ impl Release3Service {
             defaults.clone(),
         )
         .with_environment(vibe_environment(&paths.vibe_home))
-        .with_discovery(tool_discovery(&paths.vibe_home))
+        .with_discovery(tool_discovery(ToolConfigResolver::new()))
         .with_project_trusted(project_trusted);
+        // The resolver reads the effective document, which the discovery pass
+        // above has already filled with the declared defaults, and keeps
+        // reading it: the subscription refreshes the cache whenever a write
+        // moves anything under `tools`, so a session between two turns sees the
+        // change without re-registering its surface.
+        let tool_config = ToolConfigResolver::new();
+        tool_config.follow(&config);
         let user_extensions = paths.vibe_home.join("extensions");
         let discovery_roots = DiscoveryRoots {
             configured: Vec::new(),
@@ -277,6 +279,7 @@ impl Release3Service {
         let store = SessionStore::new(&paths.session_root);
         Self {
             config,
+            tool_config,
             store: store.clone(),
             continuity: SessionContinuity::new(store),
             defaults,
@@ -293,6 +296,12 @@ impl Release3Service {
     #[must_use]
     pub fn layered_config(&self) -> LayeredConfig {
         self.config.clone()
+    }
+
+    /// The per-tool configuration a session's tools resolve through.
+    #[must_use]
+    pub fn tool_config(&self) -> ToolConfigResolver {
+        self.tool_config.clone()
     }
 
     /// The active model's compaction threshold, or zero when none declares one.
@@ -2075,8 +2084,8 @@ mod tests {
     }
 
     /// The Discovered layer reaches a client through the method it reads the
-    /// configuration by, carrying the settings the universal tools declare, and
-    /// a file the operator owns still wins over them.
+    /// configuration by, carrying the settings every declared tool publishes,
+    /// and a file the operator owns still wins over them.
     #[test]
     fn config_read_publishes_the_discovered_tool_settings_a_file_can_override() {
         let (temporary, service) = service();
@@ -2084,7 +2093,7 @@ mod tests {
         fs::create_dir_all(&home).expect("home");
         fs::write(
             home.join("config.toml"),
-            "[tools.web_fetch]\nmaxRedirects = 1\n",
+            "[tools.web_fetch]\nmax_timeout = 7\n",
         )
         .expect("user fixture");
 
@@ -2101,21 +2110,27 @@ mod tests {
             "the layer composes between the defaults and the selected file"
         );
         assert!(
-            discovered["values"]["tools"]["web_fetch"]["maxContentBytes"].is_number(),
+            discovered["values"]["tools"]["web_fetch"]["max_content_bytes"].is_number(),
             "{discovered}"
         );
         assert_eq!(
-            discovered["values"]["tools"]["web_fetch"]["maxRedirects"],
-            5
+            discovered["values"]["tools"]["web_fetch"]["max_timeout"],
+            120
         );
         // The file overrides the one option it names; the rest of the
         // discovered entry survives the deep merge.
-        assert_eq!(snapshot["config"]["tools"]["web_fetch"]["maxRedirects"], 1);
+        assert_eq!(snapshot["config"]["tools"]["web_fetch"]["max_timeout"], 7);
         assert!(
-            snapshot["config"]["tools"]["web_fetch"]["maxContentBytes"].is_number(),
+            snapshot["config"]["tools"]["web_fetch"]["max_content_bytes"].is_number(),
             "{snapshot}"
         );
         assert_eq!(snapshot["validationWarnings"], json!([]));
+
+        // The resolver reads the same document, so the handler that runs next
+        // waits the seven seconds the file asked for.
+        let settings: vibe_core::tools::config::WebFetchConfig =
+            service.tool_config().view("web_fetch");
+        assert_eq!(settings.max_timeout, 7);
     }
 
     #[test]

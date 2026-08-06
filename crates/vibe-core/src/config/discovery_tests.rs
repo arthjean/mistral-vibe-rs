@@ -170,7 +170,7 @@ fn a_failed_discovery_pass_empties_the_layer_and_is_reported_once_per_load() {
 /// has to arrive under its own name in both lists the snapshot publishes.
 #[test]
 fn config_read_publishes_the_discovered_layer_under_its_own_name() {
-    let (_temporary, snapshot) = stack(Ok("[tools.web_fetch]\ntimeoutSeconds = 30\n"), "");
+    let (_temporary, snapshot) = stack(Ok("[tools.web_fetch]\ndefault_timeout = 30\n"), "");
     let published = snapshot.expect("the discovered layer loads").public_view();
 
     assert_eq!(
@@ -180,28 +180,27 @@ fn config_read_publishes_the_discovered_layer_under_its_own_name() {
     );
     assert_eq!(published["layerValues"][1]["layer"], "discovered");
     assert_eq!(
-        published["layerValues"][1]["values"]["tools"]["web_fetch"]["timeoutSeconds"],
+        published["layerValues"][1]["values"]["tools"]["web_fetch"]["default_timeout"],
         30
     );
 }
 
-/// The pass the binaries install: the settings the universal tools declare, in
+/// The pass the binaries install: the settings every declared tool carries, in
 /// the shape the layer composes.
 #[test]
-fn the_universal_tools_declare_the_settings_the_layer_carries() {
-    let temporary = tempfile::tempdir().expect("temporary root");
-    let settings = crate::tools::builtins::BuiltinTools::new(temporary.path(), None)
-        .discovered_settings()
-        .expect("the universal tools enumerate");
+fn every_declared_tool_publishes_the_settings_the_layer_carries() {
+    let settings = crate::tools::config::ToolConfigResolver::new().discovered_document();
     let tools = settings["tools"].as_table().expect("a tool table");
 
     assert!(tools.contains_key("todo"), "{tools:?}");
-    assert!(tools["web_fetch"]["timeoutSeconds"].as_integer().is_some());
-    // `skill` declares no settings, so it contributes no entry rather than an
-    // empty one an operator would see and could not use.
-    assert!(!tools.contains_key("skill"), "{tools:?}");
-    assert!(
-        !tools.contains_key("web_search"),
-        "web_search does not register without a credential, so it declares nothing"
-    );
+    assert_eq!(tools["web_fetch"]["default_timeout"].as_integer(), Some(30));
+    // A tool declaring no limit still publishes the four keys every tool
+    // carries, so an operator can move its permission without reading the
+    // source.
+    assert_eq!(tools["skill"]["permission"].as_str(), Some("always"));
+    // Reference `discover_tool_defaults` enumerates declarations rather than the
+    // surface a host publishes, so a tool that needs a credential and a family
+    // this platform never runs are both here.
+    assert!(tools.contains_key("web_search"), "{tools:?}");
+    assert!(tools.contains_key("powershell"), "{tools:?}");
 }
