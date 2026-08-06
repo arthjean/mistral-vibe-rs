@@ -567,7 +567,7 @@
     },
     {
       "dimension": "syntax highlighting inside file and command output",
-      "reason": "The reference wraps read, write, and shell output in a Markdown code fence whose highlighting is produced by Rich at paint time; the oracle can pin the fenced content but not the per-token colours."
+      "reason": "The reference wraps read, write, and shell output in a Markdown code fence whose highlighting is produced by Rich at paint time; the oracle can pin the fenced content but not the per-token colors."
     },
     {
       "dimension": "tool result expansion by mouse click",

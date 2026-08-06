@@ -938,7 +938,7 @@
       "reason": "Installing updates is a declared PRD non-goal, so the `Update now` choice reports the reference UPDATE_FAILED guidance instead of running the reference update commands."
     },
     {
-      "dimension": "theme colour palettes",
+      "dimension": "theme color palettes",
       "reason": "The reference renders Textual theme palettes; this port renders light and dark polarity, so only the catalog, order, current marker, and polarity are comparable."
     }
   ]

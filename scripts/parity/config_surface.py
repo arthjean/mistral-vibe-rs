@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Capture how the pinned Python reference composes configuration layers.
 
-The reference checkout is a read-only behavioural oracle. This script drives the
+The reference checkout is a read-only behavioral oracle. This script drives the
 real ``ConfigBuilder`` merge over synthetic in-memory layers and records, for
 each scenario, the merged document the builder hands to validation. The Rust
 differential runner replays that corpus against ``LayeredConfig::load``.
@@ -137,7 +137,7 @@ def reexecute_with_reference_interpreter(
 #: Layer stacks replayed against the reference merge. Every value here is
 #: authored for this corpus; none is read from the reference.
 #:
-#: ``models`` is deliberately absent: the reference runs a normalisation
+#: ``models`` is deliberately absent: the reference runs a normalization
 #: validator over it before merging, which US-065 restores. Deep merge is
 #: therefore exercised through ``tools``, the other ``deep_merge`` field.
 SCENARIOS: list[dict[str, Any]] = [

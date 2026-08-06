@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Record chat-input parity traces from the pinned Python reference.
 
-The reference checkout is a read-only behavioural oracle. This harness drives
+The reference checkout is a read-only behavioral oracle. This harness drives
 the real ``ChatInputContainer`` through Textual's headless pilot, records
-normalised state, effect and render observations, and writes a versioned trace
+normalized state, effect and render observations, and writes a versioned trace
 corpus consumed by the Rust differential runner.
 
 Usage::

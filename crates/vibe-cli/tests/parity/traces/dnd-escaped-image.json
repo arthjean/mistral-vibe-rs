@@ -115,5 +115,5 @@
     "workspace": "sample"
   },
   "story": "US-012",
-  "title": "A backslash-escaped image path is normalised"
+  "title": "A backslash-escaped image path is normalized"
 }

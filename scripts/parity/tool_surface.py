@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Capture the tool surface the pinned Python reference publishes.
 
-The reference checkout is a read-only behavioural oracle. This script reads the
+The reference checkout is a read-only behavioral oracle. This script reads the
 tool names it publishes for the running platform, the ``parameters`` object each
 one sends to the model, and a set of argument fixtures with the verdict Pydantic
 gives them. The Rust differential runner replays that corpus.
@@ -287,7 +287,7 @@ def argument_fixtures(name: str, tool_class: Any) -> list[dict[str, Any]]:
     """Payloads spanning the reference's accept and reject envelope.
 
     The verdict is Pydantic's, taken from the reference model itself, so the
-    Rust replay compares against measured behaviour rather than an assumption
+    Rust replay compares against measured behavior rather than an assumption
     about what a schema means.
     """
     root = tool_class.get_parameters()

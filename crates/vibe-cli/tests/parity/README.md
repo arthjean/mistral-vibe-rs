@@ -8,7 +8,7 @@ input parity as reproducible observations instead of interpretation.
 | File | Owner | Purpose |
 |---|---|---|
 | `manifest.json` | generated | schema version, pinned reference revision, workspace fixtures, audited gaps, trace index, traces skipped for a missing capability |
-| `traces/<id>.json` | generated | initial state, normalised events, and one state / effect / render / history observation per event |
+| `traces/<id>.json` | generated | initial state, normalized events, and one state / effect / render / history observation per event |
 | `expectations.json` | hand-owned | per trace and per dimension, whether Rust is expected to match the reference today |
 
 ## Recording
@@ -40,7 +40,7 @@ story closes:
 - `effects` (compared): the ordered effects both implementations expose
   (submission, history, mode, completion reset, clipboard, feedback,
   recording, notifications). Effects that exist only as internal plumbing on
-  one side (completion requests, paste normalisation, rejections) are not
+  one side (completion requests, paste normalization, rejections) are not
   compared.
 - `render` (deferred to US-018): composer prompt symbol, visual lines, cursor
   cell, popup rows and border chrome. Recorded now so the fixtures are ready,
@@ -67,7 +67,7 @@ Two rules keep the contract honest:
   observation can never be silently dropped.
 
 Individual fields inside `state` that Rust does not model yet are listed in
-`UNMODELLED_STATE_PATHS` in the runner with the story that supplies them. They
+`UNMODELED_STATE_PATHS` in the runner with the story that supplies them. They
 are removed from the expected observation before comparison, so one missing
 field cannot mask every other state assertion. A test fails if the composer
 starts reporting one of them, which is the signal to delete the entry and turn

@@ -35,11 +35,11 @@ const WORKSPACE_PLACEHOLDER: &str = "__WORKSPACE__";
 /// Fields the reference records inside `state` that Rust does not model yet.
 ///
 /// They are dropped from the expected observation before comparison so a
-/// single unmodelled field cannot mask every other state assertion in the
+/// single unmodeled field cannot mask every other state assertion in the
 /// corpus. Each entry names the story that supplies the missing state; the
 /// entry is removed when that story lands, turning the field into a real
 /// assertion.
-const UNMODELLED_STATE_PATHS: &[(&str, &str)] = &[];
+const UNMODELED_STATE_PATHS: &[(&str, &str)] = &[];
 const OBSERVABLE_EFFECTS: &[&str] = &[
     "submitRequested",
     "submit",
@@ -593,8 +593,8 @@ fn rename_event(raw: &Value, kind: &str) -> Value {
 }
 
 /// Drops the state fields Rust does not model yet from an expected observation.
-fn strip_unmodelled_state(state: &mut Value) {
-    for (path, _story) in UNMODELLED_STATE_PATHS {
+fn strip_unmodeled_state(state: &mut Value) {
+    for (path, _story) in UNMODELED_STATE_PATHS {
         let mut cursor = &mut *state;
         let mut segments = path.split('.').peekable();
         while let Some(segment) = segments.next() {
@@ -900,7 +900,7 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
                 .map_err(|error| format!("state does not serialize: {error}"))?;
 
             let mut expected_state = observation.get("state").cloned().unwrap_or(Value::Null);
-            strip_unmodelled_state(&mut expected_state);
+            strip_unmodeled_state(&mut expected_state);
             if observed.get("state").is_none_or(Option::is_none)
                 && let Some(divergence) = compare("state", Some(index), &expected_state, &state)
             {
@@ -1118,12 +1118,12 @@ fn the_workspace_placeholder_is_substituted_on_both_sides() {
 }
 
 #[test]
-fn modelled_state_fields_are_not_dropped() {
+fn modeled_state_fields_are_not_dropped() {
     let mut state = json!({
         "text": "draft",
         "history": {"navigating": true, "loadedEntry": true, "cursorMovedSinceLoad": false},
     });
-    strip_unmodelled_state(&mut state);
+    strip_unmodeled_state(&mut state);
     assert_eq!(
         state,
         json!({
@@ -1139,10 +1139,10 @@ fn modelled_state_fields_are_not_dropped() {
 
 /// The composer must answer for every state field the runner still compares.
 #[test]
-fn every_compared_state_field_is_modelled() {
+fn every_compared_state_field_is_modeled() {
     let observation =
         serde_json::to_value(ChatInputState::new().observe()).expect("the observation serializes");
-    for (path, story) in UNMODELLED_STATE_PATHS {
+    for (path, story) in UNMODELED_STATE_PATHS {
         let mut cursor = &observation;
         for segment in path.split('.') {
             let Some(next) = cursor.get(segment) else {
@@ -1153,8 +1153,8 @@ fn every_compared_state_field_is_modelled() {
         }
         assert!(
             cursor.is_null(),
-            "`{path}` is declared unmodelled ({story}) but the composer now reports it; \
-             remove it from UNMODELLED_STATE_PATHS so it becomes a real assertion"
+            "`{path}` is declared unmodeled ({story}) but the composer now reports it; \
+             remove it from UNMODELED_STATE_PATHS so it becomes a real assertion"
         );
     }
 }

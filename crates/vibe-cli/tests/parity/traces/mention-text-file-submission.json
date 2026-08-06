@@ -46,7 +46,7 @@
       "type": "key"
     },
     {
-      "char": "s",
+      "char": "z",
       "key": "char",
       "mods": [],
       "type": "key"
@@ -537,7 +537,7 @@
         }
       ],
       "event": {
-        "char": "s",
+        "char": "z",
         "key": "char",
         "mods": [],
         "type": "key"
@@ -554,7 +554,7 @@
         "popupVisible": false,
         "prompt": ">",
         "visualLines": [
-          "summaris"
+          "summariz"
         ],
         "wrapWidth": 71
       },
@@ -575,7 +575,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summaris"
+        "text": "summariz"
       }
     },
     {
@@ -602,7 +602,7 @@
         "popupVisible": false,
         "prompt": ">",
         "visualLines": [
-          "summarise"
+          "summarize"
         ],
         "wrapWidth": 71
       },
@@ -623,7 +623,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise"
+        "text": "summarize"
       }
     },
     {
@@ -650,7 +650,7 @@
         "popupVisible": false,
         "prompt": ">",
         "visualLines": [
-          "summarise "
+          "summarize "
         ],
         "wrapWidth": 71
       },
@@ -671,7 +671,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise "
+        "text": "summarize "
       }
     },
     {
@@ -704,7 +704,7 @@
         "popupVisible": true,
         "prompt": ">",
         "visualLines": [
-          "summarise @"
+          "summarize @"
         ],
         "wrapWidth": 71
       },
@@ -746,7 +746,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @"
+        "text": "summarize @"
       }
     },
     {
@@ -779,7 +779,7 @@
         "popupVisible": true,
         "prompt": ">",
         "visualLines": [
-          "summarise @n"
+          "summarize @n"
         ],
         "wrapWidth": 71
       },
@@ -821,7 +821,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @n"
+        "text": "summarize @n"
       }
     },
     {
@@ -850,7 +850,7 @@
         "popupVisible": true,
         "prompt": ">",
         "visualLines": [
-          "summarise @no"
+          "summarize @no"
         ],
         "wrapWidth": 71
       },
@@ -876,7 +876,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @no"
+        "text": "summarize @no"
       }
     },
     {
@@ -905,7 +905,7 @@
         "popupVisible": true,
         "prompt": ">",
         "visualLines": [
-          "summarise @not"
+          "summarize @not"
         ],
         "wrapWidth": 71
       },
@@ -931,7 +931,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @not"
+        "text": "summarize @not"
       }
     },
     {
@@ -960,7 +960,7 @@
         "popupVisible": true,
         "prompt": ">",
         "visualLines": [
-          "summarise @note"
+          "summarize @note"
         ],
         "wrapWidth": 71
       },
@@ -986,7 +986,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @note"
+        "text": "summarize @note"
       }
     },
     {
@@ -1015,7 +1015,7 @@
         "popupVisible": true,
         "prompt": ">",
         "visualLines": [
-          "summarise @notes"
+          "summarize @notes"
         ],
         "wrapWidth": 71
       },
@@ -1041,7 +1041,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @notes"
+        "text": "summarize @notes"
       }
     },
     {
@@ -1070,7 +1070,7 @@
         "popupVisible": true,
         "prompt": ">",
         "visualLines": [
-          "summarise @notes."
+          "summarize @notes."
         ],
         "wrapWidth": 71
       },
@@ -1096,7 +1096,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @notes."
+        "text": "summarize @notes."
       }
     },
     {
@@ -1125,7 +1125,7 @@
         "popupVisible": true,
         "prompt": ">",
         "visualLines": [
-          "summarise @notes.t"
+          "summarize @notes.t"
         ],
         "wrapWidth": 71
       },
@@ -1151,7 +1151,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @notes.t"
+        "text": "summarize @notes.t"
       }
     },
     {
@@ -1180,7 +1180,7 @@
         "popupVisible": true,
         "prompt": ">",
         "visualLines": [
-          "summarise @notes.tx"
+          "summarize @notes.tx"
         ],
         "wrapWidth": 71
       },
@@ -1206,7 +1206,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @notes.tx"
+        "text": "summarize @notes.tx"
       }
     },
     {
@@ -1235,7 +1235,7 @@
         "popupVisible": true,
         "prompt": ">",
         "visualLines": [
-          "summarise @notes.txt"
+          "summarize @notes.txt"
         ],
         "wrapWidth": 71
       },
@@ -1261,7 +1261,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @notes.txt"
+        "text": "summarize @notes.txt"
       }
     },
     {
@@ -1288,7 +1288,7 @@
         "popupVisible": false,
         "prompt": ">",
         "visualLines": [
-          "summarise @notes.txt "
+          "summarize @notes.txt "
         ],
         "wrapWidth": 71
       },
@@ -1309,7 +1309,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @notes.txt "
+        "text": "summarize @notes.txt "
       }
     },
     {
@@ -1336,7 +1336,7 @@
         "popupVisible": false,
         "prompt": ">",
         "visualLines": [
-          "summarise @notes.txt n"
+          "summarize @notes.txt n"
         ],
         "wrapWidth": 71
       },
@@ -1357,7 +1357,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @notes.txt n"
+        "text": "summarize @notes.txt n"
       }
     },
     {
@@ -1384,7 +1384,7 @@
         "popupVisible": false,
         "prompt": ">",
         "visualLines": [
-          "summarise @notes.txt no"
+          "summarize @notes.txt no"
         ],
         "wrapWidth": 71
       },
@@ -1405,7 +1405,7 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @notes.txt no"
+        "text": "summarize @notes.txt no"
       }
     },
     {
@@ -1432,7 +1432,7 @@
         "popupVisible": false,
         "prompt": ">",
         "visualLines": [
-          "summarise @notes.txt now"
+          "summarize @notes.txt now"
         ],
         "wrapWidth": 71
       },
@@ -1453,20 +1453,20 @@
         "mode": ">",
         "selection": null,
         "switching": false,
-        "text": "summarise @notes.txt now"
+        "text": "summarize @notes.txt now"
       }
     },
     {
       "effects": [
         {
-          "text": "summarise @notes.txt now",
+          "text": "summarize @notes.txt now",
           "type": "submitRequested"
         },
         {
           "type": "completionReset"
         },
         {
-          "text": "summarise @notes.txt now",
+          "text": "summarize @notes.txt now",
           "type": "submit"
         }
       ],

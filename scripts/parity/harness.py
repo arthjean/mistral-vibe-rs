@@ -391,11 +391,11 @@ class ScenarioRunner:
             observation["submission"] = capture_submission(submitted, self.workspace)
         if self.app.history_file is not None:
             observation["history"] = read_history(self.app.history_file)
-        return normalise(observation, str(self.workspace))
+        return normalize(observation, str(self.workspace))
 
 
 # --------------------------------------------------------------------------
-# Event normalisation
+# Event normalization
 # --------------------------------------------------------------------------
 
 
@@ -444,7 +444,7 @@ def textual_key(event: dict[str, Any]) -> str:
 
 
 # --------------------------------------------------------------------------
-# Effect normalisation
+# Effect normalization
 # --------------------------------------------------------------------------
 
 
@@ -588,15 +588,15 @@ def cursor_cell(widget: ChatTextArea) -> tuple[int, int]:
     return (offset.y, offset.x)
 
 
-def normalise(value: Any, workspace: str) -> Any:
+def normalize(value: Any, workspace: str) -> Any:
     """Replace nondeterministic absolute paths with a stable placeholder."""
 
     if isinstance(value, str):
         return value.replace(workspace, WORKSPACE_PLACEHOLDER)
     if isinstance(value, list):
-        return [normalise(item, workspace) for item in value]
+        return [normalize(item, workspace) for item in value]
     if isinstance(value, dict):
-        return {key: normalise(item, workspace) for key, item in value.items()}
+        return {key: normalize(item, workspace) for key, item in value.items()}
     return value
 
 

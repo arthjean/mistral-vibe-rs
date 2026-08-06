@@ -100,7 +100,7 @@ class WidgetHarness(App):
         forward = widget.post_message
 
         def record(message: object) -> bool:
-            # Only the pinned widgets' own messages are observable behaviour;
+            # Only the pinned widgets' own messages are observable behavior;
             # Textual's internal traffic is transport noise.
             if type(message).__module__.startswith("vibe."):
                 self.messages.append(describe_message(message))

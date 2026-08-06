@@ -88,7 +88,7 @@ GAPS: list[dict[str, str]] = [
     {
         "id": "GAP-16",
         "story": "US-012",
-        "title": "Drag-and-drop image path normalisation",
+        "title": "Drag-and-drop image path normalization",
     },
     {
         "id": "GAP-17",
@@ -726,7 +726,7 @@ SCENARIOS: list[dict[str, Any]] = [
         "id": "dnd-escaped-image",
         "gap": "GAP-16",
         "story": "US-012",
-        "title": "A backslash-escaped image path is normalised",
+        "title": "A backslash-escaped image path is normalized",
         "workspace": "sample",
         "events": [{"type": "paste", "text": "__WORKSPACE__/image\\ one.png"}],
     },
@@ -745,7 +745,7 @@ SCENARIOS: list[dict[str, Any]] = [
         "story": "US-013",
         "title": "A text mention stays prompt text on submission",
         "workspace": "sample",
-        "events": [text("summarise @notes.txt now"), key("enter")],
+        "events": [text("summarize @notes.txt now"), key("enter")],
     },
     {
         "id": "mention-directory-submission",

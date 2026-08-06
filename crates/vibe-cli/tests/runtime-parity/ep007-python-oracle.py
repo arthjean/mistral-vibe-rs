@@ -433,7 +433,7 @@ async def capture_shell_trace() -> list[str]:
     """Streams a shell run through the reference and cancels it mid-flight.
 
     What is measured is which chunks the reference hands to the event handler:
-    the run loop stops at cancellation, so the chunk emitted afterwards never
+    the run loop stops at cancellation, so the chunk emitted afterward never
     reaches the transcript and the accumulated text stops growing.
     """
     from vibe.cli.textual_ui.app import VibeApp

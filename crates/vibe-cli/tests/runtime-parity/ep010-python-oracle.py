@@ -3,7 +3,7 @@
 Every observation is composed from the reference itself: the tool presentation
 adapters build the call and result displays, the pinned transcript widgets turn
 them into header parts and bodies, and the error, activity, context, debug, and
-link helpers are called directly. Nothing here reimplements Rust behaviour.
+link helpers are called directly. Nothing here reimplements Rust behavior.
 """
 
 from __future__ import annotations
@@ -430,8 +430,8 @@ def observe_debug_log(event: dict) -> str:
         raw_line=event["message"],
     )
     formatted = DebugConsole._format_entry(entry)
-    colour = LOG_LEVEL_COLORS.get(event["level"], "dim")
-    return f"log|{colour}|{strip_markup(formatted)}"
+    color = LOG_LEVEL_COLORS.get(event["level"], "dim")
+    return f"log|{color}|{strip_markup(formatted)}"
 
 
 def observe_link(event: dict) -> str:

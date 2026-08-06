@@ -4,7 +4,7 @@ Every observation comes from the reference itself: update discovery runs the
 pinned `get_update_if_available` against an in-memory repository, notifications
 run the pinned `TextualNotificationAdapter`, narration drives the pinned
 `NarratorManager`, and the exit contract calls the reference formatters. Nothing
-here reimplements Rust behaviour.
+here reimplements Rust behavior.
 """
 
 from __future__ import annotations

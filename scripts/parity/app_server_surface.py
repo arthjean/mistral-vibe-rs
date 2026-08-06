@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Capture the app-server wire surface the pinned Python reference declares.
 
-The reference checkout is a read-only behavioural oracle. This script imports
+The reference checkout is a read-only behavioral oracle. This script imports
 its ``protocol`` and ``_connection_protocol`` modules and records what crosses
 the wire: the method inventory, the client-tool and notification vocabularies,
 the protocol error codes, the enum value sets, the discriminated unions and a
