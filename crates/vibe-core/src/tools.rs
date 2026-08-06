@@ -17,6 +17,7 @@ use crate::matching::NameFilter;
 use crate::text::truncate_utf8;
 
 pub mod builtins;
+pub mod config;
 pub mod shell;
 
 #[cfg(test)]

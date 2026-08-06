@@ -97,6 +97,14 @@ pub enum ConfigLayerKind {
 /// readable when the thing it describes cannot be enumerated.
 pub type ConfigDiscovery = Arc<dyn Fn() -> Result<Table, String> + Send + Sync>;
 
+/// A component told about every snapshot a load composes.
+///
+/// The change bus reports what a *write through this process* moved, which is
+/// blind to a file an operator edits by hand. An observer sees the composed
+/// document instead, so a component caching part of it stays current whatever
+/// moved it.
+pub type ConfigObserver = Arc<dyn Fn(&ConfigSnapshot) + Send + Sync>;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfigTarget {
@@ -357,6 +365,9 @@ pub struct LayeredConfig {
     migration_warnings: Arc<Mutex<Vec<String>>>,
     transaction_lock: Arc<Mutex<()>>,
     events: Arc<ConfigChangeBus>,
+    /// Shared by every clone, so a component that attached to one handle hears
+    /// about a load made through another.
+    observers: Arc<Mutex<Vec<ConfigObserver>>>,
 }
 
 impl LayeredConfig {
@@ -378,6 +389,18 @@ impl LayeredConfig {
             migration_warnings: Arc::new(Mutex::new(Vec::new())),
             transaction_lock: Arc::new(Mutex::new(())),
             events: Arc::new(ConfigChangeBus::default()),
+            observers: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    /// Registers `observer` for every snapshot [`Self::load`] composes.
+    ///
+    /// A load is what every reader already goes through, so this is where a
+    /// cache of part of the document is refreshed: it covers a file edited
+    /// outside this process, which the change bus never reports.
+    pub fn observe(&self, observer: ConfigObserver) {
+        if let Ok(mut observers) = self.observers.lock() {
+            observers.push(observer);
         }
     }
 
@@ -609,7 +632,7 @@ impl LayeredConfig {
                 Some(hex_digest(selected.to_string().as_bytes())),
             );
         }
-        Ok(ConfigSnapshot {
+        let snapshot = ConfigSnapshot {
             effective,
             selected_target,
             selected_path,
@@ -617,7 +640,16 @@ impl LayeredConfig {
             target_values,
             layer_values: layers,
             validation_warnings,
-        })
+        };
+        // The observers run under the same guards the load holds, which is what
+        // keeps a cache from reading a document another load is replacing. None
+        // of them writes configuration, so the lock cannot come back around.
+        if let Ok(observers) = self.observers.lock() {
+            for observer in observers.iter() {
+                observer(&snapshot);
+            }
+        }
+        Ok(snapshot)
     }
 
     pub fn batch_write(&self, writes: &[ConfigWrite]) -> Result<ConfigSnapshot, ConfigError> {
