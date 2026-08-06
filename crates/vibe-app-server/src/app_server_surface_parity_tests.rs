@@ -32,6 +32,7 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use vibe_core::process::ClientToolRequest;
 use vibe_protocol::{
     Envelope, LOCAL_EXTENSION_METHODS, SERVER_METHODS, TransportKind, decode_frame,
     is_server_method,
@@ -1568,6 +1569,141 @@ fn a_callback_kind_the_client_did_not_declare_is_refused() {
             Err(crate::server::ServerError::UnsupportedClientCallbackKind(_))
         ),
         "a user-input callback reached a client that declared only approvals: {refused:?}"
+    );
+}
+
+// --------------------------------------------------------------------------
+// Client tools
+// --------------------------------------------------------------------------
+
+/// One request per `ClientToolRequest` variant, which is the whole set this
+/// port can issue: `method` is exhaustive over the enum, so a variant added
+/// without a line here leaves the name comparison below short and a variant
+/// removed stops this from compiling.
+fn issued_client_tool_requests() -> Vec<ClientToolRequest> {
+    let session_id = PROBE_SESSION.to_owned();
+    let terminal_id = "terminal-1".to_owned();
+    vec![
+        ClientToolRequest::ReadTextFile {
+            session_id: session_id.clone(),
+            path: "src/main.rs".to_owned(),
+            line: Some(12),
+            limit: Some(200),
+        },
+        ClientToolRequest::WriteTextFile {
+            session_id: session_id.clone(),
+            path: "src/main.rs".to_owned(),
+            content: "fn main() {}\n".to_owned(),
+        },
+        ClientToolRequest::TerminalCreate {
+            session_id: session_id.clone(),
+            command: "cargo test".to_owned(),
+            args: None,
+            env: None,
+            cwd: "/workspace".to_owned(),
+            output_byte_limit: 1_048_576,
+            tool_call_id: Some("call-1".to_owned()),
+        },
+        ClientToolRequest::TerminalWait {
+            session_id: session_id.clone(),
+            terminal_id: terminal_id.clone(),
+        },
+        ClientToolRequest::TerminalOutput {
+            session_id: session_id.clone(),
+            terminal_id: terminal_id.clone(),
+        },
+        ClientToolRequest::TerminalKill {
+            session_id: session_id.clone(),
+            terminal_id: terminal_id.clone(),
+        },
+        ClientToolRequest::TerminalRelease {
+            session_id,
+            terminal_id,
+        },
+    ]
+}
+
+/// The client-tool methods travel the other way, so no probe can answer them.
+/// What is measurable is the request this port puts on the wire and the answer
+/// shape it reads back, both validated against the same census as every
+/// client-to-server body.
+#[test]
+fn every_issued_client_tool_request_validates_against_the_census() {
+    let corpus = corpus();
+    let census = Census::new(&corpus);
+    let issued = issued_client_tool_requests();
+
+    let declared = corpus
+        .client_tool_methods
+        .iter()
+        .map(|entry| entry.name.as_str())
+        .collect::<BTreeSet<_>>();
+    let issues_names = issued
+        .iter()
+        .map(ClientToolRequest::method)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        issues_names, declared,
+        "the issued client-tool methods are not the reference set"
+    );
+
+    let params_models = corpus
+        .client_tool_methods
+        .iter()
+        .map(|entry| (entry.name.as_str(), entry.params.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    let mut issues = Vec::new();
+    for request in &issued {
+        let method = request.method();
+        let envelope = serde_json::to_value(request).expect("a request serializes");
+        let params = envelope.get("params").cloned().unwrap_or_else(|| json!({}));
+        let model = params_models
+            .get(method)
+            .unwrap_or_else(|| unreachable!("{method} is not a corpus client-tool method"));
+        let mut form = Vec::new();
+        census.validate("", model, &params, &mut form);
+        if !form.is_empty() {
+            issues.push(format!("{method}: {}", form.join("; ")));
+        }
+    }
+
+    // The answers the delegation reads: a field this port looks for that the
+    // reference does not declare fails here rather than at an editor.
+    for (model, answer) in [
+        (
+            "ClientToolReadTextFileResponse",
+            json!({"content": "fn main() {}\n"}),
+        ),
+        (
+            "ClientToolTerminalCreateResponse",
+            json!({"terminalId": "terminal-1"}),
+        ),
+        (
+            "ClientToolTerminalWaitResponse",
+            json!({"exitCode": 0, "signal": null}),
+        ),
+        (
+            "ClientToolTerminalOutputResponse",
+            json!({"output": "ok", "truncated": false}),
+        ),
+        ("EmptyResponse", json!({})),
+    ] {
+        let mut form = Vec::new();
+        census.validate("", model, &answer, &mut form);
+        if !form.is_empty() {
+            issues.push(format!("{model}: {}", form.join("; ")));
+        }
+    }
+
+    assert!(
+        issues.is_empty(),
+        "issued client-tool bodies diverge from the census:\n{}",
+        issues.join("\n")
+    );
+    eprintln!(
+        "app-server surface: client-tool methods {}/{} issued",
+        issued.len(),
+        corpus.client_tool_methods.len()
     );
 }
 
