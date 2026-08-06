@@ -7,13 +7,15 @@ use std::sync::{Arc, Mutex};
 use crate::builtin_agents;
 use crate::host::now_millis;
 use crate::params;
+use crate::vocabulary::{AccountActionKind, AccountStatus, AgentSafety};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use thiserror::Error;
 use toml::{Table, Value as TomlValue};
 use vibe_core::config::{
-    ConfigDiscovery, ConfigMutation, ConfigPatchOp, ConfigPaths, ConfigTarget, ConfigWrite,
-    DotenvValues, JsonPointer, LayeredConfig, PatchOperation, ProxyEnvironmentStore, ProxyKey,
+    ConfigDiscovery, ConfigMutation, ConfigPatchOp, ConfigPaths, ConfigSnapshot, ConfigTarget,
+    ConfigWrite, DotenvValues, JsonPointer, LayeredConfig, PatchOperation, ProxyEnvironmentStore,
+    ProxyKey,
 };
 use vibe_core::continuity::SessionContinuity;
 use vibe_core::events::ModelMessage;
@@ -32,6 +34,10 @@ use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
 /// The variable the reference reads the web-search credential from, and the one
 /// [`crate::server::AppServer`] resolves it through.
 const MISTRAL_KEY: &str = "MISTRAL_API_KEY";
+
+/// The levels `config/thinking/write` accepts, as the wire literal declares
+/// them.
+const THINKING_LEVELS: [&str; 5] = ["off", "low", "medium", "high", "max"];
 
 pub const RELEASE3_METHODS: &[&str] = &[
     "agents/install",
@@ -77,6 +83,60 @@ pub struct RuntimeAttachment {
     pub agent: Option<String>,
     pub agent_profile: Option<AgentProfile>,
     pub hydrated: HydratedSession,
+}
+
+/// The part of `RuntimeSnapshot` this service owns, already projected into the
+/// wire shapes its census declares.
+#[derive(Debug, Clone)]
+pub struct RuntimeProjection {
+    /// A `ConfigView`.
+    pub config: Value,
+    /// A `ConfigView`.
+    pub base_config: Value,
+    /// An `AgentSummary`.
+    pub active_agent: Value,
+    /// `AgentSummary` entries.
+    pub agents: Vec<Value>,
+    /// `SkillSummary` entries.
+    pub skills: Vec<Value>,
+    /// `ConfigIssue` entries raised while the extensions were discovered.
+    pub issues: Vec<Value>,
+    pub hooks_count: usize,
+}
+
+/// One agent profile as `AgentSummary` declares it.
+///
+/// `safety` is normalized into the four values the wire vocabulary carries: a
+/// profile file may declare anything, and an unknown word is published as
+/// `neutral` rather than as a value no client can render.
+pub(crate) fn agent_summary(profile: &AgentProfile) -> Value {
+    json!({
+        "name": profile.name,
+        "displayName": profile.display_name,
+        "description": profile.description,
+        "safety": AgentSafety::parse(&profile.safety),
+        "agentType": profile.kind,
+    })
+}
+
+/// One skill as `SkillSummary` declares it.
+///
+/// The body a skill expands to travels as `prompt`, which is the name the wire
+/// gives it. `source` collapses to the two origins this port discovers: a
+/// shipped skill and one found on disk.
+fn skill_summary(skill: &SkillDefinition) -> Value {
+    json!({
+        "name": skill.name,
+        "description": skill.description,
+        "prompt": skill.body,
+        "userInvocable": skill.user_invocable,
+        "source": match skill.source {
+            ExtensionSource::Builtin => "builtin",
+            ExtensionSource::Configured | ExtensionSource::Project | ExtensionSource::User => {
+                "local"
+            }
+        },
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -312,6 +372,111 @@ impl Release3Service {
         self.persist_runtime_sessions
     }
 
+    /// The account as `AccountView` declares it, classified from the
+    /// configuration the session runs under.
+    ///
+    /// Three of the four statuses are decidable locally: a model served by a
+    /// backend other than Mistral has no Mistral account behind it
+    /// (`unavailable`), a Mistral model whose key variable resolves to nothing
+    /// is `missing_key`, and one whose key resolves is `ready`. The fourth,
+    /// `unauthorized`, is a console verdict on the key; this port has no client
+    /// for that endpoint, so it never claims it.
+    pub fn account_view(&self) -> Value {
+        let upgrade = json!({
+            "kind": AccountActionKind::UpgradeToPro,
+            "url": format!("{}/code/extensions?focus=key", self.vibe_base_url().trim_end_matches('/')),
+        });
+        let unavailable = json!({
+            "status": AccountStatus::Unavailable,
+            "plan": null,
+            "planOffer": null,
+            "rateLimitAction": null,
+            "teleportEligible": false,
+            "teleportAction": upgrade,
+        });
+        let Ok(snapshot) = self.config.load() else {
+            return unavailable;
+        };
+        let Some(provider) = snapshot.active_provider() else {
+            return unavailable;
+        };
+        let mistral = provider
+            .get("backend")
+            .and_then(TomlValue::as_str)
+            .unwrap_or("mistral")
+            == "mistral";
+        if !mistral {
+            return unavailable;
+        }
+        let variable = provider
+            .get("api_key_env_var")
+            .and_then(TomlValue::as_str)
+            .unwrap_or(MISTRAL_KEY);
+        // The credential is resolved the way every other reader resolves one:
+        // the process environment with the vibe home's dotenv filling in what it
+        // does not set. `vibe_environment` cannot serve this, because it keeps
+        // only the `VIBE_*` keys the configuration layer is built from.
+        let configured = DotenvValues::global(&self.paths.vibe_home)
+            .environment()
+            .get(variable)
+            .is_some_and(|key| !key.trim().is_empty());
+        json!({
+            "status": if configured { AccountStatus::Ready } else { AccountStatus::MissingKey },
+            "plan": null,
+            "planOffer": null,
+            "rateLimitAction": null,
+            "teleportEligible": false,
+            "teleportAction": upgrade,
+        })
+    }
+
+    /// Whether the model new turns run on reads images.
+    ///
+    /// A configuration that will not load is read as reading them, so a broken
+    /// file never makes a client report that a transcript lost its attachments.
+    pub fn active_model_supports_images(&self) -> bool {
+        self.config
+            .load()
+            .ok()
+            .map(|snapshot| snapshot.config_view()["activeModel"]["supportsImages"] == json!(true))
+            .unwrap_or(true)
+    }
+
+    /// The base URL an account action points a browser at.
+    fn vibe_base_url(&self) -> String {
+        self.config
+            .load()
+            .ok()
+            .and_then(|snapshot| {
+                snapshot
+                    .effective
+                    .get("vibe_base_url")?
+                    .as_str()
+                    .map(ToOwned::to_owned)
+            })
+            .unwrap_or_default()
+    }
+
+    /// Whether the configuration asks for sessions to be written to disk.
+    ///
+    /// A configuration that will not load is read as enabled, matching the
+    /// shipped default: a session that is being written is the normal state, and
+    /// reporting otherwise would tell a client its transcript is being dropped.
+    pub fn session_logging_enabled(&self) -> bool {
+        self.config
+            .load()
+            .ok()
+            .and_then(|snapshot| {
+                snapshot
+                    .effective
+                    .get("session_logging")?
+                    .as_table()?
+                    .get("enabled")?
+                    .as_bool()
+            })
+            .unwrap_or(true)
+    }
+
     pub(crate) fn message_count(&self, session_id: &str) -> Result<Option<usize>, Release3Error> {
         match self.store.load(session_id) {
             Ok(hydrated) => Ok(Some(hydrated.messages.len())),
@@ -511,8 +676,11 @@ impl Release3Service {
     ) -> Result<Release3Dispatch, Release3Error> {
         match method {
             // `load` always reads from disk, so reading and reloading are the
-            // same operation.
-            "config/read" | "config/reload" => self.config_snapshot(),
+            // same operation. They answer differently: a read publishes the two
+            // configuration views, a reload publishes the runtime the server
+            // fills in around this dispatch.
+            "config/read" => self.config_read(),
+            "config/reload" => Ok(Release3Dispatch::result([] as [(&str, Value); 0])),
             // Reference `config_schema_response`: the version token lets a
             // client cache the surface instead of refetching it.
             "config/schema" => Ok(Release3Dispatch::result([
@@ -530,7 +698,7 @@ impl Release3Service {
             // that predate `config/patch` keep working. Recorded as a
             // divergence in `tasks/prd-config-parity.md`.
             "config/batchWrite" => self.config_batch_write(params),
-            "config/thinking/write" => self.single_config_write(params, "thinking", "value"),
+            "config/thinking/write" => self.thinking_write(params),
             "config/proxy/write" => self.proxy_write(params),
             "config/proxy/read" => self.proxy_read(),
             "session/list" => self.session_list(params),
@@ -631,12 +799,27 @@ impl Release3Service {
         Ok((snapshot.enabled_tools(), snapshot.disabled_tools()))
     }
 
-    fn config_snapshot(&self) -> Result<Release3Dispatch, Release3Error> {
-        let snapshot = self.config.load().map_err(config_error)?;
-        Ok(Release3Dispatch::result([(
-            "snapshot",
-            snapshot.public_view(),
-        )]))
+    /// The two configuration views `ConfigReadResponse` declares.
+    ///
+    /// No agent overlay is applied to the published configuration here, so both
+    /// views are the same document; the field stays on the wire because a
+    /// client renders "changed from the base" from it.
+    fn config_read(&self) -> Result<Release3Dispatch, Release3Error> {
+        let view = self.config.load().map_err(config_error)?.config_view();
+        Ok(Release3Dispatch::result([
+            ("config", view.clone()),
+            ("baseConfig", view),
+        ]))
+    }
+
+    /// The whole configuration, with every layer and target it was composed
+    /// from.
+    ///
+    /// This is not a wire shape: `ConfigReadResponse` publishes a narrower view
+    /// and declares no room for the rest. It stays for the in-process readers
+    /// that need the effective document, chiefly the settings screen.
+    pub fn config_document(&self) -> Result<Value, Release3Error> {
+        Ok(self.config.load().map_err(config_error)?.public_view())
     }
 
     /// Writes one or more addressed fields, routing each to the file the client
@@ -646,8 +829,8 @@ impl Release3Service {
     /// `ConfigPatchResponse` splits them: `rejected` for a request the
     /// merged-configuration preflight refused, which leaves every file
     /// byte-identical, and `failures` for a target whose write did not land
-    /// while another one did. `changedKeys` is local to this port, and comes
-    /// off the change bus rather than being recomputed for the wire.
+    /// while another one did. The server fills in the runtime the patch
+    /// produced, which is what a client reads the new values from.
     ///
     /// `reloadRuntime` is accepted and has no effect: `config/read` and
     /// `config/reload` both compose from disk on every call here, so there is no
@@ -668,42 +851,19 @@ impl Release3Service {
             .get("reason")
             .and_then(Value::as_str)
             .unwrap_or("config screen edit");
-        // The changed keys are read off the change bus rather than recomputed,
-        // so the subscription every other component uses is the one the wire
-        // answer is built from. It is cancelled before the response is composed,
-        // so it never outlives the call that registered it. Dispatch is
-        // serialized by the server, so no other patch publishes into it.
-        let observed = Arc::new(Mutex::new(BTreeSet::new()));
-        let recorder = Arc::clone(&observed);
-        let subscription = self.config.subscribe(None, move |event| {
-            if let Ok(mut keys) = recorder.lock() {
-                keys.extend(event.changed_keys.iter().cloned());
-            }
-        });
-        let applied = self.config.apply_patch(&operations, reason);
-        subscription.unsubscribe();
-        let outcome = match applied {
+        let outcome = match self.config.apply_patch(&operations, reason) {
             Ok(outcome) => outcome,
             Err(vibe_core::config::ConfigError::PatchRejected(_)) => {
-                let snapshot = self.config.load().map_err(config_error)?;
                 return Ok(Release3Dispatch::result([
-                    ("snapshot", snapshot.public_view()),
                     ("rejected", Value::Bool(true)),
                     ("failures", json!([])),
-                    ("changedKeys", json!([])),
                 ]));
             }
             Err(error) => return Err(config_error(error)),
         };
-        let changed_keys = observed
-            .lock()
-            .map(|keys| keys.iter().cloned().collect::<Vec<_>>())
-            .unwrap_or_default();
         Ok(Release3Dispatch::result([
-            ("snapshot", outcome.snapshot.public_view()),
             ("rejected", Value::Bool(false)),
             ("failures", json!(outcome.failures)),
-            ("changedKeys", json!(changed_keys)),
         ]))
     }
 
@@ -725,10 +885,21 @@ impl Release3Service {
             .get("writes")
             .and_then(Value::as_array)
             .ok_or_else(|| Release3Error::InvalidParams("writes must be an array".to_owned()))?;
-        let writes = raw
+        let mut writes = raw
             .iter()
             .map(parse_config_write)
             .collect::<Result<Vec<_>, _>>()?;
+        // A caller that names no fingerprint means "write on top of what is on
+        // disk now" rather than "the file must not exist", which is how the
+        // addressed writes read an absent one too. The check still stands: the
+        // fingerprint is taken here and compared inside the transaction.
+        let snapshot = self.config.load().map_err(config_error)?;
+        for write in &mut writes {
+            if write.expected_fingerprint.is_none() {
+                write.expected_fingerprint =
+                    snapshot.fingerprints.get(&write.target).cloned().flatten();
+            }
+        }
         let snapshot = self.config.batch_write(&writes).map_err(config_error)?;
         Ok(Release3Dispatch::result([(
             "snapshot",
@@ -736,12 +907,25 @@ impl Release3Service {
         )]))
     }
 
-    fn single_config_write(
+    /// Writes the thinking level, which the reference addresses by name rather
+    /// than through the patch surface.
+    ///
+    /// The answer carries nothing of its own: the server publishes the runtime
+    /// the write produced, which is what `ConfigMutationResponse` declares.
+    fn thinking_write(
         &self,
         params: &BTreeMap<String, Value>,
-        config_key: &str,
-        value_key: &str,
     ) -> Result<Release3Dispatch, Release3Error> {
+        let level = params
+            .get("level")
+            .and_then(Value::as_str)
+            .ok_or_else(|| Release3Error::InvalidParams("level is required".to_owned()))?;
+        if !THINKING_LEVELS.contains(&level) {
+            return Err(Release3Error::InvalidParams(format!(
+                "level must be one of {}",
+                THINKING_LEVELS.join(", ")
+            )));
+        }
         let target = parse_target(
             params
                 .get("target")
@@ -754,27 +938,17 @@ impl Release3Service {
             .and_then(Value::as_str)
             .map(ToOwned::to_owned)
             .or_else(|| snapshot.fingerprints.get(&target).cloned().flatten());
-        let value = params
-            .get(value_key)
-            .cloned()
-            .ok_or_else(|| Release3Error::InvalidParams(format!("{value_key} is required")))?;
-        let mutation = ConfigMutation::set(
-            [config_key],
-            TomlValue::try_from(value)
-                .map_err(|error| Release3Error::InvalidParams(error.to_string()))?,
-        );
-        let snapshot = self
-            .config
+        self.config
             .batch_write(&[ConfigWrite {
                 target,
                 expected_fingerprint,
-                mutations: vec![mutation],
+                mutations: vec![ConfigMutation::set(
+                    ["thinking"],
+                    TomlValue::String(level.to_owned()),
+                )],
             }])
             .map_err(config_error)?;
-        Ok(Release3Dispatch::result([(
-            "snapshot",
-            snapshot.public_view(),
-        )]))
+        Ok(Release3Dispatch::result([] as [(&str, Value); 0]))
     }
 
     fn proxy_read(&self) -> Result<Release3Dispatch, Release3Error> {
@@ -840,13 +1014,15 @@ impl Release3Service {
         let offset = usize_param(params, "offset", 0)?;
         let limit = usize_param(params, "limit", 50)?;
         let cwd = params.get("cwd").and_then(Value::as_str);
-        let migration = self.store.migrate_legacy().map_err(storage_error)?;
+        // The legacy migration still runs before the page is read, so a store
+        // written by an older layout is listed; what it moved is not published,
+        // because `SessionListResponse` declares the page and nothing else.
+        self.store.migrate_legacy().map_err(storage_error)?;
         let page = self.store.list(cwd, offset, limit).map_err(storage_error)?;
-        Ok(Release3Dispatch::result([
-            ("sessions", serde_json::to_value(page.sessions)?),
-            ("nextOffset", json!(page.next_offset)),
-            ("migration", serde_json::to_value(migration)?),
-        ]))
+        Ok(Release3Dispatch::result([(
+            "sessions",
+            serde_json::to_value(page.sessions)?,
+        )]))
     }
 
     fn history_list(
@@ -1169,18 +1345,100 @@ impl Release3Service {
         ))
     }
 
+    /// The agent catalog as `AgentsListResponse` declares it.
+    ///
+    /// `active` is the agent a fresh session would run, which the server
+    /// replaces with the one the addressed session actually runs. It is always
+    /// published: the field is required, and a client that cannot resolve it
+    /// has no agent to render as selected.
     fn agents_list(&self) -> Result<Release3Dispatch, Release3Error> {
+        let profiles = self.available_agents()?;
+        let active = self
+            .default_agent_name()
+            .ok()
+            .and_then(|name| {
+                profiles
+                    .iter()
+                    .find(|profile| profile.name == name)
+                    .cloned()
+            })
+            .or_else(|| profiles.first().cloned())
+            .unwrap_or_else(builtin_agents::default_profile);
+        Ok(Release3Dispatch::result([
+            ("active", agent_summary(&active)),
+            (
+                "agents",
+                Value::Array(profiles.iter().map(agent_summary).collect()),
+            ),
+        ]))
+    }
+
+    /// Every agent profile a session may run, with the uninstalled builtins
+    /// filtered out.
+    fn available_agents(&self) -> Result<Vec<AgentProfile>, Release3Error> {
         let installed = self.installed_agent_names()?;
-        let agents = self
+        Ok(self
             .catalog()
             .agents
             .into_values()
             .filter(|profile| profile.name != "lean" || installed.contains("lean"))
+            .collect())
+    }
+
+    /// The configuration, catalogs and diagnostics `RuntimeSnapshot` carries.
+    ///
+    /// The server owns the rest of the snapshot: the tool surface, the
+    /// integrations and the session's own accounting. `active_agent` names the
+    /// profile the session runs, which this service cannot know on its own.
+    pub fn runtime_projection(&self, active_agent: Option<&str>) -> RuntimeProjection {
+        let snapshot = self.config.load().ok();
+        let view = snapshot
+            .as_ref()
+            .map_or_else(|| Value::Object(Map::new()), ConfigSnapshot::config_view);
+        let catalog = self.catalog();
+        let installed = self.installed_agent_names().unwrap_or_default();
+        let profiles = catalog
+            .agents
+            .values()
+            .filter(|profile| profile.name != "lean" || installed.contains("lean"))
+            .cloned()
             .collect::<Vec<_>>();
-        Ok(Release3Dispatch::result([(
-            "agents",
-            serde_json::to_value(agents)?,
-        )]))
+        let active = active_agent
+            .and_then(|name| {
+                profiles
+                    .iter()
+                    .find(|profile| profile.name == name)
+                    .cloned()
+            })
+            .or_else(|| {
+                let default = self.default_agent_name().ok()?;
+                profiles
+                    .iter()
+                    .find(|profile| profile.name == default)
+                    .cloned()
+            })
+            .unwrap_or_else(builtin_agents::default_profile);
+        RuntimeProjection {
+            // No agent overlay is applied to the published configuration here,
+            // so the two views are the same document, as the reference host
+            // path also answers with.
+            base_config: view.clone(),
+            config: view,
+            active_agent: agent_summary(&active),
+            agents: profiles.iter().map(agent_summary).collect(),
+            skills: catalog.skills.values().map(skill_summary).collect(),
+            issues: catalog
+                .issues
+                .iter()
+                .map(|issue| {
+                    json!({
+                        "file": issue.path.to_string_lossy(),
+                        "message": issue.message,
+                    })
+                })
+                .collect(),
+            hooks_count: catalog.hooks.len(),
+        }
     }
 
     fn agent_install(
@@ -1192,16 +1450,14 @@ impl Release3Service {
             return self.agents_list();
         }
         let source = self.authorized_existing_path(Path::new(required_string(params, "path")?))?;
-        let profile = self
-            .agents
+        self.agents
             .lock()
             .map_err(|_| Release3Error::StatePoisoned)?
             .install(&source)
             .map_err(|error| Release3Error::Extension(error.to_string()))?;
-        Ok(Release3Dispatch::result([(
-            "agent",
-            serde_json::to_value(profile)?,
-        )]))
+        // Both forms answer with the catalog the change produced, which is what
+        // `AgentsListResponse` declares and what a client re-renders from.
+        self.agents_list()
     }
 
     fn agent_uninstall(
@@ -1223,10 +1479,12 @@ impl Release3Service {
                     .and_then(Value::as_str)
                     == Some(name)
             {
+                // The session was running the agent that just went away, so it
+                // falls back to the default and the answer names it as active.
                 let (profile, hydrated) = self.set_session_agent(session_id, "default")?;
                 dispatch
                     .result
-                    .insert("agent".to_owned(), serde_json::to_value(profile)?);
+                    .insert("active".to_owned(), agent_summary(&profile));
                 dispatch.attachment = Some(runtime_attachment(&hydrated));
             }
             return Ok(dispatch);
@@ -1236,7 +1494,7 @@ impl Release3Service {
             .map_err(|_| Release3Error::StatePoisoned)?
             .uninstall(required_string(params, "name")?)
             .map_err(|error| Release3Error::Extension(error.to_string()))?;
-        Ok(Release3Dispatch::result([("removed", json!(true))]))
+        self.agents_list()
     }
 
     fn set_builtin_agent_installed(&self, name: &str, install: bool) -> Result<(), Release3Error> {
@@ -1326,15 +1584,17 @@ impl Release3Service {
         })
     }
 
+    /// The skill catalog as `SkillsListResponse` declares it.
+    ///
+    /// The discovery issues the catalog also carries are published on
+    /// `runtime/read` rather than here, which is where the reference reports
+    /// them and the only shape this response accepts.
     fn skills_list(&self) -> Result<Release3Dispatch, Release3Error> {
         let catalog = self.catalog();
-        Ok(Release3Dispatch::result([
-            (
-                "skills",
-                serde_json::to_value(catalog.skills.into_values().collect::<Vec<_>>())?,
-            ),
-            ("issues", serde_json::to_value(catalog.issues)?),
-        ]))
+        Ok(Release3Dispatch::result([(
+            "skills",
+            Value::Array(catalog.skills.values().map(skill_summary).collect()),
+        )]))
     }
 
     fn prompt_prepare(
@@ -1814,11 +2074,7 @@ mod tests {
         )
         .expect("user fixture");
 
-        let snapshot = service
-            .dispatch("config/read", &BTreeMap::new())
-            .expect("config reads")
-            .result["snapshot"]
-            .clone();
+        let snapshot = service.config_document().expect("config reads");
 
         let discovered = snapshot["layerValues"]
             .as_array()
@@ -2048,15 +2304,14 @@ mod tests {
 
         assert_eq!(written.result["rejected"], json!(false));
         assert_eq!(written.result["failures"], json!([]));
+        // The answer names what failed, not what moved: `ConfigPatchResponse`
+        // declares no room for the changed keys, so the effect is read from the
+        // configuration the patch produced.
+        assert!(!written.result.contains_key("changedKeys"));
+        let document = service.config_document().expect("config read");
+        assert_eq!(document["config"]["theme"], json!("nord"));
         assert_eq!(
-            written.result["changedKeys"],
-            json!(["theme", "tools/bash"]),
-            "a subtree that did not exist before is reported whole at the node it appears under, \
-             and `tools` itself already exists because the Discovered layer composes it"
-        );
-        assert_eq!(written.result["snapshot"]["config"]["theme"], json!("nord"));
-        assert_eq!(
-            written.result["snapshot"]["config"]["tools"]["bash"]["allowlist"],
+            document["config"]["tools"]["bash"]["allowlist"],
             json!(["git status"]),
             "the intermediate tables the leaf needs were created"
         );
@@ -2072,9 +2327,9 @@ mod tests {
                 &patch(json!([{"op": "remove", "path": "/theme"}])),
             )
             .expect("removal applies");
-        assert_eq!(removed.result["changedKeys"], json!(["theme"]));
+        assert_eq!(removed.result["rejected"], json!(false));
         assert_eq!(
-            removed.result["snapshot"]["config"]["theme"],
+            service.config_document().expect("config read")["config"]["theme"],
             json!("auto"),
             "removing the override falls back to the shipped default"
         );
@@ -2086,21 +2341,22 @@ mod tests {
                 &patch(json!([{"op": "set", "path": "/tools/bash/allowlist", "value": ["git status", "ls"]}])),
             )
             .expect("deep set applies");
+        assert_eq!(deepened.result["failures"], json!([]));
         assert_eq!(
-            deepened.result["changedKeys"],
-            json!(["tools/bash/allowlist"])
+            service.config_document().expect("config read")["config"]["tools"]["bash"]["allowlist"],
+            json!(["git status", "ls"])
         );
 
-        // A patch that writes the value already in place moves nothing, so the
-        // bus stays quiet.
+        // A patch that writes the value already in place is answered the same
+        // way rather than being refused.
         let repeated = service
             .dispatch(
                 "config/patch",
                 &patch(json!([{"op": "set", "path": "/tools/bash/allowlist", "value": ["git status", "ls"]}])),
             )
             .expect("repeat applies");
-        assert_eq!(repeated.result["changedKeys"], json!([]));
         assert_eq!(repeated.result["rejected"], json!(false));
+        assert_eq!(repeated.result["failures"], json!([]));
     }
 
     /// The preflight runs against the merged configuration and refuses the whole
@@ -2130,7 +2386,6 @@ mod tests {
                 .expect("the request is answered rather than raised");
             assert_eq!(rejected.result["rejected"], json!(true), "{ops}");
             assert_eq!(rejected.result["failures"], json!([]));
-            assert_eq!(rejected.result["changedKeys"], json!([]));
             assert_eq!(
                 digest(&user),
                 Some(before.clone()),
@@ -2138,10 +2393,7 @@ mod tests {
             );
         }
         assert_eq!(
-            service
-                .dispatch("config/read", &BTreeMap::new())
-                .expect("config read")
-                .result["snapshot"]["config"]["theme"],
+            service.config_document().expect("config read")["config"]["theme"],
             json!("nord")
         );
     }
@@ -2179,11 +2431,10 @@ mod tests {
             "{failures:?}"
         );
         assert_eq!(
-            outcome.result["snapshot"]["config"]["theme"],
+            service.config_document().expect("config read")["config"]["theme"],
             json!("dracula"),
             "the write that succeeded stands"
         );
-        assert_eq!(outcome.result["changedKeys"], json!(["theme"]));
 
         // An operation naming no target goes to the file the selection resolves
         // to, which is the trusted project file now that one exists.
@@ -2383,10 +2634,8 @@ mod tests {
     #[test]
     fn config_read_composes_the_shipped_defaults_without_a_configuration_file() {
         let (_temporary, service) = service();
-        let snapshot = service
-            .dispatch("config/read", &BTreeMap::new())
-            .expect("config read");
-        let config = &snapshot.result["snapshot"]["config"];
+        let snapshot = service.config_document().expect("config read");
+        let config = &snapshot["config"];
 
         assert_eq!(config["active_model"], json!("mistral-medium-3.5"));
         assert_eq!(config["theme"], json!("auto"));
@@ -2397,11 +2646,11 @@ mod tests {
             "models are read back keyed by alias"
         );
         assert_eq!(
-            snapshot.result["snapshot"]["validationWarnings"],
+            snapshot["validationWarnings"],
             json!([]),
             "the shipped defaults need no repair"
         );
-        let layers = snapshot.result["snapshot"]["layerValues"]
+        let layers = snapshot["layerValues"]
             .as_array()
             .expect("the snapshot lists its layers");
         let defaults = layers
@@ -2442,13 +2691,8 @@ mod tests {
                 .as_array()
                 .is_some_and(|agents| agents.iter().any(|agent| agent["name"] == "lean"))
         );
-        let config = service
-            .dispatch("config/read", &BTreeMap::new())
-            .expect("config after install");
-        assert_eq!(
-            config.result["snapshot"]["config"]["installed_agents"],
-            json!(["lean"])
-        );
+        let config = service.config_document().expect("config after install");
+        assert_eq!(config["config"]["installed_agents"], json!(["lean"]));
 
         service
             .dispatch(
@@ -2761,18 +3005,13 @@ tool_timeout_sec = 2
             true,
         )
         .expect("service");
-        let snapshot = service
-            .dispatch("config/read", &BTreeMap::new())
-            .expect("configuration reads");
+        let snapshot = service.config_document().expect("configuration reads");
 
-        assert_eq!(
-            snapshot.result["snapshot"]["config"]["theme"],
-            json!("nord")
-        );
+        assert_eq!(snapshot["config"]["theme"], json!("nord"));
         // The credential in the same file is not a configuration field and
         // never reaches the published document.
         assert!(
-            !json!(snapshot.result).to_string().contains("secret"),
+            !snapshot.to_string().contains("secret"),
             "no dotenv secret reaches the configuration surface"
         );
     }
@@ -2817,13 +3056,8 @@ tool_timeout_sec = 2
                 .expect("user file")
                 .contains("edit")
         );
-        let snapshot = service
-            .dispatch("config/read", &BTreeMap::new())
-            .expect("configuration reads");
-        assert_eq!(
-            snapshot.result["snapshot"]["config"]["disabled_tools"],
-            json!(["edit"])
-        );
+        let snapshot = service.config_document().expect("configuration reads");
+        assert_eq!(snapshot["config"]["disabled_tools"], json!(["edit"]));
     }
 
     /// US-071: an added directory is a project root of its own, so its

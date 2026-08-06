@@ -44,7 +44,7 @@ pub(super) fn apply_pending(
             let previous = runtime.model.clone();
             if call_runtime(
                 runtime,
-                "session/settings/update",
+                "session/overrides/write",
                 json!({"sessionId": runtime.session_id, "model": model}),
                 state,
             )
@@ -62,7 +62,7 @@ pub(super) fn apply_pending(
                 state,
             ) {
                 if let Err(error) = runtime.service.public_call(
-                    "session/settings/update",
+                    "session/overrides/write",
                     json!({"sessionId": runtime.session_id, "model": previous}),
                 ) {
                     state.push_diagnostic(format!(

@@ -562,7 +562,7 @@ pub(super) fn cycle_agent(
         .flatten()
         .filter(|agent| {
             agent
-                .get("kind")
+                .get("agentType")
                 .and_then(Value::as_str)
                 .is_none_or(|kind| kind == "agent")
         })
@@ -607,8 +607,13 @@ fn reset_selected_config(runtime: &mut Option<InteractiveRuntime>, state: &mut T
 }
 
 fn show_config(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
-    let Some(mut snapshot) = call_runtime(runtime, "config/read", json!({}), state)
-        .and_then(|result| result.get("snapshot").cloned())
+    // The effective document with every layer it was composed from, which the
+    // published `ConfigView` does not carry and this process already holds.
+    let Some(mut snapshot) = runtime
+        .release3
+        .config_document()
+        .map_err(|error| state.push_diagnostic(error.to_string()))
+        .ok()
     else {
         return;
     };
@@ -624,12 +629,10 @@ fn show_config(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
 }
 
 fn show_model(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
-    let Some(snapshot) = call_runtime(runtime, "config/read", json!({}), state)
-        .and_then(|result| result.get("snapshot").cloned())
-    else {
+    let Some(fields) = config::published_fields(runtime, state) else {
         return;
     };
-    state.overlay = Some(model_overlay(&snapshot, &runtime.model));
+    state.overlay = Some(model_overlay(&fields, &runtime.model));
 }
 
 fn show_sessions(runtime: &mut InteractiveRuntime, working_directory: &Path, state: &mut TuiState) {
@@ -681,10 +684,8 @@ pub(super) fn show_rewind(runtime: &mut InteractiveRuntime, state: &mut TuiState
 }
 
 fn show_voice(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
-    if let Some(snapshot) = call_runtime(runtime, "config/read", json!({}), state)
-        .and_then(|result| result.get("snapshot").cloned())
-    {
-        state.overlay = Some(voice_overlay(&snapshot));
+    if let Some(fields) = config::published_fields(runtime, state) {
+        state.overlay = Some(voice_overlay(&fields));
     }
 }
 
@@ -771,8 +772,10 @@ fn mutate_lean_agent(runtime: &mut InteractiveRuntime, state: &mut TuiState, ins
         json!({"sessionId": runtime.session_id, "agentName": "lean"}),
         state,
     ) {
+        // The catalog answer names the agent the session runs now, which is the
+        // default when the one it was running has just been uninstalled.
         if let Some(agent) = result
-            .get("agent")
+            .get("active")
             .and_then(|agent| agent.get("name"))
             .and_then(Value::as_str)
         {

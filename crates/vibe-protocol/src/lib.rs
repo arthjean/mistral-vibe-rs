@@ -128,10 +128,11 @@ pub const SERVER_METHODS: [&str; 89] = [
 /// written against the reference protocol never learns a name only this
 /// implementation answers. Each one has a row in the Accepted divergences table
 /// of `docs/parity.md`.
-pub const LOCAL_EXTENSION_METHODS: [&str; 3] = [
+pub const LOCAL_EXTENSION_METHODS: [&str; 4] = [
     "config/batchWrite",
     "connectors/toggle",
     "mcp/auth/complete",
+    "session/overrides/write",
 ];
 
 /// Correlates a request with its response.

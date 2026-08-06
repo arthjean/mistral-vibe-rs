@@ -42,13 +42,8 @@ pub(super) async fn select_overlay_item(
         OverlayKind::Config => match item.id.as_str() {
             "config-target" => {
                 let current = runtime.config_target.unwrap_or_else(|| {
-                    ConfigLayerTarget::from_snapshot(
-                        &runtime
-                            .service
-                            .public_call("config/read", json!({"sessionId": runtime.session_id}))
-                            .ok()
-                            .and_then(|result| result.get("snapshot").cloned())
-                            .unwrap_or(Value::Null),
+                    ConfigLayerTarget::from_selected_target(
+                        selected_config_target(runtime).as_deref(),
                     )
                 });
                 state.overlay = Some(config_target_overlay(current));

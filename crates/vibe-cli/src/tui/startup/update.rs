@@ -136,12 +136,10 @@ pub fn resolve_startup_update_prompt(
 #[must_use]
 pub fn update_checks_enabled(release3: &Release3Service) -> bool {
     release3
-        .dispatch("config/read", &std::collections::BTreeMap::new())
+        .config_document()
         .ok()
-        .and_then(|dispatch| {
-            dispatch
-                .result
-                .get("snapshot")?
+        .and_then(|document| {
+            document
                 .get("config")?
                 .get("enable_update_checks")?
                 .as_bool()

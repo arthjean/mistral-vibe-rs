@@ -18,6 +18,29 @@ pub enum ResourceBackendCommand {
 }
 
 impl ResourceBackendCommand {
+    /// The method this command was parsed from.
+    ///
+    /// The deferred path carries the command rather than the request, and the
+    /// answer's shape is decided by the method, so the name travels with it.
+    #[must_use]
+    pub const fn method(&self) -> &'static str {
+        match self {
+            Self::Connector(ConnectorCommand::Read) => "connectors/read",
+            Self::Connector(ConnectorCommand::AuthRead { .. }) => "connectors/auth/read",
+            Self::Connector(ConnectorCommand::Refresh { .. }) => "connectors/refresh",
+            Self::Connector(ConnectorCommand::Toggle { .. }) => "connectors/toggle",
+            Self::Mcp(McpCommand::Read) => "mcp/read",
+            Self::Mcp(McpCommand::Add(_)) => "mcp/add",
+            Self::Mcp(McpCommand::Refresh { .. }) => "mcp/refresh",
+            Self::Mcp(McpCommand::Toggle { .. }) => "mcp/toggle",
+            Self::Mcp(McpCommand::Login { .. }) => "mcp/login",
+            Self::Mcp(McpCommand::CompleteAuth { .. }) => "mcp/auth/complete",
+            Self::Mcp(McpCommand::Logout { .. }) => "mcp/logout",
+            Self::Shell(ShellCommand::Run { .. }) => "shell/run",
+            Self::Shell(ShellCommand::Interrupt { .. }) => "shell/interrupt",
+        }
+    }
+
     pub fn parse(
         method: &str,
         params: &BTreeMap<String, Value>,

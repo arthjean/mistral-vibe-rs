@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+- Report what a session is actually running. `runtime/read` used to answer with
+  an empty configuration, no agents, no skills, zeroed statistics and a context
+  window of zero whatever the session was doing; it now carries the same agent
+  and skill catalogs `agents/list` and `skills/list` publish, the agent the
+  session runs, its live token accounting, the active model's threshold, the
+  number of registered hooks and its real logging state. `stats/read` answers
+  with the same snapshot, and `account/read` classifies the configured
+  credential instead of always reporting a missing key.
+- Answer the configuration calls in the shapes the protocol declares.
+  `config/read` carries the published configuration view and the base it was
+  composed from, `config/reload` and `config/thinking/write` carry the runtime
+  the write produced, and `config/patch` carries what it rejected, what failed
+  to land and the runtime afterwards. The port's own `{snapshot}` envelope,
+  which carried every layer and every effective key, leaves the wire; the
+  settings screen reads the configuration in-process and every other caller
+  reads the published field surface. `config/batchWrite` now takes the
+  fingerprint it compares against inside its own transaction, so a caller no
+  longer reads one a call earlier to send it back.
+- Publish every source a session can call a tool through in one list. MCP
+  servers and connectors now share `mcp/read`, separated by `kind`, each with
+  the six-value status the protocol declares: a source the operator switched off
+  reads as disabled rather than broken, and one that would not start carries its
+  reason under its own name in `discoveryErrors`. `connectors/read` answers with
+  the counts alone, `connectors/refresh` with the runtime and the tool count it
+  produced, and `mcp/add` with whether it created the source, its name, its URL
+  and the runtime.
+- Trim the remaining answers to what the protocol declares. `agents/list` names
+  the agent the addressed session runs alongside the catalog, `skills/list`
+  publishes the summaries without the discovery issues that now travel on the
+  runtime, `tools/list` publishes tool names, and `session/list` publishes the
+  page. A published session names its model and its agent profile rather than
+  reporting both as null.
+- Keep `session/settings/update` to the two turn budgets it declares. Changing a
+  session's model, mode, thinking level, reasoning effort or approval stance now
+  goes through `session/overrides/write`, which none of them was ever part of
+  the protocol as: upstream a model and a thinking level are configuration
+  writes and a mode and an approval stance come from an agent profile. The
+  reference method answers a call carrying any of the five with `invalid_params`
+  like any other field it does not declare, and the new name is never advertised
+  to a client that did not already ask for it.
+
 - Publish a tool call as the effect it is rather than as an untyped blob. Every
   history entry now carries one of the twelve declared effect kinds with the
   input its kind describes and the presentation a client renders it with, so a

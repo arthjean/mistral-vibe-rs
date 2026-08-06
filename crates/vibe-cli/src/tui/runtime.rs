@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use vibe_app_server::client::{HeadlessService, LiveTurnDriver, PublicDispatch};
+use vibe_app_server::release3::Release3Service;
 
 use super::chat_input::Safety;
 use super::clipboard_images::{ImageModel, ImageModels};
@@ -28,11 +29,17 @@ pub(super) struct RuntimeSkill {
     pub(super) name: String,
     pub(super) description: String,
     pub(super) body: String,
-    pub(super) path: Option<String>,
 }
 
 pub(super) struct InteractiveRuntime {
     pub(super) service: HeadlessService<LiveTurnDriver>,
+    /// The configuration service this process already runs on.
+    ///
+    /// `ConfigReadResponse` publishes a narrow view and declares no room for the
+    /// layers, targets and unregistered keys the settings screen renders, so the
+    /// screen reads the effective document from the same store the server writes
+    /// through rather than from a wire shape that does not carry it.
+    pub(super) release3: Release3Service,
     pub(super) session_id: String,
     pub(super) model: String,
     pub(super) image_models: ImageModels,
@@ -283,6 +290,7 @@ pub(in crate::tui) fn interactive_test_runtime_with_server(
         .expect("session starts");
     InteractiveRuntime {
         service,
+        release3: Release3Service::default(),
         session_id,
         model: "test-model".to_owned(),
         image_models: {

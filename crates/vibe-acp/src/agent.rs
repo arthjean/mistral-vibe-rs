@@ -416,28 +416,24 @@ where
                     scan.matched.insert(session_id.to_owned());
                 }
             }
+            let received = page.len();
             scan.saved.extend(page);
             if scan.saved.len() > MAX_SESSION_LIST_SCAN {
                 return Err(AcpError::InvalidResponse(format!(
                     "session/list exceeded the {MAX_SESSION_LIST_SCAN}-session scan limit"
                 )));
             }
-            let Some(next_offset) = result.get("nextOffset").and_then(Value::as_u64) else {
+            // `SessionListResponse` declares the page and nothing else, so the
+            // scan advances by what it received and stops on a short page,
+            // which is the same signal a cursor carried.
+            if received < SESSION_LIST_SCAN_PAGE {
                 scan.complete = true;
                 return Ok(scan);
-            };
+            }
             if scan.saved.len() >= needed && scan.matched.len() == live.len() {
                 return Ok(scan);
             }
-            let next_offset = usize::try_from(next_offset).map_err(|_| {
-                AcpError::InvalidResponse("session/list nextOffset overflowed".to_owned())
-            })?;
-            if next_offset <= app_offset {
-                return Err(AcpError::InvalidResponse(
-                    "session/list nextOffset did not advance".to_owned(),
-                ));
-            }
-            app_offset = next_offset;
+            app_offset = app_offset.saturating_add(received);
         }
     }
 
@@ -459,7 +455,7 @@ where
             .ok_or_else(|| AcpError::InvalidParams(format!("unknown session mode `{mode_id}`")))?;
         let harness = self.session_harness(session_id)?;
         harness.service.lock().await.public_call(
-            "session/settings/update",
+            "session/overrides/write",
             json!({"sessionId": session_id, "mode": mode.as_str()}),
         )?;
         harness.update_settings(|settings| settings.mode = mode)
@@ -491,7 +487,7 @@ where
             .service
             .lock()
             .await
-            .public_call("session/settings/update", params)?;
+            .public_call("session/overrides/write", params)?;
         harness.update_settings(|settings| settings.thinking = thinking)?;
         Ok(thinking_config_options(thinking))
     }

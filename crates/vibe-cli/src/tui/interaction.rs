@@ -54,8 +54,10 @@ impl ConfigLayerTarget {
     }
 
     #[must_use]
-    pub fn from_snapshot(value: &Value) -> Self {
-        if value.get("selectedTarget").and_then(Value::as_str) == Some("project") {
+    /// The layer a write lands in, from the target the published field surface
+    /// names first.
+    pub fn from_selected_target(target: Option<&str>) -> Self {
+        if target == Some("project") {
             Self::Project
         } else {
             Self::User

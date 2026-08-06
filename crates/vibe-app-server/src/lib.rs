@@ -19,3 +19,4 @@ pub mod streaming_benchmark;
 #[cfg(test)]
 mod tool_surface_parity_tests;
 pub mod transport;
+pub mod vocabulary;

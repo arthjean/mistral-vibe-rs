@@ -109,7 +109,9 @@ pub(super) async fn prepare_prompt_for_runtime(
             .push(vibe_app_server::client::PublicContentBlock::Resource {
                 resource: json!({
                     "resource": {
-                        "uri": skill.path.as_deref().unwrap_or("skill://invoked"),
+                        // The published catalog names a skill, not the file it
+                        // was read from, so the resource is addressed by name.
+                        "uri": format!("skill://{}", skill.name),
                         "name": skill.name,
                         "text": skill.body,
                     }

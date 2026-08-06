@@ -324,8 +324,9 @@ impl ResourceBackend for CoreResourceBackend {
                     self.approval.clone(),
                 )
                 .await;
-            let state = mcp_view(session.mcp.read().await, &session.tools);
-            Ok(canonical_mutation("mcp", state, diagnostics))
+            let mut dispatch = runtime_mutation([], diagnostics);
+            dispatch.signals.integrations = Some(self.integration_state(&session).await);
+            Ok(dispatch)
         })
     }
 
@@ -335,7 +336,7 @@ impl ResourceBackend for CoreResourceBackend {
     ) -> ResourceFuture<'a, ResourceDispatch> {
         Box::pin(async move {
             let session = self.session(&request.session_id)?;
-            match &request.command {
+            let mut dispatch = match &request.command {
                 ResourceBackendCommand::Mcp(command) => {
                     self.dispatch_mcp(&session, &request.session_id, command)
                         .await
@@ -347,7 +348,17 @@ impl ResourceBackend for CoreResourceBackend {
                 ResourceBackendCommand::Shell(command) => {
                     self.dispatch_shell(&session, command).await
                 }
+            }?;
+            // Every integration call learns the current state on its way
+            // through, so it carries it back: the runtime snapshot is composed
+            // synchronously and cannot ask an async backend for it.
+            if matches!(
+                request.command,
+                ResourceBackendCommand::Mcp(_) | ResourceBackendCommand::Connector(_)
+            ) {
+                dispatch.signals.integrations = Some(self.integration_state(&session).await);
             }
+            Ok(dispatch)
         })
     }
 

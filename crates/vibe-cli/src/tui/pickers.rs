@@ -117,7 +117,9 @@ pub fn config_overlay(snapshot: &Value, schema: &Value) -> Overlay {
             advanced.push(item);
         }
     }
-    let target = ConfigLayerTarget::from_snapshot(snapshot);
+    let target = ConfigLayerTarget::from_selected_target(
+        snapshot.get("selectedTarget").and_then(Value::as_str),
+    );
     let mut items = Vec::with_capacity(popular.len() + advanced.len() + 3);
     items.push(OverlayItem::new(
         "config-target",

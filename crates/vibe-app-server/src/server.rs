@@ -176,6 +176,7 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "session/close",
     "session/compact/start",
     "session/context/inject",
+    "session/overrides/write",
     "session/read",
     "session/ready/read",
     "session/ready/wait",
@@ -1430,10 +1431,12 @@ impl AppServer {
             command,
         };
         let session_id = request.session_id.clone();
+        let method = request.command.method();
         resource_result_batch(
             request_id,
             self,
             &session_id,
+            method,
             backend.dispatch(request).await,
         )
     }
@@ -1487,21 +1490,132 @@ impl AppServer {
             runtime_updated: false,
             warnings: vec![message],
             auth_url: None,
+            integrations: None,
         };
-        let signals = match &self.resource_backend {
+        let mut signals = match &self.resource_backend {
             None => warning("MCP transport backend is not configured".to_owned()),
             Some(backend) => match backend.configure_mcp(session_id, configs).await {
                 Ok(dispatch) => dispatch.signals,
                 Err(error) => warning(redact(&error.to_string())),
             },
         };
+        if let Some(state) = signals.integrations.take()
+            && let Ok(mut resources) = self.resources.lock()
+        {
+            resources.record_integrations(session_id, state);
+        }
         signal_frames(self, session_id, &signals)
     }
 
-    /// The session's runtime as `runtime/updated` publishes it, or `None` when
-    /// the resource state cannot be read.
+    /// The session's runtime as `runtime/read` answers and `runtime/updated`
+    /// publishes it, or `None` when the resource state cannot be read.
+    ///
+    /// Three owners contribute: the resource service holds the tool surface and
+    /// the integrations, the release3 service holds the configuration and the
+    /// catalogs, and the session itself holds its accounting. Composing here is
+    /// what makes the answer live rather than a fixed payload, and it is the
+    /// same composition the notification publishes.
     pub(crate) fn runtime_snapshot(&self, session_id: &str) -> Option<Value> {
-        self.resources.lock().ok()?.runtime(session_id).ok()
+        let mut snapshot = self.resources.lock().ok()?.runtime(session_id).ok()?;
+        let (active_agent, stats, context_window) = match self.lock_sessions() {
+            Ok(sessions) => {
+                let session = sessions.get(session_id);
+                (
+                    session.and_then(|session| session.intent.agent.clone()),
+                    public_stats(session),
+                    session.map_or(0, |session| session.context_window),
+                )
+            }
+            Err(_) => (None, public_stats(None), 0),
+        };
+        let projection = self.release3.runtime_projection(active_agent.as_deref());
+        // Discovery issues and configuration diagnostics are the same fact to a
+        // client: a file the session could not read cleanly.
+        if let Some(Value::Array(issues)) = snapshot.get_mut("issues") {
+            issues.extend(projection.issues);
+        }
+        snapshot.insert("config".to_owned(), projection.config);
+        snapshot.insert("baseConfig".to_owned(), projection.base_config);
+        snapshot.insert("activeAgent".to_owned(), projection.active_agent);
+        snapshot.insert("agents".to_owned(), Value::Array(projection.agents));
+        snapshot.insert("skills".to_owned(), Value::Array(projection.skills));
+        snapshot.insert("hooksCount".to_owned(), json!(projection.hooks_count));
+        snapshot.insert("stats".to_owned(), stats);
+        snapshot.insert("contextWindow".to_owned(), json!(context_window));
+        Some(Value::Object(snapshot))
+    }
+
+    /// How many images in the session's history the active model cannot read.
+    ///
+    /// A client shows this after a configuration change so the operator learns
+    /// that switching model dropped what the transcript already carries. A model
+    /// that reads images strips nothing, so the count is zero without walking
+    /// the history.
+    pub(crate) fn stripped_history_images(&self, session_id: &str) -> usize {
+        if self.release3.active_model_supports_images() {
+            return 0;
+        }
+        let Ok(sessions) = self.lock_sessions() else {
+            return 0;
+        };
+        sessions
+            .get(session_id)
+            .and_then(|session| session.snapshot.as_ref())
+            .map(|snapshot| {
+                snapshot
+                    .history
+                    .iter()
+                    .filter_map(|entry| match entry {
+                        PublicHistoryEntry::Message { content, .. } => Some(content),
+                        _ => None,
+                    })
+                    .flatten()
+                    .filter(|block| matches!(block, PublicContentBlock::Image { .. }))
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
+    /// The session's logging state as `SessionLogSummary` declares it.
+    ///
+    /// A session the store never persisted reports its configured switch and
+    /// nothing else, which is what a client renders as "not being written".
+    pub(crate) fn session_log_summary(&self, session_id: &str) -> Value {
+        let enabled = self.release3.session_logging_enabled();
+        let Ok(sessions) = self.lock_sessions() else {
+            return json!({
+                "enabled": enabled,
+                "sessionId": null,
+                "persisted": false,
+                "path": null,
+                "title": null,
+                "needsInitialAutoTitle": false,
+            });
+        };
+        let session = sessions.get(session_id);
+        let persisted = session.and_then(|session| session.persisted.as_ref());
+        let title = session
+            .and_then(|session| {
+                session
+                    .snapshot
+                    .as_ref()
+                    .and_then(|snapshot| snapshot.title.clone())
+            })
+            .or_else(|| persisted.and_then(|hydrated| hydrated.metadata.title.clone()));
+        json!({
+            "enabled": enabled,
+            "sessionId": persisted.map(|hydrated| hydrated.metadata.id.clone()),
+            "persisted": persisted.is_some(),
+            "path": persisted
+                .map(|hydrated| hydrated.metadata.directory.clone())
+                .filter(|directory| !directory.is_empty()),
+            "title": title,
+            // A persisted session whose title is still the one the store
+            // generated is waiting for its first real one.
+            "needsInitialAutoTitle": persisted.is_some_and(|hydrated| {
+                hydrated.metadata.title.is_none() && hydrated.metadata.title_source == "auto"
+            }),
+        })
     }
 
     pub(crate) fn orphaned_resource_generation(
@@ -1533,6 +1647,10 @@ impl AppServer {
                 &attachment.hydrated,
                 attachment.agent_profile.as_ref(),
             );
+            session.agent_summary = attachment
+                .agent_profile
+                .as_ref()
+                .map(crate::release3::agent_summary);
             if review_override.is_some() {
                 session.review = review_override;
             }
@@ -1595,6 +1713,10 @@ impl AppServer {
             now_millis(),
         );
         session.persisted = Some(attachment.hydrated.clone());
+        session.agent_summary = attachment
+            .agent_profile
+            .as_ref()
+            .map(crate::release3::agent_summary);
         session.context_window = self.release3.context_window();
         sessions.insert(session);
         self.open_session_resources(
@@ -1711,6 +1833,10 @@ impl AppServer {
             &attachment.hydrated,
             attachment.agent_profile.as_ref(),
         );
+        session.agent_summary = attachment
+            .agent_profile
+            .as_ref()
+            .map(crate::release3::agent_summary);
         if review_override.is_some() {
             session.review = review_override;
         }
@@ -2191,6 +2317,7 @@ impl ServerConnection {
             "session/close" => self.session_close(request),
             "session/compact/start" => self.session_compact_start(request),
             "session/settings/update" => self.session_settings_update(request),
+            "session/overrides/write" => self.session_overrides_write(request),
             "turn/start" => self.turn_start(request),
             "turn/steer" => self.turn_steer(request),
             "turn/interrupt" => self.turn_interrupt(request),
@@ -2582,6 +2709,7 @@ impl ServerConnection {
         session.snapshot = initial_snapshot;
         session.aliases = aliases;
         session.persisted = persisted;
+        session.agent_summary = Some(crate::release3::agent_summary(&agent_profile));
         session.context_window = self.server.release3.context_window();
         sessions.insert(session);
         if let Err(error) = self.server.open_session_resources(
@@ -2732,6 +2860,28 @@ impl ServerConnection {
                 return invalid_params_batch(request.id, rejection);
             }
         };
+        self.write_session_settings(request.id, params.into())
+    }
+
+    /// The local extension that writes what the reference settings method does
+    /// not declare.
+    fn session_overrides_write(&mut self, request: ServerRequest) -> DispatchBatch {
+        let params = match from_params::<SessionOverridesWriteParams>(&request.params) {
+            Ok(params) => params,
+            Err(rejection) => {
+                return invalid_params_batch(request.id, rejection);
+            }
+        };
+        self.write_session_settings(request.id, params.into())
+    }
+
+    /// Applies whichever settings the two methods carried, to the session and to
+    /// its persisted runtime.
+    fn write_session_settings(
+        &mut self,
+        request_id: RequestId,
+        params: SessionSettings,
+    ) -> DispatchBatch {
         if params.max_turns.is_none()
             && params.model.is_none()
             && params.max_tokens.is_none()
@@ -2741,7 +2891,7 @@ impl ServerConnection {
             && params.auto_approve.is_none()
         {
             return error_batch(
-                request.id,
+                request_id,
                 ProtocolErrorCode::InvalidParams,
                 "At least one session setting must be provided",
             );
@@ -2752,7 +2902,7 @@ impl ServerConnection {
             .is_some_and(|mode| !matches!(mode, "code" | "plan"))
         {
             return error_batch(
-                request.id,
+                request_id,
                 ProtocolErrorCode::InvalidParams,
                 "mode must be `code` or `plan`",
             );
@@ -2763,29 +2913,29 @@ impl ServerConnection {
             .is_some_and(|effort| !matches!(effort, "low" | "medium" | "high" | "max"))
         {
             return error_batch(
-                request.id,
+                request_id,
                 ProtocolErrorCode::InvalidParams,
                 "reasoningEffort must be low, medium, high, or max",
             );
         }
-        if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
+        if let Some(batch) = self.attachment_error(request_id.clone(), &params.session_id) {
             return batch;
         }
         let canonical_session_id = {
             let sessions = match self.server.lock_sessions() {
                 Ok(sessions) => sessions,
-                Err(error) => return internal_error_batch(request.id, &error),
+                Err(error) => return internal_error_batch(request_id, &error),
             };
             let Some(session) = sessions.get(&params.session_id) else {
                 return error_batch(
-                    request.id,
+                    request_id,
                     ProtocolErrorCode::NotFound,
                     "Session was not found",
                 );
             };
             if params.auto_approve.is_some() && session.active_turn.is_some() {
                 return error_batch(
-                    request.id,
+                    request_id,
                     ProtocolErrorCode::Conflict,
                     "autoApprove can only change while the session is idle",
                 );
@@ -2821,15 +2971,15 @@ impl ServerConnection {
             .update_runtime_settings(&canonical_session_id, &persisted_settings)
         {
             Ok(persisted) => persisted,
-            Err(error) => return release3_error_batch(request.id, error),
+            Err(error) => return release3_error_batch(request_id, error),
         };
         let mut sessions = match self.server.lock_sessions() {
             Ok(sessions) => sessions,
-            Err(error) => return internal_error_batch(request.id, &error),
+            Err(error) => return internal_error_batch(request_id, &error),
         };
         let Some(session) = sessions.get_mut(&params.session_id) else {
             return error_batch(
-                request.id,
+                request_id,
                 ProtocolErrorCode::NotFound,
                 "Session was not found",
             );
@@ -2866,9 +3016,9 @@ impl ServerConnection {
                 .server
                 .refresh_session_workspace_tools(&canonical_session_id)
         {
-            return internal_error_batch(request.id, &error);
+            return internal_error_batch(request_id, &error);
         }
-        success_batch(request.id, BTreeMap::new())
+        success_batch(request_id, BTreeMap::new())
     }
 
     fn session_compact_start(&mut self, request: ServerRequest) -> DispatchBatch {
@@ -3418,6 +3568,12 @@ impl ServerConnection {
         {
             return batch;
         }
+        // The three live-state reads are composed here rather than inside the
+        // resource service: each one needs the configuration, the catalogs or
+        // the session's own accounting, and the service holds none of them.
+        if let Some(batch) = self.live_state_request(&request, &session_id) {
+            return batch;
+        }
         let session_active = match self.server.lock_sessions() {
             Ok(sessions) => sessions
                 .get(&session_id)
@@ -3472,7 +3628,64 @@ impl ServerConnection {
                 Err(error) => return internal_error_batch(request.id, &error),
             }
         }
-        resource_result_batch(request.id, &self.server, &session_id, result)
+        resource_result_batch(
+            request.id,
+            &self.server,
+            &session_id,
+            &request.method,
+            result,
+        )
+    }
+
+    /// Answers the three methods that report live session state.
+    ///
+    /// `runtime/read` composes what a client renders a session from,
+    /// `stats/read` publishes the same accounting the sequenced statistics
+    /// notification carries, and `account/read` classifies the configured
+    /// credential. `None` means the request is not one of them.
+    fn live_state_request(
+        &self,
+        request: &ServerRequest,
+        session_id: &str,
+    ) -> Option<DispatchBatch> {
+        let result = match request.method.as_str() {
+            "runtime/read" => {
+                let Some(runtime) = self.server.runtime_snapshot(session_id) else {
+                    return Some(error_batch(
+                        request.id.clone(),
+                        ProtocolErrorCode::NotFound,
+                        "Session was not found",
+                    ));
+                };
+                let ready = match self.server.resources.lock() {
+                    Ok(resources) => resources.is_ready(),
+                    Err(_) => false,
+                };
+                result_map([
+                    ("runtime", runtime),
+                    ("sessionLog", self.server.session_log_summary(session_id)),
+                    ("ready", json!(ready)),
+                ])
+            }
+            "stats/read" => {
+                let (stats, context_window) = match self.server.lock_sessions() {
+                    Ok(sessions) => {
+                        let session = sessions.get(session_id);
+                        (
+                            public_stats(session),
+                            session.map_or(0, |session| session.context_window),
+                        )
+                    }
+                    Err(error) => {
+                        return Some(internal_error_batch(request.id.clone(), &error));
+                    }
+                };
+                result_map([("stats", stats), ("contextWindow", json!(context_window))])
+            }
+            "account/read" => result_map([("account", self.server.release3.account_view())]),
+            _ => return None,
+        };
+        Some(success_batch(request.id.clone(), result))
     }
 
     /// Pins a workspace-trust request to the attached session root.
@@ -3616,6 +3829,12 @@ struct SessionRuntime {
     created_at: u64,
     updated_at: u64,
     latest_turn: Option<PublicTurn>,
+    /// The agent profile this session runs, projected as `AgentSummary`.
+    ///
+    /// The intent carries the name; a client renders the profile, so the
+    /// summary is composed where the profile is resolved rather than looked up
+    /// again at every projection.
+    agent_summary: Option<Value>,
     event_watermark: u64,
     stats: SessionStats,
     /// The active model's compaction threshold, read once when the session
@@ -3655,6 +3874,7 @@ impl SessionRuntime {
             context: Vec::new(),
             steering: Vec::new(),
             snapshot: None,
+            agent_summary: None,
             attachments: 1,
             resource_generation: 1,
             aliases: BTreeSet::new(),
@@ -3725,11 +3945,11 @@ impl SessionStats {
 /// The 17-field snapshot `AgentStatsSnapshot` declares.
 ///
 /// A session with no completed turn reports zeros rather than omitting the
-/// last-turn fields, because a client renders them as numbers either way.
-fn public_stats(session: &SessionRuntime) -> Value {
+/// last-turn fields, because a client renders them as numbers either way, and
+/// so does a session the registry no longer holds.
+fn public_stats(session: Option<&SessionRuntime>) -> Value {
     let history = session
-        .snapshot
-        .as_ref()
+        .and_then(|session| session.snapshot.as_ref())
         .map(|snapshot| snapshot.history.as_slice())
         .unwrap_or_default();
     let mut steps = 0_u64;
@@ -3758,7 +3978,14 @@ fn public_stats(session: &SessionRuntime) -> Value {
             _ => {}
         }
     }
-    let stats = &session.stats;
+    let owned;
+    let stats = match session {
+        Some(session) => &session.stats,
+        None => {
+            owned = SessionStats::default();
+            &owned
+        }
+    };
     let seconds = as_f64(stats.last_turn_duration_ms) / 1_000.0;
     let tokens_per_second = if seconds > 0.0 {
         as_f64(stats.last_turn_completion_tokens) / seconds
@@ -3809,7 +4036,7 @@ pub(crate) fn server_error_frame(message: &str) -> Vec<u8> {
 
 /// Publishes the session's accounting as a sequenced `session/statsUpdated`.
 fn stats_updated_frame(session: &mut SessionRuntime) -> Vec<u8> {
-    let stats = public_stats(session);
+    let stats = public_stats(Some(session));
     let context_window = session.context_window;
     let event_id = next_event_id(session);
     encode_notification(
@@ -3973,16 +4200,41 @@ struct SessionParams {
     session_id: String,
 }
 
+/// The settings `session/settings/update` changes, which is exactly what the
+/// reference declares: the two turn budgets and nothing else.
+///
+/// A field the reference does not declare is refused here, including the five
+/// this port lets a session override. Those moved to
+/// [`SessionOverridesWriteParams`] under a local method name, so a client
+/// written against the reference protocol sees this method behave as its own
+/// model describes.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct SessionSettingsUpdateParams {
     session_id: String,
     #[serde(default)]
-    model: Option<String>,
-    #[serde(default)]
     max_turns: Option<u32>,
     #[serde(default)]
     max_tokens: Option<u64>,
+}
+
+/// What a session may override beyond the reference settings, under the local
+/// method `session/overrides/write`.
+///
+/// Upstream none of these is session-scoped: the model and the thinking level
+/// are configuration writes and the mode and the approval stance come from an
+/// agent profile. This port lets a session hold them for its own lifetime,
+/// which is what `vibe-cli` switches a model, a mode, a thinking level, a
+/// reasoning effort and an approval stance through, and what `vibe-acp` maps
+/// its session modes and config options onto. The name stays out of
+/// `SERVER_METHODS` and out of the advertised capabilities, so it is offered to
+/// nobody who did not already call it.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct SessionOverridesWriteParams {
+    session_id: String,
+    #[serde(default)]
+    model: Option<String>,
     #[serde(default)]
     mode: Option<String>,
     #[serde(default)]
@@ -3991,6 +4243,47 @@ struct SessionSettingsUpdateParams {
     reasoning_effort: Option<String>,
     #[serde(default)]
     auto_approve: Option<bool>,
+}
+
+/// The settings both methods write, whichever name carried them.
+///
+/// Splitting the wire shapes is what keeps the reference method exact; the
+/// write itself is one operation on one session, so it stays one function.
+#[derive(Debug, Default)]
+struct SessionSettings {
+    session_id: String,
+    model: Option<String>,
+    max_turns: Option<u32>,
+    max_tokens: Option<u64>,
+    mode: Option<String>,
+    thinking: Option<bool>,
+    reasoning_effort: Option<String>,
+    auto_approve: Option<bool>,
+}
+
+impl From<SessionSettingsUpdateParams> for SessionSettings {
+    fn from(params: SessionSettingsUpdateParams) -> Self {
+        Self {
+            session_id: params.session_id,
+            max_turns: params.max_turns,
+            max_tokens: params.max_tokens,
+            ..Self::default()
+        }
+    }
+}
+
+impl From<SessionOverridesWriteParams> for SessionSettings {
+    fn from(params: SessionOverridesWriteParams) -> Self {
+        Self {
+            session_id: params.session_id,
+            model: params.model,
+            mode: params.mode,
+            thinking: params.thinking,
+            reasoning_effort: params.reasoning_effort,
+            auto_approve: params.auto_approve,
+            ..Self::default()
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -4665,8 +4958,230 @@ mod tests {
         );
     }
 
-    /// The three local extensions keep answering the clients already calling
-    /// them, while staying outside the advertised contract.
+    /// US-090: the single call a client renders a session from reports what the
+    /// session is actually running, not a fixed payload.
+    #[test]
+    fn runtime_read_reports_the_live_catalogs_configuration_and_accounting() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        let runtime = call(&mut connection, 10, "runtime/read")["runtime"].clone();
+
+        // The catalogs are the ones the dedicated calls publish, rather than
+        // the empty lists this method used to answer with.
+        let agents = call(&mut connection, 11, "agents/list");
+        let skills = call(&mut connection, 12, "skills/list");
+        assert_eq!(runtime["agents"], agents["agents"]);
+        assert_eq!(runtime["skills"], skills["skills"]);
+        assert_eq!(runtime["activeAgent"], agents["active"]);
+        assert!(
+            runtime["agents"]
+                .as_array()
+                .is_some_and(|agents| !agents.is_empty()),
+            "the shipped profiles are published: {runtime}"
+        );
+        assert_eq!(
+            runtime["tools"],
+            call(&mut connection, 13, "tools/list")["tools"]
+        );
+
+        // The accounting and the threshold are the session's own, and the same
+        // pair `stats/read` answers with.
+        let stats = call(&mut connection, 14, "stats/read");
+        assert_eq!(runtime["stats"], stats["stats"]);
+        assert_eq!(runtime["contextWindow"], stats["contextWindow"]);
+        assert_eq!(
+            runtime["stats"]
+                .as_object()
+                .expect("the snapshot is an object")
+                .len(),
+            17,
+            "the live snapshot is the one the notification carries"
+        );
+
+        // The configuration is a real view rather than an empty document, and
+        // the hook count is counted rather than hard-coded.
+        assert_eq!(runtime["config"], runtime["baseConfig"]);
+        assert!(
+            runtime["config"]["activeModel"]["name"]
+                .as_str()
+                .is_some_and(|name| !name.is_empty()),
+            "the active model is named: {}",
+            runtime["config"]
+        );
+        assert!(runtime["config"]["transcribeModels"].is_array());
+        assert!(runtime["hooksCount"].is_u64());
+        assert!(runtime["issues"].is_array());
+    }
+
+    /// US-093: the published session names the model and the agent it runs, so
+    /// a client renders them without a second call.
+    #[test]
+    fn the_published_session_names_its_model_and_agent() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        let batch = connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({
+                "sessionId": "session-1",
+                "workingDirectory": "/workspace",
+                "model": "devstral-small",
+                "agent": "plan"
+            }),
+        ));
+        assert_eq!(batch.outbound.len(), 2);
+        let session = call(&mut connection, 10, "session/read")["state"]["session"].clone();
+        assert_eq!(session["model"], json!("devstral-small"));
+        assert_eq!(
+            session["agent"],
+            json!({
+                "name": "plan",
+                "displayName": "Plan",
+                "description": "Read-only agent for exploration and planning",
+                "safety": "safe",
+                "agentType": "agent",
+            })
+        );
+        // The catalog names the same agent as the one the session runs, rather
+        // than the one a fresh session would.
+        assert_eq!(
+            call(&mut connection, 11, "agents/list")["active"],
+            session["agent"]
+        );
+    }
+
+    /// US-091: the configuration answers carry the two views and the runtime the
+    /// reference declares, and nothing else.
+    ///
+    /// The server runs against a temporary home: the patch below writes a file,
+    /// and a test must never write the operator's own configuration.
+    #[test]
+    fn the_configuration_envelopes_are_the_reference_shapes() {
+        let temporary = tempfile::tempdir().expect("temporary home");
+        let release3 = Release3Service::new(
+            crate::release3::Release3Paths {
+                vibe_home: temporary.path().join("home"),
+                working_directory: temporary.path().join("workspace"),
+                session_root: temporary.path().join("sessions"),
+            },
+            false,
+        )
+        .expect("release-3 service");
+        let server = AppServer::with_release3_service(release3);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+
+        let read = call(&mut connection, 10, "config/read");
+        assert_eq!(
+            read.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["baseConfig", "config", "strippedHistoryImages"]
+        );
+        assert_eq!(read["config"], read["baseConfig"]);
+        assert_eq!(
+            read["config"]
+                .as_object()
+                .expect("the view is an object")
+                .len(),
+            18,
+            "the view is the whole `ConfigView`"
+        );
+        assert!(read["strippedHistoryImages"].is_u64());
+
+        // A reload publishes the runtime rather than the views, which is what
+        // separates the two shapes upstream.
+        let reload = call(&mut connection, 11, "config/reload");
+        assert_eq!(
+            reload.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["runtime", "strippedHistoryImages"]
+        );
+        assert!(reload["runtime"]["config"]["activeModel"].is_object());
+
+        let patched = connection.dispatch(&request(
+            12,
+            "config/patch",
+            json!({
+                "sessionId": "session-1",
+                "ops": [{"op": "set", "path": "/theme", "value": "nord"}],
+            }),
+        ));
+        let Envelope::Success(SuccessResponse { result, .. }) =
+            decode_frame(&patched.outbound[0]).expect("patch answer")
+        else {
+            unreachable!("config/patch answers");
+        };
+        assert_eq!(
+            result.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["failures", "rejected", "runtime", "strippedHistoryImages"]
+        );
+        assert_eq!(result["rejected"], json!(false));
+        assert_eq!(result["failures"], json!([]));
+        assert_eq!(result["runtime"]["config"]["theme"], json!("nord"));
+    }
+
+    /// US-090: the session's logging state, rather than a fixed disabled
+    /// summary, across the six fields the wire declares.
+    #[test]
+    fn runtime_read_reports_the_session_log_summary() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        let answer = call(&mut connection, 10, "runtime/read");
+        let log = &answer["sessionLog"];
+        assert_eq!(
+            log.as_object()
+                .expect("the summary is an object")
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            [
+                "enabled",
+                "needsInitialAutoTitle",
+                "path",
+                "persisted",
+                "sessionId",
+                "title",
+            ]
+        );
+        // The default configuration writes sessions, so the switch is reported
+        // as on even though this in-memory session is not persisted.
+        assert_eq!(log["enabled"], json!(true));
+        assert_eq!(log["persisted"], json!(false));
+        assert_eq!(log["sessionId"], Value::Null);
+        assert_eq!(answer["ready"], json!(true));
+    }
+
+    /// US-090: the account is classified from the credential the session runs
+    /// under, so a configured key is never reported as missing.
+    #[test]
+    fn account_read_classifies_the_configured_credential() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        let account = call(&mut connection, 10, "account/read")["account"].clone();
+        let status = account["status"].as_str().expect("a status is published");
+        assert!(
+            ["ready", "missing_key", "unauthorized", "unavailable"].contains(&status),
+            "{status} is outside the account vocabulary"
+        );
+        // The default configuration serves a Mistral model, so the answer turns
+        // on whether a key resolves rather than being fixed.
+        let expected = if std::env::var("MISTRAL_API_KEY").is_ok_and(|key| !key.trim().is_empty()) {
+            "ready"
+        } else {
+            "missing_key"
+        };
+        assert_eq!(status, expected);
+        assert_eq!(account["teleportAction"]["kind"], json!("upgrade_to_pro"));
+    }
+
+    /// The local extensions keep answering the clients already calling them,
+    /// while staying outside the advertised contract.
     #[test]
     fn a_local_extension_stays_routable() {
         let server = AppServer::default();
@@ -4987,6 +5502,24 @@ mod tests {
         response
     }
 
+    /// Calls a session-scoped read and returns the result it answered with.
+    fn call(connection: &mut ServerConnection, id: i64, method: &str) -> BTreeMap<String, Value> {
+        call_for(connection, id, method, "session-1")
+    }
+
+    fn call_for(
+        connection: &mut ServerConnection,
+        id: i64,
+        method: &str,
+        session_id: &str,
+    ) -> BTreeMap<String, Value> {
+        let batch = connection.dispatch(&request(id, method, json!({"sessionId": session_id})));
+        match decode_frame(&batch.outbound[0]).expect("an answer") {
+            Envelope::Success(SuccessResponse { result, .. }) => result,
+            other => unreachable!("{method} did not answer: {other:?}"),
+        }
+    }
+
     fn start_session(connection: &mut ServerConnection) {
         let batch = connection.dispatch(&request(
             2,
@@ -5191,28 +5724,42 @@ mod tests {
         let update = connection.dispatch(&request(
             4,
             "session/settings/update",
-            json!({
-                "sessionId": "session-1",
-                "model": "next-model",
-                "maxTurns": 0,
-                "maxTokens": 64
-            }),
+            json!({"sessionId": "session-1", "maxTurns": 0, "maxTokens": 64}),
         ));
         assert_eq!(update.outbound.len(), 1);
+        // The model is not a reference session setting, so it travels under the
+        // local name instead.
+        let overridden = connection.dispatch(&request(
+            5,
+            "session/overrides/write",
+            json!({"sessionId": "session-1", "model": "next-model"}),
+        ));
+        assert_eq!(overridden.outbound.len(), 1);
         let session = server.session("session-1").expect("session");
         assert_eq!(session.intent.max_turns, Some(0));
         assert_eq!(session.intent.max_tokens, Some(64));
         assert_eq!(session.intent.model.as_deref(), Some("next-model"));
         assert_eq!(session.active_turn.as_deref(), Some("turn-1"));
 
+        // US-093: the reference method accepts `sessionId`, `maxTurns` and
+        // `maxTokens`, and refuses everything else, including the five fields
+        // this port moved to its own method.
         for (id, params) in [
-            (5, json!({"sessionId": "session-1"})),
-            (6, json!({"sessionId": "session-1", "maxTurns": 1.5})),
-            (7, json!({"sessionId": "session-1", "maxTokens": -1})),
+            (6, json!({"sessionId": "session-1"})),
+            (7, json!({"sessionId": "session-1", "maxTurns": 1.5})),
+            (8, json!({"sessionId": "session-1", "maxTokens": -1})),
             (
-                8,
+                9,
                 json!({"sessionId": "session-1", "maxTurns": 1, "future": true}),
             ),
+            (10, json!({"sessionId": "session-1", "model": "other"})),
+            (11, json!({"sessionId": "session-1", "mode": "plan"})),
+            (12, json!({"sessionId": "session-1", "thinking": true})),
+            (
+                13,
+                json!({"sessionId": "session-1", "reasoningEffort": "high"}),
+            ),
+            (14, json!({"sessionId": "session-1", "autoApprove": true})),
         ] {
             let invalid = decode_frame(
                 &connection
@@ -5232,8 +5779,8 @@ mod tests {
             ));
         }
         let active_approval = connection.dispatch(&request(
-            9,
-            "session/settings/update",
+            15,
+            "session/overrides/write",
             json!({"sessionId": "session-1", "autoApprove": true}),
         ));
         assert!(matches!(
@@ -5247,7 +5794,7 @@ mod tests {
             })
         ));
         let active_agent = connection.dispatch(&request(
-            10,
+            16,
             "session/agent/update",
             json!({"sessionId": "session-1", "name": "plan"}),
         ));
@@ -6896,14 +7443,31 @@ mod tests {
         let add = server
             .execute_resource_request(request_id.clone(), session_id.clone(), command.clone())
             .await;
-        assert!(matches!(
-            decode_frame(&add.outbound[0]).expect("MCP response"),
-            Envelope::Success(SuccessResponse { result, .. })
-                if result["mcp"]["sources"][0]["status"] == json!("failed")
-                    && result["diagnostics"][0]
-                        .as_str()
-                        .is_some_and(|message| message.contains("MCP `example`"))
-        ));
+        let Envelope::Success(SuccessResponse { result, .. }) =
+            decode_frame(&add.outbound[0]).expect("MCP response")
+        else {
+            unreachable!("mcp/add answers");
+        };
+        assert_eq!(
+            result.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["created", "name", "runtime", "url"]
+        );
+        assert_eq!(result["created"], json!(true));
+        assert_eq!(result["name"], json!("example"));
+        assert_eq!(result["url"], json!("https://127.0.0.1:9/mcp"));
+        // The source could not be reached, so it is published as unavailable
+        // rather than as a switch the operator threw.
+        assert_eq!(
+            result["runtime"]["mcp"]["sources"][0]["status"],
+            json!("unavailable")
+        );
+        assert!(
+            result["runtime"]["mcp"]["discoveryErrors"]["example"]
+                .as_str()
+                .is_some_and(|message| message.contains("MCP `example`")),
+            "the source that would not start is named: {}",
+            result["runtime"]["mcp"]
+        );
         // The change and the problem cross under their reference names.
         assert!(matches!(
             decode_frame(&add.outbound[1]).expect("MCP notification"),
@@ -7176,6 +7740,26 @@ tool_timeout_sec = 2
                 .any(|message| message.contains("disabled_tools entry `re:[`")),
             "the broken entry must be named: {reported:?}"
         );
+
+        // US-090: the same problem is on the runtime snapshot, named by the file
+        // it came from, and the rest of the answer is still whole.
+        let runtime = call_for(&mut connection, 4, "runtime/read", "filtered")["runtime"].clone();
+        let issues = runtime["issues"].as_array().expect("issues is a list");
+        assert!(
+            issues.iter().any(|issue| {
+                issue["file"] == json!(CONFIG_FILE_LABEL)
+                    && issue["message"]
+                        .as_str()
+                        .is_some_and(|message| message.contains("disabled_tools entry `re:[`"))
+            }),
+            "the offending file must be named: {issues:?}"
+        );
+        assert!(issues.iter().all(|issue| {
+            issue.as_object().is_some_and(|issue| {
+                issue.len() == 2 && issue.contains_key("file") && issue.contains_key("message")
+            })
+        }));
+        assert!(runtime["config"]["activeModel"].is_object());
     }
 
     /// The path the `vibe` binary and the ACP adapter actually take: they build
@@ -7565,7 +8149,7 @@ tool_timeout_sec = 2
         );
         let updated = connection.dispatch(&request(
             3,
-            "session/settings/update",
+            "session/overrides/write",
             json!({"sessionId": "session-1", "autoApprove": true}),
         ));
         assert!(matches!(

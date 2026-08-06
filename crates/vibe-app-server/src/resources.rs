@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 
 use crate::host::now_millis;
 use crate::params;
+use crate::vocabulary::{McpSourceKind, McpSourceStatus};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use thiserror::Error;
@@ -14,8 +15,8 @@ use tokio::sync::Mutex;
 use url::Url;
 use vibe_core::config::{ConfigSnapshot, LayeredConfig};
 use vibe_core::integrations::{
-    ConnectorAuthKind, ConnectorBackend, ConnectorDefinition, ConnectorRegistry, ConnectorView,
-    redact,
+    ConnectorAuthKind, ConnectorAuthState, ConnectorBackend, ConnectorDefinition,
+    ConnectorRegistry, ConnectorView, redact,
 };
 use vibe_core::mcp::{
     DefaultMcpPeerFactory, McpPeerFactory, McpRegistry, McpServerConfig, McpServerStatus,
@@ -92,6 +93,11 @@ pub const BACKEND_RESOURCE_METHODS: &[&str] = &[
     "shell/run",
 ];
 
+/// The transport a connector is published under. Reference `project_mcp`
+/// spells it the same way, because a connector reaches its tools through the
+/// gateway rather than through a transport an operator configured.
+const CONNECTOR_TRANSPORT: &str = "connector";
+
 const MAX_RESOURCE_RECORDS: usize = 1_024;
 const MAX_RESOURCE_SESSIONS: usize = 256;
 const MAX_FEEDBACK_ACTIONS: usize = 256;
@@ -117,6 +123,23 @@ pub struct ResourceSignals {
     pub warnings: Vec<String>,
     /// An MCP source waiting on authorization, published as `mcp/authUrl`.
     pub auth_url: Option<McpAuthUrl>,
+    /// What the backend knows about this session's integrations after the
+    /// dispatch.
+    ///
+    /// The runtime snapshot is composed synchronously and the backend answers
+    /// asynchronously, so the state travels back on the answer and is recorded
+    /// for the next composition rather than being fetched during it.
+    pub integrations: Option<IntegrationState>,
+}
+
+/// The integration surface a session publishes: every MCP source it can reach
+/// and how many connectors are behind them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IntegrationState {
+    /// An `MCPState`.
+    pub mcp: Value,
+    /// A `ConnectorCounts`.
+    pub counts: Value,
 }
 
 /// The authorization an MCP source is waiting on.
@@ -254,6 +277,8 @@ struct ReviewFile {
 #[derive(Clone, Default)]
 pub struct ResourceService {
     ready: bool,
+    /// The last integration state each session's backend reported.
+    backend_integrations: BTreeMap<String, IntegrationState>,
     diagnostics: Vec<(String, String)>,
     logs: Vec<(u64, String, String)>,
     feedback_actions: Vec<String>,
@@ -276,17 +301,6 @@ impl ResourceService {
             return self.dispatch_backend_fallback(command);
         }
         match method {
-            "account/read" => Ok(read_only([(
-                "account",
-                json!({
-                    "status": "missing_key",
-                    "plan": null,
-                    "planOffer": null,
-                    "rateLimitAction": null,
-                    "teleportEligible": false,
-                    "teleportAction": null
-                }),
-            )])),
             "diagnostics/list" => Ok(read_only([
                 (
                     "issues",
@@ -320,31 +334,9 @@ impl ResourceService {
             "review/baseline" => self.review_baseline(params),
             "review/hunks" => self.review_hunks(params),
             "review/turnDiff" => self.review_turn_diff(params),
-            "runtime/read" => Ok(read_only([
-                (
-                    "runtime",
-                    self.runtime(required_string(params, "sessionId")?)?,
-                ),
-                (
-                    "sessionLog",
-                    json!({
-                        "enabled": false,
-                        "sessionId": null,
-                        "persisted": false,
-                        "path": null,
-                        "title": null,
-                        "needsInitialAutoTitle": false
-                    }),
-                ),
-                ("ready", json!(self.ready)),
-            ])),
             "session/ready/read" | "session/ready/wait" => {
                 Ok(read_only([("ready", json!(self.ready))]))
             }
-            "stats/read" => Ok(read_only([
-                ("stats", empty_stats()),
-                ("contextWindow", json!(0)),
-            ])),
             "tools/list" => Ok(read_only([(
                 "tools",
                 self.tool_list(required_string(params, "sessionId")?)?,
@@ -360,10 +352,13 @@ impl ResourceService {
         command: ResourceBackendCommand,
     ) -> Result<ResourceDispatch, ResourceError> {
         match command {
-            ResourceBackendCommand::Connector(ConnectorCommand::Read) => Ok(read_only([
-                ("counts", self.connector_counts()),
-                ("connectors", self.connector_state()),
-            ])),
+            // The counts are the whole answer here too: a fallback that
+            // published the sources would answer in a shape
+            // `ConnectorsReadResponse` refuses, and the attached backend does
+            // not.
+            ResourceBackendCommand::Connector(ConnectorCommand::Read) => {
+                Ok(read_only([("counts", self.connector_counts())]))
+            }
             ResourceBackendCommand::Connector(ConnectorCommand::AuthRead { name }) => {
                 let connected = self.connectors.get(&name).ok_or_else(|| {
                     ResourceError::NotFound(format!("connector `{name}` was not found"))
@@ -430,6 +425,26 @@ impl ResourceService {
         }
     }
 
+    /// Records what a backend dispatch reported about a session's integrations.
+    ///
+    /// Bounded by the session capacity the service already enforces, so a
+    /// long-lived server cannot accumulate state for sessions that are gone.
+    pub(crate) fn record_integrations(&mut self, session_id: &str, state: IntegrationState) {
+        if !self.backend_integrations.contains_key(session_id)
+            && self.backend_integrations.len() >= MAX_RESOURCE_SESSIONS
+            && let Some(oldest) = self.backend_integrations.keys().next().cloned()
+        {
+            self.backend_integrations.remove(&oldest);
+        }
+        self.backend_integrations
+            .insert(session_id.to_owned(), state);
+    }
+
+    /// Whether a session has opened, which `runtime/read` answers with.
+    pub(crate) const fn is_ready(&self) -> bool {
+        self.ready
+    }
+
     pub fn record_diagnostic(&mut self, file: &str, message: &str) {
         push_bounded(
             &mut self.diagnostics,
@@ -476,6 +491,7 @@ impl ResourceService {
     }
 
     pub fn close_session(&mut self, session_id: &str) {
+        self.backend_integrations.remove(session_id);
         self.review.remove(session_id);
         self.policy_stores.remove(session_id);
         self.tool_registries.remove(session_id);
@@ -505,22 +521,6 @@ impl ResourceService {
         json!({
             "connected": self.connectors.values().filter(|connected| **connected).count(),
             "total": self.connectors.len()
-        })
-    }
-
-    fn connector_state(&self) -> Value {
-        json!({
-            "sources": self.connectors.iter().map(|(name, connected)| {
-                json!({
-                    "id": name,
-                    "alias": name,
-                    "name": name,
-                    "kind": "connector",
-                    "transport": "https",
-                    "authState": if *connected { "connected" } else { "disconnected" },
-                    "toolNames": [],
-                })
-            }).collect::<Vec<_>>()
         })
     }
 
@@ -817,6 +817,12 @@ impl ResourceService {
         })
     }
 
+    /// The session's tool surface as `ToolSummary` declares it: a name and
+    /// nothing else.
+    ///
+    /// The full specification a tool carries is not part of this contract. A
+    /// client that needs a schema reads it from the tool call it is answering,
+    /// which is where the reference publishes it too.
     fn tool_list(&self, session_id: &str) -> Result<Value, ResourceError> {
         let registry = self.tool_registries.get(session_id).ok_or_else(|| {
             ResourceError::NotFound(format!("session `{session_id}` was not found"))
@@ -824,7 +830,12 @@ impl ResourceService {
         let tools = registry
             .list()
             .map_err(|error| ResourceError::Unavailable(error.to_string()))?;
-        serde_json::to_value(tools).map_err(|error| ResourceError::Unavailable(error.to_string()))
+        Ok(Value::Array(
+            tools
+                .into_iter()
+                .map(|spec| json!({"name": spec.name}))
+                .collect(),
+        ))
     }
 
     fn mcp_state(&self) -> Value {
@@ -856,29 +867,35 @@ impl ResourceService {
         )
     }
 
-    pub(crate) fn runtime(&self, session_id: &str) -> Result<Value, ResourceError> {
-        Ok(json!({
-            "config": empty_config(),
-            "baseConfig": empty_config(),
-            "activeAgent": {
-                "name": "default",
-                "displayName": "Default",
-                "description": "",
-                "safety": "neutral",
-                "agentType": "agent"
-            },
-            "agents": [],
-            "skills": [],
-            "tools": self.tool_list(session_id)?,
-            "stats": empty_stats(),
-            "contextWindow": 0,
-            "issues": self.diagnostics.iter().map(|(file, message)| {
-                json!({"file": file, "message": redact(message)})
-            }).collect::<Vec<_>>(),
-            "hooksCount": 0,
-            "connectors": self.connector_counts(),
-            "mcp": self.mcp_state()
-        }))
+    /// The part of `RuntimeSnapshot` this service owns.
+    ///
+    /// The configuration, the catalogs and the session's accounting are held
+    /// elsewhere; [`crate::server::AppServer`] merges them onto this, which is
+    /// why the map is returned rather than a finished response.
+    pub(crate) fn runtime(&self, session_id: &str) -> Result<Map<String, Value>, ResourceError> {
+        let recorded = self.backend_integrations.get(session_id);
+        Ok([
+            ("tools".to_owned(), self.tool_list(session_id)?),
+            (
+                "issues".to_owned(),
+                Value::Array(
+                    self.diagnostics
+                        .iter()
+                        .map(|(file, message)| json!({"file": file, "message": redact(message)}))
+                        .collect(),
+                ),
+            ),
+            (
+                "connectors".to_owned(),
+                recorded.map_or_else(|| self.connector_counts(), |state| state.counts.clone()),
+            ),
+            (
+                "mcp".to_owned(),
+                recorded.map_or_else(|| self.mcp_state(), |state| state.mcp.clone()),
+            ),
+        ]
+        .into_iter()
+        .collect())
     }
 }
 
@@ -924,62 +941,16 @@ fn read_only<const N: usize>(entries: [(&str, Value); N]) -> ResourceDispatch {
     }
 }
 
-fn empty_stats() -> Value {
-    json!({
-        "steps": 0,
-        "sessionPromptTokens": 0,
-        "sessionCompletionTokens": 0,
-        "inputPricePerMillion": 0.0,
-        "outputPricePerMillion": 0.0,
-        "toolCallsAgreed": 0,
-        "toolCallsRejected": 0,
-        "toolCallsFailed": 0,
-        "toolCallsSucceeded": 0,
-        "contextTokens": 0,
-        "lastTurnPromptTokens": 0,
-        "lastTurnCompletionTokens": 0,
-        "lastTurnDuration": 0.0,
-        "tokensPerSecond": 0.0
-    })
-}
-
-fn empty_config() -> Value {
-    json!({
-        "activeModel": {
-            "name": "",
-            "alias": "",
-            "thinking": "off",
-            "supportsImages": false
-        },
-        "theme": "default",
-        "disableWelcomeBannerAnimation": false,
-        "autocopyToClipboard": false,
-        "fileWatcherForAutocomplete": false,
-        "askConfirmationOnExit": true,
-        "voiceModeEnabled": false,
-        "narratorEnabled": false,
-        "showThinkingNodes": true,
-        "enableUpdateChecks": true,
-        "enableNotifications": false,
-        "vibeCodeEnabled": false,
-        "models": [],
-        "transcription": {
-            "model": {"name": "", "sampleRate": 0, "encoding": "pcm_s16le", "language": "", "targetStreamingDelayMs": 0},
-            "provider": {"apiBase": "", "apiKeyEnvVar": "", "client": "mistral"}
-        },
-        "speech": {
-            "model": {"name": "", "voice": "", "responseFormat": "pcm"},
-            "provider": {"apiBase": "", "apiKeyEnvVar": "", "client": "mistral"}
-        },
-        "validationWarnings": []
-    })
-}
-
 /// A mutation that moved runtime state, with whatever it could not do cleanly.
 ///
-/// The state stays on the answer; the change itself is published as
-/// `runtime/updated` and each diagnostic as a `warning`, which is how the
-/// reference splits an answer from what a client must be told about.
+/// The answer carries only what the method's own response declares. The runtime
+/// is filled in by the server, which is the only owner able to compose it, and
+/// each diagnostic is published as its own `warning`, which is how the reference
+/// splits an answer from what a client must be told about.
+/// A mutation whose answer carries the state it produced under one key.
+///
+/// `shell/*` is a local extension, so its shape is this port's to choose and the
+/// state travels on the answer rather than through the runtime snapshot.
 fn canonical_mutation(key: &str, state: Value, diagnostics: Vec<String>) -> ResourceDispatch {
     let mut result = BTreeMap::from([(key.to_owned(), state)]);
     if !diagnostics.is_empty() {
@@ -991,44 +962,113 @@ fn canonical_mutation(key: &str, state: Value, diagnostics: Vec<String>) -> Reso
             runtime_updated: true,
             warnings: diagnostics,
             auth_url: None,
+            integrations: None,
         },
     }
 }
 
-fn mcp_view(views: Vec<McpServerView>, tools: &ToolRegistry) -> Value {
+fn runtime_mutation<const N: usize>(
+    entries: [(&str, Value); N],
+    diagnostics: Vec<String>,
+) -> ResourceDispatch {
+    ResourceDispatch {
+        result: entries
+            .into_iter()
+            .map(|(key, value)| (key.to_owned(), value))
+            .collect(),
+        signals: ResourceSignals {
+            runtime_updated: true,
+            warnings: diagnostics,
+            auth_url: None,
+            integrations: None,
+        },
+    }
+}
+
+fn mcp_view(
+    views: Vec<McpServerView>,
+    connectors: Vec<ConnectorView>,
+    tools: &ToolRegistry,
+) -> Value {
     let descriptions = tools
         .list()
         .unwrap_or_default()
         .into_iter()
         .map(|tool| (tool.name, tool.description))
         .collect::<BTreeMap<_, _>>();
-    json!({
-        "sources": views.into_iter().map(|view| {
-            let disabled_tools = view.disabled_tools;
-            let source_available = view.enabled
-                && view.status == vibe_core::mcp::McpServerStatus::Healthy;
-            json!({
-                "name": view.alias,
-                "kind": "server",
-                "transport": view.transport,
-                "status": view.status,
-                "enabled": view.enabled,
-                "diagnostic": view.diagnostic,
-                "tools": view.tools.into_iter().map(|name| {
-                    let enabled = source_available && !disabled_tools.contains(&name);
-                    let description = descriptions.get(&name).cloned().unwrap_or_default();
-                    json!({"name": name, "description": description, "enabled": enabled})
-                }).collect::<Vec<_>>()
-            })
-        }).collect::<Vec<_>>(),
-        "discoveryErrors": {}
-    })
+    let mut discovery_errors = Map::new();
+    let mut sources = Vec::with_capacity(views.len().saturating_add(connectors.len()));
+    for view in views {
+        if let Some(diagnostic) = &view.diagnostic {
+            discovery_errors.insert(view.alias.clone(), json!(redact(diagnostic)));
+        }
+        let disabled_tools = view.disabled_tools;
+        let source_available = view.enabled && view.status == McpServerStatus::Healthy;
+        sources.push(json!({
+            "name": view.alias,
+            "kind": McpSourceKind::Server,
+            "transport": view.transport,
+            "status": server_status(view.enabled, view.status),
+            "tools": view.tools.into_iter().map(|name| {
+                let enabled = source_available && !disabled_tools.contains(&name);
+                let description = descriptions.get(&name).cloned().unwrap_or_default();
+                json!({"name": name, "description": description, "enabled": enabled})
+            }).collect::<Vec<_>>()
+        }));
+    }
+    for view in connectors {
+        if let Some(diagnostic) = &view.diagnostic {
+            discovery_errors.insert(view.name.clone(), json!(redact(diagnostic)));
+        }
+        let disabled_tools = view.disabled_tools;
+        let status = connector_status(view.enabled, view.auth_state);
+        let available = status == McpSourceStatus::Connected;
+        sources.push(json!({
+            "name": view.name,
+            "kind": McpSourceKind::Connector,
+            "transport": CONNECTOR_TRANSPORT,
+            "status": status,
+            "tools": view.tool_names.into_iter().map(|name| {
+                let enabled = available && !disabled_tools.contains(&name);
+                let description = descriptions.get(&name).cloned().unwrap_or_default();
+                json!({"name": name, "description": description, "enabled": enabled})
+            }).collect::<Vec<_>>()
+        }));
+    }
+    json!({"sources": sources, "discoveryErrors": Value::Object(discovery_errors)})
 }
 
-fn connector_view(views: Vec<ConnectorView>) -> Value {
-    json!({
-        "sources": views
-    })
+/// How a configured MCP server stands, in the vocabulary the wire declares.
+///
+/// A source the operator switched off is `Disabled` whatever its transport last
+/// reported, so a deliberate choice is never rendered as a breakage; a source
+/// that failed to start is `Unavailable`, which is the distinction the reference
+/// vocabulary keeps and the internal status does not.
+fn server_status(enabled: bool, status: McpServerStatus) -> McpSourceStatus {
+    if !enabled {
+        return McpSourceStatus::Disabled;
+    }
+    match status {
+        McpServerStatus::Healthy => McpSourceStatus::Connected,
+        McpServerStatus::AuthRequired => McpSourceStatus::NeedsAuth,
+        McpServerStatus::Failed => McpSourceStatus::Unavailable,
+        McpServerStatus::Disabled => McpSourceStatus::Disabled,
+    }
+}
+
+/// How a connector stands, in the same vocabulary.
+fn connector_status(enabled: bool, state: ConnectorAuthState) -> McpSourceStatus {
+    if !enabled {
+        return McpSourceStatus::Disabled;
+    }
+    match state {
+        ConnectorAuthState::Connected | ConnectorAuthState::NotRequired => {
+            McpSourceStatus::Connected
+        }
+        ConnectorAuthState::Disconnected => McpSourceStatus::NeedsAuth,
+        ConnectorAuthState::SetupRequired => McpSourceStatus::NeedsSetup,
+        ConnectorAuthState::Failed => McpSourceStatus::Unavailable,
+    }
 }
 
 fn connector_counts_value(views: &[ConnectorView]) -> Value {
@@ -1514,12 +1554,10 @@ mod tests {
             ))
             .await
             .expect("OAuth URL");
-        assert_eq!(
-            login.result["auth"]["url"],
-            "https://auth.example/authorize?state=opaque"
-        );
-        // The same URL crosses as `mcp/authUrl`, which is where a reference
-        // client reads it rather than off this caller's answer.
+        // The URL is not on the answer: it crosses as `mcp/authUrl`, which is
+        // where a reference client reads it, and the answer declares only the
+        // runtime the server fills in.
+        assert!(!login.result.contains_key("auth"));
         assert_eq!(
             login.signals.auth_url,
             Some(McpAuthUrl {
@@ -1631,7 +1669,13 @@ mod tests {
             .dispatch(backend_request("s1", "connectors/read", BTreeMap::new()))
             .await
             .expect("connectors initialize");
-        assert_eq!(listed.result["connectors"]["sources"][0]["id"], "drive-id");
+        // The sources are published in the MCP state; this answer is the counts
+        // and nothing else.
+        assert_eq!(
+            listed.result.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["counts"]
+        );
+        assert_eq!(listed.result["counts"]["total"], json!(1));
         let login = backend
             .dispatch(backend_request(
                 "s1",
@@ -1657,8 +1701,32 @@ mod tests {
             .await
             .expect("connector refresh");
         assert_eq!(
-            refreshed.result["connectors"]["sources"][0]["authState"],
-            "connected"
+            refreshed
+                .result
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            ["toolCount"],
+            "the runtime is filled in by the server, which owns it"
+        );
+        assert!(refreshed.signals.runtime_updated);
+        let connectors = backend
+            .dispatch(backend_request("s1", "mcp/read", BTreeMap::new()))
+            .await
+            .expect("the merged source list");
+        assert_eq!(
+            connectors.result["mcp"]["sources"][0],
+            json!({
+                "name": "Drive",
+                "kind": "connector",
+                "transport": "connector",
+                "status": "connected",
+                "tools": [{
+                    "name": "connector_Drive_search",
+                    "description": "Search files",
+                    "enabled": true,
+                }],
+            })
         );
         assert_eq!(
             auth.calls.lock().expect("calls").as_slice(),

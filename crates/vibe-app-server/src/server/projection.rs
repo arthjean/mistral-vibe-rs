@@ -87,8 +87,8 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
             "updatedAt": session.updated_at,
             "cwd": session.working_directory,
             "workspaceRoots": session.intent.add_directories,
-            "model": null,
-            "agent": null,
+            "model": session.intent.model,
+            "agent": session.agent_summary,
             "tokenUsage": {
                 "inputTokens": session.stats.session_prompt_tokens,
                 "outputTokens": session.stats.session_completion_tokens,

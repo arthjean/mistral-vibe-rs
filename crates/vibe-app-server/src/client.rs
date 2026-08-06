@@ -4861,11 +4861,14 @@ command = "/must-not-run"
             )
             .await
             .expect("workspace trust commits");
+        // Trust moved the selected target onto the project file, which the
+        // published field surface reports as the first writable target.
         let trusted = service
-            .public_call("config/read", json!({"sessionId": session_id}))
+            .public_call("config/fields/read", json!({"sessionId": session_id}))
             .expect("trusted config reads");
-        assert_eq!(trusted["snapshot"]["selectedTarget"], json!("project"));
-        let fingerprint = trusted["snapshot"]["fingerprints"]["project"].clone();
+        assert_eq!(trusted["targets"][0], json!("project"));
+        // The write names no fingerprint: the server takes the one on disk
+        // inside the transaction that compares it.
         service
             .public_call(
                 "config/batchWrite",
@@ -4873,7 +4876,6 @@ command = "/must-not-run"
                     "sessionId": session_id,
                     "writes": [{
                         "target": "project",
-                        "expectedFingerprint": fingerprint,
                         "mutations": [{"path": ["theme"], "value": "dark"}],
                     }],
                 }),

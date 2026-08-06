@@ -10,12 +10,12 @@ impl CoreResourceBackend {
         self.ensure_connectors(session).await?;
         let _mutation = session.connector_mutation.lock().await;
         match command {
+            // The counts are the whole answer: the sources themselves are
+            // published in the MCP state, where a client reads every source it
+            // can call a tool through in one list.
             ConnectorCommand::Read => {
                 let views = session.connectors.views().map_err(integration_error)?;
-                Ok(read_only([
-                    ("counts", connector_counts_value(&views)),
-                    ("connectors", connector_view(views)),
-                ]))
+                Ok(read_only([("counts", connector_counts_value(&views))]))
             }
             ConnectorCommand::AuthRead { name } => {
                 let view = resolve_connector(session, name)?;
@@ -87,8 +87,13 @@ impl CoreResourceBackend {
                         .await
                         .map_err(integration_error)?;
                 }
-                let state = connector_view(session.connectors.views().map_err(integration_error)?);
-                Ok(canonical_mutation("connectors", state, Vec::new()))
+                Ok(runtime_mutation(
+                    [(
+                        "toolCount",
+                        json!(session.tools.list().map_or(0, |tools| tools.len())),
+                    )],
+                    Vec::new(),
+                ))
             }
             ConnectorCommand::Toggle {
                 name,
@@ -134,15 +139,17 @@ impl CoreResourceBackend {
                     }
                     return Err(error);
                 }
-                let state = connector_view(session.connectors.views().map_err(integration_error)?);
-                Ok(canonical_mutation("connectors", state, Vec::new()))
+                Ok(runtime_mutation([], Vec::new()))
             }
         }
     }
 }
 
 impl CoreResourceBackend {
-    async fn ensure_connectors(&self, session: &CoreResourceSession) -> Result<(), ResourceError> {
+    pub(super) async fn ensure_connectors(
+        &self,
+        session: &CoreResourceSession,
+    ) -> Result<(), ResourceError> {
         if session.connectors_initialized.load(Ordering::Acquire) {
             return Ok(());
         }

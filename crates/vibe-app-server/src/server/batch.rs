@@ -54,10 +54,28 @@ pub(super) fn resource_result_batch(
     id: RequestId,
     server: &AppServer,
     session_id: &str,
+    method: &str,
     result: Result<ResourceDispatch, ResourceError>,
 ) -> DispatchBatch {
     match result {
-        Ok(dispatch) => {
+        Ok(mut dispatch) => {
+            // What the backend learned about the session's integrations is
+            // recorded before anything is composed from it, so the runtime this
+            // answer and the notification carry are the state after the call.
+            if let Some(state) = dispatch.signals.integrations.take()
+                && let Ok(mut resources) = server.resources.lock()
+            {
+                resources.record_integrations(session_id, state);
+            }
+            // Every mutation answer that declares a runtime carries the one the
+            // mutation produced, composed here for the same reason the
+            // notification is: the backend knows something moved, the server
+            // knows what the runtime looks like afterwards.
+            if RUNTIME_ANSWERS.contains(&method)
+                && let Some(runtime) = server.runtime_snapshot(session_id)
+            {
+                dispatch.result.insert("runtime".to_owned(), runtime);
+            }
             let mut outbound = vec![success_bytes(id, dispatch.result)];
             outbound.extend(signal_frames(server, session_id, &dispatch.signals));
             DispatchBatch {
@@ -69,6 +87,16 @@ pub(super) fn resource_result_batch(
         Err(error) => resource_error_batch(id, error),
     }
 }
+
+/// The resource methods whose response declares a `RuntimeSnapshot`.
+const RUNTIME_ANSWERS: &[&str] = &[
+    "connectors/refresh",
+    "mcp/add",
+    "mcp/login",
+    "mcp/logout",
+    "mcp/refresh",
+    "mcp/toggle",
+];
 
 /// The notifications a dispatch's signals publish, in the reference's order.
 pub(super) fn signal_frames(

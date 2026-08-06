@@ -287,7 +287,7 @@ fn update_session_settings(
     auto_approve: bool,
 ) -> Result<(), vibe_app_server::client::ClientError> {
     runtime.service.public_call(
-        "session/settings/update",
+        "session/overrides/write",
         json!({
             "sessionId": runtime.session_id,
             "mode": mode,

@@ -17,7 +17,7 @@ pub(in crate::tui) fn apply_thinking(
     let params = thinking_params(&runtime.session_id, value);
     if call_runtime(
         runtime,
-        "session/settings/update",
+        "session/overrides/write",
         Value::Object(params),
         state,
     )
@@ -34,7 +34,7 @@ pub(in crate::tui) fn apply_thinking(
         state,
     ) {
         if let Err(error) = runtime.service.public_call(
-            "session/settings/update",
+            "session/overrides/write",
             Value::Object(thinking_params(&runtime.session_id, &previous)),
         ) {
             state.push_diagnostic(format!(
@@ -210,19 +210,15 @@ pub(super) fn reset_config_value_at(
         state.push_diagnostic("Usage: /config reset <path>");
         return;
     }
-    let snapshot = match runtime
-        .service
-        .public_call("config/read", json!({"sessionId": runtime.session_id}))
-    {
-        Ok(result) => result.get("snapshot").cloned().unwrap_or(Value::Null),
-        Err(error) => {
-            state.push_diagnostic(error.to_string());
-            return;
-        }
+    let Some(surface) = field_surface(runtime, state) else {
+        return;
     };
     let field = path.join(".");
-    if target_config_value(&snapshot, target, &path).is_none() {
-        match top_config_origin(&snapshot, &path) {
+    // Only the selected configuration file is published as a layer of its own,
+    // so a value that is not in it has nothing to clear in the target the write
+    // would go to.
+    if !written_in_selected_file(&surface, &field) {
+        match top_config_origin(&surface, &field) {
             Some(origin) if !matches!(origin, "defaults" | "selected_toml") => {
                 push_local_notice(
                     state,
@@ -246,32 +242,77 @@ pub(super) fn reset_config_value_at(
     }
 }
 
-fn target_config_value<'a>(snapshot: &'a Value, target: &str, path: &[&str]) -> Option<&'a Value> {
-    snapshot
-        .pointer(&format!("/targetValues/{target}"))
-        .and_then(|values| values.pointer(&config_pointer(path)))
+/// The published configuration surface, as `config/fields/read` answers it.
+///
+/// Every read a settings command makes goes through this: the field's effective
+/// value, the layer it comes from and the files a write may land in are all on
+/// this one answer, and none of them is on `ConfigReadResponse`.
+pub(super) fn field_surface(
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+) -> Option<Value> {
+    let result = call_runtime(runtime, "config/fields/read", json!({}), state)?;
+    Some(Value::Object(result.into_iter().collect()))
 }
 
-fn config_pointer(path: &[&str]) -> String {
-    format!(
-        "/{}",
-        path.iter()
-            .map(|segment| segment.replace('~', "~0").replace('/', "~1"))
-            .collect::<Vec<_>>()
-            .join("/")
-    )
+/// The published fields as an effective document, keyed by field name.
+///
+/// The pickers render values rather than layers, so they read this shape.
+pub(super) fn published_fields(
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+) -> Option<Value> {
+    let surface = field_surface(runtime, state)?;
+    Some(Value::Object(
+        fields_of(&surface)
+            .filter_map(|field| {
+                let name = field.get("name")?.as_str()?.to_owned();
+                Some((name, field.get("value").cloned().unwrap_or(Value::Null)))
+            })
+            .collect(),
+    ))
+}
+
+fn fields_of(surface: &Value) -> impl Iterator<Item = &Value> {
+    surface
+        .get("fields")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+}
+
+fn field_of<'a>(surface: &'a Value, name: &str) -> Option<&'a Value> {
+    fields_of(surface).find(|field| field.get("name").and_then(Value::as_str) == Some(name))
+}
+
+/// Whether the selected configuration file carries the field, which is what a
+/// reset would remove.
+fn written_in_selected_file(surface: &Value, name: &str) -> bool {
+    field_of(surface, name)
+        .and_then(|field| field.get("layerValues"))
+        .and_then(Value::as_array)
+        .is_some_and(|layers| {
+            layers
+                .iter()
+                .any(|layer| layer.get("layer").and_then(Value::as_str) == Some("selected_toml"))
+        })
 }
 
 pub(super) fn selected_config_target(runtime: &mut InteractiveRuntime) -> Option<String> {
     if let Some(target) = runtime.config_target {
         return Some(target.as_str().to_owned());
     }
+    // The writable targets are published with the selected one first, which is
+    // the file an unrouted write lands in.
     runtime
         .service
-        .public_call("config/read", json!({"sessionId": runtime.session_id}))
+        .public_call(
+            "config/fields/read",
+            json!({"sessionId": runtime.session_id}),
+        )
         .ok()?
-        .get("snapshot")?
-        .get("selectedTarget")?
+        .get("targets")?
+        .get(0)?
         .as_str()
         .map(ToOwned::to_owned)
 }
@@ -288,21 +329,18 @@ pub(super) fn persist_config_setting(
 }
 
 pub(super) fn configured_value(runtime: &mut InteractiveRuntime, key: &str) -> Option<Value> {
-    let pointer = format!(
-        "/{}",
-        key.split('.')
-            .map(|segment| segment.replace('~', "~0").replace('/', "~1"))
-            .collect::<Vec<_>>()
-            .join("/")
+    let surface = Value::Object(
+        runtime
+            .service
+            .public_call(
+                "config/fields/read",
+                json!({"sessionId": runtime.session_id}),
+            )
+            .ok()?
+            .into_iter()
+            .collect(),
     );
-    runtime
-        .service
-        .public_call("config/read", json!({"sessionId": runtime.session_id}))
-        .ok()?
-        .get("snapshot")?
-        .get("config")?
-        .pointer(&pointer)
-        .cloned()
+    field_of(&surface, key)?.get("value").cloned()
 }
 
 pub(super) fn config_field_schema(
@@ -367,20 +405,17 @@ fn field_is_secret(path: &[&str], schema: &Value) -> bool {
         })
 }
 
-fn top_config_origin<'a>(snapshot: &'a Value, path: &[&str]) -> Option<&'a str> {
-    let pointer = config_pointer(path);
-    snapshot
+/// The layer a field's effective value comes from.
+///
+/// The published layers are ordered highest priority first, so the first one is
+/// what a client would have to change to move the value.
+fn top_config_origin<'a>(surface: &'a Value, name: &str) -> Option<&'a str> {
+    field_of(surface, name)?
         .get("layerValues")?
         .as_array()?
-        .iter()
-        .rev()
-        .find(|entry| {
-            entry
-                .get("values")
-                .is_some_and(|values| values.pointer(&pointer).is_some())
-        })
-        .and_then(|entry| entry.get("layer"))
-        .and_then(Value::as_str)
+        .first()?
+        .get("layer")?
+        .as_str()
 }
 
 fn parse_typed_config_value(raw: &str, schema: &Value) -> Result<Value, String> {
@@ -459,19 +494,24 @@ mod tests {
         ));
     }
 
+    /// US-091: the published surface orders a field's layers highest first, so
+    /// the origin is read off the front rather than searched for.
     #[test]
     fn reset_origin_prefers_the_highest_layer() {
-        let snapshot = json!({
-            "layerValues": [
-                {"layer": "defaults", "values": {"theme": "dark"}},
-                {"layer": "selected_toml", "values": {"theme": "light"}},
-                {"layer": "environment", "values": {"theme": "pinned"}}
-            ]
+        let surface = json!({
+            "fields": [{
+                "name": "theme",
+                "layerValues": [
+                    {"layer": "environment", "value": "pinned"},
+                    {"layer": "selected_toml", "value": "light"},
+                    {"layer": "defaults", "value": "dark"}
+                ]
+            }],
+            "targets": ["user"]
         });
-        assert_eq!(
-            top_config_origin(&snapshot, &["theme"]),
-            Some("environment")
-        );
-        assert_eq!(top_config_origin(&snapshot, &["missing"]), None);
+        assert_eq!(top_config_origin(&surface, "theme"), Some("environment"));
+        assert_eq!(top_config_origin(&surface, "missing"), None);
+        assert!(written_in_selected_file(&surface, "theme"));
+        assert!(!written_in_selected_file(&surface, "missing"));
     }
 }

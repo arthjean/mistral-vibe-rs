@@ -183,10 +183,14 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
         "discovery moved runtime state, so `runtime/updated` follows the answer"
     );
     assert!(dispatch.signals.warnings.is_empty());
-    assert_eq!(
-        dispatch.result["mcp"]["sources"][0]["status"],
-        json!("healthy")
-    );
+    // The answer declares no state of its own; what the backend learned travels
+    // on the signals, which is what the runtime snapshot is composed from.
+    let integrations = dispatch
+        .signals
+        .integrations
+        .as_ref()
+        .expect("discovery reports the integration state");
+    assert_eq!(integrations.mcp["sources"][0]["status"], json!("connected"));
 
     assert_eq!(
         tools.list().expect("registered tools").len(),

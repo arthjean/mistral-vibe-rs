@@ -153,7 +153,6 @@ pub(in crate::tui) enum McpPendingOperation {
     ReadIntegrations {
         filter: Option<String>,
         detail: Option<IntegrationTarget>,
-        mcp: Option<Value>,
     },
     BeginAuth {
         kind: IntegrationKind,
@@ -235,10 +234,10 @@ pub(in crate::tui) fn execute_mcp_effect(
 ) {
     match effect {
         McpEffect::Show { filter } => {
-            schedule_read_integrations(runtime, filter, None, None, state);
+            schedule_read_integrations(runtime, filter, None, state);
         }
         McpEffect::ShowDetail { target } => {
-            schedule_read_integrations(runtime, None, Some(target), None, state);
+            schedule_read_integrations(runtime, None, Some(target), state);
         }
         McpEffect::BeginAuth {
             kind,
@@ -392,29 +391,78 @@ pub(in crate::tui) fn execute_mcp_effect(
     }
 }
 
+/// Reads every integration in one call.
+///
+/// `MCPState` carries the servers and the connectors in one list, so the two
+/// reads this used to chain are one, and the split back into the two families a
+/// picker renders happens here rather than on the wire.
 fn schedule_read_integrations(
     runtime: &mut InteractiveRuntime,
     filter: Option<String>,
     detail: Option<IntegrationTarget>,
-    mcp: Option<Value>,
     state: &mut TuiState,
 ) {
-    let method = if mcp.is_some() {
-        "connectors/read"
-    } else {
-        "mcp/read"
-    };
     schedule_ui_call(
         runtime,
-        method,
+        "mcp/read",
         json!({}),
-        UiOperation::Mcp(McpPendingOperation::ReadIntegrations {
-            filter,
-            detail,
-            mcp,
-        }),
+        UiOperation::Mcp(McpPendingOperation::ReadIntegrations { filter, detail }),
         state,
     );
+}
+
+/// The MCP servers of a published source list, under the key the pickers read.
+fn server_sources(value: &Value) -> Value {
+    json!({"mcp": {"sources": sources_of(value, "server").collect::<Vec<_>>()}})
+}
+
+/// The connectors of a published source list, in the shape the connector picker
+/// reads: it renders an authorization state and a flat tool list, and the
+/// published source carries both under other names.
+fn connector_sources(value: &Value) -> Value {
+    json!({
+        "connectors": {
+            "sources": sources_of(value, "connector")
+                .map(|source| {
+                    let tools = source.get("tools").and_then(Value::as_array);
+                    let name = source.get("name").and_then(Value::as_str).unwrap_or_default();
+                    let status = source.get("status").and_then(Value::as_str).unwrap_or_default();
+                    json!({
+                        "id": name,
+                        "alias": name,
+                        "name": name,
+                        "enabled": status != "disabled",
+                        "authState": match status {
+                            "connected" => "connected",
+                            "needs_auth" => "disconnected",
+                            "needs_setup" => "setup_required",
+                            _ => "failed",
+                        },
+                        "toolNames": tools
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|tool| tool.get("name").cloned())
+                            .collect::<Vec<_>>(),
+                        "disabledTools": tools
+                            .into_iter()
+                            .flatten()
+                            .filter(|tool| tool.get("enabled").and_then(Value::as_bool) == Some(false))
+                            .filter_map(|tool| tool.get("name").cloned())
+                            .collect::<Vec<_>>(),
+                    })
+                })
+                .collect::<Vec<_>>()
+        }
+    })
+}
+
+fn sources_of<'a>(value: &'a Value, kind: &'a str) -> impl Iterator<Item = &'a Value> {
+    value
+        .pointer("/mcp/sources")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(move |source| source.get("kind").and_then(Value::as_str) == Some(kind))
 }
 
 pub(in crate::tui) fn apply_pending_operation(
@@ -432,20 +480,13 @@ pub(in crate::tui) fn apply_pending_operation(
     };
     let value = map_value(dispatch.result);
     match operation {
-        McpPendingOperation::ReadIntegrations {
-            filter,
-            detail,
-            mcp: None,
-        } => schedule_read_integrations(runtime, filter, detail, Some(value), state),
-        McpPendingOperation::ReadIntegrations {
-            filter,
-            detail,
-            mcp: Some(mcp),
-        } => {
+        McpPendingOperation::ReadIntegrations { filter, detail } => {
+            let servers = server_sources(&value);
+            let connectors = connector_sources(&value);
             if let Some(target) = detail {
-                state.overlay = Some(mcp_detail_overlay(&mcp, &value, &target));
+                state.overlay = Some(mcp_detail_overlay(&servers, &connectors, &target));
             } else {
-                let mut overlay = mcp_overlay(&mcp, &value);
+                let mut overlay = mcp_overlay(&servers, &connectors);
                 if let Some(filter) = filter {
                     overlay.set_query(filter);
                 }
@@ -465,11 +506,18 @@ pub(in crate::tui) fn apply_pending_operation(
             source,
             enable_on_complete,
         } => {
-            let url = value
-                .get("auth")
-                .and_then(|auth| auth.get("url"))
-                .or_else(|| value.get("url"))
-                .and_then(Value::as_str);
+            // A server login publishes its URL as `mcp/authUrl` and declares
+            // nothing on the answer; a connector answers with the URL directly.
+            let notified = dispatch
+                .notifications
+                .iter()
+                .find(|notification| notification.method == "mcp/authUrl")
+                .and_then(|notification| notification.params.get("url"))
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            let url = notified
+                .as_deref()
+                .or_else(|| value.get("url").and_then(Value::as_str));
             if let Some(url) = url.filter(|url| valid_auth_url(url)) {
                 state.overlay = Some(mcp_auth_overlay(kind, &source, url, enable_on_complete));
             } else {
@@ -478,21 +526,16 @@ pub(in crate::tui) fn apply_pending_operation(
         }
         McpPendingOperation::Refresh { kind, source } => {
             if kind == IntegrationKind::Connector {
-                let connected = value
-                    .pointer("/connectors/sources")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-                    .find(|candidate| {
-                        candidate
-                            .get("id")
-                            .or_else(|| candidate.get("alias"))
-                            .and_then(Value::as_str)
-                            == Some(&source)
-                    })
-                    .and_then(|candidate| candidate.get("authState"))
-                    .and_then(Value::as_str)
-                    .is_some_and(|status| matches!(status, "connected" | "not_required"));
+                // The refresh answers with the runtime it produced, so the
+                // connector's new state is read off the published source list.
+                let connected =
+                    sources_of(value.get("runtime").unwrap_or(&Value::Null), "connector")
+                        .find(|candidate| {
+                            candidate.get("name").and_then(Value::as_str) == Some(&source)
+                        })
+                        .and_then(|candidate| candidate.get("status"))
+                        .and_then(Value::as_str)
+                        == Some("connected");
                 if !connected {
                     push_local_notice(
                         state,
@@ -502,7 +545,7 @@ pub(in crate::tui) fn apply_pending_operation(
                     return;
                 }
             }
-            schedule_read_integrations(runtime, None, None, None, state);
+            schedule_read_integrations(runtime, None, None, state);
         }
         McpPendingOperation::CompleteAuthentication {
             source,
@@ -527,14 +570,14 @@ pub(in crate::tui) fn apply_pending_operation(
                     state,
                 );
             } else {
-                schedule_read_integrations(runtime, None, None, None, state);
+                schedule_read_integrations(runtime, None, None, state);
             }
         }
         McpPendingOperation::EnableAfterAuthentication | McpPendingOperation::Logout => {
-            schedule_read_integrations(runtime, None, None, None, state);
+            schedule_read_integrations(runtime, None, None, state);
         }
         McpPendingOperation::SetEnabled { target, detail } => {
-            schedule_read_integrations(runtime, None, detail.then_some(target), None, state);
+            schedule_read_integrations(runtime, None, detail.then_some(target), state);
         }
         operation @ (McpPendingOperation::CopyUrl | McpPendingOperation::OpenUrl) => {
             let message = if matches!(operation, McpPendingOperation::CopyUrl) {
@@ -575,7 +618,7 @@ pub(in crate::tui) fn apply_pending_operation(
                 for diagnostic in diagnostics.iter().filter_map(Value::as_str) {
                     state.push_diagnostic(diagnostic);
                 }
-                schedule_read_integrations(runtime, None, None, None, state);
+                schedule_read_integrations(runtime, None, None, state);
                 return;
             }
             let Some(alias) = value

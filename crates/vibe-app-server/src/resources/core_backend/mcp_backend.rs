@@ -4,6 +4,31 @@ use vibe_core::config::mcp::{dedupe_mcp_server_name, resolve_new_mcp_server_name
 use vibe_core::mcp::{McpAuthConfig, McpOAuthConfig};
 
 impl CoreResourceBackend {
+    /// Every source a session can call a tool through: its configured MCP
+    /// servers and its connectors, in the one list `MCPState` declares.
+    ///
+    /// The connectors are enumerated best-effort. A catalog this session cannot
+    /// reach leaves them out of the list rather than failing the read: the MCP
+    /// servers are still there to publish, and a client that cannot read them
+    /// loses more than one that sees no connector.
+    pub(super) async fn mcp_state(&self, session: &CoreResourceSession) -> Value {
+        let _ = self.ensure_connectors(session).await;
+        let connectors = session.connectors.views().unwrap_or_default();
+        mcp_view(session.mcp.read().await, connectors, &session.tools)
+    }
+
+    /// The integration surface the runtime snapshot publishes for a session.
+    pub(super) async fn integration_state(
+        &self,
+        session: &CoreResourceSession,
+    ) -> crate::resources::IntegrationState {
+        let counts = connector_counts_value(&session.connectors.views().unwrap_or_default());
+        crate::resources::IntegrationState {
+            mcp: self.mcp_state(session).await,
+            counts,
+        }
+    }
+
     pub(super) async fn dispatch_mcp(
         &self,
         session: &CoreResourceSession,
@@ -20,10 +45,7 @@ impl CoreResourceBackend {
             | McpCommand::Logout { .. } => Some(session.mcp_mutation.lock().await),
         };
         match command {
-            McpCommand::Read => Ok(read_only([(
-                "mcp",
-                mcp_view(session.mcp.read().await, &session.tools),
-            )])),
+            McpCommand::Read => Ok(read_only([("mcp", self.mcp_state(session).await)])),
             McpCommand::Add(add) => {
                 let factory = self.mcp_factory.clone().ok_or_else(|| {
                     ResourceError::Unavailable("MCP transport backend is not configured".to_owned())
@@ -112,6 +134,14 @@ impl CoreResourceBackend {
                         .insert(config.alias.clone());
                 }
                 let alias = config.alias.clone();
+                // A stdio source has no URL to publish, and the field is
+                // required: the empty string says "not reachable by URL" the
+                // way an absent one cannot.
+                let url = match &config.transport {
+                    McpTransportConfig::Http { url, .. }
+                    | McpTransportConfig::StreamableHttp { url, .. } => url.to_string(),
+                    McpTransportConfig::Stdio { .. } => String::new(),
+                };
                 let diagnostics = session
                     .mcp
                     .discover_all(
@@ -122,10 +152,16 @@ impl CoreResourceBackend {
                         self.approval.clone(),
                     )
                     .await;
-                let state = mcp_view(session.mcp.read().await, &session.tools);
-                let mut dispatch = canonical_mutation("mcp", state, diagnostics);
-                dispatch.result.insert("name".to_owned(), json!(alias));
-                Ok(dispatch)
+                // The alias was resolved against what is already configured, so
+                // reaching here means a source was created rather than reused.
+                Ok(runtime_mutation(
+                    [
+                        ("created", json!(true)),
+                        ("name", json!(alias)),
+                        ("url", json!(url)),
+                    ],
+                    diagnostics,
+                ))
             }
             McpCommand::Refresh { name } => {
                 session
@@ -133,8 +169,7 @@ impl CoreResourceBackend {
                     .refresh(name)
                     .await
                     .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
-                let state = mcp_view(session.mcp.read().await, &session.tools);
-                Ok(canonical_mutation("mcp", state, Vec::new()))
+                Ok(runtime_mutation([], Vec::new()))
             }
             McpCommand::Toggle {
                 name,
@@ -197,8 +232,7 @@ impl CoreResourceBackend {
                     }
                     return Err(error);
                 }
-                let state = mcp_view(session.mcp.read().await, &session.tools);
-                Ok(canonical_mutation("mcp", state, Vec::new()))
+                Ok(runtime_mutation([], Vec::new()))
             }
             McpCommand::Login { name } => {
                 if !session
@@ -222,13 +256,10 @@ impl CoreResourceBackend {
                     backend.login(session_id, &config).await?,
                     "MCP OAuth backend",
                 )?;
-                // The URL also crosses as `mcp/authUrl`, which is where a
-                // reference client reads it: the answer serves the caller, the
-                // notification serves whoever else is attached.
-                let mut dispatch = read_only([(
-                    "auth",
-                    json!({"name": name, "url": url, "status": "waiting"}),
-                )]);
+                // The answer declares only the runtime; the URL crosses as
+                // `mcp/authUrl`, which is where every attached client reads it,
+                // including the one that asked.
+                let mut dispatch = runtime_mutation([], Vec::new());
                 dispatch.signals.auth_url = Some(crate::resources::McpAuthUrl {
                     name: name.clone(),
                     url,
@@ -276,8 +307,7 @@ impl CoreResourceBackend {
                     .clear_auth(name)
                     .await
                     .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?;
-                let state = mcp_view(session.mcp.read().await, &session.tools);
-                Ok(canonical_mutation("mcp", state, Vec::new()))
+                Ok(runtime_mutation([], Vec::new()))
             }
         }
     }

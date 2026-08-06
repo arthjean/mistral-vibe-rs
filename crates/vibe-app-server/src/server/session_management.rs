@@ -93,6 +93,10 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
             if request.method == "session/agent/update" {
                 update_runtime_agent(connection, &request);
             }
+            if let Some(session_id) = target_session_id.as_deref() {
+                enrich_config_response(connection, session_id, &request.method, &mut dispatch);
+                enrich_active_agent(connection, session_id, &request.method, &mut dispatch);
+            }
             if let Some(paths) = rewind.commit_workspace() {
                 dispatch
                     .result
@@ -211,6 +215,58 @@ fn delete_session(
     }
 }
 
+/// Names the agent the addressed session runs, rather than the one a fresh
+/// session would.
+///
+/// The catalog service knows what is installed; only the server knows which
+/// profile this session is running, and `AgentsListResponse.active` is that one.
+fn enrich_active_agent(
+    connection: &ServerConnection,
+    session_id: &str,
+    method: &str,
+    dispatch: &mut Release3Dispatch,
+) {
+    if !matches!(method, "agents/list" | "agents/install") {
+        return;
+    }
+    let summary = connection.server.lock_sessions().ok().and_then(|sessions| {
+        sessions
+            .get(session_id)
+            .and_then(|session| session.agent_summary.clone())
+    });
+    if let Some(summary) = summary {
+        dispatch.result.insert("active".to_owned(), summary);
+    }
+}
+
+/// Fills in the parts of a configuration answer only the server can compose.
+///
+/// The configuration service knows what it wrote; the runtime a client reads
+/// the result from is assembled from three owners, and the images a model can
+/// no longer read are counted against the session's own history. Both are added
+/// here so the service stays session-agnostic.
+fn enrich_config_response(
+    connection: &ServerConnection,
+    session_id: &str,
+    method: &str,
+    dispatch: &mut Release3Dispatch,
+) {
+    let (runtime, stripped) = match method {
+        "config/read" => (false, true),
+        "config/patch" | "config/reload" | "config/thinking/write" => (true, true),
+        _ => return,
+    };
+    if runtime && let Some(snapshot) = connection.server.runtime_snapshot(session_id) {
+        dispatch.result.insert("runtime".to_owned(), snapshot);
+    }
+    if stripped {
+        dispatch.result.insert(
+            "strippedHistoryImages".to_owned(),
+            json!(connection.server.stripped_history_images(session_id)),
+        );
+    }
+}
+
 fn enrich_rewind_targets(
     connection: &ServerConnection,
     session_id: &str,
@@ -262,10 +318,18 @@ fn update_runtime_agent(connection: &ServerConnection, request: &ServerRequest) 
     ) else {
         return;
     };
+    let summary = connection
+        .server
+        .release3
+        .agent_profile(agent)
+        .ok()
+        .as_ref()
+        .map(crate::release3::agent_summary);
     if let Ok(mut sessions) = connection.server.lock_sessions()
         && let Some(session) = sessions.get_mut(session_id)
     {
         session.intent.agent = Some(agent.to_owned());
+        session.agent_summary = summary;
         session.updated_at = now_millis();
     }
 }

@@ -926,8 +926,7 @@ fn configured_theme(runtime: Option<&mut InteractiveRuntime>) -> Option<Theme> {
         .public_call("config/read", json!({"sessionId": runtime.session_id}))
         .ok()?;
     result
-        .get("snapshot")
-        .and_then(|snapshot| snapshot.get("config"))
+        .get("config")
         .and_then(|config| config.get("theme"))
         .and_then(Value::as_str)
         .and_then(parse_theme)
@@ -995,20 +994,9 @@ pub(in crate::tui) fn persist_setting(
     remove: bool,
     state: &mut TuiState,
 ) -> bool {
-    let expected_fingerprint = match runtime
-        .service
-        .public_call("config/read", json!({"sessionId": runtime.session_id}))
-    {
-        Ok(result) => result
-            .get("snapshot")
-            .and_then(|snapshot| snapshot.pointer(&format!("/fingerprints/{target}")))
-            .cloned()
-            .unwrap_or(Value::Null),
-        Err(error) => {
-            state.push_diagnostic(error.to_string());
-            return false;
-        }
-    };
+    // The write names no fingerprint: the service takes the one on disk inside
+    // the transaction that compares it, which is a narrower window than reading
+    // it here one call earlier.
     let mutation = if remove {
         json!({"path": path, "remove": true})
     } else {
@@ -1020,7 +1008,6 @@ pub(in crate::tui) fn persist_setting(
         json!({
             "writes": [{
                 "target": target,
-                "expectedFingerprint": expected_fingerprint,
                 "mutations": [mutation],
             }],
         }),
@@ -1206,15 +1193,6 @@ fn persist_setup(
     completion: &SetupCompletion,
 ) -> Result<(), CliError> {
     let release3 = release3_service(arguments, working_directory)?;
-    let snapshot = release3
-        .dispatch("config/read", &BTreeMap::new())
-        .map_err(|error| CliError::Terminal(error.to_string()))?;
-    let expected_fingerprint = snapshot
-        .result
-        .get("snapshot")
-        .and_then(|snapshot| snapshot.pointer("/fingerprints/user"))
-        .cloned()
-        .unwrap_or(Value::Null);
     let notifications = match completion.preferences.notifications {
         NotificationPreference::Off => "off",
         NotificationPreference::WhenUnfocused => "unfocused",
@@ -1246,7 +1224,6 @@ fn persist_setup(
         "writes".to_owned(),
         json!([{
             "target": "user",
-            "expectedFingerprint": expected_fingerprint,
             "mutations": mutations,
         }]),
     )]);
@@ -1333,6 +1310,7 @@ fn start_runtime(
     if let Some(observer) = telemetry.as_ref() {
         driver = driver.with_event_observer(observer.clone());
     }
+    let configuration = release3.clone();
     let server = bootstrap::resource_server(arguments, release3, credential.clone())?
         .using_release4_service(bootstrap::cloud_service(credential)?);
     let mut service =
@@ -1349,8 +1327,8 @@ fn start_runtime(
         .ok()
         .and_then(|result| {
             result
-                .get("snapshot")
-                .and_then(|snapshot| snapshot.pointer("/config/voice_mode_enabled"))
+                .get("config")
+                .and_then(|config| config.get("voiceModeEnabled"))
                 .and_then(Value::as_bool)
         })
         .unwrap_or(false);
@@ -1365,6 +1343,7 @@ fn start_runtime(
     let safety = active_agent_safety(&mut service, &session_id, &agent_name);
     Ok(InteractiveRuntime {
         service,
+        release3: configuration,
         session_id,
         model: session.intent.model.unwrap_or(preferences.model),
         image_models: preferences.image_models,
@@ -1429,15 +1408,13 @@ fn parse_runtime_skills(skills: Option<&Value>) -> BTreeMap<String, RuntimeSkill
                         .and_then(Value::as_str)
                         .unwrap_or_default()
                         .to_owned(),
+                    // `SkillSummary` calls the expansion `prompt`, which is the
+                    // name it crosses the wire under.
                     body: skill
-                        .get("body")
+                        .get("prompt")
                         .and_then(Value::as_str)
                         .unwrap_or_default()
                         .to_owned(),
-                    path: skill
-                        .get("path")
-                        .and_then(Value::as_str)
-                        .map(ToOwned::to_owned),
                 },
             ))
         })
@@ -1486,8 +1463,14 @@ async fn refresh_server_banner_metrics(
             .and_then(|mcp| mcp.get("sources"))
             .and_then(Value::as_array)
     {
-        banner.mcp_servers_total = sources.len();
-        banner.mcp_servers_enabled = sources
+        // The published list carries the connectors too, and the banner counts
+        // them on their own line.
+        let servers = sources
+            .iter()
+            .filter(|source| source.get("kind").and_then(Value::as_str) != Some("connector"))
+            .collect::<Vec<_>>();
+        banner.mcp_servers_total = servers.len();
+        banner.mcp_servers_enabled = servers
             .iter()
             .filter(|source| {
                 source
@@ -1539,13 +1522,10 @@ fn startup_preferences(
     arguments: &Arguments,
     release3: &Release3Service,
 ) -> Result<StartupPreferences, CliError> {
-    let dispatch = release3
-        .dispatch("config/read", &BTreeMap::new())
+    let document = release3
+        .config_document()
         .map_err(|error| CliError::Terminal(error.to_string()))?;
-    let config = dispatch
-        .result
-        .get("snapshot")
-        .and_then(|snapshot| snapshot.get("config"));
+    let config = document.get("config");
     let configured_model = config
         .and_then(|config| config.get("active_model"))
         .and_then(Value::as_str);

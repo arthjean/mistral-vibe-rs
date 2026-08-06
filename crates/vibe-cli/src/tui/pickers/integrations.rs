@@ -246,9 +246,9 @@ fn mcp_source_item(source: &Value, kind: IntegrationKind) -> Option<OverlayItem>
     let status = if enabled {
         match raw_status {
             "connected" => "connected",
-            "auth_required" => "needs auth",
-            "setup_required" => "needs setup",
-            "failed" => UNAVAILABLE_STATUS,
+            "needs_auth" => "needs auth",
+            "needs_setup" => "needs setup",
+            "unavailable" => UNAVAILABLE_STATUS,
             _ => "enabled",
         }
     } else {
