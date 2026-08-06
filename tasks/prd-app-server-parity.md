@@ -25,7 +25,7 @@
 
 8. **Nothing measures any of the above.** `scripts/parity/` holds `oracle.py`, `tool_surface.py` and `config_surface.py`, and none of them covers the protocol. `docs/parity.md` scores the app-server 78 by counting method names, which is why problems 3 through 7 do not appear in it, and why `identity/read` and `workspace/worktrees/list` are absent from the document entirely. `cargo test --workspace --all-features` passes at full green with a handshake that rejects a conforming client.
 
-**Why now:** `docs/parity.md` ranks missing protocol notifications third in execution order, ahead of everything that follows, on the stated ground that everything written afterwards emits or consumes them. That reasoning applies with more force to the entry detail unions of problem 4: `EffectDetail` and `NoticeDetail` cross the wire in every history entry and are already written into persisted sessions, so each week of deferral multiplies the traces to migrate, exactly as it did for tool names in rank 1. The two parts that reached 95 in this repository did so because a differential oracle measures them; the instrument that makes this work verifiable is a direct reuse of `scripts/parity/config_surface.py` and `crates/vibe-core/src/config/surface_parity_tests.rs`, both of which already handle the pinned checkout, the conditional live probe and the committed corpus.
+**Why now:** `docs/parity.md` ranks missing protocol notifications third in execution order, ahead of everything that follows, on the stated ground that everything written afterward emits or consumes them. That reasoning applies with more force to the entry detail unions of problem 4: `EffectDetail` and `NoticeDetail` cross the wire in every history entry and are already written into persisted sessions, so each week of deferral multiplies the traces to migrate, exactly as it did for tool names in rank 1. The two parts that reached 95 in this repository did so because a differential oracle measures them; the instrument that makes this work verifiable is a direct reuse of `scripts/parity/config_surface.py` and `crates/vibe-core/src/config/surface_parity_tests.rs`, both of which already handle the pinned checkout, the conditional live probe and the committed corpus.
 
 ## Overview
 
@@ -265,7 +265,7 @@ Restore the eight absent notifications, retire the four invented ones, and make 
 **Dependencies:** Blocked by US-084
 
 **Acceptance Criteria:**
-- [ ] Given a request that mutates runtime state, when its response is sent, then `runtime/updated` is emitted afterwards carrying `sessionId` and the full `RuntimeSnapshot`
+- [ ] Given a request that mutates runtime state, when its response is sent, then `runtime/updated` is emitted afterward carrying `sessionId` and the full `RuntimeSnapshot`
 - [ ] Given an MCP source requiring authorization, when the URL is obtained, then `mcp/authUrl` is emitted carrying `name` and `url`
 - [ ] Given a recoverable server-side problem, when it is reported, then `warning` is emitted carrying a `PublicError`
 - [ ] Given the server after this change, when the emitted notification names are enumerated, then `mcp/updated`, `workspace/trust/updated`, `connectors/updated` and `shell/updated` are absent

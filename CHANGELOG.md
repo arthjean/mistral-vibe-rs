@@ -27,7 +27,7 @@
   `config/read` carries the published configuration view and the base it was
   composed from, `config/reload` and `config/thinking/write` carry the runtime
   the write produced, and `config/patch` carries what it rejected, what failed
-  to land and the runtime afterwards. The port's own `{snapshot}` envelope,
+  to land and the runtime afterward. The port's own `{snapshot}` envelope,
   which carried every layer and every effective key, leaves the wire; the
   settings screen reads the configuration in-process and every other caller
   reads the published field surface. `config/batchWrite` now takes the
@@ -123,7 +123,7 @@
 - Complete the handshake with a client that mutes notifications. `initialize`
   accepts `capabilities.disabledNotifications`, which the reference client
   library declares and which this port used to answer with `invalid_params`,
-  leaving the connection dead on its first frame. The server honours the list
+  leaving the connection dead on its first frame. The server honors the list
   for every notification except a sequenced event: those carry the per-session
   `eventId` a client counts, so silencing one would open a gap it reads as a
   fault. Muting a name consumes no event id, so the sequence stays contiguous
@@ -172,7 +172,7 @@
   the same name. Credentials, a fragment, a missing scheme or host, a scheme
   other than HTTP or HTTPS, and plaintext HTTP to anything but this machine are
   all refused without echoing the URL. Two spellings of one endpoint, differing
-  only by case, a default port or a trailing slash, are recognised as the same
+  only by case, a default port or a trailing slash, are recognized as the same
   server and the rejection names the entry that already holds it. An add with no
   name derives one from the host, dropping a leading `mcp` or `www` label and
   falling back to the first usable path segment, then numbering it until it is

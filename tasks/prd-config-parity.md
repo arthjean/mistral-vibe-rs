@@ -93,7 +93,7 @@ Key findings that informed this PRD:
 
 ### Assumptions (to validate)
 
-- The reference `ConfigBuilder` can be driven headlessly from a capture script with synthetic in-memory layers, without initialising the harness-files singleton or reaching the network. Validated by US-061; if it fails, the oracle falls back to capturing `create_default_config()` plus hand-authored layer-stack fixtures and the scenario count drops.
+- The reference `ConfigBuilder` can be driven headlessly from a capture script with synthetic in-memory layers, without initializing the harness-files singleton or reaching the network. Validated by US-061; if it fails, the oracle falls back to capturing `create_default_config()` plus hand-authored layer-stack fixtures and the scenario count drops.
 - No consumer outside this repository depends on `config/batchWrite`. It is called by `crates/vibe-cli` and by tests only, per `grep -rn 'config/batchWrite' crates`.
 - Rendering the settings screen from `config/fields/read` requires no runtime state beyond the loaded layers, so the Rust implementation can answer it from `ConfigSnapshot` without an agent loop.
 - Reference default values are behavioral observations rather than authored prose and may be committed. Field descriptions are prose and may not.
