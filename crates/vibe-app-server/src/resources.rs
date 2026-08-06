@@ -72,6 +72,7 @@ pub const RESOURCE_METHODS: &[&str] = &[
     "shell/interrupt",
     "shell/run",
     "stats/read",
+    "telemetry/record",
     "tools/list",
     "workspace/trust/decision",
     "workspace/trust/status",

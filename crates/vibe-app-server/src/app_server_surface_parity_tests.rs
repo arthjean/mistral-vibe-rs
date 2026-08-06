@@ -71,7 +71,6 @@ const UNROUTED_METHODS: &[(&str, &str)] = &[
     ("projectLinks/resolveRoot", "US-097"),
     ("projectLinks/save", "US-098"),
     ("projectLinks/unlink", "US-098"),
-    ("telemetry/record", "US-096"),
 ];
 
 /// Reference notifications this build does not emit yet.
@@ -120,6 +119,10 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
         ("session/ready/read", session.clone()),
         ("skills/list", session.clone()),
         ("stats/read", session.clone()),
+        (
+            "telemetry/record",
+            json!({"sessionId": PROBE_SESSION, "name": "probe", "properties": {}}),
+        ),
         ("tools/list", session.clone()),
         (
             "workspace/trust/status",

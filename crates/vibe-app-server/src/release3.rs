@@ -477,6 +477,20 @@ impl Release3Service {
             .unwrap_or(true)
     }
 
+    /// Whether the configuration lets a client-recorded event be kept.
+    ///
+    /// `telemetry/record` is the only caller: the reference hands the event to
+    /// the agent loop's telemetry client, which drops it when the same key is
+    /// off. A configuration that will not load is read as enabled, matching the
+    /// shipped default.
+    pub fn telemetry_enabled(&self) -> bool {
+        self.config
+            .load()
+            .ok()
+            .and_then(|snapshot| snapshot.effective.get("enable_telemetry")?.as_bool())
+            .unwrap_or(true)
+    }
+
     pub(crate) fn message_count(&self, session_id: &str) -> Result<Option<usize>, Release3Error> {
         match self.store.load(session_id) {
             Ok(hydrated) => Ok(Some(hydrated.messages.len())),

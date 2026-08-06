@@ -186,6 +186,7 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "shell/interrupt",
     "shell/run",
     "stats/read",
+    "telemetry/record",
     "tools/list",
     "turn/interrupt",
     "turn/start",
@@ -3621,6 +3622,9 @@ impl ServerConnection {
         if let Some(batch) = self.live_state_request(&request, &session_id) {
             return batch;
         }
+        if request.method == "telemetry/record" {
+            return self.telemetry_record(request);
+        }
         let session_active = match self.server.lock_sessions() {
             Ok(sessions) => sessions
                 .get(&session_id)
@@ -3733,6 +3737,46 @@ impl ServerConnection {
             _ => return None,
         };
         Some(success_batch(request.id.clone(), result))
+    }
+
+    /// Records a client-reported event against the attached session.
+    ///
+    /// The reference forwards the event to the agent loop's telemetry client,
+    /// which ships it to the datalake under the reference envelope. This port
+    /// publishes a deliberately different envelope from a closed vocabulary
+    /// (`docs/parity.md`, Accepted divergences), so a client-authored name and
+    /// its free-form properties have no envelope to travel in. The event is
+    /// kept where an operator can read it back, on `diagnostics/logs/read`,
+    /// and is dropped entirely when `enable_telemetry` is off, which is the
+    /// decision the reference delegates to the same key.
+    fn telemetry_record(&mut self, request: ServerRequest) -> DispatchBatch {
+        let params = match from_params::<TelemetryRecordParams>(&request.params) {
+            Ok(params) => params,
+            Err(rejection) => return invalid_params_batch(request.id, rejection),
+        };
+        if self.server.release3.telemetry_enabled() {
+            let properties = params
+                .properties
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
+            let message = format!(
+                "client event {} for session {} (correlateLastRequest={}, properties: {properties})",
+                params.name, params.session_id, params.correlate_last_request
+            );
+            match self.server.resources.lock() {
+                Ok(mut resources) => resources.record_log(now_millis(), "INFO", &message),
+                Err(_) => {
+                    return error_batch(
+                        request.id,
+                        ProtocolErrorCode::InternalError,
+                        "Resource state lock is poisoned",
+                    );
+                }
+            }
+        }
+        success_batch(request.id, BTreeMap::new())
     }
 
     /// Pins a workspace-trust request to the attached session root.
@@ -4245,6 +4289,20 @@ pub struct SessionIntent {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct SessionParams {
     session_id: String,
+}
+
+/// The event `telemetry/record` carries, exactly as the reference model
+/// declares it: the session it belongs to, a client-authored name, free-form
+/// properties and whether it correlates with the last backend request.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct TelemetryRecordParams {
+    session_id: String,
+    name: String,
+    #[serde(default)]
+    properties: BTreeMap<String, Value>,
+    #[serde(default)]
+    correlate_last_request: bool,
 }
 
 /// The settings `session/settings/update` changes, which is exactly what the
@@ -7636,6 +7694,106 @@ mod tests {
             *backend.closed.lock().expect("closed state"),
             vec!["session-1".to_owned()]
         );
+    }
+
+    /// The client's own event stream, which the reference hands to the agent
+    /// loop's telemetry client and this port keeps where an operator can read
+    /// it. Both gate it on `enable_telemetry`, so a client that records against
+    /// a session with telemetry off leaves nothing behind.
+    #[test]
+    fn a_recorded_client_event_is_kept_only_while_telemetry_is_enabled() {
+        for enabled in [true, false] {
+            let temporary = tempfile::tempdir().expect("temporary workspace");
+            let working_directory = temporary.path().join("workspace");
+            let vibe_home = temporary.path().join("home");
+            fs::create_dir_all(working_directory.join(".vibe")).expect("project config directory");
+            fs::create_dir_all(&vibe_home).expect("user config directory");
+            fs::write(
+                working_directory.join(".vibe/config.toml"),
+                format!("enable_telemetry = {enabled}\n"),
+            )
+            .expect("telemetry configuration");
+            let release3 = Release3Service::new(
+                crate::release3::Release3Paths {
+                    vibe_home,
+                    working_directory: working_directory.clone(),
+                    session_root: temporary.path().join("sessions"),
+                },
+                true,
+            )
+            .expect("release-3 service");
+            let server = AppServer::with_release3_service(release3);
+            let mut connection = server.connect(TransportKind::InProcess);
+            initialize(&mut connection);
+            connection.dispatch(&request(
+                2,
+                "session/start",
+                json!({"sessionId": "session-1", "workingDirectory": working_directory}),
+            ));
+
+            let recorded = connection.dispatch(&request(
+                3,
+                "telemetry/record",
+                json!({
+                    "sessionId": "session-1",
+                    "name": "vibe.client_ready",
+                    "properties": {"surface": "editor"},
+                    "correlateLastRequest": true
+                }),
+            ));
+            match decode_frame(&recorded.outbound[0]).expect("a recorded answer") {
+                Envelope::Success(SuccessResponse { result, .. }) => {
+                    assert!(result.is_empty(), "the answer is empty: {result:?}");
+                }
+                other => unreachable!("telemetry/record did not answer: {other:?}"),
+            }
+
+            let logs = call(&mut connection, 4, "diagnostics/logs/read");
+            let entries = logs["logs"]["entries"]
+                .as_array()
+                .expect("a log page")
+                .iter()
+                .filter(|entry| {
+                    entry["message"]
+                        .as_str()
+                        .is_some_and(|message| message.contains("vibe.client_ready"))
+                })
+                .count();
+            assert_eq!(
+                entries,
+                usize::from(enabled),
+                "enable_telemetry = {enabled} decides whether the event is kept"
+            );
+        }
+    }
+
+    /// The reference model declares four fields, so a client that sends a fifth
+    /// is answered with the pointer to it rather than having it ignored.
+    #[test]
+    fn a_recorded_client_event_refuses_a_field_the_reference_does_not_declare() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({"sessionId": "session-1", "workingDirectory": "/workspace"}),
+        ));
+
+        let refused = connection.dispatch(&request(
+            3,
+            "telemetry/record",
+            json!({"sessionId": "session-1", "name": "probe", "surplus": true}),
+        ));
+
+        match decode_frame(&refused.outbound[0]).expect("a refusal") {
+            Envelope::Error(error) => {
+                assert_eq!(error.error.code, ProtocolErrorCode::InvalidParams);
+                assert_eq!(error.error.data["errorCount"], json!(1));
+                assert_eq!(error.error.data["issues"][0]["path"], json!(["surplus"]));
+            }
+            other => unreachable!("the surplus field was accepted: {other:?}"),
+        }
     }
 
     #[test]

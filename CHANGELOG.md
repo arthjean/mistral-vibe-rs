@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Accept `telemetry/record`. A client can record its own event against a
+  session, and the call is honored only while `enable_telemetry` is on; the
+  event is kept where `diagnostics/logs/read` reports it rather than shipped,
+  because this port's telemetry envelope deliberately differs from the
+  protocol's. A field the protocol does not declare is refused with the pointer
+  to it.
 - Let a client host the agent's file access and its terminals. A client that
   declares `filesystem/read`, `filesystem/write` or `terminal` during the
   handshake is now asked to answer for them: `read_file` and `edit` read the
