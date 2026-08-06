@@ -568,7 +568,7 @@ fn observe_update_check(
 }
 
 #[test]
-fn corpus_replays_update_attention_narration_and_exit_behaviour() {
+fn corpus_replays_update_attention_narration_and_exit_behavior() {
     let corpus: Corpus = serde_json::from_str(include_str!(
         "../../../tests/runtime-parity/terminal-services-ep011.json"
     ))

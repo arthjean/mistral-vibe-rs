@@ -1560,7 +1560,7 @@ mod tests {
                 id: "compaction".to_owned(),
                 revision: 1,
                 kind: TranscriptKind::Checkpoint,
-                text: "summarised 40 messages".to_owned(),
+                text: "summarized 40 messages".to_owned(),
                 status: EntryStatus::Completed,
                 details: json!({"type": "checkpoint", "kind": "compaction"}),
             },

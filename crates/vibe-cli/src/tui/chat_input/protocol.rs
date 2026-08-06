@@ -46,7 +46,7 @@ pub struct EditorSnapshot {
     pub selection: Option<[usize; 2]>,
 }
 
-/// Normalised key identity shared by the oracle traces and the terminal adapter.
+/// Normalized key identity shared by the oracle traces and the terminal adapter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum KeyName {

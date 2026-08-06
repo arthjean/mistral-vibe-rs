@@ -56,7 +56,7 @@ impl FoldedText {
 ///
 /// Scores use hundredths so the reference's `1.5`, `1.3`, and `1.8` factors
 /// remain exact without partial floating-point ordering. Lowercase expansion
-/// keeps a source-index map so Unicode filenames cannot desynchronise indices.
+/// keeps a source-index map so Unicode filenames cannot desynchronize indices.
 pub(super) fn fuzzy_match_score(pattern: &str, text: &str) -> Option<i64> {
     if pattern.is_empty() {
         return Some(0);

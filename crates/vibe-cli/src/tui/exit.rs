@@ -82,7 +82,7 @@ pub fn quit_prompt(key: &str, queued: usize) -> String {
 }
 
 /// Reference `action_interrupt_or_quit` and `action_delete_right_or_quit`: only
-/// `Ctrl+D` honours `ask_confirmation_on_exit`, and a confirmation is bound to
+/// `Ctrl+D` honors `ask_confirmation_on_exit`, and a confirmation is bound to
 /// the key that requested it.
 pub fn resolve_quit(
     key: &str,

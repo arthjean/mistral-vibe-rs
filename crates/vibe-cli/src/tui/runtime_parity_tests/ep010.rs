@@ -9,7 +9,7 @@ use vibe_app_server::client::{EffectDetail, EffectResultDisplay};
 
 use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
 use crate::tui::diagnostics::{
-    Activity, classify, debug_log_line, log_level_colour, safe_link_spans,
+    Activity, classify, debug_log_line, log_level_color, safe_link_spans,
 };
 use crate::tui::render::{TokenState, format_context_progress};
 use crate::tui::state::{EntryStatus, TranscriptEntry, TranscriptKind};
@@ -211,7 +211,7 @@ fn apply(event: Event) -> String {
             ..
         } => format!(
             "log|{}|{}",
-            log_level_colour(&level),
+            log_level_color(&level),
             debug_log_line(timestamp, &level, &message)
         ),
         Event::Link { text, url } => format!(

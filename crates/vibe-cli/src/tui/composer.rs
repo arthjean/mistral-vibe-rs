@@ -149,7 +149,7 @@ mod tests {
         for character in "select me".chars() {
             let event =
                 normalized_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE))
-                    .expect("character is normalised");
+                    .expect("character is normalized");
             apply_event(&mut input, event, temporary.path(), &mut state);
         }
         apply_event(

@@ -239,7 +239,7 @@ pub(in crate::tui) fn interactive_test_runtime(session_id: &str) -> InteractiveR
 }
 
 /// A runtime wired to an in-process server. Tests that need a specific backend
-/// pass their own server rather than reaching into the runtime afterwards.
+/// pass their own server rather than reaching into the runtime afterward.
 #[cfg(test)]
 pub(in crate::tui) fn interactive_test_runtime_with_server(
     session_id: &str,

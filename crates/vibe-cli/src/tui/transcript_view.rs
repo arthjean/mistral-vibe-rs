@@ -246,11 +246,11 @@ mod tests {
             Some("deploy the service\nSee")
         );
 
-        // Selecting backwards yields the same text.
-        let mut backwards = view.clone();
-        backwards.begin_selection(Cell { line: 1, column: 3 });
-        backwards.extend_selection(Cell { line: 0, column: 2 });
-        assert_eq!(backwards.selected_text(), view.selected_text());
+        // Selecting backward yields the same text.
+        let mut backward = view.clone();
+        backward.begin_selection(Cell { line: 1, column: 3 });
+        backward.extend_selection(Cell { line: 0, column: 2 });
+        assert_eq!(backward.selected_text(), view.selected_text());
 
         view.clear_selection();
         assert!(!view.has_selection());

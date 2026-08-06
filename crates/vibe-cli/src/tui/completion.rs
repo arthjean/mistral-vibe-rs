@@ -445,7 +445,7 @@ impl CompletionEngine {
     /// Generation of the most recent completion request.
     ///
     /// Callers that resolve candidates outside the engine tag their request
-    /// with it and hand it back, so a late answer can be recognised as stale.
+    /// with it and hand it back, so a late answer can be recognized as stale.
     #[must_use]
     pub fn generation(&self) -> u64 {
         self.generation

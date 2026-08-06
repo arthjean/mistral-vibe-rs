@@ -300,10 +300,10 @@ impl ChatInputState {
         )
     }
 
-    /// Applies one normalised event and returns the ordered effects it causes.
+    /// Applies one normalized event and returns the ordered effects it causes.
     ///
     /// The transition never blocks and never panics: an event that cannot be
-    /// honoured yields [`InputEffect::Rejected`] and leaves the state valid.
+    /// honored yields [`InputEffect::Rejected`] and leaves the state valid.
     pub fn apply(&mut self, event: InputEvent) -> Vec<InputEffect> {
         let mut effects = Vec::new();
         match event {
@@ -797,7 +797,7 @@ impl ChatInputState {
     }
 }
 
-/// Maps a normalised key onto the popup vocabulary, honouring modifier rules.
+/// Maps a normalized key onto the popup vocabulary, honoring modifier rules.
 fn popup_key(key: KeyName, mods: &[Modifier]) -> Option<CompletionKey> {
     match key {
         KeyName::Escape => Some(CompletionKey::Escape),

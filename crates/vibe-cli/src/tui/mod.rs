@@ -524,7 +524,7 @@ pub async fn run_interactive(
                     ReadyInputDrain::Empty => {
                         let _ =
                             drain_ready_interrupts(&mut interrupt, tokio::signal::ctrl_c)?;
-                        mounted_startup.arm_fatal_acknowledgement();
+                        mounted_startup.arm_fatal_acknowledgment();
                     }
                     ReadyInputDrain::Saturated => continue,
                     ReadyInputDrain::Closed => {
@@ -1715,7 +1715,7 @@ mod tests {
     }
 
     #[test]
-    fn stale_inputs_are_drained_before_fatal_acknowledgement_arms() {
+    fn stale_inputs_are_drained_before_fatal_acknowledgment_arms() {
         let queued = Arc::new(Mutex::new(VecDeque::from([Ok::<_, std::io::Error>(
             Event::Key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)),
         )])));
@@ -1752,7 +1752,7 @@ mod tests {
         );
         assert!(stale_interrupt.as_mut().now_or_never().is_none());
         assert!(!startup.is_awaiting_fatal_key());
-        startup.arm_fatal_acknowledgement();
+        startup.arm_fatal_acknowledgment();
         assert!(startup.is_awaiting_fatal_key());
         assert!(events.next().now_or_never().is_none());
 

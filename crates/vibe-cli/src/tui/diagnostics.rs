@@ -289,7 +289,7 @@ pub fn format_elapsed(seconds: u64) -> String {
 
 /// Reference `LOG_LEVEL_COLORS`.
 #[must_use]
-pub fn log_level_colour(level: &str) -> &'static str {
+pub fn log_level_color(level: &str) -> &'static str {
     match level {
         "INFO" => "cyan",
         "WARNING" => "yellow",
@@ -460,8 +460,8 @@ mod tests {
             debug_log_line(1_754_179_200, "ERROR", "transport closed"),
             "2025-08-03 00:00:00 ERROR    transport closed"
         );
-        assert_eq!(log_level_colour("ERROR"), "red");
-        assert_eq!(log_level_colour("TRACE"), "dim");
+        assert_eq!(log_level_color("ERROR"), "red");
+        assert_eq!(log_level_color("TRACE"), "dim");
     }
 
     #[test]

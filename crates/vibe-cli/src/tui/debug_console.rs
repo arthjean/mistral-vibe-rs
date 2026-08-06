@@ -8,7 +8,7 @@
 
 use serde_json::Value;
 
-use super::diagnostics::{debug_log_line, log_level_colour};
+use super::diagnostics::{debug_log_line, log_level_color};
 use super::interaction::{Overlay, OverlayItem, OverlayKind};
 
 /// Reference `DEFAULT_LOG_PAGE_SIZE`.
@@ -19,7 +19,7 @@ pub const POLL_INTERVAL_MS: u64 = 500;
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LogLine {
     id: String,
-    colour: &'static str,
+    color: &'static str,
     text: String,
 }
 
@@ -108,7 +108,7 @@ impl DebugConsole {
             );
             self.lines.push(LogLine {
                 id,
-                colour: log_level_colour(&level),
+                color: log_level_color(&level),
                 text,
             });
         }
@@ -126,7 +126,7 @@ impl DebugConsole {
             .lines
             .iter()
             .skip(self.visible_from)
-            .map(|line| OverlayItem::new(line.id.clone(), line.colour, line.text.clone(), false))
+            .map(|line| OverlayItem::new(line.id.clone(), line.color, line.text.clone(), false))
             .collect::<Vec<_>>();
         if items.is_empty() {
             items.push(OverlayItem::new(

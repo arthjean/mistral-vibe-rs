@@ -38,7 +38,7 @@ impl MountedStartup {
         matches!(self, Self::FatalPendingRender(_))
     }
 
-    pub(in crate::tui) fn arm_fatal_acknowledgement(&mut self) {
+    pub(in crate::tui) fn arm_fatal_acknowledgment(&mut self) {
         let current = std::mem::replace(self, Self::Ready);
         *self = match current {
             Self::FatalPendingRender(error) => Self::FatalAwaitingKey(error),
@@ -238,7 +238,7 @@ mod tests {
                 .iter()
                 .any(|entry| entry.text == "Press any key to exit")
         );
-        startup.arm_fatal_acknowledgement();
+        startup.arm_fatal_acknowledgment();
         assert!(startup.is_awaiting_fatal_key());
         assert!(matches!(
             startup.into_initialization_error(),
