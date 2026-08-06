@@ -6,7 +6,7 @@ with the execution order derived from it.
 | Field | Value |
 |---|---|
 | First audit | 2026-08-04, Rust `5617d0c` |
-| Last remeasure | 2026-08-05, Rust `b2ec4b7` plus the EP-023 worktree changes |
+| Last remeasure | 2026-08-06, Rust `d4c6dcb` plus the EP-029 changes. Only the four parts EP-029 touched were remeasured, so the weighted total below predates them |
 | Python reference | `68ff32e`, package version 2.23.3 |
 | Weighted score | 76/100 (was 74 at the last remeasure, 65 at first audit) |
 
@@ -15,7 +15,7 @@ with the execution order derived from it.
 Scores measure **reproduced surface**, not behavioral conformance. They come from
 diffing inventories, not from running both implementations side by side:
 
-- app-server JSON-RPC method names (113 upstream methods);
+- app-server JSON-RPC method names (89 upstream `SERVER_METHODS` plus 7 `clientTool/*`, counted from the pinned checkout by `scripts/parity/app_server_surface.py`);
 - user-facing configuration keys (`vibe/core/config/vibe_schema.py` against
   `LayeredConfig::schema()`);
 - published agent tool names and schemas;
@@ -27,10 +27,11 @@ Anything measured only by module presence carries more uncertainty than anything
 measured by name-level diff, and the table notes which is which.
 
 Where a differential oracle exists, the score comes from running it rather than
-from reading source. The tool surface was the first part in that category; the
-configuration surface is the second, through
+from reading source. The tool surface was the first part in that category, the
+configuration surface the second, through
 `crates/vibe-core/tests/config-surface/corpus.json` and the two modules that
-replay it.
+replay it, and the app-server protocol the third, through
+`crates/vibe-app-server/tests/app-server-surface/corpus.json`.
 
 ### Measured volumes
 
@@ -59,17 +60,17 @@ replay it.
 | TUI (composer, transcript, pickers) | 80 | Broad coverage, backed by a dedicated observable-parity harness (JSON traces plus Python oracles). Missing vim navigation, word selection, `load_more`, braille rendering |
 | Review and turn diff | 80 | `review/{state,baseline,hunks,approve,revert,turnDiff}` all present |
 | Sessions, resume, fork, history | 80 | `storage.rs`: metadata, pagination, migration, file locks, handoff journal |
-| app-server protocol | 78 | 88 of 113 methods. Absent: `clientTool/*` (7), `projectLinks/*` (9), `telemetry/record`. The notification contract is complete: 15 of 15 reference names emitted, 0 invented, replayed from the committed corpus. `config/patch` and `config/fields/read` landed with the configuration epics |
+| app-server protocol | 95 | **Measured by differential oracle**: 89 of 89 reference methods declared and routed with 0 invented names inside the inventory, 15 of 15 notifications emitted with 0 invented, 7 of 7 `clientTool/*` issued, 12 of 12 error codes spoken, 18 of 20 enum vocabularies compared and 364 models in the census. The 20 methods a bare probe session can reach all validate against the census with 0 missing required and 0 surplus aliases. Reproduce with `cargo test -p vibe-app-server --all-features app_server_surface_parity_tests -- --nocapture`. The nine `projectLinks/*` answers are validated against the same census from a repository fixture, since a bare probe reaches only their ineligible form. Residual: `TerminalEmulator` is unmodeled, and 63 of the 89 responses need a backend or a written session neither harness stands up, so they are declared and routed but not census-validated |
 | Hooks | 75 | 1:1 on event types (PreTool, PostTool, PostAgent) with matcher, timeout, retries, strict |
 | System prompt and project context | 75 | `AGENTS.md` walk-up, prompt resolution, skill and subagent summaries. Missing `include_*`, `system_prompt_id`, `project_context` |
 | Agents, subagents, delegation | 75 | `AgentProfile`, `AgentRegistry`, `SubagentManager`, `agents/{list,install,uninstall}`, and `task` now published conformantly |
 | Connectors | 70 | Registry, auth, refresh, toggle. Catalog scope unverified |
-| Teleport and Vibe Code Web | 70 | `vibeCode/teleport/*` and `vibeCode/projects/*` present. The whole session-less `projectLinks/*` API is absent |
+| Teleport and Vibe Code Web | 85 | `vibeCode/teleport/*`, `vibeCode/projects/*` and the session-less `projectLinks/*` all present, the last two sharing one saved-link store as upstream does. Teleport workflow states and the push flow are unmeasured against the reference |
 | Autocompletion | 70 | Slash, path and fuzzy completion. Missing the file indexer with watcher (`file_watcher_for_autocomplete`) |
 | Voice (STT, TTS, narrator) | 65 | `voice/{realtime,recorder,session,state}` plus `narrator.rs`, cpal wired. Missing transcribe and TTS provider/model configuration |
-| Vibe Code Project | 65 | Workflow and picker present, the `projectLinks` layer is not |
+| Vibe Code Project | 85 | Workflow, picker and the `projectLinks` layer present, with the reference candidate ranking and the four root reject reasons. The project API client is measured by fixture rather than against the live service |
 | Compaction | 55 | `Compactor` trait plus manual compaction. **Automatic compaction absent** (`auto_compact_threshold`, `context_warnings`, `compaction_model`, `compaction_prompt_id`, `raise_on_compaction_failure`) |
-| Telemetry and observability | 55 | `telemetry.rs` with an intentionally divergent envelope. **OTel absent** (`enable_otel`, `otel_endpoint`, `otel_redaction`), no `telemetry/record`, no log reader |
+| Telemetry and observability | 60 | `telemetry.rs` with an intentionally divergent envelope. `telemetry/record` accepts the reference parameters and honors `enable_telemetry`, keeping the event locally rather than shipping it, which is a recorded divergence below. **OTel absent** (`enable_otel`, `otel_endpoint`, `otel_redaction`), no log reader |
 | Skills | 55 | `SKILL.md` discovery, injection, `skills/list`, and the `skill` tool now published conformantly. Missing the remote registry (install, manifest, store), the builtin skills, and `enabled/disabled_skills`, `skill_paths` |
 | Checkpoints | 50 | Baseline, hunks and revert exist on the review side. No dedicated file checkpointer (store, recorder, history) |
 | Configuration | 95 | **Measured by differential oracle**: 64/64 reference fields declared, published and merged by the strategy the reference declares, 30/30 merge scenarios, 8/8 model-validation scenarios and 22/22 MCP entry scenarios replayed from the committed corpus, plus 8/8 reference `config/*` methods dispatched. Seven layers compose (Defaults, Discovered, SelectedToml, Experiments, Environment, Runtime, Agent). Residual: the GrowthBook layer and the per-layer async state machine are recorded divergences below, the fingerprint token has its own format, and 5 keys this port declares have no upstream counterpart. Declaring a key is not implementing its feature: each arrives with the feature that reads it |
@@ -95,14 +96,14 @@ the number of downstream consumers, then user value, then cost.
 | 5 | `task`, `skill` | DONE | Shipped with rank 1 |
 | 6 | `web_search`, `web_fetch` | DONE | Shipped with rank 1 |
 | 7 | Tool name matching (globs, `re:`, case-insensitive) | DONE | `crates/vibe-core/src/matching.rs` |
-| 8 | `clientTool/*` | TODO | Routes file and terminal tools to the client, unblocks IDE and ACP embedding |
+| 8 | `clientTool/*` | DONE | All 7 server-to-client methods are issued, gated on the capabilities the client declared at `initialize`, replayed by the app-server surface corpus |
 | 9 | Checkpoints | TODO | Depends on `write_file` and `edit` to capture mutations, now available |
 | 10 | Automatic compaction | TODO | Depends on the configuration mechanism and engine token accounting |
 | 11 | Skills, complete (remote registry, builtins) | TODO | Depends on the `skill` tool, now available, and on `skill_paths` keys |
 | 12 | Specialized shells (`git_bash`, `powershell`) | DONE | Shipped with rank 1 |
 | 13 | Browser sign-in and onboarding | TODO | Blocks adoption, blocks nothing technically downstream |
-| 14 | `projectLinks/*`, autocompletion indexer, voice configuration | TODO | Independent periphery, parallelizable |
-| 15 | Telemetry and OTel | TODO | Depends on configuration, has no downstream consumer |
+| 14 | `projectLinks/*`, autocompletion indexer, voice configuration | PARTIAL | `projectLinks/*` shipped with EP-029: all 9 methods routed and validating. The autocompletion indexer and the voice configuration are independent periphery, parallelizable |
+| 15 | Telemetry and OTel | PARTIAL | `telemetry/record` shipped with EP-029. OTel depends on configuration and has no downstream consumer |
 | 16 | Experiments and GrowthBook, VS Code promo | TODO | See accepted divergences |
 
 ## Accepted divergences
@@ -115,6 +116,8 @@ what in the repository holds it in place.
 | Part | Reason | Evidence |
 |---|---|---|
 | Telemetry | The envelope already diverges intentionally from the upstream open-properties format | `CHANGELOG.md`, telemetry entry |
+| `telemetry/record` keeps the event locally | The reference hands a client-authored name and free-form properties to the agent loop's telemetry client, which ships them under the open-properties envelope this port does not publish. The method accepts and validates exactly the reference parameters and honors `enable_telemetry`; the event is kept on `diagnostics/logs/read` instead of being shipped, and shipping it needs the envelope divergence above resolved first | `AppServer::telemetry_record` in `crates/vibe-app-server/src/server.rs`, asserted by `a_recorded_client_event_is_kept_only_while_telemetry_is_enabled` |
+| `identity/read` and `workspace/worktrees/list` are absent | Neither name exists anywhere in the reference tree at the pinned commit `68ff32e`; both were added upstream afterwards. Routing them would mean inventing a contract or re-pinning, and a re-pin regenerates all three corpora as its own change | `crates/vibe-app-server/tests/app-server-surface/corpus.json`, whose 89 methods are the whole pinned inventory |
 | Experiments and GrowthBook | Requires access to a third-party Mistral service with credentials this repository does not hold. The `experiments` table stays as the injection point | `tasks/prd-config-parity.md`, Non-Goals |
 | VS Code extension promo | Advertises an extension that does not target this binary | No promo surface exists in `crates/`, and the parity table scores the part 10 for that reason |
 | Configuration fingerprint format | Upstream builds the token from `st_dev:st_ino:st_mtime_ns:st_size` (`vibe/core/config/fingerprint.py:30`); this port digests the file contents. The token is opaque, is only ever compared against one produced by the same implementation, and a content digest detects an edit that restores the size and timestamp | `crates/vibe-core/src/config.rs`, `fingerprint_optional` and the concurrent-edit tests |
@@ -148,6 +151,22 @@ arriving without a corpus entry fails the replay naming the field, which is what
 the `Configuration-surface conformance` CI step reports alongside the conforming
 counts.
 
+The app-server wire surface is the third. `scripts/parity/app_server_surface.py`
+imports the reference `protocol` and `_connection_protocol` modules and records
+the method inventory, the client-tool and notification vocabularies, the error
+codes, the enum value sets, the discriminated unions and a per-model field
+census with aliases and required flags.
+`crates/vibe-app-server/tests/app-server-surface/corpus.json` is that capture,
+committed on the same terms as the configuration one: names, aliases, pointers,
+enum values and counts, and no reference-authored prose.
+`app_server_surface_parity_tests` replays it unconditionally against what this
+build declares, routes and answers, and only the probe that recaptures from the
+pinned checkout skips. Each family carries a ledger of what is still divergent,
+and a divergence that appears outside it fails the replay, as does a ledger
+entry that has gone stale. Run it with `cargo test -p vibe-app-server
+--all-features app_server_surface_parity_tests -- --nocapture`, which is where
+the app-server score above comes from.
+
 Extend the harness before writing each phase, not after.
 
 The next ceiling is the harness itself, not a rank in the list. It compares
@@ -162,6 +181,9 @@ output oracle, which is a different instrument from the surface diff.
 - `tasks/prd-tool-surface-parity.md` (DONE) delivered ranks 1, 4, 5, 6, 7 and 12.
 - `tasks/prd-config-parity.md` delivered rank 2 and the configuration corpus this
   document's configuration score is measured from.
+- `tasks/prd-app-server-parity.md` delivered ranks 3 and 8, the `projectLinks/*`
+  part of rank 14 and the `telemetry/record` part of rank 15, plus the
+  app-server surface corpus this document's app-server score is measured from.
 - `tasks/prd-chat-input-observable-parity.md` and
   `tasks/prd-tui-runtime-observable-parity.md` established the harness this
   document relies on.
