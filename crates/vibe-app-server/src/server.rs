@@ -30,7 +30,8 @@ use serde_json::{Value, json};
 use thiserror::Error;
 use vibe_core::config::DotenvValues;
 use vibe_core::events::{
-    CallbackKind as EngineCallbackKind, LifecycleState, ModelMessage, ProjectionSnapshot,
+    CallbackDetail, CallbackKind as EngineCallbackKind, CallbackOutput, EffectDetail,
+    EffectResultDisplay, LifecycleState, ModelMessage, NoticeDetail, ProjectionSnapshot,
     PublicCallbackState, PublicContentBlock, PublicEffectState, PublicEntryGenerationStatus,
     PublicEntryMetadata, PublicError, PublicHistoryEntry, PublicMessageRole, PublicMessageSource,
     PublicTurn, PublicTurnStatus, TurnErrorCode,
@@ -861,6 +862,16 @@ impl AppServer {
         Ok(vec![stats, status, completed])
     }
 
+    /// The effect an approval raised from a bare prompt presents.
+    ///
+    /// There is no tool behind it, so it publishes the generic kind and carries
+    /// the prompt in the display's free-form content.
+    fn approval_prompt_effect(prompt: &str) -> EffectDetail {
+        let mut effect = EffectDetail::for_call("callback", &json!({}));
+        effect.display.content = Some(prompt.to_owned());
+        effect
+    }
+
     pub fn request_callback(
         &self,
         session_id: &str,
@@ -875,21 +886,7 @@ impl AppServer {
         let detail = match kind {
             EngineCallbackKind::Approval => json!({
                 "kind": "approval",
-                "effect": {
-                    "kind": "tool",
-                    "toolName": "callback",
-                    "input": null,
-                    "display": {
-                        "summary": prompt,
-                        "content": null,
-                        "suffix": "",
-                        "verb": "",
-                        "message": null,
-                        "settledVerb": "",
-                        "settledMessage": null,
-                        "statusText": "",
-                    },
-                },
+                "effect": Self::approval_prompt_effect(&prompt),
                 "requiredPermissions": [],
                 "choices": [
                     "approve",
@@ -936,12 +933,12 @@ impl AppServer {
             return Err(ServerError::UnsupportedCallbackKind(kind));
         }
         let title = title.into();
-        validate_callback_request(kind, &title, &detail)
+        let CallbackRequestDetail {
+            detail,
+            plan_review_path,
+        } = parse_callback_request(kind, &title, &detail)
             .map_err(|message| ServerError::InvalidCallbackDetail(message.to_owned()))?;
-        let related_entry_id = detail
-            .get("relatedEntryId")
-            .and_then(Value::as_str)
-            .map(str::to_owned);
+        let related_entry_id = detail.related_entry_id().map(str::to_owned);
         let mut sessions = self.lock_sessions()?;
         let session = sessions
             .get_mut(session_id)
@@ -955,6 +952,7 @@ impl AppServer {
         let callback_sequence = self.next_callback.fetch_add(1, Ordering::Relaxed);
         let callback_id = format!("callback-{callback_sequence}");
         let timestamp = now_millis();
+        let title_for_notice = title.clone();
         let callback = PublicHistoryEntry::Callback {
             metadata: PublicEntryMetadata {
                 id: format!("callback:{callback_id}"),
@@ -985,6 +983,25 @@ impl AppServer {
             title: None,
             history: Vec::new(),
         });
+        // The reference publishes a plan review as its own notice rather than as
+        // a field on the callback, so the entry that names the plan lands ahead
+        // of the question a client is about to be asked.
+        if let Some(file_path) = plan_review_path {
+            snapshot.history.push(PublicHistoryEntry::Notice {
+                metadata: PublicEntryMetadata {
+                    id: format!("notice:{callback_id}:plan-review"),
+                    session_id: snapshot.session_id.clone(),
+                    turn_id: Some(turn_id.to_owned()),
+                    created_at: timestamp,
+                    updated_at: timestamp,
+                    generation_status: PublicEntryGenerationStatus::Completed,
+                    related_entry_id: Some(format!("callback:{callback_id}")),
+                },
+                level: vibe_core::events::PublicNoticeLevel::Info,
+                message: title_for_notice.clone(),
+                detail: NoticeDetail::PlanReviewStarted { file_path },
+            });
+        }
         if !snapshot.history.iter().any(|entry| {
             matches!(
                 entry,
@@ -3321,14 +3338,25 @@ impl ServerConnection {
                 return error_batch(request.id, ProtocolErrorCode::InvalidParams, message);
             }
         };
+        // The answer is published as the union the reference declares, so a
+        // body that passed the checks above but is not one of its two forms is
+        // rejected rather than echoed back in the answered state.
+        let output = match serde_json::from_value::<CallbackOutput>(params.output.clone()) {
+            Ok(output) => output,
+            Err(_) => {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::InvalidParams,
+                    "Callback output does not match the protocol union",
+                );
+            }
+        };
         let cancel_turn = callback_requests_turn_cancel(&params.output);
         let value = serde_json::to_string(&params.output).ok();
         settle_pending_callback(
             session,
             &params.callback_id,
-            PublicCallbackState::Answered {
-                output: params.output.clone(),
-            },
+            PublicCallbackState::Answered { output },
         );
         session.pending_callback = None;
         session.resolved_callbacks.insert(
@@ -4294,6 +4322,7 @@ mod tests {
     use super::*;
     use std::fs;
     use std::path::PathBuf;
+    use vibe_core::events::ApprovalDecisionType;
 
     /// `SERVER_METHODS` is the reference contract, not this build's routing
     /// table: a name belongs there whether or not this build answers it. What
@@ -5881,7 +5910,10 @@ mod tests {
                 "callbackId": callback_id,
                 "output": {
                     "type": "approval",
-                    "decision": {"type": "approve"}
+                    "decision": {"type": "approve"},
+                    // The reference approval output declares an operator note,
+                    // so a client sending one is answered rather than rejected.
+                    "feedback": "keep the scope tight"
                 }
             }),
         ));
@@ -5908,11 +5940,13 @@ mod tests {
                                 generation_status: PublicEntryGenerationStatus::Completed,
                                 ..
                             },
-                        state: PublicCallbackState::Answered { output },
+                        state: PublicCallbackState::Answered {
+                            output: CallbackOutput::Approval { decision, feedback }
+                        },
                         ..
                     } if callback_id == "callback-1"
-                        && output.pointer("/decision/type").and_then(Value::as_str)
-                            == Some("approve")
+                        && decision.decision == ApprovalDecisionType::Approve
+                        && feedback.as_deref() == Some("keep the scope tight")
                 )
             })
         }));
@@ -5924,7 +5958,8 @@ mod tests {
                 "callbackId": "callback-1",
                 "output": {
                     "type": "approval",
-                    "decision": {"type": "approve"}
+                    "decision": {"type": "approve"},
+                    "feedback": "keep the scope tight"
                 }
             }),
         ));
@@ -6123,10 +6158,11 @@ mod tests {
                                 generation_status: PublicEntryGenerationStatus::Completed,
                                 ..
                             },
-                        state: PublicCallbackState::Answered { output },
+                        state: PublicCallbackState::Answered {
+                            output: CallbackOutput::UserInput { result }
+                        },
                         ..
-                    } if output.pointer("/result/cancelled").and_then(Value::as_bool)
-                        == Some(true)
+                    } if result.cancelled
                 )
             })
         }));
@@ -6188,11 +6224,12 @@ mod tests {
                     entry,
                     PublicHistoryEntry::Callback {
                         callback_id,
-                        state: PublicCallbackState::Answered { output },
+                        state: PublicCallbackState::Answered {
+                            output: CallbackOutput::Approval { decision, .. }
+                        },
                         ..
                     } if callback_id == "callback-1"
-                        && output.pointer("/decision/type").and_then(Value::as_str)
-                            == Some("deny")
+                        && decision.decision == ApprovalDecisionType::Deny
                 )
             })
         }));
@@ -6321,6 +6358,102 @@ mod tests {
                 .pending_callback,
             Some("callback-2".to_owned())
         );
+    }
+
+    /// The reference declares no plan-review field on a callback detail, so the
+    /// port's marker becomes the notice entry the reference publishes and the
+    /// detail that reaches the client carries only the declared keys.
+    #[test]
+    fn a_plan_review_becomes_a_notice_and_leaves_the_callback_detail_conformant() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+        connection.dispatch(&request(
+            3,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+        let review = |file_path: Value| {
+            json!({
+                "kind": "user_input",
+                "request": {
+                    "questions": [{
+                        "question": "Switch to code mode?",
+                        "options": [{"label": "Yes"}, {"label": "No"}]
+                    }],
+                    "footerNote": null,
+                },
+                "planReview": true,
+                "filePath": file_path,
+                "relatedEntryId": null,
+            })
+        };
+
+        assert!(matches!(
+            connection.request_callback_with_detail(
+                "session-1",
+                "turn-1",
+                EngineCallbackKind::UserInput,
+                "Review plan",
+                review(Value::Null),
+            ),
+            Err(ServerError::InvalidCallbackDetail(_))
+        ));
+
+        let (callback_id, _) = connection
+            .request_callback_with_detail(
+                "session-1",
+                "turn-1",
+                EngineCallbackKind::UserInput,
+                "Review plan",
+                review(json!("/workspace/plan.md")),
+            )
+            .expect("the plan review is accepted");
+
+        let sessions = server.lock_sessions().expect("sessions");
+        let history = &sessions
+            .get("session-1")
+            .expect("session")
+            .snapshot
+            .as_ref()
+            .expect("snapshot")
+            .history;
+        let notice = history
+            .iter()
+            .find_map(|entry| match entry {
+                PublicHistoryEntry::Notice {
+                    metadata, detail, ..
+                } => Some((metadata, detail)),
+                _ => None,
+            })
+            .expect("the plan review is published as a notice");
+        assert_eq!(
+            notice.1,
+            &NoticeDetail::PlanReviewStarted {
+                file_path: "/workspace/plan.md".to_owned()
+            }
+        );
+        assert_eq!(
+            notice.0.related_entry_id.as_deref(),
+            Some(format!("callback:{callback_id}").as_str())
+        );
+
+        let detail = history
+            .iter()
+            .find_map(|entry| match entry {
+                PublicHistoryEntry::Callback { detail, .. } => Some(detail),
+                _ => None,
+            })
+            .expect("the callback is published");
+        let wire = serde_json::to_value(detail).expect("the detail serializes");
+        let keys = wire
+            .as_object()
+            .expect("an object")
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(keys, ["kind", "relatedEntryId", "request"]);
     }
 
     #[test]

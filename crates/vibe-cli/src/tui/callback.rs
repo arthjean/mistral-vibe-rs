@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
@@ -160,8 +161,10 @@ pub(super) fn drain_callback_requests(
         return;
     }
     resync_current_projection(runtime, state);
+    let plan_reviews = plan_reviews(state);
     for entry in entries {
-        let pending = match pending_callback_from_entry(&entry) {
+        let plan_review = plan_reviews.get(entry.metadata().id.as_str());
+        let pending = match pending_callback_from_entry(&entry, plan_review.map(PathBuf::as_path)) {
             Ok(Some(pending)) => pending,
             Ok(None) => continue,
             Err(error) => {
@@ -375,13 +378,17 @@ pub(super) fn sync_active_callbacks(
             return;
         }
     };
+    let plan_reviews = plan_reviews(state);
     let pending_callbacks = entries
         .into_iter()
-        .filter_map(|entry| match pending_callback_from_entry(&entry) {
-            Ok(pending) => pending,
-            Err(error) => {
-                state.push_diagnostic(format!("Active callback is invalid: {error}"));
-                None
+        .filter_map(|entry| {
+            let plan_review = plan_reviews.get(entry.metadata().id.as_str());
+            match pending_callback_from_entry(&entry, plan_review.map(PathBuf::as_path)) {
+                Ok(pending) => pending,
+                Err(error) => {
+                    state.push_diagnostic(format!("Active callback is invalid: {error}"));
+                    None
+                }
             }
         })
         .collect::<Vec<_>>();
@@ -440,8 +447,44 @@ pub(super) fn activate_pending_callback_state(
     true
 }
 
+/// The plan each `plan_review_started` notice opened, by the callback entry it
+/// relates to.
+///
+/// The reference publishes a plan review as its own notice entry, so the path
+/// is read from the transcript rather than from the callback, whose detail
+/// declares no field for it. The relation is what keeps a stale review from
+/// turning a later, unrelated question into one.
+pub(super) fn plan_reviews(state: &TuiState) -> BTreeMap<String, PathBuf> {
+    state
+        .entries
+        .iter()
+        .filter(|entry| entry.kind == TranscriptKind::Notice)
+        .filter(|entry| {
+            entry
+                .details
+                .pointer("/detail/kind")
+                .and_then(Value::as_str)
+                == Some("plan_review_started")
+        })
+        .filter_map(|entry| {
+            let related = entry
+                .details
+                .get("relatedEntryId")
+                .and_then(Value::as_str)?
+                .to_owned();
+            let path = entry
+                .details
+                .pointer("/detail/filePath")
+                .and_then(Value::as_str)
+                .filter(|path| !path.is_empty())?;
+            Some((related, PathBuf::from(path)))
+        })
+        .collect()
+}
+
 pub(super) fn pending_callback_from_entry(
     entry: &PublicHistoryEntry,
+    plan_review: Option<&Path>,
 ) -> Result<Option<PendingCallback>, String> {
     let PublicHistoryEntry::Callback {
         metadata,
@@ -453,6 +496,9 @@ pub(super) fn pending_callback_from_entry(
     else {
         return Ok(None);
     };
+    // The helpers below read the published wire form, which is what a reference
+    // client sees, so the typed union is rendered back to it once here.
+    let detail = &serde_json::to_value(detail).map_err(|error| error.to_string())?;
     if serde_json::to_vec(detail)
         .map_err(|error| error.to_string())?
         .len()
@@ -478,27 +524,22 @@ pub(super) fn pending_callback_from_entry(
         })),
         Some("user_input") => {
             let questions = callback_questions(detail)?;
-            let plan_review = detail
-                .get("planReview")
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
             let footer_note = detail
                 .pointer("/request/footerNote")
                 .and_then(Value::as_str)
                 .filter(|footer| !footer.is_empty())
                 .map(ToOwned::to_owned);
             let prompt = callback_prompt(title, &questions, detail);
-            let request = if plan_review {
-                CallbackRequest::PlanReview {
+            let request = match plan_review {
+                Some(plan_path) => CallbackRequest::PlanReview {
                     questions,
                     footer_note,
-                    plan_path: callback_plan_path(detail)?,
-                }
-            } else {
-                CallbackRequest::UserInput {
+                    plan_path: plan_path.to_path_buf(),
+                },
+                None => CallbackRequest::UserInput {
                     questions,
                     footer_note,
-                }
+                },
             };
             Ok(Some(PendingCallback {
                 callback_id: callback_id.clone(),
@@ -585,15 +626,6 @@ fn callback_effect_content(tool_name: &str, value: &Value) -> String {
             value => serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string()),
         },
     }
-}
-
-fn callback_plan_path(detail: &Value) -> Result<PathBuf, String> {
-    detail
-        .get("filePath")
-        .and_then(Value::as_str)
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-        .ok_or_else(|| "plan review callback omitted its file path".to_owned())
 }
 
 fn approval_options(detail: &Value) -> Result<Vec<CallbackOption>, String> {
@@ -938,8 +970,11 @@ mod tests {
         );
     }
 
+    /// The reference publishes a plan review as its own notice, so the callback
+    /// detail carries no marker and the open notice is what turns the same
+    /// user-input question into a plan review.
     #[test]
-    fn plan_review_without_the_canonical_file_path_is_rejected() {
+    fn the_plan_review_notice_decides_what_a_user_input_callback_is() {
         let entry = serde_json::from_value::<PublicHistoryEntry>(json!({
             "type": "callback",
             "id": "callback-entry",
@@ -952,7 +987,6 @@ mod tests {
             "title": "Review plan",
             "detail": {
                 "kind": "user_input",
-                "planReview": true,
                 "request": {
                     "questions": [{
                         "header": "Plan",
@@ -970,10 +1004,47 @@ mod tests {
         }))
         .expect("callback fixture");
 
+        let plain = pending_callback_from_entry(&entry, None)
+            .expect("callback is valid")
+            .expect("callback is active");
+        assert!(matches!(plain.request, CallbackRequest::UserInput { .. }));
+
+        let reviewing = pending_callback_from_entry(&entry, Some(Path::new("/tmp/plan.md")))
+            .expect("callback is valid")
+            .expect("callback is active");
+        let CallbackRequest::PlanReview { plan_path, .. } = &reviewing.request else {
+            panic!("expected a plan-review callback");
+        };
+        assert_eq!(plan_path, Path::new("/tmp/plan.md"));
+    }
+
+    /// The relation is what stops a plan review from leaking onto the next
+    /// question the session asks.
+    #[test]
+    fn a_plan_review_notice_only_reaches_the_callback_it_relates_to() {
+        let mut state = TuiState::new("session");
+        assert!(plan_reviews(&state).is_empty());
+
+        state.entries.push(TranscriptEntry {
+            id: "notice:callback-1:plan-review".to_owned(),
+            revision: 1,
+            kind: TranscriptKind::Notice,
+            text: "Review plan".to_owned(),
+            status: EntryStatus::Completed,
+            details: json!({
+                "type": "notice",
+                "level": "info",
+                "relatedEntryId": "callback:callback-1",
+                "detail": {"kind": "plan_review_started", "filePath": "/tmp/plan.md"},
+            }),
+        });
+
+        let reviews = plan_reviews(&state);
         assert_eq!(
-            pending_callback_from_entry(&entry),
-            Err("plan review callback omitted its file path".to_owned())
+            reviews.get("callback:callback-1"),
+            Some(&PathBuf::from("/tmp/plan.md"))
         );
+        assert_eq!(reviews.get("callback:callback-2"), None);
     }
 
     #[test]
@@ -1036,7 +1107,7 @@ mod tests {
             "state": {"status": "open"}
         }))
         .expect("callback fixture");
-        let pending = pending_callback_from_entry(&entry)
+        let pending = pending_callback_from_entry(&entry, None)
             .expect("callback is valid")
             .expect("callback is active");
         let CallbackRequest::UserInput { questions, .. } = &pending.request else {

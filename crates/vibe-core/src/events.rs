@@ -2,6 +2,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
 
+pub mod detail;
+
+pub use detail::{
+    ApprovalDecision, ApprovalDecisionType, CallbackDetail, CallbackOutput, EffectCallDisplay,
+    EffectDetail, EffectResultDisplay, HookNotice, HookScope, HookSeverity, NoticeDetail,
+    QuestionChoice, TodoEffectItem, TodoEffectPriority, TodoEffectStatus, ToolEffectKind,
+    UserAnswer, UserQuestion, UserQuestionRequest, UserQuestionResult,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EventEnvelope {
@@ -221,8 +230,7 @@ pub enum PublicEffectState {
         output_text: String,
         #[serde(default)]
         duration_ms: u64,
-        #[serde(default)]
-        display: Value,
+        display: EffectResultDisplay,
     },
     Failed {
         error: PublicError,
@@ -230,8 +238,7 @@ pub enum PublicEffectState {
         output_text: String,
         #[serde(default)]
         duration_ms: u64,
-        #[serde(default)]
-        display: Value,
+        display: EffectResultDisplay,
     },
     Cancelled {
         reason: String,
@@ -239,13 +246,14 @@ pub enum PublicEffectState {
         output_text: String,
         #[serde(default)]
         duration_ms: u64,
+        /// A cancellation that produced no result carries no display, which is
+        /// the one settled state the reference lets publish a null one.
         #[serde(default)]
-        display: Option<Value>,
+        display: Option<EffectResultDisplay>,
     },
     Skipped {
         reason: String,
-        #[serde(default)]
-        display: Value,
+        display: EffectResultDisplay,
     },
 }
 
@@ -312,7 +320,7 @@ pub struct PublicTurn {
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum PublicCallbackState {
     Open,
-    Answered { output: Value },
+    Answered { output: CallbackOutput },
     Cancelled { reason: String },
     Expired { reason: String },
 }
@@ -353,15 +361,25 @@ pub enum PublicHistoryEntry {
         #[serde(flatten)]
         metadata: PublicEntryMetadata,
         title: String,
-        detail: Value,
+        /// Boxed because the call and result displays it carries are what make
+        /// an effect entry three times the size of every other variant.
+        detail: Box<EffectDetail>,
         state: PublicEffectState,
+        /// Which model tool call this effect projects.
+        ///
+        /// The reference does not publish it and a conforming client rejects a
+        /// surplus field, so it stays off the wire and lives here, where the
+        /// reducer correlates a stream chunk or a result with the call it
+        /// belongs to.
+        #[serde(skip)]
+        tool_call_id: String,
     },
     Callback {
         #[serde(flatten)]
         metadata: PublicEntryMetadata,
         callback_id: String,
         title: String,
-        detail: Value,
+        detail: CallbackDetail,
         state: PublicCallbackState,
     },
     Checkpoint {
@@ -378,7 +396,7 @@ pub enum PublicHistoryEntry {
         metadata: PublicEntryMetadata,
         level: PublicNoticeLevel,
         message: String,
-        detail: Value,
+        detail: NoticeDetail,
     },
 }
 
@@ -740,15 +758,11 @@ fn reduce_event(
                     PublicEntryGenerationStatus::InProgress,
                 ),
                 title: name.clone(),
-                detail: json!({
-                    "kind": "tool",
-                    "toolCallId": call_id,
-                    "toolName": name,
-                    "arguments": arguments,
-                }),
+                detail: Box::new(EffectDetail::for_encoded_call(name, arguments)),
                 state: PublicEffectState::Running {
                     output_text: String::new(),
                 },
+                tool_call_id: call_id.clone(),
             });
         }
         EngineEvent::ToolStream { call_id, chunk } => {
@@ -758,8 +772,8 @@ fn reduce_event(
                 .iter_mut()
                 .rev()
                 .find(|entry| {
-                    matches!(entry, PublicHistoryEntry::Effect { detail, .. }
-                        if detail.get("toolCallId").and_then(Value::as_str) == Some(call_id))
+                    matches!(entry, PublicHistoryEntry::Effect { tool_call_id, .. }
+                        if tool_call_id == call_id)
                 })
                 .ok_or(ProjectionError::IllegalTransition {
                     from: state.lifecycle,
@@ -790,8 +804,8 @@ fn reduce_event(
                 .iter_mut()
                 .rev()
                 .find(|entry| {
-                    matches!(entry, PublicHistoryEntry::Effect { detail, .. }
-                        if detail.get("toolCallId").and_then(Value::as_str) == Some(call_id))
+                    matches!(entry, PublicHistoryEntry::Effect { tool_call_id, .. }
+                        if tool_call_id == call_id)
                 })
                 .ok_or(ProjectionError::IllegalTransition {
                     from: state.lifecycle,
@@ -799,16 +813,26 @@ fn reduce_event(
                 })?;
             if let PublicHistoryEntry::Effect {
                 metadata,
+                detail,
                 state: current_state,
                 ..
             } = entry
             {
+                let output = if typed_result.is_null() {
+                    json!(content)
+                } else {
+                    typed_result.clone()
+                };
                 *current_state = if *cancelled {
                     PublicEffectState::Cancelled {
                         reason: content.clone(),
                         output_text: content.clone(),
                         duration_ms: *duration_ms,
-                        display: (!display.is_null()).then(|| display.clone()),
+                        display: EffectResultDisplay::cancelled(
+                            &detail.tool_name,
+                            typed_result,
+                            display,
+                        ),
                     }
                 } else if *is_error {
                     PublicEffectState::Failed {
@@ -819,20 +843,27 @@ fn reduce_event(
                         },
                         output_text: content.clone(),
                         duration_ms: *duration_ms,
-                        display: display.clone(),
+                        display: EffectResultDisplay::failed(&detail.display),
                     }
                 } else {
                     PublicEffectState::Completed {
-                        output: if typed_result.is_null() {
-                            json!(content)
-                        } else {
-                            typed_result.clone()
-                        },
                         output_text: content.clone(),
                         duration_ms: *duration_ms,
-                        display: display.clone(),
+                        display: EffectResultDisplay::completed(
+                            detail.kind,
+                            &detail.display,
+                            &output,
+                            display,
+                        ),
+                        output,
                     }
                 };
+                // The child session is named by the delegation the tool answers
+                // with, which is the earliest this projection learns it: the
+                // engine raises no event when the child opens.
+                if detail.kind == ToolEffectKind::Subagent {
+                    detail.child_session_id = subagent_child_session(typed_result);
+                }
                 metadata.updated_at = emitted_at;
                 metadata.generation_status = PublicEntryGenerationStatus::Completed;
             }
@@ -854,7 +885,7 @@ fn reduce_event(
                 ),
                 callback_id: callback_id.clone(),
                 title: prompt.clone(),
-                detail: json!({"kind": kind, "prompt": prompt}),
+                detail: engine_callback_detail(*kind, prompt),
                 state: PublicCallbackState::Open,
             });
         }
@@ -882,16 +913,17 @@ fn reduce_event(
                 .ok_or_else(|| ProjectionError::CallbackNotPending(callback_id.clone()))?;
             if let PublicHistoryEntry::Callback {
                 metadata,
+                detail,
                 state: callback_state,
                 ..
             } = callback
             {
                 *callback_state = if *accepted {
                     PublicCallbackState::Answered {
-                        output: json!({
-                            "accepted": true,
-                            "value": value,
-                        }),
+                        // The answer's type must match the callback that is
+                        // open, which is what a reference client validates the
+                        // answered state against.
+                        output: accepted_callback_output(detail, value.as_deref()),
                     }
                 } else {
                     PublicCallbackState::Cancelled {
@@ -920,10 +952,10 @@ fn reduce_event(
                 ),
                 level: PublicNoticeLevel::Info,
                 message: message.clone(),
-                detail: json!({
-                    "kind": "hook_completed",
-                    "hookName": name,
-                    "content": message,
+                detail: NoticeDetail::HookCompleted(HookNotice {
+                    hook_name: Some(name.clone()),
+                    content: Some(message.clone()),
+                    ..HookNotice::default()
                 }),
             });
         }
@@ -954,18 +986,18 @@ fn reduce_event(
                 ),
                 level: PublicNoticeLevel::Info,
                 message: title.clone(),
-                detail: json!({
-                    "kind": "session_title_updated",
-                    "title": title,
-                }),
+                detail: NoticeDetail::SessionTitleUpdated {
+                    title: title.clone(),
+                },
             });
         }
         EngineEvent::SessionHandoff {
             from_session_id,
             to_session_id,
-            // The cause names the notification the app-server publishes; the
-            // projection rebinds the same way either way.
-            cause: _,
+            // The cause names the notification the app-server publishes, and a
+            // clearing also earns a transcript entry; the rebind below is the
+            // same either way.
+            cause,
         } => {
             require_active(state, "session_handoff")?;
             if from_session_id != &state.session_id {
@@ -978,6 +1010,24 @@ fn reduce_event(
             for entry in &mut state.history {
                 entry.metadata_mut().session_id.clone_from(to_session_id);
             }
+            // A compaction is published as its own checkpoint; a clearing is
+            // the handoff that leaves a notice behind, naming the plan whose
+            // acceptance cleared the context when one did.
+            if let SessionHandoffCause::ContextCleared { plan_file_path } = cause {
+                state.history.push(PublicHistoryEntry::Notice {
+                    metadata: entry_metadata(
+                        state,
+                        event_id,
+                        emitted_at,
+                        PublicEntryGenerationStatus::Completed,
+                    ),
+                    level: PublicNoticeLevel::Info,
+                    message: "Session context cleared".to_owned(),
+                    detail: NoticeDetail::ContextCleared {
+                        plan_file_path: plan_file_path.clone(),
+                    },
+                });
+            }
         }
         EngineEvent::Stats { .. } | EngineEvent::Retrying { .. } => {}
         EngineEvent::Lifecycle {
@@ -987,22 +1037,86 @@ fn reduce_event(
             validate_lifecycle_transition(state.lifecycle, *next)?;
             state.lifecycle = *next;
             complete_streaming_entries(state, emitted_at);
-            if *next == LifecycleState::Failed {
-                state.history.push(PublicHistoryEntry::Notice {
-                    metadata: entry_metadata(
-                        state,
-                        event_id,
-                        emitted_at,
-                        PublicEntryGenerationStatus::Completed,
-                    ),
-                    level: PublicNoticeLevel::Error,
-                    message: message.clone().unwrap_or_else(|| "Turn failed".to_owned()),
-                    detail: json!({"kind": "turn_failed"}),
-                });
-            }
+            // A failed turn used to append a notice whose `kind` the reference
+            // does not declare, which a conforming client rejects. The failure
+            // reaches a client through `turn/completed` and the session status,
+            // both of which carry the message this notice repeated.
+            let _ = message;
         }
     }
     Ok(())
+}
+
+/// The session a subagent ran in, as its delegation result names it.
+///
+/// The public identifier is the one a client may open; the internal one is the
+/// fallback for a result that only carries it.
+fn subagent_child_session(typed_result: &Value) -> Option<String> {
+    ["publicSessionId", "childSessionId"]
+        .iter()
+        .find_map(|key| typed_result.get(*key).and_then(Value::as_str))
+        .filter(|session_id| !session_id.is_empty())
+        .map(str::to_owned)
+}
+
+/// The callback detail an engine-raised callback publishes.
+///
+/// The engine names a kind and a prompt; the wire union wants a typed body, so
+/// an approval borrows the generic effect shape and a question becomes a
+/// single-question request.
+fn engine_callback_detail(kind: CallbackKind, prompt: &str) -> CallbackDetail {
+    match kind {
+        CallbackKind::UserInput => CallbackDetail::UserInput {
+            request: UserQuestionRequest {
+                questions: vec![UserQuestion {
+                    question: prompt.to_owned(),
+                    header: String::new(),
+                    options: Vec::new(),
+                    multi_select: false,
+                    hide_other: false,
+                }],
+                footer_note: None,
+            },
+            related_entry_id: None,
+        },
+        // A connector-authorization callback has no reference variant, and the
+        // app-server refuses to raise one. It is projected as the approval it
+        // behaves like rather than as an invented kind.
+        CallbackKind::Approval | CallbackKind::ConnectorAuth => CallbackDetail::Approval {
+            effect: Box::new(EffectDetail::for_call("callback", &json!({}))),
+            required_permissions: Vec::new(),
+            choices: ApprovalDecisionType::ALL.to_vec(),
+            related_entry_id: None,
+        },
+    }
+}
+
+/// The answer an engine-resolved callback records, in the form its own kind
+/// declares. A mismatched pair never reaches here: the app-server rejects an
+/// output whose type is not the open callback's.
+fn accepted_callback_output(detail: &CallbackDetail, value: Option<&str>) -> CallbackOutput {
+    match detail {
+        CallbackDetail::Approval { .. } => CallbackOutput::Approval {
+            decision: ApprovalDecision {
+                decision: ApprovalDecisionType::Approve,
+            },
+            feedback: value.map(str::to_owned),
+        },
+        CallbackDetail::UserInput { request, .. } => CallbackOutput::UserInput {
+            result: UserQuestionResult {
+                answers: request
+                    .questions
+                    .iter()
+                    .map(|question| UserAnswer {
+                        question: question.question.clone(),
+                        answer: value.unwrap_or_default().to_owned(),
+                        is_other: false,
+                    })
+                    .collect(),
+                cancelled: false,
+            },
+        },
+    }
 }
 
 fn entry_metadata(
@@ -1244,10 +1358,124 @@ mod tests {
         assert!(matches!(
             reducer.state().history.get(1),
             Some(PublicHistoryEntry::Callback {
-                state: PublicCallbackState::Answered { output },
+                state: PublicCallbackState::Answered {
+                    output: CallbackOutput::Approval { feedback, .. }
+                },
                 ..
-            }) if output.get("value").and_then(Value::as_str) == Some("yes")
+            }) if feedback.as_deref() == Some("yes")
         ));
+    }
+
+    /// The reference publishes a clearing as a notice entry as well as a
+    /// notification, and it names the plan whose acceptance cleared the
+    /// context. A compaction publishes its checkpoint instead.
+    #[test]
+    fn a_cleared_context_leaves_a_notice_a_compaction_does_not() {
+        let handoff = |id: u64, from: &str, to: &str, cause: SessionHandoffCause| EventEnvelope {
+            session_id: from.to_owned(),
+            turn_id: None,
+            emitted_at: id,
+            event_id: id,
+            event: EngineEvent::SessionHandoff {
+                from_session_id: from.to_owned(),
+                to_session_id: to.to_owned(),
+                cause,
+            },
+        };
+        let mut reducer = ProjectionReducer::new("session-1");
+        for envelope in [
+            event(
+                1,
+                EngineEvent::UserMessage {
+                    content: "clear it".to_owned(),
+                },
+            ),
+            handoff(2, "session-1", "session-2", SessionHandoffCause::Compaction),
+            handoff(
+                3,
+                "session-2",
+                "session-3",
+                SessionHandoffCause::ContextCleared {
+                    plan_file_path: Some("/workspace/plan.md".to_owned()),
+                },
+            ),
+        ] {
+            reducer.apply(&envelope).expect("valid lifecycle event");
+        }
+        let notices = reducer
+            .state()
+            .history
+            .iter()
+            .filter_map(|entry| match entry {
+                PublicHistoryEntry::Notice {
+                    metadata, detail, ..
+                } => Some((metadata.session_id.clone(), detail.clone())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            notices,
+            vec![(
+                "session-3".to_owned(),
+                NoticeDetail::ContextCleared {
+                    plan_file_path: Some("/workspace/plan.md".to_owned()),
+                },
+            )],
+            "only the clearing publishes a notice, and it carries the new session"
+        );
+    }
+
+    /// The subagent detail names the session a client may open, which the
+    /// delegation result is the first thing to report.
+    #[test]
+    fn a_subagent_effect_publishes_the_child_session_it_ran() {
+        let mut reducer = ProjectionReducer::new("session-1");
+        for envelope in [
+            event(
+                1,
+                EngineEvent::UserMessage {
+                    content: "delegate".to_owned(),
+                },
+            ),
+            event(
+                2,
+                EngineEvent::ToolCall {
+                    call_id: "call-1".to_owned(),
+                    name: "task".to_owned(),
+                    arguments: r#"{"task":"audit","agent":"explore"}"#.to_owned(),
+                },
+            ),
+            event(
+                3,
+                EngineEvent::ToolResult {
+                    call_id: "call-1".to_owned(),
+                    content: "done".to_owned(),
+                    typed_result: json!({
+                        "parentSessionId": "session-1",
+                        "childSessionId": "session-child",
+                        "publicSessionId": "session-child",
+                        "status": "completed",
+                        "result": "done",
+                    }),
+                    display: Value::Null,
+                    duration_ms: 1,
+                    is_error: false,
+                    cancelled: false,
+                },
+            ),
+        ] {
+            reducer.apply(&envelope).expect("valid lifecycle event");
+        }
+        let Some(PublicHistoryEntry::Effect { detail, .. }) = reducer
+            .state()
+            .history
+            .iter()
+            .find(|entry| matches!(entry, PublicHistoryEntry::Effect { .. }))
+        else {
+            panic!("the delegation publishes an effect entry");
+        };
+        assert_eq!(detail.kind, ToolEffectKind::Subagent);
+        assert_eq!(detail.child_session_id.as_deref(), Some("session-child"));
     }
 
     #[test]

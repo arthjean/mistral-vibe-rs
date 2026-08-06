@@ -57,8 +57,9 @@ pub use vibe_core::engine::TurnOutcome as PublicTurnOutcome;
 pub use vibe_core::engine::TurnStopReason as PublicTurnStopReason;
 pub use vibe_core::events::CallbackKind as PublicCallbackKind;
 pub use vibe_core::events::{
-    PublicCallbackState, PublicContentBlock, PublicEffectState, PublicError, PublicHistoryEntry,
-    PublicMessageRole, TurnErrorCode,
+    CallbackDetail, CallbackOutput, EffectCallDisplay, EffectDetail, EffectResultDisplay,
+    NoticeDetail, PublicCallbackState, PublicContentBlock, PublicEffectState, PublicError,
+    PublicHistoryEntry, PublicMessageRole, ToolEffectKind, TurnErrorCode,
 };
 
 pub type DriverFuture<'a> =
@@ -2258,23 +2259,13 @@ fn unique_cloud_operation_id() -> String {
 }
 
 fn approval_callback_detail(request: &ApprovalRequest) -> Value {
+    // The approval presents the effect it is gating, so the detail carries the
+    // same typed shape the effect entry will publish once the call is allowed.
+    let mut effect = EffectDetail::for_call(&request.tool, &request.input);
+    effect.display.content = Some(request.rationale.clone());
     json!({
         "kind": "approval",
-        "effect": {
-            "kind": "tool",
-            "toolName": request.tool,
-            "input": request.input,
-            "display": {
-                "summary": request.rationale,
-                "content": null,
-                "suffix": "",
-                "verb": "",
-                "message": null,
-                "settledVerb": "",
-                "settledMessage": null,
-                "statusText": "",
-            },
-        },
+        "effect": effect,
         "requiredPermissions": request
             .requirements
             .iter()
@@ -6506,8 +6497,10 @@ command = "/must-not-run"
         else {
             return;
         };
+        let detail = serde_json::to_value(&detail).expect("the callback detail serializes");
         assert_eq!(detail["requiredPermissions"], json!(["cargo test"]));
         assert_eq!(detail["effect"]["input"], json!({"command": "cargo test"}));
+        assert_eq!(detail["effect"]["kind"], "shell");
         service
             .respond_callback(json!({
                 "sessionId": session_id,

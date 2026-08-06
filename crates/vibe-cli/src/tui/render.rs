@@ -1325,6 +1325,7 @@ mod tests {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use serde_json::json;
+    use vibe_app_server::client::EffectDetail;
 
     use super::*;
     use crate::tui::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName};
@@ -1519,8 +1520,12 @@ mod tests {
                 status: EntryStatus::Completed,
                 details: json!({
                     "type": "effect",
-                    "detail": {"toolName": "bash", "arguments": {"command": "cargo test"}},
-                    "state": {"status": "completed", "output": {"stdout": "ok", "stderr": ""}},
+                    "detail": EffectDetail::for_call("bash", &json!({"command": "cargo test"})),
+                    "state": {
+                        "status": "completed",
+                        "output": {"stdout": "ok", "stderr": ""},
+                        "display": {"success": true, "verb": "Ran", "message": "cargo test"},
+                    },
                 }),
             },
             TranscriptEntry {
@@ -1531,10 +1536,11 @@ mod tests {
                 status: EntryStatus::Completed,
                 details: json!({
                     "type": "effect",
-                    "detail": {"toolName": "edit", "arguments": {"file_path": "src/lib.rs"}},
+                    "detail": EffectDetail::for_call("edit", &json!({"file_path": "src/lib.rs"})),
                     "state": {
                         "status": "completed",
                         "output": {"file": "src/lib.rs", "old_string": "old", "new_string": "new"},
+                        "display": {"success": true, "verb": "Edited", "message": "lib.rs"},
                     },
                 }),
             },
@@ -1664,11 +1670,12 @@ mod tests {
             status: EntryStatus::Failed,
             details: json!({
                 "type": "effect",
-                "detail": {"toolName": "edit", "arguments": {"path": "src/lib.rs"}},
+                "detail": EffectDetail::for_call("edit", &json!({"path": "src/lib.rs"})),
                 "state": {
                     "status": "failed",
                     "error": {"message": "permission denied"},
                     "outputText": "",
+                    "display": {"success": false, "verb": "Edited", "message": "lib.rs"},
                 },
             }),
         });

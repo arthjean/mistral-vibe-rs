@@ -5,6 +5,7 @@ use std::process::Command;
 
 use serde::Deserialize;
 use serde_json::{Value, json};
+use vibe_app_server::client::{EffectDetail, EffectResultDisplay};
 
 use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
 use crate::tui::diagnostics::{
@@ -12,7 +13,7 @@ use crate::tui::diagnostics::{
 };
 use crate::tui::render::{TokenState, format_context_progress};
 use crate::tui::state::{EntryStatus, TranscriptEntry, TranscriptKind};
-use crate::tui::transcript::{EffectRegion, Region, region};
+use crate::tui::transcript::{EffectLayout, EffectRegion, Region, region};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -233,6 +234,10 @@ fn notice_entry(text: &str, detail: Value, level: &str) -> TranscriptEntry {
 }
 
 fn observe_effect(tool: &str, arguments: &Value, outcome: &Outcome) -> String {
+    // The detail and the settled display are what the app server publishes with
+    // the entry, so the observation renders exactly the strings a reference
+    // client would receive rather than deriving its own from the arguments.
+    let detail = EffectDetail::for_call(tool, arguments);
     let entry = TranscriptEntry {
         id: "effect".to_owned(),
         revision: 1,
@@ -241,8 +246,8 @@ fn observe_effect(tool: &str, arguments: &Value, outcome: &Outcome) -> String {
         status: EntryStatus::Streaming,
         details: json!({
             "type": "effect",
-            "detail": {"toolName": tool, "arguments": arguments},
-            "state": effect_state(outcome),
+            "detail": detail,
+            "state": effect_state(&detail, outcome),
         }),
     };
     let effect = match region(&entry) {
@@ -256,7 +261,7 @@ fn observe_effect(tool: &str, arguments: &Value, outcome: &Outcome) -> String {
         effect.verb,
         effect.message,
         effect.suffix,
-        u8::from(effect.kind.is_collapsible()),
+        u8::from(effect.kind.collapses()),
         u8::from(effect.kind.joins_tool_group()),
         effect
             .body
@@ -281,7 +286,7 @@ fn indicator_label(effect: &EffectRegion) -> &'static str {
 
 /// Rebuilds the canonical effect state the app server would project, so both
 /// sides read the same nested contract.
-fn effect_state(outcome: &Outcome) -> Value {
+fn effect_state(detail: &EffectDetail, outcome: &Outcome) -> Value {
     match outcome {
         Outcome::Pending => json!({"status": "pending"}),
         Outcome::Running { output_text } => {
@@ -297,32 +302,41 @@ fn effect_state(outcome: &Outcome) -> Value {
             "error": {"message": error},
             "outputText": error,
             "durationMs": 0,
+            "display": EffectResultDisplay::failed(&detail.display),
         }),
-        Outcome::Skipped { reason } => json!({"status": "skipped", "reason": reason}),
+        Outcome::Skipped { reason } => json!({
+            "status": "skipped",
+            "reason": reason,
+            "display": EffectResultDisplay::skipped(&detail.tool_name),
+        }),
         Outcome::Cancelled { reason } => json!({
             "status": "cancelled",
             "reason": reason,
             "outputText": "",
             "durationMs": 0,
+            "display": EffectResultDisplay::skipped(&detail.tool_name),
         }),
         Outcome::Completed { result } => {
-            let mut state = json!({
-                "status": "completed",
-                "output": result.clone().unwrap_or(Value::Null),
-                "outputText": "",
-                "durationMs": 0,
-            });
             // Without a result the reference server projects an explicit
             // unsuccessful display, which stays authoritative here.
-            if result.is_none()
-                && let Some(object) = state.as_object_mut()
-            {
-                object.insert(
-                    "display".to_owned(),
-                    json!({"success": false, "message": "No result"}),
-                );
-            }
-            state
+            let emitted = if result.is_none() {
+                json!({"success": false, "message": "No result"})
+            } else {
+                Value::Null
+            };
+            let output = result.clone().unwrap_or(Value::Null);
+            json!({
+                "status": "completed",
+                "display": EffectResultDisplay::completed(
+                    detail.kind,
+                    &detail.display,
+                    &output,
+                    &emitted,
+                ),
+                "output": output,
+                "outputText": "",
+                "durationMs": 0,
+            })
         }
     }
 }

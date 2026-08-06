@@ -83,13 +83,18 @@ fn cumulative_public_entries_emit_only_new_text_and_keep_tool_identity() {
             "updatedAt": 2,
             "generationStatus": generation_status,
             "title": "Shell",
-            "detail": {"command": "cargo check"},
+            "detail": {
+                "kind": "shell",
+                "toolName": "bash",
+                "display": {"summary": "bash: cargo check", "statusText": "Running command"},
+                "input": {"command": "cargo check"},
+            },
             "state": {
                 "status": status,
                 "outputText": output_text,
                 "output": {"ok": true},
                 "durationMs": 1,
-                "display": {},
+                "display": {"success": true, "message": "cargo check"},
             },
         }))
         .expect("public effect")

@@ -9,8 +9,9 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use tokio::sync::mpsc::Receiver;
 use vibe_app_server::client::{
-    ClientError, EventObserver, ProgrammaticTurn, ProgrammaticUpdate, PublicCallbackState,
-    PublicHistoryEntry, PublicTurnOutcome, TurnDriver, TurnErrorCode, TurnRequest, TurnReservation,
+    CallbackDetail, ClientError, EventObserver, ProgrammaticTurn, ProgrammaticUpdate,
+    PublicCallbackState, PublicHistoryEntry, PublicTurnOutcome, TurnDriver, TurnErrorCode,
+    TurnRequest, TurnReservation,
 };
 
 use crate::agent::AcpAgent;
@@ -325,30 +326,24 @@ where
                     metadata.session_id, harness.session_id
                 )));
             }
-            let output = match detail.get("kind").and_then(Value::as_str) {
-                Some("approval") => {
-                    self.resolve_approval_callback(harness, &callback_id, &title, &detail)
+            // ACP forwards the detail verbatim as the permission request's raw
+            // input, so the typed union is rendered back to its wire form here
+            // rather than being re-modelled a second time in this adapter.
+            let wire = serde_json::to_value(&detail).unwrap_or(Value::Null);
+            let output = match detail {
+                CallbackDetail::Approval { .. } => {
+                    self.resolve_approval_callback(harness, &callback_id, &title, &wire)
                         .await
                 }
                 // ACP v1 has no interactive question flow, so the canonical
                 // request is declined instead of being surfaced.
-                Some("user_input") => json!({
+                CallbackDetail::UserInput { .. } => json!({
                     "type": "user_input",
                     "result": {
                         "answers": [],
                         "cancelled": true,
                     },
                 }),
-                Some(kind) => {
-                    return Err(AcpError::InvalidResponse(format!(
-                        "unsupported canonical callback kind `{kind}`"
-                    )));
-                }
-                None => {
-                    return Err(AcpError::InvalidResponse(format!(
-                        "callback `{callback_id}` omitted its kind"
-                    )));
-                }
             };
             harness.service.lock().await.respond_callback(json!({
                 "sessionId": harness.session_id,

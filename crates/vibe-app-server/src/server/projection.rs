@@ -118,7 +118,10 @@ pub(super) fn persisted_projection(
 ) -> ProjectionSnapshot {
     let session_id = &hydrated.metadata.id;
     let base_timestamp = hydrated.metadata.created_at_ms;
-    let mut tool_names = BTreeMap::<String, (String, usize)>::new();
+    // The call's name and arguments are what the effect detail is rebuilt from,
+    // so a resumed transcript renders through the same typed path a live turn
+    // publishes rather than through a generic fallback.
+    let mut tool_calls_by_id = BTreeMap::<String, (String, String, usize)>::new();
     let mut history = Vec::new();
     let metadata = |index: usize, suffix: &str| PublicEntryMetadata {
         id: format!("persisted:{index}:{suffix}"),
@@ -166,7 +169,10 @@ pub(super) fn persisted_projection(
                     });
                 }
                 for tool_call in tool_calls {
-                    tool_names.insert(tool_call.id.clone(), (tool_call.name.clone(), index));
+                    tool_calls_by_id.insert(
+                        tool_call.id.clone(),
+                        (tool_call.name.clone(), tool_call.arguments.clone(), index),
+                    );
                 }
             }
             ModelMessage::Tool {
@@ -174,9 +180,10 @@ pub(super) fn persisted_projection(
                 content,
                 is_error,
             } => {
-                let (title, call_index) = tool_names
+                let (title, arguments, call_index) = tool_calls_by_id
                     .remove(call_id)
-                    .unwrap_or_else(|| ("Tool".to_owned(), index));
+                    .unwrap_or_else(|| ("Tool".to_owned(), String::new(), index));
+                let detail = EffectDetail::for_encoded_call(&title, &arguments);
                 let state = if *is_error {
                     PublicEffectState::Failed {
                         error: PublicError {
@@ -186,34 +193,42 @@ pub(super) fn persisted_projection(
                         },
                         output_text: content.clone(),
                         duration_ms: 0,
-                        display: json!({"kind": "generic"}),
+                        display: EffectResultDisplay::failed(&detail.display),
                     }
                 } else {
+                    let output = json!(content);
                     PublicEffectState::Completed {
-                        output: json!(content),
+                        display: EffectResultDisplay::completed(
+                            detail.kind,
+                            &detail.display,
+                            &output,
+                            &Value::Null,
+                        ),
+                        output,
                         output_text: content.clone(),
                         duration_ms: 0,
-                        display: json!({"kind": "generic"}),
                     }
                 };
                 history.push(PublicHistoryEntry::Effect {
                     metadata: metadata(call_index, "effect"),
                     title,
-                    detail: json!({"callId": call_id, "presentationKind": "generic"}),
+                    detail: Box::new(detail),
                     state,
+                    tool_call_id: call_id.clone(),
                 });
             }
         }
     }
-    for (call_id, (title, index)) in tool_names {
+    for (call_id, (title, arguments, index)) in tool_calls_by_id {
         history.push(PublicHistoryEntry::Effect {
             metadata: metadata(index, "effect"),
-            title,
-            detail: json!({"callId": call_id, "presentationKind": "generic"}),
+            detail: Box::new(EffectDetail::for_encoded_call(&title, &arguments)),
             state: PublicEffectState::Skipped {
                 reason: "Persisted tool call has no recorded result".to_owned(),
-                display: json!({"kind": "generic"}),
+                display: EffectResultDisplay::skipped(&title),
             },
+            title,
+            tool_call_id: call_id,
         });
     }
     history.sort_by_key(|entry| entry.metadata().created_at);

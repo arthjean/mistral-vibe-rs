@@ -7,6 +7,60 @@
 
 use super::*;
 
+/// A validated callback request, split into what crosses the wire and what does
+/// not.
+///
+/// The reference publishes a plan review as its own notice entry rather than as
+/// a field on the callback, so the marker the port's plan tool sets is read here
+/// and never reaches `CallbackDetail`, which forbids a surplus field.
+pub(super) struct CallbackRequestDetail {
+    pub(super) detail: CallbackDetail,
+    pub(super) plan_review_path: Option<String>,
+}
+
+/// The wire keys a callback detail may carry alongside the reference ones. They
+/// are port-internal: the dispatcher sets them, this parse consumes them.
+const LOCAL_CALLBACK_KEYS: [&str; 2] = ["planReview", "filePath"];
+
+/// Validates a callback request and decodes it into the reference union.
+///
+/// Decoding is the second half of the check: a detail that passes the bounds
+/// below but does not deserialize is a shape a conforming client would reject,
+/// so it is refused here rather than published.
+pub(super) fn parse_callback_request(
+    kind: EngineCallbackKind,
+    title: &str,
+    detail: &Value,
+) -> Result<CallbackRequestDetail, &'static str> {
+    validate_callback_request(kind, title, detail)?;
+    let plan_review = detail
+        .get("planReview")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let plan_review_path = plan_review
+        .then(|| {
+            detail
+                .get("filePath")
+                .and_then(Value::as_str)
+                .filter(|path| !path.is_empty())
+                .map(str::to_owned)
+                .ok_or("Plan-review callback omitted its file path")
+        })
+        .transpose()?;
+    let mut published = detail.clone();
+    if let Some(object) = published.as_object_mut() {
+        for key in LOCAL_CALLBACK_KEYS {
+            object.remove(key);
+        }
+    }
+    let detail = serde_json::from_value::<CallbackDetail>(published)
+        .map_err(|_| "Callback detail does not match the protocol union")?;
+    Ok(CallbackRequestDetail {
+        detail,
+        plan_review_path,
+    })
+}
+
 pub(super) fn validate_callback_output(output: &Value) -> Result<EngineCallbackKind, &'static str> {
     if serde_json::to_vec(output).map_or(true, |encoded| encoded.len() > MAX_CALLBACK_OUTPUT_BYTES)
     {
@@ -17,8 +71,23 @@ pub(super) fn validate_callback_output(output: &Value) -> Result<EngineCallbackK
     };
     match output.get("type").and_then(Value::as_str) {
         Some("approval") => {
-            if object.len() != 2 || !object.contains_key("decision") {
+            // The reference approval output declares an optional operator note
+            // alongside the decision, so a client that sends one is answered
+            // rather than rejected.
+            if !object.contains_key("decision")
+                || object
+                    .keys()
+                    .any(|key| !matches!(key.as_str(), "type" | "decision" | "feedback"))
+            {
                 return Err("Approval output has unexpected fields");
+            }
+            if let Some(feedback) = object.get("feedback")
+                && !feedback.is_null()
+                && !feedback
+                    .as_str()
+                    .is_some_and(|value| value.len() <= MAX_CALLBACK_TEXT_BYTES)
+            {
+                return Err("Approval feedback is invalid");
             }
             let Some(decision) = output.get("decision").and_then(Value::as_object) else {
                 return Err("Approval decision must be an object");
@@ -256,7 +325,7 @@ pub(super) fn validate_user_input_request(detail: &Value) -> Result<(), &'static
     Ok(())
 }
 
-pub(super) fn callback_entry_detail(entry: &PublicHistoryEntry) -> Option<&Value> {
+pub(super) fn callback_entry_detail(entry: &PublicHistoryEntry) -> Option<&CallbackDetail> {
     match entry {
         PublicHistoryEntry::Callback { detail, .. } => Some(detail),
         _ => None,
@@ -277,15 +346,17 @@ pub(super) fn validate_callback_output_against_request(
                 .pointer("/decision/type")
                 .and_then(Value::as_str)
                 .ok_or("Approval output omitted its decision")?;
-            if !callback_entry_detail(&callback.entry)
-                .and_then(|detail| detail.get("choices"))
-                .and_then(Value::as_array)
-                .is_some_and(|choices| {
-                    choices
-                        .iter()
-                        .any(|choice| choice.as_str() == Some(decision))
-                })
-            {
+            let offered = match callback_entry_detail(&callback.entry) {
+                Some(CallbackDetail::Approval { choices, .. }) => choices.iter().any(|choice| {
+                    serde_json::to_value(choice)
+                        .ok()
+                        .as_ref()
+                        .and_then(Value::as_str)
+                        == Some(decision)
+                }),
+                _ => false,
+            };
+            if !offered {
                 return Err("Approval decision was not offered");
             }
         }
@@ -303,10 +374,10 @@ pub(super) fn validate_user_input_output_against_request(
     output: &Value,
     entry: &PublicHistoryEntry,
 ) -> Result<(), &'static str> {
-    let questions = callback_entry_detail(entry)
-        .and_then(|detail| detail.pointer("/request/questions"))
-        .and_then(Value::as_array)
-        .ok_or("User-input callback request omitted questions")?;
+    let Some(CallbackDetail::UserInput { request, .. }) = callback_entry_detail(entry) else {
+        return Err("User-input callback request omitted questions");
+    };
+    let questions = &request.questions;
     let answers = output
         .pointer("/result/answers")
         .and_then(Value::as_array)
@@ -326,11 +397,7 @@ pub(super) fn validate_user_input_output_against_request(
         return Err("User-input answer count does not match the request");
     }
     for (answer, question) in answers.iter().zip(questions) {
-        let expected_question = question
-            .get("question")
-            .and_then(Value::as_str)
-            .ok_or("User-input callback question is invalid")?;
-        if answer.get("question").and_then(Value::as_str) != Some(expected_question) {
+        if answer.get("question").and_then(Value::as_str) != Some(question.question.as_str()) {
             return Err("User-input answer does not match its question");
         }
         let answer_text = answer
@@ -344,25 +411,13 @@ pub(super) fn validate_user_input_output_against_request(
             .get("isOther")
             .and_then(Value::as_bool)
             .ok_or("User-input answer omitted isOther")?;
-        let hide_other = question
-            .get("hideOther")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
         if is_other {
-            if hide_other {
+            if question.hide_other {
                 return Err("User-input question does not allow free text");
             }
             continue;
         }
-        let options = question
-            .get("options")
-            .and_then(Value::as_array)
-            .ok_or("User-input callback options are invalid")?;
-        let multi_select = question
-            .get("multiSelect")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let selected = if multi_select {
+        let selected = if question.multi_select {
             answer_text.split(", ").collect::<Vec<_>>()
         } else {
             vec![answer_text]
@@ -372,11 +427,9 @@ pub(super) fn validate_user_input_output_against_request(
                 .iter()
                 .enumerate()
                 .any(|(index, label)| selected[..index].contains(label))
-            || selected.iter().any(|label| {
-                !options
-                    .iter()
-                    .any(|option| option.get("label").and_then(Value::as_str) == Some(*label))
-            })
+            || selected
+                .iter()
+                .any(|label| !question.options.iter().any(|option| option.label == *label))
         {
             return Err("User-input answer selected an invalid option");
         }

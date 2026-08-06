@@ -416,9 +416,13 @@ pub(super) fn history_entry(entry: PublicHistoryEntry) -> TranscriptEntry {
                 },
             )
         }
-        PublicHistoryEntry::Callback { title, detail, .. } => {
-            (TranscriptKind::Callback, format!("{title}\n{detail}"))
-        }
+        PublicHistoryEntry::Callback { title, detail, .. } => (
+            TranscriptKind::Callback,
+            format!(
+                "{title}\n{}",
+                serde_json::to_value(&detail).unwrap_or(Value::Null)
+            ),
+        ),
         PublicHistoryEntry::Checkpoint { kind, message, .. } => (
             TranscriptKind::Checkpoint,
             message.unwrap_or_else(|| format!("Checkpoint: {kind}")),
@@ -563,6 +567,12 @@ mod tests {
                     "title": "Approve?",
                     "detail": {
                         "kind": "approval",
+                        "effect": {
+                            "kind": "shell",
+                            "toolName": "bash",
+                            "display": {"summary": "bash: ls", "statusText": "Running command"},
+                            "input": {"command": "ls"}
+                        },
                         "choices": ["approve", "deny", "cancel_turn"]
                     },
                     "state": {"status": "open"}

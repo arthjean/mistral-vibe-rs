@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- Publish a tool call as the effect it is rather than as an untyped blob. Every
+  history entry now carries one of the twelve declared effect kinds with the
+  input its kind describes and the presentation a client renders it with, so a
+  shell command, a file edit and a subagent run reach every client as three
+  different things instead of one generic tool call. The port's own
+  `toolCallId` and raw `arguments` leave the wire; a settled effect carries the
+  result header it finished with, and only a cancellation that produced nothing
+  carries none. A transcript written by either implementation now renders the
+  same way in both.
+- Publish a notice under one of the eight declared kinds rather than an
+  invented one. A finished hook names itself and what it reported, a title
+  change names the title, a plan review names the file it opened, and a cleared
+  context names the plan whose acceptance cleared it. A failed turn no longer
+  appends a notice under a kind the protocol does not declare, since the
+  failure already reaches a client through the completed turn and the session
+  status.
+- Answer a callback in the two forms the protocol declares. An approval carries
+  the typed effect it is gating, its required permissions and the decisions on
+  offer; a question carries the request a client renders. An answer whose type
+  is not the open callback's is refused with `invalid_params` rather than
+  recorded. A plan review is published as its own notice entry carrying the plan
+  file, which is where a client reads it from now that the callback carries only
+  the fields the protocol declares.
 - Push session status instead of making a client poll for it. Every server-side
   transition now publishes `session/updated` with a JSON patch replacing
   `/status` and `/updatedAt`: a running turn names its turn id, a blocked one

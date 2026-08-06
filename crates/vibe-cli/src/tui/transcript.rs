@@ -8,99 +8,50 @@
 //! cancelled, or skipped effect can never be presented as a success.
 
 use serde_json::Value;
+use vibe_app_server::client::{EffectCallDisplay, EffectResultDisplay, ToolEffectKind};
 
 use super::state::{EntryStatus, TranscriptEntry, TranscriptKind};
 
-/// Reference `ToolEffectKind`. The variant decides the header verbs, the
-/// result body, the default collapse, and whether the effect joins the
-/// surrounding tool group.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EffectKind {
-    Tool,
-    Shell,
-    FileEdit,
-    FileSearch,
-    FileRead,
-    Todo,
-    FileWrite,
-    UserQuestion,
-    WebSearch,
-    WebFetch,
-    Skill,
-    Subagent,
-}
+/// The kind the app server published with the effect. Its verbs, subject and
+/// status text arrive on the entry; what stays here is how the terminal lays
+/// the result out.
+pub type EffectKind = ToolEffectKind;
 
-impl EffectKind {
-    #[must_use]
-    pub fn from_tool_name(name: &str) -> Self {
-        match name {
-            "shell" | "bash" | "windows_shell" | "experimental_bash" | "git_bash"
-            | "powershell" => Self::Shell,
-            "edit" | "patch" => Self::FileEdit,
-            "search" | "grep" => Self::FileSearch,
-            "read" | "read_file" => Self::FileRead,
-            "todo" => Self::Todo,
-            "write" | "write_file" => Self::FileWrite,
-            "ask_user_question" => Self::UserQuestion,
-            "web_search" => Self::WebSearch,
-            "web_fetch" => Self::WebFetch,
-            "skill" => Self::Skill,
-            "task" => Self::Subagent,
-            _ => Self::Tool,
-        }
-    }
-
+/// How the terminal folds and groups an effect, which is presentation the wire
+/// contract does not carry.
+pub trait EffectLayout {
     /// Reference `EFFECT_WIDGETS[...].result.COLLAPSIBLE`: diff-shaped and
     /// question results always render in full, everything else folds into its
     /// header until the operator expands it.
-    #[must_use]
-    pub fn is_collapsible(self) -> bool {
-        !matches!(self, Self::FileEdit | Self::FileWrite | Self::UserQuestion)
-    }
+    fn collapses(&self) -> bool;
 
     /// Reference `_NON_GROUPED_EFFECT_KINDS`: writes and edits break the
     /// current tool group and stand on their own.
-    #[must_use]
-    pub fn joins_tool_group(self) -> bool {
+    fn joins_tool_group(&self) -> bool;
+}
+
+impl EffectLayout for EffectKind {
+    fn collapses(&self) -> bool {
+        !matches!(self, Self::FileEdit | Self::FileWrite | Self::UserQuestion)
+    }
+
+    fn joins_tool_group(&self) -> bool {
         !matches!(self, Self::FileEdit | Self::FileWrite)
     }
+}
 
-    /// Reference `get_status_text`, shown by the loading indicator.
-    #[must_use]
-    pub fn status_text(self) -> &'static str {
-        match self {
-            Self::Tool => "Running tool",
-            Self::Shell => "Running command",
-            Self::FileEdit => "Editing files",
-            Self::FileSearch => "Searching files",
-            Self::FileRead => "Reading file",
-            Self::Todo => "Managing todos",
-            Self::FileWrite => "Writing file",
-            Self::UserQuestion => "Waiting for user input",
-            Self::WebSearch => "Searching the web",
-            Self::WebFetch => "Fetching page",
-            Self::Skill => "Loading skill",
-            Self::Subagent => "Running subagent",
-        }
-    }
-
-    #[must_use]
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Tool => "tool",
-            Self::Shell => "shell",
-            Self::FileEdit => "file_edit",
-            Self::FileSearch => "file_search",
-            Self::FileRead => "file_read",
-            Self::Todo => "todo",
-            Self::FileWrite => "file_write",
-            Self::UserQuestion => "user_question",
-            Self::WebSearch => "web_search",
-            Self::WebFetch => "web_fetch",
-            Self::Skill => "skill",
-            Self::Subagent => "subagent",
-        }
-    }
+/// The kind an entry's published detail names, falling back to the tool name
+/// for an entry written before the detail carried one.
+fn effect_kind(detail: &Value, tool_name: &str) -> EffectKind {
+    detail
+        .get("kind")
+        .and_then(Value::as_str)
+        .and_then(|kind| {
+            EffectKind::ALL
+                .into_iter()
+                .find(|candidate| candidate.label() == kind)
+        })
+        .unwrap_or_else(|| EffectKind::from_tool_name(tool_name))
 }
 
 /// Reference `IndicatorState` plus the in-flight spinner it replaces.
@@ -277,7 +228,8 @@ pub fn keeps_tool_group(entry: &TranscriptEntry) -> bool {
     // discriminants directly instead of projecting the whole region.
     match entry.kind {
         TranscriptKind::Reasoning => true,
-        TranscriptKind::Effect => EffectKind::from_tool_name(
+        TranscriptKind::Effect => effect_kind(
+            entry.details.get("detail").unwrap_or(&Value::Null),
             entry
                 .details
                 .pointer("/detail/toolName")
@@ -344,7 +296,7 @@ fn restored_effect_region(entry: &TranscriptEntry) -> EffectRegion {
         verb: String::new(),
         message: title.to_owned(),
         suffix: String::new(),
-        collapsed_by_default: EffectKind::Tool.is_collapsible(),
+        collapsed_by_default: EffectKind::Tool.collapses(),
         stream: None,
         body: text_lines(output),
     }
@@ -370,13 +322,27 @@ fn effect_region(entry: &TranscriptEntry) -> EffectRegion {
         .get("toolName")
         .and_then(Value::as_str)
         .unwrap_or(entry.text.lines().next().unwrap_or_default());
-    let kind = EffectKind::from_tool_name(tool_name);
-    let arguments = effect_arguments(detail);
-    let call = call_display(kind, tool_name, &arguments);
+    let kind = effect_kind(detail, tool_name);
+    // The call and result displays are published with the entry, so the header
+    // a reference client renders and the one this terminal renders are the same
+    // strings rather than two derivations of the same arguments.
+    let call = detail
+        .get("display")
+        .and_then(|display| serde_json::from_value::<EffectCallDisplay>(display.clone()).ok())
+        .unwrap_or_default();
     let status = effect_status(state);
-    let settled = settled_display(kind, tool_name, &call, state, status);
+    let settled = state
+        .get("display")
+        .and_then(|display| serde_json::from_value::<EffectResultDisplay>(display.clone()).ok())
+        .filter(|_| status.is_terminal());
     let (verb, message, suffix) = settled.as_ref().map_or_else(
-        || (call.verb.to_owned(), call.message.clone(), String::new()),
+        || {
+            (
+                call.verb.clone(),
+                call.subject().to_owned(),
+                call.suffix.clone(),
+            )
+        },
         |display| {
             (
                 display.verb.clone(),
@@ -392,7 +358,7 @@ fn effect_region(entry: &TranscriptEntry) -> EffectRegion {
         verb,
         message,
         suffix,
-        collapsed_by_default: kind.is_collapsible(),
+        collapsed_by_default: kind.collapses(),
         stream: running_stream(state, status),
         body: effect_body(kind, state, status, settled.as_ref()),
     }
@@ -413,18 +379,6 @@ fn running_stream(state: &Value, status: EntryStatus) -> Option<String> {
     (!last.is_empty()).then(|| format!("→ {last}"))
 }
 
-fn effect_arguments(detail: &Value) -> Value {
-    match detail.get("arguments") {
-        Some(Value::String(encoded)) => {
-            serde_json::from_str(encoded).unwrap_or_else(|_| Value::String(encoded.clone()))
-        }
-        Some(value) => value.clone(),
-        None => detail.get("input").cloned().unwrap_or(Value::Null),
-    }
-}
-
-/// Reference `PublicEffectState` discriminant, which is authoritative over the
-/// entry generation flag.
 fn effect_status(state: &Value) -> EntryStatus {
     match state.get("status").and_then(Value::as_str) {
         Some("pending") => EntryStatus::Pending,
@@ -437,439 +391,7 @@ fn effect_status(state: &Value) -> EntryStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResultDisplay {
-    pub success: bool,
-    pub verb: String,
-    pub message: String,
-    pub suffix: String,
-    pub warnings: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct CallDisplay {
-    /// The collapsed one-line form.
-    summary: String,
-    /// What is being acted on. The live and settled headers share it, so a
-    /// finished call never renames its own subject.
-    message: String,
-    verb: &'static str,
-    settled_verb: &'static str,
-}
-
-/// Reference `ToolUIDataAdapter.get_call_display` verbs. `Todo` is absent
-/// because its `action` argument, not its kind, decides what is happening.
-const EFFECT_VERBS: &[(EffectKind, &str, &str)] = &[
-    (EffectKind::Shell, "Running", "Ran"),
-    (EffectKind::FileRead, "Reading", "Read"),
-    (EffectKind::FileWrite, "Creating", "Created"),
-    (EffectKind::FileEdit, "Editing", "Edited"),
-    (EffectKind::FileSearch, "Searching", "Searched"),
-    (EffectKind::UserQuestion, "Asking", "Asked"),
-    (EffectKind::WebSearch, "Searching", "Searched"),
-    (EffectKind::WebFetch, "Fetching", "Fetched"),
-    (EffectKind::Skill, "Loading", "Loaded"),
-    (EffectKind::Subagent, "Running", "Ran"),
-];
-
-/// Reference fallback for a tool with no presentation of its own.
-const DEFAULT_VERBS: (&str, &str) = ("Running", "Ran");
-
-fn effect_verbs(kind: EffectKind) -> (&'static str, &'static str) {
-    EFFECT_VERBS
-        .iter()
-        .find(|(candidate, _, _)| *candidate == kind)
-        .map_or(DEFAULT_VERBS, |(_, verb, settled)| (*verb, *settled))
-}
-
-/// Reference `ToolUIDataAdapter.get_call_display`, including the summary
-/// fallback it applies to a call whose arguments are missing.
-fn call_display(kind: EffectKind, tool_name: &str, arguments: &Value) -> CallDisplay {
-    if kind == EffectKind::Todo {
-        return todo_call_display(arguments);
-    }
-    let (verb, settled_verb) = effect_verbs(kind);
-    let (summary, message) = match kind {
-        EffectKind::Shell => {
-            let command = string_argument(arguments, &["command", "cmd"]);
-            (format!("bash: {command}"), command)
-        }
-        EffectKind::FileRead => {
-            let mut message = string_argument(arguments, &["file_path", "filePath", "path"]);
-            let mut extras = Vec::new();
-            if let Some(offset) = number_argument(arguments, &["offset", "startLine", "start_line"])
-                && offset > 0
-            {
-                extras.push(format!("from line {offset}"));
-            }
-            if let Some(limit) = number_argument(arguments, &["limit", "maxLines", "max_lines"]) {
-                extras.push(format!("limit {limit} lines"));
-            }
-            if !extras.is_empty() {
-                message = format!("{message} ({})", extras.join(", "));
-            }
-            (format!("Reading {message}"), message)
-        }
-        EffectKind::FileWrite => {
-            let path = string_argument(arguments, &["file_path", "filePath", "path"]);
-            (format!("Writing {path}"), path)
-        }
-        EffectKind::FileEdit => {
-            let name = file_name(&string_argument(
-                arguments,
-                &["file_path", "filePath", "path"],
-            ));
-            (format!("Editing {name}"), name)
-        }
-        EffectKind::FileSearch => {
-            let pattern = string_argument(arguments, &["pattern", "query"]);
-            let mut message = format!("'{pattern}'");
-            let path = string_argument(arguments, &["path"]);
-            if !path.is_empty() && path != "." {
-                message = format!("{message} in {path}");
-            }
-            if let Some(max) = number_argument(arguments, &["max_matches", "maxMatches"]) {
-                message = format!("{message} (max {max} matches)");
-            }
-            (format!("Grepping {message}"), message)
-        }
-        EffectKind::UserQuestion => {
-            let questions = arguments
-                .get("questions")
-                .and_then(Value::as_array)
-                .map(Vec::as_slice)
-                .unwrap_or_default();
-            match questions {
-                [only] => {
-                    let message = only
-                        .get("question")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_owned();
-                    (format!("Asking: {message}"), message)
-                }
-                many => {
-                    let message = format!("{} questions", many.len());
-                    (format!("Asking {message}"), message)
-                }
-            }
-        }
-        EffectKind::WebSearch => {
-            let query = string_argument(arguments, &["query"]);
-            let message = format!("the web: '{query}'");
-            (format!("Searching {message}"), message)
-        }
-        EffectKind::WebFetch => {
-            let message = host_of(&string_argument(arguments, &["url"]));
-            (format!("Fetching: {message}"), message)
-        }
-        EffectKind::Skill => {
-            let message = format!("skill: {}", string_argument(arguments, &["name"]));
-            (format!("Loading {message}"), message)
-        }
-        EffectKind::Subagent => {
-            let message = format!(
-                "{} agent: {}",
-                string_argument(arguments, &["agent"]),
-                string_argument(arguments, &["task"])
-            );
-            (format!("Running {message}"), message)
-        }
-        // A tool with no presentation of its own shows its arguments, and the
-        // summary is all there is to show.
-        EffectKind::Tool | EffectKind::Todo => {
-            let summary = generic_call_summary(tool_name, arguments);
-            (summary.clone(), summary)
-        }
-    };
-    // A call whose arguments never arrived would otherwise render a bare verb.
-    let message = if message.is_empty() {
-        summary.clone()
-    } else {
-        message
-    };
-    CallDisplay {
-        summary,
-        message,
-        verb,
-        settled_verb,
-    }
-}
-
-/// The todo effect names its own verbs: the same kind reads, writes, or fails
-/// to recognise its action.
-fn todo_call_display(arguments: &Value) -> CallDisplay {
-    match string_argument(arguments, &["action"]).as_str() {
-        "read" => CallDisplay {
-            summary: "Reading todos".to_owned(),
-            message: "todos".to_owned(),
-            verb: "Retrieving",
-            settled_verb: "Retrieved",
-        },
-        "write" => {
-            let count = arguments
-                .get("todos")
-                .and_then(Value::as_array)
-                .map_or(0, Vec::len);
-            CallDisplay {
-                summary: format!("Writing {count} todos"),
-                message: format!("{count} todos"),
-                verb: "Updating",
-                settled_verb: "Updated",
-            }
-        }
-        action => CallDisplay {
-            summary: format!("Unknown action: {action}"),
-            message: format!("unknown todo action: {action}"),
-            verb: "Running",
-            settled_verb: "Ran",
-        },
-    }
-}
-
-/// Reference `ToolUIDataAdapter.get_call_display` fallback for tools without
-/// their own presentation: the first three arguments, in schema order.
-fn generic_call_summary(tool_name: &str, arguments: &Value) -> String {
-    let rendered = arguments
-        .as_object()
-        .into_iter()
-        .flatten()
-        .take(3)
-        .map(|(key, value)| match value {
-            Value::String(text) => format!("{key}='{text}'"),
-            value => format!("{key}={value}"),
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("{tool_name}({rendered})")
-}
-
-/// Reference `ToolCallMessage._settled_display` combined with
-/// `_failed_header_display` and `ToolResultMessage._get_result_parts`.
-fn settled_display(
-    kind: EffectKind,
-    tool_name: &str,
-    call: &CallDisplay,
-    state: &Value,
-    status: EntryStatus,
-) -> Option<ResultDisplay> {
-    match status {
-        EntryStatus::Pending | EntryStatus::Streaming | EntryStatus::Blocked => None,
-        EntryStatus::Failed => Some(ResultDisplay {
-            success: false,
-            verb: call.settled_verb.to_owned(),
-            message: call.message.clone(),
-            suffix: String::new(),
-            warnings: Vec::new(),
-        }),
-        EntryStatus::Cancelled | EntryStatus::Skipped => Some(ResultDisplay {
-            success: false,
-            verb: String::new(),
-            message: format!("{tool_name}: skipped"),
-            suffix: String::new(),
-            warnings: Vec::new(),
-        }),
-        EntryStatus::Completed => Some(completed_display(kind, call, state)),
-    }
-}
-
-/// A server-provided result display is authoritative, exactly as the reference
-/// widgets consume `state.display` without re-deriving it.
-fn explicit_result_display(state: &Value) -> Option<ResultDisplay> {
-    let display = state.get("display")?;
-    let success = display.get("success")?.as_bool()?;
-    Some(ResultDisplay {
-        success,
-        verb: display
-            .get("verb")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_owned(),
-        message: display
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_owned(),
-        suffix: display
-            .get("suffix")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_owned(),
-        warnings: display
-            .get("warnings")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_str)
-            .map(str::to_owned)
-            .collect(),
-    })
-}
-
-fn completed_display(kind: EffectKind, call: &CallDisplay, state: &Value) -> ResultDisplay {
-    if let Some(display) = explicit_result_display(state) {
-        return display;
-    }
-    let output = state.get("output").unwrap_or(&Value::Null);
-    let warnings = output
-        .get("warnings")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
-    let (verb, message, suffix) = match kind {
-        EffectKind::Shell => {
-            let command = string_argument(output, &["command"]);
-            (
-                "Ran".to_owned(),
-                if command.is_empty() {
-                    call.message.clone()
-                } else {
-                    command
-                },
-                String::new(),
-            )
-        }
-        EffectKind::FileRead => {
-            let lines = read_line_count(output);
-            let word = if lines == 1 { "line" } else { "lines" };
-            let name = file_name(&string_argument(output, &["file_path", "filePath", "path"]));
-            (
-                "Read".to_owned(),
-                format!("{lines} {word} from {name}"),
-                if read_was_truncated(output, lines) {
-                    "(truncated)".to_owned()
-                } else {
-                    String::new()
-                },
-            )
-        }
-        EffectKind::FileWrite => (
-            "Created".to_owned(),
-            file_name(&string_argument(output, &["file_path", "filePath", "path"])),
-            String::new(),
-        ),
-        EffectKind::FileEdit => (
-            "Edited".to_owned(),
-            file_name(&string_argument(
-                output,
-                &["file", "file_path", "filePath", "path"],
-            )),
-            String::new(),
-        ),
-        EffectKind::FileSearch => {
-            let count = search_match_count(output);
-            let word = if count == 1 { "match" } else { "matches" };
-            let pattern = string_argument(output, &["pattern"]);
-            (
-                "Searched".to_owned(),
-                if pattern.is_empty() {
-                    format!("({count} {word})")
-                } else {
-                    format!("{pattern} ({count} {word})")
-                },
-                if truncated_flag(output) {
-                    "(truncated)".to_owned()
-                } else {
-                    String::new()
-                },
-            )
-        }
-        EffectKind::Todo => {
-            let verb = string_argument(output, &["verb"]);
-            let count = output
-                .get("total_count")
-                .or_else(|| output.get("totalCount"))
-                .and_then(Value::as_u64)
-                .map_or_else(
-                    || todo_items(output).len(),
-                    |count| usize::try_from(count).unwrap_or(usize::MAX),
-                );
-            (
-                if verb.is_empty() {
-                    "Updated".to_owned()
-                } else {
-                    verb
-                },
-                format!("{count} todos"),
-                String::new(),
-            )
-        }
-        EffectKind::UserQuestion => {
-            if output
-                .get("cancelled")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
-            {
-                return ResultDisplay {
-                    success: false,
-                    verb: "Cancelled".to_owned(),
-                    message: "by user".to_owned(),
-                    suffix: String::new(),
-                    warnings,
-                };
-            }
-            (
-                "Answered".to_owned(),
-                answered_message(output),
-                String::new(),
-            )
-        }
-        EffectKind::WebSearch => {
-            let sources = output
-                .get("sources")
-                .and_then(Value::as_array)
-                .map_or(0, Vec::len);
-            let plural = if sources == 1 { "" } else { "s" };
-            (
-                "Searched".to_owned(),
-                format!(
-                    "'{}' ({sources} source{plural})",
-                    string_argument(output, &["query"])
-                ),
-                String::new(),
-            )
-        }
-        EffectKind::WebFetch => {
-            let content_length = output
-                .get("content")
-                .and_then(Value::as_str)
-                .map_or(0, str::len);
-            let content_type = string_argument(output, &["content_type", "contentType"]);
-            (
-                "Fetched".to_owned(),
-                format!(
-                    "{} ({} chars, {})",
-                    string_argument(output, &["url"]),
-                    grouped_thousands(content_length),
-                    content_type.split(';').next().unwrap_or_default()
-                ),
-                if truncated_flag(output) {
-                    "(truncated)".to_owned()
-                } else {
-                    String::new()
-                },
-            )
-        }
-        EffectKind::Skill => ("Loaded".to_owned(), call.message.clone(), String::new()),
-        EffectKind::Subagent => ("Completed".to_owned(), call.message.clone(), String::new()),
-        EffectKind::Tool => ("Ran".to_owned(), call.message.clone(), String::new()),
-    };
-    ResultDisplay {
-        success: true,
-        verb,
-        message,
-        suffix,
-        warnings,
-    }
-}
-
-/// Reference `ToolCallMessage.__init__` and `ToolResultMessage.on_mount`: the
-/// nested result display decides the indicator, so a completed effect whose
-/// display reports failure still shows the error glyph.
-fn indicator(status: EntryStatus, settled: Option<&ResultDisplay>) -> Indicator {
+fn indicator(status: EntryStatus, settled: Option<&EffectResultDisplay>) -> Indicator {
     match status {
         EntryStatus::Pending | EntryStatus::Streaming | EntryStatus::Blocked => Indicator::Running,
         EntryStatus::Cancelled | EntryStatus::Skipped => Indicator::Muted,
@@ -888,7 +410,7 @@ fn effect_body(
     kind: EffectKind,
     state: &Value,
     status: EntryStatus,
-    settled: Option<&ResultDisplay>,
+    settled: Option<&EffectResultDisplay>,
 ) -> Vec<BodyLine> {
     match status {
         EntryStatus::Pending | EntryStatus::Streaming | EntryStatus::Blocked => Vec::new(),
@@ -1190,120 +712,6 @@ fn strip_line_numbers(content: &str) -> String {
         .join("\n")
 }
 
-fn read_line_count(output: &Value) -> u64 {
-    if let Some(count) = output
-        .get("num_lines")
-        .or_else(|| output.get("numLines"))
-        .and_then(Value::as_u64)
-    {
-        return count;
-    }
-    let start = output
-        .get("startLine")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
-    let end = output
-        .get("endLine")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
-    if end >= start && start > 0 {
-        return end.saturating_sub(start).saturating_add(1);
-    }
-    output
-        .get("content")
-        .and_then(Value::as_str)
-        .map_or(0, |content| content.lines().count() as u64)
-}
-
-fn truncated_flag(output: &Value) -> bool {
-    output
-        .get("was_truncated")
-        .or_else(|| output.get("wasTruncated"))
-        .or_else(|| output.get("truncated"))
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-}
-
-/// Reference read suffix: the flag, or a window that stops short of the file.
-fn read_was_truncated(output: &Value, lines: u64) -> bool {
-    if truncated_flag(output) {
-        return true;
-    }
-    let Some(total) = output
-        .get("total_lines")
-        .or_else(|| output.get("totalLines"))
-        .and_then(Value::as_u64)
-    else {
-        return false;
-    };
-    let start = output
-        .get("start_line")
-        .or_else(|| output.get("startLine"))
-        .and_then(Value::as_u64)
-        .unwrap_or(1);
-    start.saturating_add(lines).saturating_sub(1) < total
-}
-
-/// Reference `f"{value:,}"`.
-fn grouped_thousands(value: usize) -> String {
-    let digits = value.to_string();
-    let mut grouped = String::with_capacity(digits.len().saturating_add(digits.len() / 3));
-    for (index, digit) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            grouped.push(',');
-        }
-        grouped.push(digit);
-    }
-    grouped
-}
-
-fn search_match_count(output: &Value) -> usize {
-    if let Some(count) = output
-        .get("match_count")
-        .or_else(|| output.get("matchCount"))
-        .and_then(Value::as_u64)
-    {
-        return usize::try_from(count).unwrap_or(usize::MAX);
-    }
-    match output {
-        Value::Array(matches) => matches.len(),
-        value => value
-            .get("matches")
-            .and_then(Value::as_str)
-            .map_or(0, |matches| matches.lines().count()),
-    }
-}
-
-/// Reference `AskUserQuestionUIData.get_result_display`.
-fn answered_message(output: &Value) -> String {
-    output
-        .get("answers")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|answer| {
-            let question = answer
-                .get("question")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let other = answer
-                .get("is_other")
-                .or_else(|| answer.get("isOther"))
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
-            let text = answer
-                .get("answer")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            format!(
-                "\"{question}\" → {}{text}",
-                if other { "(Other) " } else { "" }
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(" · ")
-}
-
 fn is_empty_value(value: &Value) -> bool {
     match value {
         Value::Null => true,
@@ -1327,39 +735,40 @@ fn string_argument(arguments: &Value, keys: &[&str]) -> String {
         .to_owned()
 }
 
-fn number_argument(arguments: &Value, keys: &[&str]) -> Option<u64> {
-    keys.iter()
-        .find_map(|key| arguments.get(*key).and_then(Value::as_u64))
-}
-
-fn file_name(path: &str) -> String {
-    path.rsplit('/').next().unwrap_or(path).to_owned()
-}
-
-fn host_of(url: &str) -> String {
-    let without_scheme = url
-        .split_once("://")
-        .map_or(url, |(_, remainder)| remainder);
-    let host = without_scheme
-        .split(['/', '?', '#'])
-        .next()
-        .unwrap_or(without_scheme);
-    if host.is_empty() {
-        url.chars().take(50).collect()
-    } else {
-        host.to_owned()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
     use serde_json::json;
+    use vibe_app_server::client::EffectDetail;
 
     use super::*;
 
-    fn effect(tool: &str, arguments: Value, state: Value) -> TranscriptEntry {
+    /// An entry in the shape the app server publishes: a typed detail carrying
+    /// the call display, and a settled state carrying the result display the
+    /// projection computed for it.
+    fn effect(tool: &str, arguments: Value, mut state: Value) -> TranscriptEntry {
+        let detail = EffectDetail::for_call(tool, &arguments);
+        if let Some(object) = state.as_object_mut() {
+            let output = object.get("output").cloned().unwrap_or(Value::Null);
+            let display = match object.get("status").and_then(Value::as_str) {
+                Some("completed") => Some(EffectResultDisplay::completed(
+                    detail.kind,
+                    &detail.display,
+                    &output,
+                    &Value::Null,
+                )),
+                Some("failed") => Some(EffectResultDisplay::failed(&detail.display)),
+                Some("skipped") => Some(EffectResultDisplay::skipped(&detail.tool_name)),
+                Some("cancelled") => {
+                    EffectResultDisplay::cancelled(&detail.tool_name, &output, &Value::Null)
+                }
+                _ => None,
+            };
+            if let Some(display) = display {
+                object.insert("display".to_owned(), json!(display));
+            }
+        }
         TranscriptEntry {
             id: "effect".to_owned(),
             revision: 1,
@@ -1368,7 +777,7 @@ mod tests {
             status: EntryStatus::Streaming,
             details: json!({
                 "type": "effect",
-                "detail": {"toolName": tool, "arguments": arguments},
+                "detail": detail,
                 "state": state,
             }),
         }
