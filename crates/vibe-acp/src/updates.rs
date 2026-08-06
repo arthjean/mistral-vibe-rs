@@ -45,7 +45,7 @@ pub(crate) fn content_chunk(kind: &str, message_id: &str, content: Value) -> Val
     })
 }
 
-/// A canonical entry is announced once and revised afterwards.
+/// A canonical entry is announced once and revised afterward.
 const fn tool_call_kind(revision: bool) -> &'static str {
     if revision {
         "tool_call_update"

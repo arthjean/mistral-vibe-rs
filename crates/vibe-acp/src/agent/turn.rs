@@ -328,7 +328,7 @@ where
             }
             // ACP forwards the detail verbatim as the permission request's raw
             // input, so the typed union is rendered back to its wire form here
-            // rather than being re-modelled a second time in this adapter.
+            // rather than being re-modeled a second time in this adapter.
             let wire = serde_json::to_value(&detail).unwrap_or(Value::Null);
             let output = match detail {
                 CallbackDetail::Approval { .. } => {
