@@ -27,11 +27,22 @@ use serde_json::{Value, json};
 use thiserror::Error;
 use url::Url;
 
+mod project_links;
+
 pub const RELEASE4_METHODS: &[&str] = &[
     "loops/clear",
     "loops/create",
     "loops/delete",
     "loops/list",
+    "projectLinks/create",
+    "projectLinks/inspectRoot",
+    "projectLinks/link",
+    "projectLinks/list",
+    "projectLinks/picker/load",
+    "projectLinks/picker/loadMore",
+    "projectLinks/resolveRoot",
+    "projectLinks/save",
+    "projectLinks/unlink",
     "vibeCode/projects/cancel",
     "vibeCode/projects/create",
     "vibeCode/projects/loadMore",
@@ -47,6 +58,14 @@ pub const RELEASE4_METHODS: &[&str] = &[
 /// Methods that reach Vibe Code over the network. They are always dispatched on
 /// the asynchronous path so a slow cloud call never blocks the caller's loop.
 const DEFERRED_RELEASE4_METHODS: &[&str] = &[
+    "projectLinks/create",
+    "projectLinks/inspectRoot",
+    "projectLinks/link",
+    "projectLinks/picker/load",
+    "projectLinks/picker/loadMore",
+    "projectLinks/resolveRoot",
+    "projectLinks/save",
+    "projectLinks/unlink",
     "vibeCode/projects/create",
     "vibeCode/projects/loadMore",
     "vibeCode/projects/open",
@@ -174,8 +193,59 @@ pub struct ProjectGitSnapshot {
     pub branch: Option<String>,
 }
 
+/// One repository root as the session-less project-link surface publishes it.
+///
+/// `repo_url` is the sanitized remote the link is keyed against; the two branch
+/// names are absent rather than guessed when the probe cannot observe them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectLinkRoot {
+    pub repo_local_path: String,
+    pub repo_name: String,
+    pub repo_url: String,
+    pub current_branch: Option<String>,
+    pub default_branch: Option<String>,
+}
+
+/// Why a path is not an eligible project root, in the reference vocabulary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectRootRejection {
+    /// The path is not inside a Git repository.
+    NotGit,
+    /// The repository has no remote the project surface can link against.
+    UnsupportedRemote,
+    /// The repository is there but its root could not be resolved.
+    NestedUnresolvable,
+    /// The repository has no commit yet, so there is nothing to link.
+    NoCommits,
+}
+
 pub trait GitProbe: Send + Sync {
     fn inspect(&self, working_directory: &Path) -> Result<GitSnapshot, CloudError>;
+
+    /// Resolves a path to the repository root the project-link surface keys on.
+    ///
+    /// The default is built on [`GitProbe::inspect_project`], which every probe
+    /// answers: a path that inspects is a repository with a usable remote, and
+    /// the branch names the default cannot observe are reported absent rather
+    /// than guessed. [`CommandGitProbe`] overrides it with the classification
+    /// Git itself reports, which is what turns a failure into one of the four
+    /// reject reasons instead of a single opaque one.
+    fn resolve_project_root(
+        &self,
+        working_directory: &Path,
+    ) -> Result<ProjectLinkRoot, ProjectRootRejection> {
+        let project = self
+            .inspect_project(working_directory)
+            .map_err(|_| ProjectRootRejection::NotGit)?;
+        Ok(ProjectLinkRoot {
+            repo_name: repository_name(&project.snapshot.repository),
+            repo_local_path: project.repo_root,
+            repo_url: project.snapshot.repository,
+            current_branch: project.branch,
+            default_branch: None,
+        })
+    }
 
     fn inspect_project(&self, working_directory: &Path) -> Result<ProjectGitSnapshot, CloudError> {
         let snapshot = self.inspect(working_directory)?;
@@ -759,21 +829,17 @@ impl CommandGitProbe {
         self
     }
 
-    fn metadata(&self, working_directory: &Path) -> Result<GitMetadata, CloudError> {
-        let repo_root = self.git_text(
-            working_directory,
-            &["rev-parse", "--show-toplevel"],
-            self.command_timeout,
-            "locate the repository root",
-        )?;
-        let repo_root = fs::canonicalize(repo_root.trim())
-            .map_err(|_| CloudError::Git("Git returned an invalid repository root".to_owned()))?;
-        let remotes = self.git_text(
-            working_directory,
-            &["remote"],
-            self.command_timeout,
-            "list Git remotes",
-        )?;
+    /// The first eligible GitHub remote, preferring `origin`, with its
+    /// sanitized URL. `None` when the repository publishes none.
+    fn github_remote(&self, working_directory: &Path) -> Option<(String, String)> {
+        let remotes = self
+            .git_text(
+                working_directory,
+                &["remote"],
+                self.command_timeout,
+                "list Git remotes",
+            )
+            .ok()?;
         let mut candidates = remotes
             .lines()
             .map(str::trim)
@@ -781,7 +847,6 @@ impl CommandGitProbe {
             .map(ToOwned::to_owned)
             .collect::<Vec<_>>();
         candidates.sort_by_key(|remote| (remote != "origin", remote.clone()));
-        let mut selected = None;
         for remote in candidates {
             let remote_url = match self.git_text_os(
                 working_directory,
@@ -805,11 +870,22 @@ impl CommandGitProbe {
                 .and_then(|url| url.host_str().map(str::to_owned))
                 .is_some_and(|host| host.eq_ignore_ascii_case("github.com"));
             if is_github {
-                selected = Some((remote, repo_url));
-                break;
+                return Some((remote, repo_url));
             }
         }
-        let (remote, repo_url) = selected.ok_or_else(|| {
+        None
+    }
+
+    fn metadata(&self, working_directory: &Path) -> Result<GitMetadata, CloudError> {
+        let repo_root = self.git_text(
+            working_directory,
+            &["rev-parse", "--show-toplevel"],
+            self.command_timeout,
+            "locate the repository root",
+        )?;
+        let repo_root = fs::canonicalize(repo_root.trim())
+            .map_err(|_| CloudError::Git("Git returned an invalid repository root".to_owned()))?;
+        let (remote, repo_url) = self.github_remote(working_directory).ok_or_else(|| {
             CloudError::Git("Teleport requires a GitHub remote; configure one and retry".to_owned())
         })?;
         let branch = self.git_text(
@@ -1131,6 +1207,85 @@ impl GitProbe for CommandGitProbe {
         })
     }
 
+    /// Classifies a candidate root the way the reference does, from what Git
+    /// reports rather than from a single failure message.
+    ///
+    /// The remote is checked before the commit, so a repository with a usable
+    /// GitHub remote and no commit yet is reported as `no_commits` rather than
+    /// as an unsupported remote. Neither the fetch nor the working-tree scan
+    /// `inspect` runs is needed here, which is why this does not go through it.
+    fn resolve_project_root(
+        &self,
+        working_directory: &Path,
+    ) -> Result<ProjectLinkRoot, ProjectRootRejection> {
+        let repo_root = self
+            .git_text(
+                working_directory,
+                &["rev-parse", "--show-toplevel"],
+                self.command_timeout,
+                "locate the repository root",
+            )
+            .map_err(|_| ProjectRootRejection::NotGit)?;
+        let repo_root = fs::canonicalize(repo_root.trim())
+            .map_err(|_| ProjectRootRejection::NestedUnresolvable)?;
+        let (remote, repo_url) = self
+            .github_remote(working_directory)
+            .ok_or(ProjectRootRejection::UnsupportedRemote)?;
+        let commit = self
+            .git_text(
+                working_directory,
+                &["rev-parse", "--verify", "HEAD"],
+                self.command_timeout,
+                "read the current commit",
+            )
+            .map_err(|_| ProjectRootRejection::NoCommits)?;
+        let commit = commit.trim();
+        if !(7..=64).contains(&commit.len()) || !commit.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(ProjectRootRejection::NoCommits);
+        }
+        let current_branch = self
+            .git_text(
+                working_directory,
+                &["symbolic-ref", "--quiet", "--short", "HEAD"],
+                self.command_timeout,
+                "read the current branch",
+            )
+            .ok()
+            .map(|branch| branch.trim().to_owned())
+            .filter(|branch| !branch.is_empty());
+        // `refs/remotes/<remote>/HEAD` is what the reference reads the default
+        // branch from, and it resolves to `<remote>/<branch>`.
+        let default_branch = self
+            .git_text(
+                working_directory,
+                &[
+                    "symbolic-ref",
+                    "--quiet",
+                    "--short",
+                    &format!("refs/remotes/{remote}/HEAD"),
+                ],
+                self.command_timeout,
+                "read the remote default branch",
+            )
+            .ok()
+            .map(|branch| branch.trim().to_owned())
+            .map(|branch| {
+                branch
+                    .strip_prefix(&format!("{remote}/"))
+                    .unwrap_or(&branch)
+                    .to_owned()
+            })
+            .filter(|branch| !branch.is_empty());
+        Ok(ProjectLinkRoot {
+            repo_local_path: repo_root.to_string_lossy().into_owned(),
+            repo_name: repository_name(&repo_url),
+            repo_url,
+            current_branch,
+            default_branch,
+        })
+    }
+
     fn inspect_for_teleport(
         &self,
         working_directory: &Path,
@@ -1303,6 +1458,20 @@ fn normalize_repo_url(value: &str) -> String {
         .strip_suffix(".git")
         .unwrap_or(&normalized)
         .to_owned()
+}
+
+/// The repository's own name, taken from the remote rather than from the
+/// checkout directory, which is what the reference publishes as `repoName`.
+///
+/// [`normalize_repo_url`] is not reused here: it lowercases, and a repository
+/// name is displayed as its owner spelled it.
+fn repository_name(repo_url: &str) -> String {
+    let sanitized = sanitize_git_remote(repo_url).unwrap_or_else(|_| repo_url.trim().to_owned());
+    let path = Url::parse(&sanitized).map_or(sanitized.clone(), |url| {
+        url.path().trim_matches('/').to_owned()
+    });
+    let last = path.rsplit('/').next().unwrap_or_default().trim();
+    last.strip_suffix(".git").unwrap_or(last).to_owned()
 }
 
 fn is_project_linked_to_repo(project: &Project, repo_url: &str) -> bool {
@@ -1567,6 +1736,12 @@ pub struct Release4Service {
     project_cloud: ProjectCloudBackend,
     teleport_cloud: TeleportCloudBackend,
     git: Arc<dyn GitProbe>,
+    /// Whether a Vibe Code backend is attached at all.
+    ///
+    /// The session-less project surface reports an absent one as an
+    /// authorization failure, which is how the reference classifies a missing
+    /// API key; a backend that is attached but failing is an internal error.
+    cloud_configured: bool,
     next_operation: Arc<AtomicU64>,
     next_loop: Arc<AtomicU64>,
 }
@@ -1597,6 +1772,7 @@ impl Default for Release4Service {
             project_cloud: ProjectCloudBackend::Sync(Arc::new(UnavailableProjectCloud)),
             teleport_cloud: TeleportCloudBackend::Sync(Arc::new(UnavailableTeleportCloud)),
             git: Arc::new(UnavailableGitProbe),
+            cloud_configured: false,
             next_operation: Arc::new(AtomicU64::new(1)),
             next_loop: Arc::new(AtomicU64::new(next_loop)),
         }
@@ -1610,6 +1786,7 @@ impl Release4Service {
             project_cloud: ProjectCloudBackend::Async(cloud.clone()),
             teleport_cloud: TeleportCloudBackend::Async(cloud),
             git: Arc::new(CommandGitProbe::default()),
+            cloud_configured: true,
             ..Self::default()
         };
         service
@@ -1773,6 +1950,7 @@ impl Release4Service {
             project_cloud: ProjectCloudBackend::Sync(project_cloud),
             teleport_cloud: TeleportCloudBackend::Sync(teleport_cloud),
             git,
+            cloud_configured: true,
             ..Self::default()
         }
     }
@@ -2465,6 +2643,7 @@ impl Release4Service {
             )));
         }
         match method {
+            "projectLinks/list" => self.project_links_list(),
             "vibeCode/projects/recover" => self.project_recover(params),
             "vibeCode/projects/select" => self.project_select(params),
             "vibeCode/projects/unlink" => self.project_unlink(params),
@@ -2489,6 +2668,9 @@ impl Release4Service {
         params: &BTreeMap<String, Value>,
     ) -> Result<Release4Dispatch, Release4Error> {
         match method {
+            method if method.starts_with("projectLinks/") => {
+                self.project_links_deferred(method, params).await
+            }
             "vibeCode/projects/create" => self.project_create(params).await,
             "vibeCode/projects/loadMore" => self.project_load_more(params).await,
             "vibeCode/projects/open" => self.project_open(params).await,
@@ -3366,6 +3548,13 @@ pub enum Release4Error {
     Conflict(String),
     #[error(transparent)]
     Cloud(CloudError),
+    /// A Vibe Code call that failed for a reason the caller cannot act on.
+    ///
+    /// The session-less project surface separates this from an authorization
+    /// failure, because the reference answers the two with different codes and
+    /// a client shows a sign-in prompt for one and a retry for the other.
+    #[error("Vibe Code request failed: {0}")]
+    VibeCode(String),
     #[error("scheduled-loop persistence failed: {0}")]
     Persistence(std::io::Error),
     #[error("scheduled-loop persistence is unavailable: {0}")]

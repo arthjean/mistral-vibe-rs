@@ -61,17 +61,10 @@ const PROBE_SESSION: &str = "session-1";
 
 /// Reference methods this build does not route yet, each with the story that
 /// adds it. A method routed while listed here fails the replay as a stale entry.
-const UNROUTED_METHODS: &[(&str, &str)] = &[
-    ("projectLinks/create", "US-098"),
-    ("projectLinks/inspectRoot", "US-097"),
-    ("projectLinks/link", "US-098"),
-    ("projectLinks/list", "US-097"),
-    ("projectLinks/picker/load", "US-097"),
-    ("projectLinks/picker/loadMore", "US-097"),
-    ("projectLinks/resolveRoot", "US-097"),
-    ("projectLinks/save", "US-098"),
-    ("projectLinks/unlink", "US-098"),
-];
+///
+/// US-098 routed the last of them, so the list is empty and a method that stops
+/// being routed has to earn an entry here before the replay accepts it.
+const UNROUTED_METHODS: &[(&str, &str)] = &[];
 
 /// Reference notifications this build does not emit yet.
 ///
@@ -112,6 +105,18 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
         ("diagnostics/list", session.clone()),
         ("history/list", session.clone()),
         ("mcp/read", session.clone()),
+        // The session-less surface takes no session, and a path that resolves
+        // to no repository is answered rather than refused, which is what makes
+        // three of its methods probeable from a bare server.
+        ("projectLinks/list", json!({})),
+        (
+            "projectLinks/resolveRoot",
+            json!({"rootPath": "/workspace"}),
+        ),
+        (
+            "projectLinks/inspectRoot",
+            json!({"rootPath": "/workspace"}),
+        ),
         ("review/state", session.clone()),
         ("runtime/read", session.clone()),
         ("session/list", json!({})),
@@ -866,6 +871,27 @@ impl<'a> Census<'a> {
             }
         }
     }
+}
+
+/// Every divergence between one method's answer and the model the corpus
+/// declares for it.
+///
+/// The probe below reaches a method with whatever a bare server can answer,
+/// which leaves the shapes that need a repository, a backend or a written
+/// session measured by nothing. This is how a test that stands those up
+/// validates against the same census rather than against its own expectations.
+pub(crate) fn census_issues(method: &str, response: &Value) -> Vec<String> {
+    let corpus = corpus();
+    let model = corpus
+        .methods
+        .iter()
+        .find(|entry| entry.name == method)
+        .unwrap_or_else(|| unreachable!("{method} is not a corpus method"))
+        .response
+        .clone();
+    let mut issues = Vec::new();
+    Census::new(&corpus).validate("", &model, response, &mut issues);
+    issues
 }
 
 #[test]
@@ -1809,26 +1835,33 @@ fn probe(
     }
 }
 
-/// Runs the resource request a dispatch deferred, so its answer is validated
-/// like an inline one.
+/// Runs the work a dispatch deferred, so its answer is validated like an inline
+/// one.
 ///
 /// `mcp/read` and `connectors/read` are served by the asynchronous resource
-/// backend, so their frame exists only after the deferred work runs. Without
-/// this the two methods US-092 reshaped would leave the probe silently.
+/// backend, and the session-less project surface resolves a repository root off
+/// the loop, so in both cases the frame exists only after the deferred work
+/// runs. Without this those methods would leave the probe silently.
 fn run_deferred(server: &AppServer, batch: DispatchBatch) -> Option<DispatchBatch> {
-    let DeferredWork::ResourceRequest {
-        request_id,
-        session_id,
-        command,
-    } = batch.deferred.into_iter().next()?
-    else {
-        return None;
-    };
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .ok()?;
-    Some(runtime.block_on(server.execute_resource_request(request_id, session_id, command)))
+    match batch.deferred.into_iter().next()? {
+        DeferredWork::ResourceRequest {
+            request_id,
+            session_id,
+            command,
+        } => {
+            Some(runtime.block_on(server.execute_resource_request(request_id, session_id, command)))
+        }
+        DeferredWork::CloudRequest {
+            request_id,
+            method,
+            params,
+        } => Some(runtime.block_on(server.execute_cloud_request(request_id, method, params))),
+        _ => None,
+    }
 }
 
 fn wire_values<T: serde::Serialize>(values: &[T]) -> Vec<String> {

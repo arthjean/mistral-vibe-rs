@@ -181,7 +181,8 @@ pub(super) fn release4_error_batch(id: RequestId, error: Release4Error) -> Dispa
         Release4Error::Cloud(error) => {
             error_batch(id, ProtocolErrorCode::Conflict, &error.to_string())
         }
-        Release4Error::Persistence(_)
+        Release4Error::VibeCode(_)
+        | Release4Error::Persistence(_)
         | Release4Error::PersistenceState(_)
         | Release4Error::ProjectLinkPersistence(_)
         | Release4Error::ProjectLinkPersistenceState(_)

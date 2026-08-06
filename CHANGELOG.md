@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Link a repository to a Vibe Code project without opening a session. The nine
+  `projectLinks/*` calls now answer: a path resolves to its repository root with
+  the repository's name and its current and default branches, or is reported
+  ineligible with the reason it failed, whether that is not being a repository,
+  publishing no usable remote, having no commit yet or being unresolvable.
+  Inspecting a root reports the link saved against it and drops one that names
+  another repository, saying so rather than staying silent. The picker pages
+  candidates and recommends the same project the terminal would: the currently
+  linked one first, then single-repository matches, then multi-repository ones.
+  Creating, linking and saving persist to the same store `vibeCode/projects/*`
+  already writes, so a link made through either is the one the other sees;
+  saving refuses when the remote moved since the caller last read it. Unlinking
+  succeeds on a root that carries no link, and still removes the link of a
+  checkout that has moved or been deleted. A missing credential is answered as
+  an authorization failure and a reachable backend that fails as an internal
+  one, so a client knows whether to prompt for sign-in or to retry.
 - Accept `telemetry/record`. A client can record its own event against a
   session, and the call is honored only while `enable_telemetry` is on; the
   event is kept where `diagnostics/logs/read` reports it rather than shipped,
