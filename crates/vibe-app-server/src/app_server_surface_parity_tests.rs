@@ -88,7 +88,7 @@ const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[];
 const LOCAL_NOTIFICATIONS: &[(&str, &str)] = &[];
 
 /// Enum vocabularies the reference declares that this port does not model yet.
-const UNMODELLED_ENUMS: &[(&str, &str)] = &[("TerminalEmulator", "US-081")];
+const UNMODELED_ENUMS: &[(&str, &str)] = &[("TerminalEmulator", "US-081")];
 
 /// Methods whose probed response does not validate against the census yet, each
 /// with the story that fixes it. A method that starts validating while listed
@@ -546,7 +546,7 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
         .iter()
         .map(|entry| (entry.name.as_str(), &entry.values))
         .collect::<BTreeMap<_, _>>();
-    let backlog = ledger(UNMODELLED_ENUMS);
+    let backlog = ledger(UNMODELED_ENUMS);
 
     // The vocabularies this port already spells. Everything else is in the
     // backlog above until the story that models it lands.
@@ -675,7 +675,7 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
         assert_eq!(&values, expected, "the {name} vocabulary diverged");
         assert!(
             !backlog.contains_key(*name),
-            "{name} is modelled now and its backlog entry is stale"
+            "{name} is modeled now and its backlog entry is stale"
         );
     }
 

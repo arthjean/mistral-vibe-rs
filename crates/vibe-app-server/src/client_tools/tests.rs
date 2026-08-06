@@ -302,7 +302,7 @@ async fn closing_a_session_releases_the_terminal_its_client_still_holds() {
 
     // The wait is never answered, so the terminal is still open when the
     // session closes. The close runs alongside the reader because it waits out
-    // the acknowledgements this client will not send.
+    // the acknowledgments this client will not send.
     let closing = tokio::spawn(async move { server.close_resource_session(SESSION, 0).await });
     let mut issued = Vec::new();
     while !issued

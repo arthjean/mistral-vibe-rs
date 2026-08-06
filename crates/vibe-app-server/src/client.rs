@@ -555,7 +555,7 @@ impl EventObserver for ProgrammaticEventObserver {
 }
 
 /// Usage carries no history, so it is forwarded straight to the live observer
-/// instead of travelling through the projection.
+/// instead of traveling through the projection.
 fn forward_stats(
     sender: &tokio::sync::mpsc::Sender<ProgrammaticUpdate>,
     event: &EventEnvelope,
@@ -1767,7 +1767,7 @@ where
             .and_then(|value| {
                 serde_json::from_value::<PublicHistoryEntry>(value).map_err(ClientError::Json)
             })?;
-        let acknowledgement = serde_json::to_vec(&json!({
+        let acknowledgment = serde_json::to_vec(&json!({
             "jsonrpc": "2.0",
             "id": request.id,
             "result": {
@@ -1776,10 +1776,10 @@ where
             },
         }))
         .map_err(ClientError::Json)?;
-        let batch = self.client.connection.dispatch(&acknowledgement);
+        let batch = self.client.connection.dispatch(&acknowledgment);
         if batch.close_after_flush || !batch.outbound.is_empty() || !batch.deferred.is_empty() {
             return Err(ClientError::InvalidResponse(
-                "callback delivery acknowledgement was rejected".to_owned(),
+                "callback delivery acknowledgment was rejected".to_owned(),
             ));
         }
         Ok((callback_id, callback))
@@ -3524,10 +3524,10 @@ pub(crate) const DEFAULT_SUBAGENT: &str = "explore";
 ///
 /// | Reference directive | Covered by |
 /// |---|---|
-/// | The work is handed to a specialised subagent | "Hand a bounded task to a subagent" |
+/// | The work is handed to a specialized subagent | "Hand a bounded task to a subagent" |
 /// | The subagent runs in its own session and reports back once | "runs in its own session and reports back once" |
 /// | The task text is self-contained, because the subagent sees no history | "state it self-contained: the subagent sees none of this conversation" |
-/// | The agent name selects which specialisation runs | the `agent` description |
+/// | The agent name selects which specialization runs | the `agent` description |
 ///
 /// The argument shape comes from the reference `TaskArgs`, which configures
 /// `extra="forbid"`: `agent` is a plain string carrying a default rather than
@@ -3548,7 +3548,7 @@ pub(crate) fn task_spec() -> ToolSpec {
             .optional(
                 "agent",
                 Property::string()
-                    .described("Which specialised subagent runs the task")
+                    .described("Which specialized subagent runs the task")
                     .with_default(DEFAULT_SUBAGENT),
             )
             .forbid_extra_properties()
@@ -4519,7 +4519,7 @@ mod tests {
             continuation.contains("clear planning context"),
             "the continuation is the instruction the cleared turn restarts from: {continuation}"
         );
-        response.send(Ok(())).expect("clearing acknowledgement");
+        response.send(Ok(())).expect("clearing acknowledgment");
 
         let output = task
             .await
@@ -5700,7 +5700,7 @@ command = "/must-not-run"
                     "task": {"type": "string", "description": "The task for the subagent to perform"},
                     "agent": {
                         "type": "string",
-                        "description": "Which specialised subagent runs the task",
+                        "description": "Which specialized subagent runs the task",
                         "default": "explore",
                     },
                 },
@@ -6239,7 +6239,7 @@ command = "/must-not-run"
             .await
             .expect("turn reserves");
 
-        let (response, acknowledgement) = tokio::sync::oneshot::channel();
+        let (response, acknowledgment) = tokio::sync::oneshot::channel();
         sender
             .send(InteractiveCallbackRequest::ClearContext {
                 session_id: session_id.clone(),
@@ -6256,7 +6256,7 @@ command = "/must-not-run"
                 .is_empty(),
             "a clearing is not a callback entry"
         );
-        acknowledgement
+        acknowledgment
             .await
             .expect("the tool is answered")
             .expect("the driver accepted the clearing");

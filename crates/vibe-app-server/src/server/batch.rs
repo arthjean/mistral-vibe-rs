@@ -44,7 +44,7 @@ pub(super) fn error_batch(id: RequestId, code: ProtocolErrorCode, message: &str)
     }
 }
 
-/// Answers a resource dispatch and publishes what it signalled.
+/// Answers a resource dispatch and publishes what it signaled.
 ///
 /// The reference emits `runtime/updated` after any response that moved runtime
 /// state, so the notification is built here from the live snapshot rather than
@@ -70,7 +70,7 @@ pub(super) fn resource_result_batch(
             // Every mutation answer that declares a runtime carries the one the
             // mutation produced, composed here for the same reason the
             // notification is: the backend knows something moved, the server
-            // knows what the runtime looks like afterwards.
+            // knows what the runtime looks like afterward.
             if RUNTIME_ANSWERS.contains(&method)
                 && let Some(runtime) = server.runtime_snapshot(session_id)
             {

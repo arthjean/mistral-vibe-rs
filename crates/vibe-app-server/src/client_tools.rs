@@ -58,7 +58,7 @@ pub struct ClientToolBridge {
 
 impl ClientToolBridge {
     /// Records what the handshake declared. Called on every `initialize`, so a
-    /// reconnection that declares less is honoured immediately.
+    /// reconnection that declares less is honored immediately.
     pub fn declare(&self, capabilities: &[WireCapability]) {
         let declared = capabilities
             .iter()

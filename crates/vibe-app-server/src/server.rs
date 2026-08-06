@@ -2036,7 +2036,7 @@ impl ServerConnection {
     /// Whether a frame may be delivered to this client.
     ///
     /// A client can mute notification names during `initialize`, and the server
-    /// honours the list with one exception: a sequenced event carries the
+    /// honors the list with one exception: a sequenced event carries the
     /// per-session `eventId` the client's projection counts on, so dropping one
     /// would open a gap it reads as a fault. Muting a non-event notification
     /// touches no watermark, so the sequence stays contiguous either way.
@@ -2454,7 +2454,7 @@ impl ServerConnection {
         success_batch(request.id, BTreeMap::new())
     }
 
-    /// Reports what the session's tool surface could not honour: a filter entry
+    /// Reports what the session's tool surface could not honor: a filter entry
     /// that does not compile, and a registered tool whose runtime prerequisite
     /// does not hold.
     ///
@@ -6486,7 +6486,7 @@ mod tests {
                 && params["callback"]["callbackId"].as_str() == Some(callback_id.as_str())
                 && params["callback"]["detail"]["kind"] == "approval"
         ));
-        let acknowledgement = encode_frame(&Envelope::Success(SuccessResponse {
+        let acknowledgment = encode_frame(&Envelope::Success(SuccessResponse {
             jsonrpc: JsonRpcVersion::V2,
             id: callback_request_id,
             result: result_map([
@@ -6494,8 +6494,8 @@ mod tests {
                 ("accepted", json!(true)),
             ]),
         }));
-        let acknowledgement = connection.dispatch(&acknowledgement);
-        assert_eq!(acknowledgement, DispatchBatch::empty());
+        let acknowledgment = connection.dispatch(&acknowledgment);
+        assert_eq!(acknowledgment, DispatchBatch::empty());
         let first = connection.dispatch(&request(
             5,
             "callback/respond",
@@ -6699,7 +6699,7 @@ mod tests {
             Envelope::Request(request) => request.id,
             _ => return,
         };
-        let acknowledgement = encode_frame(&Envelope::Success(SuccessResponse {
+        let acknowledgment = encode_frame(&Envelope::Success(SuccessResponse {
             jsonrpc: JsonRpcVersion::V2,
             id: request_id,
             result: result_map([
@@ -6707,10 +6707,7 @@ mod tests {
                 ("accepted", json!(true)),
             ]),
         }));
-        assert_eq!(
-            connection.dispatch(&acknowledgement),
-            DispatchBatch::empty()
-        );
+        assert_eq!(connection.dispatch(&acknowledgment), DispatchBatch::empty());
 
         let response = connection.dispatch(&request(
             4,
@@ -6890,7 +6887,7 @@ mod tests {
     }
 
     #[test]
-    fn answered_delivery_ignores_a_late_negative_acknowledgement() {
+    fn answered_delivery_ignores_a_late_negative_acknowledgment() {
         let server = AppServer::default();
         let mut connection = server.connect(TransportKind::InProcess);
         initialize(&mut connection);
@@ -7293,7 +7290,7 @@ mod tests {
             Envelope::Request(request) => request.id,
             _ => return,
         };
-        let acknowledgement = encode_frame(&Envelope::Success(SuccessResponse {
+        let acknowledgment = encode_frame(&Envelope::Success(SuccessResponse {
             jsonrpc: JsonRpcVersion::V2,
             id: request_id,
             result: result_map([
@@ -7301,10 +7298,7 @@ mod tests {
                 ("accepted", json!(true)),
             ]),
         }));
-        assert_eq!(
-            connection.dispatch(&acknowledgement),
-            DispatchBatch::empty()
-        );
+        assert_eq!(connection.dispatch(&acknowledgment), DispatchBatch::empty());
 
         for (id, output) in [
             (

@@ -335,7 +335,7 @@ impl Release3Service {
     /// configuration must never rewrite the operator's files.
     ///
     /// The returned warnings name the files a migration could not write; they
-    /// also reach every configuration snapshot afterwards.
+    /// also reach every configuration snapshot afterward.
     pub fn migrate_configuration(&self) -> Result<Vec<String>, Release3Error> {
         self.config.migrate_sources().map_err(config_error)
     }
