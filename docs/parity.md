@@ -124,6 +124,7 @@ what in the repository holds it in place.
 | `config/batchWrite` | Writes several configuration targets in one request, which the reference client does with one `config/patch` per target. `vibe-cli` settings screens already depend on the atomic form; retiring it is its own migration | `LOCAL_EXTENSION_METHODS` in `crates/vibe-protocol/src/lib.rs`, kept out of `SERVER_METHODS` and out of `ServerCapabilities.methods`, asserted by `app_server_surface_parity_tests` |
 | `connectors/toggle` | Enables or disables one connector without the full `config/patch` round trip the reference uses. Live callers in `vibe-cli` | Same as above |
 | `mcp/auth/complete` | Completes the local MCP OAuth callback this port serves itself, which the reference delegates to its own browser flow | Same as above |
+| `session/overrides/write` | Holds a model, a mode, a thinking level, a reasoning effort and an approval stance for one session's lifetime. Upstream none of the five is session-scoped: the model and the thinking level are configuration writes and the mode and the approval stance come from an agent profile. They used to ride on `session/settings/update`, which made that method accept five fields its reference model forbids; moving them here left it exactly `sessionId`, `maxTurns` and `maxTokens` | Same as above, plus `settings_update_is_strict_and_applies_to_the_next_turn_while_active`, which asserts each of the five is answered with `invalid_params` on the reference method |
 
 ## Verification
 
