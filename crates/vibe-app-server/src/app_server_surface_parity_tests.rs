@@ -91,16 +91,10 @@ const UNMODELLED_ENUMS: &[(&str, &str)] = &[
     ("AccountStatus", "US-090"),
     ("AgentSafety", "US-093"),
     ("AgentType", "US-093"),
-    ("ApprovalDecisionType", "US-089"),
     ("ConfigFieldKind", "US-091"),
-    ("HookScope", "US-088"),
-    ("HookSeverity", "US-088"),
     ("MCPSourceKind", "US-092"),
     ("MCPSourceStatus", "US-092"),
     ("TerminalEmulator", "US-081"),
-    ("TodoEffectPriority", "US-087"),
-    ("TodoEffectStatus", "US-087"),
-    ("ToolEffectKind", "US-087"),
 ];
 
 /// Methods whose probed response does not validate against the census yet, each
@@ -232,10 +226,8 @@ struct FieldEntry {
     models: Vec<String>,
     #[expect(dead_code, reason = "the enum family compares vocabularies by name")]
     enums: Vec<String>,
-    #[expect(
-        dead_code,
-        reason = "literals are compared through the union discriminators"
-    )]
+    /// The values a literal field may take, which is how a variant whose
+    /// discriminator is a literal set is resolved.
     literals: Vec<Value>,
 }
 
@@ -550,7 +542,48 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
 
     // The vocabularies this port already spells. Everything else is in the
     // backlog above until the story that models it lands.
-    let declared: [(&str, Vec<String>); 4] = [
+    let declared: [(&str, Vec<String>); 10] = [
+        (
+            "ApprovalDecisionType",
+            wire_values(&vibe_core::events::ApprovalDecisionType::ALL),
+        ),
+        (
+            "HookScope",
+            wire_values(&[
+                vibe_core::events::HookScope::PostAgent,
+                vibe_core::events::HookScope::PreTool,
+                vibe_core::events::HookScope::PostTool,
+            ]),
+        ),
+        (
+            "HookSeverity",
+            wire_values(&[
+                vibe_core::events::HookSeverity::Ok,
+                vibe_core::events::HookSeverity::Warning,
+                vibe_core::events::HookSeverity::Error,
+            ]),
+        ),
+        (
+            "TodoEffectPriority",
+            wire_values(&[
+                vibe_core::events::TodoEffectPriority::Low,
+                vibe_core::events::TodoEffectPriority::Medium,
+                vibe_core::events::TodoEffectPriority::High,
+            ]),
+        ),
+        (
+            "TodoEffectStatus",
+            wire_values(&[
+                vibe_core::events::TodoEffectStatus::Pending,
+                vibe_core::events::TodoEffectStatus::InProgress,
+                vibe_core::events::TodoEffectStatus::Completed,
+                vibe_core::events::TodoEffectStatus::Cancelled,
+            ]),
+        ),
+        (
+            "ToolEffectKind",
+            wire_values(&vibe_core::events::ToolEffectKind::ALL),
+        ),
         (
             "PublicEntryGenerationStatus",
             wire_values(&[
@@ -751,10 +784,25 @@ impl<'a> Census<'a> {
                     ));
                     return;
                 };
+                // A variant whose discriminator is a literal set rather than a
+                // single value carries no captured value, so it is resolved
+                // through the literals its own model declares.
                 let Some(variant) = union
                     .variants
                     .iter()
                     .find(|variant| variant.value.as_ref() == Some(tag))
+                    .or_else(|| {
+                        union.variants.iter().find(|variant| {
+                            self.models
+                                .get(variant.model.as_str())
+                                .is_some_and(|model| {
+                                    model.fields.iter().any(|field| {
+                                        field.alias == *discriminator
+                                            && field.literals.contains(tag)
+                                    })
+                                })
+                        })
+                    })
                 else {
                     issues.push(format!(
                         "{pointer}/{discriminator}: {tag} is not a {} variant",
@@ -923,6 +971,531 @@ fn a_surplus_or_missing_alias_is_reported_with_its_pointer() {
     assert_eq!(
         issues,
         ["/settings/invented: ProxySettingsView does not declare this field"]
+    );
+}
+
+// --------------------------------------------------------------------------
+// The projection unions
+// --------------------------------------------------------------------------
+
+/// One tool per `ToolEffectKind`, with arguments and a typed result shaped the
+/// way the tool actually answers. The replay drives the projection with them,
+/// so the entry it validates is the one a client receives.
+const EFFECT_PROBES: &[(&str, &str, &str)] = &[
+    (
+        "mcp_fixture_echo",
+        r#"{"text":"hello"}"#,
+        r#"{"echo":"hello"}"#,
+    ),
+    (
+        "bash",
+        r#"{"command":"cargo test"}"#,
+        r#"{"stdout":"ok","stderr":""}"#,
+    ),
+    (
+        "edit",
+        r#"{"file_path":"/w/a.rs","old_string":"a","new_string":"b"}"#,
+        r#"{"file":"/w/a.rs","old_string":"a","new_string":"b","occurrences":[]}"#,
+    ),
+    (
+        "grep",
+        r#"{"pattern":"fn","path":"src"}"#,
+        r#"{"matches":"src/a.rs:1","match_count":1,"was_truncated":false}"#,
+    ),
+    (
+        "read_file",
+        r#"{"file_path":"/w/a.rs","offset":1,"limit":10}"#,
+        r#"{"file_path":"/w/a.rs","content":"x","num_lines":1,"start_line":1}"#,
+    ),
+    (
+        "todo",
+        r#"{"action":"write","todos":[{"id":"a","content":"ship","status":"in_progress","priority":"high","surplus":true}]}"#,
+        r#"{"todos":[]}"#,
+    ),
+    (
+        "write_file",
+        r#"{"file_path":"/w/a.rs","content":"x"}"#,
+        r#"{"file_path":"/w/a.rs","content":"x"}"#,
+    ),
+    (
+        "ask_user_question",
+        r#"{"questions":[{"question":"Ship?","header":"Release","options":[{"label":"Yes"}],"multiSelect":false,"hideOther":false}]}"#,
+        r#"{"answers":[{"question":"Ship?","answer":"Yes"}],"cancelled":false}"#,
+    ),
+    (
+        "web_search",
+        r#"{"query":"rust"}"#,
+        r#"{"query":"rust","answer":"a","sources":[]}"#,
+    ),
+    (
+        "web_fetch",
+        r#"{"url":"https://example.com/a"}"#,
+        r#"{"url":"https://example.com/a","content":"x","content_type":"text/html"}"#,
+    ),
+    (
+        "skill",
+        r#"{"name":"probe"}"#,
+        r#"{"name":"probe","content":"x"}"#,
+    ),
+    (
+        "task",
+        r#"{"task":"audit","agent":"explore"}"#,
+        r#"{"parentSessionId":"session-1","childSessionId":"session-child","publicSessionId":"session-child","status":"completed","result":"done"}"#,
+    ),
+];
+
+/// The history entries one turn's worth of engine events projects.
+fn projected_history(events: &[vibe_core::events::EngineEvent]) -> Vec<Value> {
+    use vibe_core::events::{EventEnvelope, ProjectionReducer};
+
+    let mut reducer = ProjectionReducer::for_turn(PROBE_SESSION, "turn-1");
+    for (index, event) in events.iter().enumerate() {
+        let envelope = EventEnvelope {
+            session_id: PROBE_SESSION.to_owned(),
+            turn_id: Some("turn-1".to_owned()),
+            emitted_at: 1_000 + index as u64,
+            event_id: index as u64 + 1,
+            event: event.clone(),
+        };
+        reducer
+            .apply(&envelope)
+            .unwrap_or_else(|error| unreachable!("the projection accepts {event:?}: {error}"));
+    }
+    reducer
+        .into_state()
+        .history
+        .iter()
+        .map(|entry| serde_json::to_value(entry).unwrap_or(Value::Null))
+        .collect()
+}
+
+/// Every `ToolEffectKind` is published with a detail that validates, which is
+/// what proves the union is served rather than merely declared.
+#[test]
+fn every_effect_kind_publishes_an_entry_that_validates_against_the_census() {
+    use vibe_core::events::{EngineEvent, ToolEffectKind};
+
+    let corpus = corpus();
+    let census = Census::new(&corpus);
+    let mut published = BTreeSet::new();
+    let mut issues = Vec::new();
+    for (tool, arguments, typed_result) in EFFECT_PROBES {
+        let history = projected_history(&[
+            EngineEvent::UserMessage {
+                content: "go".to_owned(),
+            },
+            EngineEvent::ToolCall {
+                call_id: "call-1".to_owned(),
+                name: (*tool).to_owned(),
+                arguments: (*arguments).to_owned(),
+            },
+            EngineEvent::ToolResult {
+                call_id: "call-1".to_owned(),
+                content: "done".to_owned(),
+                typed_result: serde_json::from_str(typed_result).unwrap_or(Value::Null),
+                display: Value::Null,
+                duration_ms: 1,
+                is_error: false,
+                cancelled: false,
+            },
+        ]);
+        let entry = history
+            .iter()
+            .find(|entry| entry["type"] == "effect")
+            .unwrap_or_else(|| unreachable!("{tool} projects an effect entry"));
+        census.validate("", "PublicEffectEntry", entry, &mut issues);
+        let kind = entry["detail"]["kind"]
+            .as_str()
+            .unwrap_or_else(|| unreachable!("{tool} publishes a detail kind"));
+        published.insert(kind.to_owned());
+        assert!(
+            entry["detail"].get("toolCallId").is_none()
+                && entry["detail"].get("arguments").is_none(),
+            "{tool} still publishes the port's own detail keys: {}",
+            entry["detail"]
+        );
+        // The subagent variant is the only one declaring a child session, and
+        // the delegation result is where the projection reads it.
+        if kind == ToolEffectKind::Subagent.label() {
+            assert_eq!(
+                entry["detail"]["childSessionId"], "session-child",
+                "{tool} published no child session: {}",
+                entry["detail"]
+            );
+        }
+    }
+    assert!(
+        issues.is_empty(),
+        "published effect entries diverge from the census: {issues:?}"
+    );
+    let expected = ToolEffectKind::ALL
+        .into_iter()
+        .map(|kind| kind.label().to_owned())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(published, expected, "not every effect kind was published");
+    eprintln!(
+        "app-server surface: effect details {}/{} kinds validate",
+        published.len(),
+        expected.len()
+    );
+}
+
+/// A settled effect carries the result display its state declares, and only a
+/// cancellation with no result may publish none.
+#[test]
+fn every_settled_effect_state_carries_the_display_its_variant_declares() {
+    use vibe_core::events::{EngineEvent, ToolEffectKind};
+
+    let corpus = corpus();
+    let census = Census::new(&corpus);
+    let call = EngineEvent::ToolCall {
+        call_id: "call-1".to_owned(),
+        name: "bash".to_owned(),
+        arguments: r#"{"command":"cargo test"}"#.to_owned(),
+    };
+    let result = |typed_result: Value, is_error: bool, cancelled: bool| EngineEvent::ToolResult {
+        call_id: "call-1".to_owned(),
+        content: "done".to_owned(),
+        typed_result,
+        display: Value::Null,
+        duration_ms: 1,
+        is_error,
+        cancelled,
+    };
+    let start = EngineEvent::UserMessage {
+        content: "go".to_owned(),
+    };
+    let mut issues = Vec::new();
+    for (label, event, expects_display) in [
+        (
+            "completed",
+            result(json!({"stdout": "ok"}), false, false),
+            true,
+        ),
+        ("failed", result(Value::Null, true, false), true),
+        (
+            "cancelled with a result",
+            result(json!({"stdout": ""}), false, true),
+            true,
+        ),
+        (
+            "cancelled with none",
+            result(Value::Null, false, true),
+            false,
+        ),
+    ] {
+        let history = projected_history(&[start.clone(), call.clone(), event]);
+        let entry = history
+            .iter()
+            .find(|entry| entry["type"] == "effect")
+            .unwrap_or_else(|| unreachable!("{label} projects an effect entry"));
+        census.validate("", "PublicEffectEntry", entry, &mut issues);
+        let display = &entry["state"]["display"];
+        assert_eq!(
+            !display.is_null(),
+            expects_display,
+            "{label} published the wrong display: {display}"
+        );
+        if expects_display {
+            let mut display_issues = Vec::new();
+            census.validate("", "EffectResultDisplay", display, &mut display_issues);
+            assert!(
+                display_issues.is_empty(),
+                "{label} published a divergent result display: {display_issues:?}"
+            );
+        }
+    }
+    assert!(
+        issues.is_empty(),
+        "settled effect entries diverge from the census: {issues:?}"
+    );
+    // The generic kind is the one a tool with no variant lands on, so the
+    // display contract above holds for every kind that shares its state union.
+    assert_eq!(
+        ToolEffectKind::from_tool_name("bash"),
+        ToolEffectKind::Shell
+    );
+}
+
+/// The eight notice variants, each in the form the projection publishes.
+fn notice_probes() -> Vec<(&'static str, vibe_core::events::NoticeDetail)> {
+    use vibe_core::events::{HookNotice, HookScope, HookSeverity, NoticeDetail};
+
+    let hook = || HookNotice {
+        scope: HookScope::PreTool,
+        tool_name: Some("bash".to_owned()),
+        tool_call_id: Some("call-1".to_owned()),
+        hook_name: Some("guard".to_owned()),
+        status: Some(HookSeverity::Ok),
+        content: Some("checked".to_owned()),
+    };
+    vec![
+        ("hook_run_started", NoticeDetail::HookRunStarted(hook())),
+        ("hook_run_completed", NoticeDetail::HookRunCompleted(hook())),
+        ("hook_started", NoticeDetail::HookStarted(hook())),
+        ("hook_completed", NoticeDetail::HookCompleted(hook())),
+        (
+            "agent_changed",
+            NoticeDetail::AgentChanged {
+                agent_name: "explore".to_owned(),
+            },
+        ),
+        (
+            "context_cleared",
+            NoticeDetail::ContextCleared {
+                plan_file_path: Some("/w/plan.md".to_owned()),
+            },
+        ),
+        (
+            "session_title_updated",
+            NoticeDetail::SessionTitleUpdated {
+                title: "Audit".to_owned(),
+            },
+        ),
+        (
+            "plan_review_started",
+            NoticeDetail::PlanReviewStarted {
+                file_path: "/w/plan.md".to_owned(),
+            },
+        ),
+        ("plan_review_ended", NoticeDetail::PlanReviewEnded),
+        (
+            "waiting_for_input",
+            NoticeDetail::WaitingForInput {
+                task_id: "task-1".to_owned(),
+                label: Some("Waiting".to_owned()),
+                predefined_answers: Some(vec!["Yes".to_owned()]),
+            },
+        ),
+        (
+            "scheduled_loop_fired",
+            NoticeDetail::ScheduledLoopFired {
+                loop_id: "loop-1".to_owned(),
+            },
+        ),
+    ]
+}
+
+#[test]
+fn every_notice_variant_validates_against_the_census() {
+    let corpus = corpus();
+    let census = Census::new(&corpus);
+    let union = corpus
+        .unions
+        .iter()
+        .find(|union| union.name == "NoticeDetail")
+        .unwrap_or_else(|| unreachable!("the corpus carries the notice union"));
+    let mut issues = Vec::new();
+    let mut covered = BTreeSet::new();
+    for (kind, detail) in notice_probes() {
+        let entry = json!({
+            "type": "notice",
+            "id": "notice-1",
+            "sessionId": PROBE_SESSION,
+            "turnId": "turn-1",
+            "createdAt": 1,
+            "updatedAt": 1,
+            "generationStatus": "completed",
+            "level": "info",
+            "message": "a notice",
+            "detail": detail,
+        });
+        assert_eq!(entry["detail"]["kind"], kind);
+        census.validate("", "PublicNoticeEntry", &entry, &mut issues);
+        let variant = union
+            .variants
+            .iter()
+            .find(|variant| variant.value.as_ref().and_then(Value::as_str) == Some(kind))
+            // The four hook kinds share one variant, whose discriminator is the
+            // literal set rather than a single value.
+            .map_or("HookNoticeDetail", |variant| variant.model.as_str());
+        covered.insert(variant.to_owned());
+    }
+    assert!(
+        issues.is_empty(),
+        "published notice entries diverge from the census: {issues:?}"
+    );
+    let expected = union
+        .variants
+        .iter()
+        .map(|variant| variant.model.clone())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(covered, expected, "a notice variant was never published");
+    eprintln!(
+        "app-server surface: notice details {}/{} variants validate",
+        covered.len(),
+        expected.len()
+    );
+}
+
+/// The callback detail, output and state unions, in both of their forms.
+#[test]
+fn every_callback_union_form_validates_against_the_census() {
+    use vibe_core::events::{
+        ApprovalDecision, ApprovalDecisionType, CallbackDetail, CallbackOutput, EffectDetail,
+        QuestionChoice, UserAnswer, UserQuestion, UserQuestionRequest, UserQuestionResult,
+    };
+
+    let corpus = corpus();
+    let census = Census::new(&corpus);
+    let request = UserQuestionRequest {
+        questions: vec![UserQuestion {
+            question: "Ship?".to_owned(),
+            header: "Release".to_owned(),
+            options: vec![QuestionChoice {
+                label: "Yes".to_owned(),
+                description: "Ship it".to_owned(),
+            }],
+            multi_select: false,
+            hide_other: false,
+        }],
+        footer_note: None,
+    };
+    let details = [
+        (
+            "approval",
+            CallbackDetail::Approval {
+                effect: Box::new(EffectDetail::for_encoded_call(
+                    "bash",
+                    r#"{"command":"cargo test"}"#,
+                )),
+                required_permissions: vec!["shell".to_owned()],
+                choices: ApprovalDecisionType::ALL.to_vec(),
+                related_entry_id: Some("entry-1".to_owned()),
+            },
+        ),
+        (
+            "user_input",
+            CallbackDetail::UserInput {
+                request: request.clone(),
+                related_entry_id: None,
+            },
+        ),
+    ];
+    let states = [
+        ("open", json!({"status": "open"})),
+        (
+            "answered with an approval",
+            json!({
+                "status": "answered",
+                "output": CallbackOutput::Approval {
+                    decision: ApprovalDecision { decision: ApprovalDecisionType::Approve },
+                    feedback: None,
+                },
+            }),
+        ),
+        (
+            "answered with an input",
+            json!({
+                "status": "answered",
+                "output": CallbackOutput::UserInput {
+                    result: UserQuestionResult {
+                        answers: vec![UserAnswer {
+                            question: "Ship?".to_owned(),
+                            answer: "Yes".to_owned(),
+                            is_other: false,
+                        }],
+                        cancelled: false,
+                    },
+                },
+            }),
+        ),
+        (
+            "cancelled",
+            json!({"status": "cancelled", "reason": "interrupted"}),
+        ),
+        (
+            "expired",
+            json!({"status": "expired", "reason": "timed out"}),
+        ),
+    ];
+
+    let mut issues = Vec::new();
+    for (detail_label, detail) in &details {
+        for (state_label, state) in &states {
+            let entry = json!({
+                "type": "callback",
+                "id": "callback-entry",
+                "sessionId": PROBE_SESSION,
+                "turnId": "turn-1",
+                "createdAt": 1,
+                "updatedAt": 1,
+                "generationStatus": "in_progress",
+                "callbackId": "callback-1",
+                "title": "Approve?",
+                "detail": detail,
+                "state": state,
+            });
+            let mut form = Vec::new();
+            census.validate("", "PublicCallbackEntry", &entry, &mut form);
+            if !form.is_empty() {
+                issues.push(format!(
+                    "{detail_label} / {state_label}: {}",
+                    form.join("; ")
+                ));
+            }
+        }
+    }
+    assert!(
+        issues.is_empty(),
+        "published callback entries diverge from the census:\n{}",
+        issues.join("\n")
+    );
+    eprintln!(
+        "app-server surface: callback unions {} details x {} states validate",
+        details.len(),
+        states.len()
+    );
+}
+
+/// A client that did not declare a callback kind is never asked one, which is
+/// what keeps the server from raising a question the client cannot close.
+#[test]
+fn a_callback_kind_the_client_did_not_declare_is_refused() {
+    let server = AppServer::default();
+    let mut connection = server.connect(TransportKind::InProcess);
+    let batch = connection.dispatch(&frame(
+        1,
+        "initialize",
+        &json!({
+            "clientInfo": {"name": "surface-parity", "version": "1"},
+            "capabilities": {
+                "callbackKinds": ["approval"],
+                "clientTools": [],
+                "disabledNotifications": []
+            }
+        }),
+    ));
+    assert!(matches!(
+        decode_frame(&batch.outbound[0]).expect("handshake answer"),
+        Envelope::Success(_)
+    ));
+    connection.dispatch(
+        &serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }))
+        .expect("initialized frame"),
+    );
+    connection.dispatch(&frame(
+        2,
+        "session/start",
+        &json!({"sessionId": PROBE_SESSION, "workingDirectory": "/workspace"}),
+    ));
+
+    let refused = connection.request_callback(
+        PROBE_SESSION,
+        "turn-1",
+        vibe_core::events::CallbackKind::UserInput,
+        "Ship?",
+    );
+    assert!(
+        matches!(
+            refused,
+            Err(crate::server::ServerError::UnsupportedClientCallbackKind(_))
+        ),
+        "a user-input callback reached a client that declared only approvals: {refused:?}"
     );
 }
 
