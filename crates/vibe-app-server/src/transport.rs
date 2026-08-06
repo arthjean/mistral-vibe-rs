@@ -797,6 +797,61 @@ mod tests {
             .expect("server exits cleanly");
     }
 
+    /// A connection the server gives up on says so before it goes quiet, so a
+    /// client learns why the stream stopped rather than only that it did.
+    #[tokio::test]
+    async fn a_fatal_transport_failure_publishes_an_error_before_the_stream_ends() {
+        let (client, server_io) = duplex(4096);
+        let (client_read, mut client_write) = tokio::io::split(client);
+        let (server_read, server_write) = tokio::io::split(server_io);
+        let server_task = tokio::spawn(serve_stdio(
+            AppServer::default(),
+            StdioTransport::new(BufReader::new(server_read), server_write),
+            Arc::new(EchoTurnDriver::new("answer")),
+        ));
+        let mut responses = BufReader::new(client_read).lines();
+        for request in [
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1","entrypoint":"programmatic","terminalEmulator":"unknown"},"capabilities":{}}}"#,
+            r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#,
+            // An empty frame is unreadable rather than merely invalid, which is
+            // what the transport reports as fatal.
+            "",
+        ] {
+            client_write
+                .write_all(request.as_bytes())
+                .await
+                .expect("request bytes");
+            client_write
+                .write_all(b"\n")
+                .await
+                .expect("request newline");
+        }
+        assert!(responses.next_line().await.expect("initialize").is_some());
+        let frame = responses
+            .next_line()
+            .await
+            .expect("error read")
+            .expect("the failure is published");
+        let frame = serde_json::from_str::<serde_json::Value>(&frame).expect("error JSON");
+        assert_eq!(frame["method"], "error");
+        assert!(
+            frame["params"]["error"]["message"]
+                .as_str()
+                .is_some_and(|message| !message.is_empty()),
+            "the failure names itself: {frame}"
+        );
+        assert!(frame["params"]["error"]["code"].is_null());
+        assert!(frame["params"]["error"]["details"].is_null());
+        // The stream stops right after, which is the point of sending it.
+        assert!(responses.next_line().await.expect("stream end").is_none());
+        drop(client_write);
+        drop(responses);
+        assert!(
+            server_task.await.expect("server task joins").is_err(),
+            "the connection ends on the failure it published"
+        );
+    }
+
     #[tokio::test]
     async fn stdio_transport_loss_closes_orphaned_resource_sessions() {
         let backend = Arc::new(CleanupResourceBackend::default());
