@@ -3,7 +3,7 @@
     "file": "tasks/prd-app-server-parity.md",
     "title": "App-Server Surface Parity",
     "created_at": "2026-08-05",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -53,11 +53,12 @@
     },
     {
       "id": "EP-029",
-      "title": "Project Links, Identity, Telemetry and Worktrees",
-      "status": "TODO",
+      "title": "Project Links and Telemetry",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3,
+      "stories_in_review": 0
     }
   ],
   "stories": [
@@ -299,45 +300,45 @@
     },
     {
       "id": "US-096",
-      "title": "Add identity/read, telemetry/record and workspace/worktrees/list",
+      "title": "Add telemetry/record",
       "epic": "EP-029",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-090"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-097",
       "title": "Add the projectLinks read surface",
       "epic": "EP-029",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-096"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-098",
       "title": "Add the projectLinks mutation surface and re-score parity",
       "epic": "EP-029",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-097"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     }
   ]
 }

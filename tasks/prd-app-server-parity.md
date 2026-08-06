@@ -5,13 +5,14 @@
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
-| 1.0 | 2026-08-05 | Arthur Jean | Initial PRD from the measured app-server audit against the Python reference: 114 contract points with 87 reproduced, 7 invented names, 8 absent notifications, and an `initialize` handshake that rejects a conforming reference client |
+| 1.0 | 2026-08-05 | Arthur Jean | Initial PRD from the measured app-server audit against the Python reference: 112 contract points with 87 reproduced, 7 invented names, 8 absent notifications, and an `initialize` handshake that rejects a conforming reference client |
+| 1.1 | 2026-08-06 | Arthur Jean | Corrected the inventory count from the captured corpus: the pinned checkout declares 89 `SERVER_METHODS`, not 91, so every 91 in this document became 89 and the surface became 112 contract points. `identity/read` and `workspace/worktrees/list` left US-096 and the epic title: neither exists at commit `68ff32e`, both were added upstream afterwards, and routing them would mean inventing a contract or re-pinning, which is a Non-Goal here. `docs/parity.md` carries the divergence row |
 
 ## Problem Statement
 
 1. **A conforming reference client cannot complete the handshake.** `ClientCapabilities` declares three fields upstream ([vibe/app_server/_connection_protocol.py:36](/home/arthur/dev/mistral-vibe/vibe/app_server/_connection_protocol.py)); the Rust struct declares two and carries `deny_unknown_fields` (`crates/vibe-protocol/src/lib.rs:391`). Any client sending `capabilities.disabledNotifications`, which the reference client library always may, has its `initialize` answered with `invalid_params`. No later parity work is observable until this is fixed, because no reference client reaches the second frame.
 
-2. **The method inventory diverges by 19 absences and 3 inventions.** `SERVER_METHODS` upstream holds 91 names ([vibe/app_server/protocol.py:82](/home/arthur/dev/mistral-vibe/vibe/app_server/protocol.py)); the Rust constant holds 82 (`crates/vibe-protocol/src/lib.rs:27`). Absent: `identity/read`, `telemetry/record`, `workspace/worktrees/list`, the 9 `projectLinks/*` and, outside `SERVER_METHODS`, the 7 `clientTool/*` server-to-client methods of `ClientToolMethod`. Invented: `config/batchWrite`, `connectors/toggle`, `mcp/auth/complete`, none of which appears anywhere in the reference tree. `ServerCapabilities.methods` therefore advertises a set that is neither a subset nor a superset of the contract.
+2. **The method inventory diverges by 17 absences and 3 inventions.** `SERVER_METHODS` upstream holds 89 names ([vibe/app_server/protocol.py:82](/home/arthur/dev/mistral-vibe/vibe/app_server/protocol.py)); the Rust constant holds 82 (`crates/vibe-protocol/src/lib.rs:27`). Absent: `telemetry/record`, the 9 `projectLinks/*` and, outside `SERVER_METHODS`, the 7 `clientTool/*` server-to-client methods of `ClientToolMethod`. `identity/read` and `workspace/worktrees/list` are not in this count: neither name exists at the pinned commit, both having been added upstream afterwards, so routing them would mean inventing a contract or re-pinning. Invented: `config/batchWrite`, `connectors/toggle`, `mcp/auth/complete`, none of which appears anywhere in the reference tree. `ServerCapabilities.methods` therefore advertises a set that is neither a subset nor a superset of the contract.
 
 3. **Eight of fifteen notifications are never emitted, and four names are invented.** Absent: `session/snapshot`, `session/updated`, `session/statsUpdated`, `session/contextCleared`, `turn/retrying`, `runtime/updated`, `mcp/authUrl`, `warning`. The consequences compound: `_turns.py:772` emits `session/updated` on every status transition, `_turns.py:742` emits `session/statsUpdated` on every turn, and `server.py:642` emits `runtime/updated` after any response marked `runtime_updated`. Without those three, session status and token accounting are never pushed and a client must poll. That is consistent with `crates/vibe-app-server/src/server/projection.rs:68`, which hard-codes `"model": null, "agent": null, "tokenUsage": null` into every published session. Invented in their place: `mcp/updated`, `workspace/trust/updated`, `connectors/updated`, `shell/updated`.
 
@@ -23,7 +24,7 @@
 
 7. **`invalid_params` carries no structured detail.** The reference fills `data` with `{errorCount, issues:[{path, message}]}` ([server.py:613](/home/arthur/dev/mistral-vibe/vibe/app_server/server.py)); grep for `errorCount` across `crates/` returns nothing. A client cannot point at the offending field.
 
-8. **Nothing measures any of the above.** `scripts/parity/` holds `oracle.py`, `tool_surface.py` and `config_surface.py`, and none of them covers the protocol. `docs/parity.md` scores the app-server 78 by counting method names, which is why problems 3 through 7 do not appear in it, and why `identity/read` and `workspace/worktrees/list` are absent from the document entirely. `cargo test --workspace --all-features` passes at full green with a handshake that rejects a conforming client.
+8. **Nothing measures any of the above.** `scripts/parity/` holds `oracle.py`, `tool_surface.py` and `config_surface.py`, and none of them covers the protocol. `docs/parity.md` scores the app-server 78 by counting method names, which is why problems 3 through 7 do not appear in it, and why the count it diffs against is itself unverified. `cargo test --workspace --all-features` passes at full green with a handshake that rejects a conforming client.
 
 **Why now:** `docs/parity.md` ranks missing protocol notifications third in execution order, ahead of everything that follows, on the stated ground that everything written afterward emits or consumes them. That reasoning applies with more force to the entry detail unions of problem 4: `EffectDetail` and `NoticeDetail` cross the wire in every history entry and are already written into persisted sessions, so each week of deferral multiplies the traces to migrate, exactly as it did for tool names in rank 1. The two parts that reached 95 in this repository did so because a differential oracle measures them; the instrument that makes this work verifiable is a direct reuse of `scripts/parity/config_surface.py` and `crates/vibe-core/src/config/surface_parity_tests.rs`, both of which already handle the pinned checkout, the conditional live probe and the committed corpus.
 
@@ -43,12 +44,12 @@ One constraint shaped the plan. `NOTICE` declares that no upstream implementatio
 
 | Goal | Month-1 Target | Month-6 Target |
 |------|---------------|----------------|
-| Reproduce the method inventory | 91 of 91 reference methods in `SERVER_METHODS`, 0 invented names inside it | 91 of 91 maintained, every local extension listed in `LOCAL_EXTENSION_METHODS` with a recorded divergence entry |
+| Reproduce the method inventory | 89 of 89 reference methods in `SERVER_METHODS`, 0 invented names inside it | 89 of 89 maintained, every local extension listed in `LOCAL_EXTENSION_METHODS` with a recorded divergence entry |
 | Interoperate with a conforming client | `initialize` accepts every field of the reference `ClientCapabilities`, 0 handshake rejections on valid input | 0 maintained, asserted by a corpus scenario |
 | Reproduce the notification contract | 15 of 15 reference notifications emitted, 0 invented names | 15 of 15 maintained |
 | Type the projection unions | 12 of 12 `EffectDetail` kinds and 8 of 8 `NoticeDetail` kinds published | 0 entry details serialized as an untyped value |
-| Make envelopes validate | 91 of 91 responses validating against the reference model under `extra="forbid"` | 0 methods answering with a shell payload |
-| Make conformance mechanically enforced | Corpus replays at least 91 method shapes plus 15 notification shapes and fails on any divergence | Oracle wired into CI, no wire model changed without a corpus entry |
+| Make envelopes validate | 89 of 89 responses validating against the reference model under `extra="forbid"` | 0 methods answering with a shell payload |
+| Make conformance mechanically enforced | Corpus replays at least 89 method shapes plus 15 notification shapes and fails on any divergence | Oracle wired into CI, no wire model changed without a corpus entry |
 
 ## Target Users
 
@@ -82,7 +83,7 @@ Key findings that informed this PRD:
 
 ### Reference Contract
 
-- The full surface is 114 contract points: 91 `SERVER_METHODS`, 7 `clientTool/*`, 15 server-to-client notifications and 1 server-to-client request (`callback/call`). Lifecycle methods (`initialize`, `initialized`, `shutdown`, `exit`) sit outside the negotiated inventory in both implementations. The port reproduces 87 of the 114 by name, or 76 percent.
+- The full surface is 112 contract points: 89 `SERVER_METHODS`, 7 `clientTool/*`, 15 server-to-client notifications and 1 server-to-client request (`callback/call`). Lifecycle methods (`initialize`, `initialized`, `shutdown`, `exit`) sit outside the negotiated inventory in both implementations. The port reproduces 87 of the 112 by name, or 78 percent.
 - `extra="forbid"` on `ProtocolModel` ([_model.py:10](/home/arthur/dev/mistral-vibe/vibe/app_server/_model.py)) makes the contract symmetric: a surplus field fails validation exactly like a missing required field. This is what turns `{counts, connectors}` on `connectors/read` into a hard incompatibility rather than a tolerated extension.
 - Notifications are sequenced, not fire-and-forget. `_sequence_notification` ([server.py:1185](/home/arthur/dev/mistral-vibe/vibe/app_server/server.py)) assigns a per-session monotonic `eventId` to every `EventNotificationParams` and rewrites the embedded `state.eventId` for snapshot and handoff params. `ClientProjection._next_event_id` ([events.py:294](/home/arthur/dev/mistral-vibe/vibe/app_server/events.py)) raises on a gap, so an implementation that skips a notification breaks the client's sequence rather than degrading it.
 - Attachment buffers rather than drops. `_begin_attachment` / `_finish_attachment` ([server.py:576](/home/arthur/dev/mistral-vibe/vibe/app_server/server.py)) queue notifications raised while a session attaches and flush them once attached, and `_redeliver_open_callbacks` replays open callbacks to the newly attached client.
@@ -134,7 +135,7 @@ These commands must pass for every user story:
 
 Stand up the differential instrument that measures the app-server wire contract, then close the two defects that make the port unreachable for a conforming client: the rejected handshake and the advertised inventory.
 
-**Definition of Done:** `scripts/parity/app_server_surface.py` captures the reference surface, the committed corpus replays unconditionally in CI, `initialize` accepts every reference capability field, `invalid_params` carries structured detail, and `SERVER_METHODS` contains exactly the 91 reference names.
+**Definition of Done:** `scripts/parity/app_server_surface.py` captures the reference surface, the committed corpus replays unconditionally in CI, `initialize` accepts every reference capability field, `invalid_params` carries structured detail, and `SERVER_METHODS` contains exactly the 89 reference names.
 
 #### US-079: Capture the reference app-server surface into a committed corpus
 
@@ -145,7 +146,7 @@ Stand up the differential instrument that measures the app-server wire contract,
 **Dependencies:** None
 
 **Acceptance Criteria:**
-- [ ] Given the pinned checkout, when `scripts/parity/app_server_surface.py` runs, then it writes `crates/vibe-app-server/tests/app-server-surface/corpus.json` recording the 91 `SERVER_METHODS` names, the 7 `ClientToolMethod` values, the 15 notification names and the 12 `ProtocolErrorCode` values
+- [ ] Given the pinned checkout, when `scripts/parity/app_server_surface.py` runs, then it writes `crates/vibe-app-server/tests/app-server-surface/corpus.json` recording the 89 `SERVER_METHODS` names, the 7 `ClientToolMethod` values, the 15 notification names and the 12 `ProtocolErrorCode` values
 - [ ] Given each of the 250 protocol models, when the census is written, then each entry carries the model name, every field's camelCase alias, its required flag and its declared type kind, and carries no description, docstring or other reference-authored prose
 - [ ] Given a discriminated union such as `EffectDetail` or `NoticeDetail`, when the census walks it, then every variant is recorded with its discriminator field and value, and the walk reaches all 250 models transitively from the top-level params and response models
 - [ ] Given the enum vocabularies, when the capture runs, then `MCPSourceStatus`, `PublicRetryCategory`, `TurnErrorCode`, `ToolEffectKind`, `AccountStatus`, `PublicTurnStopReason` and `PublicEntryGenerationStatus` are recorded with their exact wire values
@@ -333,7 +334,7 @@ Replace the untyped `detail` values on history entries with the reference discri
 
 Make every response body validate against its reference model, and replace the shell payloads with live state.
 
-**Definition of Done:** All 91 method responses validate under `extra="forbid"`, and `runtime/read`, `stats/read` and `account/read` report real state.
+**Definition of Done:** All 89 method responses validate under `extra="forbid"`, and `runtime/read`, `stats/read` and `account/read` report real state.
 
 #### US-090: Report live runtime and statistics
 
@@ -398,7 +399,7 @@ Make every response body validate against its reference model, and replace the s
 - [ ] Given `session/settings/update`, when it is called, then it accepts exactly `sessionId`, `maxTurns` and `maxTokens`, and a call carrying a field the reference does not declare is answered with `invalid_params`
 - [ ] Given `session/start`, `session/resume` and `session/continue`, when any is called with `localWorkspaceSelection`, then the existing or create selection is honored
 - [ ] Given a published `PublicSession`, when `model` and `agent` are read, then they carry the session's real model name and agent summary rather than null
-- [ ] Given every method in the corpus, when the replay compares its response keys against the census, then all 91 validate with zero missing required and zero surplus aliases
+- [ ] Given every method in the corpus, when the replay compares its response keys against the census, then all 89 validate with zero missing required and zero surplus aliases
 
 ---
 
@@ -442,27 +443,23 @@ Implement the server-to-client tool delegation that lets an editor host file acc
 
 ---
 
-### EP-029: Project Links, Identity, Telemetry and Worktrees
+### EP-029: Project Links and Telemetry
 
 Add the remaining absent method families and re-score the parity document from the measured result.
 
-**Definition of Done:** All 19 previously absent methods are routed and validating, and `docs/parity.md` records the app-server score from a corpus run rather than a name count.
+**Definition of Done:** All 17 previously absent methods are routed and validating, and `docs/parity.md` records the app-server score from a corpus run rather than a name count.
 
-#### US-096: Add `identity/read`, `telemetry/record` and `workspace/worktrees/list`
+#### US-096: Add `telemetry/record`
 
-**Description:** As an editor integration author, I want the account identity, telemetry sink and worktree listing so that my client can show who is signed in and which worktrees a session spans.
+**Description:** As an editor integration author, I want the telemetry sink so that my client can record its own events against the session it drives.
 
 **Priority:** P1
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-090
 
 **Acceptance Criteria:**
-- [ ] Given a configured API key, when `identity/read` is called, then it answers `{identity}` carrying `id`, `email`, `firstName`, `lastName`, `workspace` and `organization`
-- [ ] Given no configured key or an unreachable identity endpoint, when `identity/read` is called, then it answers with a null identity rather than failing the request
 - [ ] Given `telemetry/record`, when a client records an event, then it accepts `sessionId`, `name`, `properties` and `correlateLastRequest`, and answers empty
 - [ ] Given telemetry disabled by configuration, when `telemetry/record` is called, then it answers empty and records nothing
-- [ ] Given a session in a git repository with linked worktrees, when `workspace/worktrees/list` is called, then each entry carries `name`, `root`, `cwd`, `repoRoot` and `branch`
-- [ ] Given a session outside a git repository, when `workspace/worktrees/list` is called, then it answers an empty list rather than an error
 
 #### US-097: Add the `projectLinks` read surface
 
@@ -493,12 +490,12 @@ Add the remaining absent method families and re-score the parity document from t
 - [ ] Given `projectLinks/link` and `projectLinks/save`, when either is called, then the answer carries `{link}`, and `save` rejects when `expectedRepoUrl` does not match the root's current remote
 - [ ] Given `projectLinks/unlink`, when called on a linked root, then the answer reports the removal, and when called on an unlinked root, then it answers `unlinked: true` rather than failing
 - [ ] Given a store deletion that fails, when unlinking, then the failure is reported on the response rather than being swallowed
-- [ ] Given the full corpus, when the replay runs after this story, then it reports 91 of 91 methods, 15 of 15 notifications and 0 invented names inside the inventory
+- [ ] Given the full corpus, when the replay runs after this story, then it reports 89 of 89 methods, 15 of 15 notifications and 0 invented names inside the inventory
 - [ ] Given `docs/parity.md`, when the change lands, then the app-server row states the score, the corpus run it comes from and the command that reproduces it, and the Execution order table marks ranks 3 and 8 done
 
 ## Functional Requirements
 
-- FR-01: `SERVER_METHODS` must contain exactly the 91 method names the reference declares, in sorted order, with no additions.
+- FR-01: `SERVER_METHODS` must contain exactly the 89 method names the reference declares, in sorted order, with no additions.
 - FR-02: Method names this port routes but the reference does not declare must live in `LOCAL_EXTENSION_METHODS`, must be absent from `ServerCapabilities.methods`, and must each have a row in the Accepted divergences table of `docs/parity.md`.
 - FR-03: `initialize` must accept every field the reference `ClientCapabilities` declares, and must continue to reject a field it does not declare.
 - FR-04: The server must honor a client's `disabledNotifications` for every notification except a sequenced event notification, and muting must not advance or skip the per-session event watermark.
@@ -516,7 +513,7 @@ Add the remaining absent method families and re-score the parity document from t
 
 ## Non-Functional Requirements
 
-- **Conformance:** 91 of 91 methods, 15 of 15 notifications, 7 of 7 client-tool methods and 12 of 12 error codes replayed with zero divergence. Zero invented names inside `SERVER_METHODS`.
+- **Conformance:** 89 of 89 methods, 15 of 15 notifications, 7 of 7 client-tool methods and 12 of 12 error codes replayed with zero divergence. Zero invented names inside `SERVER_METHODS`.
 - **Performance:** The corpus replay adds at most 5 seconds to `cargo test --workspace --all-features` on the CI runner. Notification emission adds at most 1 millisecond of median latency per event to a turn, measured by `crates/vibe-app-server/src/streaming_benchmark.rs`.
 - **Reliability:** A missing or off-pin reference checkout never fails `cargo test`; it skips exactly one live probe and prints why. Corpus replay is deterministic: two runs on the same commit produce byte-identical output.
 - **Compatibility:** A session persisted before this PRD must load and project after it, verified by a fixture session in the existing storage tests. Zero `vibe-cli` or `vibe-acp` call sites left reading a key or listening for a notification name that is no longer published.
@@ -590,10 +587,10 @@ Add the remaining absent method families and re-score the parity document from t
 
 | Metric | Baseline (current) | Target | Timeframe | How Measured |
 |--------|-------------------|--------|-----------|-------------|
-| Reference contract points reproduced | 87 of 114 (76%) | 114 of 114 | Month-1 | `cargo test -p vibe-app-server --all-features app_server_surface_parity_tests -- --nocapture` conforming count |
-| Methods in `SERVER_METHODS` matching the reference | 79 of 91, plus 3 invented | 91 of 91, 0 invented | Month-1 | Corpus replay, inventory family |
+| Reference contract points reproduced | 87 of 112 (78%) | 112 of 112 | Month-1 | `cargo test -p vibe-app-server --all-features app_server_surface_parity_tests -- --nocapture` conforming count |
+| Methods in `SERVER_METHODS` matching the reference | 79 of 89, plus 3 invented | 89 of 89, 0 invented | Month-1 | Corpus replay, inventory family |
 | Notifications emitted under reference names | 7 of 15, plus 4 invented | 15 of 15, 0 invented | Month-1 | Corpus replay, notification family |
-| Responses validating under `extra="forbid"` | Not measured; 6 known divergent on inspection | 91 of 91 | Month-1 | Corpus replay, envelope family |
+| Responses validating under `extra="forbid"` | Not measured; 6 known divergent on inspection | 89 of 89 | Month-1 | Corpus replay, envelope family |
 | `EffectDetail` kinds published | 1 of 12 | 12 of 12 | Month-1 | Corpus replay, union family |
 | `NoticeDetail` kinds published | 2 of 8 | 8 of 8 | Month-1 | Corpus replay, union family |
 | Methods answering with a shell payload | 3 (`runtime/read`, `stats/read`, `account/read`) | 0 | Month-1 | US-090 criteria plus corpus replay |
@@ -604,7 +601,6 @@ Add the remaining absent method families and re-score the parity document from t
 ## Open Questions
 
 - Does any client outside this repository depend on the four invented notification names (`mcp/updated`, `workspace/trust/updated`, `connectors/updated`, `shell/updated`)? Arthur to confirm before US-086 lands; if yes, they become local extensions rather than removals.
-- Should `identity/read` cache the identity for the session lifetime or re-fetch per call? The reference re-fetches with an internal guard; engineering to decide before US-096, since a per-call fetch adds network latency to a method a TUI may poll.
 - Is the `projectLinks` store expected to interoperate with the file the Python client writes, or may it use its own format? Arthur to decide before US-097; interoperation is the stated goal of this PRD but the store is not part of the protocol surface the corpus measures.
 - Should the corpus record request parameter shapes for the 7 `clientTool/*` methods as server-issued requests, given the replay has no client to answer them? Engineering to decide during US-079; recording the shape without replaying the round trip is the cheaper option and still catches a field rename.
 [/PRD]
