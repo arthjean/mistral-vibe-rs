@@ -36,10 +36,11 @@
     {
       "id": "EP-027",
       "title": "Response Envelopes and Live Runtime",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 4,
+      "stories_in_review": 0
     },
     {
       "id": "EP-028",
@@ -215,57 +216,57 @@
       "id": "US-090",
       "title": "Report live runtime and statistics",
       "epic": "EP-027",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-084"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-091",
       "title": "Publish the complete ConfigView and the reference config envelopes",
       "epic": "EP-027",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-090"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-092",
       "title": "Publish the reference MCP and connector vocabularies",
       "epic": "EP-027",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-090"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-093",
       "title": "Align the remaining request and response envelopes",
       "epic": "EP-027",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-090"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-094",
