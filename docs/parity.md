@@ -7,7 +7,9 @@ with the execution order derived from it.
 |---|---|
 | First audit | 2026-08-04, Rust `5617d0c` |
 | Last remeasure | 2026-08-06, Rust `d4c6dcb` plus the EP-029 changes. Only the four parts EP-029 touched were remeasured, so the weighted total below predates them |
-| Python reference | `68ff32e`, package version 2.23.3 |
+| Python reference | `68ff32e`, reference package version 2.23.3, against this port's `[workspace.package] version` 2.23.1 |
+| Pin sources | `vibe_core::parity::REFERENCE_COMMIT` and `EXPECTED_COMMIT` in `scripts/parity/pin.py`, held equal by `crates/vibe-core/src/parity/parity_tests.rs` |
+| Restore an off-pin checkout | `git -C /home/arthur/dev/mistral-vibe checkout 68ff32e6a92e80a874c8153312f0aa8ae4955477` |
 | Weighted score | 76/100 (was 74 at the last remeasure, 65 at first audit) |
 
 ## Method
@@ -46,8 +48,8 @@ replay it, and the app-server protocol the third, through
 |---|---|---|
 | Distribution, updates, installers | 95 | `install.sh`/`install.ps1`, archives, checksums, rollback, shell completions, `action.yml`. Exceeds upstream PyInstaller packaging |
 | Slash commands | 95 | 26 of 27 aliases identical. Missing `/retry` (and its `turn/retrying` notification) |
-| Built-in tools | 95 | **Measured by differential oracle**: 12/12 names and 12/12 schemas on the base surface, 16/16 under the managed shell rollout, 10/10 on the Windows families, 38/38 against the committed digest. Residual: 2 argument fixtures of 92 rejected here and accepted upstream (`edit/replace_all`, `grep/use_default_ignore` boolean coercion). Descriptions are compared for presence only, never text, as `NOTICE` requires |
-| Tool infrastructure (registry, schemas, filtering) | 95 | `object_schema` removed, `apply_defaults` applies schema defaults, `validate_arguments` understands `$ref`, `anyOf`, `items` and array-form `type`, proven by 92 replayed fixtures. `matching.rs` matches globs, `re:` prefixes and is case-insensitive |
+| Built-in tools | 95 | **Measured by two differential oracles**. Surface: 12/12 names and 12/12 schemas on the base surface, 16/16 under the managed shell rollout, 10/10 on the Windows families, 38/38 against the committed digest, and 92/92 argument fixtures now returning the reference verdict. Execution: 12/41 cases match the reference over the committed fixture tree; the 29 divergent ones are ledgered against US-112 through US-115, which is the gap EP-034 closes. Descriptions and error message text are compared for presence only, never text, as `NOTICE` requires |
+| Tool infrastructure (registry, schemas, filtering) | 95 | `object_schema` removed, `apply_defaults` applies schema defaults, `validate_arguments` understands `$ref`, `anyOf`, `items` and array-form `type`. `coerce_and_validate` reproduces the reference Pydantic lax coercion before dispatch, so a handler reads the coerced value, proven by 92/92 replayed fixtures with 0 wrongly accepted and 0 stricter. `matching.rs` matches globs, `re:` prefixes and is case-insensitive |
 | Worktree (`--worktree`) | 90 | `startup/worktree.rs`, full create/reuse/cleanup/branch lifecycle |
 | Managed shell and terminals | 90 | `TerminalManager` plus a rich shell policy analyzer, and the `bash_*`, `git_bash` and `powershell` families now publish conformant schemas. Execution equivalence is not yet proven by an oracle |
 | CLI surface (flags, modes) | 90 | Every upstream flag present, and tool filtering now matches globs and `re:` prefixes. Missing the `vibe mcp ...` subcommand |
@@ -115,6 +117,8 @@ what in the repository holds it in place.
 
 | Part | Reason | Evidence |
 |---|---|---|
+| Tool description text | `NOTICE` forbids shipping upstream prose, so the 13.8 KB of reference directive text has no byte-identical counterpart here and never will. Descriptions are held to directive coverage and compared for presence only. **This does not cap the score in this document**, measured 2026-08-06 and settled two ways. By stated method: the scoring unit above is names and schemas, and description text is not among the inventories it diffs. By construction: the instrument that produces the tool scores replaces every description with `<described>` in both the capture and the replay, so prose carries exactly zero weight and no amount of it can move the number. The residue is therefore a licensing fact with no scoring consequence here | `DESCRIBED` in `scripts/parity/tool_surface.py` and `crates/vibe-app-server/src/tool_surface_parity_tests.rs`, which substitute every description before diffing, plus the `## Method` section above |
+| A third-party score weighing description text | Not determinable from this repository, and recorded as such rather than left open. `tasks/prd-tool-surface-parity.md` records the externally reported 35/100 score as weighing names and schemas "in an unpublished way", so no method exists here to confirm or refute against. The exposure is bounded instead of guessed: measured at the pinned commit, the reference publishes 13 776 bytes of tool prompt prose and 1 735 bytes of parameter descriptions against 3 789 bytes of description-free schema and 94 bytes of names. A byte-weighing external metric would therefore hold roughly four fifths of the tool contract permanently out of reach, which would make that metric a measure of licensing posture rather than of engineering parity. Chasing it is refused on that basis | `vibe/core/tools/builtins/prompts/*.md` at `68ff32e`, byte-counted out of tree; no prose is stored here |
 | Telemetry | The envelope already diverges intentionally from the upstream open-properties format | `CHANGELOG.md`, telemetry entry |
 | `telemetry/record` keeps the event locally | The reference hands a client-authored name and free-form properties to the agent loop's telemetry client, which ships them under the open-properties envelope this port does not publish. The method accepts and validates exactly the reference parameters and honors `enable_telemetry`; the event is kept on `diagnostics/logs/read` instead of being shipped, and shipping it needs the envelope divergence above resolved first | `AppServer::telemetry_record` in `crates/vibe-app-server/src/server.rs`, asserted by `a_recorded_client_event_is_kept_only_while_telemetry_is_enabled` |
 | `identity/read` and `workspace/worktrees/list` are absent | Neither name exists anywhere in the reference tree at the pinned commit `68ff32e`; both were added upstream afterwards. Routing them would mean inventing a contract or re-pinning, and a re-pin regenerates all three corpora as its own change | `crates/vibe-app-server/tests/app-server-surface/corpus.json`, whose 89 methods are the whole pinned inventory |
@@ -167,14 +171,37 @@ entry that has gone stale. Run it with `cargo test -p vibe-app-server
 --all-features app_server_surface_parity_tests -- --nocapture`, which is where
 the app-server score above comes from.
 
+Tool *execution* is the fourth, and the first oracle in this repository that
+compares output rather than declarations. `scripts/parity/tool_execution.py`
+drives the reference's `read_file`, `grep`, `write_file`, `edit` and `todo` over
+the fixture tree at `crates/vibe-app-server/tests/tool-execution/tree` and
+records, per case, the typed result, the text the agent loop would send to the
+model, and whether the call returned or raised.
+`crates/vibe-app-server/tests/tool-execution/corpus.json` is that capture,
+committed on stricter terms than the others: a captured string survives verbatim
+only when it is a value the case supplied, a normalized path or an
+identifier-shaped token, and everything else, including every error message, is
+committed as a SHA-256 digest. `tool_execution_parity_tests` replays it
+unconditionally against this build and reports **12 of 41 cases matching**, with
+the remaining 29 held in a ledger that names the story closing each one: US-112
+for `grep`, US-113 for `read_file`, US-114 for `write_file` and `edit`, US-115
+for `todo`. A divergence outside the ledger fails the suite, and so does a ledger
+entry whose divergence has been fixed. Reproduce with `cargo test -p
+vibe-app-server --all-features tool_execution_parity_tests -- --nocapture`.
+
+The capture reads the pinned commit with `git archive` instead of requiring the
+checkout to sit on it, so it never moves HEAD, creates a branch or adds a
+worktree. A workstation whose checkout has moved on can still capture.
+
 Extend the harness before writing each phase, not after.
 
-The next ceiling is the harness itself, not a rank in the list. It compares
-contracts, not behavior: it proves `bash` publishes the right schema, not that
-`bash` produces the same output. Two blind spots follow from that. Tool bodies
-are unproven, and descriptions are compared for presence only, so the 13.8 KB of
-upstream directive text has no measured counterpart. Closing those needs an
-output oracle, which is a different instrument from the surface diff.
+One blind spot remains, and it is a licensing one rather than an engineering one:
+descriptions are compared for presence only, so the 13.8 KB of upstream directive
+text has no measured counterpart, and error message text is compared by presence
+for the same reason. It does not cap the score above, which weighs names and
+schemas and never reads a description; whether it caps a third-party score whose
+method is unpublished cannot be determined from here. Both halves are settled
+under accepted divergences.
 
 ## Related
 
