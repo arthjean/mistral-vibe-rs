@@ -1,0 +1,873 @@
+{
+  "cases": [
+    {
+      "arguments": {
+        "file_path": "alpha.txt"
+      },
+      "case": "whole-file",
+      "modelText": {
+        "digest": "sha256:04be2215283623fea8afa9b52c634c32",
+        "length": 248
+      },
+      "outcome": "returned",
+      "tool": "read_file",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:e5100fc2e3d4b8e8ac8b9c9dc083fedf",
+          "length": 103
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 5,
+        "requested_limit": 2000,
+        "requested_offset": null,
+        "start_line": 1,
+        "total_lines": 5,
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "alpha.txt",
+        "offset": 3
+      },
+      "case": "offset",
+      "modelText": {
+        "digest": "sha256:9ac5f586ce76009dc978562cb1e0baa1",
+        "length": 205
+      },
+      "outcome": "returned",
+      "tool": "read_file",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:394b57eb52a2bedf21950b20bc84e7ce",
+          "length": 63
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 3,
+        "requested_limit": 2000,
+        "requested_offset": 3,
+        "start_line": 3,
+        "total_lines": 5,
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "alpha.txt",
+        "limit": 2
+      },
+      "case": "limit",
+      "modelText": {
+        "digest": "sha256:75b5f4147c0edb0e4724e44b180fa515",
+        "length": 183
+      },
+      "outcome": "returned",
+      "tool": "read_file",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:8d757b24a86e26bae529768fc4560470",
+          "length": 39
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 2,
+        "requested_limit": 2,
+        "requested_offset": null,
+        "start_line": 1,
+        "total_lines": null,
+        "was_truncated": true
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "alpha.txt",
+        "limit": 2,
+        "offset": 2
+      },
+      "case": "offset-and-limit",
+      "modelText": {
+        "digest": "sha256:35b25f9f61992cd205bd74166ab82b65",
+        "length": 182
+      },
+      "outcome": "returned",
+      "tool": "read_file",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:d23544d955396649c2c2349e69492fe5",
+          "length": 41
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 2,
+        "requested_limit": 2,
+        "requested_offset": 2,
+        "start_line": 2,
+        "total_lines": null,
+        "was_truncated": true
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "alpha.txt",
+        "offset": 99
+      },
+      "case": "offset-past-the-end",
+      "modelText": {
+        "digest": "sha256:d249c498248e2f0eef90bd7c73bf821d",
+        "length": 265
+      },
+      "outcome": "returned",
+      "tool": "read_file",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:85e1f10bdb85c4b1e4db7b7efc81717d",
+          "length": 121
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 0,
+        "requested_limit": 2000,
+        "requested_offset": 99,
+        "start_line": 99,
+        "total_lines": 5,
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "alpha.txt",
+        "offset": 6
+      },
+      "case": "offset-one-past-the-last-line",
+      "modelText": {
+        "digest": "sha256:64a88f25beb83d651caac7939d3c929f",
+        "length": 262
+      },
+      "outcome": "returned",
+      "tool": "read_file",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:65e0a83754990e9cf965ce83d4d076d7",
+          "length": 120
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 0,
+        "requested_limit": 2000,
+        "requested_offset": 6,
+        "start_line": 6,
+        "total_lines": 5,
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "empty.txt"
+      },
+      "case": "empty-file",
+      "modelText": {
+        "digest": "sha256:38dd3410f2a439f66f84d17f320a0778",
+        "length": 226
+      },
+      "outcome": "returned",
+      "tool": "read_file",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:9b11021204c2e2064e6f078fdac918b8",
+          "length": 81
+        },
+        "file_path": "{tree}/empty.txt",
+        "num_lines": 0,
+        "requested_limit": 2000,
+        "requested_offset": null,
+        "start_line": 1,
+        "total_lines": 0,
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "crlf.txt"
+      },
+      "case": "crlf-file",
+      "modelText": {
+        "digest": "sha256:3732f8be88785a54c6d656a59ad75b6a",
+        "length": 186
+      },
+      "outcome": "returned",
+      "tool": "read_file",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:cf4c025f1878f294d1f5b0067441a51f",
+          "length": 42
+        },
+        "file_path": "{tree}/crlf.txt",
+        "num_lines": 2,
+        "requested_limit": 2000,
+        "requested_offset": null,
+        "start_line": 1,
+        "total_lines": 2,
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "nested/beta.py"
+      },
+      "case": "nested-file",
+      "modelText": {
+        "digest": "sha256:f9217b5f7028ec4b9a12d645a5048ef3",
+        "length": 529
+      },
+      "outcome": "returned",
+      "tool": "read_file",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:bec70998bd1f8cd4c751bdd2b5c154f4",
+          "length": 377
+        },
+        "file_path": "{tree}/nested/beta.py",
+        "num_lines": 12,
+        "requested_limit": 2000,
+        "requested_offset": null,
+        "start_line": 1,
+        "total_lines": 12,
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "nowhere.txt"
+      },
+      "case": "missing-file",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "nested"
+      },
+      "case": "a-directory",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": ""
+      },
+      "case": "empty-path",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "pattern": "gather"
+      },
+      "case": "lowercase-is-case-insensitive",
+      "modelText": {
+        "digest": "sha256:5a9ac70ed464ea7a368ab3bb43744f6a",
+        "length": 300
+      },
+      "outcome": "returned",
+      "tool": "grep",
+      "typedResult": {
+        "match_count": 4,
+        "matches": {
+          "digest": "sha256:a92615a8ee02d3e8cc920f0311a6ae66",
+          "length": 239
+        },
+        "pattern": "gather",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "pattern": "Gather"
+      },
+      "case": "uppercase-is-case-sensitive",
+      "modelText": {
+        "digest": "sha256:ebaec7ef0d1b8969d9fc2323b0c96d2b",
+        "length": 131
+      },
+      "outcome": "returned",
+      "tool": "grep",
+      "typedResult": {
+        "match_count": 1,
+        "matches": {
+          "digest": "sha256:7ce215c430cd53ba2c9f8c26bbeb1c16",
+          "length": 70
+        },
+        "pattern": "Gather",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "pattern": "zzz-absent-zzz"
+      },
+      "case": "no-match",
+      "modelText": {
+        "digest": "sha256:c620b5c2cd03a0b0b4e418cdddc1b86f",
+        "length": 69
+      },
+      "outcome": "returned",
+      "tool": "grep",
+      "typedResult": {
+        "match_count": 0,
+        "matches": {
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb924",
+          "length": 0
+        },
+        "pattern": "zzz-absent-zzz",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "path": "nested",
+        "pattern": "gather"
+      },
+      "case": "scoped-to-a-subdirectory",
+      "modelText": {
+        "digest": "sha256:7c49b04d6c597df0ecf72a2f674ae861",
+        "length": 320
+      },
+      "outcome": "returned",
+      "tool": "grep",
+      "typedResult": {
+        "match_count": 4,
+        "matches": {
+          "digest": "sha256:343873d68ea60ef8485c06f71cef744c",
+          "length": 259
+        },
+        "pattern": "gather",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "path": "nested/beta.py",
+        "pattern": "value"
+      },
+      "case": "scoped-to-one-file",
+      "modelText": {
+        "digest": "sha256:311c2b0be2ff70b0771d7661ffe48b60",
+        "length": 434
+      },
+      "outcome": "returned",
+      "tool": "grep",
+      "typedResult": {
+        "match_count": 7,
+        "matches": {
+          "digest": "sha256:6a8c27bd63d1c2df5cdfd8718566f887",
+          "length": 374
+        },
+        "pattern": "value",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "max_matches": 2,
+        "pattern": "value"
+      },
+      "case": "max-matches",
+      "modelText": {
+        "digest": "sha256:203b98eecd5345cae15a419b14548e8e",
+        "length": 160
+      },
+      "outcome": "returned",
+      "tool": "grep",
+      "typedResult": {
+        "match_count": 2,
+        "matches": {
+          "digest": "sha256:22a1fef14934a62b851fe45558a9012b",
+          "length": 101
+        },
+        "pattern": "value",
+        "was_truncated": true
+      }
+    },
+    {
+      "arguments": {
+        "pattern": "gather",
+        "use_default_ignore": true
+      },
+      "case": "ignore-honored",
+      "modelText": {
+        "digest": "sha256:2cc7b1d38ed14bbc32feeb3f2c56c577",
+        "length": 300
+      },
+      "outcome": "returned",
+      "tool": "grep",
+      "typedResult": {
+        "match_count": 4,
+        "matches": {
+          "digest": "sha256:4343e2b22973e3648b3a5313b3966a86",
+          "length": 239
+        },
+        "pattern": "gather",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "pattern": "gather",
+        "use_default_ignore": false
+      },
+      "case": "ignore-disabled",
+      "modelText": {
+        "digest": "sha256:5a9ac70ed464ea7a368ab3bb43744f6a",
+        "length": 300
+      },
+      "outcome": "returned",
+      "tool": "grep",
+      "typedResult": {
+        "match_count": 4,
+        "matches": {
+          "digest": "sha256:a92615a8ee02d3e8cc920f0311a6ae66",
+          "length": 239
+        },
+        "pattern": "gather",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "pattern": "gather("
+      },
+      "case": "invalid-regex",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "grep"
+    },
+    {
+      "arguments": {
+        "path": "nowhere",
+        "pattern": "gather"
+      },
+      "case": "missing-path",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "grep"
+    },
+    {
+      "arguments": {
+        "pattern": "gather|scatter"
+      },
+      "case": "regex-alternation",
+      "modelText": {
+        "digest": "sha256:a3a71fd995289f4c74dcc4854a23a425",
+        "length": 349
+      },
+      "outcome": "returned",
+      "tool": "grep",
+      "typedResult": {
+        "match_count": 5,
+        "matches": {
+          "digest": "sha256:6bb21d523feff206db3cfa500a2cbbd5",
+          "length": 280
+        },
+        "pattern": "gather|scatter",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "pattern": "^def "
+      },
+      "case": "anchored",
+      "modelText": {
+        "digest": "sha256:afd3a3020fcdd1cbae74eaf8d3a8b2b6",
+        "length": 139
+      },
+      "outcome": "returned",
+      "tool": "grep",
+      "typedResult": {
+        "match_count": 2,
+        "matches": {
+          "digest": "sha256:1bf28b17e6b51f44e6cd750c49efdee3",
+          "length": 79
+        },
+        "pattern": "^def ",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "content": "written body\n",
+        "file_path": "written.txt"
+      },
+      "case": "new-file",
+      "modelText": {
+        "digest": "sha256:f353a606de16f3fec7eed066711fbb40",
+        "length": 70
+      },
+      "outcome": "returned",
+      "tool": "write_file",
+      "typedResult": {
+        "bytes_written": 13,
+        "content": "written body\n",
+        "file_path": "{tree}/written.txt"
+      }
+    },
+    {
+      "arguments": {
+        "content": "overwrite\n",
+        "file_path": "alpha.txt"
+      },
+      "case": "existing-file-is-refused",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "deep body\n",
+        "file_path": "made/up/deep.txt"
+      },
+      "case": "missing-parent",
+      "modelText": {
+        "digest": "sha256:73f836cdfb0eec94233257168bd3759a",
+        "length": 72
+      },
+      "outcome": "returned",
+      "tool": "write_file",
+      "typedResult": {
+        "bytes_written": 10,
+        "content": "deep body\n",
+        "file_path": "{tree}/made/up/deep.txt"
+      }
+    },
+    {
+      "arguments": {
+        "content": "",
+        "file_path": "blank.txt"
+      },
+      "case": "empty-content",
+      "modelText": {
+        "digest": "sha256:8284a3cb6d162a634e2aa0865afdcf46",
+        "length": 54
+      },
+      "outcome": "returned",
+      "tool": "write_file",
+      "typedResult": {
+        "bytes_written": 0,
+        "content": "",
+        "file_path": "{tree}/blank.txt"
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "alpha.txt",
+        "new_string": "alpha II",
+        "old_string": "alpha two"
+      },
+      "case": "single-replacement",
+      "modelText": {
+        "digest": "sha256:7288661d5aa742aad0b46a5b1d1a6fb4",
+        "length": 114
+      },
+      "outcome": "returned",
+      "tool": "edit",
+      "typedResult": {
+        "file": "{tree}/alpha.txt",
+        "message": {
+          "digest": "sha256:6baeae03e595f1ca08ac6e2c82c92420",
+          "length": 39
+        },
+        "new_string": "alpha II",
+        "old_string": "alpha two"
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "alpha.txt",
+        "new_string": "ALPHA",
+        "old_string": "alpha",
+        "replace_all": true
+      },
+      "case": "replace-all",
+      "modelText": {
+        "digest": "sha256:23e0ab5e91ec162eadaf2eb17eb35cd5",
+        "length": 137
+      },
+      "outcome": "returned",
+      "tool": "edit",
+      "typedResult": {
+        "file": "{tree}/alpha.txt",
+        "message": {
+          "digest": "sha256:63dedd39fdd5c944821bd5d4dc37f579",
+          "length": 69
+        },
+        "new_string": "ALPHA",
+        "old_string": "alpha"
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "alpha.txt",
+        "new_string": "ALPHA",
+        "old_string": "alpha"
+      },
+      "case": "ambiguous-without-replace-all",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "alpha.txt",
+        "new_string": "x",
+        "old_string": "absent"
+      },
+      "case": "absent-old-string",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "alpha.txt",
+        "new_string": "alpha one",
+        "old_string": "alpha one"
+      },
+      "case": "identical-strings",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "alpha.txt",
+        "new_string": "x",
+        "old_string": ""
+      },
+      "case": "empty-old-string",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "crlf.txt",
+        "new_string": "changed line",
+        "old_string": "second line"
+      },
+      "case": "crlf-is-preserved",
+      "modelText": {
+        "digest": "sha256:403a16006b5a8a4842e150d284dbb4c1",
+        "length": 119
+      },
+      "outcome": "returned",
+      "tool": "edit",
+      "typedResult": {
+        "file": "{tree}/crlf.txt",
+        "message": {
+          "digest": "sha256:6baeae03e595f1ca08ac6e2c82c92420",
+          "length": 39
+        },
+        "new_string": "changed line",
+        "old_string": "second line"
+      }
+    },
+    {
+      "arguments": {
+        "file_path": "nowhere.txt",
+        "new_string": "b",
+        "old_string": "a"
+      },
+      "case": "missing-file",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "action": "write",
+        "todos": [
+          {
+            "content": "first task",
+            "id": "one",
+            "status": "pending"
+          },
+          {
+            "content": "second task",
+            "id": "two",
+            "status": "in_progress"
+          }
+        ]
+      },
+      "case": "write-two",
+      "modelText": {
+        "digest": "sha256:d09d7b5aad3e4f802c423f8f08dc53f3",
+        "length": 232
+      },
+      "outcome": "returned",
+      "tool": "todo",
+      "typedResult": {
+        "message": {
+          "digest": "sha256:7354f259410b340343481b95f1937604",
+          "length": 15
+        },
+        "todos": [
+          {
+            "content": "first task",
+            "id": "one",
+            "priority": "medium",
+            "status": "pending"
+          },
+          {
+            "content": "second task",
+            "id": "two",
+            "priority": "medium",
+            "status": "in_progress"
+          }
+        ],
+        "total_count": 2,
+        "verb": "Updated"
+      }
+    },
+    {
+      "arguments": {
+        "action": "read"
+      },
+      "case": "read-empty",
+      "modelText": {
+        "digest": "sha256:2f71ca8a93e9913775be7d393d9a6f08",
+        "length": 67
+      },
+      "outcome": "returned",
+      "tool": "todo",
+      "typedResult": {
+        "message": {
+          "digest": "sha256:da223f9c5a063eadcf8b18ab662857a3",
+          "length": 17
+        },
+        "todos": [],
+        "total_count": 0,
+        "verb": "Retrieved"
+      }
+    },
+    {
+      "arguments": {
+        "action": "write",
+        "todos": [
+          {
+            "content": "first",
+            "id": "same",
+            "status": "pending"
+          },
+          {
+            "content": "second",
+            "id": "same",
+            "status": "pending"
+          }
+        ]
+      },
+      "case": "duplicate-identifiers",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "todo"
+    },
+    {
+      "arguments": {
+        "action": "write",
+        "todos": []
+      },
+      "case": "write-empty-list",
+      "modelText": {
+        "digest": "sha256:5322097d9a75dce9db7f68345c5ef579",
+        "length": 63
+      },
+      "outcome": "returned",
+      "tool": "todo",
+      "typedResult": {
+        "message": {
+          "digest": "sha256:e8ac5771528dbd5608ae00541435ca5a",
+          "length": 15
+        },
+        "todos": [],
+        "total_count": 0,
+        "verb": "Updated"
+      }
+    },
+    {
+      "arguments": {
+        "action": "delete"
+      },
+      "case": "unknown-action",
+      "error": {
+        "message": {
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "tool": "todo"
+    }
+  ],
+  "note": "Tool execution corpus: what the pinned reference's tools return for each case over the checked-in fixture tree. A captured string is committed as it stands only when it is a value these arguments supplied, a normalized path, or an identifier-shaped token; everything else, including every error message, is committed as a SHA-256 digest and its length, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/tool_execution.py --corpus when the pinned reference moves.",
+  "platform": "linux",
+  "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+  "schemaVersion": 1
+}

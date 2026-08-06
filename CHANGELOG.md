@@ -14,6 +14,15 @@
   handler reads the coerced value, so a prompt tuned against one client now
   works against the other. The 92 committed argument fixtures all return the
   reference verdict, where two of them used to diverge.
+- Measure what the tools do, not only what they declare. A new execution oracle
+  drives `read_file`, `grep`, `write_file`, `edit` and `todo` over a fixture
+  tree checked into the repository, records what the reference returns for each
+  of 41 cases and replays it against this build on every `cargo test`, with no
+  reference checkout needed. 12 cases match today; each of the other 29 is held
+  in a ledger naming the story that closes it, and both an unlisted divergence
+  and a ledger entry that has gone stale fail the suite. The instrument
+  immediately found that an `edit` whose `old_string` equals its `new_string` is
+  refused upstream and silently rewrites the file here.
 - Link a repository to a Vibe Code project without opening a session. The nine
   `projectLinks/*` calls now answer: a path resolves to its repository root with
   the repository's name and its current and default branches, or is reported
