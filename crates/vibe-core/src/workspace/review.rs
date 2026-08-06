@@ -7,6 +7,40 @@ use super::{
     path_display, unified_diff,
 };
 
+/// Applies one edit's operations to the text it was written against.
+///
+/// The rules are the file's, not the storage's, which is what lets an edit whose
+/// content came from a client-owned buffer refuse a stale or ambiguous needle on
+/// the same terms as one read from disk.
+pub(crate) fn apply_edit_operations(
+    path: &Path,
+    original: &str,
+    operations: &[EditOperation],
+) -> Result<String, WorkspaceError> {
+    let mut updated = original.to_owned();
+    for operation in operations {
+        let matches = updated.matches(&operation.old_text).count();
+        if matches == 0 {
+            return Err(WorkspaceError::StaleEdit {
+                path: path.to_path_buf(),
+                needle: operation.old_text.clone(),
+            });
+        }
+        if matches > 1 && !operation.replace_all {
+            return Err(WorkspaceError::AmbiguousEdit {
+                path: path.to_path_buf(),
+                matches,
+            });
+        }
+        updated = if operation.replace_all {
+            updated.replace(&operation.old_text, &operation.new_text)
+        } else {
+            updated.replacen(&operation.old_text, &operation.new_text, 1)
+        };
+    }
+    Ok(updated)
+}
+
 const MAX_REWIND_CHECKPOINTS: usize = 64;
 const MAX_REWIND_SNAPSHOT_BYTES: usize = 64 * 1_048_576;
 
@@ -88,27 +122,7 @@ impl ReviewManager {
         let original = self.workspace.read_raw(&relative)?;
         let original_text = String::from_utf8(original.clone())
             .map_err(|_| WorkspaceError::InvalidEncoding(relative.clone()))?;
-        let mut updated = original_text.clone();
-        for operation in operations {
-            let matches = updated.matches(&operation.old_text).count();
-            if matches == 0 {
-                return Err(WorkspaceError::StaleEdit {
-                    path: relative.clone(),
-                    needle: operation.old_text.clone(),
-                });
-            }
-            if matches > 1 && !operation.replace_all {
-                return Err(WorkspaceError::AmbiguousEdit {
-                    path: relative.clone(),
-                    matches,
-                });
-            }
-            updated = if operation.replace_all {
-                updated.replace(&operation.old_text, &operation.new_text)
-            } else {
-                updated.replacen(&operation.old_text, &operation.new_text, 1)
-            };
-        }
+        let updated = apply_edit_operations(&relative, &original_text, operations)?;
         self.workspace
             .atomic_replace(&relative, updated.as_bytes())?;
         Ok(MutationResult {

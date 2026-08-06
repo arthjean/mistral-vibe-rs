@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use thiserror::Error;
 
 use crate::policy::{ApprovalAgent, PermissionRequirement, PermissionStore, PolicyGuardedTool};
+use crate::process::ClientToolIo;
 use crate::schema::{ObjectSchema, Property};
 use crate::text::matches_wildcard;
 use crate::tools::{
@@ -694,12 +695,30 @@ impl Workspace {
 pub struct WorkspaceTools {
     workspace: Arc<Workspace>,
     review: Arc<ReviewManager>,
+    client_io: Option<ClientToolIo>,
 }
 
 impl WorkspaceTools {
     #[must_use]
     pub fn new(workspace: Arc<Workspace>, review: Arc<ReviewManager>) -> Self {
-        Self { workspace, review }
+        Self {
+            workspace,
+            review,
+            client_io: None,
+        }
+    }
+
+    /// Routes file access through the connected client when it declared the
+    /// matching capability.
+    ///
+    /// A client that hosts the editor holds buffers the workspace cannot see, so
+    /// the file the agent reads is the one the user is looking at rather than
+    /// the one last saved to disk. A client that declared nothing leaves every
+    /// tool on the workspace's own filesystem access.
+    #[must_use]
+    pub fn with_client_io(mut self, client_io: Option<ClientToolIo>) -> Self {
+        self.client_io = client_io;
+        self
     }
 
     pub fn register(
@@ -709,9 +728,11 @@ impl WorkspaceTools {
         approval: Arc<dyn ApprovalAgent>,
     ) -> Result<Vec<RegistrationOutcome>, ToolError> {
         let read_workspace = self.workspace.clone();
+        let read_client = self.client_io.clone();
         let read: Arc<dyn ToolHandler> = Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let workspace = read_workspace.clone();
+                let client = read_client.clone();
                 let path = invocation.arguments["file_path"]
                     .as_str()
                     .unwrap_or_default()
@@ -725,9 +746,15 @@ impl WorkspaceTools {
                 Box::pin(async move {
                     let start_line = usize::try_from(start_line).unwrap_or(usize::MAX);
                     let limit = usize::try_from(limit).unwrap_or(usize::MAX);
-                    let result = workspace
-                        .read(path, start_line, Some(limit))
-                        .map_err(|error| ToolError::Execution(error.to_string()))?;
+                    let result =
+                        match delegated_read(&workspace, client.as_ref(), &path, start_line, limit)
+                            .await?
+                        {
+                            Some(result) => result,
+                            None => workspace
+                                .read(path, start_line, Some(limit))
+                                .map_err(|error| ToolError::Execution(error.to_string()))?,
+                        };
                     let model_text = read_model_text(&result);
                     Ok(ToolExecutionOutput {
                         typed_result: serde_json::to_value(&result)
@@ -780,9 +807,13 @@ impl WorkspaceTools {
             },
         );
         let edit_review = self.review.clone();
+        let edit_client = self.client_io.clone();
+        let edit_workspace = self.workspace.clone();
         let edit: Arc<dyn ToolHandler> = Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let review = edit_review.clone();
+                let client = edit_client.clone();
+                let workspace = edit_workspace.clone();
                 let path = invocation.arguments["file_path"]
                     .as_str()
                     .unwrap_or_default()
@@ -799,16 +830,20 @@ impl WorkspaceTools {
                     .as_bool()
                     .unwrap_or(false);
                 Box::pin(async move {
-                    let result = review
-                        .edit(
-                            path,
-                            &[EditOperation {
-                                old_text,
-                                new_text,
-                                replace_all,
-                            }],
-                        )
-                        .map_err(|error| ToolError::Execution(error.to_string()))?;
+                    let operations = [EditOperation {
+                        old_text,
+                        new_text,
+                        replace_all,
+                    }];
+                    let result =
+                        match delegated_edit(&workspace, client.as_ref(), &path, &operations)
+                            .await?
+                        {
+                            Some(result) => result,
+                            None => review
+                                .edit(path, &operations)
+                                .map_err(|error| ToolError::Execution(error.to_string()))?,
+                        };
                     Ok(ToolExecutionOutput {
                         typed_result: serde_json::to_value(&result)
                             .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
@@ -820,9 +855,13 @@ impl WorkspaceTools {
             },
         );
         let write_review = self.review.clone();
+        let write_client = self.client_io.clone();
+        let write_workspace = self.workspace.clone();
         let write: Arc<dyn ToolHandler> = Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let review = write_review.clone();
+                let client = write_client.clone();
+                let workspace = write_workspace.clone();
                 let path = invocation.arguments["file_path"]
                     .as_str()
                     .unwrap_or_default()
@@ -837,9 +876,14 @@ impl WorkspaceTools {
                             "write_file file_path cannot be empty".to_owned(),
                         ));
                     }
-                    let result = review
-                        .write(&path, content.as_bytes())
-                        .map_err(|error| ToolError::Execution(error.to_string()))?;
+                    let result = match delegated_write(&workspace, client.as_ref(), &path, &content)
+                        .await?
+                    {
+                        Some(result) => result,
+                        None => review
+                            .write(&path, content.as_bytes())
+                            .map_err(|error| ToolError::Execution(error.to_string()))?,
+                    };
                     Ok(ToolExecutionOutput {
                         model_text: format!(
                             "Wrote {} bytes to {}",
@@ -917,6 +961,157 @@ impl WorkspaceTools {
             registry.register(write_file_spec(), guarded_write)?,
         ])
     }
+}
+
+/// The path a delegated request carries, or the error the local path would
+/// have raised for it.
+///
+/// Hosting the filesystem is not a way around the workspace boundary: the same
+/// confinement the local tools apply runs first, so a path that escapes the
+/// root is refused here rather than handed to an editor that would happily open
+/// it. What travels is the confined absolute path, which is the only form a
+/// client can resolve: the request carries no working directory.
+fn delegated_path(
+    workspace: &Workspace,
+    path: &str,
+    must_exist: bool,
+) -> Result<(PathBuf, String), ToolError> {
+    let relative = workspace
+        .confined(Path::new(path), must_exist)
+        .map_err(|error| ToolError::Execution(error.to_string()))?;
+    let display = path_display(&relative);
+    Ok((workspace.root().join(relative), display))
+}
+
+/// Reads one file through the client, or `None` when it hosts no filesystem.
+///
+/// The client answers with a window rather than a file, so the line count it
+/// implies is what it returned: the reference reports zero only for an empty
+/// answer at the top of the file, and this keeps that distinction so an offset
+/// past the end still reads as one rather than as an empty file.
+async fn delegated_read(
+    workspace: &Workspace,
+    client: Option<&ClientToolIo>,
+    path: &str,
+    start_line: usize,
+    limit: usize,
+) -> Result<Option<FileRead>, ToolError> {
+    let Some(client) = client.filter(|client| client.supports_read()) else {
+        return Ok(None);
+    };
+    let (absolute, display) = delegated_path(workspace, path, true)?;
+    let start = start_line.max(1);
+    let line_limit = limit.min(workspace.max_lines);
+    let content = client
+        .read_text_file(
+            &absolute.to_string_lossy(),
+            u64::try_from(start).ok(),
+            // One line past the budget, which is how the answer reports that it
+            // stopped short without a second round trip.
+            u64::try_from(line_limit.saturating_add(1)).ok(),
+        )
+        .await
+        .map_err(|error| ToolError::Execution(error.to_string()))?;
+    let mut cut = workspace.max_read_bytes.min(content.len());
+    while cut > 0 && !content.is_char_boundary(cut) {
+        cut = cut.saturating_sub(1);
+    }
+    let byte_truncated = cut < content.len();
+    let all_lines = content[..cut].lines().collect::<Vec<_>>();
+    let selected = all_lines
+        .iter()
+        .take(line_limit)
+        .copied()
+        .collect::<Vec<_>>();
+    let selected_content = selected.join("\n");
+    let numbered_content = selected
+        .iter()
+        .enumerate()
+        .map(|(index, line)| format!("{}|{line}", start.saturating_add(index)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let total_lines = if selected.is_empty() && start == 1 {
+        0
+    } else {
+        start.saturating_sub(1).saturating_add(selected.len())
+    };
+    Ok(Some(FileRead {
+        path: display,
+        content_bytes: selected_content.len(),
+        content: selected_content,
+        numbered_content,
+        start_line: start,
+        end_line: start.saturating_add(selected.len().saturating_sub(1)),
+        total_lines,
+        truncated: byte_truncated || all_lines.len() > line_limit,
+    }))
+}
+
+/// Writes one file through the client, or `None` when it hosts no filesystem.
+///
+/// Nothing on disk changes, so nothing is checkpointed: the buffer the client
+/// now holds is its own to save, and a rewind that restored the untouched file
+/// would claim an edit the workspace never made.
+async fn delegated_write(
+    workspace: &Workspace,
+    client: Option<&ClientToolIo>,
+    path: &str,
+    content: &str,
+) -> Result<Option<MutationResult>, ToolError> {
+    let Some(client) = client.filter(|client| client.supports_write()) else {
+        return Ok(None);
+    };
+    // A write may target a file that does not exist yet, on the client's side
+    // as much as on ours.
+    let (absolute, display) = delegated_path(workspace, path, false)?;
+    client
+        .write_text_file(&absolute.to_string_lossy(), content)
+        .await
+        .map_err(|error| ToolError::Execution(error.to_string()))?;
+    Ok(Some(MutationResult {
+        path: display,
+        bytes_written: content.len(),
+        files_changed: 1,
+        diff: unified_diff("", content),
+    }))
+}
+
+/// Edits one file through the client, or `None` when it hosts no filesystem.
+///
+/// The read and the write are both delegated, so the text the operations run
+/// against is the buffer's rather than the file's. A client that hosts reads
+/// but not writes leaves the whole edit local: applying an edit to a buffer and
+/// saving it to disk would write over the very content it was not read from.
+async fn delegated_edit(
+    workspace: &Workspace,
+    client: Option<&ClientToolIo>,
+    path: &str,
+    operations: &[EditOperation],
+) -> Result<Option<MutationResult>, ToolError> {
+    let Some(client) = client.filter(|client| client.supports_read() && client.supports_write())
+    else {
+        return Ok(None);
+    };
+    let (absolute, display) = delegated_path(workspace, path, true)?;
+    let absolute = absolute.to_string_lossy().into_owned();
+    let original = client
+        .read_text_file(&absolute, None, None)
+        .await
+        .map_err(|error| ToolError::Execution(error.to_string()))?;
+    let updated = review::apply_edit_operations(Path::new(&display), &original, operations)
+        .map_err(|error| ToolError::Execution(error.to_string()))?;
+    if updated != original {
+        client
+            .write_text_file(&absolute, &updated)
+            .await
+            .map_err(|error| ToolError::Execution(error.to_string()))?;
+    }
+    Ok(Some(MutationResult {
+        path: display,
+        bytes_written: updated.len(),
+        files_changed: 1,
+        diff: unified_diff(&original, &updated),
+    }))
 }
 
 #[derive(Debug, Error)]
@@ -1821,6 +2016,252 @@ mod tests {
             .register(&registry, policy, Arc::new(RejectApproval))
             .expect("register");
         registry
+    }
+
+    /// A client hosting an editor: it answers reads from a buffer that differs
+    /// from what is on disk, so a delegated read is distinguishable from a local
+    /// one by its content alone.
+    #[derive(Default)]
+    struct EditorClient {
+        requests: Mutex<Vec<crate::process::ClientToolRequest>>,
+        buffer: Mutex<String>,
+        capabilities: Mutex<BTreeSet<crate::process::ClientToolCapability>>,
+    }
+
+    impl EditorClient {
+        fn hosting(
+            buffer: &str,
+            capabilities: impl IntoIterator<Item = crate::process::ClientToolCapability>,
+        ) -> Arc<Self> {
+            let client = Self::default();
+            *client.buffer.lock().expect("buffer") = buffer.to_owned();
+            *client.capabilities.lock().expect("capabilities") = capabilities.into_iter().collect();
+            Arc::new(client)
+        }
+
+        fn methods(&self) -> Vec<&'static str> {
+            self.requests
+                .lock()
+                .expect("requests")
+                .iter()
+                .map(crate::process::ClientToolRequest::method)
+                .collect()
+        }
+    }
+
+    impl crate::process::ClientToolPort for EditorClient {
+        fn request<'a>(
+            &'a self,
+            request: crate::process::ClientToolRequest,
+        ) -> crate::process::ToolIoFuture<'a> {
+            Box::pin(async move {
+                self.requests
+                    .lock()
+                    .map_err(|_| {
+                        crate::process::ToolIoError::Request("client lock poisoned".to_owned())
+                    })?
+                    .push(request.clone());
+                match request {
+                    crate::process::ClientToolRequest::ReadTextFile { .. } => {
+                        Ok(json!({"content": self.buffer.lock().expect("buffer").clone()}))
+                    }
+                    crate::process::ClientToolRequest::WriteTextFile { content, .. } => {
+                        *self.buffer.lock().expect("buffer") = content;
+                        Ok(json!({}))
+                    }
+                    _ => Ok(json!({})),
+                }
+            })
+        }
+
+        fn supports(&self, capability: crate::process::ClientToolCapability) -> bool {
+            self.capabilities
+                .lock()
+                .expect("capabilities")
+                .contains(&capability)
+        }
+    }
+
+    async fn registered_workspace_tools_with_client(
+        root: &Path,
+        client: Option<ClientToolIo>,
+    ) -> ToolRegistry {
+        let workspace = Arc::new(Workspace::open(root).expect("workspace"));
+        let review = Arc::new(ReviewManager::new(workspace.clone()));
+        review.begin_turn("turn-1").expect("turn");
+        let policy = PermissionStore::default();
+        policy
+            .set_trust(root, TrustDecision::Trusted, TrustRootKind::Workspace)
+            .await
+            .expect("trust");
+        let registry = ToolRegistry::default();
+        WorkspaceTools::new(workspace, review)
+            .with_client_io(client)
+            .register(&registry, policy, Arc::new(RejectApproval))
+            .expect("register");
+        registry
+    }
+
+    /// The agent reads the buffer the user is looking at rather than the file
+    /// the workspace last saw.
+    #[tokio::test]
+    async fn a_client_hosting_reads_answers_read_file_from_its_buffer() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("main.rs"), "on disk\n").expect("file");
+        let client = EditorClient::hosting(
+            "unsaved one\nunsaved two\n",
+            [crate::process::ClientToolCapability::FilesystemRead],
+        );
+        let registry = registered_workspace_tools_with_client(
+            directory.path(),
+            Some(ClientToolIo::new("session-1", client.clone())),
+        )
+        .await;
+
+        let read = registry
+            .invoke(
+                "read_file",
+                ToolInvocation {
+                    call_id: "read-1".to_owned(),
+                    arguments: json!({"file_path": "main.rs"}),
+                },
+            )
+            .await
+            .expect("the client answers the read");
+        assert_eq!(read.model_text, "1|unsaved one\n2|unsaved two");
+        assert_eq!(client.methods(), ["clientTool/readTextFile"]);
+        // The request carries the confined absolute path, which is the only
+        // form a client can resolve, and the result keeps the workspace-
+        // relative display the local read reports.
+        let expected = std::fs::canonicalize(directory.path())
+            .expect("canonical root")
+            .join("main.rs")
+            .to_string_lossy()
+            .into_owned();
+        let requests = client.requests.lock().expect("requests");
+        assert!(
+            matches!(
+                &requests[0],
+                crate::process::ClientToolRequest::ReadTextFile { session_id, path, .. }
+                    if session_id == "session-1" && *path == expected
+            ),
+            "{requests:?} does not carry {expected}"
+        );
+    }
+
+    /// A write the client hosts never touches the workspace, so the file the
+    /// user has open is the only copy that changed.
+    #[tokio::test]
+    async fn a_client_hosting_writes_answers_write_file_and_edit() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("main.rs"), "on disk\n").expect("file");
+        let client = EditorClient::hosting(
+            "alpha\n",
+            [
+                crate::process::ClientToolCapability::FilesystemRead,
+                crate::process::ClientToolCapability::FilesystemWrite,
+            ],
+        );
+        let registry = registered_workspace_tools_with_client(
+            directory.path(),
+            Some(ClientToolIo::new("session-1", client.clone())),
+        )
+        .await;
+
+        registry
+            .invoke(
+                "write_file",
+                ToolInvocation {
+                    call_id: "write-1".to_owned(),
+                    arguments: json!({"file_path": "created.rs", "content": "beta\n"}),
+                },
+            )
+            .await
+            .expect("the client answers the write");
+        assert!(
+            !directory.path().join("created.rs").exists(),
+            "a delegated write reached the workspace filesystem"
+        );
+
+        let edited = registry
+            .invoke(
+                "edit",
+                ToolInvocation {
+                    call_id: "edit-1".to_owned(),
+                    arguments: json!({
+                        "file_path": "main.rs",
+                        "old_string": "beta",
+                        "new_string": "gamma",
+                    }),
+                },
+            )
+            .await
+            .expect("the client answers the edit");
+        assert!(edited.model_text.contains("+gamma"), "{edited:?}");
+        assert_eq!(
+            *client.buffer.lock().expect("buffer"),
+            "gamma\n",
+            "the edit was applied to the client's buffer"
+        );
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("main.rs")).expect("on disk"),
+            "on disk\n",
+            "a delegated edit rewrote the workspace file"
+        );
+        assert_eq!(
+            client.methods(),
+            [
+                "clientTool/writeTextFile",
+                "clientTool/readTextFile",
+                "clientTool/writeTextFile",
+            ]
+        );
+    }
+
+    /// A client that declared nothing leaves every tool on the workspace, which
+    /// is what keeps a terminal client from paying for a delegation it cannot
+    /// answer.
+    #[tokio::test]
+    async fn a_client_declaring_no_filesystem_leaves_the_tools_on_the_workspace() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("main.rs"), "on disk\n").expect("file");
+        let client = EditorClient::hosting("unsaved\n", []);
+        let registry = registered_workspace_tools_with_client(
+            directory.path(),
+            Some(ClientToolIo::new("session-1", client.clone())),
+        )
+        .await;
+
+        let read = registry
+            .invoke(
+                "read_file",
+                ToolInvocation {
+                    call_id: "read-1".to_owned(),
+                    arguments: json!({"file_path": "main.rs"}),
+                },
+            )
+            .await
+            .expect("the workspace answers the read");
+        assert_eq!(read.model_text, "1|on disk");
+        registry
+            .invoke(
+                "write_file",
+                ToolInvocation {
+                    call_id: "write-1".to_owned(),
+                    arguments: json!({"file_path": "created.rs", "content": "beta\n"}),
+                },
+            )
+            .await
+            .expect("the workspace answers the write");
+        assert!(
+            directory.path().join("created.rs").exists(),
+            "the write did not reach the workspace filesystem"
+        );
+        assert!(
+            client.methods().is_empty(),
+            "an undeclared capability still reached the client: {:?}",
+            client.methods()
+        );
     }
 
     /// The same, plus the review manager the caller needs to inspect what the
