@@ -15,6 +15,7 @@ use projection::*;
 use registry::SessionRegistry;
 
 use crate::client::public_turn_failure;
+use crate::client_tools::ClientToolBridge;
 use crate::host::{now_millis, vibe_home};
 use crate::release3::{RELEASE3_METHODS, Release3Error, Release3Service, RuntimeAttachment};
 use crate::release4::{
@@ -377,6 +378,10 @@ pub struct AppServer {
     session_tool_factory: Arc<dyn SessionToolFactory>,
     builtin_tools: Arc<BuiltinTools>,
     shell_tools: Arc<ShellTools>,
+    /// The `clientTool/*` delegation this server's connection offers. Empty
+    /// until a client declares a capability, which is what keeps a client that
+    /// hosts nothing on the server's own filesystem and terminals.
+    client_tools: Arc<ClientToolBridge>,
     next_session: Arc<AtomicU64>,
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
@@ -412,6 +417,7 @@ impl Default for AppServer {
                 home,
                 ShellRollout::from_environment(MANAGED_SHELL_VARIABLE),
             )),
+            client_tools: Arc::new(ClientToolBridge::default()),
             next_session: Arc::new(AtomicU64::new(1)),
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
@@ -1459,10 +1465,16 @@ impl AppServer {
         generation: u64,
     ) -> Result<(), ServerError> {
         // A managed shell session outlives the call that started it, so this is
-        // the only place left that can stop one. A failure there must not skip
-        // the backend teardown, so both run and the first failure is reported.
+        // the only place left that can stop one. The same holds for a terminal
+        // the client opened on our behalf. A failure in either must not skip the
+        // backend teardown, so all three run and the first failure is reported.
         let shell = self
             .shell_tools
+            .close_session(session_id)
+            .await
+            .map_err(|error| ServerError::Resource(error.to_string()));
+        let delegated = self
+            .client_tools
             .close_session(session_id)
             .await
             .map_err(|error| ServerError::Resource(error.to_string()));
@@ -1473,7 +1485,7 @@ impl AppServer {
                 .map_err(|error| ServerError::Resource(error.to_string())),
             None => Ok(()),
         };
-        shell.and(backend)
+        shell.and(delegated).and(backend)
     }
 
     /// Configures a session's MCP sources and publishes what changed.
@@ -1755,6 +1767,10 @@ impl AppServer {
         let approval =
             self.approval_factory
                 .for_agent(session_id, intent.approval, intent.auto_approve);
+        // The delegation is resolved once per registration and handed to both
+        // families, so the file tools and the shell agree on what this client
+        // hosts for the session they are being published into.
+        let client_io = self.client_tools.session_io(session_id);
         self.builtin_tools
             .register(
                 session_id,
@@ -1772,6 +1788,7 @@ impl AppServer {
                 tools,
                 policy.clone(),
                 approval.clone(),
+                client_io.clone(),
             )
             .map_err(|error| ServerError::Resource(error.to_string()))?;
         let Ok(workspace) = Workspace::open(working_directory) else {
@@ -1780,6 +1797,7 @@ impl AppServer {
         let workspace = Arc::new(workspace);
         let review = review.unwrap_or_else(|| Arc::new(ReviewManager::new(workspace.clone())));
         WorkspaceTools::new(workspace, review.clone())
+            .with_client_io(client_io)
             .register(tools, policy.clone(), approval)
             .map_err(|error| ServerError::Resource(error.to_string()))?;
         Ok(Some(review))
@@ -2165,6 +2183,12 @@ impl ServerConnection {
     }
 
     fn handle_server_success(&mut self, response: SuccessResponse) -> DispatchBatch {
+        if self.server.client_tools.resolve(
+            &response.id,
+            Ok(Value::Object(response.result.clone().into_iter().collect())),
+        ) {
+            return DispatchBatch::empty();
+        }
         let Some(route) = self.pending_server_requests.remove(&response.id) else {
             return self.close_for_protocol_error();
         };
@@ -2196,6 +2220,13 @@ impl ServerConnection {
     }
 
     fn handle_server_error(&mut self, response: ErrorResponse) -> DispatchBatch {
+        if self
+            .server
+            .client_tools
+            .resolve(&response.id, Err(response.error.message.clone()))
+        {
+            return DispatchBatch::empty();
+        }
         let Some(route) = self.pending_server_requests.remove(&response.id) else {
             return self.close_for_protocol_error();
         };
@@ -2283,7 +2314,17 @@ impl ServerConnection {
         }
         self.attached_sessions.clear();
         self.pending_server_requests.clear();
+        // A tool parked on a delegation would otherwise wait out its deadline
+        // for a client that is already gone.
+        self.server.client_tools.detach();
         self.state = ConnectionState::Closed;
+    }
+
+    /// The delegation registry a transport puts its write side on, so a tool
+    /// running off the read loop can still reach the client.
+    #[must_use]
+    pub fn client_tools(&self) -> Arc<ClientToolBridge> {
+        self.server.client_tools.clone()
     }
 
     pub(crate) fn attached_session_ids(&self) -> Vec<String> {
@@ -2376,6 +2417,12 @@ impl ServerConnection {
             }
         };
         self.capabilities = params.capabilities;
+        // Sessions started on this connection publish their tools against what
+        // the handshake just declared, so the delegation is recorded before the
+        // first `session/start` can read it.
+        self.server
+            .client_tools
+            .declare(&self.capabilities.client_tools);
         self.state = ConnectionState::AwaitingInitialized;
         let response = InitializeResponse {
             server_info: ServerInfo {

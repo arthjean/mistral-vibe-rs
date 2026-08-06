@@ -106,6 +106,13 @@ where
 {
     let mut connection = server.connect(vibe_protocol::TransportKind::Stdio);
     let (events, mut incoming_events) = mpsc::unbounded_channel::<ServeEvent>();
+    // A delegated `clientTool/*` request is raised by a tool running on a turn
+    // task, so it reaches the wire through the loop rather than by writing to a
+    // transport the loop also owns. The retained sender keeps the receiver from
+    // completing while the connection is up.
+    let (client_tool_frames, mut client_tool_requests) = mpsc::unbounded_channel::<Vec<u8>>();
+    connection.client_tools().attach(client_tool_frames.clone());
+    let _client_tool_sender = client_tool_frames;
     let mut tasks = JoinSet::new();
     let mut active = BTreeSet::<(String, String)>::new();
     let mut failure = None;
@@ -147,6 +154,16 @@ where
                     }
                 }
                 while tasks.try_join_next().is_some() {}
+            }
+            delegated = client_tool_requests.recv() => {
+                // A server-to-client request is an answer the client asked for
+                // by declaring the capability, so no mute list applies to it.
+                if let Some(frame) = delegated
+                    && let Err(error) = transport.send(&frame).await
+                {
+                    failure = Some(error);
+                    break 'serve;
+                }
             }
             incoming = transport.receive() => {
                 let bytes = match incoming {
@@ -888,5 +905,107 @@ mod tests {
             .expect("server task")
             .expect("transport closes");
         assert!(backend.closed.load(Ordering::Acquire));
+    }
+
+    /// The delegation reaches the client over the same stream its requests
+    /// arrive on, and the answer travels back to the tool that is waiting.
+    ///
+    /// The tool is invoked on the server handle the serve loop is holding, which
+    /// is how a turn running off the read loop raises a `clientTool/*` request
+    /// in production.
+    #[tokio::test]
+    async fn stdio_server_carries_a_client_tool_delegation_and_its_answer() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("main.rs"), "on disk\n").expect("file");
+        let server = AppServer::default();
+        let (client, server_io) = duplex(4096);
+        let (client_read, mut client_write) = tokio::io::split(client);
+        let (server_read, server_write) = tokio::io::split(server_io);
+        let server_task = tokio::spawn(serve_stdio(
+            server.clone(),
+            StdioTransport::new(BufReader::new(server_read), server_write),
+            Arc::new(EchoTurnDriver::new("answer")),
+        ));
+        let mut frames = BufReader::new(client_read).lines();
+        for request in [
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"editor","version":"1"},"capabilities":{"clientTools":["filesystem/read"]}}}"#.to_owned(),
+            r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#.to_owned(),
+            format!(
+                r#"{{"jsonrpc":"2.0","id":2,"method":"session/start","params":{{"sessionId":"session-1","workingDirectory":{},"trusted":true,"autoApprove":true}}}}"#,
+                serde_json::Value::String(directory.path().to_string_lossy().into_owned())
+            ),
+        ] {
+            client_write
+                .write_all(request.as_bytes())
+                .await
+                .expect("request bytes");
+            client_write
+                .write_all(b"\n")
+                .await
+                .expect("request newline");
+        }
+        assert!(frames.next_line().await.expect("initialize").is_some());
+        assert!(frames.next_line().await.expect("session").is_some());
+
+        let reader = server.clone();
+        let call = tokio::spawn(async move {
+            reader
+                .invoke_tool(
+                    "session-1",
+                    "read_file",
+                    vibe_core::tools::ToolInvocation {
+                        call_id: "read-1".to_owned(),
+                        arguments: serde_json::json!({"file_path": "main.rs"}),
+                    },
+                )
+                .await
+        });
+
+        // Attaching the session put its snapshot on the same stream, so the
+        // delegation is picked out by being a request rather than by position.
+        let delegated = loop {
+            let frame = frames
+                .next_line()
+                .await
+                .expect("delegated frame")
+                .expect("the delegation reaches the wire");
+            let frame = serde_json::from_str::<serde_json::Value>(&frame).expect("delegated JSON");
+            if frame["method"].is_string() && !frame["id"].is_null() {
+                break frame;
+            }
+        };
+        assert_eq!(delegated["method"], "clientTool/readTextFile");
+        assert_eq!(delegated["params"]["sessionId"], "session-1");
+        assert_eq!(
+            delegated["params"]["path"],
+            serde_json::Value::String(
+                std::fs::canonicalize(directory.path())
+                    .expect("canonical root")
+                    .join("main.rs")
+                    .to_string_lossy()
+                    .into_owned()
+            )
+        );
+
+        let answer = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": delegated["id"],
+            "result": {"content": "unsaved\n"},
+        });
+        client_write
+            .write_all(serde_json::to_string(&answer).expect("answer").as_bytes())
+            .await
+            .expect("answer bytes");
+        client_write.write_all(b"\n").await.expect("answer newline");
+
+        let output = call.await.expect("the tool task joins").expect("the read");
+        assert_eq!(output.model_text, "1|unsaved");
+
+        drop(client_write);
+        drop(frames);
+        server_task
+            .await
+            .expect("server task")
+            .expect("transport closes");
     }
 }

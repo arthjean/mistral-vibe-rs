@@ -14,6 +14,7 @@ use crate::matching::NameFilter;
 use crate::policy::{
     ApprovalDecision, ApprovalFuture, ApprovalRequest, TrustDecision, TrustRootKind,
 };
+use crate::process::{ClientToolIo, ClientToolRequest};
 
 /// Answers every approval the same way and records what it was asked to
 /// approve: the tool, and the label of every requirement the call carried.
@@ -164,6 +165,7 @@ async fn harness_on(
             &registry,
             policy,
             approval as Arc<dyn ApprovalAgent>,
+            None,
         )
         .expect("the shell family registers");
     Harness {
@@ -1087,6 +1089,7 @@ async fn a_windows_family_leaves_the_surface_when_its_interpreter_goes_away() {
             &registry,
             PermissionStore::default(),
             approval as Arc<dyn ApprovalAgent>,
+            None,
         )
         .expect("the Git Bash family registers");
     let published = || {
@@ -1598,5 +1601,155 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
             .any(|reason| reason.contains("outside")),
         "another drive is outside the workspace: {:?}",
         outside.rationale
+    );
+}
+
+// --------------------------------------------------------------------------
+// Client terminals
+// --------------------------------------------------------------------------
+
+/// A client hosting a terminal, recording the sequence it was driven through.
+#[derive(Default)]
+struct TerminalClient {
+    requests: StdMutex<Vec<ClientToolRequest>>,
+    hosts_terminal: bool,
+}
+
+impl TerminalClient {
+    fn hosting(hosts_terminal: bool) -> Arc<Self> {
+        Arc::new(Self {
+            requests: StdMutex::new(Vec::new()),
+            hosts_terminal,
+        })
+    }
+
+    fn methods(&self) -> Vec<&'static str> {
+        self.requests
+            .lock()
+            .expect("requests")
+            .iter()
+            .map(ClientToolRequest::method)
+            .collect()
+    }
+}
+
+impl crate::process::ClientToolPort for TerminalClient {
+    fn request<'a>(&'a self, request: ClientToolRequest) -> crate::process::ToolIoFuture<'a> {
+        Box::pin(async move {
+            self.requests
+                .lock()
+                .map_err(|_| crate::process::ToolIoError::Request("client lock".to_owned()))?
+                .push(request.clone());
+            match request {
+                ClientToolRequest::TerminalCreate { .. } => {
+                    Ok(json!({"terminalId": "editor-terminal-1"}))
+                }
+                ClientToolRequest::TerminalWait { .. } => Ok(json!({"exitCode": 0})),
+                ClientToolRequest::TerminalOutput { .. } => {
+                    Ok(json!({"output": "from the editor\n", "truncated": false}))
+                }
+                _ => Ok(json!({})),
+            }
+        })
+    }
+
+    fn supports(&self, capability: crate::process::ClientToolCapability) -> bool {
+        self.hosts_terminal && capability == crate::process::ClientToolCapability::Terminal
+    }
+}
+
+async fn terminal_client_harness(client: Arc<TerminalClient>) -> Harness {
+    let directory = tempdir().expect("tempdir");
+    let policy = PermissionStore::default();
+    policy
+        .set_trust(
+            directory.path(),
+            TrustDecision::Trusted,
+            TrustRootKind::Workspace,
+        )
+        .await
+        .expect("trust");
+    let (approval, requests) = ScriptedApproval::new(ApprovalDecision::ApproveOnce);
+    let registry = ToolRegistry::default();
+    let tools = ShellTools::with_host(
+        directory.path().join("home"),
+        ShellRollout::Legacy,
+        posix_host(),
+    );
+    tools
+        .register(
+            "session-1",
+            directory.path(),
+            &registry,
+            policy,
+            approval as Arc<dyn ApprovalAgent>,
+            Some(ClientToolIo::new("session-1", client)),
+        )
+        .expect("the shell family registers");
+    Harness {
+        directory,
+        registry,
+        tools,
+        family: ShellFamily::Bash,
+        requests,
+    }
+}
+
+/// The command runs in the user's editor rather than in a hidden process, and
+/// the terminal it opened is released once the output has been read.
+#[tokio::test]
+async fn a_client_hosting_a_terminal_runs_the_command_through_it() {
+    let client = TerminalClient::hosting(true);
+    let harness = terminal_client_harness(client.clone()).await;
+
+    let output = harness
+        .call("bash", json!({"command": "echo ok"}))
+        .await
+        .expect("the client answers the command");
+    assert_eq!(output.model_text, "from the editor\n");
+    assert_eq!(
+        client.methods(),
+        [
+            "clientTool/terminal/create",
+            "clientTool/terminal/wait",
+            "clientTool/terminal/output",
+            "clientTool/terminal/release",
+        ]
+    );
+    let requests = client.requests.lock().expect("requests");
+    let ClientToolRequest::TerminalCreate {
+        session_id,
+        command,
+        cwd,
+        output_byte_limit,
+        tool_call_id,
+        ..
+    } = &requests[0]
+    else {
+        unreachable!("the first request creates the terminal: {requests:?}");
+    };
+    assert_eq!(session_id, "session-1");
+    assert_eq!(command, "echo ok");
+    assert_eq!(cwd, &harness.root().to_string_lossy());
+    assert!(*output_byte_limit > 0);
+    assert_eq!(tool_call_id.as_deref(), Some("bash-1"));
+}
+
+/// A client that declared no terminal leaves the command on this host, so a
+/// terminal-less editor is not left waiting on a delegation it cannot answer.
+#[tokio::test]
+async fn a_client_hosting_no_terminal_runs_the_command_on_this_host() {
+    let client = TerminalClient::hosting(false);
+    let harness = terminal_client_harness(client.clone()).await;
+
+    let output = harness
+        .call("bash", json!({"command": "echo local"}))
+        .await
+        .expect("this host answers the command");
+    assert_eq!(output.model_text.trim(), "local");
+    assert!(
+        client.methods().is_empty(),
+        "an undeclared terminal still reached the client: {:?}",
+        client.methods()
     );
 }

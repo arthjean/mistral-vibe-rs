@@ -318,6 +318,7 @@ async fn published_specs_with(
             &registry,
             policy,
             Arc::new(RejectApproval),
+            None,
         )
         .expect("the shell family registers");
     let (sender, _receiver) = tokio::sync::mpsc::channel(1);

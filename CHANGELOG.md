@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Let a client host the agent's file access and its terminals. A client that
+  declares `filesystem/read`, `filesystem/write` or `terminal` during the
+  handshake is now asked to answer for them: `read_file` and `edit` read the
+  buffer the editor holds rather than the file last saved, `write_file` and
+  `edit` write back into it, and a command runs on the client's terminal where
+  the user can watch it. A client that declares nothing keeps every tool on this
+  host, unchanged. Hosting the filesystem is not a way around the workspace
+  boundary: a path that escapes the root is refused before it is delegated, and
+  what travels is the absolute path the client can resolve. A delegation the
+  client leaves unanswered fails the tool naming the call rather than holding
+  the turn open, a malformed answer names the field it is missing, and a
+  terminal is always released, whether its command finished, its turn was
+  interrupted or its session closed.
 - Report what a session is actually running. `runtime/read` used to answer with
   an empty configuration, no agents, no skills, zeroed statistics and a context
   window of zero whatever the session was doing; it now carries the same agent

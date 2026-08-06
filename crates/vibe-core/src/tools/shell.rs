@@ -39,7 +39,8 @@ use crate::policy::{
     ApprovalAgent, PermissionMode, PermissionRequirement, PermissionStore, PolicyGuardedTool,
 };
 use crate::process::{
-    ProcessChunk, ProcessError, ProcessSpec, ProcessStream, TerminalManager, TerminalState,
+    ClientShellRequest, ClientToolIo, ProcessChunk, ProcessError, ProcessSpec, ProcessStream,
+    TerminalManager, TerminalState,
 };
 use crate::schema::{ObjectSchema, Property};
 use crate::shell::{ShellAnalysis, ShellConfig, ShellFlavor, ShellPolicyContext, analyze_shell};
@@ -469,6 +470,7 @@ impl ShellTools {
         registry: &ToolRegistry,
         policy: PermissionStore,
         approval: Arc<dyn ApprovalAgent>,
+        client_io: Option<ClientToolIo>,
     ) -> Result<Vec<RegistrationOutcome>, ToolError> {
         let host = (self.host)();
         let Some((family, managed)) = published_family(&host, self.rollout) else {
@@ -511,6 +513,7 @@ impl ShellTools {
                 policy: policy.clone(),
                 approval: approval.clone(),
                 managed: false,
+                client_io: client_io.clone(),
             }),
         )?];
         if !managed {
@@ -527,6 +530,7 @@ impl ShellTools {
                 policy: policy.clone(),
                 approval: approval.clone(),
                 managed: true,
+                client_io,
             }),
         )?);
         outcomes.push(publish(
@@ -998,6 +1002,7 @@ struct CommandWiring {
     policy: PermissionStore,
     approval: Arc<dyn ApprovalAgent>,
     managed: bool,
+    client_io: Option<ClientToolIo>,
 }
 
 fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
@@ -1010,8 +1015,15 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
         policy,
         approval,
         managed,
+        client_io,
     } = wiring;
-    let inner = command_handler(shell, config.clone(), working_directory.clone(), managed);
+    let inner = command_handler(
+        shell,
+        config.clone(),
+        working_directory.clone(),
+        managed,
+        client_io,
+    );
     // Reference `GitBashArgs` and `WindowsShellArgs` publish `cwd`, `shell` and
     // `env` on the legacy variant too, so the Windows families answer for them
     // whichever variant is selected.
@@ -1263,6 +1275,7 @@ fn command_handler(
     config: ShellConfig,
     working_directory: PathBuf,
     managed: bool,
+    client_io: Option<ClientToolIo>,
 ) -> Arc<dyn ToolHandler> {
     Arc::new(
         move |invocation: &ToolInvocation, output: ToolOutputSink| -> OwnedToolHandlerFuture {
@@ -1270,7 +1283,25 @@ fn command_handler(
             let config = config.clone();
             let working_directory = working_directory.clone();
             let arguments = invocation.arguments.clone();
+            let client = client_io.clone();
+            let call_id = invocation.call_id.clone();
             Box::pin(async move {
+                // A client terminal is one command's terminal: it is created,
+                // waited on and released inside this call, which is why the
+                // delegation covers the legacy variant and leaves the managed
+                // sessions the model addresses later on this host.
+                if !managed
+                    && let Some(delegated) = delegated_command(
+                        client.as_ref(),
+                        &working_directory,
+                        &arguments,
+                        &output,
+                        &call_id,
+                    )
+                    .await?
+                {
+                    return Ok(delegated);
+                }
                 if managed {
                     run_managed_command(&shell, &config, &working_directory, &arguments, &output)
                         .await
@@ -1281,6 +1312,45 @@ fn command_handler(
             })
         },
     )
+}
+
+/// Runs one command on a client terminal, or `None` when the client hosts none.
+async fn delegated_command(
+    client: Option<&ClientToolIo>,
+    working_directory: &Path,
+    arguments: &Value,
+    output: &ToolOutputSink,
+    call_id: &str,
+) -> Result<Option<ToolExecutionOutput>, ToolError> {
+    let Some(client) = client.filter(|client| client.supports_terminal()) else {
+        return Ok(None);
+    };
+    let command = command_argument(arguments)?;
+    let timeout = timeout_argument(arguments);
+    let limit = MAX_OUTPUT_BYTES.min(output.remaining_bytes().max(1));
+    let result = client
+        .run_shell(ClientShellRequest {
+            tool_call_id: Some(call_id.to_owned()),
+            command: command.clone(),
+            args: None,
+            env: None,
+            cwd: working_directory.to_string_lossy().into_owned(),
+            output_byte_limit: u64::try_from(limit).unwrap_or(u64::MAX),
+            timeout: Duration::from_secs(timeout),
+        })
+        .await
+        .map_err(|error| {
+            ToolError::Execution(format!("the client terminal failed: {error}: `{command}`"))
+        })?;
+    command_output(
+        &command,
+        result.stdout,
+        result.stderr,
+        result.returncode,
+        result.truncated,
+        limit,
+    )
+    .map(Some)
 }
 
 async fn run_legacy_command(
@@ -1338,6 +1408,21 @@ async fn run_legacy_command(
     let (stderr, stderr_truncated) = render_stream(&read.chunks, ProcessStream::Stderr, limit);
     let truncated = stdout_truncated || stderr_truncated || read.backpressure_dropped;
     let status = exit_status(&read.state);
+    command_output(&command, stdout, stderr, status, truncated, limit)
+}
+
+/// What one finished command reports, whether this host ran it or a client did.
+///
+/// A non-zero status is a tool failure rather than a result, so the two paths
+/// share this rather than each deciding when a command counts as failed.
+fn command_output(
+    command: &str,
+    stdout: String,
+    stderr: String,
+    status: i32,
+    truncated: bool,
+    limit: usize,
+) -> Result<ToolExecutionOutput, ToolError> {
     if status != 0 {
         return Err(ToolError::Execution(format!(
             "the command failed with exit status {status}: `{command}`\nstderr:\n{stderr}\n\
