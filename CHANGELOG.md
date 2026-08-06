@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- Read the per-tool configuration an operator writes. `[tools.grep]
+  default_max_matches = 500`, `[tools.read_file] max_read_bytes`, `[tools.todo]
+  max_todos`, the `web_fetch` and `web_search` timeouts, the shell budgets and
+  the four permission lists every tool carries are now resolved from the layered
+  configuration at each call rather than compiled in: the 26 tool classes the
+  reference declares, the 22 keys they draw from and all 146 `(tool, key)` pairs
+  have a live reader, replayed against a committed corpus captured from the
+  pinned reference. A settings screen reads the same table, since the discovered
+  configuration layer now publishes every declared tool with the reference key
+  names instead of four tools with invented ones.
+- Obey a configuration change between two turns. The tool families are published
+  against a resolver rather than a snapshot, so raising a budget or moving a
+  permission applies to the next call without the session being restarted,
+  whether a client patched the file or an operator edited it by hand.
+- Refuse a mistyped setting without refusing the session. A value of the wrong
+  type, or a limit set to zero or below, falls back to the shipped default and
+  leaves a diagnostic naming the tool, the key and the replacement, in one line
+  a narrow terminal renders whole.
+- Guard what the Python client guards. A tool's configured `permission`,
+  `allowlist`, `denylist` and `sensitive_patterns` now decide alongside the
+  trust roots: reading a `.env` file asks even though `read_file` is configured
+  to always, `vim`, `nano`, `tmux`, `screen`, `gdb`, `passwd` and a bare
+  `python`, `bash`, `sh` or `su` are refused as the reference refuses them, and
+  a session approval carrying no pattern grants the tool for the session instead
+  of asking again on the next call. An allowlisted reader pointed outside the
+  workspace still reaches the operator: every allowlisted command has its path
+  operands inspected first.
+- Ask about `sudo` instead of refusing it. The reference carries `sudo` as a
+  shell sensitive pattern rather than a denylist entry, so a command starting
+  with it now reaches an approval prompt where this client used to refuse it
+  outright. It is still never granted automatically, whatever the allowlist
+  says. The other outright denials this client adds on its own, `rm`, `dd`,
+  `mkfs`, `shutdown` and `eval`, are unchanged for now.
 - Accept the argument spellings the reference accepts. A model that sends
   `"replace_all": "yes"` or `"max_matches": "50"` used to have the call refused
   here and honored by the Python client, because the reference builds its

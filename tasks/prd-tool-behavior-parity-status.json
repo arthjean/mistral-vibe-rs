@@ -17,10 +17,10 @@
     {
       "id": "EP-031",
       "title": "Per-Tool Configuration",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3
     },
     {
       "id": "EP-032",
@@ -98,43 +98,43 @@
       "id": "US-102",
       "title": "Resolve a tool configuration from the layers",
       "epic": "EP-031",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-101"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-103",
       "title": "Wire the builtin limits onto the resolved configuration",
       "epic": "EP-031",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-102"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-104",
       "title": "Publish the discovered tool configuration defaults",
       "epic": "EP-031",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-103"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-105",
