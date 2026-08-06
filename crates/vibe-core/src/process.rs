@@ -21,6 +21,10 @@ use crate::workspace::{GitInspector, GitInspectorFuture, GitState, WorkspaceErro
 const DEFAULT_QUEUE_CAPACITY: usize = 128;
 const DEFAULT_MAX_OUTPUT_BYTES: usize = 1_048_576;
 const DEFAULT_CLEANUP_GRACE: Duration = Duration::from_secs(2);
+/// How long one delegated request may stay unanswered before the tool reports
+/// the delegation rather than holding the turn open on a client that stopped
+/// responding.
+pub const DEFAULT_CLIENT_TOOL_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub type ToolIoFuture<'a> = Pin<Box<dyn Future<Output = Result<Value, ToolIoError>> + Send + 'a>>;
 
@@ -505,61 +509,185 @@ pub enum ClientToolCapability {
     Terminal,
 }
 
+impl ClientToolCapability {
+    /// The name a client declares this capability under during `initialize`.
+    #[must_use]
+    pub const fn declaration(self) -> &'static str {
+        match self {
+            Self::FilesystemRead => "filesystem/read",
+            Self::FilesystemWrite => "filesystem/write",
+            Self::Terminal => "terminal",
+        }
+    }
+}
+
+/// One server-to-client tool request, serialized as the method name the
+/// reference routes and the parameter object it validates.
+///
+/// The variant names carry their reference method names and the fields their
+/// reference aliases, so a request is put on the wire by serializing it rather
+/// than by a second mapping that could drift from this one.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "method", content = "params", rename_all = "snake_case")]
+#[serde(tag = "method", content = "params", rename_all = "camelCase")]
 pub enum ClientToolRequest {
-    FilesystemRead {
+    #[serde(rename = "clientTool/readTextFile")]
+    ReadTextFile {
+        #[serde(rename = "sessionId")]
+        session_id: String,
         path: String,
+        line: Option<u64>,
+        limit: Option<u64>,
     },
-    FilesystemWrite {
+    #[serde(rename = "clientTool/writeTextFile")]
+    WriteTextFile {
+        #[serde(rename = "sessionId")]
+        session_id: String,
         path: String,
-        content: Vec<u8>,
+        content: String,
     },
+    #[serde(rename = "clientTool/terminal/create")]
     TerminalCreate {
-        request_id: String,
+        #[serde(rename = "sessionId")]
+        session_id: String,
         command: String,
+        args: Option<Vec<String>>,
+        env: Option<BTreeMap<String, String>>,
         cwd: String,
+        #[serde(rename = "outputByteLimit")]
+        output_byte_limit: u64,
+        #[serde(rename = "toolCallId")]
+        tool_call_id: Option<String>,
     },
-    TerminalCancelCreate {
-        request_id: String,
-    },
+    #[serde(rename = "clientTool/terminal/wait")]
     TerminalWait {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+        #[serde(rename = "terminalId")]
         terminal_id: String,
     },
+    #[serde(rename = "clientTool/terminal/output")]
     TerminalOutput {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+        #[serde(rename = "terminalId")]
         terminal_id: String,
     },
+    #[serde(rename = "clientTool/terminal/kill")]
     TerminalKill {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+        #[serde(rename = "terminalId")]
         terminal_id: String,
     },
+    #[serde(rename = "clientTool/terminal/release")]
     TerminalRelease {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+        #[serde(rename = "terminalId")]
         terminal_id: String,
     },
 }
 
 impl ClientToolRequest {
-    fn required_capability(&self) -> ClientToolCapability {
+    /// The reference method name this request is issued under.
+    #[must_use]
+    pub const fn method(&self) -> &'static str {
         match self {
-            Self::FilesystemRead { .. } => ClientToolCapability::FilesystemRead,
-            Self::FilesystemWrite { .. } => ClientToolCapability::FilesystemWrite,
+            Self::ReadTextFile { .. } => "clientTool/readTextFile",
+            Self::WriteTextFile { .. } => "clientTool/writeTextFile",
+            Self::TerminalCreate { .. } => "clientTool/terminal/create",
+            Self::TerminalWait { .. } => "clientTool/terminal/wait",
+            Self::TerminalOutput { .. } => "clientTool/terminal/output",
+            Self::TerminalKill { .. } => "clientTool/terminal/kill",
+            Self::TerminalRelease { .. } => "clientTool/terminal/release",
+        }
+    }
+
+    #[must_use]
+    pub const fn required_capability(&self) -> ClientToolCapability {
+        match self {
+            Self::ReadTextFile { .. } => ClientToolCapability::FilesystemRead,
+            Self::WriteTextFile { .. } => ClientToolCapability::FilesystemWrite,
             Self::TerminalCreate { .. }
-            | Self::TerminalCancelCreate { .. }
             | Self::TerminalWait { .. }
             | Self::TerminalOutput { .. }
             | Self::TerminalKill { .. }
             | Self::TerminalRelease { .. } => ClientToolCapability::Terminal,
         }
     }
+
+    /// Rejects a request the reference model would refuse before it costs a
+    /// round trip.
+    ///
+    /// `line` and `limit` are bounded at one and `outputByteLimit` above zero
+    /// upstream, so a call that violates either is a fault on this side and is
+    /// reported as one rather than delegated for the client to reject.
+    fn validate(&self) -> Result<(), ToolIoError> {
+        match self {
+            Self::ReadTextFile { line, limit, .. } => {
+                if *line == Some(0) {
+                    return Err(ToolIoError::OutOfBounds("line"));
+                }
+                if *limit == Some(0) {
+                    return Err(ToolIoError::OutOfBounds("limit"));
+                }
+                Ok(())
+            }
+            Self::TerminalCreate {
+                output_byte_limit, ..
+            } => {
+                if *output_byte_limit == 0 {
+                    return Err(ToolIoError::OutOfBounds("outputByteLimit"));
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
 }
 
 pub trait ClientToolPort: Send + Sync {
     fn request<'a>(&'a self, request: ClientToolRequest) -> ToolIoFuture<'a>;
+
+    /// Whether the connected client declared this capability during
+    /// `initialize`. Asked per call rather than snapshotted, so a reconnection
+    /// that changes the declaration is honoured by tools already registered.
+    fn supports(&self, capability: ClientToolCapability) -> bool;
 }
 
+/// What one delegated command needs, mirroring the reference
+/// `ShellCommandRequest`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientShellRequest {
+    pub tool_call_id: Option<String>,
+    pub command: String,
+    pub args: Option<Vec<String>>,
+    pub env: Option<BTreeMap<String, String>>,
+    pub cwd: String,
+    pub output_byte_limit: u64,
+    pub timeout: Duration,
+}
+
+/// What a delegated command produced, mirroring the reference
+/// `ShellCommandResult`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientShellResult {
+    pub stdout: String,
+    pub stderr: String,
+    pub returncode: i32,
+    pub truncated: bool,
+}
+
+/// The file and terminal access one session delegates to its client.
+///
+/// Every request carries the session the tools were registered for, which is
+/// what lets a client route the delegation back to the buffer or terminal the
+/// user is looking at.
 #[derive(Clone)]
 pub struct ClientToolIo {
-    capabilities: BTreeSet<ClientToolCapability>,
+    session_id: String,
     port: Arc<dyn ClientToolPort>,
+    timeout: Duration,
     active_terminals: Arc<Mutex<BTreeSet<String>>>,
     lifecycles: Arc<Mutex<ClientLifecycles>>,
     next_lifecycle: Arc<AtomicU64>,
@@ -583,22 +711,21 @@ struct ClientShellLifecycle {
     active_terminals: Arc<Mutex<BTreeSet<String>>>,
     cleanup_failures: Arc<Mutex<Vec<String>>>,
     cleanup_grace: Duration,
-    command: String,
-    cwd: String,
-    request_id: String,
+    session_id: String,
+    create: ClientToolRequest,
+    wait_timeout: Duration,
+    request_timeout: Duration,
     cancel: watch::Receiver<bool>,
-    result_sender: oneshot::Sender<Result<Value, ToolIoError>>,
+    result_sender: oneshot::Sender<Result<ClientShellResult, ToolIoError>>,
 }
 
 impl ClientToolIo {
     #[must_use]
-    pub fn new(
-        capabilities: impl IntoIterator<Item = ClientToolCapability>,
-        port: Arc<dyn ClientToolPort>,
-    ) -> Self {
+    pub fn new(session_id: impl Into<String>, port: Arc<dyn ClientToolPort>) -> Self {
         Self {
-            capabilities: capabilities.into_iter().collect(),
+            session_id: session_id.into(),
             port,
+            timeout: DEFAULT_CLIENT_TOOL_TIMEOUT,
             active_terminals: Arc::new(Mutex::new(BTreeSet::new())),
             lifecycles: Arc::new(Mutex::new(ClientLifecycles::default())),
             next_lifecycle: Arc::new(AtomicU64::new(1)),
@@ -607,28 +734,114 @@ impl ClientToolIo {
         }
     }
 
-    pub async fn request(&self, request: ClientToolRequest) -> Result<Value, ToolIoError> {
-        let required = request.required_capability();
-        if !self.capabilities.contains(&required) {
-            return Err(ToolIoError::CapabilityNotAdvertised(required));
-        }
-        self.port.request(request).await
+    /// The same delegation with a stated deadline, which is how a test drives a
+    /// client that never answers without waiting out the default.
+    #[must_use]
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
     }
 
-    pub async fn run_shell(&self, command: String, cwd: String) -> Result<Value, ToolIoError> {
-        if !self.capabilities.contains(&ClientToolCapability::Terminal) {
+    #[must_use]
+    pub fn supports_read(&self) -> bool {
+        self.port.supports(ClientToolCapability::FilesystemRead)
+    }
+
+    #[must_use]
+    pub fn supports_write(&self) -> bool {
+        self.port.supports(ClientToolCapability::FilesystemWrite)
+    }
+
+    #[must_use]
+    pub fn supports_terminal(&self) -> bool {
+        self.port.supports(ClientToolCapability::Terminal)
+    }
+
+    /// Reads a file through the client, returning what its buffer holds.
+    ///
+    /// `line` is sent only past the first, matching the reference, which leaves
+    /// the field absent when the read starts at the top of the file.
+    pub async fn read_text_file(
+        &self,
+        path: &str,
+        line: Option<u64>,
+        limit: Option<u64>,
+    ) -> Result<String, ToolIoError> {
+        let response = self
+            .request(ClientToolRequest::ReadTextFile {
+                session_id: self.session_id.clone(),
+                path: path.to_owned(),
+                line: line.filter(|line| *line != 1),
+                limit,
+            })
+            .await?;
+        response
+            .get("content")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .ok_or(ToolIoError::MalformedResponse("content"))
+    }
+
+    pub async fn write_text_file(&self, path: &str, content: &str) -> Result<(), ToolIoError> {
+        self.request(ClientToolRequest::WriteTextFile {
+            session_id: self.session_id.clone(),
+            path: path.to_owned(),
+            content: content.to_owned(),
+        })
+        .await
+        .map(|_| ())
+    }
+
+    pub async fn request(&self, request: ClientToolRequest) -> Result<Value, ToolIoError> {
+        let required = request.required_capability();
+        if !self.port.supports(required) {
+            return Err(ToolIoError::CapabilityNotAdvertised(required));
+        }
+        request.validate()?;
+        let method = request.method();
+        let timeout = self.timeout;
+        tokio::time::timeout(timeout, self.port.request(request))
+            .await
+            .map_err(|_| ToolIoError::Unanswered {
+                method,
+                seconds: timeout.as_secs(),
+            })?
+    }
+
+    /// Runs one command on a client terminal, from creation to release.
+    ///
+    /// The lifecycle runs in its own task so an abandoned call still reaches the
+    /// kill and the release: a terminal the client opened on our behalf is ours
+    /// to close, and dropping the future is not an excuse to leak it.
+    pub async fn run_shell(
+        &self,
+        request: ClientShellRequest,
+    ) -> Result<ClientShellResult, ToolIoError> {
+        if !self.port.supports(ClientToolCapability::Terminal) {
             return Err(ToolIoError::CapabilityNotAdvertised(
                 ClientToolCapability::Terminal,
             ));
         }
+        let create = ClientToolRequest::TerminalCreate {
+            session_id: self.session_id.clone(),
+            command: request.command,
+            args: request.args,
+            env: request.env,
+            cwd: request.cwd,
+            output_byte_limit: request.output_byte_limit,
+            tool_call_id: request.tool_call_id,
+        };
+        create.validate()?;
         let runtime =
             tokio::runtime::Handle::try_current().map_err(|_| ToolIoError::RuntimeUnavailable)?;
         let port = self.port.clone();
         let active_terminals = self.active_terminals.clone();
         let cleanup_failures = self.cleanup_failures.clone();
         let cleanup_grace = self.cleanup_grace;
+        let session_id = self.session_id.clone();
+        let request_timeout = self.timeout;
+        let wait_timeout = request.timeout;
         let lifecycle_id = self.next_lifecycle.fetch_add(1, Ordering::Relaxed);
-        let request_id = format!("terminal-create-{lifecycle_id}");
         let (cancel, cancel_receiver) = watch::channel(false);
         let (result_sender, result_receiver) = oneshot::channel();
         let mut lifecycles = self.lifecycles.lock().await;
@@ -641,9 +854,10 @@ impl ClientToolIo {
                 active_terminals,
                 cleanup_failures,
                 cleanup_grace,
-                command,
-                cwd,
-                request_id,
+                session_id,
+                create,
+                wait_timeout,
+                request_timeout,
                 cancel: cancel_receiver,
                 result_sender,
             })
@@ -705,6 +919,7 @@ impl ClientToolIo {
         for terminal_id in terminal_ids {
             cleanup_client_terminal(
                 &self.port,
+                &self.session_id,
                 &terminal_id,
                 self.cleanup_grace,
                 &self.cleanup_failures,
@@ -731,82 +946,44 @@ async fn run_client_shell_lifecycle(context: ClientShellLifecycle) {
         active_terminals,
         cleanup_failures,
         cleanup_grace,
-        command,
-        cwd,
-        request_id,
+        session_id,
+        create,
+        wait_timeout,
+        request_timeout,
         mut cancel,
         mut result_sender,
     } = context;
-    let created = port.request(ClientToolRequest::TerminalCreate {
-        request_id: request_id.clone(),
-        command,
-        cwd,
-    });
+    let created = tokio::time::timeout(request_timeout, port.request(create));
     tokio::pin!(created);
+    // A cancellation raised while the client is still minting the terminal
+    // cannot be sent to it: the reference declares no method to withdraw a
+    // creation, and a terminal id that arrives after we stopped waiting is
+    // still ours to close. So the creation is awaited out and then killed.
     let cancelled = tokio::select! {
-        created = &mut created => {
-            let created = match created {
-                Ok(created) => created,
-                Err(error) => {
-                    let _ = result_sender.send(Err(error));
-                    return;
-                }
-            };
-            Some(created)
-        }
+        created = &mut created => Some(created),
         changed = cancel.changed() => {
             let _ = changed;
             None
         }
-        () = result_sender.closed() => {
-            None
-        }
+        () = result_sender.closed() => None,
     };
+    let abandoned = cancelled.is_none();
     let created = match cancelled {
         Some(created) => created,
-        None => {
-            let cancellation = cleanup_client_request(
-                &port,
-                ClientToolRequest::TerminalCancelCreate {
-                    request_id: request_id.clone(),
-                },
-                cleanup_grace,
-            )
-            .await;
-            match cancellation {
-                Ok(response) if response["cancelled"] == true => {
-                    let _ = result_sender.send(Err(ToolIoError::LifecycleCancelled));
-                    return;
-                }
-                Ok(response) => {
-                    if let Some(terminal_id) = response.get("terminalId").and_then(Value::as_str) {
-                        cleanup_client_terminal(
-                            &port,
-                            terminal_id,
-                            cleanup_grace,
-                            &cleanup_failures,
-                        )
-                        .await;
-                        let _ = result_sender.send(Err(ToolIoError::LifecycleCancelled));
-                        return;
-                    }
-                    cleanup_failures.lock().await.push(format!(
-                        "{request_id}: client did not acknowledge terminal creation cancellation"
-                    ));
-                }
-                Err(error) => {
-                    cleanup_failures.lock().await.push(format!(
-                        "{request_id}: terminal creation cancellation failed: {error}"
-                    ));
-                }
-            }
-            match created.await {
-                Ok(created) => created,
-                Err(error) => {
-                    let _ = result_sender.send(Err(error));
-                    return;
-                }
-            }
+        None => created.await,
+    };
+    let created = match created {
+        Ok(Ok(created)) => created,
+        Ok(Err(error)) => {
+            let _ = result_sender.send(Err(error));
+            return;
+        }
+        Err(_) => {
+            let _ = result_sender.send(Err(ToolIoError::Unanswered {
+                method: "clientTool/terminal/create",
+                seconds: request_timeout.as_secs(),
+            }));
+            return;
         }
     };
     let terminal_id = match created.get("terminalId").and_then(Value::as_str) {
@@ -817,65 +994,93 @@ async fn run_client_shell_lifecycle(context: ClientShellLifecycle) {
         }
     };
     active_terminals.lock().await.insert(terminal_id.clone());
-    if result_sender.is_closed() || *cancel.borrow() {
-        cleanup_client_terminal(&port, &terminal_id, cleanup_grace, &cleanup_failures).await;
+    if abandoned || result_sender.is_closed() || *cancel.borrow() {
+        cleanup_client_terminal(
+            &port,
+            &session_id,
+            &terminal_id,
+            cleanup_grace,
+            &cleanup_failures,
+        )
+        .await;
         active_terminals.lock().await.remove(&terminal_id);
         let _ = result_sender.send(Err(ToolIoError::LifecycleCancelled));
         return;
     }
+    let terminal = |terminal_id: &str| (session_id.clone(), terminal_id.to_owned());
+    let (wait_session, wait_terminal) = terminal(&terminal_id);
     let waited = tokio::select! {
-        waited = port.request(ClientToolRequest::TerminalWait {
-            terminal_id: terminal_id.clone(),
-        }) => waited,
+        waited = tokio::time::timeout(wait_timeout, port.request(ClientToolRequest::TerminalWait {
+            session_id: wait_session,
+            terminal_id: wait_terminal,
+        })) => waited.unwrap_or(Err(ToolIoError::Unanswered {
+            method: "clientTool/terminal/wait",
+            seconds: wait_timeout.as_secs(),
+        })),
         () = result_sender.closed() => {
-            cleanup_client_terminal(&port, &terminal_id, cleanup_grace, &cleanup_failures).await;
+            cleanup_client_terminal(&port, &session_id, &terminal_id, cleanup_grace, &cleanup_failures).await;
             active_terminals.lock().await.remove(&terminal_id);
             return;
         }
         changed = cancel.changed() => {
             let _ = changed;
-            cleanup_client_terminal(&port, &terminal_id, cleanup_grace, &cleanup_failures).await;
+            cleanup_client_terminal(&port, &session_id, &terminal_id, cleanup_grace, &cleanup_failures).await;
             active_terminals.lock().await.remove(&terminal_id);
             let _ = result_sender.send(Err(ToolIoError::LifecycleCancelled));
             return;
         }
     };
-    if waited.is_err() {
-        let killed = cleanup_client_request(
-            &port,
-            ClientToolRequest::TerminalKill {
-                terminal_id: terminal_id.clone(),
-            },
-            cleanup_grace,
-        )
-        .await;
-        if let Err(error) = killed {
-            record_cleanup_failure(&cleanup_failures, &terminal_id, error).await;
+    let (output_session, output_terminal) = terminal(&terminal_id);
+    let (waited, output) = match waited {
+        Ok(waited) => {
+            let output = tokio::select! {
+                output = tokio::time::timeout(request_timeout, port.request(ClientToolRequest::TerminalOutput {
+                    session_id: output_session,
+                    terminal_id: output_terminal,
+                })) => output.unwrap_or(Err(ToolIoError::Unanswered {
+                    method: "clientTool/terminal/output",
+                    seconds: request_timeout.as_secs(),
+                })),
+                () = result_sender.closed() => {
+                    cleanup_client_terminal(&port, &session_id, &terminal_id, cleanup_grace, &cleanup_failures).await;
+                    active_terminals.lock().await.remove(&terminal_id);
+                    return;
+                }
+                changed = cancel.changed() => {
+                    let _ = changed;
+                    cleanup_client_terminal(&port, &session_id, &terminal_id, cleanup_grace, &cleanup_failures).await;
+                    active_terminals.lock().await.remove(&terminal_id);
+                    let _ = result_sender.send(Err(ToolIoError::LifecycleCancelled));
+                    return;
+                }
+            };
+            (waited, output)
         }
-    }
-    let output = match waited {
-        Ok(_) => tokio::select! {
-            output = port.request(ClientToolRequest::TerminalOutput {
-                terminal_id: terminal_id.clone(),
-            }) => output,
-            () = result_sender.closed() => {
-                cleanup_client_terminal(&port, &terminal_id, cleanup_grace, &cleanup_failures).await;
-                active_terminals.lock().await.remove(&terminal_id);
-                return;
+        // A wait this client failed or never answered leaves its command
+        // running, so the kill precedes the release rather than the release
+        // standing alone.
+        Err(error) => {
+            let killed = cleanup_client_request(
+                &port,
+                ClientToolRequest::TerminalKill {
+                    session_id: session_id.clone(),
+                    terminal_id: terminal_id.clone(),
+                },
+                cleanup_grace,
+            )
+            .await;
+            if let Err(failure) = killed {
+                record_cleanup_failure(&cleanup_failures, &terminal_id, failure).await;
             }
-            changed = cancel.changed() => {
-                let _ = changed;
-                cleanup_client_terminal(&port, &terminal_id, cleanup_grace, &cleanup_failures).await;
-                active_terminals.lock().await.remove(&terminal_id);
-                let _ = result_sender.send(Err(ToolIoError::LifecycleCancelled));
-                return;
-            }
-        },
-        Err(error) => Err(error),
+            (Value::Null, Err(error))
+        }
     };
+    // The release closes every path, including the ones the client failed, so a
+    // terminal it opened for us is never left behind.
     let release = cleanup_client_request(
         &port,
         ClientToolRequest::TerminalRelease {
+            session_id: session_id.clone(),
             terminal_id: terminal_id.clone(),
         },
         cleanup_grace,
@@ -883,29 +1088,61 @@ async fn run_client_shell_lifecycle(context: ClientShellLifecycle) {
     .await;
     active_terminals.lock().await.remove(&terminal_id);
     let result = match (output, release) {
-        (Ok(output), Ok(_)) => {
-            if output.get("signal").is_some_and(|signal| !signal.is_null()) {
-                Err(ToolIoError::TerminalSignal)
-            } else {
-                Ok(output)
-            }
-        }
+        (Ok(output), Ok(_)) => shell_result(&waited, &output),
         (Err(error), _) | (_, Err(error)) => Err(error),
     };
     let _ = result_sender.send(result);
 }
 
+/// The command outcome the reference assembles from the wait and the output.
+///
+/// A terminal that reports neither an exit code nor a signal has told us
+/// nothing about how the command ended, which upstream treats as a fault rather
+/// than as a success with an unknown status.
+fn shell_result(waited: &Value, output: &Value) -> Result<ClientShellResult, ToolIoError> {
+    let exit_code = waited.get("exitCode").and_then(Value::as_i64);
+    let signal = waited
+        .get("signal")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    if exit_code.is_none() && signal.is_none() {
+        return Err(ToolIoError::MissingExitStatus);
+    }
+    let stdout = output
+        .get("output")
+        .and_then(Value::as_str)
+        .ok_or(ToolIoError::MalformedResponse("output"))?
+        .to_owned();
+    let truncated = output
+        .get("truncated")
+        .and_then(Value::as_bool)
+        .ok_or(ToolIoError::MalformedResponse("truncated"))?;
+    Ok(ClientShellResult {
+        stdout,
+        stderr: signal.map_or_else(String::new, |signal| {
+            format!("Process terminated by {signal}")
+        }),
+        returncode: exit_code
+            .and_then(|code| i32::try_from(code).ok())
+            .unwrap_or(-1),
+        truncated,
+    })
+}
+
 async fn cleanup_client_terminal(
     port: &Arc<dyn ClientToolPort>,
+    session_id: &str,
     terminal_id: &str,
     cleanup_grace: Duration,
     cleanup_failures: &Arc<Mutex<Vec<String>>>,
 ) {
     for request in [
         ClientToolRequest::TerminalKill {
+            session_id: session_id.to_owned(),
             terminal_id: terminal_id.to_owned(),
         },
         ClientToolRequest::TerminalRelease {
+            session_id: session_id.to_owned(),
             terminal_id: terminal_id.to_owned(),
         },
     ] {
@@ -979,8 +1216,12 @@ pub enum ToolIoError {
     CapabilityNotAdvertised(ClientToolCapability),
     #[error("client response is missing `{0}`")]
     MalformedResponse(&'static str),
-    #[error("client terminal exited from a signal")]
-    TerminalSignal,
+    #[error("the client did not answer {method} within {seconds}s")]
+    Unanswered { method: &'static str, seconds: u64 },
+    #[error("`{0}` is below the bound the client tool protocol declares")]
+    OutOfBounds(&'static str),
+    #[error("client terminal returned no exit status")]
+    MissingExitStatus,
     #[error("client ToolIO requires a Tokio runtime")]
     RuntimeUnavailable,
     #[error("client terminal lifecycle ended before returning a result")]
@@ -1118,10 +1359,29 @@ mod tests {
         );
     }
 
+    /// A client that answers everything, recording what it was asked.
     #[derive(Default)]
     struct FakeClientPort {
         requests: StdMutex<Vec<ClientToolRequest>>,
+        capabilities: StdMutex<BTreeSet<ClientToolCapability>>,
         fail_wait: AtomicBool,
+    }
+
+    impl FakeClientPort {
+        fn hosting(capabilities: impl IntoIterator<Item = ClientToolCapability>) -> Arc<Self> {
+            let port = Self::default();
+            *port.capabilities.lock().expect("capabilities") = capabilities.into_iter().collect();
+            Arc::new(port)
+        }
+
+        fn methods(&self) -> Vec<&'static str> {
+            self.requests
+                .lock()
+                .expect("requests")
+                .iter()
+                .map(ClientToolRequest::method)
+                .collect()
+        }
     }
 
     impl ClientToolPort for FakeClientPort {
@@ -1132,81 +1392,271 @@ mod tests {
                     .map_err(|_| ToolIoError::Request("fake lock poisoned".to_owned()))?
                     .push(request.clone());
                 match request {
+                    ClientToolRequest::ReadTextFile { .. } => {
+                        Ok(json!({"content": "from the buffer\n"}))
+                    }
                     ClientToolRequest::TerminalCreate { .. } => {
                         Ok(json!({"terminalId": "client-terminal-1"}))
                     }
                     ClientToolRequest::TerminalWait { .. }
                         if self.fail_wait.load(Ordering::Acquire) =>
                     {
-                        Err(ToolIoError::Request("timeout".to_owned()))
+                        Err(ToolIoError::Request(
+                            "the client failed the wait".to_owned(),
+                        ))
                     }
+                    ClientToolRequest::TerminalWait { .. } => Ok(json!({"exitCode": 0})),
                     ClientToolRequest::TerminalOutput { .. } => {
-                        Ok(json!({"stdout": "ok", "signal": null}))
+                        Ok(json!({"output": "ok", "truncated": false}))
                     }
                     _ => Ok(json!({})),
                 }
             })
         }
+
+        fn supports(&self, capability: ClientToolCapability) -> bool {
+            self.capabilities
+                .lock()
+                .expect("capabilities")
+                .contains(&capability)
+        }
+    }
+
+    #[test]
+    fn client_tool_requests_serialize_as_the_reference_methods() {
+        let read = ClientToolRequest::ReadTextFile {
+            session_id: "session-1".to_owned(),
+            path: "/work/main.rs".to_owned(),
+            line: Some(4),
+            limit: Some(10),
+        };
+        assert_eq!(
+            serde_json::to_value(&read).expect("read serializes"),
+            json!({
+                "method": "clientTool/readTextFile",
+                "params": {
+                    "sessionId": "session-1",
+                    "path": "/work/main.rs",
+                    "line": 4,
+                    "limit": 10,
+                },
+            })
+        );
+        let create = ClientToolRequest::TerminalCreate {
+            session_id: "session-1".to_owned(),
+            command: "cargo test".to_owned(),
+            args: None,
+            env: None,
+            cwd: "/work".to_owned(),
+            output_byte_limit: 1024,
+            tool_call_id: Some("call-1".to_owned()),
+        };
+        assert_eq!(create.method(), "clientTool/terminal/create");
+        assert_eq!(
+            serde_json::to_value(&create).expect("create serializes")["params"]["outputByteLimit"],
+            json!(1024)
+        );
     }
 
     #[tokio::test]
-    async fn client_tool_io_validates_capability_and_terminal_ordering() {
-        let port = Arc::new(FakeClientPort::default());
-        let io = ClientToolIo::new([ClientToolCapability::Terminal], port.clone());
-        let output = io
-            .run_shell("echo ok".to_owned(), "/work".to_owned())
-            .await
-            .expect("run");
-        assert_eq!(output["stdout"], "ok");
-        {
-            let requests = port.requests.lock().expect("requests");
-            assert!(matches!(
-                requests[0],
-                ClientToolRequest::TerminalCreate { .. }
-            ));
-            assert!(matches!(
-                requests[1],
-                ClientToolRequest::TerminalWait { .. }
-            ));
-            assert!(matches!(
-                requests[2],
-                ClientToolRequest::TerminalOutput { .. }
-            ));
-            assert!(matches!(
-                requests[3],
-                ClientToolRequest::TerminalRelease { .. }
-            ));
-        }
+    async fn a_capability_the_client_did_not_declare_is_never_delegated() {
+        let port = FakeClientPort::hosting([ClientToolCapability::Terminal]);
+        let io = ClientToolIo::new("session-1", port.clone());
+        assert!(io.supports_terminal());
+        assert!(!io.supports_read());
+        assert!(!io.supports_write());
         assert!(matches!(
-            io.request(ClientToolRequest::FilesystemRead {
-                path: "secret".to_owned(),
-            })
-            .await,
+            io.read_text_file("secret", None, None).await,
             Err(ToolIoError::CapabilityNotAdvertised(
                 ClientToolCapability::FilesystemRead
             ))
         ));
+        assert!(
+            port.requests.lock().expect("requests").is_empty(),
+            "a refused capability still reached the client"
+        );
     }
 
     #[tokio::test]
-    async fn client_timeout_kills_before_release() {
-        let port = Arc::new(FakeClientPort::default());
-        port.fail_wait.store(true, Ordering::Release);
-        let io = ClientToolIo::new([ClientToolCapability::Terminal], port.clone());
-        assert!(
-            io.run_shell("blocked".to_owned(), "/work".to_owned())
+    async fn a_delegated_read_carries_the_reference_parameters() {
+        let port = FakeClientPort::hosting([ClientToolCapability::FilesystemRead]);
+        let io = ClientToolIo::new("session-1", port.clone());
+        assert_eq!(
+            io.read_text_file("main.rs", Some(1), Some(51))
                 .await
-                .is_err()
+                .expect("the client answers"),
+            "from the buffer\n"
         );
         let requests = port.requests.lock().expect("requests");
+        // The first line is the default, so the reference leaves `line` unset
+        // rather than sending the offset it would have meant anyway.
         assert!(matches!(
-            requests[2],
-            ClientToolRequest::TerminalKill { .. }
+            &requests[0],
+            ClientToolRequest::ReadTextFile { session_id, path, line, limit }
+                if session_id == "session-1" && path == "main.rs" && line.is_none() && *limit == Some(51)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_read_below_the_reference_bounds_is_refused_before_it_is_sent() {
+        let port = FakeClientPort::hosting([ClientToolCapability::FilesystemRead]);
+        let io = ClientToolIo::new("session-1", port.clone());
+        assert!(matches!(
+            io.read_text_file("main.rs", Some(2), Some(0)).await,
+            Err(ToolIoError::OutOfBounds("limit"))
         ));
         assert!(matches!(
-            requests[3],
-            ClientToolRequest::TerminalRelease { .. }
+            io.read_text_file("main.rs", Some(0), Some(10)).await,
+            Err(ToolIoError::OutOfBounds("line"))
         ));
+        assert!(
+            port.requests.lock().expect("requests").is_empty(),
+            "an out-of-bounds read reached the client"
+        );
+    }
+
+    /// A command the client's terminal did not exit from reports the signal
+    /// that ended it, and one that reports neither is a fault rather than a
+    /// success with an unknown status.
+    #[test]
+    fn a_terminal_exit_status_is_read_the_way_the_reference_reads_it() {
+        let output = json!({"output": "partial", "truncated": true});
+        let signalled = shell_result(&json!({"exitCode": null, "signal": "SIGKILL"}), &output)
+            .expect("a signal is an outcome");
+        assert_eq!(signalled.returncode, -1);
+        assert_eq!(signalled.stderr, "Process terminated by SIGKILL");
+        assert!(signalled.truncated);
+
+        let exited = shell_result(&json!({"exitCode": 2, "signal": null}), &output)
+            .expect("an exit code is an outcome");
+        assert_eq!(exited.returncode, 2);
+        assert!(exited.stderr.is_empty());
+
+        assert!(matches!(
+            shell_result(&json!({"exitCode": null, "signal": null}), &output),
+            Err(ToolIoError::MissingExitStatus)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_terminal_below_the_reference_bounds_is_refused_before_it_is_sent() {
+        let port = FakeClientPort::hosting([ClientToolCapability::Terminal]);
+        let io = ClientToolIo::new("session-1", port.clone());
+        assert!(matches!(
+            io.run_shell(shell_request(0)).await,
+            Err(ToolIoError::OutOfBounds("outputByteLimit"))
+        ));
+        assert!(
+            port.requests.lock().expect("requests").is_empty(),
+            "an out-of-bounds terminal reached the client"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_malformed_client_answer_names_the_field_it_is_missing() {
+        struct SilentPort;
+
+        impl ClientToolPort for SilentPort {
+            fn request<'a>(&'a self, _request: ClientToolRequest) -> ToolIoFuture<'a> {
+                Box::pin(async { Ok(json!({})) })
+            }
+
+            fn supports(&self, _capability: ClientToolCapability) -> bool {
+                true
+            }
+        }
+
+        let io = ClientToolIo::new("session-1", Arc::new(SilentPort));
+        let failure = io
+            .read_text_file("main.rs", None, None)
+            .await
+            .expect_err("an answer without content is a failure");
+        assert!(matches!(failure, ToolIoError::MalformedResponse("content")));
+        assert!(
+            failure.to_string().contains("content"),
+            "the failure does not name the field: {failure}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_client_that_never_answers_names_the_delegation_it_left_open() {
+        struct MutePort;
+
+        impl ClientToolPort for MutePort {
+            fn request<'a>(&'a self, _request: ClientToolRequest) -> ToolIoFuture<'a> {
+                Box::pin(std::future::pending())
+            }
+
+            fn supports(&self, _capability: ClientToolCapability) -> bool {
+                true
+            }
+        }
+
+        let io = ClientToolIo::new("session-1", Arc::new(MutePort))
+            .with_timeout(Duration::from_millis(20));
+        let failure = io
+            .read_text_file("main.rs", None, None)
+            .await
+            .expect_err("an unanswered read is a failure");
+        assert!(
+            failure
+                .to_string()
+                .contains("clientTool/readTextFile within"),
+            "the failure does not name the delegation: {failure}"
+        );
+    }
+
+    fn shell_request(output_byte_limit: u64) -> ClientShellRequest {
+        ClientShellRequest {
+            tool_call_id: Some("call-1".to_owned()),
+            command: "echo ok".to_owned(),
+            args: None,
+            env: None,
+            cwd: "/work".to_owned(),
+            output_byte_limit,
+            timeout: Duration::from_secs(30),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_delegated_command_runs_the_reference_terminal_sequence() {
+        let port = FakeClientPort::hosting([ClientToolCapability::Terminal]);
+        let io = ClientToolIo::new("session-1", port.clone());
+        let result = io.run_shell(shell_request(1024)).await.expect("run");
+        assert_eq!(result.stdout, "ok");
+        assert_eq!(result.returncode, 0);
+        assert!(result.stderr.is_empty());
+        assert!(!result.truncated);
+        assert_eq!(
+            port.methods(),
+            [
+                "clientTool/terminal/create",
+                "clientTool/terminal/wait",
+                "clientTool/terminal/output",
+                "clientTool/terminal/release",
+            ],
+            "the release is issued once, after the output"
+        );
+        assert_eq!(io.active_terminal_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn a_terminal_the_client_fails_mid_command_is_killed_and_released() {
+        let port = FakeClientPort::hosting([ClientToolCapability::Terminal]);
+        port.fail_wait.store(true, Ordering::Release);
+        let io = ClientToolIo::new("session-1", port.clone());
+        assert!(io.run_shell(shell_request(1024)).await.is_err());
+        assert_eq!(
+            port.methods(),
+            [
+                "clientTool/terminal/create",
+                "clientTool/terminal/wait",
+                "clientTool/terminal/kill",
+                "clientTool/terminal/release",
+            ],
+            "a failed wait did not kill before releasing"
+        );
+        assert_eq!(io.active_terminal_count().await, 0);
     }
 
     #[derive(Default)]
@@ -1236,10 +1686,13 @@ mod tests {
                         self.finish_create.notified().await;
                         Ok(json!({"terminalId": "late-client-terminal"}))
                     }
-                    ClientToolRequest::TerminalCancelCreate { .. } => std::future::pending().await,
                     _ => Ok(json!({})),
                 }
             })
+        }
+
+        fn supports(&self, _capability: ClientToolCapability) -> bool {
+            true
         }
     }
 
@@ -1266,18 +1719,18 @@ mod tests {
                 }
             })
         }
+
+        fn supports(&self, _capability: ClientToolCapability) -> bool {
+            true
+        }
     }
 
     #[tokio::test]
     async fn client_task_abort_kills_and_releases_created_terminal() {
         let port = Arc::new(BlockingClientPort::default());
-        let io = ClientToolIo::new([ClientToolCapability::Terminal], port.clone());
+        let io = ClientToolIo::new("session-1", port.clone());
         let task_io = io.clone();
-        let task = tokio::spawn(async move {
-            task_io
-                .run_shell("blocked".to_owned(), "/work".to_owned())
-                .await
-        });
+        let task = tokio::spawn(async move { task_io.run_shell(shell_request(1024)).await });
         port.waiting.notified().await;
         task.abort();
         assert!(task.await.expect_err("aborted").is_cancelled());
@@ -1289,12 +1742,12 @@ mod tests {
         let requests = port.requests.lock().expect("requests");
         assert!(requests.iter().any(|request| matches!(
             request,
-            ClientToolRequest::TerminalKill { terminal_id }
+            ClientToolRequest::TerminalKill { terminal_id, .. }
                 if terminal_id == "client-terminal-cancelled"
         )));
         assert!(requests.iter().any(|request| matches!(
             request,
-            ClientToolRequest::TerminalRelease { terminal_id }
+            ClientToolRequest::TerminalRelease { terminal_id, .. }
                 if terminal_id == "client-terminal-cancelled"
         )));
     }
@@ -1302,14 +1755,10 @@ mod tests {
     #[tokio::test]
     async fn client_cleanup_keeps_unacknowledged_terminal_creation_tracked() {
         let port = Arc::new(BlockingCreatePort::default());
-        let mut io = ClientToolIo::new([ClientToolCapability::Terminal], port.clone());
+        let mut io = ClientToolIo::new("session-1", port.clone());
         io.cleanup_grace = Duration::from_millis(20);
         let task_io = io.clone();
-        let task = tokio::spawn(async move {
-            task_io
-                .run_shell("blocked".to_owned(), "/work".to_owned())
-                .await
-        });
+        let task = tokio::spawn(async move { task_io.run_shell(shell_request(1024)).await });
         port.entered.notified().await;
 
         assert!(matches!(
@@ -1327,12 +1776,12 @@ mod tests {
         let requests = port.requests.lock().expect("requests");
         assert!(requests.iter().any(|request| matches!(
             request,
-            ClientToolRequest::TerminalKill { terminal_id }
+            ClientToolRequest::TerminalKill { terminal_id, .. }
                 if terminal_id == "late-client-terminal"
         )));
         assert!(requests.iter().any(|request| matches!(
             request,
-            ClientToolRequest::TerminalRelease { terminal_id }
+            ClientToolRequest::TerminalRelease { terminal_id, .. }
                 if terminal_id == "late-client-terminal"
         )));
     }
