@@ -469,7 +469,7 @@ pub struct ClientCapabilities {
     pub client_tools: Vec<ClientToolCapability>,
     /// Notification names the client does not want delivered.
     ///
-    /// The server honours the list for every notification except a sequenced
+    /// The server honors the list for every notification except a sequenced
     /// event: muting one of those would open a gap in the per-session event
     /// stream that the client's own projection treats as a fault.
     #[serde(default)]
