@@ -6,8 +6,13 @@ boundaries: commands, flags, configuration, protocols, persisted state, tool
 semantics, and user-visible output. Internal design is free to differ where Rust
 offers a stronger one.
 
-Write every repository artifact in English: code, comments, documentation,
-commit messages, and PRDs.
+Write every repository artifact in US English: code, comments, documentation,
+commit messages, and PRDs. `color`, `behavior`, `normalize`, `analyzer`,
+`acknowledgment`, `modeled`, `afterward`. The exception is a spelling the
+reference or a dependency publishes, which is reproduced verbatim: `cancelled`
+is the value the Python reference emits for `TodoStatus`, the stop reason ACP
+declares, and the spelling of tokio's `CancellationToken::is_cancelled`, so it
+stays British everywhere it names that concept.
 
 ## Licensing boundary
 
