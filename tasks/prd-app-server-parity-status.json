@@ -27,10 +27,11 @@
     {
       "id": "EP-026",
       "title": "Typed Entry Details",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3,
+      "stories_in_review": 0
     },
     {
       "id": "EP-027",
@@ -172,43 +173,43 @@
       "id": "US-087",
       "title": "Publish the 12-variant EffectDetail with its call display",
       "epic": "EP-026",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-080"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-088",
       "title": "Publish the 8-variant NoticeDetail",
       "epic": "EP-026",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-087"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-089",
       "title": "Validate the callback detail and output unions",
       "epic": "EP-026",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-087"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-06",
+      "completed_at": "2026-08-06",
+      "reviewed_at": "2026-08-06"
     },
     {
       "id": "US-090",
