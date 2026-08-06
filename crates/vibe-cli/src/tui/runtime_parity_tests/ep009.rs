@@ -462,11 +462,11 @@ fn assert_python_oracle_probe(probe: &OracleProbe) -> Option<BTreeMap<String, Ve
 /// the standalone probe dimensions. Returns `None` where the pinned checkout is
 /// unavailable, which is every machine but the reference workstation.
 fn run_python_oracle(probe: &OracleProbe) -> Option<(Value, BTreeMap<String, Vec<String>>)> {
-    let oracle_root = pinned_python_oracle()?;
+    let (oracle_root, interpreter) = pinned_python_oracle()?;
     let script = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/runtime-parity")
         .join(&probe.script);
-    let output = Command::new(oracle_root.join(".venv/bin/python"))
+    let output = Command::new(interpreter)
         .arg(script)
         .current_dir(&oracle_root)
         .output()

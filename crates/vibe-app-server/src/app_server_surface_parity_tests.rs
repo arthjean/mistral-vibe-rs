@@ -42,15 +42,8 @@ use crate::server::{
     AppServer, DeferredWork, DispatchBatch, EMITTED_NOTIFICATIONS, ServerConnection, routed_methods,
 };
 
-/// The reference commit the corpus is captured from. A checkout at any other
-/// revision is not an oracle for this corpus.
-const REFERENCE_COMMIT: &str = "68ff32e6a92e80a874c8153312f0aa8ae4955477";
-const REFERENCE_ROOT: &str = "/home/arthur/dev/mistral-vibe";
-/// Lets a workstation holding the checkout elsewhere still run the live probe,
-/// under the same name the parity scripts read.
-const REFERENCE_VARIABLE: &str = "VIBE_REFERENCE";
-/// An interpreter that can import the reference package.
-const INTERPRETER_VARIABLE: &str = "VIBE_PARITY_PYTHON";
+use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
+
 const CAPTURE_SCRIPT: &str = "scripts/parity/app_server_surface.py";
 const CORPUS_RELATIVE: &str = "tests/app-server-surface/corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
@@ -1883,37 +1876,12 @@ fn wire_values<T: serde::Serialize>(values: &[T]) -> Vec<String> {
 /// live probe cannot run here. Every replay above still ran against the
 /// committed corpus.
 fn pinned_reference() -> Option<(PathBuf, PathBuf)> {
-    let root = std::env::var_os(REFERENCE_VARIABLE)
-        .map_or_else(|| PathBuf::from(REFERENCE_ROOT), PathBuf::from);
-    if !root.is_dir() {
+    let root = reference_root();
+    if let Some(reason) = off_pin_reason(&root, "app-server surface") {
+        eprintln!("{reason}");
         return None;
     }
-    let revision = Command::new("git")
-        .arg("-C")
-        .arg(&root)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()?;
-    if !revision.status.success() {
-        return None;
-    }
-    let head = String::from_utf8(revision.stdout).ok()?;
-    if head.trim() != REFERENCE_COMMIT {
-        eprintln!(
-            "skipping the live app-server surface probe: {} is at {}, not the pinned {REFERENCE_COMMIT}",
-            root.display(),
-            head.trim()
-        );
-        return None;
-    }
-    let interpreter = std::env::var_os(INTERPRETER_VARIABLE)
-        .map(PathBuf::from)
-        .into_iter()
-        .chain([
-            root.join(".venv/bin/python"),
-            root.join(".venv/Scripts/python.exe"),
-        ])
-        .find(|candidate| candidate.is_file())?;
+    let interpreter = pinned_interpreter(&root)?;
     Some((root, interpreter))
 }
 

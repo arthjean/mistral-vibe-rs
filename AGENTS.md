@@ -31,18 +31,21 @@ vendored, linked, or shipped. This binds every change:
 
 ## The behavioral oracle
 
-The Python reference is a read-only checkout outside this repository, pinned per
-PRD at commit `68ff32e6a92e80a874c8153312f0aa8ae4955477`. Never write to it. Its
-location is machine-dependent: `C:\dev\mistral-vibe` on Windows and
-`/home/arthur/dev/mistral-vibe` on Linux. The parity scripts default to the Linux
+The Python reference is a read-only checkout outside this repository. Never
+write to it. The pin lives in exactly two places, one per language:
+`vibe_core::parity::REFERENCE_COMMIT` (`crates/vibe-core/src/parity.rs`) and
+`EXPECTED_COMMIT` in `scripts/parity/pin.py`. Every oracle cites one of them, and
+`crates/vibe-core/src/parity/parity_tests.rs` fails when a third copy appears or
+when the two disagree.
+
+The checkout location is machine-dependent: `C:\dev\mistral-vibe` on Windows and
+`/home/arthur/dev/mistral-vibe` on Linux. Both pin sources default to the Linux
 path and read `VIBE_REFERENCE` as an override, with `--reference` winning over
-both. Among the Rust parity tests the configuration one
-(`crates/vibe-core/src/config/surface_parity_tests.rs:39`) and the app-server
-surface one (`crates/vibe-app-server/src/app_server_surface_parity_tests.rs:48`)
-read `VIBE_REFERENCE`; the others still hardcode the Linux path, so their live
-probe skips on Windows. A new parity test reads the variable. Reference paths written in PRDs and comments use
-the Linux form as the canonical spelling; read them relative to whichever checkout
-is local.
+both, so every Rust parity test now honors the variable through
+`vibe_core::parity::reference_root`. A new parity test calls that function
+rather than spelling a path. Reference paths written in PRDs and comments use the
+Linux form as the canonical spelling; read them relative to whichever checkout is
+local.
 
 - Read the reference before writing Rust that touches a public boundary. Open
   the owning module first, then implement. `vibe/cli/` is the terminal client,
@@ -61,11 +64,11 @@ is local.
   live probe when the checkout is absent or off-pin
   (`crates/vibe-cli/src/tui/runtime_parity_tests.rs:46`). Keep new parity tests
   skippable the same way: a missing checkout must never fail `cargo test`.
-- Re-pinning the reference means regenerating every corpus and updating each
-  `REFERENCE_COMMIT` constant in the same change. They sit in separate crates
-  and separate test modules, so enumerate them instead of assuming: `grep -rn
-  'REFERENCE_COMMIT: &str' crates`. A corpus and the constant asserting it must
-  never disagree.
+- Re-pinning the reference means editing the two pin sources above and
+  regenerating every committed corpus in the same change. A corpus and the
+  constant asserting it must never disagree. When the local checkout sits at
+  another commit, restore it with the command `vibe_core::parity::RESTORE_COMMAND`
+  documents rather than re-pinning by accident.
 - State a parity claim only from a measurement against the reference, and run
   the measurement wide enough to cover what changed. Filtering `cargo test` to
   the module you edited hides the assertions that live elsewhere and read the

@@ -40,14 +40,12 @@ import types
 import typing
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
+#: The pin and the checkout path come from the one place this repository writes
+#: them, so a re-pin does not have to find this script.
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+
 SCHEMA_VERSION = 1
-#: Where the read-only reference checkout lives. ``VIBE_REFERENCE`` overrides the
-#: default for machines that hold it elsewhere, and ``--reference`` wins over both.
-DEFAULT_REFERENCE = Path(
-    os.environ.get("VIBE_REFERENCE") or "/home/arthur/dev/mistral-vibe"
-)
 DEFAULT_OUTPUT = Path("crates/vibe-app-server/tests/app-server-surface/corpus.json")
-EXPECTED_COMMIT = "68ff32e6a92e80a874c8153312f0aa8ae4955477"
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 #: Longest string the corpus may carry. A name, alias, pointer or enum value is
 #: far shorter; anything longer would be prose, which ``NOTICE`` forbids.

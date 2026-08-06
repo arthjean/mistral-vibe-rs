@@ -21,7 +21,9 @@ import subprocess
 import sys
 from typing import Any
 
-EXPECTED_COMMIT = "68ff32e6a92e80a874c8153312f0aa8ae4955477"
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
+
+from pin import EXPECTED_COMMIT  # noqa: E402  the path insert above enables it
 
 # The rewind targets the corpus replays: an early message with no file changes
 # and a later one that touched files.

@@ -34,19 +34,17 @@ import sys
 import tempfile
 from typing import Any
 
+#: The pin and the checkout path come from the one place this repository writes
+#: them, so a re-pin does not have to find this script.
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+
 SCHEMA_VERSION = 3
 DIGEST_SCHEMA_VERSION = 1
-#: Where the read-only reference checkout lives. ``VIBE_REFERENCE`` overrides the
-#: default for machines that hold it elsewhere, and ``--reference`` wins over both.
-DEFAULT_REFERENCE = Path(
-    os.environ.get("VIBE_REFERENCE") or "/home/arthur/dev/mistral-vibe"
-)
 DEFAULT_OUTPUT = Path(".parity/tool-surface-corpus.json")
 DEFAULT_DIGEST = Path("crates/vibe-app-server/tests/tool-surface/digest.json")
 #: Stands in for every description string, so the digest records that a
 #: description exists without carrying reference prose into the repository.
 DESCRIBED = "<described>"
-EXPECTED_COMMIT = "68ff32e6a92e80a874c8153312f0aa8ae4955477"
 PROBE_ENDPOINT = "https://api.mistral.ai/v1/chat/completions"
 PROBE_MODEL = "mistral-medium-3.5"
 UNEXPECTED_KEY = "__unexpected__"

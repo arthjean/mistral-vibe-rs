@@ -42,10 +42,8 @@ use vibe_core::tools::shell::{HostShells, ShellRollout, ShellTools};
 use crate::client::{InteractiveSessionToolFactory, task_spec};
 use crate::server::SessionToolFactory;
 
-/// The reference commit the corpus is captured from. A checkout at any other
-/// revision is not an oracle for this corpus.
-const REFERENCE_COMMIT: &str = "68ff32e6a92e80a874c8153312f0aa8ae4955477";
-const REFERENCE_ROOT: &str = "/home/arthur/dev/mistral-vibe";
+use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
+
 const CORPUS_RELATIVE: &str = ".parity/tool-surface-corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
@@ -143,28 +141,16 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// The pinned checkout, or `None` when this machine cannot act as the oracle.
-fn pinned_reference() -> Option<PathBuf> {
-    let root = PathBuf::from(REFERENCE_ROOT);
-    if !root.join(".venv/bin/python").is_file() {
+/// The pinned checkout and an interpreter that can drive it, or `None` when
+/// this machine cannot act as the oracle.
+fn pinned_reference() -> Option<(PathBuf, PathBuf)> {
+    let root = reference_root();
+    if let Some(reason) = off_pin_reason(&root, "tool-surface") {
+        eprintln!("{reason}");
         return None;
     }
-    let revision = Command::new("git")
-        .args(["-C", REFERENCE_ROOT, "rev-parse", "HEAD"])
-        .output()
-        .ok()?;
-    if !revision.status.success() {
-        return None;
-    }
-    let head = String::from_utf8(revision.stdout).ok()?;
-    if head.trim() != REFERENCE_COMMIT {
-        eprintln!(
-            "the tool-surface oracle needs {REFERENCE_ROOT} at {REFERENCE_COMMIT}, found {}",
-            head.trim()
-        );
-        return None;
-    }
-    Some(root)
+    let interpreter = pinned_interpreter(&root)?;
+    Some((root, interpreter))
 }
 
 /// Recaptures the corpus when the pinned checkout is present, otherwise falls
@@ -172,10 +158,11 @@ fn pinned_reference() -> Option<PathBuf> {
 fn corpus() -> Option<Corpus> {
     let root = repo_root();
     let path = root.join(CORPUS_RELATIVE);
-    if let Some(reference) = pinned_reference() {
-        let capture = Command::new(reference.join(".venv/bin/python"))
+    if let Some((reference, interpreter)) = pinned_reference() {
+        let capture = Command::new(interpreter)
             .arg(root.join(CAPTURE_SCRIPT))
-            .args(["--reference", REFERENCE_ROOT])
+            .arg("--reference")
+            .arg(&reference)
             .arg("--output")
             .arg(&path)
             .current_dir(&root)
@@ -189,8 +176,8 @@ fn corpus() -> Option<Corpus> {
     }
     let Ok(raw) = fs::read_to_string(&path) else {
         eprintln!(
-            "skipping the tool-surface oracle: no corpus at {} and no pinned checkout at \
-             {REFERENCE_ROOT} on {REFERENCE_COMMIT}",
+            "skipping the tool-surface oracle: no corpus at {} and no pinned checkout on \
+             {REFERENCE_COMMIT}",
             path.display()
         );
         return None;

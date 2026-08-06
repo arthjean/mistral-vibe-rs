@@ -1,7 +1,6 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Duration;
 
 use super::attachments::{PromptDraft, prepare_submission};
@@ -36,35 +35,27 @@ use ratatui::backend::TestBackend;
 use serde::Deserialize;
 use serde_json::Value;
 
-const REFERENCE_COMMIT: &str = "68ff32e6a92e80a874c8153312f0aa8ae4955477";
+use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
 
 /// The Python reference lives in a checkout outside this repository, so the
 /// live oracle probe can only run on a workstation that holds it at
-/// [`REFERENCE_COMMIT`]. Returns the checkout root when it is usable, and
-/// `None` when it is missing or has moved: every corpus replay still runs
-/// against the reference captured in the checked-in fixtures.
-fn pinned_python_oracle() -> Option<PathBuf> {
-    const ORACLE_ROOT: &str = "/home/arthur/dev/mistral-vibe";
-    let root = PathBuf::from(ORACLE_ROOT);
-    if !root.join(".venv/bin/python").is_file() {
+/// [`REFERENCE_COMMIT`]. Returns the checkout root and the interpreter that can
+/// drive it, and `None` when either is missing or the checkout has moved: every
+/// corpus replay still runs against the reference captured in the checked-in
+/// fixtures.
+///
+/// The interpreter is returned rather than merely checked, so a caller spawns
+/// the one this guard admitted. Probing for `VIBE_PARITY_PYTHON` or a Windows
+/// virtual environment and then hardcoding the POSIX path would turn a skip into
+/// a panic on exactly the machines the override exists for.
+fn pinned_python_oracle() -> Option<(PathBuf, PathBuf)> {
+    let root = reference_root();
+    if let Some(reason) = off_pin_reason(&root, "Python oracle") {
+        eprintln!("{reason}");
         return None;
     }
-    let revision = Command::new("git")
-        .args(["-C", ORACLE_ROOT, "rev-parse", "HEAD"])
-        .output()
-        .ok()?;
-    if !revision.status.success() {
-        return None;
-    }
-    let head = String::from_utf8(revision.stdout).ok()?;
-    if head.trim() != REFERENCE_COMMIT {
-        eprintln!(
-            "skipping the live Python oracle probe: {ORACLE_ROOT} is at {}, not the pinned {REFERENCE_COMMIT}",
-            head.trim()
-        );
-        return None;
-    }
-    Some(root)
+    let interpreter = pinned_interpreter(&root)?;
+    Some((root, interpreter))
 }
 
 mod ep009;

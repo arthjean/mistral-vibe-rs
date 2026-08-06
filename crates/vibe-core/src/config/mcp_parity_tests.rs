@@ -21,9 +21,9 @@ use super::mcp::{
 };
 use super::*;
 use crate::mcp::{McpAuthConfig, McpServerConfig, McpTransportConfig};
+use crate::parity::REFERENCE_COMMIT;
 
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
-const REFERENCE_COMMIT: &str = "68ff32e6a92e80a874c8153312f0aa8ae4955477";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

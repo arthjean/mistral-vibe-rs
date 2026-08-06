@@ -20,6 +20,7 @@ pub mod images;
 pub mod integrations;
 pub mod matching;
 pub mod mcp;
+pub mod parity;
 pub mod platform;
 pub mod policy;
 pub mod process;

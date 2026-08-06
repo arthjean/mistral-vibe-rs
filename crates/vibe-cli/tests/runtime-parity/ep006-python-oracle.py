@@ -28,7 +28,9 @@ import sys
 from typing import Any
 from unittest import mock
 
-EXPECTED_COMMIT = "68ff32e6a92e80a874c8153312f0aa8ae4955477"
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
+
+from pin import EXPECTED_COMMIT  # noqa: E402  the path insert above enables it
 
 # The argument shapes the corpus replays, keyed by trace id.
 CASES: dict[str, dict[str, Any]] = {
