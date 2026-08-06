@@ -28,8 +28,9 @@ use vibe_core::policy::{
     PermissionStore, TrustDecision, TrustRootKind,
 };
 use vibe_core::process::{ProcessSpec, TerminalManager};
-use vibe_core::shell::{ShellConfig, ShellPolicyContext, analyze_shell};
+use vibe_core::shell::{ShellCommandLists, ShellConfig, ShellPolicyContext, analyze_shell};
 use vibe_core::tools::ToolRegistry;
+use vibe_core::tools::config::ShellCommandConfig;
 
 mod backend_command;
 mod core_backend;

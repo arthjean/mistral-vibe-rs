@@ -27,7 +27,7 @@ use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use vibe_core::parity::REFERENCE_COMMIT;
 use vibe_core::policy::{
-    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore,
+    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore, ToolGuard,
     TrustDecision, TrustRootKind,
 };
 use vibe_core::tools::builtins::BuiltinTools;
@@ -409,18 +409,12 @@ async fn registry_for(tree: &Path, home: &Path) -> ToolRegistry {
     review.begin_turn("turn-1").expect("a turn opens");
 
     let registry = ToolRegistry::default();
+    let guard = ToolGuard::new(policy, Arc::new(GrantApproval));
     BuiltinTools::new(home, None)
-        .register(
-            "session-1",
-            tree,
-            true,
-            &registry,
-            policy.clone(),
-            Arc::new(GrantApproval),
-        )
+        .register("session-1", tree, true, &registry, &guard)
         .expect("universal tools register");
     WorkspaceTools::new(workspace, review)
-        .register(&registry, policy, Arc::new(GrantApproval))
+        .register(&registry, &guard)
         .expect("workspace tools register");
     registry
 }

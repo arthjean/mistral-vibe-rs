@@ -45,7 +45,7 @@ pub use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionRequirement,
     PolicyError,
 };
-use vibe_core::policy::{PermissionRule, PermissionStore, TrustDecision, TrustRootKind};
+use vibe_core::policy::{PermissionRule, PermissionStore, ToolGuard, TrustDecision, TrustRootKind};
 use vibe_core::storage::HydratedSession;
 pub use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
 use vibe_core::tools::shell::{ShellRollout, ShellTools};
@@ -1672,7 +1672,7 @@ impl AppServer {
             drop(sessions);
             return self.refresh_session_workspace_tools(&session_id);
         }
-        let policy = PermissionStore::default();
+        let policy = PermissionStore::default().with_tool_config(self.release3.tool_config());
         let tools = ToolRegistry::default();
         // A resumed session runs under the same configuration a fresh one does,
         // so its two filter lists are read again here rather than left empty.
@@ -1772,14 +1772,19 @@ impl AppServer {
         // families, so the file tools and the shell agree on what this client
         // hosts for the session they are being published into.
         let client_io = self.client_tools.session_io(session_id);
+        // Every family is handed the resolver rather than a snapshot of what it
+        // currently answers, so a `tools.<name>` change observed between two
+        // turns reaches the handlers without the surface being registered
+        // again. The store narrows it with this session's permission
+        // overrides, which is the one per-session part of the composition.
+        let guard = ToolGuard::new(policy.clone(), approval);
         self.builtin_tools
             .register(
                 session_id,
                 Path::new(working_directory),
                 intent.trusted,
                 tools,
-                policy.clone(),
-                approval.clone(),
+                &guard,
             )
             .map_err(|error| ServerError::Resource(error.to_string()))?;
         self.shell_tools
@@ -1787,9 +1792,8 @@ impl AppServer {
                 session_id,
                 Path::new(working_directory),
                 tools,
-                policy.clone(),
-                approval.clone(),
                 client_io.clone(),
+                &guard,
             )
             .map_err(|error| ServerError::Resource(error.to_string()))?;
         let Ok(workspace) = Workspace::open(working_directory) else {
@@ -1799,7 +1803,7 @@ impl AppServer {
         let review = review.unwrap_or_else(|| Arc::new(ReviewManager::new(workspace.clone())));
         WorkspaceTools::new(workspace, review.clone())
             .with_client_io(client_io)
-            .register(tools, policy.clone(), approval)
+            .register(tools, &guard)
             .map_err(|error| ServerError::Resource(error.to_string()))?;
         Ok(Some(review))
     }
@@ -2666,7 +2670,8 @@ impl ServerConnection {
             .requested_disabled_tools
             .clone_from(&intent.disabled_tools);
         apply_agent_profile_settings(&mut intent, &agent_profile);
-        let permission_store = PermissionStore::default();
+        let permission_store =
+            PermissionStore::default().with_tool_config(self.server.release3.tool_config());
         let tools = ToolRegistry::default();
         if let Err(error) = permission_store.try_replace_rules_with_rationale_prefix(
             "agent-profile:",
@@ -8245,6 +8250,57 @@ tool_timeout_sec = 2
                 .map(|snapshot| snapshot.history.len()),
             Some(2)
         );
+    }
+
+    /// US-102: the families are published against the resolver, so a
+    /// configuration change between two turns reaches the handlers without the
+    /// session's surface being registered again.
+    #[tokio::test]
+    async fn a_configuration_change_between_turns_reaches_the_published_tools() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::fs::write(workspace.path().join("visible.txt"), "safe\n").expect("fixture");
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({"sessionId": "session-1", "workingDirectory": workspace.path()}),
+        ));
+        connection.dispatch(&request(
+            3,
+            "workspace/trust/decision",
+            json!({
+                "sessionId": "session-1",
+                "cwd": workspace.path(),
+                "decision": "trust_cwd"
+            }),
+        ));
+        let invocation = || ToolInvocation {
+            call_id: "read-1".to_owned(),
+            arguments: json!({"file_path": "visible.txt"}),
+        };
+        assert_eq!(
+            server
+                .invoke_tool("session-1", "read_file", invocation())
+                .await
+                .expect("the declared budget carries this file")
+                .model_text,
+            "1|safe"
+        );
+
+        // No re-registration: the same published surface, a moved budget.
+        let config = server.release3.tool_config();
+        config.update(
+            "[read_file]\nmax_read_bytes = 2\n"
+                .parse::<toml::Table>()
+                .expect("settings parse"),
+        );
+        let refused = server
+            .invoke_tool("session-1", "read_file", invocation())
+            .await
+            .expect_err("the lowered budget refuses the same file");
+        assert!(refused.to_string().contains("2-byte budget"), "{refused}");
     }
 
     #[tokio::test]

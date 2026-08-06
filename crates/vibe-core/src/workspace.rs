@@ -5,6 +5,7 @@ use std::path::{Component, Path, PathBuf};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use cap_std::ambient_authority;
 use cap_std::fs::{Dir, OpenOptions};
@@ -13,10 +14,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
 
-use crate::policy::{ApprovalAgent, PermissionRequirement, PermissionStore, PolicyGuardedTool};
+use crate::policy::{PermissionRequirement, PolicyGuardedTool, ToolGuard};
 use crate::process::ClientToolIo;
 use crate::schema::{ObjectSchema, Property};
-use crate::text::matches_wildcard;
+use crate::text::{matches_wildcard, truncate_utf8};
+use crate::tools::config::{
+    GrepConfig, ReadFileConfig, ToolConfigResolver, WriteFileConfig, declared_document,
+};
 use crate::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolError, ToolExecutionOutput,
     ToolHandler, ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource,
@@ -104,6 +108,54 @@ pub struct SearchMatch {
     pub path: String,
     pub line: usize,
     pub text: String,
+}
+
+/// What one search reads off the `grep` configuration.
+///
+/// Reference `GrepConfig` carries all five: how many matches a call returns
+/// when it names none, which globs never enter the walk, which ignore file adds
+/// to them, and how long the search may take. [`Self::from_config`] is where
+/// they arrive, so a handler never spells a limit itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchOptions {
+    pub limit: usize,
+    pub use_default_ignore: bool,
+    pub exclude_patterns: Vec<String>,
+    pub codeignore_file: String,
+    /// [`None`] runs without a deadline, which is what a caller with no
+    /// configured timeout asks for.
+    pub timeout: Option<Duration>,
+}
+
+impl SearchOptions {
+    /// The options a resolved `grep` configuration composes, with `limit`
+    /// taken from the call when it named one.
+    ///
+    /// The reference reads `max_matches or default_max_matches`, so a null and
+    /// a zero both fall back to the configured cap.
+    #[must_use]
+    pub fn from_config(
+        config: &GrepConfig,
+        requested_limit: Option<usize>,
+        use_default_ignore: bool,
+    ) -> Self {
+        Self {
+            limit: requested_limit
+                .filter(|limit| *limit > 0)
+                .unwrap_or(config.default_max_matches),
+            use_default_ignore,
+            exclude_patterns: config.exclude_patterns.clone(),
+            codeignore_file: config.codeignore_file.clone(),
+            timeout: (config.default_timeout > 0)
+                .then(|| Duration::from_secs(config.default_timeout)),
+        }
+    }
+}
+
+impl Default for SearchOptions {
+    fn default() -> Self {
+        Self::from_config(&ToolConfigResolver::new().view("grep"), None, true)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -359,14 +411,14 @@ impl Workspace {
     /// Regex search over `path`, the contract the reference `grep` publishes.
     ///
     /// The pattern is always a regular expression, `path` narrows the walk to
-    /// one file or one subtree, and `use_default_ignore` selects whether the
-    /// `.gitignore` entries join the always-excluded directories.
+    /// one file or one subtree, and [`SearchOptions`] carries what the operator
+    /// configured: how many matches to return, which globs to exclude, which
+    /// ignore file to read and how long the walk may take.
     pub fn search(
         &self,
         pattern: &str,
         path: impl AsRef<Path>,
-        limit: usize,
-        use_default_ignore: bool,
+        options: &SearchOptions,
     ) -> Result<Vec<SearchMatch>, WorkspaceError> {
         let compiled = Regex::new(pattern)
             .map_err(|error| WorkspaceError::InvalidPattern(error.to_string()))?;
@@ -376,14 +428,17 @@ impl Workspace {
             .metadata(&relative)
             .map(|metadata| metadata.is_dir())
             .unwrap_or(false);
+        let deadline = options.timeout.map(|timeout| Instant::now() + timeout);
         let targets = if is_directory {
             // `use_default_ignore` governs the `.gitignore` entries only: the
-            // reference keeps its own exclusion list applied either way.
-            let ignores = if use_default_ignore {
-                self.load_ignores()
+            // reference keeps its own exclusion list applied either way, and
+            // adds whatever the codeignore file names.
+            let mut ignores = self.configured_ignores(options);
+            if options.use_default_ignore {
+                ignores.extend(self.load_ignores());
             } else {
-                vec![".git".to_owned(), "target".to_owned()]
-            };
+                ignores.extend([".git".to_owned(), "target".to_owned()]);
+            }
             self.discover_under(&relative, &ignores)?
                 .into_iter()
                 .filter(|entry| !entry.is_directory)
@@ -394,6 +449,13 @@ impl Workspace {
         };
         let mut matches = Vec::new();
         for target in targets {
+            if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                // A partial answer is discarded rather than returned as a whole
+                // one: a search that ran out of time answers nothing.
+                return Err(WorkspaceError::SearchTimeout {
+                    seconds: options.timeout.unwrap_or_default().as_secs(),
+                });
+            }
             let relative = self.confined(Path::new(&target), true)?;
             // Search the whole file, not just the first page a reader would get.
             let content = match self.read_text(&relative) {
@@ -408,13 +470,41 @@ impl Workspace {
                         line: index.saturating_add(1),
                         text: line.to_owned(),
                     });
-                    if matches.len() >= limit {
+                    if matches.len() >= options.limit {
                         return Ok(matches);
                     }
                 }
             }
         }
         Ok(matches)
+    }
+
+    /// The exclusion set the configuration contributes: the configured globs,
+    /// plus every non-comment line of the configured codeignore file.
+    fn configured_ignores(&self, options: &SearchOptions) -> Vec<String> {
+        let mut ignores = options
+            .exclude_patterns
+            .iter()
+            .map(|pattern| pattern.trim_end_matches('/').to_owned())
+            .filter(|pattern| !pattern.is_empty())
+            .collect::<Vec<_>>();
+        if options.codeignore_file.is_empty() {
+            return ignores;
+        }
+        if let Ok(read) = self.read(&options.codeignore_file, 1, Some(self.max_lines)) {
+            ignores.extend(
+                read.content
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                    .map(|line| {
+                        line.trim_start_matches('/')
+                            .trim_end_matches('/')
+                            .to_owned()
+                    }),
+            );
+        }
+        ignores
     }
 
     pub async fn project_context(
@@ -724,15 +814,23 @@ impl WorkspaceTools {
     pub fn register(
         &self,
         registry: &ToolRegistry,
-        policy: PermissionStore,
-        approval: Arc<dyn ApprovalAgent>,
+        guard: &ToolGuard,
     ) -> Result<Vec<RegistrationOutcome>, ToolError> {
+        let ToolGuard {
+            policy,
+            approval,
+            config,
+        } = guard;
         let read_workspace = self.workspace.clone();
         let read_client = self.client_io.clone();
+        let read_config = config.clone();
         let read: Arc<dyn ToolHandler> = Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let workspace = read_workspace.clone();
                 let client = read_client.clone();
+                // The budget is read per call, so an operator who raises it
+                // between two turns is obeyed on the second one.
+                let settings: ReadFileConfig = read_config.view("read_file");
                 let path = invocation.arguments["file_path"]
                     .as_str()
                     .unwrap_or_default()
@@ -756,6 +854,17 @@ impl WorkspaceTools {
                                 .map_err(|error| ToolError::Execution(error.to_string()))?,
                         };
                     let model_text = read_model_text(&result);
+                    // Reference `read_file` raises rather than truncating when
+                    // the rendered output passes the budget, because a silently
+                    // clipped file reads as a complete one.
+                    if model_text.len() > settings.max_read_bytes {
+                        return Err(ToolError::Execution(format!(
+                            "the rendered output is {} bytes, over the {}-byte budget; narrow it \
+                             with offset and limit",
+                            model_text.len(),
+                            settings.max_read_bytes
+                        )));
+                    }
                     Ok(ToolExecutionOutput {
                         typed_result: serde_json::to_value(&result)
                             .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
@@ -767,9 +876,11 @@ impl WorkspaceTools {
             },
         );
         let search_workspace = self.workspace.clone();
+        let search_config = config.clone();
         let search: Arc<dyn ToolHandler> = Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let workspace = search_workspace.clone();
+                let settings: GrepConfig = search_config.view("grep");
                 let pattern = invocation.arguments["pattern"]
                     .as_str()
                     .unwrap_or_default()
@@ -778,28 +889,31 @@ impl WorkspaceTools {
                     .as_str()
                     .unwrap_or(".")
                     .to_owned();
-                // The reference reads `max_matches or default`, so a null and a
-                // zero both fall back to the configured cap.
-                let max_matches = invocation.arguments["max_matches"]
+                let requested = invocation.arguments["max_matches"]
                     .as_u64()
-                    .filter(|limit| *limit > 0)
-                    .and_then(|limit| usize::try_from(limit).ok())
-                    .unwrap_or(DEFAULT_GREP_MAX_MATCHES);
+                    .and_then(|limit| usize::try_from(limit).ok());
                 let use_default_ignore = invocation.arguments["use_default_ignore"]
                     .as_bool()
                     .unwrap_or(true);
                 Box::pin(async move {
+                    let options =
+                        SearchOptions::from_config(&settings, requested, use_default_ignore);
                     let result = workspace
-                        .search(&pattern, path, max_matches, use_default_ignore)
+                        .search(&pattern, path, &options)
                         .map_err(|error| ToolError::Execution(error.to_string()))?;
+                    let rendered = result
+                        .iter()
+                        .map(|entry| format!("{}:{}:{}", entry.path, entry.line, entry.text))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    // The byte budget clips the model-facing text rather than
+                    // failing the call, which is what the reference does with
+                    // its own output cap.
+                    let model_text = truncate_utf8(&rendered, settings.max_output_bytes).to_owned();
                     Ok(ToolExecutionOutput {
                         typed_result: serde_json::to_value(&result)
                             .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
-                        model_text: result
-                            .iter()
-                            .map(|entry| format!("{}:{}:{}", entry.path, entry.line, entry.text))
-                            .collect::<Vec<_>>()
-                            .join("\n"),
+                        model_text,
                         display: json!({"kind": "search", "matches": result.len()}),
                         chunks: Vec::new(),
                     })
@@ -857,11 +971,13 @@ impl WorkspaceTools {
         let write_review = self.review.clone();
         let write_client = self.client_io.clone();
         let write_workspace = self.workspace.clone();
+        let write_config = config.clone();
         let write: Arc<dyn ToolHandler> = Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let review = write_review.clone();
                 let client = write_client.clone();
                 let workspace = write_workspace.clone();
+                let settings: WriteFileConfig = write_config.view("write_file");
                 let path = invocation.arguments["file_path"]
                     .as_str()
                     .unwrap_or_default()
@@ -875,6 +991,23 @@ impl WorkspaceTools {
                         return Err(ToolError::Execution(
                             "write_file file_path cannot be empty".to_owned(),
                         ));
+                    }
+                    // Both checks run before anything touches the filesystem,
+                    // so a refused write leaves no directory behind.
+                    if content.len() > settings.max_write_bytes {
+                        return Err(ToolError::Execution(format!(
+                            "the content is {} bytes, exceeding the {}-byte write budget",
+                            content.len(),
+                            settings.max_write_bytes
+                        )));
+                    }
+                    if !settings.create_parent_dirs
+                        && let Some(missing) = missing_parent(&workspace, &path)
+                    {
+                        return Err(ToolError::Execution(format!(
+                            "the parent directory `{missing}` does not exist and \
+                             create_parent_dirs is off"
+                        )));
                     }
                     let result = match delegated_write(&workspace, client.as_ref(), &path, &content)
                         .await?
@@ -942,8 +1075,8 @@ impl WorkspaceTools {
         let write_root = self.workspace.root().to_path_buf();
         let guarded_write = Arc::new(PolicyGuardedTool::new(
             "write_file",
-            policy,
-            approval,
+            policy.clone(),
+            approval.clone(),
             Arc::new(move |invocation| {
                 let path = invocation.arguments["file_path"].as_str().ok_or_else(|| {
                     ToolError::Execution("write_file file_path is missing".to_owned())
@@ -961,6 +1094,23 @@ impl WorkspaceTools {
             registry.register(write_file_spec(), guarded_write)?,
         ])
     }
+}
+
+/// The parent directory `path` needs and does not have, or [`None`] when it
+/// has one.
+///
+/// A path the workspace refuses outright is not reported here: the confinement
+/// check that follows names it, and answering "the parent is missing" for a
+/// path that escapes the root would name the wrong problem.
+fn missing_parent(workspace: &Workspace, path: &str) -> Option<String> {
+    let relative = workspace.confined(Path::new(path), false).ok()?;
+    let parent = relative
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())?;
+    if workspace.root().join(parent).is_dir() {
+        return None;
+    }
+    Some(path_display(parent))
 }
 
 /// The path a delegated request carries, or the error the local path would
@@ -1138,6 +1288,8 @@ pub enum WorkspaceError {
     AlreadyExists(PathBuf),
     #[error("invalid search pattern: {0}")]
     InvalidPattern(String),
+    #[error("the search did not finish inside the {seconds}-second budget")]
+    SearchTimeout { seconds: u64 },
     #[error("git inspection failed: {0}")]
     GitInspection(String),
     #[error("edit is stale in `{path}` because `{needle}` was not found")]
@@ -1183,9 +1335,6 @@ fn read_model_text(result: &FileRead) -> String {
 
 /// Reference `ReadFileArgs.limit` default.
 const DEFAULT_READ_LINE_LIMIT: u64 = 2000;
-/// Reference `GrepToolConfig.default_max_matches`, applied when `max_matches`
-/// stays null.
-const DEFAULT_GREP_MAX_MATCHES: usize = 100;
 
 fn read_file_spec() -> ToolSpec {
     ToolSpec {
@@ -1217,7 +1366,7 @@ fn read_file_spec() -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: json!({"maxBytes": DEFAULT_MAX_READ_BYTES, "maxLines": DEFAULT_MAX_LINES}),
+        config: declared_document("read_file"),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Read,
@@ -1260,7 +1409,7 @@ fn grep_spec() -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: json!({"maxMatches": DEFAULT_GREP_MAX_MATCHES}),
+        config: declared_document("grep"),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Search,
@@ -1300,7 +1449,7 @@ fn edit_spec() -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: Value::Null,
+        config: declared_document("edit"),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Diff,
@@ -1337,7 +1486,7 @@ fn write_file_spec() -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: json!({"maxBytes": DEFAULT_MAX_READ_BYTES}),
+        config: declared_document("write_file"),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Diff,
@@ -1454,10 +1603,21 @@ fn path_display(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::policy::{ApprovalAgent, PermissionStore};
     use crate::policy::{
         ApprovalDecision, ApprovalFuture, ApprovalRequest, TrustDecision, TrustRootKind,
     };
     use tempfile::tempdir;
+
+    /// The declared `grep` options with the call's own limit and ignore
+    /// choice, which is what the handler composes.
+    fn probe_options(limit: usize, use_default_ignore: bool) -> SearchOptions {
+        SearchOptions {
+            limit,
+            use_default_ignore,
+            ..SearchOptions::default()
+        }
+    }
 
     struct RejectApproval;
 
@@ -1479,13 +1639,17 @@ mod tests {
         assert!(discovered.iter().all(|entry| entry.path != "ignored.txt"));
         let read = workspace.read("visible.txt", 2, Some(1)).expect("read");
         assert_eq!(read.numbered_content, "2|beta");
-        let matches = workspace.search("alpha", ".", 10, true).expect("search");
+        let matches = workspace
+            .search("alpha", ".", &probe_options(10, true))
+            .expect("search");
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].path, "visible.txt");
 
         // `use_default_ignore: false` drops the .gitignore entries and keeps
         // the always-excluded directories, matching the reference split.
-        let unfiltered = workspace.search("alpha", ".", 10, false).expect("search");
+        let unfiltered = workspace
+            .search("alpha", ".", &probe_options(10, false))
+            .expect("search");
         assert_eq!(unfiltered.len(), 2);
     }
 
@@ -1497,7 +1661,9 @@ mod tests {
         std::fs::write(directory.path().join("long.txt"), content).expect("long file");
         let workspace = Workspace::open(directory.path()).expect("workspace");
 
-        let matches = workspace.search("needle", ".", 10, true).expect("search");
+        let matches = workspace
+            .search("needle", ".", &probe_options(10, true))
+            .expect("search");
 
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].line, DEFAULT_MAX_LINES + 11);
@@ -1732,7 +1898,10 @@ mod tests {
             .expect("trust");
         let registry = ToolRegistry::default();
         WorkspaceTools::new(workspace, review)
-            .register(&registry, policy.clone(), Arc::new(RejectApproval))
+            .register(
+                &registry,
+                &ToolGuard::new(policy.clone(), Arc::new(RejectApproval)),
+            )
             .expect("register");
         let result = registry
             .invoke(
@@ -1945,7 +2114,10 @@ mod tests {
             .expect("trust");
         let registry = ToolRegistry::default();
         WorkspaceTools::new(workspace, review)
-            .register(&registry, policy, Arc::new(RejectApproval))
+            .register(
+                &registry,
+                &ToolGuard::new(policy.clone(), Arc::new(RejectApproval)),
+            )
             .expect("register");
 
         let ambiguous = registry
@@ -2004,18 +2176,238 @@ mod tests {
     /// A trusted workspace with the file tools registered and every approval
     /// refused, so anything reaching the approval path fails loudly.
     async fn registered_workspace_tools(root: &Path) -> ToolRegistry {
+        registered_with_settings(root, "").await.0
+    }
+
+    /// The file tools of a trusted workspace, published against a resolver the
+    /// caller can move afterward.
+    ///
+    /// The resolver is returned rather than consumed, which is what proves the
+    /// registration hands the families a resolver and not a snapshot: a test
+    /// changes `settings` after the surface is published and the next call
+    /// obeys it.
+    async fn registered_with_settings(
+        root: &Path,
+        settings: &str,
+    ) -> (ToolRegistry, ToolConfigResolver) {
         let workspace = Arc::new(Workspace::open(root).expect("workspace"));
         let review = Arc::new(ReviewManager::new(workspace.clone()));
+        // A mutating tool snapshots what it is about to change, which this port
+        // only allows inside a turn, so the helper opens one.
+        review.begin_turn("turn-1").expect("a turn opens");
         let policy = PermissionStore::default();
         policy
             .set_trust(root, TrustDecision::Trusted, TrustRootKind::Workspace)
             .await
             .expect("trust");
+        let config = policy.tool_config();
+        config.update(settings.parse::<toml::Table>().expect("settings parse"));
         let registry = ToolRegistry::default();
         WorkspaceTools::new(workspace, review)
-            .register(&registry, policy, Arc::new(RejectApproval))
+            .register(
+                &registry,
+                &ToolGuard {
+                    policy,
+                    approval: Arc::new(RejectApproval),
+                    config: config.clone(),
+                },
+            )
             .expect("register");
+        (registry, config)
+    }
+
+    /// US-103: `read_file` reads its budget from the configuration, and a
+    /// render past it fails naming both sizes rather than truncating.
+    #[tokio::test]
+    async fn a_configured_read_budget_refuses_the_render_naming_both_sizes() {
+        let directory = tempdir().expect("tempdir");
+        let content = (1..=200)
+            .map(|line| format!("line {line}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(directory.path().join("long.txt"), &content).expect("file");
+        let (registry, config) =
+            registered_with_settings(directory.path(), "[read_file]\nmax_read_bytes = 120\n").await;
+
+        let refused = registry
+            .invoke(
+                "read_file",
+                ToolInvocation {
+                    call_id: "read-1".to_owned(),
+                    arguments: json!({"file_path": "long.txt"}),
+                },
+            )
+            .await
+            .expect_err("a render past the budget is refused");
+        let message = refused.to_string();
+        assert!(message.contains("120-byte budget"), "{message}");
+        assert!(message.contains("offset and limit"), "{message}");
+
+        // The surface was published against the resolver, not a snapshot of it,
+        // so raising the budget between two calls is obeyed on the second.
+        config.update(
+            "[read_file]\nmax_read_bytes = 51200\n"
+                .parse::<toml::Table>()
+                .expect("settings parse"),
+        );
+        let read = registry
+            .invoke(
+                "read_file",
+                ToolInvocation {
+                    call_id: "read-2".to_owned(),
+                    arguments: json!({"file_path": "long.txt"}),
+                },
+            )
+            .await
+            .expect("the raised budget carries the same file");
+        assert_eq!(read.typed_result["totalLines"], json!(200));
+    }
+
+    /// US-103: `grep` reads its cap, its exclusion globs and its codeignore file
+    /// from the configuration.
+    #[tokio::test]
+    async fn grep_reads_its_cap_and_its_exclusions_from_the_configuration() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::create_dir_all(directory.path().join("build")).expect("build");
+        std::fs::create_dir_all(directory.path().join("generated")).expect("generated");
+        std::fs::write(
+            directory.path().join("kept.txt"),
+            "needle\nneedle\nneedle\n",
+        )
+        .expect("kept");
+        std::fs::write(directory.path().join("build/out.txt"), "needle\n").expect("built");
+        std::fs::write(directory.path().join("generated/out.txt"), "needle\n").expect("generated");
+        std::fs::write(
+            directory.path().join(".vibeignore"),
+            "# comment\n\ngenerated/\n",
+        )
+        .expect("codeignore");
+        let (registry, config) = registered_with_settings(directory.path(), "").await;
+
+        let matched = registry
+            .invoke(
+                "grep",
+                ToolInvocation {
+                    call_id: "grep-1".to_owned(),
+                    arguments: json!({"pattern": "needle"}),
+                },
+            )
+            .await
+            .expect("search");
+        let paths = matched.typed_result["matches"]
+            .as_array()
+            .map(|entries| entries.len())
+            .unwrap_or_else(|| {
+                matched
+                    .typed_result
+                    .as_array()
+                    .map(Vec::len)
+                    .expect("an array of matches")
+            });
+        assert_eq!(
+            paths, 3,
+            "the declared exclusions drop `build/` and the codeignore file drops `generated/`: {}",
+            matched.model_text
+        );
+
+        // The cap is the operator's: two matches out of the three.
+        config.update(
+            "[grep]\ndefault_max_matches = 2\n"
+                .parse::<toml::Table>()
+                .expect("settings parse"),
+        );
+        let capped = registry
+            .invoke(
+                "grep",
+                ToolInvocation {
+                    call_id: "grep-2".to_owned(),
+                    arguments: json!({"pattern": "needle"}),
+                },
+            )
+            .await
+            .expect("search");
+        assert_eq!(
+            capped.model_text.lines().count(),
+            2,
+            "{}",
+            capped.model_text
+        );
+
+        // And so is the byte budget the model-facing text is clipped at.
+        config.update(
+            "[grep]\nmax_output_bytes = 12\n"
+                .parse::<toml::Table>()
+                .expect("settings parse"),
+        );
+        let clipped = registry
+            .invoke(
+                "grep",
+                ToolInvocation {
+                    call_id: "grep-3".to_owned(),
+                    arguments: json!({"pattern": "needle"}),
+                },
+            )
+            .await
+            .expect("search");
+        assert!(clipped.model_text.len() <= 12, "{}", clipped.model_text);
+    }
+
+    /// US-103: `write_file` reads its byte budget and its parent-creation flag
+    /// from the configuration, and refuses before touching the filesystem.
+    #[tokio::test]
+    async fn write_file_reads_its_budget_and_parent_creation_from_the_configuration() {
+        let directory = tempdir().expect("tempdir");
+        let (registry, config) = registered_with_settings(
+            directory.path(),
+            "[write_file]\nmax_write_bytes = 16\ncreate_parent_dirs = false\n",
+        )
+        .await;
+        let oversized = registry
+            .invoke(
+                "write_file",
+                ToolInvocation {
+                    call_id: "write-1".to_owned(),
+                    arguments: json!({"file_path": "big.txt", "content": "x".repeat(64)}),
+                },
+            )
+            .await
+            .expect_err("a write past the configured budget is refused");
+        assert!(
+            oversized.to_string().contains("16-byte write budget"),
+            "{oversized}"
+        );
+        assert!(!directory.path().join("big.txt").exists());
+
+        let missing = registry
+            .invoke(
+                "write_file",
+                ToolInvocation {
+                    call_id: "write-2".to_owned(),
+                    arguments: json!({"file_path": "nested/child.txt", "content": "hi"}),
+                },
+            )
+            .await
+            .expect_err("a missing parent is refused when the flag is off");
+        assert!(missing.to_string().contains("nested"), "{missing}");
+        assert!(!directory.path().join("nested").exists());
+
+        // The reference default creates the directory instead.
+        config.update(
+            "[write_file]\ncreate_parent_dirs = true\n"
+                .parse::<toml::Table>()
+                .expect("settings parse"),
+        );
         registry
+            .invoke(
+                "write_file",
+                ToolInvocation {
+                    call_id: "write-3".to_owned(),
+                    arguments: json!({"file_path": "nested/child.txt", "content": "hi"}),
+                },
+            )
+            .await
+            .expect("the parent is created");
+        assert!(directory.path().join("nested/child.txt").exists());
     }
 
     /// A client hosting an editor: it answers reads from a buffer that differs
@@ -2097,7 +2489,10 @@ mod tests {
         let registry = ToolRegistry::default();
         WorkspaceTools::new(workspace, review)
             .with_client_io(client)
-            .register(&registry, policy, Arc::new(RejectApproval))
+            .register(
+                &registry,
+                &ToolGuard::new(policy.clone(), Arc::new(RejectApproval)),
+            )
             .expect("register");
         registry
     }
@@ -2279,7 +2674,10 @@ mod tests {
             .expect("trust");
         let registry = ToolRegistry::default();
         WorkspaceTools::new(workspace, review.clone())
-            .register(&registry, policy, Arc::new(RejectApproval))
+            .register(
+                &registry,
+                &ToolGuard::new(policy.clone(), Arc::new(RejectApproval)),
+            )
             .expect("register");
         (registry, review)
     }

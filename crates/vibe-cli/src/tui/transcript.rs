@@ -804,8 +804,7 @@ mod tests {
                 directory.path(),
                 true,
                 &registry,
-                policy,
-                Arc::new(DenyEverything),
+                &vibe_core::policy::ToolGuard::new(policy, Arc::new(DenyEverything)),
             )
             .expect("universal tools register");
         let written = registry

@@ -163,9 +163,8 @@ async fn harness_on(
             "session-1",
             directory.path(),
             &registry,
-            policy,
-            approval as Arc<dyn ApprovalAgent>,
             None,
+            &ToolGuard::new(policy, approval as Arc<dyn ApprovalAgent>),
         )
         .expect("the shell family registers");
     Harness {
@@ -511,7 +510,7 @@ async fn a_flood_of_output_is_bounded_and_the_truncation_is_reported() {
             .as_str()
             .expect("stdout")
             .len()
-            <= MAX_OUTPUT_BYTES,
+            <= shell_settings().max_output_bytes,
         "the captured stream stays inside the reference limit"
     );
     assert!(
@@ -1016,18 +1015,63 @@ async fn closing_the_session_terminates_every_session_it_left_running() {
 /// on it rather than running unbounded.
 #[test]
 fn the_foreground_wait_is_bounded_by_the_reference_ceiling() {
-    assert_eq!(timeout_argument(&json!({})), DEFAULT_TIMEOUT_SECONDS);
-    assert_eq!(timeout_argument(&json!({"timeout": 5})), 5);
+    let settings = shell_settings();
+    assert_eq!(timeout_argument(&json!({}), &settings), 300);
+    assert_eq!(timeout_argument(&json!({"timeout": 5}), &settings), 5);
     // The reference reads `args.timeout or default`, so a zero is the default.
+    assert_eq!(timeout_argument(&json!({"timeout": 0}), &settings), 300);
     assert_eq!(
-        timeout_argument(&json!({"timeout": 0})),
-        DEFAULT_TIMEOUT_SECONDS
+        timeout_argument(&json!({"timeout": 100_000}), &settings),
+        600
     );
     assert_eq!(
-        timeout_argument(&json!({"timeout": 100_000})),
-        MAX_TIMEOUT_SECONDS
+        timeout_argument(&json!({"timeout_seconds": 1.2}), &settings),
+        2
     );
-    assert_eq!(timeout_argument(&json!({"timeout_seconds": 1.2})), 2);
+
+    // Both bounds are the operator's to move.
+    let resolver = ToolConfigResolver::new();
+    resolver.update(
+        "[bash]\ndefault_timeout = 12\nmax_timeout_seconds = 30.0\n"
+            .parse::<toml::Table>()
+            .expect("settings parse"),
+    );
+    let configured: ShellCommandConfig = resolver.view("bash");
+    assert_eq!(timeout_argument(&json!({}), &configured), 12);
+    assert_eq!(
+        timeout_argument(&json!({"timeout": 100_000}), &configured),
+        30
+    );
+}
+
+/// The declared `bash` configuration, which is what a call resolves when
+/// nothing overrides it.
+fn shell_settings() -> ShellCommandConfig {
+    ToolConfigResolver::new().view("bash")
+}
+
+/// US-103: the shell lists follow the interpreter the family drives, not the
+/// operating system, which is the branch `register` narrows the resolver to.
+/// The Windows host is simulated so the case runs on either one.
+#[test]
+fn the_shell_lists_follow_the_family_rather_than_the_host() {
+    let windows_host = ToolConfigResolver::new().with_posix_shell(false);
+    for (family, allowlisted) in [
+        (ShellFamily::Bash, 44),
+        (ShellFamily::GitBash, 44),
+        (ShellFamily::PowerShell, 13),
+    ] {
+        let settings: ShellCommandConfig = windows_host
+            .clone()
+            .with_posix_shell(family.uses_posix_shell())
+            .view(family.name());
+        assert_eq!(
+            settings.shared.allowlist.len(),
+            allowlisted,
+            "`{}` reads the wrong shell branch",
+            family.name()
+        );
+    }
 }
 
 /// Every control key the schema advertises writes bytes, and nothing else does.
@@ -1087,9 +1131,11 @@ async fn a_windows_family_leaves_the_surface_when_its_interpreter_goes_away() {
             "session-1",
             directory.path(),
             &registry,
-            PermissionStore::default(),
-            approval as Arc<dyn ApprovalAgent>,
             None,
+            &ToolGuard::new(
+                PermissionStore::default(),
+                approval as Arc<dyn ApprovalAgent>,
+            ),
         )
         .expect("the Git Bash family registers");
     let published = || {
@@ -1559,6 +1605,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         Platform::Windows,
         Path::new(r"C:\work"),
         "cat /c/work/notes.txt",
+        &ShellCommandLists::from_config(&shell_settings()),
     );
     assert_eq!(inside.path_operands, ["/c/work/notes.txt"]);
     assert!(
@@ -1578,6 +1625,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         Platform::Windows,
         Path::new(r"C:\work"),
         "cat /c/work/notes.txt",
+        &ShellCommandLists::from_config(&shell_settings()),
     );
     assert!(
         untranslated
@@ -1593,6 +1641,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         Platform::Windows,
         Path::new(r"C:\work"),
         "cat /d/secrets/notes.txt",
+        &ShellCommandLists::from_config(&shell_settings()),
     );
     assert!(
         outside
@@ -1681,9 +1730,8 @@ async fn terminal_client_harness(client: Arc<TerminalClient>) -> Harness {
             "session-1",
             directory.path(),
             &registry,
-            policy,
-            approval as Arc<dyn ApprovalAgent>,
             Some(ClientToolIo::new("session-1", client)),
+            &ToolGuard::new(policy, approval as Arc<dyn ApprovalAgent>),
         )
         .expect("the shell family registers");
     Harness {

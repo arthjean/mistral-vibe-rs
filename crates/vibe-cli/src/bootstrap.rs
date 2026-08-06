@@ -108,7 +108,6 @@ fn web_search_access(arguments: &Arguments, credential: String) -> WebSearchAcce
         .unwrap_or_else(|| WebSearchAccess::DEFAULT_ENDPOINT.to_owned());
     WebSearchAccess {
         endpoint,
-        model: WebSearchAccess::DEFAULT_MODEL.to_owned(),
         api_key: SecretString::from(credential),
     }
 }

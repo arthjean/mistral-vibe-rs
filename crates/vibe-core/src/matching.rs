@@ -79,6 +79,20 @@ impl NameFilter {
     }
 }
 
+/// Whether `pattern` matches `value` with the case both sides were written in.
+///
+/// Reference `fnmatch.fnmatch` normalizes case per platform, which is a no-op
+/// on POSIX, so a filesystem path and a command are matched as written. `*`
+/// crosses separators, as it does upstream: `**/.env` matches
+/// `/home/user/.env`.
+#[must_use]
+pub fn pattern_matches(pattern: &str, value: &str) -> bool {
+    matches_glob(
+        &pattern.chars().collect::<Vec<_>>(),
+        &value.chars().collect::<Vec<_>>(),
+    )
+}
+
 /// `fnmatch` semantics over already-lowercased characters: `*` stands for any
 /// run, `?` for exactly one, `[abc]` and `[a-z]` for a set, `[!abc]` for its
 /// complement, and an unterminated `[` is a literal bracket.

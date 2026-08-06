@@ -37,29 +37,25 @@ use tokio::sync::Mutex;
 use crate::platform::{Platform, parse_policy_path};
 use crate::policy::{
     ApprovalAgent, PermissionMode, PermissionRequirement, PermissionStore, PolicyGuardedTool,
+    ToolGuard,
 };
 use crate::process::{
     ClientShellRequest, ClientToolIo, ProcessChunk, ProcessError, ProcessSpec, ProcessStream,
     TerminalManager, TerminalState,
 };
 use crate::schema::{ObjectSchema, Property};
-use crate::shell::{ShellAnalysis, ShellConfig, ShellFlavor, ShellPolicyContext, analyze_shell};
+use crate::shell::{
+    ShellAnalysis, ShellCommandLists, ShellConfig, ShellFlavor, ShellPolicyContext, analyze_shell,
+};
+use crate::tools::config::{
+    ShellCommandConfig, ShellInlineConfig, ShellOutputConfig, ToolConfigResolver, declared_document,
+};
 use crate::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolCondition, ToolError,
     ToolExecutionOutput, ToolHandler, ToolHandlerFuture, ToolInvocation, ToolOutputSink,
     ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
 };
 
-/// Reference `BashToolConfig.default_timeout`.
-const DEFAULT_TIMEOUT_SECONDS: u64 = 300;
-/// Reference `ExperimentalBashToolConfig.max_timeout_seconds`.
-const MAX_TIMEOUT_SECONDS: u64 = 600;
-/// Reference `BashToolConfig.max_output_bytes`, applied per stream.
-const MAX_OUTPUT_BYTES: usize = 16_000;
-/// Reference `DEFAULT_INLINE_BYTES`, the managed family's read window.
-const DEFAULT_INLINE_BYTES: usize = 30_000;
-/// Reference `DEFAULT_MAX_POLL_SECONDS`.
-const MAX_POLL_SECONDS: u64 = 300;
 /// Reference `TerminalSessionManager.base_dir`, relative to the Vibe home.
 const LOG_DIRECTORY: &str = "shell-tool";
 /// Reference `TerminalSessionManager.sessions_dir`, relative to [`LOG_DIRECTORY`].
@@ -166,6 +162,14 @@ impl ShellFamily {
             Self::GitBash => "git_bash",
             Self::PowerShell => "powershell",
         }
+    }
+
+    /// Reference `uses_posix_shell`, which answers for the interpreter the
+    /// session drives rather than for the operating system: a Windows host
+    /// publishing Git Bash composes the POSIX shell lists, not the Windows
+    /// ones.
+    fn uses_posix_shell(self) -> bool {
+        matches!(self, Self::Bash | Self::GitBash)
     }
 
     fn tool_name(self, suffix: &str) -> String {
@@ -468,17 +472,26 @@ impl ShellTools {
         session_id: &str,
         working_directory: &Path,
         registry: &ToolRegistry,
-        policy: PermissionStore,
-        approval: Arc<dyn ApprovalAgent>,
         client_io: Option<ClientToolIo>,
+        guard: &ToolGuard,
     ) -> Result<Vec<RegistrationOutcome>, ToolError> {
+        let ToolGuard {
+            policy,
+            approval,
+            config,
+        } = guard;
         let host = (self.host)();
         let Some((family, managed)) = published_family(&host, self.rollout) else {
             return Ok(Vec::new());
         };
-        let Some(config) = family_config(family, &host) else {
+        let Some(shell_config) = family_config(family, &host) else {
             return Ok(Vec::new());
         };
+        // The three shell lists are composed from the interpreter this family
+        // drives, not from the host, so the resolver follows the family. The
+        // settings cache is shared, so an operator's `tools.<family>` entry
+        // still reaches every tool published below.
+        let config = config.clone().with_posix_shell(family.uses_posix_shell());
         let shell = self.session_shell(session_id, family)?;
         let platform = host.platform;
         let working_directory = working_directory.to_path_buf();
@@ -507,7 +520,8 @@ impl ShellTools {
             guarded_command(CommandWiring {
                 family,
                 shell: shell.clone(),
-                config: config.clone(),
+                shell_config: shell_config.clone(),
+                tool_config: config.clone(),
                 working_directory: working_directory.clone(),
                 platform,
                 policy: policy.clone(),
@@ -524,7 +538,8 @@ impl ShellTools {
             guarded_command(CommandWiring {
                 family,
                 shell: shell.clone(),
-                config,
+                shell_config,
+                tool_config: config.clone(),
                 working_directory,
                 platform,
                 policy: policy.clone(),
@@ -533,29 +548,67 @@ impl ShellTools {
                 client_io,
             }),
         )?);
+        // The three polling tools are configured `always` upstream and produce
+        // no granular requirement, so the guard in front of them is exactly
+        // what reads that permission and the lists beside it.
         outcomes.push(publish(
             output_spec(family),
-            session_handler(shell.clone(), run_output),
+            guarded_session(
+                family.tool_name("output"),
+                policy,
+                approval,
+                session_handler(
+                    shell.clone(),
+                    config.clone(),
+                    family.tool_name("output"),
+                    run_output,
+                ),
+            ),
         )?);
         outcomes.push(publish(
             stdin_spec(family),
-            session_handler(shell.clone(), run_stdin),
+            guarded_session(
+                family.tool_name("stdin"),
+                policy,
+                approval,
+                session_handler(
+                    shell.clone(),
+                    config.clone(),
+                    family.tool_name("stdin"),
+                    run_stdin,
+                ),
+            ),
         )?);
         outcomes.push(publish(
             sessions_spec(family),
-            session_handler(shell.clone(), run_sessions),
+            guarded_session(
+                family.tool_name("sessions"),
+                policy,
+                approval,
+                session_handler(
+                    shell.clone(),
+                    config.clone(),
+                    family.tool_name("sessions"),
+                    run_sessions,
+                ),
+            ),
         )?);
         let log_shell = shell.clone();
         outcomes.push(publish(
             log_file_spec(family),
             Arc::new(PolicyGuardedTool::new(
                 family.tool_name("log_file"),
-                policy,
-                approval,
+                policy.clone(),
+                approval.clone(),
                 Arc::new(move |invocation| {
                     log_file_requirements(&log_shell, &invocation.arguments)
                 }),
-                session_handler(shell, run_log_file),
+                session_handler(
+                    shell,
+                    config.clone(),
+                    family.tool_name("log_file"),
+                    run_log_file,
+                ),
             )),
         )?);
         Ok(outcomes)
@@ -715,10 +768,7 @@ fn command_spec(family: ShellFamily, managed: bool) -> ToolSpec {
         description,
         input_schema: schema.build(),
         output_schema: None,
-        config: json!({
-            "defaultTimeoutSeconds": DEFAULT_TIMEOUT_SECONDS,
-            "maxOutputBytes": MAX_OUTPUT_BYTES,
-        }),
+        config: declared_document(family.name()),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Shell,
@@ -771,7 +821,7 @@ fn output_spec(family: ShellFamily) -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: json!({"maxInlineBytes": DEFAULT_INLINE_BYTES, "maxPollSeconds": MAX_POLL_SECONDS}),
+        config: declared_document(&family.tool_name("output")),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Shell,
@@ -823,7 +873,7 @@ fn stdin_spec(family: ShellFamily) -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: Value::Null,
+        config: declared_document(&family.tool_name("stdin")),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Shell,
@@ -879,7 +929,7 @@ fn sessions_spec(family: ShellFamily) -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: json!({"maxInlineBytes": DEFAULT_INLINE_BYTES}),
+        config: declared_document(&family.tool_name("sessions")),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Shell,
@@ -938,7 +988,7 @@ fn log_file_spec(family: ShellFamily) -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: json!({"maxInlineBytes": DEFAULT_INLINE_BYTES}),
+        config: declared_document(&family.tool_name("log_file")),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Shell,
@@ -996,7 +1046,10 @@ impl ToolHandler for ShellPolicyGuard {
 struct CommandWiring {
     family: ShellFamily,
     shell: Arc<SessionShell>,
-    config: ShellConfig,
+    /// The interpreter this family drives.
+    shell_config: ShellConfig,
+    /// The `tools.<family>` settings the call reads its limits and lists from.
+    tool_config: ToolConfigResolver,
     working_directory: PathBuf,
     platform: Platform,
     policy: PermissionStore,
@@ -1009,7 +1062,8 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
     let CommandWiring {
         family,
         shell,
-        config,
+        shell_config,
+        tool_config,
         working_directory,
         platform,
         policy,
@@ -1019,7 +1073,9 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
     } = wiring;
     let inner = command_handler(
         shell,
-        config.clone(),
+        shell_config.clone(),
+        tool_config.clone(),
+        family.name().to_owned(),
         working_directory.clone(),
         managed,
         client_io,
@@ -1029,14 +1085,23 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
     // whichever variant is selected.
     let overrides = managed || family != ShellFamily::Bash;
     let requirement_root = working_directory.clone();
-    let requirement_flavor = config.flavor;
+    let requirement_flavor = shell_config.flavor;
+    let requirement_config = tool_config.clone();
+    let requirement_tool = family.name().to_owned();
     let guarded = Arc::new(PolicyGuardedTool::new(
         family.name(),
         policy,
         approval,
         Arc::new(move |invocation: &ToolInvocation| {
             let command = command_argument(&invocation.arguments)?;
-            let analysis = analyze(requirement_flavor, platform, &requirement_root, &command);
+            let settings: ShellCommandConfig = requirement_config.view(&requirement_tool);
+            let analysis = analyze(
+                requirement_flavor,
+                platform,
+                &requirement_root,
+                &command,
+                &ShellCommandLists::from_config(&settings),
+            );
             // Every analyzed segment is named on its own, so approving one
             // command does not silently approve the rest of a chain.
             let mut requirements = analysis
@@ -1064,11 +1129,20 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
         inner.clone(),
     ));
     let analysis_root = working_directory;
-    let analysis_flavor = config.flavor;
+    let analysis_flavor = shell_config.flavor;
+    let analysis_config = tool_config;
+    let analysis_tool = family.name().to_owned();
     Arc::new(ShellPolicyGuard {
         analysis: Arc::new(move |arguments: &Value| {
             let command = command_argument(arguments)?;
-            let mut analysis = analyze(analysis_flavor, platform, &analysis_root, &command);
+            let settings: ShellCommandConfig = analysis_config.view(&analysis_tool);
+            let mut analysis = analyze(
+                analysis_flavor,
+                platform,
+                &analysis_root,
+                &command,
+                &ShellCommandLists::from_config(&settings),
+            );
             // The command text is not all that runs: an override decides where
             // it runs, what interprets it and what it inherits, none of which
             // the analysis of the text can see. So a call carrying one stops
@@ -1092,6 +1166,7 @@ fn analyze(
     platform: Platform,
     working_directory: &Path,
     command: &str,
+    lists: &ShellCommandLists,
 ) -> ShellAnalysis {
     let Ok(root) = parse_policy_path(platform, &working_directory.to_string_lossy()) else {
         // A working directory the policy cannot parse is not a reason to run
@@ -1111,6 +1186,7 @@ fn analyze(
             working_directory: root.clone(),
             roots: vec![root],
         },
+        lists,
     )
 }
 
@@ -1195,8 +1271,8 @@ fn string_argument<'a>(arguments: &'a Value, name: &str) -> Option<&'a str> {
     arguments.get(name).and_then(Value::as_str)
 }
 
-/// The foreground wait, in seconds, bounded by the reference maximum.
-fn timeout_argument(arguments: &Value) -> u64 {
+/// The foreground wait, in seconds, bounded by the configured maximum.
+fn timeout_argument(arguments: &Value, settings: &ShellCommandConfig) -> u64 {
     // The reference reads `args.timeout or default`, so a zero is falsy and
     // means the default rather than an instant timeout.
     let requested = arguments["timeout"]
@@ -1209,17 +1285,20 @@ fn timeout_argument(arguments: &Value) -> u64 {
                 seconds.ceil().max(0.0) as u64
             })
         })
-        .unwrap_or(DEFAULT_TIMEOUT_SECONDS);
-    requested.clamp(1, MAX_TIMEOUT_SECONDS)
+        .unwrap_or(settings.default_timeout);
+    let ceiling = settings.max_timeout_seconds.max(1.0) as u64;
+    requested.clamp(1, ceiling)
 }
 
-fn byte_limit(arguments: &Value, sink: &ToolOutputSink) -> usize {
+/// The read window one inline answer may carry: what the call asked for,
+/// bounded by the configured window and by what the turn's budget has left.
+fn byte_limit(arguments: &Value, sink: &ToolOutputSink, max_inline_bytes: usize) -> usize {
     let requested = arguments["max_bytes"]
         .as_u64()
         .and_then(|value| usize::try_from(value).ok())
-        .unwrap_or(DEFAULT_INLINE_BYTES);
+        .unwrap_or(max_inline_bytes);
     requested
-        .min(DEFAULT_INLINE_BYTES)
+        .min(max_inline_bytes)
         .min(sink.remaining_bytes().max(1))
 }
 
@@ -1273,6 +1352,8 @@ impl Drop for TerminalGuard {
 fn command_handler(
     shell: Arc<SessionShell>,
     config: ShellConfig,
+    tool_config: ToolConfigResolver,
+    tool_name: String,
     working_directory: PathBuf,
     managed: bool,
     client_io: Option<ClientToolIo>,
@@ -1281,6 +1362,9 @@ fn command_handler(
         move |invocation: &ToolInvocation, output: ToolOutputSink| -> OwnedToolHandlerFuture {
             let shell = shell.clone();
             let config = config.clone();
+            // Read per call, so a raised timeout or output budget applies to
+            // the next command rather than to the next session.
+            let settings: ShellCommandConfig = tool_config.view(&tool_name);
             let working_directory = working_directory.clone();
             let arguments = invocation.arguments.clone();
             let client = client_io.clone();
@@ -1295,6 +1379,7 @@ fn command_handler(
                         client.as_ref(),
                         &working_directory,
                         &arguments,
+                        &settings,
                         &output,
                         &call_id,
                     )
@@ -1303,11 +1388,25 @@ fn command_handler(
                     return Ok(delegated);
                 }
                 if managed {
-                    run_managed_command(&shell, &config, &working_directory, &arguments, &output)
-                        .await
+                    run_managed_command(
+                        &shell,
+                        &config,
+                        &working_directory,
+                        &arguments,
+                        &settings,
+                        &output,
+                    )
+                    .await
                 } else {
-                    run_legacy_command(&shell, &config, &working_directory, &arguments, &output)
-                        .await
+                    run_legacy_command(
+                        &shell,
+                        &config,
+                        &working_directory,
+                        &arguments,
+                        &settings,
+                        &output,
+                    )
+                    .await
                 }
             })
         },
@@ -1319,6 +1418,7 @@ async fn delegated_command(
     client: Option<&ClientToolIo>,
     working_directory: &Path,
     arguments: &Value,
+    settings: &ShellCommandConfig,
     output: &ToolOutputSink,
     call_id: &str,
 ) -> Result<Option<ToolExecutionOutput>, ToolError> {
@@ -1326,8 +1426,10 @@ async fn delegated_command(
         return Ok(None);
     };
     let command = command_argument(arguments)?;
-    let timeout = timeout_argument(arguments);
-    let limit = MAX_OUTPUT_BYTES.min(output.remaining_bytes().max(1));
+    let timeout = timeout_argument(arguments, settings);
+    let limit = settings
+        .max_output_bytes
+        .min(output.remaining_bytes().max(1));
     let result = client
         .run_shell(ClientShellRequest {
             tool_call_id: Some(call_id.to_owned()),
@@ -1358,10 +1460,11 @@ async fn run_legacy_command(
     config: &ShellConfig,
     working_directory: &Path,
     arguments: &Value,
+    settings: &ShellCommandConfig,
     output: &ToolOutputSink,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let command = command_argument(arguments)?;
-    let timeout = timeout_argument(arguments);
+    let timeout = timeout_argument(arguments, settings);
     let terminal_id = shell
         .terminals
         .run(process_spec(
@@ -1370,6 +1473,7 @@ async fn run_legacy_command(
             working_directory,
             &command,
             None,
+            settings.max_output_bytes,
         ))
         .await
         .map_err(process_error)?;
@@ -1403,7 +1507,9 @@ async fn run_legacy_command(
     guard.disarm();
     let _ = shell.terminals.release(&terminal_id).await;
 
-    let limit = MAX_OUTPUT_BYTES.min(output.remaining_bytes().max(1));
+    let limit = settings
+        .max_output_bytes
+        .min(output.remaining_bytes().max(1));
     let (stdout, stdout_truncated) = render_stream(&read.chunks, ProcessStream::Stdout, limit);
     let (stderr, stderr_truncated) = render_stream(&read.chunks, ProcessStream::Stderr, limit);
     let truncated = stdout_truncated || stderr_truncated || read.backpressure_dropped;
@@ -1457,6 +1563,7 @@ fn process_spec(
     working_directory: &Path,
     command: &str,
     environment: Option<&Value>,
+    max_output_bytes: usize,
 ) -> ProcessSpec {
     let mut spec = ProcessSpec::new(&config.executable, working_directory);
     spec.arguments = config
@@ -1467,7 +1574,7 @@ fn process_spec(
         .collect();
     // Both streams share one budget in the reader, so the spec carries what the
     // two rendered streams may need together.
-    spec.max_output_bytes = MAX_OUTPUT_BYTES.saturating_mul(2);
+    spec.max_output_bytes = max_output_bytes.saturating_mul(2);
     // The family's own variables go in first: the reference merges the call's
     // overrides over them, so a call may still ask for a pager it will read.
     for (key, value) in family.environment() {
@@ -1660,6 +1767,7 @@ async fn run_managed_command(
     config: &ShellConfig,
     working_directory: &Path,
     arguments: &Value,
+    settings: &ShellCommandConfig,
     output: &ToolOutputSink,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let command = command_argument(arguments)?;
@@ -1682,15 +1790,20 @@ async fn run_managed_command(
         &requested_directory,
         &command,
         arguments.get("env"),
+        settings.max_output_bytes,
     )
     .await?;
     let background = arguments["background"].as_bool().unwrap_or(false);
     if background {
-        return managed_output(&session, 0, byte_limit(arguments, output));
+        return managed_output(
+            &session,
+            0,
+            byte_limit(arguments, output, settings.max_inline_bytes),
+        );
     }
     let hard_timeout =
         arguments["hard_timeout"].as_bool().unwrap_or(false) || arguments["timeout"].is_u64();
-    let timeout = timeout_argument(arguments);
+    let timeout = timeout_argument(arguments, settings);
     let deadline = Instant::now() + Duration::from_secs(timeout);
     while session.is_running() && Instant::now() < deadline {
         tokio::time::sleep(PUMP_INTERVAL).await;
@@ -1699,17 +1812,29 @@ async fn run_managed_command(
         if !hard_timeout {
             // A soft timeout leaves the session running: the model polls it
             // with the family's output tool instead of losing the work.
-            return managed_output(&session, 0, byte_limit(arguments, output));
+            return managed_output(
+                &session,
+                0,
+                byte_limit(arguments, output, settings.max_inline_bytes),
+            );
         }
         kill_managed_session(shell, &session, SessionStatus::TimedOut).await?;
-        let rendered = managed_output(&session, 0, byte_limit(arguments, output))?;
+        let rendered = managed_output(
+            &session,
+            0,
+            byte_limit(arguments, output, settings.max_inline_bytes),
+        )?;
         return Err(ToolError::Execution(format!(
             "the command timed out after {timeout}s and its process group was terminated: \
              `{command}`\nsession_id: {}\noutput:\n{}",
             session.id, rendered.model_text
         )));
     }
-    let rendered = managed_output(&session, 0, byte_limit(arguments, output))?;
+    let rendered = managed_output(
+        &session,
+        0,
+        byte_limit(arguments, output, settings.max_inline_bytes),
+    )?;
     let status = rendered.typed_result["exitCode"].as_i64().unwrap_or(0);
     if status != 0 {
         return Err(ToolError::Execution(format!(
@@ -1726,6 +1851,7 @@ async fn start_managed_session(
     working_directory: &Path,
     command: &str,
     environment: Option<&Value>,
+    max_output_bytes: usize,
 ) -> Result<Arc<ManagedSession>, ToolError> {
     if !working_directory.is_dir() {
         return Err(ToolError::Execution(format!(
@@ -1756,6 +1882,7 @@ async fn start_managed_session(
             working_directory,
             command,
             environment,
+            max_output_bytes,
         ))
         .await
         .map_err(process_error)?;
@@ -1874,17 +2001,65 @@ fn new_session_id(family: ShellFamily) -> String {
 
 /// Wraps one managed-family handler, which all share the same shape: a session
 /// store, the call arguments, and the turn's output budget.
-fn session_handler<F, Fut>(shell: Arc<SessionShell>, run: F) -> Arc<dyn ToolHandler>
+/// What a session tool reads off its own `tools.<name>` entry.
+///
+/// The four session tools declare different subsets: `_stdin` declares neither
+/// limit, `_output` declares both, and `_sessions` and `_log_file` only the
+/// read window. One value carries all of them so the four handlers share a
+/// signature; a tool that declares neither reads its base declaration and uses
+/// nothing.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SessionLimits {
+    max_inline_bytes: usize,
+    max_poll_seconds: f64,
+}
+
+impl SessionLimits {
+    fn resolve(config: &ToolConfigResolver, tool: &str) -> Self {
+        let inline: ShellInlineConfig = config.view(tool);
+        let polling: ShellOutputConfig = config.view(tool);
+        Self {
+            max_inline_bytes: inline.max_inline_bytes,
+            max_poll_seconds: polling.max_poll_seconds,
+        }
+    }
+}
+
+fn session_handler<F, Fut>(
+    shell: Arc<SessionShell>,
+    config: ToolConfigResolver,
+    tool: String,
+    run: F,
+) -> Arc<dyn ToolHandler>
 where
-    F: Fn(Arc<SessionShell>, Value, ToolOutputSink) -> Fut + Send + Sync + 'static,
+    F: Fn(Arc<SessionShell>, Value, ToolOutputSink, SessionLimits) -> Fut + Send + Sync + 'static,
     Fut: std::future::Future<Output = Result<ToolExecutionOutput, ToolError>> + Send + 'static,
 {
     Arc::new(
         move |invocation: &ToolInvocation, output: ToolOutputSink| -> OwnedToolHandlerFuture {
-            let future = run(shell.clone(), invocation.arguments.clone(), output);
+            let limits = SessionLimits::resolve(&config, &tool);
+            let future = run(shell.clone(), invocation.arguments.clone(), output, limits);
             Box::pin(future)
         },
     )
+}
+
+/// Wraps a session tool in the permission guard, which is what reads its
+/// configured permission: the three polling tools produce no requirement of
+/// their own, so the configuration is the whole decision.
+fn guarded_session(
+    tool: String,
+    policy: &PermissionStore,
+    approval: &Arc<dyn ApprovalAgent>,
+    inner: Arc<dyn ToolHandler>,
+) -> Arc<dyn ToolHandler> {
+    Arc::new(PolicyGuardedTool::new(
+        tool,
+        policy.clone(),
+        approval.clone(),
+        Arc::new(|_invocation| Ok(Vec::new())),
+        inner,
+    ))
 }
 
 async fn managed_session(
@@ -1995,6 +2170,7 @@ async fn run_output(
     shell: Arc<SessionShell>,
     arguments: Value,
     output: ToolOutputSink,
+    limits: SessionLimits,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let session_id = string_argument(&arguments, "session_id")
         .unwrap_or_default()
@@ -2004,13 +2180,17 @@ async fn run_output(
     let wait = arguments["wait_seconds"]
         .as_f64()
         .unwrap_or(0.0)
-        .clamp(0.0, MAX_POLL_SECONDS as f64);
+        .clamp(0.0, limits.max_poll_seconds);
     let deadline = Instant::now() + Duration::from_secs_f64(wait);
     while Instant::now() < deadline && session.is_running() && log_size(&session.log_path) <= cursor
     {
         tokio::time::sleep(PUMP_INTERVAL).await;
     }
-    managed_output(&session, cursor, byte_limit(&arguments, &output))
+    managed_output(
+        &session,
+        cursor,
+        byte_limit(&arguments, &output, limits.max_inline_bytes),
+    )
 }
 
 fn log_size(path: &Path) -> u64 {
@@ -2023,6 +2203,7 @@ async fn run_stdin(
     shell: Arc<SessionShell>,
     arguments: Value,
     _output: ToolOutputSink,
+    _limits: SessionLimits,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let session_id = string_argument(&arguments, "session_id")
         .unwrap_or_default()
@@ -2103,9 +2284,10 @@ async fn run_sessions(
     shell: Arc<SessionShell>,
     arguments: Value,
     output: ToolOutputSink,
+    limits: SessionLimits,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let action = string_argument(&arguments, "action").unwrap_or("list");
-    let limit = byte_limit(&arguments, &output);
+    let limit = byte_limit(&arguments, &output, limits.max_inline_bytes);
     match action {
         "list" => {
             let sessions = shell.managed.lock().await;
@@ -2205,13 +2387,14 @@ async fn run_log_file(
     shell: Arc<SessionShell>,
     arguments: Value,
     output: ToolOutputSink,
+    limits: SessionLimits,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let action = string_argument(&arguments, "action").unwrap_or_default();
     let path = resolve_log_path(&shell, &arguments)?;
     match action {
         "read" => {
             let offset = arguments["offset"].as_u64().unwrap_or(0);
-            let limit = byte_limit(&arguments, &output);
+            let limit = byte_limit(&arguments, &output, limits.max_inline_bytes);
             let (content, next_cursor, truncated) = read_file_window(&path, offset, limit)?;
             Ok(ToolExecutionOutput {
                 model_text: content.clone(),

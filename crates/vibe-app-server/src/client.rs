@@ -4662,8 +4662,10 @@ mod tests {
         vibe_core::workspace::WorkspaceTools::new(workspace, review)
             .register(
                 &tools,
-                vibe_core::policy::PermissionStore::default(),
-                Arc::new(DenyEveryApproval),
+                &vibe_core::policy::ToolGuard::new(
+                    vibe_core::policy::PermissionStore::default(),
+                    Arc::new(DenyEveryApproval),
+                ),
             )
             .expect("workspace tools register");
         let edit = tools

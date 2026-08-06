@@ -74,6 +74,14 @@ impl CoreResourceBackend {
                 let platform = host_platform();
                 let working_directory = parse_policy_path(platform, &session.working_directory)
                     .map_err(|error| ResourceError::InvalidParams(error.to_string()))?;
+                // The manual shell resource reads the same `bash` lists the
+                // tool does, through the session's own permission store.
+                let lists = ShellCommandLists::from_config(
+                    &session
+                        .policy
+                        .tool_config()
+                        .view::<ShellCommandConfig>("bash"),
+                );
                 let analysis = analyze_shell(
                     ShellConfig::default_for(platform).flavor,
                     command,
@@ -82,6 +90,7 @@ impl CoreResourceBackend {
                         working_directory: working_directory.clone(),
                         roots: vec![working_directory],
                     },
+                    &lists,
                 );
                 if analysis.mode != PermissionMode::Always {
                     return Err(ResourceError::Conflict(format!(

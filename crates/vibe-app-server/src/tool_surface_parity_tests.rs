@@ -26,7 +26,7 @@ use secrecy::SecretString;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use vibe_core::policy::{
-    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore,
+    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore, ToolGuard,
     TrustDecision, TrustRootKind,
 };
 use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
@@ -308,31 +308,17 @@ async fn published_specs_with(
     let registry = ToolRegistry::default();
     let access = web_search.then(|| WebSearchAccess {
         endpoint: WebSearchAccess::DEFAULT_ENDPOINT.to_owned(),
-        model: WebSearchAccess::DEFAULT_MODEL.to_owned(),
         api_key: SecretString::from("probe"),
     });
+    let guard = ToolGuard::new(policy, Arc::new(RejectApproval));
     BuiltinTools::new(directory.path(), access)
-        .register(
-            "session-1",
-            directory.path(),
-            true,
-            &registry,
-            policy.clone(),
-            Arc::new(RejectApproval),
-        )
+        .register("session-1", directory.path(), true, &registry, &guard)
         .expect("universal tools register");
     WorkspaceTools::new(workspace, review)
-        .register(&registry, policy.clone(), Arc::new(RejectApproval))
+        .register(&registry, &guard)
         .expect("workspace tools register");
     ShellTools::with_host(directory.path().join("home"), rollout, host)
-        .register(
-            "session-1",
-            directory.path(),
-            &registry,
-            policy,
-            Arc::new(RejectApproval),
-            None,
-        )
+        .register("session-1", directory.path(), &registry, None, &guard)
         .expect("the shell family registers");
     let (sender, _receiver) = tokio::sync::mpsc::channel(1);
     InteractiveSessionToolFactory {

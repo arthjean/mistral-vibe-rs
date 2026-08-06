@@ -18,36 +18,23 @@ use std::time::Duration;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use toml::{Table, Value as TomlValue};
 use url::Url;
 
 use crate::config::DotenvValues;
 use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
-use crate::policy::{ApprovalAgent, PermissionRequirement, PermissionStore, PolicyGuardedTool};
+use crate::policy::{PermissionRequirement, PolicyGuardedTool, ToolGuard};
 use crate::schema::{ObjectSchema, Property};
+use crate::tools::config::{
+    TodoConfig, ToolConfigResolver, WebFetchConfig, WebSearchConfig, declared_document,
+};
 use crate::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolError, ToolExecutionOutput,
     ToolHandler, ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource,
     ToolSpec,
 };
 
-/// Reference `TodoConfig.max_todos`.
-const MAX_TODOS: usize = 100;
-/// Reference `WebFetchConfig.default_timeout`.
-const DEFAULT_FETCH_TIMEOUT_SECONDS: u64 = 30;
-/// Reference `WebFetchConfig.max_timeout`, also the cap the schema description
-/// states.
-const MAX_FETCH_TIMEOUT_SECONDS: u64 = 120;
-/// Reference `WebFetchConfig.max_content_bytes`.
-const MAX_FETCH_CONTENT_BYTES: usize = 120_000;
 /// The redirect budget the security NFR sets for `web_fetch`.
 const MAX_FETCH_REDIRECTS: usize = 5;
-/// Reference `WebFetchConfig.user_agent`: a browser string, because a plain
-/// bot agent is refused by a large share of the pages an operator asks for.
-const FETCH_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) \
-     Chrome/120.0.0.0 Safari/537.36";
-/// Reference `WebSearchConfig.timeout`.
-const SEARCH_TIMEOUT_SECONDS: u64 = 120;
 /// How many skill names an unknown-skill error lists before it truncates.
 const MAX_LISTED_SKILLS: usize = 40;
 /// Reference `skill.py:_MAX_LISTED_FILES`.
@@ -63,8 +50,6 @@ const MAX_LISTED_SKILL_FILES: usize = 10;
 pub struct WebSearchAccess {
     /// The API base, for example `https://api.mistral.ai`.
     pub endpoint: String,
-    /// Reference `WebSearchConfig.model`.
-    pub model: String,
     pub api_key: SecretString,
 }
 
@@ -73,14 +58,11 @@ impl std::fmt::Debug for WebSearchAccess {
         formatter
             .debug_struct("WebSearchAccess")
             .field("endpoint", &self.endpoint)
-            .field("model", &self.model)
             .finish_non_exhaustive()
     }
 }
 
 impl WebSearchAccess {
-    /// Reference `WebSearchConfig.model`.
-    pub const DEFAULT_MODEL: &'static str = "mistral-vibe-cli-with-tools";
     /// Reference `DEFAULT_MISTRAL_API_ENV_KEY`.
     pub const DEFAULT_ENDPOINT: &'static str = "https://api.mistral.ai";
 
@@ -95,7 +77,6 @@ impl WebSearchAccess {
         let key = dotenv.variable(variable).filter(|key| !key.is_empty())?;
         Some(Self {
             endpoint: Self::DEFAULT_ENDPOINT.to_owned(),
-            model: Self::DEFAULT_MODEL.to_owned(),
             api_key: SecretString::from(key),
         })
     }
@@ -179,14 +160,36 @@ impl BuiltinTools {
         working_directory: &Path,
         project_trusted: bool,
         registry: &ToolRegistry,
-        policy: PermissionStore,
-        approval: Arc<dyn ApprovalAgent>,
+        guard: &ToolGuard,
     ) -> Result<Vec<RegistrationOutcome>, ToolError> {
+        let ToolGuard {
+            policy,
+            approval,
+            config,
+        } = guard;
         let mut outcomes = vec![
-            registry.register(todo_spec(), self.todo_handler(session_id))?,
+            // `todo` and `skill` are configured `always` upstream, and the
+            // guard is what reads that: a session or an operator moving either
+            // one to `ask` is obeyed without the handler knowing about policy.
+            registry.register(
+                todo_spec(),
+                Arc::new(PolicyGuardedTool::new(
+                    "todo",
+                    policy.clone(),
+                    approval.clone(),
+                    Arc::new(|_invocation| Ok(Vec::new())),
+                    self.todo_handler(session_id, config),
+                )),
+            )?,
             registry.register(
                 skill_spec(),
-                self.skill_handler(working_directory, project_trusted),
+                Arc::new(PolicyGuardedTool::new(
+                    "skill",
+                    policy.clone(),
+                    approval.clone(),
+                    Arc::new(|_invocation| Ok(Vec::new())),
+                    self.skill_handler(working_directory, project_trusted),
+                )),
             )?,
             registry.register(
                 web_fetch_spec(),
@@ -198,7 +201,7 @@ impl BuiltinTools {
                         let url = fetch_url(&invocation.arguments)?;
                         Ok(vec![PermissionRequirement::Network { url }])
                     }),
-                    web_fetch_handler(),
+                    web_fetch_handler(config.clone()),
                 )),
             )?,
         ];
@@ -214,67 +217,29 @@ impl BuiltinTools {
                 web_search_spec(),
                 Arc::new(PolicyGuardedTool::new(
                     "web_search",
-                    policy,
-                    approval,
+                    policy.clone(),
+                    approval.clone(),
                     Arc::new(move |_invocation| {
                         Ok(vec![PermissionRequirement::Network { url: scope.clone() }])
                     }),
-                    web_search_handler(access),
+                    web_search_handler(access, config.clone()),
                 )),
             )?);
         }
         Ok(outcomes)
     }
 
-    /// The per-tool settings these tools declare, shaped as the document
-    /// [`crate::config::ConfigLayerKind::Discovered`] composes.
-    ///
-    /// The set is the one [`Self::register`] publishes, `web_search` included
-    /// exactly when a credential resolves for it: a tool that never registers
-    /// has no settings for an operator to override. Each entry lands under
-    /// `tools.<name>`, which the `tools` field deep-merges, so a file setting
-    /// one option of one tool leaves the rest of the discovered document
-    /// standing.
-    ///
-    /// A tool declaring nothing contributes nothing, and a declaration that
-    /// cannot be expressed as a configuration value fails the whole pass rather
-    /// than composing a half-filled tool table.
-    pub fn discovered_settings(&self) -> Result<Table, ToolError> {
-        let mut specs = vec![todo_spec(), skill_spec(), web_fetch_spec()];
-        if self.web_search.is_some() {
-            specs.push(web_search_spec());
-        }
-        let mut tools = Table::new();
-        for spec in &specs {
-            if spec.config.is_null() {
-                continue;
-            }
-            let settings = TomlValue::try_from(&spec.config).map_err(|error| {
-                ToolError::Execution(format!(
-                    "tool `{}` declares settings no configuration can carry: {error}",
-                    spec.name
-                ))
-            })?;
-            tools.insert(spec.name.clone(), settings);
-        }
-        if tools.is_empty() {
-            return Ok(Table::new());
-        }
-        Ok(Table::from_iter([(
-            "tools".to_owned(),
-            TomlValue::Table(tools),
-        )]))
-    }
-
-    fn todo_handler(&self, session_id: &str) -> Arc<dyn ToolHandler> {
+    fn todo_handler(&self, session_id: &str, config: &ToolConfigResolver) -> Arc<dyn ToolHandler> {
         let todos = self.todos.clone();
         let session_id = session_id.to_owned();
+        let config = config.clone();
         Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let todos = todos.clone();
                 let session_id = session_id.clone();
+                let settings: TodoConfig = config.view("todo");
                 let arguments = invocation.arguments.clone();
-                Box::pin(async move { run_todo(&todos, &session_id, &arguments) })
+                Box::pin(async move { run_todo(&todos, &session_id, &arguments, &settings) })
             },
         )
     }
@@ -375,7 +340,7 @@ fn todo_spec() -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: json!({"maxTodos": MAX_TODOS}),
+        config: declared_document("todo"),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Generic,
@@ -388,6 +353,7 @@ fn run_todo(
     todos: &Mutex<BTreeMap<String, Vec<TodoItem>>>,
     session_id: &str,
     arguments: &Value,
+    settings: &TodoConfig,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let action = arguments["action"].as_str().unwrap_or_default();
     let mut stored = todos
@@ -401,10 +367,11 @@ fn run_todo(
         ),
         "write" => {
             let items = parse_todo_items(&arguments["todos"])?;
-            if items.len() > MAX_TODOS {
+            if items.len() > settings.max_todos {
                 return Err(ToolError::Execution(format!(
-                    "the todo list holds {} items, exceeding the {MAX_TODOS}-item limit",
-                    items.len()
+                    "the todo list holds {} items, exceeding the {}-item limit",
+                    items.len(),
+                    settings.max_todos
                 )));
             }
             let mut seen = BTreeSet::new();
@@ -484,7 +451,7 @@ fn skill_spec() -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: Value::Null,
+        config: declared_document("skill"),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Generic,
@@ -586,11 +553,7 @@ fn web_fetch_spec() -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: json!({
-            "maxContentBytes": MAX_FETCH_CONTENT_BYTES,
-            "maxRedirects": MAX_FETCH_REDIRECTS,
-            "timeoutSeconds": DEFAULT_FETCH_TIMEOUT_SECONDS,
-        }),
+        config: declared_document("web_fetch"),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Generic,
@@ -625,9 +588,11 @@ fn fetch_url(arguments: &Value) -> Result<Url, ToolError> {
         .map_err(|error| ToolError::Execution(format!("`{raw}` is not a URL: {error}")))
 }
 
-fn fetch_timeout(arguments: &Value) -> Result<Duration, ToolError> {
+/// How long one call may wait: what it asked for, bounded by the configured
+/// ceiling, or the configured default when it asked for nothing.
+fn fetch_timeout(arguments: &Value, settings: &WebFetchConfig) -> Result<Duration, ToolError> {
     let Some(requested) = arguments["timeout"].as_i64() else {
-        return Ok(Duration::from_secs(DEFAULT_FETCH_TIMEOUT_SECONDS));
+        return Ok(Duration::from_secs(settings.default_timeout));
     };
     if requested <= 0 {
         return Err(ToolError::SchemaViolation {
@@ -635,30 +600,32 @@ fn fetch_timeout(arguments: &Value) -> Result<Duration, ToolError> {
             message: "must be a positive number of seconds".to_owned(),
         });
     }
-    let seconds = u64::try_from(requested).unwrap_or(MAX_FETCH_TIMEOUT_SECONDS);
-    Ok(Duration::from_secs(seconds.min(MAX_FETCH_TIMEOUT_SECONDS)))
+    let seconds = u64::try_from(requested).unwrap_or(settings.max_timeout);
+    Ok(Duration::from_secs(seconds.min(settings.max_timeout)))
 }
 
-fn web_fetch_handler() -> Arc<dyn ToolHandler> {
+fn web_fetch_handler(config: ToolConfigResolver) -> Arc<dyn ToolHandler> {
     Arc::new(
         move |invocation: &ToolInvocation, output: ToolOutputSink| -> OwnedToolHandlerFuture {
             let arguments = invocation.arguments.clone();
-            Box::pin(async move { run_web_fetch(&arguments, &output).await })
+            let settings: WebFetchConfig = config.view("web_fetch");
+            Box::pin(async move { run_web_fetch(&arguments, &settings, &output).await })
         },
     )
 }
 
 async fn run_web_fetch(
     arguments: &Value,
+    settings: &WebFetchConfig,
     output: &ToolOutputSink,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let url = fetch_url(arguments)?;
-    let timeout = fetch_timeout(arguments)?;
+    let timeout = fetch_timeout(arguments, settings)?;
     let host = url.host_str().unwrap_or("the requested host").to_owned();
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::limited(MAX_FETCH_REDIRECTS))
         .timeout(timeout)
-        .user_agent(FETCH_USER_AGENT)
+        .user_agent(settings.user_agent.clone())
         .build()
         .map_err(|error| ToolError::Execution(error.to_string()))?;
     let response = client.get(url.clone()).send().await.map_err(|error| {
@@ -701,7 +668,7 @@ async fn run_web_fetch(
     };
     // The sink owns the turn's output budget, so the page is bounded by the
     // smaller of its own limit and what the sink still has room for.
-    let limit = MAX_FETCH_CONTENT_BYTES.min(output.remaining_bytes());
+    let limit = settings.max_content_bytes.min(output.remaining_bytes());
     let truncated = text.len() > limit;
     let content = if truncated {
         let mut boundary = limit;
@@ -872,7 +839,7 @@ fn web_search_spec() -> ToolSpec {
             )
             .build(),
         output_schema: None,
-        config: json!({"timeoutSeconds": SEARCH_TIMEOUT_SECONDS}),
+        config: declared_document("web_search"),
         state: Value::Null,
         availability: ToolAvailability::Available,
         presentation: ToolPresentationKind::Generic,
@@ -881,21 +848,23 @@ fn web_search_spec() -> ToolSpec {
     }
 }
 
-fn web_search_handler(access: WebSearchAccess) -> Arc<dyn ToolHandler> {
+fn web_search_handler(access: WebSearchAccess, config: ToolConfigResolver) -> Arc<dyn ToolHandler> {
     Arc::new(
         move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
             let access = access.clone();
+            let settings: WebSearchConfig = config.view("web_search");
             let query = invocation.arguments["query"]
                 .as_str()
                 .unwrap_or_default()
                 .to_owned();
-            Box::pin(async move { run_web_search(&access, &query).await })
+            Box::pin(async move { run_web_search(&access, &settings, &query).await })
         },
     )
 }
 
 async fn run_web_search(
     access: &WebSearchAccess,
+    settings: &WebSearchConfig,
     query: &str,
 ) -> Result<ToolExecutionOutput, ToolError> {
     if query.trim().is_empty() {
@@ -906,14 +875,14 @@ async fn run_web_search(
     }
     let endpoint = format!("{}/v1/conversations", access.endpoint.trim_end_matches('/'));
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(SEARCH_TIMEOUT_SECONDS))
+        .timeout(Duration::from_secs(settings.timeout))
         .build()
         .map_err(|error| ToolError::Execution(error.to_string()))?;
     let response = client
         .post(&endpoint)
         .bearer_auth(access.api_key.expose_secret())
         .json(&json!({
-            "model": access.model,
+            "model": settings.model,
             "instructions": "Always use the web_search tool to answer the query. Never answer \
                              from memory alone.",
             "tools": [{"type": "web_search"}],
@@ -989,6 +958,7 @@ fn parse_search_response(payload: &Value) -> (String, Vec<Value>) {
 
 #[cfg(test)]
 mod tests {
+    use crate::policy::{ApprovalAgent, PermissionStore};
     use std::io::{Read as _, Write as _};
     use std::net::TcpListener;
 
@@ -1036,9 +1006,21 @@ mod tests {
             .expect("trust");
         let registry = ToolRegistry::default();
         BuiltinTools::new(root, access)
-            .register("session-1", root, true, &registry, policy, approval)
+            .register(
+                "session-1",
+                root,
+                true,
+                &registry,
+                &ToolGuard::new(policy, approval),
+            )
             .expect("register");
         registry
+    }
+
+    /// The declared `todo` configuration, which is what the handler resolves
+    /// when nothing overrides it.
+    fn todo_settings() -> TodoConfig {
+        ToolConfigResolver::new().view("todo")
     }
 
     fn names(registry: &ToolRegistry) -> Vec<String> {
@@ -1053,7 +1035,6 @@ mod tests {
     fn probe_access(endpoint: String) -> WebSearchAccess {
         WebSearchAccess {
             endpoint,
-            model: WebSearchAccess::DEFAULT_MODEL.to_owned(),
             api_key: SecretString::from("probe-key"),
         }
     }
@@ -1074,6 +1055,25 @@ mod tests {
             }
         });
         format!("http://{address}")
+    }
+
+    /// The same fixture, handing back what the client sent so a test can assert
+    /// on the request rather than only on the answer.
+    fn serve_once_recording(response: String) -> (String, std::sync::mpsc::Receiver<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("fixture listener");
+        let address = listener.local_addr().expect("listener address").to_string();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut buffer = [0_u8; 8192];
+            let read = stream.read(&mut buffer).unwrap_or(0);
+            let _ = sender.send(String::from_utf8_lossy(&buffer[..read]).into_owned());
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+        });
+        (format!("http://{address}"), receiver)
     }
 
     fn http_response(body: &str) -> String {
@@ -1124,7 +1124,6 @@ mod tests {
             .expect("the file's key resolves");
         assert_eq!(access.api_key.expose_secret(), "from-file");
         assert_eq!(access.endpoint, WebSearchAccess::DEFAULT_ENDPOINT);
-        assert_eq!(access.model, WebSearchAccess::DEFAULT_MODEL);
 
         assert!(
             WebSearchAccess::from_environment(&dotenv, "VIBE_WEB_SEARCH_ABSENT_KEY").is_none(),
@@ -1240,13 +1239,139 @@ mod tests {
         assert!(missing.to_string().contains("probe"), "{missing}");
     }
 
+    /// US-103: `todo` reads its maximum from the configuration, and the failure
+    /// names the configured limit rather than a compiled-in one.
+    #[tokio::test]
+    async fn a_configured_todo_maximum_replaces_the_declared_one() {
+        let directory = tempdir().expect("tempdir");
+        let policy = PermissionStore::default();
+        policy
+            .set_trust(
+                directory.path(),
+                TrustDecision::Trusted,
+                TrustRootKind::Workspace,
+            )
+            .await
+            .expect("trust");
+        let config = policy.tool_config();
+        config.update(
+            "[todo]\nmax_todos = 2\n"
+                .parse::<toml::Table>()
+                .expect("settings parse"),
+        );
+        let registry = ToolRegistry::default();
+        BuiltinTools::new(directory.path(), None)
+            .register(
+                "session-1",
+                directory.path(),
+                true,
+                &registry,
+                &ToolGuard {
+                    policy,
+                    approval: Arc::new(AllowApproval),
+                    config: config.clone(),
+                },
+            )
+            .expect("register");
+
+        let todos = |count: usize| {
+            json!({
+                "action": "write",
+                "todos": (0..count)
+                    .map(|index| json!({"id": index.to_string(), "content": "work"}))
+                    .collect::<Vec<_>>(),
+            })
+        };
+        registry
+            .invoke(
+                "todo",
+                ToolInvocation {
+                    call_id: "todo-1".to_owned(),
+                    arguments: todos(2),
+                },
+            )
+            .await
+            .expect("a list at the configured maximum is accepted");
+        let refused = registry
+            .invoke(
+                "todo",
+                ToolInvocation {
+                    call_id: "todo-2".to_owned(),
+                    arguments: todos(3),
+                },
+            )
+            .await
+            .expect_err("a list past the configured maximum is refused");
+        assert!(refused.to_string().contains("2-item limit"), "{refused}");
+    }
+
+    /// US-103: `web_search` sends the configured model, and waits the configured
+    /// timeout for the answer.
+    #[tokio::test]
+    async fn web_search_sends_the_configured_model() {
+        let directory = tempdir().expect("tempdir");
+        let answer = "{\"outputs\": [{\"type\": \"message.output\", \"content\": \"answered\"}]}";
+        let (endpoint, requests) = serve_once_recording(format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: \
+             close\r\n\r\n{answer}",
+            answer.len()
+        ));
+        let policy = PermissionStore::default();
+        let config = policy.tool_config();
+        config.update(
+            "[web_search]\nmodel = \"configured-model\"\ntimeout = 9\n"
+                .parse::<toml::Table>()
+                .expect("settings parse"),
+        );
+        let registry = ToolRegistry::default();
+        BuiltinTools::new(
+            directory.path(),
+            Some(WebSearchAccess {
+                endpoint,
+                api_key: SecretString::from("probe"),
+            }),
+        )
+        .register(
+            "session-1",
+            directory.path(),
+            true,
+            &registry,
+            &ToolGuard {
+                policy,
+                approval: Arc::new(AllowApproval),
+                config: config.clone(),
+            },
+        )
+        .expect("register");
+
+        registry
+            .invoke(
+                "web_search",
+                ToolInvocation {
+                    call_id: "search-1".to_owned(),
+                    arguments: json!({"query": "who ships parity"}),
+                },
+            )
+            .await
+            .expect("the fixture answers");
+        let request = requests.recv().expect("the fixture recorded the request");
+        assert!(request.contains("configured-model"), "{request}");
+        assert!(
+            !request.contains("mistral-vibe-cli-with-tools"),
+            "the declared default must not travel once an operator moved it: {request}"
+        );
+        let settings: WebSearchConfig = config.view("web_search");
+        assert_eq!(settings.timeout, 9);
+    }
+
     /// A page past the limit comes back truncated rather than overflowing the
     /// turn's output budget.
     #[tokio::test]
     async fn a_long_page_is_truncated_inside_the_output_budget() {
         let directory = tempdir().expect("tempdir");
         let registry = registered_with(directory.path(), None, Arc::new(AllowApproval)).await;
-        let body = "z".repeat(MAX_FETCH_CONTENT_BYTES + 4_096);
+        let settings: WebFetchConfig = ToolConfigResolver::new().view("web_fetch");
+        let body = "z".repeat(settings.max_content_bytes + 4_096);
         let endpoint = serve_once(vec![http_response(&body)]);
 
         let fetched = registry
@@ -1261,7 +1386,7 @@ mod tests {
             .expect("fetch");
         assert_eq!(fetched.typed_result["wasTruncated"], json!(true));
         assert!(
-            fetched.model_text.len() < MAX_FETCH_CONTENT_BYTES + 128,
+            fetched.model_text.len() < settings.max_content_bytes + 128,
             "the page must stay inside the limit"
         );
         assert!(
@@ -1387,8 +1512,13 @@ mod tests {
     #[test]
     fn an_unwritten_todo_list_reads_back_empty() {
         let todos = Mutex::new(BTreeMap::new());
-        let output = run_todo(&todos, "session-1", &json!({"action": "read"}))
-            .expect("reading an unwritten list is not an error");
+        let output = run_todo(
+            &todos,
+            "session-1",
+            &json!({"action": "read"}),
+            &todo_settings(),
+        )
+        .expect("reading an unwritten list is not an error");
         assert_eq!(output.typed_result["todos"], json!([]));
         assert_eq!(output.model_text, "Retrieved 0 todos");
     }
@@ -1400,9 +1530,16 @@ mod tests {
             &todos,
             "session-1",
             &json!({"action": "write", "todos": [{"id": "a", "content": "ship"}]}),
+            &todo_settings(),
         )
         .expect("write");
-        let output = run_todo(&todos, "session-1", &json!({"action": "read"})).expect("read");
+        let output = run_todo(
+            &todos,
+            "session-1",
+            &json!({"action": "read"}),
+            &todo_settings(),
+        )
+        .expect("read");
         assert_eq!(
             output.typed_result["todos"],
             json!([{"id": "a", "content": "ship", "status": "pending", "priority": "medium"}])
@@ -1416,9 +1553,16 @@ mod tests {
             &todos,
             "session-1",
             &json!({"action": "write", "todos": [{"id": "a", "content": "ship"}]}),
+            &todo_settings(),
         )
         .expect("write");
-        let other = run_todo(&todos, "session-2", &json!({"action": "read"})).expect("read");
+        let other = run_todo(
+            &todos,
+            "session-2",
+            &json!({"action": "read"}),
+            &todo_settings(),
+        )
+        .expect("read");
         assert_eq!(other.typed_result["todos"], json!([]));
     }
 
@@ -1432,6 +1576,7 @@ mod tests {
                 {"id": "a", "content": "one"},
                 {"id": "a", "content": "two"}
             ]}),
+            &todo_settings(),
         )
         .expect_err("a duplicated id is refused");
         assert!(error.to_string().contains('a'), "{error}");
@@ -1441,8 +1586,13 @@ mod tests {
     #[test]
     fn an_unknown_todo_action_names_the_two_that_exist() {
         let todos = Mutex::new(BTreeMap::new());
-        let error = run_todo(&todos, "session-1", &json!({"action": "append"}))
-            .expect_err("an unknown action is refused");
+        let error = run_todo(
+            &todos,
+            "session-1",
+            &json!({"action": "append"}),
+            &todo_settings(),
+        )
+        .expect_err("an unknown action is refused");
         assert!(error.to_string().contains("append"), "{error}");
         assert!(error.to_string().contains("read"), "{error}");
     }
@@ -1469,15 +1619,33 @@ mod tests {
 
     #[test]
     fn the_fetch_timeout_defaults_and_is_capped() {
+        let settings: WebFetchConfig = ToolConfigResolver::new().view("web_fetch");
         assert_eq!(
-            fetch_timeout(&json!({"timeout": Value::Null})).expect("default"),
-            Duration::from_secs(DEFAULT_FETCH_TIMEOUT_SECONDS)
+            fetch_timeout(&json!({"timeout": Value::Null}), &settings).expect("default"),
+            Duration::from_secs(settings.default_timeout)
         );
         assert_eq!(
-            fetch_timeout(&json!({"timeout": 9_000})).expect("capped"),
-            Duration::from_secs(MAX_FETCH_TIMEOUT_SECONDS)
+            fetch_timeout(&json!({"timeout": 9_000}), &settings).expect("capped"),
+            Duration::from_secs(settings.max_timeout)
         );
-        assert!(fetch_timeout(&json!({"timeout": 0})).is_err());
+        assert!(fetch_timeout(&json!({"timeout": 0}), &settings).is_err());
+
+        // The ceiling and the default are the operator's to move.
+        let resolver = ToolConfigResolver::new();
+        resolver.update(
+            "[web_fetch]\ndefault_timeout = 5\nmax_timeout = 7\n"
+                .parse::<toml::Table>()
+                .expect("settings parse"),
+        );
+        let configured: WebFetchConfig = resolver.view("web_fetch");
+        assert_eq!(
+            fetch_timeout(&json!({"timeout": Value::Null}), &configured).expect("default"),
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            fetch_timeout(&json!({"timeout": 9_000}), &configured).expect("capped"),
+            Duration::from_secs(7)
+        );
     }
 
     /// A page whose text folds to a different byte length than it occupies,
