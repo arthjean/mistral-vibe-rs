@@ -400,6 +400,20 @@ SOURCE_MODULES: tuple[str, ...] = (
     "vibe.app_server._effect_models",
     "vibe.app_server.config",
     "vibe.app_server.review",
+    # Two contracts the app-server publishes are declared outside it: the
+    # effect displays every entry detail carries, and the question models the
+    # user-input callback and the `ask_user_question` effect take.
+    "vibe.utils.tool_presentation",
+    "vibe.questions",
+)
+
+#: The base classes whose subclasses cross the wire. They differ only in which
+#: package declares them; each one forbids surplus fields and serializes under a
+#: camelCase alias, which is the contract the census records.
+WIRE_MODEL_BASES: tuple[tuple[str, str], ...] = (
+    ("vibe.app_server._model", "ProtocolModel"),
+    ("vibe.utils.tool_presentation", "PresentationModel"),
+    ("vibe.questions", "QuestionModel"),
 )
 
 
@@ -415,6 +429,13 @@ class Census:
         from vibe.app_server._model import ProtocolModel
 
         self.protocol_model = ProtocolModel
+        #: Every base a wire model may inherit from. `describe` and `record`
+        #: walk all of them; the completeness check below stays scoped to
+        #: `ProtocolModel`, which is the only base the app-server package owns.
+        self.wire_models = tuple(
+            getattr(__import__(module, fromlist=["_"]), name)
+            for module, name in WIRE_MODEL_BASES
+        )
         self.modules = [__import__(name, fromlist=["_"]) for name in SOURCE_MODULES]
         self.models: dict[str, Any] = {}
         self.enums: dict[str, Any] = {}
@@ -430,7 +451,7 @@ class Census:
 
     def model(self, name: str) -> Any:
         found = self.lookup(name)
-        if not isinstance(found, type) or not issubclass(found, self.protocol_model):
+        if not isinstance(found, type) or not issubclass(found, self.wire_models):
             raise OracleError(f"reference declares no wire model named {name}")
         return found
 
@@ -473,7 +494,7 @@ class Census:
                     visit(arguments[1])
                 return "dict"
             if isinstance(node, type):
-                if issubclass(node, self.protocol_model):
+                if issubclass(node, self.wire_models):
                     models.add(node.__name__)
                     self.record(node)
                     return "model"
@@ -490,7 +511,10 @@ class Census:
         kind = visit(annotation) or "any"
         return {
             "kind": kind,
-            "optional": optional,
+            # An untyped JSON value includes null, which the walk above never
+            # reaches because it stops at the alias rather than expanding its
+            # recursive union.
+            "optional": optional or kind == "any",
             "models": sorted(models),
             "enums": sorted(enums),
             "literals": [_wire_value(value) for value in literals],

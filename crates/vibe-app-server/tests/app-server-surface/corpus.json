@@ -2021,9 +2021,11 @@
           "name": "display",
           "alias": "display",
           "required": false,
-          "kind": "scalar",
+          "kind": "model",
           "optional": true,
-          "models": [],
+          "models": [
+            "EffectResultDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -2498,9 +2500,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectResultDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -2519,7 +2523,7 @@
           "alias": "output",
           "required": false,
           "kind": "any",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -2630,7 +2634,7 @@
           "alias": "value",
           "required": false,
           "kind": "any",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -2722,7 +2726,7 @@
           "alias": "value",
           "required": false,
           "kind": "any",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -2797,7 +2801,7 @@
           "alias": "value",
           "required": false,
           "kind": "any",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -3773,6 +3777,146 @@
       ]
     },
     {
+      "name": "EffectCallDisplay",
+      "fields": [
+        {
+          "name": "content",
+          "alias": "content",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "message",
+          "alias": "message",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "settled_message",
+          "alias": "settledMessage",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "settled_verb",
+          "alias": "settledVerb",
+          "required": false,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "status_text",
+          "alias": "statusText",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "suffix",
+          "alias": "suffix",
+          "required": false,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "summary",
+          "alias": "summary",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "verb",
+          "alias": "verb",
+          "required": false,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "EffectResultDisplay",
+      "fields": [
+        {
+          "name": "message",
+          "alias": "message",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "success",
+          "alias": "success",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "suffix",
+          "alias": "suffix",
+          "required": false,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "verb",
+          "alias": "verb",
+          "required": false,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "warnings",
+          "alias": "warnings",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "EmptyResponse",
       "fields": []
     },
@@ -3845,9 +3989,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectResultDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -4000,9 +4146,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -4203,9 +4351,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -4372,9 +4522,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -4528,9 +4680,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -4627,9 +4781,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -4638,7 +4794,7 @@
           "alias": "input",
           "required": false,
           "kind": "any",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -5244,7 +5400,7 @@
           "alias": "value",
           "required": false,
           "kind": "any",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -7039,7 +7195,7 @@
           "alias": "data",
           "required": false,
           "kind": "any",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -7236,7 +7392,7 @@
           "alias": "details",
           "required": false,
           "kind": "any",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -7495,7 +7651,7 @@
           "alias": "details",
           "required": false,
           "kind": "any",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -8238,6 +8394,31 @@
           "enums": [
             "PublicTurnStopReason"
           ],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "QuestionChoice",
+      "fields": [
+        {
+          "name": "description",
+          "alias": "description",
+          "required": false,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "label",
+          "alias": "label",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
           "literals": []
         }
       ]
@@ -11466,9 +11647,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -11725,9 +11908,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -11915,9 +12100,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectResultDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -12090,9 +12277,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -12827,9 +13016,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -13474,6 +13665,41 @@
       ]
     },
     {
+      "name": "UserAnswer",
+      "fields": [
+        {
+          "name": "answer",
+          "alias": "answer",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "is_other",
+          "alias": "isOther",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "question",
+          "alias": "question",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "UserInputCallbackDetail",
       "fields": [
         {
@@ -13502,9 +13728,11 @@
           "name": "request",
           "alias": "request",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "UserQuestionRequest"
+          ],
           "enums": [],
           "literals": []
         }
@@ -13517,9 +13745,11 @@
           "name": "result",
           "alias": "result",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "UserQuestionResult"
+          ],
           "enums": [],
           "literals": []
         },
@@ -13538,15 +13768,74 @@
       ]
     },
     {
+      "name": "UserQuestion",
+      "fields": [
+        {
+          "name": "header",
+          "alias": "header",
+          "required": false,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "hide_other",
+          "alias": "hideOther",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "multi_select",
+          "alias": "multiSelect",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "options",
+          "alias": "options",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "QuestionChoice"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "question",
+          "alias": "question",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "UserQuestionEffectDetail",
       "fields": [
         {
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -13554,9 +13843,11 @@
           "name": "input",
           "alias": "input",
           "required": false,
-          "kind": "scalar",
+          "kind": "model",
           "optional": true,
-          "models": [],
+          "models": [
+            "UserQuestionRequest"
+          ],
           "enums": [],
           "literals": []
         },
@@ -13577,6 +13868,60 @@
           "alias": "toolName",
           "required": true,
           "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "UserQuestionRequest",
+      "fields": [
+        {
+          "name": "footer_note",
+          "alias": "footerNote",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "questions",
+          "alias": "questions",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "UserQuestion"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "UserQuestionResult",
+      "fields": [
+        {
+          "name": "answers",
+          "alias": "answers",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "UserAnswer"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "cancelled",
+          "alias": "cancelled",
+          "required": false,
+          "kind": "bool",
           "optional": false,
           "models": [],
           "enums": [],
@@ -14339,9 +14684,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
@@ -14458,9 +14805,11 @@
           "name": "display",
           "alias": "display",
           "required": true,
-          "kind": "scalar",
+          "kind": "model",
           "optional": false,
-          "models": [],
+          "models": [
+            "EffectCallDisplay"
+          ],
           "enums": [],
           "literals": []
         },
