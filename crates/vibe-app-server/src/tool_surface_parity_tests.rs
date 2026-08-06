@@ -32,7 +32,7 @@ use vibe_core::policy::{
 use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
 use vibe_core::tools::{
     ToolError, ToolHandler, ToolHandlerFuture, ToolInvocation, ToolOutputSink, ToolRegistry,
-    ToolSpec, validate_arguments,
+    ToolSpec, coerce_and_validate,
 };
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 
@@ -56,6 +56,16 @@ const DIGEST_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/digest.
 /// The digest layout this runner reads, matching `DIGEST_SCHEMA_VERSION` in the
 /// capture script.
 const DIGEST_SCHEMA_VERSION: u32 = 1;
+/// The committed argument fixtures, replayed unconditionally: unlike the corpus
+/// they carry no reference prose, so CI reports a conformance count rather than
+/// skipping for want of a checkout.
+const FIXTURES_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/fixtures.json";
+/// The fixture layout this runner reads, matching `FIXTURES_SCHEMA_VERSION` in
+/// the capture script.
+const FIXTURES_SCHEMA_VERSION: u32 = 1;
+/// The floor the fixture set commits to, so a regeneration that captured almost
+/// nothing fails instead of reporting a clean but empty run.
+const MINIMUM_FIXTURES: usize = 92;
 /// Stands in for every description string so presence is compared and text is
 /// not, keeping the diff inside what `NOTICE` allows.
 const DESCRIBED: &str = "<described>";
@@ -104,6 +114,20 @@ struct Fixture {
     case: String,
     arguments: Value,
     accepted: bool,
+}
+
+/// The committed argument fixtures: payloads this repository authored and the
+/// accept-or-reject verdict the reference Pydantic gave each one.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Fixtures {
+    schema_version: u32,
+    reference_commit: String,
+    #[expect(dead_code, reason = "the platform documents the capture host")]
+    platform: String,
+    #[expect(dead_code, reason = "the note documents the file for its readers")]
+    note: String,
+    fixtures: Vec<Fixture>,
 }
 
 /// The committed canonical surface: published names and schema structure, with
@@ -231,6 +255,8 @@ fn skip_reason_for(
     None
 }
 
+/// Refuses every approval, so a case measures the published surface rather than
+/// a prompt.
 struct RejectApproval;
 
 impl ApprovalAgent for RejectApproval {
@@ -722,52 +748,124 @@ async fn no_windows_family_name_reaches_a_posix_surface() {
     }
 }
 
-#[tokio::test]
-async fn arguments_the_reference_rejects_are_rejected_here_too() {
-    let Some(corpus) = corpus() else {
-        return;
-    };
-    let schemas = corpus
-        .tools
-        .iter()
-        .map(|tool| (tool.name.as_str(), &tool.parameters))
-        .collect::<BTreeMap<_, _>>();
+/// Replays every committed argument fixture through the same coercion and
+/// validation the registry runs before dispatch.
+///
+/// This runs unconditionally: the fixtures and the schemas they are validated
+/// against are both committed, so CI reports a conformance count instead of
+/// skipping. A fixture carries no reference prose, only a payload this
+/// repository authored and the accept-or-reject verdict the reference gave it.
+#[test]
+fn arguments_the_reference_rejects_are_rejected_here_too() {
+    let root = repo_root();
+    let raw = fs::read_to_string(root.join(FIXTURES_RELATIVE)).expect("the fixtures are committed");
+    let fixtures: Fixtures = serde_json::from_str(&raw).expect("the fixtures parse");
+    assert_eq!(
+        fixtures.schema_version, FIXTURES_SCHEMA_VERSION,
+        "the fixture layout moved; regenerate with `--fixtures`"
+    );
+    assert_eq!(
+        fixtures.reference_commit, REFERENCE_COMMIT,
+        "the fixtures were captured from another commit than this build asserts"
+    );
+
+    let digest = digest();
+    assert_eq!(
+        digest.reference_commit, fixtures.reference_commit,
+        "a fixture and the schema it is validated against must describe the same surface"
+    );
 
     let mut checked = 0;
     let mut wrongly_accepted = Vec::new();
-    let mut stricter_than_pydantic = Vec::new();
-    for fixture in &corpus.fixtures {
-        let Some(schema) = schemas.get(fixture.tool.as_str()) else {
+    let mut stricter_than_the_reference = Vec::new();
+    for fixture in &fixtures.fixtures {
+        let Some(schema) = digest.tools.get(&fixture.tool) else {
             continue;
         };
         checked += 1;
-        let verdict: Result<(), ToolError> = validate_arguments(&fixture.arguments, schema);
+        // The registry entry point, so the verdict this reports is the verdict a
+        // real call gets rather than one a test-only path computed.
+        let mut arguments = fixture.arguments.clone();
+        let verdict: Result<(), ToolError> = coerce_and_validate(&mut arguments, schema);
         match (fixture.accepted, verdict) {
             (false, Ok(())) => wrongly_accepted.push(format!(
                 "{}/{}: {}",
                 fixture.tool, fixture.case, fixture.arguments
             )),
-            (true, Err(error)) => {
-                stricter_than_pydantic.push(format!("{}/{}: {error}", fixture.tool, fixture.case));
-            }
+            (true, Err(error)) => stricter_than_the_reference
+                .push(format!("{}/{}: {error}", fixture.tool, fixture.case)),
             _ => {}
         }
     }
+
     println!(
-        "argument fixtures: {checked} replayed, {} accepted here and rejected there, {} rejected \
-         here and accepted there",
+        "argument fixtures: {checked}/{} replayed with the reference verdict, {} wrongly accepted, \
+         {} stricter than the reference",
+        fixtures.fixtures.len(),
         wrongly_accepted.len(),
-        stricter_than_pydantic.len()
+        stricter_than_the_reference.len()
     );
-    for line in &stricter_than_pydantic {
-        println!("stricter than the reference: {line}");
-    }
     assert!(
         wrongly_accepted.is_empty(),
         "arguments the reference rejects were accepted here: {}",
         wrongly_accepted.join("; ")
     );
-    assert!(checked > 0, "the corpus carries no argument fixtures");
+    assert!(
+        stricter_than_the_reference.is_empty(),
+        "arguments the reference accepts were rejected here: {}",
+        stricter_than_the_reference.join("; ")
+    );
+    assert_eq!(
+        checked,
+        fixtures.fixtures.len(),
+        "every committed fixture names a tool the digest publishes"
+    );
+    assert!(
+        checked >= MINIMUM_FIXTURES,
+        "the fixture set shrank to {checked}"
+    );
+}
+
+/// The captured corpus and the committed fixtures must not drift apart: when a
+/// checkout is present the corpus is recaptured on every run, so a verdict that
+/// changed upstream is caught here rather than at the next regeneration.
+#[tokio::test]
+async fn the_committed_fixtures_match_a_freshly_captured_corpus() {
+    let Some(corpus) = corpus() else {
+        return;
+    };
+    let root = repo_root();
+    let raw = fs::read_to_string(root.join(FIXTURES_RELATIVE)).expect("the fixtures are committed");
+    let fixtures: Fixtures = serde_json::from_str(&raw).expect("the fixtures parse");
+
+    let committed = fixtures
+        .fixtures
+        .iter()
+        .map(|fixture| ((&fixture.tool, &fixture.case), fixture.accepted))
+        .collect::<BTreeMap<_, _>>();
+    let captured = corpus
+        .fixtures
+        .iter()
+        .map(|fixture| ((&fixture.tool, &fixture.case), fixture.accepted))
+        .collect::<BTreeMap<_, _>>();
+
+    let divergent = captured
+        .iter()
+        .filter(|((tool, case), accepted)| {
+            committed
+                .get(&(*tool, *case))
+                .is_none_or(|held| held != *accepted)
+        })
+        .map(|((tool, case), accepted)| format!("{tool}/{case}: reference says {accepted}"))
+        .collect::<Vec<_>>();
+
+    assert!(
+        divergent.is_empty(),
+        "the committed fixtures disagree with the pinned reference; regenerate them with \
+         `scripts/parity/tool_surface.py --fixtures`: {}",
+        divergent.join("; ")
+    );
+    assert_eq!(committed.len(), captured.len());
 }
 
 #[test]

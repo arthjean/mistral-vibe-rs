@@ -19,6 +19,9 @@ use crate::text::truncate_utf8;
 pub mod builtins;
 pub mod shell;
 
+#[cfg(test)]
+mod coercion_tests;
+
 pub const DEFAULT_MAX_TOOL_OUTPUT_BYTES: usize = 1_048_576;
 pub(crate) const MAX_TOOL_ERROR_BYTES: usize = 16_384;
 
@@ -466,7 +469,7 @@ impl ToolRegistry {
         if !registered.available() {
             return Err(ToolError::Unavailable(name.to_owned()));
         }
-        validate_arguments(&invocation.arguments, &registered.spec.input_schema)?;
+        coerce_and_validate(&mut invocation.arguments, &registered.spec.input_schema)?;
         apply_defaults(&mut invocation.arguments, &registered.spec.input_schema);
         let output = ToolOutputSink::new(stream, self.max_output_bytes);
         let mut result =
@@ -770,6 +773,234 @@ pub fn validate_arguments(arguments: &Value, schema: &Value) -> Result<(), ToolE
 /// same value the reference model would have materialized.
 pub fn apply_defaults(arguments: &mut Value, schema: &Value) {
     fill_defaults(arguments, schema, schema, 0);
+}
+
+/// Rewrites scalars the reference model would have accepted in a looser form,
+/// then validates what the handler is actually going to read.
+///
+/// The reference builds its arguments through Pydantic in lax mode, which
+/// coerces before it validates: `"yes"` reaches a `bool` field as `true` and
+/// `"17"` reaches an `int` field as `17`. Validating the raw payload therefore
+/// rejects calls the reference accepts, which is what made two of the 92
+/// argument fixtures diverge. Coercing first closes that gap and, because the
+/// rewrite is in place, the handler reads the coerced value rather than the
+/// string the model sent.
+///
+/// This is the single entry point for both: `ToolRegistry::invoke_stream` calls
+/// it before dispatch, and the fixture replay calls it to reproduce a verdict.
+pub fn coerce_and_validate(arguments: &mut Value, schema: &Value) -> Result<(), ToolError> {
+    coerce_at(arguments, schema, schema, 0);
+    validate_arguments(arguments, schema)
+}
+
+/// Applies the reference scalar coercion in place, leaving anything it cannot
+/// coerce untouched so validation reports it against the property that declared
+/// the type.
+fn coerce_at(value: &mut Value, schema: &Value, root: &Value, depth: usize) {
+    if depth > MAX_SCHEMA_DEPTH {
+        return;
+    }
+    let Some(object) = schema.as_object() else {
+        return;
+    };
+    if let Some(reference) = object.get("$ref").and_then(Value::as_str) {
+        if let Some(target) = resolve_reference(reference, root) {
+            coerce_at(value, target, root, depth + 1);
+        }
+        return;
+    }
+    if let Some(variants) = object.get("anyOf").and_then(Value::as_array) {
+        coerce_union(value, variants, root, depth);
+        return;
+    }
+    match object.get("type") {
+        Some(Value::String(declared)) => coerce_declared(value, declared, object, root, depth),
+        // The array form is a union spelled inline, so it follows the same
+        // exact-match-first rule.
+        Some(Value::Array(declared)) => {
+            let variants = declared
+                .iter()
+                .filter_map(Value::as_str)
+                .map(|name| serde_json::json!({ "type": name }))
+                .collect::<Vec<_>>();
+            coerce_union(value, &variants, root, depth);
+        }
+        _ => {}
+    }
+}
+
+/// Picks the branch of a union the way Pydantic's smart mode does: a variant the
+/// value already satisfies wins over any coercion, and only when none matches is
+/// each variant tried in declaration order.
+fn coerce_union(value: &mut Value, variants: &[Value], root: &Value, depth: usize) {
+    if variants
+        .iter()
+        .any(|variant| validate_at(value, variant, root, "$", depth + 1).is_ok())
+    {
+        return;
+    }
+    for variant in variants {
+        let mut candidate = value.clone();
+        coerce_at(&mut candidate, variant, root, depth + 1);
+        if validate_at(&candidate, variant, root, "$", depth + 1).is_ok() {
+            *value = candidate;
+            return;
+        }
+    }
+}
+
+/// Coerces `value` toward a single declared type, recursing into containers.
+fn coerce_declared(
+    value: &mut Value,
+    declared: &str,
+    schema: &Map<String, Value>,
+    root: &Value,
+    depth: usize,
+) {
+    match declared {
+        "boolean" => {
+            if let Some(coerced) = coerce_boolean(value) {
+                *value = coerced;
+            }
+        }
+        "integer" => {
+            if let Some(coerced) = coerce_integer(value) {
+                *value = coerced;
+            }
+        }
+        "number" => {
+            if let Some(coerced) = coerce_number(value) {
+                *value = coerced;
+            }
+        }
+        // A `string` field coerces nothing: the reference accepts only `str`
+        // and `bytes`, so a number or a boolean stays as it is and validation
+        // rejects it naming the property.
+        "array" => {
+            if let Some(items) = value.as_array_mut()
+                && let Some(item_schema) = schema.get("items")
+            {
+                for item in items {
+                    coerce_at(item, item_schema, root, depth + 1);
+                }
+            }
+        }
+        "object" => {
+            if let Some(fields) = value.as_object_mut()
+                && let Some(properties) = schema.get("properties").and_then(Value::as_object)
+            {
+                for (name, field_schema) in properties {
+                    if let Some(field) = fields.get_mut(name) {
+                        coerce_at(field, field_schema, root, depth + 1);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The booleanish forms the reference accepts, or [`None`] when the value is
+/// already a boolean or cannot become one.
+///
+/// The word set is case-insensitive and tolerates no surrounding whitespace,
+/// both measured against the reference interpreter.
+fn coerce_boolean(value: &Value) -> Option<Value> {
+    match value {
+        Value::String(text) => {
+            let lowered = text.to_ascii_lowercase();
+            match lowered.as_str() {
+                "yes" | "on" | "true" | "t" | "y" | "1" => Some(Value::Bool(true)),
+                "no" | "off" | "false" | "f" | "n" | "0" => Some(Value::Bool(false)),
+                _ => None,
+            }
+        }
+        // Only the two values that name a truth: `2` and `-1` are rejected
+        // rather than treated as truthy.
+        Value::Number(number) => {
+            let flag = if let Some(integer) = number.as_i64() {
+                match integer {
+                    0 => false,
+                    1 => true,
+                    _ => return None,
+                }
+            } else {
+                let float = number.as_f64()?;
+                if float == 0.0 {
+                    false
+                } else if float == 1.0 {
+                    true
+                } else {
+                    return None;
+                }
+            };
+            Some(Value::Bool(flag))
+        }
+        _ => None,
+    }
+}
+
+/// The integral forms the reference accepts: a boolean, a float whose fraction
+/// is zero, and a string spelling either of those.
+fn coerce_integer(value: &Value) -> Option<Value> {
+    match value {
+        Value::Bool(flag) => Some(Value::from(i64::from(*flag))),
+        Value::Number(number) => {
+            if number.is_i64() || number.is_u64() {
+                return None;
+            }
+            let float = number.as_f64()?;
+            (float.fract() == 0.0).then(|| Value::from(float as i64))
+        }
+        Value::String(text) => parse_integer(text).map(Value::from),
+        _ => None,
+    }
+}
+
+/// The numeric forms the reference accepts for a float field. An integer is
+/// already a valid JSON number, so it is left alone rather than rewritten into
+/// a float that no acceptance decision depends on.
+fn coerce_number(value: &Value) -> Option<Value> {
+    match value {
+        Value::Bool(flag) => Some(Value::from(f64::from(u8::from(*flag)))),
+        Value::String(text) => {
+            let normalized = text.trim().replace('_', "");
+            let parsed = normalized.parse::<f64>().ok()?;
+            // JSON carries no infinity and no NaN, so a string spelling either
+            // cannot be represented and is refused instead of silently clamped.
+            parsed.is_finite().then(|| Value::from(parsed))
+        }
+        _ => None,
+    }
+}
+
+/// Parses the integer spellings the reference accepts and no others.
+///
+/// Python's `int()` trims whitespace, honors a sign and ignores underscore
+/// separators, and Pydantic additionally accepts a decimal spelling whose
+/// fraction is zero. It refuses exponent notation, so `"1e2"` is not an integer
+/// even though it is a whole number.
+fn parse_integer(text: &str) -> Option<i64> {
+    let normalized = text.trim().replace('_', "");
+    if normalized.is_empty() {
+        return None;
+    }
+    if let Ok(integer) = normalized.parse::<i64>() {
+        return Some(integer);
+    }
+    let decimal = normalized
+        .split_once('.')
+        .filter(|_| !normalized.contains(['e', 'E']))?;
+    let whole = format!("{}{}", decimal.0, decimal.1);
+    if !whole
+        .trim_start_matches(['+', '-'])
+        .chars()
+        .all(|character| character.is_ascii_digit())
+    {
+        return None;
+    }
+    let parsed = normalized.parse::<f64>().ok()?;
+    (parsed.fract() == 0.0 && parsed.is_finite()).then_some(parsed as i64)
 }
 
 fn validate_at(

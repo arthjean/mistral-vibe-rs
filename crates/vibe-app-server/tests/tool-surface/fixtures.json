@@ -1,0 +1,855 @@
+{
+  "fixtures": [
+    {
+      "accepted": false,
+      "arguments": {
+        "questions": []
+      },
+      "case": "empty-questions",
+      "tool": "ask_user_question"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "questions": [
+          {
+            "options": [
+              {
+                "label": "sample"
+              },
+              {
+                "label": "sample"
+              }
+            ]
+          }
+        ]
+      },
+      "case": "incomplete-item-questions",
+      "tool": "ask_user_question"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "footerNote": 17,
+        "questions": [
+          {
+            "options": [
+              {
+                "label": "sample"
+              },
+              {
+                "label": "sample"
+              }
+            ],
+            "question": "sample"
+          }
+        ]
+      },
+      "case": "mismatched-footerNote",
+      "tool": "ask_user_question"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "questions": {
+          "not": "an array"
+        }
+      },
+      "case": "mismatched-questions",
+      "tool": "ask_user_question"
+    },
+    {
+      "accepted": false,
+      "arguments": {},
+      "case": "missing-questions",
+      "tool": "ask_user_question"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "footerNote": null,
+        "questions": [
+          {
+            "options": [
+              {
+                "label": "sample"
+              },
+              {
+                "label": "sample"
+              }
+            ],
+            "question": "sample"
+          }
+        ]
+      },
+      "case": "null-footerNote",
+      "tool": "ask_user_question"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "questions": null
+      },
+      "case": "null-questions",
+      "tool": "ask_user_question"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "questions": [
+          {
+            "options": [
+              {
+                "label": "sample"
+              },
+              {
+                "label": "sample"
+              }
+            ],
+            "question": "sample"
+          }
+        ]
+      },
+      "case": "required-only",
+      "tool": "ask_user_question"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "__unexpected__": 1,
+        "questions": [
+          {
+            "options": [
+              {
+                "label": "sample"
+              },
+              {
+                "label": "sample"
+              }
+            ],
+            "question": "sample"
+          }
+        ]
+      },
+      "case": "unexpected-key",
+      "tool": "ask_user_question"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "command": 17
+      },
+      "case": "mismatched-command",
+      "tool": "bash"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "command": "sample",
+        "timeout": "seventeen"
+      },
+      "case": "mismatched-timeout",
+      "tool": "bash"
+    },
+    {
+      "accepted": false,
+      "arguments": {},
+      "case": "missing-command",
+      "tool": "bash"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "command": null
+      },
+      "case": "null-command",
+      "tool": "bash"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "command": "sample",
+        "timeout": null
+      },
+      "case": "null-timeout",
+      "tool": "bash"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "command": "sample"
+      },
+      "case": "required-only",
+      "tool": "bash"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "__unexpected__": 1,
+        "command": "sample"
+      },
+      "case": "unexpected-key",
+      "tool": "bash"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": 17,
+        "new_string": "sample",
+        "old_string": "sample"
+      },
+      "case": "mismatched-file_path",
+      "tool": "edit"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": "sample",
+        "new_string": 17,
+        "old_string": "sample"
+      },
+      "case": "mismatched-new_string",
+      "tool": "edit"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": "sample",
+        "new_string": "sample",
+        "old_string": 17
+      },
+      "case": "mismatched-old_string",
+      "tool": "edit"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "file_path": "sample",
+        "new_string": "sample",
+        "old_string": "sample",
+        "replace_all": "yes"
+      },
+      "case": "mismatched-replace_all",
+      "tool": "edit"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "new_string": "sample",
+        "old_string": "sample"
+      },
+      "case": "missing-file_path",
+      "tool": "edit"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": "sample",
+        "old_string": "sample"
+      },
+      "case": "missing-new_string",
+      "tool": "edit"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": "sample",
+        "new_string": "sample"
+      },
+      "case": "missing-old_string",
+      "tool": "edit"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": null,
+        "new_string": "sample",
+        "old_string": "sample"
+      },
+      "case": "null-file_path",
+      "tool": "edit"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": "sample",
+        "new_string": null,
+        "old_string": "sample"
+      },
+      "case": "null-new_string",
+      "tool": "edit"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": "sample",
+        "new_string": "sample",
+        "old_string": null
+      },
+      "case": "null-old_string",
+      "tool": "edit"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": "sample",
+        "new_string": "sample",
+        "old_string": "sample",
+        "replace_all": null
+      },
+      "case": "null-replace_all",
+      "tool": "edit"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "file_path": "sample",
+        "new_string": "sample",
+        "old_string": "sample"
+      },
+      "case": "required-only",
+      "tool": "edit"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "__unexpected__": 1,
+        "file_path": "sample",
+        "new_string": "sample",
+        "old_string": "sample"
+      },
+      "case": "unexpected-key",
+      "tool": "edit"
+    },
+    {
+      "accepted": true,
+      "arguments": {},
+      "case": "required-only",
+      "tool": "exit_plan_mode"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "__unexpected__": 1
+      },
+      "case": "unexpected-key",
+      "tool": "exit_plan_mode"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "max_matches": "seventeen",
+        "pattern": "sample"
+      },
+      "case": "mismatched-max_matches",
+      "tool": "grep"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "path": 17,
+        "pattern": "sample"
+      },
+      "case": "mismatched-path",
+      "tool": "grep"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "pattern": 17
+      },
+      "case": "mismatched-pattern",
+      "tool": "grep"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "pattern": "sample",
+        "use_default_ignore": "yes"
+      },
+      "case": "mismatched-use_default_ignore",
+      "tool": "grep"
+    },
+    {
+      "accepted": false,
+      "arguments": {},
+      "case": "missing-pattern",
+      "tool": "grep"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "max_matches": null,
+        "pattern": "sample"
+      },
+      "case": "null-max_matches",
+      "tool": "grep"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "path": null,
+        "pattern": "sample"
+      },
+      "case": "null-path",
+      "tool": "grep"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "pattern": null
+      },
+      "case": "null-pattern",
+      "tool": "grep"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "pattern": "sample",
+        "use_default_ignore": null
+      },
+      "case": "null-use_default_ignore",
+      "tool": "grep"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "pattern": "sample"
+      },
+      "case": "required-only",
+      "tool": "grep"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "__unexpected__": 1,
+        "pattern": "sample"
+      },
+      "case": "unexpected-key",
+      "tool": "grep"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": 17
+      },
+      "case": "mismatched-file_path",
+      "tool": "read_file"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": "sample",
+        "limit": "seventeen"
+      },
+      "case": "mismatched-limit",
+      "tool": "read_file"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": "sample",
+        "offset": "seventeen"
+      },
+      "case": "mismatched-offset",
+      "tool": "read_file"
+    },
+    {
+      "accepted": false,
+      "arguments": {},
+      "case": "missing-file_path",
+      "tool": "read_file"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": null
+      },
+      "case": "null-file_path",
+      "tool": "read_file"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": "sample",
+        "limit": null
+      },
+      "case": "null-limit",
+      "tool": "read_file"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "file_path": "sample",
+        "offset": null
+      },
+      "case": "null-offset",
+      "tool": "read_file"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "file_path": "sample"
+      },
+      "case": "required-only",
+      "tool": "read_file"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "__unexpected__": 1,
+        "file_path": "sample"
+      },
+      "case": "unexpected-key",
+      "tool": "read_file"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "name": 17
+      },
+      "case": "mismatched-name",
+      "tool": "skill"
+    },
+    {
+      "accepted": false,
+      "arguments": {},
+      "case": "missing-name",
+      "tool": "skill"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "name": null
+      },
+      "case": "null-name",
+      "tool": "skill"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "name": "sample"
+      },
+      "case": "required-only",
+      "tool": "skill"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "__unexpected__": 1,
+        "name": "sample"
+      },
+      "case": "unexpected-key",
+      "tool": "skill"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "agent": 17,
+        "task": "sample"
+      },
+      "case": "mismatched-agent",
+      "tool": "task"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "task": 17
+      },
+      "case": "mismatched-task",
+      "tool": "task"
+    },
+    {
+      "accepted": false,
+      "arguments": {},
+      "case": "missing-task",
+      "tool": "task"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "agent": null,
+        "task": "sample"
+      },
+      "case": "null-agent",
+      "tool": "task"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "task": null
+      },
+      "case": "null-task",
+      "tool": "task"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "task": "sample"
+      },
+      "case": "required-only",
+      "tool": "task"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "__unexpected__": 1,
+        "task": "sample"
+      },
+      "case": "unexpected-key",
+      "tool": "task"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "action": "sample",
+        "todos": []
+      },
+      "case": "empty-todos",
+      "tool": "todo"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "action": "sample",
+        "todos": [
+          {
+            "content": "sample"
+          }
+        ]
+      },
+      "case": "incomplete-item-todos",
+      "tool": "todo"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "action": 17
+      },
+      "case": "mismatched-action",
+      "tool": "todo"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "action": "sample",
+        "todos": {
+          "not": "an array"
+        }
+      },
+      "case": "mismatched-todos",
+      "tool": "todo"
+    },
+    {
+      "accepted": false,
+      "arguments": {},
+      "case": "missing-action",
+      "tool": "todo"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "action": null
+      },
+      "case": "null-action",
+      "tool": "todo"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "action": "sample",
+        "todos": null
+      },
+      "case": "null-todos",
+      "tool": "todo"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "action": "sample"
+      },
+      "case": "required-only",
+      "tool": "todo"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "__unexpected__": 1,
+        "action": "sample"
+      },
+      "case": "unexpected-key",
+      "tool": "todo"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "timeout": "seventeen",
+        "url": "sample"
+      },
+      "case": "mismatched-timeout",
+      "tool": "web_fetch"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "url": 17
+      },
+      "case": "mismatched-url",
+      "tool": "web_fetch"
+    },
+    {
+      "accepted": false,
+      "arguments": {},
+      "case": "missing-url",
+      "tool": "web_fetch"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "timeout": null,
+        "url": "sample"
+      },
+      "case": "null-timeout",
+      "tool": "web_fetch"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "url": null
+      },
+      "case": "null-url",
+      "tool": "web_fetch"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "url": "sample"
+      },
+      "case": "required-only",
+      "tool": "web_fetch"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "__unexpected__": 1,
+        "url": "sample"
+      },
+      "case": "unexpected-key",
+      "tool": "web_fetch"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "query": 17
+      },
+      "case": "mismatched-query",
+      "tool": "web_search"
+    },
+    {
+      "accepted": false,
+      "arguments": {},
+      "case": "missing-query",
+      "tool": "web_search"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "query": null
+      },
+      "case": "null-query",
+      "tool": "web_search"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "query": "sample"
+      },
+      "case": "required-only",
+      "tool": "web_search"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "__unexpected__": 1,
+        "query": "sample"
+      },
+      "case": "unexpected-key",
+      "tool": "web_search"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "content": 17,
+        "file_path": "sample"
+      },
+      "case": "mismatched-content",
+      "tool": "write_file"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "content": "sample",
+        "file_path": 17
+      },
+      "case": "mismatched-file_path",
+      "tool": "write_file"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "file_path": "sample"
+      },
+      "case": "missing-content",
+      "tool": "write_file"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "content": "sample"
+      },
+      "case": "missing-file_path",
+      "tool": "write_file"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "content": null,
+        "file_path": "sample"
+      },
+      "case": "null-content",
+      "tool": "write_file"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "content": "sample",
+        "file_path": null
+      },
+      "case": "null-file_path",
+      "tool": "write_file"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "content": "sample",
+        "file_path": "sample"
+      },
+      "case": "required-only",
+      "tool": "write_file"
+    },
+    {
+      "accepted": true,
+      "arguments": {
+        "__unexpected__": 1,
+        "content": "sample",
+        "file_path": "sample"
+      },
+      "case": "unexpected-key",
+      "tool": "write_file"
+    }
+  ],
+  "note": "Argument fixtures with the verdict the reference Pydantic gave them. Payloads and case names are authored by scripts/parity/tool_surface.py; the only captured value is the accepted flag. Schemas come from digest.json. Regenerate with scripts/parity/tool_surface.py --fixtures when the pinned reference moves.",
+  "platform": "linux",
+  "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+  "schemaVersion": 1
+}

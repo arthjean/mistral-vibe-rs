@@ -40,8 +40,10 @@ from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
 SCHEMA_VERSION = 3
 DIGEST_SCHEMA_VERSION = 1
+FIXTURES_SCHEMA_VERSION = 1
 DEFAULT_OUTPUT = Path(".parity/tool-surface-corpus.json")
 DEFAULT_DIGEST = Path("crates/vibe-app-server/tests/tool-surface/digest.json")
+DEFAULT_FIXTURES = Path("crates/vibe-app-server/tests/tool-surface/fixtures.json")
 #: Stands in for every description string, so the digest records that a
 #: description exists without carrying reference prose into the repository.
 DESCRIBED = "<described>"
@@ -384,6 +386,44 @@ def build_digest(corpus: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_fixtures(corpus: dict[str, Any]) -> dict[str, Any]:
+    """The committed argument fixtures: payloads and the verdict Pydantic gave.
+
+    Committable on the same terms as the digest, and for a stricter reason: no
+    part of a fixture is reference-authored. The payloads are built by
+    :func:`argument_fixtures` from the schema alone, the case names are written
+    here, and the verdict is a boolean. What the fixture set carries about the
+    reference is the accept-or-reject decision, which is the measurement.
+
+    The replay needs a schema, which it reads from the committed digest, so a
+    fixture and the schema it is validated against always describe the same
+    pinned surface.
+    """
+    return {
+        "schemaVersion": FIXTURES_SCHEMA_VERSION,
+        "referenceCommit": corpus["reference"]["commit"],
+        "platform": corpus["platform"],
+        "note": (
+            "Argument fixtures with the verdict the reference Pydantic gave them. Payloads and "
+            "case names are authored by scripts/parity/tool_surface.py; the only captured value "
+            "is the accepted flag. Schemas come from digest.json. Regenerate with "
+            "scripts/parity/tool_surface.py --fixtures when the pinned reference moves."
+        ),
+        "fixtures": sorted(
+            (
+                {
+                    "tool": fixture["tool"],
+                    "case": fixture["case"],
+                    "arguments": fixture["arguments"],
+                    "accepted": fixture["accepted"],
+                }
+                for fixture in corpus["fixtures"]
+            ),
+            key=lambda fixture: (fixture["tool"], fixture["case"]),
+        ),
+    }
+
+
 # --------------------------------------------------------------------------
 # Live endpoint probe
 # --------------------------------------------------------------------------
@@ -476,6 +516,17 @@ def parse_arguments() -> argparse.Namespace:
             f"reference checkout is reachable (default {DEFAULT_DIGEST})"
         ),
     )
+    parser.add_argument(
+        "--fixtures",
+        type=Path,
+        nargs="?",
+        const=DEFAULT_FIXTURES,
+        default=None,
+        help=(
+            "also write the committed argument fixtures, which the Rust replay reads "
+            f"unconditionally (default {DEFAULT_FIXTURES})"
+        ),
+    )
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     parser.add_argument(
         "--probe-endpoint",
@@ -525,6 +576,16 @@ def main() -> int:
                 + "\n",
                 encoding="utf-8",
             )
+        # Written on request for the same reason as the digest: the fixtures are
+        # a conformance target, and recapturing them on every run would let a
+        # validation change rewrite the verdict it is supposed to be held to.
+        if arguments.fixtures is not None:
+            arguments.fixtures.parent.mkdir(parents=True, exist_ok=True)
+            arguments.fixtures.write_text(
+                json.dumps(build_fixtures(corpus), indent=2, sort_keys=True, ensure_ascii=False)
+                + "\n",
+                encoding="utf-8",
+            )
     except OracleError as error:
         print(f"tool-surface capture failed: {error}", file=sys.stderr)
         return 1
@@ -535,6 +596,8 @@ def main() -> int:
     )
     if arguments.digest is not None:
         print(f"wrote the canonical digest to {arguments.digest}")
+    if arguments.fixtures is not None:
+        print(f"wrote the argument fixtures to {arguments.fixtures}")
     if probe := corpus.get("endpointProbe"):
         print(f"endpoint probe: {json.dumps(probe, sort_keys=True)}")
     return 0

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Accept the argument spellings the reference accepts. A model that sends
+  `"replace_all": "yes"` or `"max_matches": "50"` used to have the call refused
+  here and honored by the Python client, because the reference builds its
+  arguments through Pydantic in lax mode and this port validated the raw JSON.
+  Scalars are now coerced before validation exactly as the reference coerces
+  them: a boolean accepts `yes`, `no`, `on`, `off`, `true`, `false`, `t`, `f`,
+  `y`, `n`, `1` and `0` in any case, plus the numbers `0` and `1`; an integer
+  accepts an integral string, a whole float and a boolean; a string accepts
+  neither a number nor a boolean, because the reference coerces neither. The
+  handler reads the coerced value, so a prompt tuned against one client now
+  works against the other. The 92 committed argument fixtures all return the
+  reference verdict, where two of them used to diverge.
 - Link a repository to a Vibe Code project without opening a session. The nine
   `projectLinks/*` calls now answer: a path resolves to its repository root with
   the repository's name and its current and default branches, or is reported
