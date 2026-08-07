@@ -214,12 +214,15 @@ method:
   integral string, a float with a zero fractional part, and `bool`; `float`
   accepts a numeric string, `int` and `bool`; `null` is never coerced. LOW risk,
   reproducible.
-- `portable-pty` can kill a whole process group, not only the direct child. The
-  fetched documentation covers `ChildKiller::kill` on the child and is silent on
-  the group. MEDIUM risk: the reference declares `process_group_kill` as a
-  backend capability, and a `hard_timeout` that leaves grandchildren alive is a
-  visible divergence. US-116 validates empirically before the implementation
-  settles.
+- ~~`portable-pty` can kill a whole process group, not only the direct child.~~
+  **CLOSED 2026-08-07 by US-116**, and not through `ChildKiller::kill`, which is
+  indeed silent on the group. `portable-pty` calls `setsid` before `exec`, so the
+  child leads its own session and process group and its pid is that group's id;
+  the ladder in `crates/vibe-core/src/pty.rs` therefore signals the group through
+  `killpg` and falls back to the child only when no pid is owned. Measured by
+  `a_hard_timeout_terminates_the_whole_process_group`, which backgrounds a
+  subshell that outlives its parent and asserts the marker it would have written
+  never appears.
 - Adding a C toolchain requirement for `tree-sitter-bash` does not break CI.
   LOW risk: the build already needs ALSA headers for `cpal`, so CI images
   already carry a compiler.

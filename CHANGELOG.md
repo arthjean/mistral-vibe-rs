@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Run a managed shell session under a real terminal. A program that checks
+  whether it is attached to one now finds it is, a control key sent through
+  `<family>_stdin` reaches the foreground program instead of landing in a pipe,
+  and a command stopped by its hard timeout takes its whole process group with
+  it, including a child that outlived its parent. A session reports which
+  terminal backend it got, and a host that provides none runs it on pipes and
+  says so rather than refusing to start it.
+- Keep a shell session findable after the client restarts. Every session writes
+  a manifest beside its log, and one left running by a previous process is
+  listed, read and inspected as `orphaned` instead of disappearing with the
+  process that started it. A reset clears the logs and manifests together only
+  when it is asked to, a manifest that cannot be read is skipped without hiding
+  the sessions beside it, and an output window that lands inside a multi-byte
+  character is adjusted rather than answered with a replacement character.
+- Answer the completions MCP servers ask for. A server entry with sampling
+  enabled now advertises the capability when the session initializes, and its
+  `sampling/createMessage` requests are answered by the model the turn itself
+  runs on, over stdio and streamable HTTP alike. An entry with sampling disabled
+  advertises nothing and refuses the request, and a backend failure comes back as
+  a structured error rather than as half an answer.
+
 - Return the matches the Python client returns. `grep` now runs on the libraries
   ripgrep is built from instead of walking the tree with a plain regex: a
   lowercase pattern matches case-insensitively and one carrying a capital does

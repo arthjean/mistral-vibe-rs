@@ -3,7 +3,7 @@
     "file": "tasks/prd-tool-behavior-parity.md",
     "title": "Tool Behavior Parity",
     "created_at": "2026-08-06",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -49,10 +49,10 @@
     {
       "id": "EP-035",
       "title": "Live Channels: PTY and MCP Sampling",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3
     }
   ],
   "stories": [
@@ -298,43 +298,43 @@
       "id": "US-116",
       "title": "Back the managed shell with a real PTY",
       "epic": "EP-035",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "size": "L",
       "blocked_by": [
         "US-110"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-117",
       "title": "Persist sessions and recover the orphaned ones",
       "epic": "EP-035",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "size": "M",
       "blocked_by": [
         "US-116"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-118",
       "title": "Answer MCP sampling requests",
       "epic": "EP-035",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "size": "M",
       "blocked_by": [
         "US-102"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     }
   ]
 }
