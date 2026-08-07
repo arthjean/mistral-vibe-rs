@@ -24,7 +24,7 @@
 //! every terminal this family opens is owned by a guard, so a dropped turn
 //! terminates the process group instead of leaving it behind.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -479,7 +479,7 @@ impl ShellTools {
             policy,
             approval,
             config,
-            scratchpad: _,
+            scratchpad,
         } = guard;
         let host = (self.host)();
         let Some((family, managed)) = published_family(&host, self.rollout) else {
@@ -529,6 +529,7 @@ impl ShellTools {
                 approval: approval.clone(),
                 managed: false,
                 client_io: client_io.clone(),
+                scratchpad: scratchpad.clone(),
             }),
         )?];
         if !managed {
@@ -547,6 +548,7 @@ impl ShellTools {
                 approval: approval.clone(),
                 managed: true,
                 client_io,
+                scratchpad: scratchpad.clone(),
             }),
         )?);
         // The three polling tools are configured `always` upstream and produce
@@ -1057,6 +1059,8 @@ struct CommandWiring {
     approval: Arc<dyn ApprovalAgent>,
     managed: bool,
     client_io: Option<ClientToolIo>,
+    /// The session's own scratchpad, whose paths raise no requirement.
+    scratchpad: Option<PathBuf>,
 }
 
 fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
@@ -1071,6 +1075,7 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
         approval,
         managed,
         client_io,
+        scratchpad,
     } = wiring;
     let inner = command_handler(
         shell,
@@ -1089,6 +1094,7 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
     let requirement_flavor = shell_config.flavor;
     let requirement_config = tool_config.clone();
     let requirement_tool = family.name().to_owned();
+    let requirement_scratchpad = scratchpad.clone();
     let guarded = Arc::new(PolicyGuardedTool::new(
         family.name(),
         policy,
@@ -1101,42 +1107,20 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
                 requirement_flavor,
                 platform,
                 &requirement_root,
+                requirement_scratchpad.clone(),
                 &command,
                 &lists,
             );
-            // Every analyzed segment is named on its own, so approving one
-            // command does not silently approve the rest of a chain. Two
-            // segments reducing to the same session pattern are asked once:
-            // reference `_build_required_permissions` deduplicates on exactly
-            // that key rather than on the segment text.
-            let mut requirements = Vec::new();
-            let mut seen_session = BTreeSet::new();
-            let segments = analysis
-                .commands
-                .iter()
-                .map(|node| {
-                    std::iter::once(node.program.as_str())
-                        .chain(node.arguments.iter().map(String::as_str))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                })
-                .collect::<Vec<_>>();
-            for segment in if segments.is_empty() {
-                std::slice::from_ref(&command)
-            } else {
-                &segments
-            } {
-                // A segment whose first word is sensitive carries itself as its
-                // own session pattern, so approving `sudo apt update` for the
-                // session never approves `sudo rm`.
-                let requirement = if lists.sensitive(segment).is_some() {
-                    PermissionRequirement::exact_command(segment)
-                } else {
-                    PermissionRequirement::command(segment)
-                };
-                if seen_session.insert(requirement.session_pattern.clone()) {
-                    requirements.push(requirement);
-                }
+            // The analysis already composed what the operator answers: one
+            // requirement per session pattern, one per directory the call
+            // leaves the workspace for, and one per `find` that runs a program.
+            // Rebuilding them here would be a second vocabulary to keep in step
+            // with the first.
+            let mut requirements = analysis.requirements;
+            if requirements.is_empty() {
+                // An analysis that composed none still needs something to
+                // approve, which is the whole command under its own pattern.
+                requirements.push(PermissionRequirement::command(&command));
             }
             if overrides {
                 requirements.extend(override_requirements(
@@ -1160,6 +1144,7 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
     let analysis_flavor = shell_config.flavor;
     let analysis_config = tool_config;
     let analysis_tool = family.name().to_owned();
+    let analysis_scratchpad = scratchpad;
     Arc::new(ShellPolicyGuard {
         analysis: Arc::new(move |arguments: &Value| {
             let command = command_argument(arguments)?;
@@ -1168,6 +1153,7 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
                 analysis_flavor,
                 platform,
                 &analysis_root,
+                analysis_scratchpad.clone(),
                 &command,
                 &ShellCommandLists::from_config(&settings),
             );
@@ -1193,6 +1179,7 @@ fn analyze(
     flavor: ShellFlavor,
     platform: Platform,
     working_directory: &Path,
+    scratchpad: Option<PathBuf>,
     command: &str,
     lists: &ShellCommandLists,
 ) -> ShellAnalysis {
@@ -1204,16 +1191,13 @@ fn analyze(
             rationale: vec!["the working directory is not a policy path".to_owned()],
             commands: Vec::new(),
             path_operands: Vec::new(),
+            requirements: Vec::new(),
         };
     };
     analyze_shell(
         flavor,
         command,
-        &ShellPolicyContext {
-            platform,
-            working_directory: root.clone(),
-            roots: vec![root],
-        },
+        &ShellPolicyContext::new(platform, root).with_scratchpad(scratchpad),
         lists,
     )
 }

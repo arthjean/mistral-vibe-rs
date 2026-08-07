@@ -396,17 +396,43 @@ async fn a_command_needing_approval_never_runs_when_it_is_refused() {
     );
 }
 
-/// A destructive command is refused by the analysis itself: no approval is
+/// A denylisted command is refused by the analysis itself: no approval is
 /// raised, because no answer could make it run.
 #[tokio::test]
-async fn a_destructive_command_is_refused_before_any_approval() {
+async fn a_denylisted_command_is_refused_before_any_approval() {
     let harness = harness(ShellRollout::Legacy, ApprovalDecision::ApproveOnce).await;
     let refused = harness
-        .call("bash", json!({"command": "rm -rf /tmp/anything"}))
+        .call("bash", json!({"command": "vim notes.txt"}))
         .await
-        .expect_err("a destructive command is denied");
+        .expect_err("a denylisted command is denied");
     assert!(refused.to_string().contains("refused"), "{refused}");
     assert_eq!(harness.approval_count(), 0);
+}
+
+/// US-110: a command this port used to refuse outright now reaches the
+/// operator, and a refusal there still keeps it from running.
+///
+/// The approval is denied rather than granted, so the loosening is proven at
+/// the tool boundary without a destructive command ever reaching a process.
+#[tokio::test]
+async fn a_previously_denied_command_now_reaches_the_operator() {
+    let harness = harness(ShellRollout::Legacy, ApprovalDecision::Deny).await;
+    let marker = harness.root().join("kept-by-the-refusal");
+    std::fs::write(&marker, "kept").expect("marker");
+    let refused = harness
+        .call(
+            "bash",
+            json!({"command": format!("rm -rf {}", marker.display())}),
+        )
+        .await
+        .expect_err("the operator refused the approval");
+    assert!(refused.to_string().contains("denied"), "{refused}");
+    assert_eq!(
+        harness.approval_count(),
+        1,
+        "`rm` is on no denylist, so it is asked about rather than refused outright"
+    );
+    assert!(marker.exists(), "a refused approval never runs the command");
 }
 
 /// The managed variant runs more than the command text: `cwd`, `shell` and
@@ -983,11 +1009,11 @@ async fn a_log_path_that_escapes_the_session_directory_is_refused() {
 async fn a_refused_command_carries_the_analysis_rationale() {
     let harness = harness(ShellRollout::Legacy, ApprovalDecision::ApproveOnce).await;
     let refused = harness
-        .call("bash", json!({"command": "dd if=/dev/zero of=/dev/sda"}))
+        .call("bash", json!({"command": "gdb ./binary"}))
         .await
-        .expect_err("a destructive command is denied");
-    assert!(refused.to_string().contains("destructive"), "{refused}");
-    assert!(refused.to_string().contains("dd"), "{refused}");
+        .expect_err("a denylisted command is denied");
+    assert!(refused.to_string().contains("denylist"), "{refused}");
+    assert!(refused.to_string().contains("gdb"), "{refused}");
 }
 
 /// A live session's log is fed by its process, so writing to it is refused;
@@ -1671,7 +1697,8 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         ShellFlavor::GitBash,
         Platform::Windows,
         Path::new(r"C:\work"),
-        "cat /c/work/notes.txt",
+        None,
+        "more /c/work/notes.txt",
         &ShellCommandLists::from_config(&shell_settings()),
     );
     assert_eq!(inside.path_operands, ["/c/work/notes.txt"]);
@@ -1691,7 +1718,8 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         ShellFlavor::PowerShell,
         Platform::Windows,
         Path::new(r"C:\work"),
-        "cat /c/work/notes.txt",
+        None,
+        "more /c/work/notes.txt",
         &ShellCommandLists::from_config(&shell_settings()),
     );
     assert!(
@@ -1707,6 +1735,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         ShellFlavor::GitBash,
         Platform::Windows,
         Path::new(r"C:\work"),
+        None,
         "cat /d/secrets/notes.txt",
         &ShellCommandLists::from_config(&shell_settings()),
     );

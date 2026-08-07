@@ -85,11 +85,11 @@ impl CoreResourceBackend {
                 let analysis = analyze_shell(
                     ShellConfig::default_for(platform).flavor,
                     command,
-                    &ShellPolicyContext {
-                        platform,
-                        working_directory: working_directory.clone(),
-                        roots: vec![working_directory],
-                    },
+                    // The manual shell resource only ever runs a command the
+                    // analysis allows outright, so it names no scratchpad: a
+                    // scratchpad operand raises a requirement here and the
+                    // operation is refused rather than run unattended.
+                    &ShellPolicyContext::new(platform, working_directory),
                     &lists,
                 );
                 if analysis.mode != PermissionMode::Always {

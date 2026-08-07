@@ -1,10 +1,16 @@
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::platform::{PathPolicyError, Platform, PolicyPath, parse_policy_path};
-use crate::policy::PermissionMode;
+use crate::policy::{PermissionMode, PermissionRequirement};
+use crate::scratchpad::is_scratchpad_path;
 use crate::tools::config::ShellCommandConfig;
+
+mod extract;
+
+pub use extract::{REDIRECT_MARKER, extract_commands};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -55,6 +61,34 @@ pub struct ShellPolicyContext {
     pub platform: Platform,
     pub working_directory: PolicyPath,
     pub roots: Vec<PolicyPath>,
+    /// The session's own scratchpad, whose paths never raise a requirement.
+    ///
+    /// Reference `_collect_outside_dirs` consults `is_scratchpad_path` before
+    /// it collects a directory, so the runtime's own capability is not
+    /// something the operator is asked about. [`None`] for a session whose
+    /// scratchpad could not be opened.
+    pub scratchpad: Option<PathBuf>,
+}
+
+impl ShellPolicyContext {
+    /// A context whose working directory is its only root and which names no
+    /// scratchpad.
+    #[must_use]
+    pub fn new(platform: Platform, working_directory: PolicyPath) -> Self {
+        Self {
+            platform,
+            roots: vec![working_directory.clone()],
+            working_directory,
+            scratchpad: None,
+        }
+    }
+
+    /// The same context whose file tools may always reach `scratchpad`.
+    #[must_use]
+    pub fn with_scratchpad(mut self, scratchpad: Option<PathBuf>) -> Self {
+        self.scratchpad = scratchpad;
+        self
+    }
 }
 
 /// The four lists a shell tool resolves from its configuration.
@@ -66,12 +100,33 @@ pub struct ShellPolicyContext {
 /// operands staying inside the working directory, which is why the lists are
 /// resolved here, next to the operand walk, rather than in the permission
 /// store.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShellCommandLists {
+    /// The configured `tools.<name>.permission` the lists are consulted under.
+    ///
+    /// Reference `_is_unconditionally_allowed` grants every non-sensitive
+    /// command when it is `ALWAYS`, so the operator's own setting decides
+    /// before the allowlist does.
+    pub permission: PermissionMode,
     pub allowlist: Vec<String>,
     pub denylist: Vec<String>,
     pub denylist_standalone: Vec<String>,
     pub sensitive_patterns: Vec<String>,
+}
+
+impl Default for ShellCommandLists {
+    /// Four empty lists under the permission the reference declares for every
+    /// shell family, so an operator who empties the lists is asked rather than
+    /// granted.
+    fn default() -> Self {
+        Self {
+            permission: PermissionMode::Ask,
+            allowlist: Vec::new(),
+            denylist: Vec::new(),
+            denylist_standalone: Vec::new(),
+            sensitive_patterns: Vec::new(),
+        }
+    }
 }
 
 impl ShellCommandLists {
@@ -79,6 +134,7 @@ impl ShellCommandLists {
     #[must_use]
     pub fn from_config(config: &ShellCommandConfig) -> Self {
         Self {
+            permission: config.shared.permission,
             allowlist: config.shared.allowlist.clone(),
             denylist: config.shared.denylist.clone(),
             denylist_standalone: config.denylist_standalone.clone(),
@@ -140,6 +196,12 @@ pub struct ShellCommandNode {
     pub arguments: Vec<String>,
 }
 
+/// What resolving a command's policy answers.
+///
+/// Reference `BashTool.resolve_permission` returns a `PermissionContext`
+/// carrying a permission and the requirements the operator is asked about. This
+/// carries the same two, plus the segments and operands the decision was made
+/// from, which is what lets a caller name the offending part in a refusal.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShellAnalysis {
@@ -147,431 +209,338 @@ pub struct ShellAnalysis {
     pub rationale: Vec<String>,
     pub commands: Vec<ShellCommandNode>,
     pub path_operands: Vec<String>,
+    /// What an `Ask` decision asks for, already deduplicated.
+    ///
+    /// Empty for an `Always` or a `Never` decision, and empty for an `Ask` that
+    /// only falls back to the configured permission, which is the reference
+    /// answering `None`.
+    #[serde(default)]
+    pub requirements: Vec<PermissionRequirement>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Token {
-    Word(String),
-    Operator(String),
-}
-
-/// Resolves the policy for `command` against the built-in analysis and the
-/// four configured lists.
+/// The `find` predicates that make a read an execution.
 ///
-/// The lists are consulted per extracted segment, in the reference order: a
-/// denylist or standalone-denylist match refuses the whole command, a sensitive
-/// first word keeps the segment out of any automatic grant, and an allowlist
-/// match replaces what the built-in analysis decided about the command text.
-/// The path-operand walk still runs either way, so an allowlisted reader
-/// pointed outside the workspace roots reaches the operator rather than the
-/// filesystem.
+/// Reference `_FIND_EXECUTION_PREDICATES`. No allowlist entry covers a segment
+/// carrying one, because `find` on the allowlist grants a walk and not the
+/// program the walk runs.
+const FIND_EXECUTION_PREDICATES: [&str; 4] = ["-exec", "-execdir", "-ok", "-okdir"];
+
+/// The commands whose path operands are inspected.
+///
+/// Reference `_PATH_COMMANDS`, the union of `_MUTATING_PATH_COMMANDS` and the
+/// POSIX read-only commands. The reference documents it as a superset of the
+/// read-only allowlist for a reason this port keeps: a command that can be
+/// auto-allowed must have its operands checked first, or `grep secret
+/// /etc/passwd` reads outside the workspace without ever asking.
+const MUTATING_PATH_COMMANDS: [&str; 8] =
+    ["cd", "chmod", "chown", "cp", "mkdir", "mv", "rm", "touch"];
+
+/// Whether `program` has its path operands inspected under `flavor`.
+///
+/// The set is the reference union: the eight mutating commands and every
+/// read-only command of the branch, which is what makes it a superset of the
+/// read-only allowlist by construction.
+fn inspects_paths(flavor: ShellFlavor, program: &str) -> bool {
+    MUTATING_PATH_COMMANDS.contains(&program)
+        || crate::tools::config::shell_read_only_commands(matches!(
+            flavor,
+            ShellFlavor::Posix | ShellFlavor::GitBash
+        ))
+        .contains(&program)
+}
+
+/// Resolves the policy for `command` against the four configured lists.
+///
+/// Reference `BashTool.resolve_permission`, in its order: the grammar extracts
+/// the segments, a denylist or standalone-denylist match refuses the whole
+/// command, the operands that leave the workspace are collected, an
+/// unconditionally allowed command runs, and everything else becomes the
+/// requirements the operator answers.
+///
+/// Nothing is denied outside the two denylists. A command this port cannot
+/// classify reaches an approval prompt, which is the direction the guard is
+/// meant to fail in.
 pub fn analyze_shell(
     flavor: ShellFlavor,
     command: &str,
     context: &ShellPolicyContext,
     lists: &ShellCommandLists,
 ) -> ShellAnalysis {
-    let tokens = match tokenize(flavor, command) {
-        Ok(tokens) => tokens,
-        Err(message) => {
-            return ShellAnalysis {
-                mode: PermissionMode::Ask,
-                rationale: vec![message],
-                commands: Vec::new(),
-                path_operands: Vec::new(),
-            };
+    let segments = segments_of(flavor, command);
+    if segments.is_empty() {
+        // Reference `resolve_permission` returns `None` here, which defers to
+        // the configured permission rather than deciding.
+        return ShellAnalysis {
+            mode: lists.permission,
+            rationale: vec![
+                "no command was extracted; the configured permission applies".to_owned(),
+            ],
+            commands: Vec::new(),
+            path_operands: Vec::new(),
+            requirements: Vec::new(),
+        };
+    }
+
+    // 1. The two denylists, which are the only thing that refuses outright.
+    for segment in &segments {
+        if let Some(pattern) = lists.denied(segment) {
+            return refusal(format!(
+                "`{segment}` matches the denylist entry `{pattern}`"
+            ));
         }
-    };
+        if let Some(entry) = lists.denied_standalone(segment) {
+            return refusal(format!("`{entry}` is refused as a standalone command"));
+        }
+    }
+
+    // 2. The guardrails an allowlist entry may not overturn.
     let mut rationale = Vec::new();
-    let mut mode = PermissionMode::Always;
-    if contains_indirection(flavor, command) {
-        mode = PermissionMode::Ask;
-        rationale.push("indirection or nested shell text requires approval".to_owned());
-    }
-    if tokens.iter().any(|token| {
-        matches!(token, Token::Operator(operator) if matches!(operator.as_str(), ">" | "<"))
-    }) {
-        mode = mode.min(PermissionMode::Ask);
-        rationale.push("shell redirection requires approval".to_owned());
-    }
-    let segments = split_commands(tokens);
-    let mut commands = Vec::new();
-    let mut path_operands = Vec::new();
-    for segment in segments {
-        let words = segment
-            .into_iter()
-            .filter_map(|token| match token {
-                Token::Word(word) => Some(word),
-                Token::Operator(_) => None,
-            })
-            .collect::<Vec<_>>();
-        let Some(program) = words.first().cloned() else {
-            mode = mode.min(PermissionMode::Ask);
-            rationale.push("empty command segment requires approval".to_owned());
+    let mut guardrails = Vec::new();
+    let mut seen_guardrail = BTreeSet::new();
+    for segment in &segments {
+        if !has_find_execution_predicate(segment) {
             continue;
+        }
+        if !seen_guardrail.insert(segment.clone()) {
+            continue;
+        }
+        rationale.push(format!("`{segment}` asks `find` to run a program"));
+        guardrails.push(PermissionRequirement::exact_command(segment));
+    }
+    // The guards this port keeps beyond the reference set, each of which only
+    // withholds an automatic grant. A segment they name is asked about under
+    // its own pattern, so the operator still has something to approve.
+    let withheld = withheld_segments(flavor, command, &segments, &mut rationale);
+    let guarded = !guardrails.is_empty() || !withheld.is_empty();
+
+    // 3. The operands that leave the workspace.
+    let (outside, operands) = collect_outside_directories(flavor, &segments, context);
+
+    // 4. The grant, when nothing withheld it.
+    let sensitive = segments
+        .iter()
+        .any(|segment| lists.sensitive(segment).is_some());
+    let allowed_outright = !sensitive
+        && (lists.permission == PermissionMode::Always
+            || (segments
+                .iter()
+                .all(|segment| lists.allowed(segment).is_some())
+                && outside.is_empty()));
+    let commands = segments
+        .iter()
+        .map(|segment| command_node(segment))
+        .collect::<Vec<_>>();
+    if allowed_outright && !guarded {
+        rationale.push("every segment is allowed and stays inside the workspace".to_owned());
+        return ShellAnalysis {
+            mode: PermissionMode::Always,
+            rationale,
+            commands,
+            path_operands: operands,
+            requirements: Vec::new(),
         };
-        let arguments = words[1..].to_vec();
-        let normalized = normalize_program(flavor, &program);
-        let segment = std::iter::once(normalized.clone())
-            .chain(arguments.iter().cloned())
-            .collect::<Vec<_>>()
-            .join(" ");
-        let decision = command_mode(flavor, &normalized, &arguments);
-        if let Some(pattern) = lists.denied(&segment) {
-            return ShellAnalysis {
-                mode: PermissionMode::Never,
-                rationale: vec![format!(
-                    "`{segment}` matches the denylist entry `{pattern}`"
-                )],
-                commands: Vec::new(),
-                path_operands: Vec::new(),
-            };
+    }
+
+    // 5. What is left is what the operator answers.
+    let mut requirements = Vec::new();
+    let mut seen_session = BTreeSet::new();
+    for segment in &segments {
+        let sensitive = lists.sensitive(segment);
+        if sensitive.is_none() && lists.allowed(segment).is_some() && !withheld.contains(segment) {
+            continue;
         }
-        if let Some(entry) = lists.denied_standalone(&segment) {
-            return ShellAnalysis {
-                mode: PermissionMode::Never,
-                rationale: vec![format!("`{entry}` is refused as a standalone command")],
-                commands: Vec::new(),
-                path_operands: Vec::new(),
-            };
-        }
-        // Reference `resolve_permission` grants an allowlisted segment only
-        // when no guardrail fired for it, which is why `find -exec` stays an
-        // approval even though `find` is on the allowlist.
-        let decision = match (lists.sensitive(&segment), lists.allowed(&segment)) {
-            // A sensitive first word is never granted automatically, whatever
-            // the allowlist and the built-in analysis say about it.
-            (Some(pattern), _) => (
-                PermissionMode::Ask,
-                format!("`{segment}` matches the sensitive pattern `{pattern}`"),
-            ),
-            (None, Some(pattern)) if !decision.guarded => (
-                PermissionMode::Always,
-                format!("`{segment}` matches the allowlist entry `{pattern}`"),
-            ),
-            _ => (decision.mode, decision.rationale),
+        // A sensitive segment carries itself as its own session pattern, so
+        // approving `sudo apt update` never approves `sudo rm`.
+        let requirement = if let Some(pattern) = sensitive {
+            rationale.push(format!(
+                "`{segment}` matches the sensitive pattern `{pattern}`"
+            ));
+            PermissionRequirement::exact_command(segment)
+        } else {
+            PermissionRequirement::command(segment)
         };
-        mode = mode.min(decision.0);
-        rationale.push(decision.1);
-        let operands = path_operands_for(&normalized, &arguments, lists);
-        for operand in operands {
-            match normalize_operand(flavor, context, &operand) {
-                Ok(path) if inside_any_root(&path, &context.roots) => {
-                    match host_path_is_authorized(&path, context) {
-                        Some(true) => {
-                            mode = mode.min(PermissionMode::Ask);
-                            rationale.push(format!(
-                                "path `{operand}` requires approval because shell access cannot be bound to the validated filesystem object"
-                            ));
-                        }
-                        Some(false) => {
-                            mode = mode.min(PermissionMode::Ask);
-                            rationale.push(format!(
-                                "path `{operand}` resolves outside workspace roots or cannot be resolved"
-                            ));
-                        }
-                        None => {}
-                    }
-                    path_operands.push(operand);
-                }
-                Ok(_) => {
-                    mode = mode.min(PermissionMode::Ask);
-                    rationale.push(format!("path `{operand}` is outside workspace roots"));
-                    path_operands.push(operand);
-                }
-                Err(_) => {
-                    mode = mode.min(PermissionMode::Ask);
-                    rationale.push(format!("path `{operand}` is ambiguous"));
-                    path_operands.push(operand);
-                }
-            }
+        if seen_session.insert(requirement.session_pattern.clone()) {
+            requirements.push(requirement);
         }
-        commands.push(ShellCommandNode { program, arguments });
+    }
+    for glob in &outside {
+        rationale.push(format!("`{glob}` is outside the workspace roots"));
+        requirements.push(PermissionRequirement::outside_directory(glob));
+    }
+    requirements.extend(guardrails);
+
+    if requirements.is_empty() {
+        // Reference `resolve_permission` returns `None` when it composed no
+        // requirement, which defers to the configured permission.
+        return ShellAnalysis {
+            mode: lists.permission,
+            rationale,
+            commands,
+            path_operands: operands,
+            requirements: Vec::new(),
+        };
     }
     ShellAnalysis {
-        mode,
+        mode: PermissionMode::Ask,
         rationale,
         commands,
-        path_operands,
+        path_operands: operands,
+        requirements,
     }
 }
 
-/// Whether the segment asks `find` to run something, which no allowlist entry
-/// covers.
-fn has_execution_predicate(program: &str, arguments: &[String]) -> bool {
-    program == "find"
-        && arguments
-            .iter()
-            .any(|argument| matches!(argument.as_str(), "-exec" | "-execdir" | "-delete"))
+fn refusal(reason: String) -> ShellAnalysis {
+    ShellAnalysis {
+        mode: PermissionMode::Never,
+        rationale: vec![reason],
+        commands: Vec::new(),
+        path_operands: Vec::new(),
+        requirements: Vec::new(),
+    }
 }
 
-/// What the built-in analysis decides about one command segment.
+/// The segments `command` runs.
 ///
-/// `guarded` marks a decision an allowlist entry may not overturn: the branches
-/// that exist because a command can be pointed somewhere it does not normally
-/// go. Reference `resolve_permission` keeps the same separation, granting an
-/// allowlisted segment only when its own guardrail pass found nothing.
-struct CommandDecision {
-    mode: PermissionMode,
-    rationale: String,
-    guarded: bool,
-}
-
-fn decided(mode: PermissionMode, rationale: String) -> CommandDecision {
-    CommandDecision {
-        mode,
-        rationale,
-        guarded: false,
+/// The bash grammar answers for the two POSIX flavors, which is what the
+/// reference parses every `bash` and `git_bash` call with. The two Windows
+/// interpreters are not bash, so their segments still come from the word split
+/// this port has always used for them; proving Windows execution equivalence is
+/// an explicit non-goal of the PRD this implements.
+fn segments_of(flavor: ShellFlavor, command: &str) -> Vec<String> {
+    match flavor {
+        ShellFlavor::Posix | ShellFlavor::GitBash => extract_commands(command),
+        ShellFlavor::Cmd | ShellFlavor::PowerShell => command
+            .split(['\n', ';', '|', '&'])
+            .map(|segment| {
+                segment
+                    .split_whitespace()
+                    .map(|word| word.trim_matches(['"', '\'']))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .filter(|segment| !segment.is_empty())
+            .map(|segment| normalize_windows_segment(&segment))
+            .collect(),
     }
 }
 
-fn guarded(mode: PermissionMode, rationale: String) -> CommandDecision {
-    CommandDecision {
-        mode,
-        rationale,
-        guarded: true,
-    }
-}
-
-fn command_mode(flavor: ShellFlavor, program: &str, arguments: &[String]) -> CommandDecision {
-    let destructive = match flavor {
-        ShellFlavor::Posix | ShellFlavor::GitBash => {
-            ["rm", "rmdir", "dd", "mkfs", "shutdown", "sudo", "eval"].contains(&program)
-        }
-        ShellFlavor::Cmd => ["del", "erase", "format", "rd", "rmdir"].contains(&program),
-        ShellFlavor::PowerShell => [
-            "remove-item",
-            "clear-content",
-            "format-volume",
-            "invoke-expression",
-            "start-process",
-        ]
-        .contains(&program),
+/// A Windows segment under the lowercased basename its lists are written in.
+fn normalize_windows_segment(segment: &str) -> String {
+    let mut words = segment.split(' ');
+    let Some(program) = words.next() else {
+        return segment.to_owned();
     };
-    if destructive {
-        return guarded(
-            PermissionMode::Never,
-            format!("destructive command `{program}` is denied"),
-        );
+    let file = program
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(program)
+        .trim_end_matches(".exe")
+        .to_ascii_lowercase();
+    std::iter::once(file.as_str())
+        .chain(words)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn command_node(segment: &str) -> ShellCommandNode {
+    let mut words = segment.split(' ').filter(|word| !word.is_empty());
+    let program = words.next().unwrap_or_default().to_owned();
+    ShellCommandNode {
+        program,
+        arguments: words.map(ToOwned::to_owned).collect(),
     }
-    if has_execution_predicate(program, arguments) {
-        return guarded(
-            PermissionMode::Ask,
-            "find execution predicates require approval".to_owned(),
-        );
+}
+
+/// Reference `_has_find_execution_predicate`: a `find` segment naming one of
+/// the four predicates anywhere in its text.
+fn has_find_execution_predicate(segment: &str) -> bool {
+    if !ShellCommandLists::matches("find", segment) {
+        return false;
     }
+    FIND_EXECUTION_PREDICATES
+        .iter()
+        .any(|predicate| segment.contains(predicate))
+}
+
+/// The segments this port withholds an automatic grant from beyond the
+/// reference set.
+///
+/// Each entry only costs an approval prompt: none of them refuses, so the guard
+/// still fails toward asking. They exist because the command text alone does not
+/// say what a call reads: a substitution runs another program, a redirect writes
+/// somewhere the segment never names, and three git options read a path the
+/// index never held. `crates/vibe-core/src/shell/shell_parity_tests.rs` records
+/// every one of them against the reference verdict, so the set cannot grow
+/// silently.
+fn withheld_segments(
+    flavor: ShellFlavor,
+    command: &str,
+    segments: &[String],
+    rationale: &mut Vec<String>,
+) -> BTreeSet<String> {
+    let mut withheld = BTreeSet::new();
+    if contains_indirection(flavor, command) {
+        rationale.push("indirection or nested shell text requires approval".to_owned());
+        withheld.extend(segments.iter().cloned());
+    }
+    for segment in segments {
+        if segment
+            .split(' ')
+            .next_back()
+            .is_some_and(|word| word == REDIRECT_MARKER)
+        {
+            rationale.push(format!(
+                "`{segment}` redirects, which the text does not name"
+            ));
+            withheld.insert(segment.clone());
+            continue;
+        }
+        if let Some(reason) = git_or_ripgrep_guard(segment) {
+            rationale.push(reason);
+            withheld.insert(segment.clone());
+        }
+    }
+    withheld
+}
+
+/// Why a `git` or `rg` segment does not ride its allowlist entry.
+fn git_or_ripgrep_guard(segment: &str) -> Option<String> {
+    let mut words = segment.split(' ').filter(|word| !word.is_empty());
+    let program = words.next()?;
+    let arguments = words.collect::<Vec<_>>();
     if program == "git" {
         if arguments.iter().any(|argument| {
-            matches!(argument.as_str(), "-c" | "--config-env" | "--exec-path")
+            matches!(*argument, "-c" | "--config-env" | "--exec-path")
                 || argument.starts_with("-c=")
                 || argument.starts_with("--config-env=")
                 || argument.starts_with("--exec-path=")
         }) {
-            return guarded(
-                PermissionMode::Ask,
-                "git configuration and executable overrides require approval".to_owned(),
-            );
+            return Some("git configuration and executable overrides require approval".to_owned());
         }
-        let subcommand = arguments
-            .iter()
-            .find(|argument| !argument.starts_with('-'))
-            .map(String::as_str)
-            .unwrap_or_default();
-        // A destructive subcommand is answered before anything that only makes
-        // a read broader, so a pathspec separator cannot turn the denial below
-        // into an approval prompt.
-        if subcommand == "reset" && arguments.iter().any(|argument| argument == "--hard") {
-            return guarded(
-                PermissionMode::Never,
-                "destructive git reset is denied".to_owned(),
-            );
-        }
-        // `--no-index` and a pathspec separator both let git read a path the
-        // workspace never named, so neither is covered by an allowlist entry.
         if arguments
             .iter()
-            .any(|argument| matches!(argument.as_str(), "--" | "--no-index"))
+            .any(|argument| matches!(*argument, "--" | "--no-index"))
         {
-            return guarded(
-                PermissionMode::Ask,
-                "git reading outside the index requires approval".to_owned(),
-            );
+            return Some("git reading outside the index requires approval".to_owned());
         }
-        return match subcommand {
-            "" | "rev-parse" => decided(PermissionMode::Always, "read-only git command".to_owned()),
-            "status"
-                if arguments
-                    .iter()
-                    .filter(|argument| !argument.starts_with('-'))
-                    .count()
-                    == 1 =>
-            {
-                decided(PermissionMode::Always, "read-only git status".to_owned())
-            }
-            "branch"
-                if arguments.iter().all(|argument| {
-                    argument == "branch"
-                        || matches!(
-                            argument.as_str(),
-                            "--list"
-                                | "-l"
-                                | "--show-current"
-                                | "--contains"
-                                | "--no-contains"
-                                | "--merged"
-                                | "--no-merged"
-                                | "--points-at"
-                                | "--format"
-                                | "--sort"
-                                | "--color"
-                                | "--no-color"
-                        )
-                        || argument.starts_with("--format=")
-                        || argument.starts_with("--sort=")
-                        || argument.starts_with("--color=")
-                }) =>
-            {
-                decided(
-                    PermissionMode::Always,
-                    "read-only git branch query".to_owned(),
-                )
-            }
-            _ => decided(
-                PermissionMode::Ask,
-                format!("git subcommand `{subcommand}` requires approval"),
-            ),
-        };
+        if arguments.first() == Some(&"reset") {
+            return Some("git reset requires approval".to_owned());
+        }
+        return None;
     }
     if program == "rg"
         && arguments
             .iter()
-            .any(|argument| argument == "--pre" || argument.starts_with("--pre="))
+            .any(|argument| *argument == "--pre" || argument.starts_with("--pre="))
     {
-        return guarded(
-            PermissionMode::Ask,
-            "ripgrep preprocessor execution requires approval".to_owned(),
-        );
+        return Some("ripgrep preprocessor execution requires approval".to_owned());
     }
-    let read_only = match flavor {
-        ShellFlavor::Posix | ShellFlavor::GitBash => [
-            "pwd", "ls", "cat", "head", "tail", "rg", "grep", "find", "wc", "which",
-        ]
-        .contains(&program),
-        ShellFlavor::Cmd => ["cd", "dir", "type", "findstr", "where"].contains(&program),
-        ShellFlavor::PowerShell => [
-            "get-content",
-            "gc",
-            "get-childitem",
-            "gci",
-            "get-location",
-            "select-string",
-        ]
-        .contains(&program),
-    };
-    if read_only {
-        decided(
-            PermissionMode::Always,
-            format!("reader `{program}` is allowlisted"),
-        )
-    } else {
-        decided(
-            PermissionMode::Ask,
-            format!("unknown or mutating command `{program}` requires approval"),
-        )
-    }
-}
-
-fn tokenize(flavor: ShellFlavor, command: &str) -> Result<Vec<Token>, String> {
-    let mut tokens = Vec::new();
-    let mut current = String::new();
-    let mut quote = None;
-    let mut escaped = false;
-    let mut chars = command.chars().peekable();
-    while let Some(character) = chars.next() {
-        if escaped {
-            current.push(character);
-            escaped = false;
-            continue;
-        }
-        if character == '\\' && matches!(flavor, ShellFlavor::Posix | ShellFlavor::GitBash) {
-            escaped = true;
-            continue;
-        }
-        if let Some(active) = quote {
-            if character == active {
-                quote = None;
-            } else {
-                current.push(character);
-            }
-            continue;
-        }
-        if matches!(character, '\'' | '"') {
-            quote = Some(character);
-            continue;
-        }
-        if character.is_whitespace() {
-            push_word(&mut tokens, &mut current);
-            continue;
-        }
-        if matches!(character, ';' | '|' | '&') {
-            push_word(&mut tokens, &mut current);
-            let mut operator = character.to_string();
-            if chars.peek() == Some(&character) {
-                operator.push(character);
-                chars.next();
-            }
-            tokens.push(Token::Operator(operator));
-            continue;
-        }
-        if matches!(character, '>' | '<') {
-            push_word(&mut tokens, &mut current);
-            tokens.push(Token::Operator(character.to_string()));
-            continue;
-        }
-        current.push(character);
-    }
-    if quote.is_some() || escaped {
-        return Err("unparseable shell quoting requires approval".to_owned());
-    }
-    push_word(&mut tokens, &mut current);
-    if tokens.is_empty() {
-        return Err("empty shell command requires approval".to_owned());
-    }
-    Ok(tokens)
-}
-
-fn push_word(tokens: &mut Vec<Token>, current: &mut String) {
-    if !current.is_empty() {
-        tokens.push(Token::Word(std::mem::take(current)));
-    }
-}
-
-fn split_commands(tokens: Vec<Token>) -> Vec<Vec<Token>> {
-    let mut segments = vec![Vec::new()];
-    for token in tokens {
-        match &token {
-            Token::Operator(operator) if matches!(operator.as_str(), ";" | "&&" | "||" | "|") => {
-                segments.push(Vec::new());
-            }
-            Token::Operator(operator) if matches!(operator.as_str(), ">" | "<") => {
-                if let Some(segment) = segments.last_mut() {
-                    segment.push(Token::Word("__redirection__".to_owned()));
-                }
-            }
-            _ => {
-                if let Some(segment) = segments.last_mut() {
-                    segment.push(token);
-                }
-            }
-        }
-    }
-    segments
+    None
 }
 
 fn contains_indirection(flavor: ShellFlavor, command: &str) -> bool {
     command.contains("$(")
         || command.contains('`')
-        || command.contains("__redirection__")
         || match flavor {
             ShellFlavor::PowerShell => {
                 command.contains("$env:")
@@ -581,81 +550,202 @@ fn contains_indirection(flavor: ShellFlavor, command: &str) -> bool {
             ShellFlavor::Cmd => {
                 command.contains('%') || command.to_ascii_lowercase().contains("call ")
             }
-            ShellFlavor::Posix | ShellFlavor::GitBash => {
-                command.contains("${") || command.contains("eval ")
-            }
+            ShellFlavor::Posix | ShellFlavor::GitBash => command.contains("${"),
         }
 }
 
-fn normalize_program(flavor: ShellFlavor, program: &str) -> String {
-    let file = program
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or(program)
-        .trim_end_matches(".exe");
-    match flavor {
-        ShellFlavor::Cmd | ShellFlavor::PowerShell => file.to_ascii_lowercase(),
-        ShellFlavor::Posix | ShellFlavor::GitBash => file.to_owned(),
-    }
-}
-
-/// The operands of `program` that name a path, or nothing when it takes none.
+/// The directories a call reaches outside every root, as the globs a
+/// requirement names them by, and the operands they came from.
 ///
-/// `lists` widens the inspected set with everything the operator allowlisted:
-/// reference `_PATH_COMMANDS` is documented as a superset of the read-only
-/// allowlist for exactly this reason, since a command that can be auto-allowed
-/// must have its paths checked first or `wc -l /etc/passwd` reads outside the
-/// workspace without ever asking.
-fn path_operands_for(
-    program: &str,
-    arguments: &[String],
-    lists: &ShellCommandLists,
-) -> Vec<String> {
-    let takes_paths = [
-        "ls",
-        "cat",
-        "head",
-        "tail",
-        "rg",
-        "grep",
-        "find",
-        "dir",
-        "type",
-        "findstr",
-        "get-content",
-        "gc",
-        "get-childitem",
-        "gci",
-        "select-string",
-    ];
-    let allowlisted = lists
-        .allowlist
-        .iter()
-        .any(|pattern| pattern.split_whitespace().next() == Some(program));
-    if !takes_paths.contains(&program) && !allowlisted {
-        return Vec::new();
+/// Reference `_collect_outside_dirs`: only a path-inspecting command's operands
+/// are considered, a flag and a `chmod` mode are skipped, a token that does not
+/// look like a path is skipped, the scratchpad is skipped, and a file
+/// contributes its parent directory while a directory contributes itself. The
+/// globs are sorted and deduplicated, so two operands in one directory are one
+/// approval.
+fn collect_outside_directories(
+    flavor: ShellFlavor,
+    segments: &[String],
+    context: &ShellPolicyContext,
+) -> (Vec<String>, Vec<String>) {
+    let mut globs = BTreeSet::new();
+    let mut operands = Vec::new();
+    for segment in segments {
+        let mut words = split_operand_tokens(flavor, segment).into_iter();
+        let Some(program) = words.next() else {
+            continue;
+        };
+        if !inspects_paths(flavor, &program) {
+            continue;
+        }
+        for token in words {
+            if token.starts_with('-') {
+                continue;
+            }
+            // A `chmod` mode is not a path, and `+x` would otherwise resolve as
+            // a relative one.
+            if program == "chmod" && token.starts_with('+') {
+                continue;
+            }
+            if !looks_like_path(&token) {
+                continue;
+            }
+            let Some(glob) = escaping_glob(flavor, context, &token) else {
+                operands.push(token);
+                continue;
+            };
+            globs.insert(glob);
+            operands.push(token);
+        }
     }
-    arguments
-        .iter()
-        .filter(|argument| !argument.starts_with('-') && *argument != "__redirection__")
-        .filter(|argument| {
-            !(matches!(program, "rg" | "grep" | "findstr" | "select-string")
-                && arguments.first() == Some(*argument))
-        })
-        .cloned()
-        .collect()
+    (globs.into_iter().collect(), operands)
 }
 
-fn normalize_operand(
-    flavor: ShellFlavor,
-    context: &ShellPolicyContext,
-    operand: &str,
-) -> Result<PolicyPath, PathPolicyError> {
+/// The tokens of a segment, as the interpreter's own quoting reads them.
+///
+/// Reference `_split_command_tokens` uses POSIX `shlex` and falls back to a
+/// whitespace split when the quoting does not close. On Windows it keeps the
+/// backslash literal, because a path like `C:\Users\me` would otherwise lose
+/// its separators to the POSIX escape rule.
+fn split_operand_tokens(flavor: ShellFlavor, segment: &str) -> Vec<String> {
+    match flavor {
+        ShellFlavor::Posix | ShellFlavor::GitBash => shlex::split(segment)
+            .unwrap_or_else(|| segment.split_whitespace().map(ToOwned::to_owned).collect()),
+        ShellFlavor::Cmd | ShellFlavor::PowerShell => segment
+            .split_whitespace()
+            .map(|word| word.trim_matches(['"', '\'']).to_owned())
+            .collect(),
+    }
+}
+
+/// Reference `_collect_outside_dirs`: only a token shaped like a path is
+/// resolved, so a `grep` pattern and a `chmod` mode never become directories.
+fn looks_like_path(token: &str) -> bool {
+    token.starts_with('/')
+        || token.starts_with('~')
+        || token.starts_with('.')
+        || token.contains('/')
+        || token.contains('\\')
+}
+
+/// The glob naming where `token` reaches, or [`None`] when it stays inside.
+///
+/// The operand is parsed under the interpreter's own path grammar and then
+/// positioned on the host's, which is what lets a Git Bash `/c/work/notes.txt`
+/// land on the Windows workspace root it names.
+fn escaping_glob(flavor: ShellFlavor, context: &ShellPolicyContext, token: &str) -> Option<String> {
     let platform = match flavor {
         ShellFlavor::Posix => Platform::Posix,
         ShellFlavor::GitBash => Platform::GitBash,
         ShellFlavor::Cmd | ShellFlavor::PowerShell => Platform::Windows,
     };
+    let expanded = expand_home(token);
+    let Ok(path) = normalize_operand(platform, context, &expanded) else {
+        // A path the policy cannot position is treated as outside rather than
+        // as inside, which is the direction the reference resolves an
+        // unresolvable operand in.
+        return Some(join_glob(&expanded, separator_for(platform)));
+    };
+    let host = policy_path_to_host(&path);
+    if let Some(host) = host.as_deref()
+        && is_scratchpad_path(host, context.scratchpad.as_deref())
+    {
+        return None;
+    }
+    // A path that exists is positioned on the filesystem too, so a symlink
+    // pointing out of the workspace is caught. One that does not exist yet is
+    // positioned lexically: `cp x <workdir>/copy.txt` names a file the call is
+    // about to create, and refusing it for not existing would ask about every
+    // write into the workspace.
+    let lexically_inside = inside_any_root(&path, &context.roots);
+    let inside = match host.as_deref() {
+        Some(host) if host.exists() => {
+            lexically_inside && host_path_is_authorized(&path, context) != Some(false)
+        }
+        Some(_) | None => lexically_inside,
+    };
+    if inside {
+        return None;
+    }
+    // A directory names itself; a file names the directory holding it, which is
+    // what makes one approval cover a sibling read.
+    let directory = match host.as_deref() {
+        Some(host) if host.is_dir() => path.clone(),
+        Some(_) | None => parent_of(&path),
+    };
+    Some(join_glob(
+        &render_policy_path(&directory),
+        separator_for(directory.platform),
+    ))
+}
+
+/// The separator `platform` writes a path with.
+fn separator_for(platform: Platform) -> char {
+    if platform == Platform::Windows {
+        '\\'
+    } else {
+        '/'
+    }
+}
+
+/// `directory` joined with `*`, which is how the reference names the class of
+/// paths one approval covers.
+fn join_glob(directory: &str, separator: char) -> String {
+    if directory.ends_with(separator) {
+        format!("{directory}*")
+    } else {
+        format!("{directory}{separator}*")
+    }
+}
+
+/// `path` without its last component, or `path` when it has none.
+fn parent_of(path: &PolicyPath) -> PolicyPath {
+    let mut parent = path.clone();
+    parent.components.pop();
+    parent
+}
+
+/// The text a requirement names `path` by, in the separator its platform uses.
+fn render_policy_path(path: &PolicyPath) -> String {
+    let separator = separator_for(path.platform);
+    let mut rendered = path.root.clone();
+    for component in &path.components {
+        if !rendered.is_empty() && !rendered.ends_with(separator) {
+            rendered.push(separator);
+        }
+        rendered.push_str(component);
+    }
+    if rendered.is_empty() {
+        separator.to_string()
+    } else {
+        rendered
+    }
+}
+
+/// `token` with a leading `~` replaced by the operator's home directory.
+///
+/// Reference `_collect_outside_dirs` calls `Path.expanduser` before resolving,
+/// without which `cat ~/.ssh/id_rsa` would position under a literal `~`
+/// directory inside the workspace and never raise a requirement.
+fn expand_home(token: &str) -> String {
+    if token != "~" && !token.starts_with("~/") {
+        return token.to_owned();
+    }
+    let Some(home) = crate::config::user_home_directory() else {
+        return token.to_owned();
+    };
+    let home = home.to_string_lossy().into_owned();
+    match token.strip_prefix("~/") {
+        Some(rest) => format!("{}/{rest}", home.trim_end_matches('/')),
+        None => home,
+    }
+}
+
+fn normalize_operand(
+    platform: Platform,
+    context: &ShellPolicyContext,
+    operand: &str,
+) -> Result<PolicyPath, PathPolicyError> {
     match parse_policy_path(platform, operand) {
         Ok(mut absolute) if !absolute.root.is_empty() => {
             absolute.platform = context.platform;
@@ -666,7 +756,82 @@ fn normalize_operand(
             combined.components.extend(relative.components);
             Ok(combined)
         }
+        Err(PathPolicyError::ParentTraversal) => fold_traversal(platform, context, operand),
         Err(error) => Err(error),
+    }
+}
+
+/// `operand` positioned on the working directory with its `..` components
+/// folded away.
+///
+/// Reference `_collect_outside_dirs` calls `Path.resolve()`, which folds a
+/// traversal instead of refusing it, so `cat sub/../notes.txt` is measured where
+/// it actually reads. [`parse_policy_path`] refuses one, because the file tools
+/// it also serves must never let a `..` cross a root; the folding therefore
+/// happens here, on a shell operand only. Without it a traversal is treated as
+/// unresolvable, which both asks about a path that never left the workspace and
+/// names it by a glob built on the file rather than on the directory holding it.
+fn fold_traversal(
+    platform: Platform,
+    context: &ShellPolicyContext,
+    operand: &str,
+) -> Result<PolicyPath, PathPolicyError> {
+    let separators = path_separators(platform);
+    // The head is everything before the first ascent, which the same grammar the
+    // rest of the policy uses reads the root from. Every separator is one ASCII
+    // byte, so the running offset addresses the operand directly.
+    let mut offset = 0_usize;
+    let mut head_end = operand.len();
+    for part in operand.split(separators) {
+        if part == ".." {
+            head_end = offset;
+            break;
+        }
+        offset += part.len() + 1;
+    }
+    let (head, rest) = operand.split_at(head_end);
+    let mut folded = if head.is_empty() {
+        context.working_directory.clone()
+    } else {
+        match parse_policy_path(platform, head) {
+            Ok(mut absolute) if !absolute.root.is_empty() => {
+                absolute.platform = context.platform;
+                absolute
+            }
+            Ok(relative) => {
+                let mut combined = context.working_directory.clone();
+                combined.components.extend(relative.components);
+                combined
+            }
+            Err(error) => return Err(error),
+        }
+    };
+    for part in rest.split(separators) {
+        match part {
+            "" | "." => {}
+            ".." => {
+                // At a root an ascent is the root itself, which is what a
+                // filesystem answers. A relative operand that has no root left
+                // to stand on cannot be positioned at all.
+                if folded.components.pop().is_none() && folded.root.is_empty() {
+                    return Err(PathPolicyError::ParentTraversal);
+                }
+            }
+            component => folded.components.push(component.to_owned()),
+        }
+    }
+    Ok(folded)
+}
+
+/// The separators an operand of `platform` is written with.
+///
+/// Git Bash accepts both, which is why only POSIX reads a backslash as an
+/// ordinary character.
+fn path_separators(platform: Platform) -> &'static [char] {
+    if platform == Platform::Posix {
+        &['/']
+    } else {
+        &['/', '\\']
     }
 }
 
@@ -732,6 +897,7 @@ fn policy_path_to_host(path: &PolicyPath) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::policy::PermissionScope;
 
     /// The lists a POSIX host resolves for `bash`, which is what every session
     /// analyzes with.
@@ -744,143 +910,189 @@ mod tests {
     }
 
     fn posix_context() -> ShellPolicyContext {
-        ShellPolicyContext {
-            platform: Platform::Posix,
-            working_directory: parse_policy_path(Platform::Posix, "/work/project")
-                .expect("working directory"),
-            roots: vec![
-                parse_policy_path(Platform::Posix, "/work/project").expect("workspace root"),
-            ],
-        }
+        ShellPolicyContext::new(
+            Platform::Posix,
+            parse_policy_path(Platform::Posix, "/work/project").expect("working directory"),
+        )
     }
 
-    #[test]
-    fn posix_nested_commands_and_find_exec_are_conservative() {
-        let safe = analyze_shell(
+    fn analyze(command: &str) -> ShellAnalysis {
+        analyze_shell(
             ShellFlavor::Posix,
-            "pwd && rg needle src",
+            command,
             &posix_context(),
             &posix_lists(),
-        );
-        assert_eq!(safe.mode, PermissionMode::Always);
-        assert_eq!(safe.commands.len(), 2);
-        let find = analyze_shell(
-            ShellFlavor::Posix,
-            "find . -exec sh -c 'echo x' \\;",
-            &posix_context(),
-            &posix_lists(),
-        );
-        assert_eq!(find.mode, PermissionMode::Ask);
-        let nested = analyze_shell(
-            ShellFlavor::Posix,
-            "cat \"$(credential-helper)\"",
-            &posix_context(),
-            &posix_lists(),
-        );
-        assert_eq!(nested.mode, PermissionMode::Ask);
+        )
     }
 
-    #[test]
-    fn explicit_deny_wins_over_reader_segments() {
-        let analysis = analyze_shell(
-            ShellFlavor::Posix,
-            "cat README.md && rm secret",
-            &posix_context(),
-            &posix_lists(),
-        );
-        assert_eq!(analysis.mode, PermissionMode::Never);
+    /// The session patterns an analysis asks about, in order.
+    fn session_patterns(analysis: &ShellAnalysis) -> Vec<String> {
+        analysis
+            .requirements
+            .iter()
+            .map(|requirement| requirement.session_pattern.clone())
+            .collect()
     }
 
-    #[test]
-    fn executable_reader_options_and_git_no_index_require_approval() {
-        let ripgrep = analyze_shell(
-            ShellFlavor::Posix,
-            "rg --pre malicious-helper needle .",
-            &posix_context(),
-            &posix_lists(),
-        );
-        assert_eq!(ripgrep.mode, PermissionMode::Ask);
+    // ----------------------------------------------------------------------
+    // US-109: the grammar decides what runs
+    // ----------------------------------------------------------------------
 
-        let git = analyze_shell(
-            ShellFlavor::Posix,
-            "git diff --no-index /etc/passwd /dev/null",
-            &posix_context(),
-            &posix_lists(),
+    /// US-109: a heredoc is a redirect, so the command under it is not the bare
+    /// standalone interpreter the denylist refuses.
+    #[test]
+    fn a_heredoc_is_not_a_bare_standalone_interpreter() {
+        let analysis = analyze("python3 <<'EOF'\nprint(1)\nEOF");
+        assert_ne!(
+            analysis.mode,
+            PermissionMode::Never,
+            "a heredoc body is not a standalone `python3`: {:?}",
+            analysis.rationale
         );
-        assert_eq!(git.mode, PermissionMode::Ask);
+        assert_eq!(session_patterns(&analysis), vec!["python3 *".to_owned()]);
     }
 
-    /// A pathspec separator broadens a read; it never softens the denial a
-    /// destructive subcommand already earned.
+    /// US-109: each segment of a chain is analyzed on its own, so approving the
+    /// reader never approves what follows it.
     #[test]
-    fn a_pathspec_separator_does_not_reopen_a_destructive_git_reset() {
-        for command in ["git reset --hard", "git reset --hard -- src"] {
-            let analysis = analyze_shell(
-                ShellFlavor::Posix,
-                command,
-                &posix_context(),
-                &posix_lists(),
-            );
-            assert_eq!(
-                analysis.mode,
-                PermissionMode::Never,
-                "`{command}`: {:?}",
-                analysis.rationale
-            );
-        }
+    fn a_chain_is_analyzed_one_segment_at_a_time() {
+        let analysis = analyze("cat README.md && rm -rf build");
+        assert_eq!(analysis.commands.len(), 2);
+        // `cat` is allowlisted and drops out; only `rm` is asked about.
+        assert_eq!(session_patterns(&analysis), vec!["rm *".to_owned()]);
     }
 
-    /// US-103: the four configured lists decide a segment before the built-in
-    /// analysis does, which is what closes the commands the reference refuses
-    /// and this port used to run.
+    /// US-109: text the grammar finds no command in defers to the configured
+    /// permission rather than being granted.
     #[test]
-    fn the_configured_lists_refuse_what_the_reference_refuses() {
-        for command in ["vim notes.txt", "nano", "tmux", "gdb ./binary", "passwd"] {
-            let analysis = analyze_shell(
-                ShellFlavor::Posix,
-                command,
-                &posix_context(),
-                &posix_lists(),
-            );
+    fn text_without_a_command_falls_back_to_the_configured_permission() {
+        let analysis = analyze("");
+        assert_eq!(analysis.mode, PermissionMode::Ask);
+        assert!(analysis.requirements.is_empty());
+        assert!(analysis.commands.is_empty());
+    }
+
+    // ----------------------------------------------------------------------
+    // US-110: the four lists, and nothing else, decide
+    // ----------------------------------------------------------------------
+
+    /// US-110: the denylist refuses, naming both the segment and the pattern.
+    #[test]
+    fn the_denylist_refuses_and_names_what_matched() {
+        for (command, pattern) in [
+            ("vim notes.txt", "vim"),
+            ("nano", "nano"),
+            ("tmux", "tmux"),
+            ("gdb ./binary", "gdb"),
+            ("passwd", "passwd"),
+            ("bash -i", "bash -i"),
+        ] {
+            let analysis = analyze(command);
             assert_eq!(
                 analysis.mode,
                 PermissionMode::Never,
                 "`{command}` is on the reference denylist: {:?}",
                 analysis.rationale
             );
+            let reason = analysis.rationale.join("; ");
+            assert!(
+                reason.contains(pattern),
+                "`{command}` refused without naming `{pattern}`: {reason}"
+            );
         }
-        // The standalone denylist refuses the bare interpreter and nothing else.
-        let bare = analyze_shell(
-            ShellFlavor::Posix,
-            "python3",
-            &posix_context(),
-            &posix_lists(),
-        );
-        assert_eq!(bare.mode, PermissionMode::Never);
-        let scripted = analyze_shell(
-            ShellFlavor::Posix,
-            "python3 script.py",
-            &posix_context(),
-            &posix_lists(),
-        );
-        assert_ne!(
-            scripted.mode,
-            PermissionMode::Never,
-            "the same interpreter with an argument is not a standalone command"
-        );
     }
 
-    /// A sensitive first word never rides an allowlist entry, and it is asked
-    /// about even where the analysis would have allowed it.
+    /// US-110: the standalone denylist refuses the bare interpreter by its whole
+    /// text or its basename, and refuses nothing that carries an argument.
+    #[test]
+    fn the_standalone_denylist_refuses_only_a_single_word() {
+        for command in ["python3", "/usr/bin/python3", "su", "sh"] {
+            assert_eq!(
+                analyze(command).mode,
+                PermissionMode::Never,
+                "`{command}` is a bare standalone interpreter"
+            );
+        }
+        for command in ["python3 script.py", "sh build.sh"] {
+            assert_ne!(
+                analyze(command).mode,
+                PermissionMode::Never,
+                "`{command}` carries an argument, so the standalone rule misses it"
+            );
+        }
+    }
+
+    /// US-110: the five commands this port used to refuse outright now reach an
+    /// approval prompt, because no denylist entry matches any of them.
+    ///
+    /// One named case per loosening, which is what makes the change visible in
+    /// the suite rather than buried in a list diff.
+    #[test]
+    fn rm_now_reaches_an_approval_prompt() {
+        let analysis = analyze("rm -rf build/");
+        assert_eq!(
+            analysis.mode,
+            PermissionMode::Ask,
+            "{:?}",
+            analysis.rationale
+        );
+        assert_eq!(session_patterns(&analysis), vec!["rm *".to_owned()]);
+    }
+
+    #[test]
+    fn dd_now_reaches_an_approval_prompt() {
+        let analysis = analyze("dd if=/dev/zero of=disk.img");
+        assert_eq!(analysis.mode, PermissionMode::Ask);
+        assert!(session_patterns(&analysis).contains(&"dd *".to_owned()));
+    }
+
+    #[test]
+    fn mkfs_now_reaches_an_approval_prompt() {
+        let analysis = analyze("mkfs.ext4 /dev/sdb1");
+        assert_eq!(analysis.mode, PermissionMode::Ask);
+        assert!(session_patterns(&analysis).contains(&"mkfs.ext4 *".to_owned()));
+    }
+
+    #[test]
+    fn shutdown_now_reaches_an_approval_prompt() {
+        let analysis = analyze("shutdown -h now");
+        assert_eq!(analysis.mode, PermissionMode::Ask);
+        assert_eq!(session_patterns(&analysis), vec!["shutdown *".to_owned()]);
+    }
+
+    #[test]
+    fn eval_now_reaches_an_approval_prompt() {
+        let analysis = analyze("eval echo hi");
+        assert_eq!(analysis.mode, PermissionMode::Ask);
+        assert!(session_patterns(&analysis).contains(&"eval *".to_owned()));
+    }
+
+    /// The sixth loosening this epic carries: `git reset --hard` is on no
+    /// denylist, so it is asked about rather than refused.
+    #[test]
+    fn a_destructive_git_reset_now_reaches_an_approval_prompt() {
+        for command in ["git reset --hard", "git reset --hard -- src"] {
+            let analysis = analyze(command);
+            assert_eq!(
+                analysis.mode,
+                PermissionMode::Ask,
+                "`{command}`: {:?}",
+                analysis.rationale
+            );
+            assert!(
+                !analysis.requirements.is_empty(),
+                "`{command}` must leave something to approve"
+            );
+        }
+    }
+
+    /// US-110: a sensitive first word always produces a requirement, is never
+    /// covered by an allowlist match, and never widens past itself.
     #[test]
     fn a_sensitive_first_word_is_always_asked_about() {
-        let analysis = analyze_shell(
-            ShellFlavor::Posix,
-            "sudo ls",
-            &posix_context(),
-            &posix_lists(),
-        );
+        let analysis = analyze("sudo ls");
         assert_eq!(analysis.mode, PermissionMode::Ask);
+        assert_eq!(session_patterns(&analysis), vec!["sudo ls".to_owned()]);
         assert!(
             analysis
                 .rationale
@@ -889,71 +1101,291 @@ mod tests {
             "{:?}",
             analysis.rationale
         );
+
+        // Even at permission `always`, which grants everything else outright.
+        let mut lists = posix_lists();
+        lists.permission = PermissionMode::Always;
+        let granted = analyze_shell(ShellFlavor::Posix, "ls -la", &posix_context(), &lists);
+        assert_eq!(granted.mode, PermissionMode::Always);
+        let sensitive = analyze_shell(ShellFlavor::Posix, "sudo ls", &posix_context(), &lists);
+        assert_eq!(sensitive.mode, PermissionMode::Ask);
     }
 
-    /// The allowlist grant never outruns the operand walk: an allowlisted
-    /// reader pointed outside the roots still reaches the operator.
+    /// US-110: `find` running a program is asked about under the whole segment,
+    /// once per distinct segment, even though `find` is allowlisted.
+    #[test]
+    fn find_running_a_program_is_asked_about_once_per_segment() {
+        for predicate in ["-exec", "-execdir", "-ok", "-okdir"] {
+            let analysis = analyze(&format!("find . {predicate} rm {{}} ;"));
+            assert_eq!(
+                analysis.mode,
+                PermissionMode::Ask,
+                "`find {predicate}` must ask: {:?}",
+                analysis.rationale
+            );
+            let requirement = analysis
+                .requirements
+                .first()
+                .expect("a find execution raises a requirement");
+            assert_eq!(requirement.scope, PermissionScope::CommandPattern);
+            assert!(
+                requirement.invocation_pattern.contains(predicate),
+                "the requirement carries the whole segment: {requirement:?}"
+            );
+            // The grant may not widen: the segment is its own session pattern.
+            assert_eq!(requirement.invocation_pattern, requirement.session_pattern);
+        }
+        // A plain walk stays allowlisted.
+        assert_eq!(analyze("find . -name '*.rs'").mode, PermissionMode::Always);
+        // The same segment twice is one approval.
+        let repeated = analyze("find . -exec rm {} ; && find . -exec rm {} ;");
+        assert_eq!(
+            repeated.requirements.len(),
+            1,
+            "{:?}",
+            repeated.requirements
+        );
+    }
+
+    /// US-110: an operator who empties the allowlist is asked per segment rather
+    /// than losing the tool.
+    #[test]
+    fn an_emptied_allowlist_asks_per_segment() {
+        let lists = ShellCommandLists::default();
+        let analysis = analyze_shell(
+            ShellFlavor::Posix,
+            "ls -la && cat README.md",
+            &posix_context(),
+            &lists,
+        );
+        assert_eq!(analysis.mode, PermissionMode::Ask);
+        assert_eq!(
+            session_patterns(&analysis),
+            vec!["ls *".to_owned(), "cat *".to_owned()]
+        );
+        // An emptied denylist stops refusing what it used to refuse, which is
+        // the operator's decision rather than a hardcoded one.
+        assert_ne!(
+            analyze_shell(
+                ShellFlavor::Posix,
+                "vim notes.txt",
+                &posix_context(),
+                &lists
+            )
+            .mode,
+            PermissionMode::Never
+        );
+    }
+
+    /// US-110: two segments reducing to the same session pattern are one
+    /// approval, not two.
+    #[test]
+    fn segments_sharing_a_session_pattern_are_asked_once() {
+        let analysis = analyze("cargo build && cargo build --release");
+        assert_eq!(
+            session_patterns(&analysis),
+            vec!["cargo build *".to_owned()]
+        );
+        let distinct = analyze("cargo build && cargo test");
+        assert_eq!(
+            session_patterns(&distinct),
+            vec!["cargo build *".to_owned(), "cargo test *".to_owned()]
+        );
+    }
+
+    // ----------------------------------------------------------------------
+    // US-111: the operands that leave the workspace
+    // ----------------------------------------------------------------------
+
+    /// US-111: an allowlisted reader pointed outside the roots asks, under an
+    /// `outside_directory` requirement naming the parent directory.
     #[test]
     fn an_allowlisted_reader_pointed_outside_the_roots_still_asks() {
-        let inside = analyze_shell(
-            ShellFlavor::Posix,
-            "wc -l /work/project/notes.txt",
-            &posix_context(),
-            &posix_lists(),
-        );
+        let inside = analyze("wc -l /work/project/notes.txt");
         assert_eq!(
             inside.mode,
             PermissionMode::Always,
             "`wc` is on the reference read-only allowlist: {:?}",
             inside.rationale
         );
-        let outside = analyze_shell(
-            ShellFlavor::Posix,
-            "wc -l /etc/passwd",
-            &posix_context(),
-            &posix_lists(),
-        );
+
+        let outside = analyze("grep secret /etc/passwd");
         assert_eq!(outside.mode, PermissionMode::Ask);
+        let requirement = outside
+            .requirements
+            .iter()
+            .find(|requirement| requirement.scope == PermissionScope::OutsideDirectory)
+            .expect("an escaping operand raises an outside-directory requirement");
+        assert_eq!(requirement.invocation_pattern, "/etc/*");
+        assert_eq!(requirement.session_pattern, "/etc/*");
+        assert_eq!(requirement.label, "outside workdir (/etc/*)");
     }
 
-    /// An operator who empties the allowlist gets an approval per command
-    /// rather than an unusable tool.
+    /// US-111: a flag and a `chmod` mode are not paths.
     #[test]
-    fn an_emptied_allowlist_asks_rather_than_refusing() {
-        let lists = ShellCommandLists::default();
-        let analysis = analyze_shell(
-            ShellFlavor::Posix,
-            "vim notes.txt",
-            &posix_context(),
-            &lists,
-        );
-        assert_ne!(
-            analysis.mode,
-            PermissionMode::Never,
-            "an emptied denylist stops refusing what it used to refuse"
-        );
-        let reader = analyze_shell(ShellFlavor::Posix, "sudo ls", &posix_context(), &lists);
+    fn flags_and_chmod_modes_are_not_resolved_as_paths() {
+        let flagged = analyze("ls --color /work/project");
         assert_eq!(
-            reader.mode,
-            PermissionMode::Never,
-            "the built-in analysis still guards sudo"
+            flagged.mode,
+            PermissionMode::Always,
+            "{:?}",
+            flagged.rationale
+        );
+        let mode = analyze("chmod +x /work/project/script.sh");
+        assert!(
+            mode.requirements
+                .iter()
+                .all(|requirement| requirement.scope != PermissionScope::OutsideDirectory),
+            "`+x` is a mode, not a path: {:?}",
+            mode.requirements
         );
     }
 
+    /// US-111: identical directories are emitted once, whichever operand
+    /// reached them.
     #[test]
-    fn paths_outside_roots_require_approval() {
+    fn one_directory_is_one_approval() {
+        let analysis = analyze("cat /etc/passwd /etc/group && cat /etc/hosts");
+        let outside = analysis
+            .requirements
+            .iter()
+            .filter(|requirement| requirement.scope == PermissionScope::OutsideDirectory)
+            .collect::<Vec<_>>();
+        assert_eq!(outside.len(), 1, "{outside:?}");
+        assert_eq!(outside[0].invocation_pattern, "/etc/*");
+    }
+
+    /// US-111: a command that inspects no path never resolves its arguments,
+    /// which is why `echo` naming a file outside is not an approval.
+    #[test]
+    fn a_command_outside_the_path_set_has_no_operands_resolved() {
+        let analysis = analyze("echo /etc/passwd");
+        assert_eq!(
+            analysis.mode,
+            PermissionMode::Always,
+            "{:?}",
+            analysis.rationale
+        );
+        assert!(analysis.path_operands.is_empty());
+    }
+
+    /// US-111: the inspected set stays a superset of the read-only allowlist, so
+    /// no auto-allowed reader escapes the operand walk.
+    #[test]
+    fn every_read_only_allowlist_command_has_its_operands_inspected() {
+        for posix in [true, false] {
+            let flavor = if posix {
+                ShellFlavor::Posix
+            } else {
+                ShellFlavor::PowerShell
+            };
+            let uninspected = crate::tools::config::shell_read_only_commands(posix)
+                .iter()
+                .filter(|program| !inspects_paths(flavor, program))
+                .collect::<Vec<_>>();
+            assert!(
+                uninspected.is_empty(),
+                "read-only commands whose operands are never inspected: {uninspected:?}"
+            );
+        }
+        // The reference set is the union with the eight mutating commands, and
+        // nothing else: a command only the shared allowlist names is not
+        // inspected, which is what keeps `echo /etc/passwd` an allowed echo.
+        assert!(!inspects_paths(ShellFlavor::Posix, "echo"));
+        assert!(inspects_paths(ShellFlavor::Posix, "rm"));
+    }
+
+    /// US-111: a path inside the scratchpad raises nothing, because it is the
+    /// runtime's own capability rather than the operator's workspace.
+    #[test]
+    fn a_scratchpad_operand_raises_no_requirement() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let scratchpad = tempfile::tempdir().expect("scratchpad");
+        std::fs::write(scratchpad.path().join("note.txt"), "note").expect("note");
+        let root = workspace.path().to_string_lossy().into_owned();
+        let context = ShellPolicyContext::new(
+            Platform::Posix,
+            parse_policy_path(Platform::Posix, &root).expect("root"),
+        )
+        .with_scratchpad(Some(scratchpad.path().to_path_buf()));
+
+        let note = scratchpad.path().join("note.txt");
         let analysis = analyze_shell(
             ShellFlavor::Posix,
-            "cat /etc/passwd",
-            &posix_context(),
+            &format!("cat {}", note.display()),
+            &context,
             &posix_lists(),
         );
-        assert_eq!(analysis.mode, PermissionMode::Ask);
+        assert_eq!(
+            analysis.mode,
+            PermissionMode::Always,
+            "the scratchpad is granted before any list: {:?}",
+            analysis.rationale
+        );
+    }
+
+    /// US-111: a `~` operand is expanded before it is positioned, so a home-relative
+    /// read is measured where it actually reads.
+    #[test]
+    fn a_home_relative_operand_is_expanded_before_it_is_positioned() {
+        let Some(home) = crate::config::user_home_directory() else {
+            eprintln!("skipping: the environment names no home directory");
+            return;
+        };
+        let analysis = analyze("cat ~/.ssh/id_rsa");
+        assert_eq!(
+            analysis.mode,
+            PermissionMode::Ask,
+            "{:?}",
+            analysis.rationale
+        );
+        let expected = format!(
+            "{}/.ssh/*",
+            home.display().to_string().trim_end_matches('/')
+        );
         assert!(
             analysis
-                .rationale
+                .requirements
                 .iter()
-                .any(|line| line.contains("outside"))
+                .any(|requirement| requirement.invocation_pattern == expected),
+            "expected `{expected}` among {:?}",
+            analysis.requirements
+        );
+    }
+
+    /// US-111: an operand that ascends is folded before it is positioned, so it
+    /// is measured where it actually reads and named by the directory holding
+    /// it rather than by itself.
+    #[test]
+    fn an_ascending_operand_is_folded_before_it_is_positioned() {
+        let outside = analyze("cat ../elsewhere/secret.txt");
+        assert_eq!(outside.mode, PermissionMode::Ask, "{:?}", outside.rationale);
+        let requirement = outside
+            .requirements
+            .iter()
+            .find(|requirement| requirement.scope == PermissionScope::OutsideDirectory)
+            .expect("an ascending operand leaves the workspace");
+        assert_eq!(requirement.invocation_pattern, "/work/elsewhere/*");
+        assert_eq!(requirement.session_pattern, "/work/elsewhere/*");
+
+        // An ascent that lands back inside raises nothing, which is what keeps a
+        // relative read of a sibling directory from asking.
+        let inside = analyze("cat sub/../notes.txt");
+        assert_eq!(
+            inside.mode,
+            PermissionMode::Always,
+            "`sub/../notes.txt` never left the workspace: {:?}",
+            inside.rationale
+        );
+
+        // An ascent past the root stops at it rather than failing to position.
+        let root = analyze("cat ../../../../etc/passwd");
+        assert!(
+            root.requirements
+                .iter()
+                .any(|requirement| requirement.invocation_pattern == "/etc/*"),
+            "{:?}",
+            root.requirements
         );
     }
 
@@ -966,12 +1398,11 @@ mod tests {
         let outside = tempfile::tempdir().expect("outside");
         std::fs::write(outside.path().join("secret"), "secret").expect("outside file");
         symlink(outside.path(), root.path().join("outside")).expect("symlink");
-        let root_text = root.path().to_string_lossy();
-        let context = ShellPolicyContext {
-            platform: Platform::Posix,
-            working_directory: parse_policy_path(Platform::Posix, &root_text).expect("cwd"),
-            roots: vec![parse_policy_path(Platform::Posix, &root_text).expect("root")],
-        };
+        let root_text = root.path().to_string_lossy().into_owned();
+        let context = ShellPolicyContext::new(
+            Platform::Posix,
+            parse_policy_path(Platform::Posix, &root_text).expect("root"),
+        );
 
         let analysis = analyze_shell(
             ShellFlavor::Posix,
@@ -983,39 +1414,73 @@ mod tests {
         assert_eq!(analysis.mode, PermissionMode::Ask);
         assert!(
             analysis
-                .rationale
+                .requirements
                 .iter()
-                .any(|line| line.contains("resolves outside"))
+                .any(|requirement| requirement.scope == PermissionScope::OutsideDirectory),
+            "a symlink out of the workspace is still out of it: {:?}",
+            analysis.requirements
         );
+    }
+
+    // ----------------------------------------------------------------------
+    // The guards this port keeps beyond the reference set
+    // ----------------------------------------------------------------------
+
+    /// Each of them withholds the automatic grant and nothing more: the segment
+    /// is asked about under its own pattern, never refused.
+    #[test]
+    fn the_extra_guards_ask_rather_than_refuse() {
+        for command in [
+            "cat $(credential-helper)",
+            "cat README.md > /etc/motd",
+            "git diff --no-index /etc/passwd /dev/null",
+            "git -c core.pager=sh log",
+            "rg --pre malicious-helper needle .",
+        ] {
+            let analysis = analyze(command);
+            assert_eq!(
+                analysis.mode,
+                PermissionMode::Ask,
+                "`{command}`: {:?}",
+                analysis.rationale
+            );
+            assert!(
+                !analysis.requirements.is_empty(),
+                "`{command}` must leave something to approve"
+            );
+        }
     }
 
     #[test]
     fn windows_shells_handle_aliases_drives_unc_and_ambiguity() {
-        let context = ShellPolicyContext {
-            platform: Platform::Windows,
-            working_directory: parse_policy_path(Platform::Windows, r"C:\work\project")
-                .expect("cwd"),
-            roots: vec![parse_policy_path(Platform::Windows, r"C:\work\project").expect("root")],
-        };
-        let safe = analyze_shell(
-            ShellFlavor::PowerShell,
-            r"gc C:\work\project\README.md",
-            &context,
-            &posix_lists(),
+        let windows_lists = ShellCommandLists::from_config(
+            &crate::tools::config::ToolConfigResolver::new()
+                .with_posix_shell(false)
+                .view("powershell"),
         );
-        assert_eq!(safe.mode, PermissionMode::Always);
+        let context = ShellPolicyContext::new(
+            Platform::Windows,
+            parse_policy_path(Platform::Windows, r"C:\work\project").expect("cwd"),
+        );
+        let safe = analyze_shell(
+            ShellFlavor::Cmd,
+            r"type C:\work\project\README.md",
+            &context,
+            &windows_lists,
+        );
+        assert_eq!(safe.mode, PermissionMode::Always, "{:?}", safe.rationale);
         let unc = analyze_shell(
             ShellFlavor::Cmd,
             r"type \\server\share\secret.txt",
             &context,
-            &posix_lists(),
+            &windows_lists,
         );
         assert_eq!(unc.mode, PermissionMode::Ask);
         let provider = analyze_shell(
             ShellFlavor::PowerShell,
-            r"gc Env:\SECRET",
+            r"type Env:\SECRET",
             &context,
-            &posix_lists(),
+            &windows_lists,
         );
         assert_eq!(provider.mode, PermissionMode::Ask);
     }

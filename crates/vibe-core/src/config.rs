@@ -2004,7 +2004,12 @@ fn expand_home(path: &Path, home: Option<PathBuf>) -> Option<PathBuf> {
     Some(home)
 }
 
-fn user_home_directory() -> Option<PathBuf> {
+/// The operator's home directory, or [`None`] when the environment names none.
+///
+/// The shell policy expands a `~` operand through this before positioning it
+/// against the workspace roots, so `cat ~/.ssh/id_rsa` is measured where it
+/// actually reads rather than under a literal `~` directory in the workspace.
+pub(crate) fn user_home_directory() -> Option<PathBuf> {
     #[cfg(windows)]
     {
         std::env::var_os("USERPROFILE")
