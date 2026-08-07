@@ -18,6 +18,7 @@ use crate::text::truncate_utf8;
 
 pub mod builtins;
 pub mod config;
+pub mod reference_text;
 pub mod shell;
 
 #[cfg(test)]
