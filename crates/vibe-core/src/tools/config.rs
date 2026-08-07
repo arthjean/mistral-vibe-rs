@@ -73,7 +73,7 @@ impl ToolConfigDefault {
             Self::Seconds(seconds) => Value::Float(seconds),
             Self::Text(text) => Value::String(text.to_owned()),
             Self::Texts(entries) => text_array(entries),
-            Self::ShellAllowlist => text_array(shell_allowlist(posix_shell)),
+            Self::ShellAllowlist => text_array(&shell_allowlist(posix_shell)),
             Self::ShellDenylist => text_array(shell_denylist(posix_shell)),
             Self::ShellDenylistStandalone => text_array(shell_denylist_standalone(posix_shell)),
         }
@@ -221,9 +221,8 @@ const GREP_EXCLUDE_PATTERNS: &[&str] = &[
 const FETCH_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) \
      Chrome/120.0.0.0 Safari/537.36";
 
-/// Reference `_get_default_allowlist`: the seven commands both branches share,
-/// then `_READ_ONLY_COMMANDS_POSIX`.
-const SHELL_ALLOWLIST_POSIX: [&str; 44] = [
+/// Reference `_get_default_allowlist`: the seven commands both branches share.
+const SHELL_ALLOWLIST_COMMON: [&str; 7] = [
     "cd",
     "echo",
     "git diff",
@@ -231,6 +230,16 @@ const SHELL_ALLOWLIST_POSIX: [&str; 44] = [
     "git status",
     "tree",
     "whoami",
+];
+
+/// Reference `_READ_ONLY_COMMANDS_POSIX`, which `default_read_only_commands`
+/// publishes on a POSIX host.
+///
+/// It is the read-only half of the allowlist, and the shell policy's
+/// path-inspecting set is built on top of it: reference `_PATH_COMMANDS` is
+/// documented as a superset of exactly this list, so a command that can be
+/// auto-allowed has its operands checked before the grant.
+pub const SHELL_READ_ONLY_POSIX: [&str; 37] = [
     "basename",
     "cat",
     "comm",
@@ -270,22 +279,8 @@ const SHELL_ALLOWLIST_POSIX: [&str; 44] = [
     "which",
 ];
 
-/// The same seven, then `_READ_ONLY_COMMANDS_WINDOWS`.
-const SHELL_ALLOWLIST_WINDOWS: [&str; 13] = [
-    "cd",
-    "echo",
-    "git diff",
-    "git log",
-    "git status",
-    "tree",
-    "whoami",
-    "dir",
-    "findstr",
-    "more",
-    "type",
-    "ver",
-    "where",
-];
+/// Reference `_READ_ONLY_COMMANDS_WINDOWS`.
+pub const SHELL_READ_ONLY_WINDOWS: [&str; 6] = ["dir", "findstr", "more", "type", "ver", "where"];
 
 /// Reference `_get_default_denylist`.
 const SHELL_DENYLIST_POSIX: [&str; 14] = [
@@ -318,13 +313,25 @@ const SHELL_DENYLIST_STANDALONE_WINDOWS: [&str; 7] = [
     "notepad",
 ];
 
+/// Reference `default_read_only_commands`, the branch `posix_shell` selects.
 #[must_use]
-pub fn shell_allowlist(posix_shell: bool) -> &'static [&'static str] {
+pub fn shell_read_only_commands(posix_shell: bool) -> &'static [&'static str] {
     if posix_shell {
-        &SHELL_ALLOWLIST_POSIX
+        &SHELL_READ_ONLY_POSIX
     } else {
-        &SHELL_ALLOWLIST_WINDOWS
+        &SHELL_READ_ONLY_WINDOWS
     }
+}
+
+/// Reference `_get_default_allowlist`: the shared seven, then the read-only
+/// commands of the branch.
+#[must_use]
+pub fn shell_allowlist(posix_shell: bool) -> Vec<&'static str> {
+    SHELL_ALLOWLIST_COMMON
+        .iter()
+        .copied()
+        .chain(shell_read_only_commands(posix_shell).iter().copied())
+        .collect()
 }
 
 #[must_use]
