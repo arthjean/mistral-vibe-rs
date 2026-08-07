@@ -183,10 +183,47 @@ impl ShellFamily {
     /// command that would wait for a terminal no operator is watching fails or
     /// finishes instead of hanging the session. The POSIX family inherits the
     /// process environment untouched, as the reference `Bash` does.
-    fn environment(self) -> &'static [(&'static str, &'static str)] {
-        match self {
-            Self::Bash => &[],
-            Self::GitBash => &[
+    ///
+    /// A managed session composes a different set: reference
+    /// `TerminalSessionManager._build_env` is the only environment source on
+    /// that path and it keeps the terminal interactive rather than declaring it
+    /// absent, because a session the model feeds control keys to is one an
+    /// operator would otherwise be sitting in front of. `TERM`, `COLUMNS` and
+    /// `LINES` are read back from the process environment first, so a host that
+    /// already states them keeps its own.
+    fn environment(self, managed: bool) -> Vec<(String, String)> {
+        let inherited = |key: &str, fallback: &str| {
+            (
+                key.to_owned(),
+                std::env::var(key)
+                    .ok()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or_else(|| fallback.to_owned()),
+            )
+        };
+        let owned = |pairs: &[(&str, &str)]| {
+            pairs
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+                .collect::<Vec<_>>()
+        };
+        match (self, managed) {
+            (Self::Bash, false) => Vec::new(),
+            (Self::Bash | Self::GitBash, true) => {
+                let mut environment = vec![
+                    inherited("TERM", "xterm-256color"),
+                    inherited("COLUMNS", "120"),
+                    inherited("LINES", "40"),
+                ];
+                environment.extend(owned(&[
+                    ("GIT_PAGER", "cat"),
+                    ("PAGER", "cat"),
+                    ("LESS", "-FX"),
+                    ("DEBIAN_FRONTEND", "noninteractive"),
+                ]));
+                environment
+            }
+            (Self::GitBash, false) => owned(&[
                 ("CI", "true"),
                 ("NONINTERACTIVE", "1"),
                 ("NO_TTY", "1"),
@@ -194,14 +231,15 @@ impl ShellFamily {
                 ("GIT_PAGER", "cat"),
                 ("PAGER", "cat"),
                 ("LESS", "-FX"),
-            ],
-            Self::PowerShell => &[
+            ]),
+            (Self::PowerShell, false) => owned(&[
                 ("CI", "true"),
                 ("NONINTERACTIVE", "1"),
                 ("NO_TTY", "1"),
                 ("GIT_PAGER", "more"),
                 ("PAGER", "more"),
-            ],
+            ]),
+            (Self::PowerShell, true) => owned(&[("GIT_PAGER", "more"), ("PAGER", "more")]),
         }
     }
 }
@@ -417,12 +455,86 @@ struct SessionShell {
     family: ShellFamily,
     terminals: TerminalManager,
     managed: Mutex<BTreeMap<String, Arc<ManagedSession>>>,
+    /// The sessions a previous process left behind, by id, holding the manifest
+    /// each one wrote before its client stopped. Guarded by a blocking lock
+    /// because the family loads them while it is being constructed, which is
+    /// synchronous.
+    orphaned: StdMutex<BTreeMap<String, Value>>,
     log_root: PathBuf,
 }
 
 impl SessionShell {
     fn sessions_directory(&self) -> PathBuf {
         self.log_root.join(SESSIONS_DIRECTORY)
+    }
+
+    /// Reads the manifests this family owns and records what they describe.
+    ///
+    /// Reference `_load_orphaned_manifests` rewrites a manifest that still says
+    /// `running`, because the process that would have settled it is gone. A
+    /// manifest that cannot be read is skipped rather than failing the load, so
+    /// one corrupt file never hides the sessions beside it.
+    fn load_orphaned_manifests(&self) {
+        let directory = self.sessions_directory();
+        let Ok(entries) = std::fs::read_dir(&directory) else {
+            return;
+        };
+        let mut orphaned = BTreeMap::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(mut metadata) = std::fs::read(&path)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                .filter(Value::is_object)
+            else {
+                continue;
+            };
+            let Some(id) = metadata
+                .get("sessionId")
+                .and_then(Value::as_str)
+                .filter(|id| is_family_session_id(self.family, id))
+                .map(str::to_owned)
+            else {
+                continue;
+            };
+            if metadata.get("status").and_then(Value::as_str)
+                == Some(SessionStatus::Running.as_str())
+            {
+                metadata["status"] = Value::String(SessionStatus::Orphaned.as_str().to_owned());
+                metadata["updatedAtMs"] = Value::String(now_ms().to_string());
+                if let Ok(rendered) = serde_json::to_vec_pretty(&metadata) {
+                    let _ = std::fs::write(&path, rendered);
+                }
+            }
+            orphaned.insert(id, metadata);
+        }
+        if let Ok(mut store) = self.orphaned.lock() {
+            *store = orphaned;
+        }
+    }
+
+    /// The manifest recorded for `session_id`, if it names an orphan.
+    fn orphan(&self, session_id: &str) -> Option<Value> {
+        self.orphaned
+            .lock()
+            .ok()
+            .and_then(|store| store.get(session_id).cloned())
+    }
+
+    fn orphans(&self) -> Vec<Value> {
+        self.orphaned
+            .lock()
+            .map(|store| store.values().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    fn forget_orphan(&self, session_id: &str) {
+        if let Ok(mut store) = self.orphaned.lock() {
+            store.remove(session_id);
+        }
     }
 }
 
@@ -625,6 +737,14 @@ impl ShellTools {
         let Some(shell) = self.take_session_shell(session_id)? else {
             return Ok(());
         };
+        // Each session's manifest is settled before its terminal is torn down,
+        // so a later process reads what happened to it rather than reporting a
+        // session this one deliberately stopped as orphaned.
+        for session in shell.managed.lock().await.values() {
+            if session.is_running() {
+                session.settle(SessionStatus::Killed, session.snapshot().1);
+            }
+        }
         shell.managed.lock().await.clear();
         shell
             .terminals
@@ -646,12 +766,19 @@ impl ShellTools {
         Ok(sessions
             .entry(session_id.to_owned())
             .or_insert_with(|| {
-                Arc::new(SessionShell {
+                let shell = Arc::new(SessionShell {
                     family,
                     terminals: TerminalManager::default(),
                     managed: Mutex::new(BTreeMap::new()),
+                    orphaned: StdMutex::new(BTreeMap::new()),
                     log_root: self.vibe_home.join(LOG_DIRECTORY),
-                })
+                });
+                // Reference `TerminalSessionManager.__init__` reads the
+                // manifests as the family is built, so the first `sessions`
+                // call of a fresh process already lists what the previous one
+                // left running.
+                shell.load_orphaned_manifests();
+                shell
             })
             .clone())
     }
@@ -1498,6 +1625,7 @@ async fn run_legacy_command(
             &command,
             None,
             settings.max_output_bytes,
+            false,
         ))
         .await
         .map_err(process_error)?;
@@ -1588,6 +1716,7 @@ fn process_spec(
     command: &str,
     environment: Option<&Value>,
     max_output_bytes: usize,
+    managed: bool,
 ) -> ProcessSpec {
     let mut spec = ProcessSpec::new(&config.executable, working_directory);
     spec.arguments = config
@@ -1599,11 +1728,14 @@ fn process_spec(
     // Both streams share one budget in the reader, so the spec carries what the
     // two rendered streams may need together.
     spec.max_output_bytes = max_output_bytes.saturating_mul(2);
+    // A managed session outlives its call and is fed control keys, which only a
+    // terminal turns into signals, so it asks for one; the legacy variant runs
+    // one command to completion and needs none.
+    spec.terminal = managed;
     // The family's own variables go in first: the reference merges the call's
     // overrides over them, so a call may still ask for a pager it will read.
-    for (key, value) in family.environment() {
-        spec.environment
-            .insert((*key).to_owned(), (*value).to_owned());
+    for (key, value) in family.environment(managed) {
+        spec.environment.insert(key, value);
     }
     if let Some(Value::Object(overrides)) = environment {
         for (key, value) in overrides {
@@ -1719,6 +1851,10 @@ enum SessionStatus {
     Completed,
     Killed,
     TimedOut,
+    /// Reference `orphaned`: a session a previous process left behind, whose
+    /// manifest and log survive it while the terminal that produced them does
+    /// not.
+    Orphaned,
 }
 
 impl SessionStatus {
@@ -1728,6 +1864,7 @@ impl SessionStatus {
             Self::Completed => "completed",
             Self::Killed => "killed",
             Self::TimedOut => "timed_out",
+            Self::Orphaned => "orphaned",
         }
     }
 }
@@ -1737,6 +1874,7 @@ struct SessionState {
     status: SessionStatus,
     exit_code: Option<i32>,
     backpressure_dropped: bool,
+    updated_at_ms: u128,
 }
 
 struct ManagedSession {
@@ -1746,7 +1884,14 @@ struct ManagedSession {
     working_directory: String,
     shell: String,
     log_path: PathBuf,
+    manifest_path: PathBuf,
     created_at_ms: u128,
+    /// Reference `SessionInfo.pty_backend`, absent when the host provided no
+    /// terminal and the session fell back to pipes.
+    pty_backend: Option<&'static str>,
+    /// Reference `SessionInfo.reader_error`, which this port also uses to name
+    /// the reason a terminal could not be opened.
+    reader_error: Option<String>,
     state: StdMutex<SessionState>,
 }
 
@@ -1761,16 +1906,23 @@ impl ManagedSession {
 
     fn info(&self) -> Value {
         let (status, exit_code, dropped) = self.snapshot();
+        let updated_at_ms = self
+            .state
+            .lock()
+            .map_or(self.created_at_ms, |state| state.updated_at_ms);
         json!({
             "sessionId": self.id,
             "command": self.command,
             "cwd": self.working_directory,
             "shell": self.shell,
+            "ptyBackend": self.pty_backend,
             "status": status.as_str(),
             "exitCode": exit_code,
             "outputPath": self.log_path.to_string_lossy(),
             "createdAtMs": self.created_at_ms.to_string(),
+            "updatedAtMs": updated_at_ms.to_string(),
             "backpressureDropped": dropped,
+            "readerError": self.reader_error,
         })
     }
 
@@ -1782,8 +1934,30 @@ impl ManagedSession {
         if let Ok(mut state) = self.state.lock() {
             state.status = status;
             state.exit_code = exit_code;
+            state.updated_at_ms = now_ms();
         }
+        self.save_manifest();
     }
+
+    /// Records what a later process needs to report this session as orphaned.
+    ///
+    /// Reference `_save_manifest` writes it beside the log at every state
+    /// change, so a client that dies between two of them still leaves a
+    /// manifest describing the session as it last was.
+    fn save_manifest(&self) {
+        let Ok(rendered) = serde_json::to_vec_pretty(&self.info()) else {
+            return;
+        };
+        let _ = std::fs::write(&self.manifest_path, rendered);
+    }
+}
+
+/// The wall-clock milliseconds a session records its transitions at.
+fn now_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|since| since.as_millis())
+        .unwrap_or_default()
 }
 
 async fn run_managed_command(
@@ -1892,6 +2066,7 @@ async fn start_managed_session(
     })?;
     let id = new_session_id(shell.family);
     let log_path = sessions_directory.join(format!("{id}.log"));
+    let manifest_path = sessions_directory.join(format!("{id}.json"));
     std::fs::write(&log_path, b"").map_err(|error| {
         ToolError::Execution(format!(
             "the session log `{}` cannot be created: {error}",
@@ -1907,9 +2082,16 @@ async fn start_managed_session(
             command,
             environment,
             max_output_bytes,
+            true,
         ))
         .await
         .map_err(process_error)?;
+    let backend = shell
+        .terminals
+        .backend(&terminal_id)
+        .await
+        .unwrap_or_default();
+    let created_at_ms = now_ms();
     let session = Arc::new(ManagedSession {
         id,
         terminal_id,
@@ -1917,16 +2099,21 @@ async fn start_managed_session(
         working_directory: working_directory.to_string_lossy().into_owned(),
         shell: config.executable.to_string_lossy().into_owned(),
         log_path,
-        created_at_ms: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|since| since.as_millis())
-            .unwrap_or_default(),
+        manifest_path,
+        created_at_ms,
+        pty_backend: backend.pty,
+        reader_error: backend.degraded,
         state: StdMutex::new(SessionState {
             status: SessionStatus::Running,
             exit_code: None,
             backpressure_dropped: false,
+            updated_at_ms: created_at_ms,
         }),
     });
+    session.save_manifest();
+    // A session id that was orphaned by a previous process and is now live
+    // again answers from the live entry rather than from the manifest.
+    shell.forget_orphan(&session.id);
     shell
         .managed
         .lock()
@@ -2086,15 +2273,36 @@ fn guarded_session(
     ))
 }
 
-async fn managed_session(
+/// The session `session_id` names, live or left behind.
+///
+/// Reference `_live_session` separates the two: a live session is driven, an
+/// orphaned one is only described, and an id that is neither is unknown. The
+/// three answers are distinct here for the same reason, so a tool that needs a
+/// process says so rather than reporting the id as missing.
+enum SessionHandle {
+    Live(Arc<ManagedSession>),
+    Orphaned(Value),
+}
+
+async fn session_handle(
     shell: &SessionShell,
     session_id: &str,
-) -> Result<Arc<ManagedSession>, ToolError> {
+) -> Result<SessionHandle, ToolError> {
     let sessions = shell.managed.lock().await;
     if let Some(session) = sessions.get(session_id) {
-        return Ok(session.clone());
+        return Ok(SessionHandle::Live(session.clone()));
     }
-    let active = sessions.keys().cloned().collect::<Vec<_>>();
+    drop(sessions);
+    if let Some(manifest) = shell.orphan(session_id) {
+        return Ok(SessionHandle::Orphaned(manifest));
+    }
+    let active = shell
+        .managed
+        .lock()
+        .await
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
     let listed = if active.is_empty() {
         "none".to_owned()
     } else {
@@ -2105,13 +2313,27 @@ async fn managed_session(
     )))
 }
 
+async fn managed_session(
+    shell: &SessionShell,
+    session_id: &str,
+) -> Result<Arc<ManagedSession>, ToolError> {
+    match session_handle(shell, session_id).await? {
+        SessionHandle::Live(session) => Ok(session),
+        SessionHandle::Orphaned(_) => Err(ToolError::Execution(format!(
+            "session `{session_id}` was left running by a previous process and has no live \
+             terminal; read its log instead"
+        ))),
+    }
+}
+
 /// Reads one session's log from `cursor` and reports where the next read starts.
 fn managed_output(
     session: &ManagedSession,
     cursor: u64,
     limit: usize,
 ) -> Result<ToolExecutionOutput, ToolError> {
-    let (output, next_cursor, truncated) = read_file_window(&session.log_path, cursor, limit)?;
+    let (output, next_cursor, truncated) =
+        read_file_window(&session.log_path, cursor, limit, session.is_running())?;
     let (status, exit_code, dropped) = session.snapshot();
     let mut model_text = output.clone();
     if truncated {
@@ -2139,10 +2361,17 @@ fn managed_output(
 }
 
 /// Reads at most `limit` bytes of `path` starting at `cursor`.
+///
+/// A window bounded by bytes can end mid-character. Reference `_read_file_chunk`
+/// drops the dangling lead so the next read picks it up whole, whenever more
+/// bytes are coming: either because the file is longer than the window, or
+/// because the session is still writing to it. Without that, a poll of a live
+/// log emits a replacement character the next poll cannot take back.
 fn read_file_window(
     path: &Path,
     cursor: u64,
     limit: usize,
+    running: bool,
 ) -> Result<(String, u64, bool), ToolError> {
     let mut file = std::fs::File::open(path).map_err(|error| {
         ToolError::Execution(format!("`{}` cannot be read: {error}", path.display()))
@@ -2162,8 +2391,66 @@ fn read_file_window(
         ToolError::Execution(format!("`{}` cannot be read: {error}", path.display()))
     })?;
     buffer.truncate(read);
-    let next_cursor = cursor.saturating_add(read as u64);
+    if running || size > cursor.saturating_add(read as u64) {
+        trim_incomplete_utf8_suffix(&mut buffer);
+    }
+    let next_cursor = cursor.saturating_add(buffer.len() as u64);
     Ok((decode_output(&buffer), next_cursor, size > next_cursor))
+}
+
+/// How many bytes the UTF-8 sequence led by `lead` occupies, if it leads one.
+fn utf8_sequence_length(lead: u8) -> Option<usize> {
+    match lead {
+        0x00..=0x7f => Some(1),
+        0xc0..=0xdf => Some(2),
+        0xe0..=0xef => Some(3),
+        0xf0..=0xf7 => Some(4),
+        _ => None,
+    }
+}
+
+/// Drops a trailing sequence the window cut short, reference
+/// `_trim_incomplete_utf8_suffix`.
+fn trim_incomplete_utf8_suffix(buffer: &mut Vec<u8>) {
+    for back in 1..=buffer.len().min(4) {
+        let byte = buffer[buffer.len() - back];
+        if (0x80..0xc0).contains(&byte) {
+            continue;
+        }
+        if utf8_sequence_length(byte).is_some_and(|expected| back < expected) {
+            buffer.truncate(buffer.len() - back);
+        }
+        return;
+    }
+}
+
+/// Moves `cursor` forward off the continuation bytes of a character that starts
+/// before it, reference `_skip_utf8_continuation_prefix`.
+///
+/// A tail window is positioned by subtracting a byte budget from the file size,
+/// so unlike a cursor the model supplies it can land inside a character. Reading
+/// from there would decode the tail of one character as a replacement.
+fn skip_utf8_continuation_prefix(path: &Path, cursor: u64) -> u64 {
+    if cursor == 0 {
+        return cursor;
+    }
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return cursor;
+    };
+    if file.seek(SeekFrom::Start(cursor)).is_err() {
+        return cursor;
+    }
+    let mut prefix = [0_u8; 3];
+    let Ok(read) = file.read(&mut prefix) else {
+        return cursor;
+    };
+    for (index, byte) in prefix[..read].iter().enumerate() {
+        if (0x80..0xc0).contains(byte) {
+            continue;
+        }
+        return cursor.saturating_add(index as u64);
+    }
+    cursor.saturating_add(read as u64)
 }
 
 async fn kill_managed_session(
@@ -2199,22 +2486,72 @@ async fn run_output(
     let session_id = string_argument(&arguments, "session_id")
         .unwrap_or_default()
         .to_owned();
-    let session = managed_session(&shell, &session_id).await?;
     let cursor = arguments["cursor"].as_u64().unwrap_or(0);
+    let limit = byte_limit(&arguments, &output, limits.max_inline_bytes);
+    // Reference `read_output` answers an orphan from its manifest and its log,
+    // which is what makes a build a previous process left running readable
+    // rather than lost.
+    let session = match session_handle(&shell, &session_id).await? {
+        SessionHandle::Live(session) => session,
+        SessionHandle::Orphaned(manifest) => return orphan_output(&manifest, cursor, limit),
+    };
     let wait = arguments["wait_seconds"]
         .as_f64()
         .unwrap_or(0.0)
         .clamp(0.0, limits.max_poll_seconds);
     let deadline = Instant::now() + Duration::from_secs_f64(wait);
-    while Instant::now() < deadline && session.is_running() && log_size(&session.log_path) <= cursor
+    // Reference `read_output` waits for the session to exit, for a full window
+    // to accumulate, or for the deadline. Returning on the first byte instead
+    // would answer a poll of an interactive session with the echo of what was
+    // just written to it rather than with what the program then said.
+    while Instant::now() < deadline
+        && session.is_running()
+        && log_size(&session.log_path).saturating_sub(cursor) < limit as u64
     {
         tokio::time::sleep(PUMP_INTERVAL).await;
     }
-    managed_output(
-        &session,
-        cursor,
-        byte_limit(&arguments, &output, limits.max_inline_bytes),
-    )
+    managed_output(&session, cursor, limit)
+}
+
+/// What an orphaned session answers with: its manifest and whatever its log
+/// still holds.
+fn orphan_output(
+    manifest: &Value,
+    cursor: u64,
+    limit: usize,
+) -> Result<ToolExecutionOutput, ToolError> {
+    let log_path = PathBuf::from(
+        manifest
+            .get("outputPath")
+            .and_then(Value::as_str)
+            .unwrap_or_default(),
+    );
+    let (output, next_cursor, truncated) = read_file_window(&log_path, cursor, limit, false)?;
+    let command = manifest
+        .get("command")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let mut model_text = output.clone();
+    if truncated {
+        model_text.push_str(&format!("\n[output truncated at {limit} bytes]"));
+    }
+    Ok(ToolExecutionOutput {
+        model_text,
+        display: json!({"kind": "shell", "command": command}),
+        typed_result: json!({
+            "sessionId": manifest.get("sessionId").cloned().unwrap_or(Value::Null),
+            "command": command,
+            "status": SessionStatus::Orphaned.as_str(),
+            "exitCode": manifest.get("exitCode").cloned().unwrap_or(Value::Null),
+            "output": output,
+            "nextCursor": next_cursor,
+            "truncated": truncated,
+            "outputPath": log_path.to_string_lossy(),
+            "backpressureDropped": false,
+        }),
+        chunks: Vec::new(),
+    })
 }
 
 fn log_size(path: &Path) -> u64 {
@@ -2315,10 +2652,23 @@ async fn run_sessions(
     match action {
         "list" => {
             let sessions = shell.managed.lock().await;
-            let infos = sessions
+            let mut infos = sessions
                 .values()
                 .map(|session| session.info())
                 .collect::<Vec<_>>();
+            // Reference `list_sessions` appends the orphans a live session does
+            // not shadow, so a client that restarted still sees what it left.
+            infos.extend(shell.orphans().into_iter().filter(|manifest| {
+                manifest
+                    .get("sessionId")
+                    .and_then(Value::as_str)
+                    .is_none_or(|id| !sessions.contains_key(id))
+            }));
+            infos.sort_by(|left, right| {
+                created_at(left)
+                    .cmp(&created_at(right))
+                    .then_with(|| session_id_of(left).cmp(&session_id_of(right)))
+            });
             Ok(ToolExecutionOutput {
                 model_text: format!("{} {} sessions", infos.len(), shell.family.name()),
                 display: json!({
@@ -2330,16 +2680,49 @@ async fn run_sessions(
             })
         }
         "inspect" => {
-            let session = required_session(&shell, &arguments, "inspect").await?;
-            let mut rendered = managed_output(&session, 0, limit)?;
-            rendered.typed_result = json!({
-                "action": "inspect",
-                "session": session.info(),
-                "output": rendered.typed_result["output"],
-                "nextCursor": rendered.typed_result["nextCursor"],
-                "truncated": rendered.typed_result["truncated"],
-            });
-            Ok(rendered)
+            // Reference `inspect_session` positions the window at the end of
+            // the log rather than at its start: an inspection reports what a
+            // session is doing now, not how it began.
+            let (info, log_path, running) =
+                match required_handle(&shell, &arguments, "inspect").await? {
+                    SessionHandle::Live(session) => (
+                        session.info(),
+                        session.log_path.clone(),
+                        session.is_running(),
+                    ),
+                    SessionHandle::Orphaned(manifest) => {
+                        let log_path = PathBuf::from(
+                            manifest
+                                .get("outputPath")
+                                .and_then(Value::as_str)
+                                .unwrap_or_default(),
+                        );
+                        (manifest, log_path, false)
+                    }
+                };
+            let cursor = skip_utf8_continuation_prefix(
+                &log_path,
+                log_size(&log_path).saturating_sub(limit as u64),
+            );
+            let (output, next_cursor, truncated) =
+                read_file_window(&log_path, cursor, limit, running)?;
+            let command = info
+                .get("command")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned();
+            Ok(ToolExecutionOutput {
+                model_text: output.clone(),
+                display: json!({"kind": "shell", "command": command}),
+                typed_result: json!({
+                    "action": "inspect",
+                    "session": info,
+                    "output": output,
+                    "nextCursor": next_cursor,
+                    "truncated": truncated,
+                }),
+                chunks: Vec::new(),
+            })
         }
         "kill" => {
             // A session is owned by the Vibe session, not by the turn that
@@ -2372,8 +2755,22 @@ async fn run_sessions(
             }
             shell.managed.lock().await.clear();
             if arguments["clear_logs"].as_bool().unwrap_or(false) {
+                // Reference `reset` clears the orphans with the logs, because
+                // the manifests it would read them back from are what it just
+                // deleted.
                 for session in &sessions {
                     let _ = std::fs::remove_file(&session.log_path);
+                    let _ = std::fs::remove_file(&session.manifest_path);
+                }
+                for manifest in shell.orphans() {
+                    if let Some(id) = manifest.get("sessionId").and_then(Value::as_str) {
+                        let directory = shell.sessions_directory();
+                        let _ = std::fs::remove_file(directory.join(format!("{id}.log")));
+                        let _ = std::fs::remove_file(directory.join(format!("{id}.json")));
+                    }
+                }
+                if let Ok(mut orphaned) = shell.orphaned.lock() {
+                    orphaned.clear();
                 }
             }
             Ok(ToolExecutionOutput {
@@ -2398,13 +2795,38 @@ async fn required_session(
     arguments: &Value,
     action: &str,
 ) -> Result<Arc<ManagedSession>, ToolError> {
-    let Some(session_id) = string_argument(arguments, "session_id") else {
-        return Err(ToolError::SchemaViolation {
-            path: "/session_id".to_owned(),
-            message: format!("is required by the `{action}` action"),
-        });
-    };
-    managed_session(shell, session_id).await
+    managed_session(shell, required_session_id(arguments, action)?).await
+}
+
+async fn required_handle(
+    shell: &SessionShell,
+    arguments: &Value,
+    action: &str,
+) -> Result<SessionHandle, ToolError> {
+    session_handle(shell, required_session_id(arguments, action)?).await
+}
+
+fn required_session_id<'a>(arguments: &'a Value, action: &str) -> Result<&'a str, ToolError> {
+    string_argument(arguments, "session_id").ok_or_else(|| ToolError::SchemaViolation {
+        path: "/session_id".to_owned(),
+        message: format!("is required by the `{action}` action"),
+    })
+}
+
+/// When a listed session was created, which is the order the reference lists
+/// them in. A manifest that lost the field sorts first rather than failing.
+fn created_at(info: &Value) -> u128 {
+    info.get("createdAtMs")
+        .and_then(Value::as_str)
+        .and_then(|stamp| stamp.parse().ok())
+        .unwrap_or_default()
+}
+
+fn session_id_of(info: &Value) -> String {
+    info.get("sessionId")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
 }
 
 async fn run_log_file(
@@ -2419,7 +2841,11 @@ async fn run_log_file(
         "read" => {
             let offset = arguments["offset"].as_u64().unwrap_or(0);
             let limit = byte_limit(&arguments, &output, limits.max_inline_bytes);
-            let (content, next_cursor, truncated) = read_file_window(&path, offset, limit)?;
+            // Reference `read_log_file` trims a cut character only while the
+            // session behind the path is still writing to it.
+            let running = is_running_log(&shell, &path).await;
+            let (content, next_cursor, truncated) =
+                read_file_window(&path, offset, limit, running)?;
             Ok(ToolExecutionOutput {
                 model_text: content.clone(),
                 display: json!({
@@ -2536,6 +2962,16 @@ fn is_family_session_id(family: ShellFamily, candidate: &str) -> bool {
     matches!(components.next(), Some(Component::Normal(_)))
         && components.next().is_none()
         && candidate.starts_with(&format!("{}_", family.name()))
+}
+
+/// Whether `path` is the log of a session still writing to it.
+async fn is_running_log(shell: &SessionShell, path: &Path) -> bool {
+    shell
+        .managed
+        .lock()
+        .await
+        .values()
+        .any(|session| session.log_path == path && session.is_running())
 }
 
 async fn refuse_live_session_log(shell: &SessionShell, path: &Path) -> Result<(), ToolError> {

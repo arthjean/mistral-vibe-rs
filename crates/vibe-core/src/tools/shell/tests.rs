@@ -688,12 +688,15 @@ async fn background_session(harness: &Harness, command: &str) -> String {
 #[tokio::test]
 async fn a_cursor_read_returns_only_the_bytes_that_followed_it() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
-    let session = background_session(&harness, "echo first; sleep 1; echo second").await;
+    let session = background_session(&harness, "echo first; sleep 5; echo second").await;
 
+    // A poll returns early only once a full window has accumulated, which is
+    // reference `read_output`, so the first one asks for the window the first
+    // line fills: `first` plus the terminal's line ending.
     let first = harness
         .call(
             "bash_output",
-            json!({"session_id": session, "wait_seconds": 5}),
+            json!({"session_id": session, "wait_seconds": 5, "max_bytes": 7}),
         )
         .await
         .expect("the first poll answers");
@@ -1562,9 +1565,14 @@ async fn a_git_bash_session_runs_and_answers_under_its_own_prefix() {
     assert!(refused.to_string().contains("git_bash"), "{refused}");
 }
 
-/// The family's environment reaches the process: reference
-/// `_get_git_bash_env_overrides` pins the switches that keep a command from
-/// waiting on a terminal no operator is watching.
+/// The family's environment reaches the process.
+///
+/// A Windows family is published only under the managed rollout, so the
+/// environment its commands observe is the one reference
+/// `TerminalSessionManager._build_env` composes rather than the legacy
+/// `_get_git_bash_env_overrides` set: a managed session can be fed control
+/// keys, so the reference keeps its terminal interactive instead of declaring
+/// it absent.
 #[tokio::test]
 async fn a_windows_family_forces_its_reference_environment() {
     let harness = harness_on(
@@ -1574,11 +1582,14 @@ async fn a_windows_family_forces_its_reference_environment() {
     )
     .await;
     let output = harness
-        .call("git_bash", json!({"command": "echo \"$CI $PAGER $TERM\""}))
+        .call(
+            "git_bash",
+            json!({"command": "echo \"[${CI:-unset} $PAGER $LESS $DEBIAN_FRONTEND]\""}),
+        )
         .await
         .expect("the command runs");
     assert!(
-        output.model_text.contains("true cat dumb"),
+        output.model_text.contains("[unset cat -FX noninteractive]"),
         "{}",
         output.model_text
     );
@@ -1897,4 +1908,455 @@ async fn a_client_hosting_no_terminal_runs_the_command_on_this_host() {
         "an undeclared terminal still reached the client: {:?}",
         client.methods()
     );
+}
+
+// --------------------------------------------------------------------------
+// The terminal behind a managed session
+// --------------------------------------------------------------------------
+
+/// A managed session runs under a real terminal, so a program that probes for
+/// one behaves the way it behaves under one.
+///
+/// Reference `PosixManagedShellBackend.start_terminal` opens a PTY and gives
+/// the child a controlling terminal, which is what `[ -t 1 ]` answers to.
+#[tokio::test]
+async fn a_managed_session_runs_under_a_terminal() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let output = harness
+        .call(
+            "bash",
+            json!({"command": "if [ -t 0 ] && [ -t 1 ]; then echo interactive; else echo piped; fi"}),
+        )
+        .await
+        .expect("the command runs");
+    assert!(output.model_text.contains("interactive"), "{output:?}");
+    assert_eq!(output.typed_result["status"], "completed", "{output:?}");
+}
+
+/// The session reports which backend it got, which is reference
+/// `SessionInfo.pty_backend`.
+#[tokio::test]
+async fn a_managed_session_reports_its_terminal_backend() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "sleep 5").await;
+    let listed = harness
+        .call("bash_sessions", json!({"action": "list"}))
+        .await
+        .expect("the sessions list answers");
+    let entry = listed.typed_result["sessions"]
+        .as_array()
+        .expect("sessions")
+        .iter()
+        .find(|entry| entry["sessionId"] == session.as_str())
+        .cloned()
+        .expect("the session is listed");
+    assert_eq!(entry["ptyBackend"], json!("posix"), "{entry}");
+    assert_eq!(entry["readerError"], Value::Null, "{entry}");
+}
+
+/// A control key reaches the foreground program, which is the whole point of a
+/// terminal: the same byte written to a pipe would be data rather than a signal.
+#[tokio::test]
+async fn a_control_key_interrupts_the_foreground_program() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "trap 'echo caught; exit 7' INT; sleep 30").await;
+    // The trap must be installed before the signal, otherwise the shell's own
+    // default disposition answers it and the case proves nothing.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    harness
+        .call(
+            "bash_stdin",
+            json!({"session_id": session, "control": ["ctrl_c"]}),
+        )
+        .await
+        .expect("the control key is written");
+    let polled = harness
+        .call(
+            "bash_output",
+            json!({"session_id": session, "wait_seconds": 10}),
+        )
+        .await
+        .expect("the poll answers");
+    assert!(
+        polled.typed_result["output"]
+            .as_str()
+            .expect("output")
+            .contains("caught"),
+        "{polled:?}"
+    );
+    assert_eq!(polled.typed_result["status"], "completed", "{polled:?}");
+    assert_eq!(polled.typed_result["exitCode"], json!(7), "{polled:?}");
+}
+
+/// A hard timeout terminates the whole process group, so a grandchild that
+/// outlives its parent does not outlive the session.
+#[tokio::test]
+async fn a_hard_timeout_terminates_the_whole_process_group() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let marker = harness.root().join("grandchild.marker");
+    let command = format!("( sleep 3; touch {} ) & sleep 30", marker.to_string_lossy());
+    let failure = harness
+        .call(
+            "bash",
+            json!({"command": command, "timeout": 1, "hard_timeout": true}),
+        )
+        .await
+        .expect_err("the command times out");
+    assert!(failure.to_string().contains("timed out"), "{failure}");
+
+    tokio::time::sleep(Duration::from_secs(4)).await;
+    assert!(
+        !marker.exists(),
+        "a grandchild survived the terminated process group"
+    );
+}
+
+/// Output stays bounded by the session's budget and the excess is reported as
+/// dropped rather than buffered without limit.
+#[tokio::test]
+async fn a_chatty_session_reports_its_dropped_output() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(
+        &harness,
+        "for i in $(seq 1 4000); do echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; done",
+    )
+    .await;
+    for _ in 0..200 {
+        let polled = harness
+            .call(
+                "bash_output",
+                json!({"session_id": session, "wait_seconds": 1}),
+            )
+            .await
+            .expect("the poll answers");
+        if polled.typed_result["status"] != "running" {
+            let size = log_size(
+                &harness
+                    .shell()
+                    .sessions_directory()
+                    .join(format!("{session}.log")),
+            );
+            assert!(
+                size <= 2 * 30_000,
+                "the log outgrew the session output budget: {size}"
+            );
+            return;
+        }
+    }
+    unreachable!("the session never settled");
+}
+
+/// The writing half is released once: a second close is a no-op rather than an
+/// error, so a session torn down twice does not report a failure.
+#[tokio::test]
+async fn closing_a_session_terminal_twice_is_a_no_op() {
+    let manager = TerminalManager::default();
+    let mut spec = ProcessSpec::new("/bin/sh", std::env::temp_dir());
+    spec.arguments = vec!["-c".to_owned(), "sleep 5".to_owned()];
+    spec.terminal = true;
+    let terminal = manager.run(spec).await.expect("the terminal starts");
+    assert_eq!(
+        manager.backend(&terminal).await.expect("backend").pty,
+        Some("posix")
+    );
+    manager
+        .close_stdin(&terminal)
+        .await
+        .expect("the first close releases the writer");
+    manager
+        .close_stdin(&terminal)
+        .await
+        .expect("the second close is a no-op");
+    manager.interrupt(&terminal).await.expect("interrupt");
+    manager.release(&terminal).await.expect("release");
+}
+
+/// A host that cannot open a terminal falls back to the pipe backend rather
+/// than failing the session, which is what keeps a headless container usable.
+///
+/// The two halves are proven at the seam: the terminal backend names why it
+/// could not start a child, and a request for one that cannot be honored still
+/// reaches the pipe backend, whose own error is the one that surfaces.
+#[tokio::test]
+async fn a_terminal_that_cannot_start_falls_back_to_pipes() {
+    let environment = BTreeMap::new();
+    let reason = crate::pty::spawn(crate::pty::PtySpec {
+        program: Path::new("vibe-no-such-program"),
+        arguments: &[],
+        working_directory: &std::env::temp_dir(),
+        environment: &environment,
+    })
+    .err()
+    .expect("an unstartable program yields a reason");
+    assert!(reason.contains("terminal"), "{reason}");
+
+    let manager = TerminalManager::default();
+    let mut spec = ProcessSpec::new("vibe-no-such-program", std::env::temp_dir());
+    spec.terminal = true;
+    let failure = manager
+        .run(spec)
+        .await
+        .expect_err("neither backend can start the program");
+    assert!(
+        matches!(failure, ProcessError::Spawn { .. }),
+        "the pipe fallback never ran: {failure}"
+    );
+
+    // A terminal nobody asked for is reported as absent rather than as failed.
+    let mut piped = ProcessSpec::new("/bin/sh", std::env::temp_dir());
+    piped.arguments = vec!["-c".to_owned(), "echo piped".to_owned()];
+    let terminal = manager.run(piped).await.expect("the pipe backend starts");
+    let backend = manager.backend(&terminal).await.expect("backend");
+    assert_eq!(backend.pty, None);
+    assert_eq!(backend.degraded, None);
+    let _ = manager.wait(&terminal).await;
+    let _ = manager.release(&terminal).await;
+}
+
+// --------------------------------------------------------------------------
+// Session manifests and the orphans they leave
+// --------------------------------------------------------------------------
+
+/// A second publication of the same family over the same Vibe home, which is
+/// what a client restart looks like from the session directory's side.
+async fn reopened(harness: &Harness) -> ToolRegistry {
+    let registry = ToolRegistry::default();
+    let (approval, _requests) = ScriptedApproval::new(ApprovalDecision::ApproveOnce);
+    harness
+        .tools
+        .register(
+            "session-restarted",
+            harness.root(),
+            &registry,
+            None,
+            &ToolGuard::new(harness.policy.clone(), approval as Arc<dyn ApprovalAgent>),
+        )
+        .expect("the shell family registers again");
+    registry
+}
+
+async fn invoke(
+    registry: &ToolRegistry,
+    tool: &str,
+    arguments: Value,
+) -> Result<ToolExecutionOutput, ToolError> {
+    registry
+        .invoke(
+            tool,
+            ToolInvocation {
+                call_id: format!("{tool}-restarted"),
+                arguments,
+            },
+        )
+        .await
+}
+
+/// Every started session writes a manifest beside its log, recording what a
+/// later process needs to describe it.
+#[tokio::test]
+async fn a_started_session_writes_its_manifest() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "sleep 5").await;
+    let manifest_path = harness
+        .shell()
+        .sessions_directory()
+        .join(format!("{session}.json"));
+    let manifest: Value = serde_json::from_slice(
+        &std::fs::read(&manifest_path).expect("the manifest is written next to the log"),
+    )
+    .expect("the manifest is JSON");
+    assert_eq!(manifest["sessionId"], session.as_str());
+    assert_eq!(manifest["command"], "sleep 5");
+    assert_eq!(manifest["cwd"], harness.root().to_string_lossy().as_ref());
+    assert!(
+        manifest["shell"].as_str().expect("shell").contains("sh"),
+        "{manifest}"
+    );
+    assert_eq!(manifest["status"], "running");
+    assert!(
+        manifest["createdAtMs"]
+            .as_str()
+            .and_then(|stamp| stamp.parse::<u128>().ok())
+            .is_some_and(|stamp| stamp > 0),
+        "{manifest}"
+    );
+    assert_eq!(
+        manifest["outputPath"],
+        harness
+            .shell()
+            .sessions_directory()
+            .join(format!("{session}.log"))
+            .to_string_lossy()
+            .as_ref()
+    );
+}
+
+/// A session left running by a previous process is listed as orphaned, and its
+/// log is still readable.
+#[tokio::test]
+async fn a_session_left_by_a_previous_process_is_listed_as_orphaned() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "sleep 30").await;
+    std::fs::write(
+        harness
+            .shell()
+            .sessions_directory()
+            .join(format!("{session}.log")),
+        b"building\n",
+    )
+    .expect("the previous process left a log");
+
+    let restarted = reopened(&harness).await;
+    let listed = invoke(&restarted, "bash_sessions", json!({"action": "list"}))
+        .await
+        .expect("the sessions list answers");
+    let entry = listed.typed_result["sessions"]
+        .as_array()
+        .expect("sessions")
+        .iter()
+        .find(|entry| entry["sessionId"] == session.as_str())
+        .cloned()
+        .expect("the orphan is listed");
+    assert_eq!(entry["status"], "orphaned", "{entry}");
+
+    let read = invoke(
+        &restarted,
+        "bash_output",
+        json!({"session_id": session, "wait_seconds": 0}),
+    )
+    .await
+    .expect("an orphan answers from its manifest");
+    assert_eq!(read.typed_result["status"], "orphaned", "{read:?}");
+    assert!(
+        read.typed_result["output"]
+            .as_str()
+            .expect("output")
+            .contains("building"),
+        "{read:?}"
+    );
+
+    let inspected = invoke(
+        &restarted,
+        "bash_sessions",
+        json!({"action": "inspect", "session_id": session}),
+    )
+    .await
+    .expect("an orphan is inspectable");
+    assert_eq!(
+        inspected.typed_result["session"]["status"], "orphaned",
+        "{inspected:?}"
+    );
+
+    // Reference `kill` resolves a live session first, so an orphan is refused
+    // by name rather than reported as unknown.
+    let refused = invoke(
+        &restarted,
+        "bash_sessions",
+        json!({"action": "kill", "session_id": session}),
+    )
+    .await
+    .expect_err("an orphan has no live terminal to kill");
+    assert!(
+        refused.to_string().contains("previous process"),
+        "{refused}"
+    );
+    assert!(refused.to_string().contains(&session), "{refused}");
+}
+
+/// A manifest that cannot be read is skipped, and the sessions beside it still
+/// load.
+#[tokio::test]
+async fn a_corrupt_manifest_is_skipped_without_dropping_the_others() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "sleep 30").await;
+    let directory = harness.shell().sessions_directory();
+    std::fs::write(directory.join("bash_0_ff.json"), b"{ not json").expect("a corrupt manifest");
+    std::fs::write(
+        directory.join("powershell_0_ff.json"),
+        b"{\"sessionId\": \"powershell_0_ff\", \"status\": \"running\"}",
+    )
+    .expect("another family's manifest");
+
+    let restarted = reopened(&harness).await;
+    let listed = invoke(&restarted, "bash_sessions", json!({"action": "list"}))
+        .await
+        .expect("the sessions list answers");
+    let ids = listed.typed_result["sessions"]
+        .as_array()
+        .expect("sessions")
+        .iter()
+        .map(|entry| entry["sessionId"].as_str().unwrap_or_default().to_owned())
+        .collect::<Vec<_>>();
+    assert!(ids.contains(&session), "{ids:?}");
+    assert!(!ids.iter().any(|id| id == "bash_0_ff"), "{ids:?}");
+    assert!(
+        !ids.iter().any(|id| id.starts_with("powershell_")),
+        "another family's session leaked into this one: {ids:?}"
+    );
+}
+
+/// A reset clears the logs and the manifests together only when it is asked to;
+/// without the flag both survive.
+#[tokio::test]
+async fn a_reset_clears_the_logs_and_manifests_only_when_asked() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let kept = background_session(&harness, "sleep 30").await;
+    let directory = harness.shell().sessions_directory();
+
+    harness
+        .call("bash_sessions", json!({"action": "reset"}))
+        .await
+        .expect("the reset answers");
+    assert!(directory.join(format!("{kept}.log")).exists());
+    assert!(directory.join(format!("{kept}.json")).exists());
+
+    let cleared = background_session(&harness, "sleep 30").await;
+    harness
+        .call(
+            "bash_sessions",
+            json!({"action": "reset", "clear_logs": true}),
+        )
+        .await
+        .expect("the clearing reset answers");
+    assert!(!directory.join(format!("{cleared}.log")).exists());
+    assert!(!directory.join(format!("{cleared}.json")).exists());
+}
+
+/// A window that lands inside a character is adjusted rather than decoded into
+/// a replacement, in both directions: a cursor read drops the cut lead, and the
+/// tail window an inspection positions skips the continuation bytes ahead of it.
+#[tokio::test]
+async fn a_multibyte_boundary_is_adjusted_in_both_directions() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "sleep 30").await;
+    let log_path = harness
+        .shell()
+        .sessions_directory()
+        .join(format!("{session}.log"));
+    // Four three-byte characters: every window boundary that is not a multiple
+    // of three falls inside one.
+    std::fs::write(&log_path, "日本語版".as_bytes()).expect("the log is written");
+
+    let leading = harness
+        .call(
+            "bash_output",
+            json!({"session_id": session, "wait_seconds": 0, "max_bytes": 4}),
+        )
+        .await
+        .expect("the poll answers");
+    let output = leading.typed_result["output"].as_str().expect("output");
+    assert_eq!(output, "日", "{leading:?}");
+    assert!(!output.contains('\u{fffd}'), "{leading:?}");
+    assert_eq!(leading.typed_result["nextCursor"], json!(3), "{leading:?}");
+
+    let trailing = harness
+        .call(
+            "bash_sessions",
+            json!({"action": "inspect", "session_id": session, "max_bytes": 4}),
+        )
+        .await
+        .expect("the inspection answers");
+    let tail = trailing.typed_result["output"].as_str().expect("output");
+    assert_eq!(tail, "版", "{trailing:?}");
+    assert!(!tail.contains('\u{fffd}'), "{trailing:?}");
 }
