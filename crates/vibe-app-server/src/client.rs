@@ -25,7 +25,10 @@ use vibe_core::extensions::{
     ExtensionSource, SubagentFuture, SubagentManager, SubagentRunner, discover_extensions,
 };
 use vibe_core::matching::NameFilter;
-use vibe_core::mcp::McpServerConfig;
+use vibe_core::mcp::{
+    McpError, McpFuture, McpServerConfig, SamplingHandler, SamplingRequest, SamplingResponse,
+    SamplingRole,
+};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PolicyError,
 };
@@ -3176,6 +3179,20 @@ impl LiveTurnDriver {
         self
     }
 
+    /// Serves the completions MCP servers ask this client for.
+    ///
+    /// Reference `_create_sampling_handler` builds one from the loop's backend
+    /// and the active model, so a server that asks is answered by the same
+    /// provider the turn itself uses rather than by a second one configured
+    /// beside it.
+    #[must_use]
+    pub fn sampling_handler(&self, model: impl Into<String>) -> Arc<dyn SamplingHandler> {
+        Arc::new(ProviderSamplingHandler {
+            provider: Arc::clone(&self.provider),
+            model: model.into(),
+        })
+    }
+
     async fn run_engine(
         &self,
         reservation: &TurnReservation,
@@ -4299,8 +4316,73 @@ fn default_session_root() -> Option<PathBuf> {
     Some(crate::host::vibe_home().join("sessions"))
 }
 
+/// Answers an MCP sampling request with the provider this driver already runs
+/// turns on.
+///
+/// Reference `MCPSamplingHandler` returns a structured error rather than a
+/// partial completion when the backend fails, and names the model it answered
+/// with, so a server can tell which one produced the text it received.
+struct ProviderSamplingHandler {
+    provider: Arc<dyn CompletionProvider>,
+    model: String,
+}
+
+impl SamplingHandler for ProviderSamplingHandler {
+    fn complete<'a>(&'a self, request: SamplingRequest) -> McpFuture<'a, SamplingResponse> {
+        Box::pin(async move {
+            let input = ProviderInput {
+                turn_id: None,
+                model_override: None,
+                messages: request
+                    .messages
+                    .into_iter()
+                    .map(|message| match message.role {
+                        SamplingRole::System => ModelMessage::System {
+                            content: message.content,
+                        },
+                        SamplingRole::User => ModelMessage::User {
+                            content: message.content,
+                        },
+                        SamplingRole::Assistant => ModelMessage::Assistant {
+                            content: message.content,
+                            reasoning: None,
+                            reasoning_signature: None,
+                            reasoning_state: Vec::new(),
+                            tool_calls: Vec::new(),
+                        },
+                    })
+                    .collect(),
+                stream: false,
+                images: Vec::new(),
+                tools: Vec::new(),
+                tool_choice: None,
+                thinking: false,
+                reasoning_effort: None,
+                headers: BTreeMap::new(),
+                limits: RequestLimits {
+                    max_tokens: request.max_tokens.unwrap_or(4096),
+                    temperature_millis: request.temperature_millis,
+                    max_response_bytes: 2 * 1024 * 1024,
+                },
+                metadata: BTreeMap::from([("operation".to_owned(), "mcp_sampling".to_owned())]),
+            };
+            let message = self
+                .provider
+                .complete(&input)
+                .await
+                .map_err(|error| McpError::Tool(error.to_string()))?;
+            Ok(SamplingResponse {
+                text: message.text,
+                model: self.model.clone(),
+            })
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use vibe_core::mcp::SamplingMessage;
+
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
@@ -5044,6 +5126,143 @@ command = "/must-not-run"
         fn push(&self, _working_directory: &std::path::Path) -> Result<(), CloudError> {
             Ok(())
         }
+    }
+
+    /// A sampling request reaches the provider as an engine turn: the system
+    /// prompt leads, the roles map across, and the request's own budget and
+    /// temperature travel with it.
+    #[tokio::test]
+    async fn a_sampling_request_reaches_the_provider_as_a_completion() {
+        struct SamplingProbe {
+            seen: Arc<Mutex<Option<ProviderInput>>>,
+        }
+
+        impl CompletionProvider for SamplingProbe {
+            fn complete<'a>(
+                &'a self,
+                input: &'a ProviderInput,
+            ) -> vibe_core::engine::ProviderFuture<'a> {
+                Box::pin(async move {
+                    *self.seen.lock().map_err(|_| {
+                        vibe_core::provider::ProviderError::MalformedStream(
+                            "test lock poisoned".to_owned(),
+                        )
+                    })? = Some(input.clone());
+                    Ok(AssistantMessage {
+                        text: "sampled answer".to_owned(),
+                        reasoning: None,
+                        reasoning_signature: None,
+                        reasoning_state: Vec::new(),
+                        tool_calls: Vec::new(),
+                        usage: Usage {
+                            input_tokens: 1,
+                            output_tokens: 1,
+                        },
+                        refusal: None,
+                        stop_reason: "stop".to_owned(),
+                        correlation_id: None,
+                    })
+                })
+            }
+        }
+
+        let seen = Arc::new(Mutex::new(None));
+        let driver = LiveTurnDriver::from_provider_for_tests(
+            Arc::new(SamplingProbe {
+                seen: Arc::clone(&seen),
+            }),
+            "system",
+        );
+        let handler = driver.sampling_handler("probe-model");
+        let answer = handler
+            .complete(SamplingRequest {
+                messages: vec![
+                    SamplingMessage {
+                        role: SamplingRole::System,
+                        content: "be brief".to_owned(),
+                    },
+                    SamplingMessage {
+                        role: SamplingRole::User,
+                        content: "ping".to_owned(),
+                    },
+                    SamplingMessage {
+                        role: SamplingRole::Assistant,
+                        content: "pong".to_owned(),
+                    },
+                ],
+                max_tokens: Some(64),
+                temperature_millis: Some(250),
+            })
+            .await
+            .expect("the completion answers");
+        assert_eq!(answer.text, "sampled answer");
+        assert_eq!(answer.model, "probe-model");
+
+        let input = seen
+            .lock()
+            .expect("probe lock")
+            .clone()
+            .expect("the provider was asked");
+        assert_eq!(
+            input.messages,
+            vec![
+                ModelMessage::System {
+                    content: "be brief".to_owned(),
+                },
+                ModelMessage::User {
+                    content: "ping".to_owned(),
+                },
+                ModelMessage::Assistant {
+                    content: "pong".to_owned(),
+                    reasoning: None,
+                    reasoning_signature: None,
+                    reasoning_state: Vec::new(),
+                    tool_calls: Vec::new(),
+                },
+            ]
+        );
+        assert_eq!(input.limits.max_tokens, 64);
+        assert_eq!(input.limits.temperature_millis, Some(250));
+        assert!(!input.stream, "a sampling request is not streamed");
+        assert!(
+            input.tools.is_empty(),
+            "a sampling request carries no tools"
+        );
+    }
+
+    /// A backend failure is reported as an error rather than as an empty
+    /// completion, so no partial answer reaches the server that asked.
+    #[tokio::test]
+    async fn a_failing_provider_fails_the_sampling_request() {
+        struct FailingProvider;
+
+        impl CompletionProvider for FailingProvider {
+            fn complete<'a>(
+                &'a self,
+                _input: &'a ProviderInput,
+            ) -> vibe_core::engine::ProviderFuture<'a> {
+                Box::pin(async {
+                    Err(vibe_core::provider::ProviderError::MalformedStream(
+                        "the backend refused".to_owned(),
+                    ))
+                })
+            }
+        }
+
+        let driver = LiveTurnDriver::from_provider_for_tests(Arc::new(FailingProvider), "system");
+        let failure = driver
+            .sampling_handler("probe-model")
+            .complete(SamplingRequest {
+                messages: Vec::new(),
+                max_tokens: None,
+                temperature_millis: None,
+            })
+            .await
+            .expect_err("a failing backend fails the request");
+        assert!(
+            failure.to_string().contains("the backend refused"),
+            "{failure}"
+        );
     }
 
     struct RecordingProvider {

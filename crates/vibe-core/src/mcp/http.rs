@@ -10,7 +10,8 @@ use url::Url;
 use super::{
     MAX_MCP_DISCOVERY_PAGES, MAX_MCP_TOOLS_PER_SERVER, MCP_PROTOCOL_VERSION, McpAuthConfig,
     McpError, McpFuture, McpPeer, McpPeerFactory, McpServerConfig, McpTransportConfig, RemoteTool,
-    decode_tool_result, validate_config,
+    SamplingHandler, client_capabilities, decode_tool_result, method_not_found, sampling_answer,
+    validate_config,
 };
 use crate::tools::{ToolExecutionOutput, ToolOutputSink};
 
@@ -23,17 +24,20 @@ pub struct HttpMcpPeerFactory;
 impl McpPeerFactory for HttpMcpPeerFactory {
     fn connect<'a>(&'a self, config: &'a McpServerConfig) -> McpFuture<'a, Arc<dyn McpPeer>> {
         Box::pin(async move {
-            let peer = HttpMcpPeer::connect(config).await?;
+            let peer = HttpMcpPeer::connect(config, None).await?;
             Ok(Arc::new(peer) as Arc<dyn McpPeer>)
         })
     }
 }
 
-struct HttpMcpPeer {
+pub(super) struct HttpMcpPeer {
     client: reqwest::Client,
     endpoint: Url,
     headers: HeaderMap,
     state: Mutex<HttpState>,
+    /// Present only when the entry enables sampling and the host installed a
+    /// handler, which is exactly when the capability was advertised.
+    sampling: Option<Arc<dyn SamplingHandler>>,
 }
 
 struct HttpState {
@@ -43,7 +47,10 @@ struct HttpState {
 }
 
 impl HttpMcpPeer {
-    async fn connect(config: &McpServerConfig) -> Result<Self, McpError> {
+    pub(super) async fn connect(
+        config: &McpServerConfig,
+        sampling: Option<Arc<dyn SamplingHandler>>,
+    ) -> Result<Self, McpError> {
         validate_config(config)?;
         let (endpoint, configured_headers) = match &config.transport {
             McpTransportConfig::Http { url, headers }
@@ -83,6 +90,7 @@ impl HttpMcpPeer {
                 session_id: None,
                 closed: false,
             }),
+            sampling: sampling.filter(|_| config.sampling_enabled),
         };
         peer.initialize().await?;
         Ok(peer)
@@ -94,7 +102,7 @@ impl HttpMcpPeer {
                 "initialize",
                 json!({
                     "protocolVersion": MCP_PROTOCOL_VERSION,
-                    "capabilities": {},
+                    "capabilities": client_capabilities(self.sampling.is_some()),
                     "clientInfo": {
                         "name": "mistral-vibe-rs",
                         "version": env!("CARGO_PKG_VERSION"),
@@ -251,8 +259,15 @@ impl HttpMcpPeer {
             .to_ascii_lowercase();
         if content_type.starts_with("text/event-stream") {
             if let Some(request_id) = expected_response_id {
-                return read_event_stream(&mut response, max_response_bytes, request_id, output)
-                    .await;
+                return read_event_stream(
+                    self,
+                    state.session_id.clone(),
+                    &mut response,
+                    max_response_bytes,
+                    request_id,
+                    output,
+                )
+                .await;
             }
             return Ok(Vec::new());
         }
@@ -275,6 +290,50 @@ impl HttpMcpPeer {
         let message = serde_json::from_slice(&bytes)
             .map_err(|error| McpError::Transport(format!("invalid JSON response: {error}")))?;
         Ok(vec![message])
+    }
+
+    /// Answers a request the server made of this client.
+    ///
+    /// The answer travels on its own POST rather than on the stream it arrived
+    /// on, which is what the streamable transport requires: the response body
+    /// of a client-issued POST carries only what the client asked for. The
+    /// session lock is not held here, because the call this answer unblocks is
+    /// the one still holding it.
+    async fn answer_inbound(
+        &self,
+        session: Option<&HeaderValue>,
+        request: &Value,
+    ) -> Result<(), McpError> {
+        let method = request.get("method").and_then(Value::as_str).unwrap_or("");
+        let answer = match self
+            .sampling
+            .as_ref()
+            .filter(|_| method == "sampling/createMessage")
+        {
+            Some(handler) => sampling_answer(handler, request).await,
+            None => method_not_found(request),
+        };
+        let mut post = self
+            .client
+            .post(self.endpoint.clone())
+            .headers(self.headers.clone())
+            .header(CONTENT_TYPE, "application/json")
+            .header(ACCEPT, "application/json, text/event-stream")
+            .json(&answer);
+        if let Some(session) = session {
+            post = post.header(SESSION_HEADER, session.clone());
+        }
+        let response = post
+            .send()
+            .await
+            .map_err(|error| McpError::Transport(error.to_string()))?;
+        if response.status().is_success() {
+            return Ok(());
+        }
+        Err(McpError::Transport(format!(
+            "the HTTP MCP endpoint refused a client answer with {}",
+            response.status()
+        )))
     }
 
     async fn list_tools(&self, max_response_bytes: usize) -> Result<Vec<RemoteTool>, McpError> {
@@ -435,6 +494,8 @@ fn parse_event_stream(bytes: &[u8]) -> Result<Vec<Value>, McpError> {
 }
 
 async fn read_event_stream(
+    peer: &HttpMcpPeer,
+    session: Option<HeaderValue>,
     response: &mut reqwest::Response,
     max_response_bytes: usize,
     request_id: u64,
@@ -456,18 +517,37 @@ async fn read_event_stream(
         }
         buffer.extend_from_slice(&chunk);
         while let Some(event) = take_event(&mut buffer) {
-            if record_event_messages(parse_event(&event)?, request_id, output, &mut messages)? {
+            if record_event_messages(
+                peer,
+                session.as_ref(),
+                parse_event(&event)?,
+                request_id,
+                output,
+                &mut messages,
+            )
+            .await?
+            {
                 return Ok(messages);
             }
         }
     }
     if !buffer.is_empty() {
-        record_event_messages(parse_event(&buffer)?, request_id, output, &mut messages)?;
+        record_event_messages(
+            peer,
+            session.as_ref(),
+            parse_event(&buffer)?,
+            request_id,
+            output,
+            &mut messages,
+        )
+        .await?;
     }
     Ok(messages)
 }
 
-fn record_event_messages(
+async fn record_event_messages(
+    peer: &HttpMcpPeer,
+    session: Option<&HeaderValue>,
     parsed: Vec<Value>,
     request_id: u64,
     output: Option<&ToolOutputSink>,
@@ -483,6 +563,13 @@ fn record_event_messages(
             output
                 .emit(chunk)
                 .map_err(|error| McpError::Tool(error.to_string()))?;
+            continue;
+        }
+        // A request the server made of this client is answered while its stream
+        // is still open: the server is waiting on that answer before it can
+        // finish the call this stream belongs to.
+        if message.get("method").is_some() && message.get("id").is_some() {
+            peer.answer_inbound(session, &message).await?;
             continue;
         }
         complete |= message.get("id").and_then(Value::as_u64) == Some(request_id);
@@ -536,6 +623,7 @@ mod tests {
     use std::sync::mpsc;
 
     use super::*;
+    use crate::mcp::{SamplingRequest, SamplingResponse};
 
     #[test]
     fn parses_sse_data_without_accepting_empty_streams() {
@@ -657,6 +745,148 @@ mod tests {
         call.await
             .expect("tool task joins")
             .expect("tool result completes");
+    }
+
+    /// A server that asks for a completion mid-call is answered on its own POST
+    /// while its stream stays open, which is what the streamable transport
+    /// requires: the call the client is waiting on cannot finish until the
+    /// server has the answer.
+    #[tokio::test]
+    async fn streamable_http_serves_an_inbound_sampling_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("fixture listener");
+        let endpoint = Url::parse(&format!(
+            "http://{}/mcp",
+            listener.local_addr().expect("listener address")
+        ))
+        .expect("fixture URL");
+        let (answer_sender, answer_receiver) = mpsc::channel::<String>();
+        std::thread::spawn(move || {
+            let mut gated = Some(answer_receiver);
+            for index in 0..4 {
+                let (stream, _) = listener.accept().expect("fixture accepts");
+                match index {
+                    0 | 1 => {
+                        std::thread::spawn(move || serve_request(stream, &AtomicBool::new(false)));
+                    }
+                    2 => {
+                        let released = gated.take().expect("single gated response");
+                        std::thread::spawn(move || serve_sampling_tool_call(stream, released));
+                    }
+                    _ => {
+                        let answered = answer_sender.clone();
+                        std::thread::spawn(move || serve_client_answer(stream, &answered));
+                    }
+                }
+            }
+        });
+        let config = McpServerConfig {
+            alias: "sampling".to_owned(),
+            transport: McpTransportConfig::StreamableHttp {
+                url: endpoint,
+                headers: Default::default(),
+            },
+            enabled: true,
+            disabled_tools: Default::default(),
+            startup_timeout_ms: 2_000,
+            tool_timeout_ms: 2_000,
+            auth: Default::default(),
+            prompt: None,
+            sampling_enabled: true,
+        };
+        let peer = crate::mcp::DefaultMcpPeerFactory::with_sampling(Arc::new(FixedSampler))
+            .connect(&config)
+            .await
+            .expect("peer connects");
+        let answered = tokio::time::timeout(
+            Duration::from_secs(5),
+            peer.call(
+                "search",
+                json!({}),
+                64 * 1024,
+                ToolOutputSink::discard(64 * 1024),
+            ),
+        )
+        .await
+        .expect("the call completes once the sampling answer lands")
+        .expect("tool result completes");
+        assert!(answered.model_text.contains("sampled"), "{answered:?}");
+    }
+
+    struct FixedSampler;
+
+    impl SamplingHandler for FixedSampler {
+        fn complete<'a>(&'a self, _request: SamplingRequest) -> McpFuture<'a, SamplingResponse> {
+            Box::pin(async {
+                Ok(SamplingResponse {
+                    text: "sampled".to_owned(),
+                    model: "fixture-model".to_owned(),
+                })
+            })
+        }
+    }
+
+    fn serve_sampling_tool_call(mut stream: TcpStream, answered: mpsc::Receiver<String>) {
+        let request = read_request(&mut stream);
+        let body = request.split("\r\n\r\n").nth(1).unwrap_or_default();
+        let message: Value = serde_json::from_str(body).expect("JSON-RPC request");
+        let id = message
+            .get("id")
+            .and_then(Value::as_u64)
+            .expect("request ID");
+        stream
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nMcp-Session-Id: session-test\r\nConnection: keep-alive\r\n\r\n",
+            )
+            .expect("SSE headers");
+        let ask = format!(
+            "event: message\r\ndata: {}\r\n\r\n",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 9001,
+                "method": "sampling/createMessage",
+                "params": {
+                    "messages": [{"role": "user", "content": {"type": "text", "text": "ping"}}],
+                    "maxTokens": 16,
+                },
+            })
+        );
+        write_chunk(&mut stream, ask.as_bytes());
+        stream.flush().expect("the sampling request flushes");
+        let text = answered.recv().expect("the client answers the request");
+        let response = format!(
+            "event: message\r\ndata: {}\r\n\r\n",
+            json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": {"content": [{"type": "text", "text": text}]},
+            })
+        );
+        write_chunk(&mut stream, response.as_bytes());
+        stream.flush().expect("result flushes");
+    }
+
+    fn serve_client_answer(mut stream: TcpStream, answered: &mpsc::Sender<String>) {
+        let request = read_request(&mut stream);
+        let body = request.split("\r\n\r\n").nth(1).unwrap_or_default();
+        let message: Value = serde_json::from_str(body).expect("the client answer is JSON-RPC");
+        assert_eq!(message["id"], json!(9001), "{message}");
+        assert_eq!(message["result"]["role"], json!("assistant"), "{message}");
+        assert_eq!(
+            message["result"]["model"],
+            json!("fixture-model"),
+            "{message}"
+        );
+        answered
+            .send(
+                message["result"]["content"]["text"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+            )
+            .expect("the fixture records the answer");
+        stream
+            .write_all(b"HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            .expect("the answer is accepted");
     }
 
     fn serve_gated_tool_call(mut stream: TcpStream, release: mpsc::Receiver<()>) {

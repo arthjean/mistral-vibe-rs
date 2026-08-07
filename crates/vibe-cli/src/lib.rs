@@ -29,6 +29,7 @@ use vibe_app_server::client::{
 };
 use vibe_app_server::release3::Release3Service;
 use vibe_app_server::server::AppServer;
+use vibe_core::mcp::SamplingHandler;
 use vibe_core::telemetry::{
     ReqwestTelemetryTransport, TelemetryAttributes, TelemetryClient, TelemetryConfig,
     TelemetryEnvelope, TelemetryEvent, TelemetryEventObserver, TelemetryField, TelemetryMetadata,
@@ -145,7 +146,8 @@ pub async fn run(
         if let Some(observer) = telemetry.as_ref() {
             driver = driver.with_event_observer(observer.clone());
         }
-        let server = production_server(&arguments)?;
+        let server =
+            production_server(&arguments, Some(driver.sampling_handler(&arguments.model)))?;
         let result = execute_with_server(arguments, driver, server, stdout, stderr).await;
         if let Some(observer) = telemetry {
             observer.flush().await;
@@ -328,7 +330,10 @@ where
     Ok(())
 }
 
-fn production_server(arguments: &Arguments) -> Result<AppServer, CliError> {
+fn production_server(
+    arguments: &Arguments,
+    sampling: Option<Arc<dyn SamplingHandler>>,
+) -> Result<AppServer, CliError> {
     let credential = bootstrap::credential(arguments)?;
     let release3 = Release3Service::default();
     // The programmatic entry point starts here, so this is where an older
@@ -336,7 +341,7 @@ fn production_server(arguments: &Arguments) -> Result<AppServer, CliError> {
     release3
         .migrate_configuration()
         .map_err(|error| CliError::Configuration(error.to_string()))?;
-    let server = bootstrap::resource_server(arguments, release3, credential.clone())?;
+    let server = bootstrap::resource_server(arguments, release3, credential.clone(), sampling)?;
     if !arguments.teleport {
         return Ok(server);
     }

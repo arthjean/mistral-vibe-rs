@@ -16,6 +16,7 @@ use vibe_app_server::resources::{
 };
 use vibe_app_server::server::{AppServer, WebSearchAccess};
 use vibe_core::config::DotenvValues;
+use vibe_core::mcp::SamplingHandler;
 
 use secrecy::SecretString;
 use url::Url;
@@ -71,13 +72,17 @@ pub(crate) fn resource_server(
     arguments: &Arguments,
     release3: Release3Service,
     credential: String,
+    sampling: Option<Arc<dyn SamplingHandler>>,
 ) -> Result<AppServer, CliError> {
     let connector = Arc::new(
         MistralConnectorClient::new(&arguments.api_base, credential.clone())
             .map_err(|error| CliError::Terminal(error.to_string()))?,
     );
+    // The sampling handler is what turns an entry's `sampling_enabled` into a
+    // capability: it carries the provider the driver already runs turns on, so
+    // a server that asks for a completion is answered by the active model.
     let (mcp_factory, mcp_auth) =
-        production_mcp_adapters().map_err(|error| CliError::Terminal(error.to_string()))?;
+        production_mcp_adapters(sampling).map_err(|error| CliError::Terminal(error.to_string()))?;
     let resource_backend = CoreResourceBackend::default()
         .with_config(release3.layered_config())
         .with_mcp_factory(mcp_factory)

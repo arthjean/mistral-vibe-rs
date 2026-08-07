@@ -1311,8 +1311,13 @@ fn start_runtime(
         driver = driver.with_event_observer(observer.clone());
     }
     let configuration = release3.clone();
-    let server = bootstrap::resource_server(arguments, release3, credential.clone())?
-        .using_release4_service(bootstrap::cloud_service(credential)?);
+    let server = bootstrap::resource_server(
+        arguments,
+        release3,
+        credential.clone(),
+        Some(driver.sampling_handler(&preferences.model)),
+    )?
+    .using_release4_service(bootstrap::cloud_service(credential)?);
     let mut service =
         HeadlessService::new_interactive_shared_with_server(Arc::new(driver), server)?;
     let session_id = service.start_session(&bootstrap::session_options(

@@ -63,7 +63,7 @@ impl Default for CoreResourceBackend {
     fn default() -> Self {
         Self {
             sessions: Arc::new(StdMutex::new(BTreeMap::new())),
-            mcp_factory: Some(Arc::new(DefaultMcpPeerFactory)),
+            mcp_factory: Some(Arc::new(DefaultMcpPeerFactory::default())),
             mcp_auth: None,
             connector_definitions: Arc::new(Vec::new()),
             connector_catalog: None,

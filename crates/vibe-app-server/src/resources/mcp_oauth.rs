@@ -15,7 +15,7 @@ use url::Url;
 use vibe_core::integrations::redact;
 use vibe_core::mcp::{
     DefaultMcpPeerFactory, McpError, McpFuture, McpOAuthConfig, McpPeer, McpPeerFactory,
-    McpServerConfig, McpTransportConfig,
+    McpServerConfig, McpTransportConfig, SamplingHandler,
 };
 
 use super::{McpAuthBackend, ResourceError, ResourceFuture};
@@ -28,16 +28,30 @@ const MAX_OAUTH_RESPONSE_BYTES: usize = 1024 * 1024;
 
 pub type ProductionMcpAdapters = (Arc<dyn McpPeerFactory>, Arc<dyn McpAuthBackend>);
 
-pub fn production_mcp_adapters() -> Result<ProductionMcpAdapters, ResourceError> {
+/// The production peer factory and OAuth backend.
+///
+/// The sampling handler arrives from the layer that owns a provider, which is
+/// what makes an entry's `sampling_enabled` a capability rather than a
+/// declaration: without one the factory advertises nothing and refuses an
+/// inbound request.
+pub fn production_mcp_adapters(
+    sampling: Option<Arc<dyn SamplingHandler>>,
+) -> Result<ProductionMcpAdapters, ResourceError> {
     let auth = Arc::new(ProductionMcpAuth::new()?);
     Ok((
-        Arc::new(AuthenticatedMcpPeerFactory { auth: auth.clone() }),
+        Arc::new(AuthenticatedMcpPeerFactory {
+            auth: auth.clone(),
+            inner: sampling.map_or_else(DefaultMcpPeerFactory::default, |handler| {
+                DefaultMcpPeerFactory::with_sampling(handler)
+            }),
+        }),
         auth,
     ))
 }
 
 struct AuthenticatedMcpPeerFactory {
     auth: Arc<ProductionMcpAuth>,
+    inner: DefaultMcpPeerFactory,
 }
 
 impl McpPeerFactory for AuthenticatedMcpPeerFactory {
@@ -60,7 +74,7 @@ impl McpPeerFactory for AuthenticatedMcpPeerFactory {
                     header.expose_secret().to_owned(),
                 );
             }
-            DefaultMcpPeerFactory.connect(&config).await
+            self.inner.connect(&config).await
         })
     }
 }

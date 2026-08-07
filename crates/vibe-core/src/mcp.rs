@@ -29,6 +29,7 @@ use crate::tools::{
 
 mod http;
 
+use http::HttpMcpPeer;
 pub use http::HttpMcpPeerFactory;
 
 const MAX_MCP_SERVERS: usize = 256;
@@ -43,6 +44,54 @@ pub const DEFAULT_MCP_TOOL_TIMEOUT_MS: u64 = 60_000;
 const MAX_MCP_TIMEOUT_MS: u64 = 10 * 60 * 1_000;
 
 pub type McpFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, McpError>> + Send + 'a>>;
+
+/// One message of a `sampling/createMessage` request, already reduced to what a
+/// completion needs.
+///
+/// Reference `_map_sampling_messages` keeps the two roles it knows and treats
+/// anything else as an assistant turn, and `_extract_text_content` joins the
+/// text blocks and drops the rest, so the handler this port hands the request to
+/// never sees a shape the engine cannot carry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SamplingMessage {
+    pub role: SamplingRole,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SamplingRole {
+    System,
+    User,
+    Assistant,
+}
+
+/// What a server asks the client to complete.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SamplingRequest {
+    pub messages: Vec<SamplingMessage>,
+    pub max_tokens: Option<u32>,
+    /// The temperature in thousandths, matching [`crate::provider::RequestLimits`],
+    /// so a fractional value survives a type that carries no floats.
+    pub temperature_millis: Option<u16>,
+}
+
+/// What the client answers with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SamplingResponse {
+    pub text: String,
+    pub model: String,
+}
+
+/// Serves the completions MCP servers ask this client for.
+///
+/// Reference `MCPSamplingHandler` reaches the active backend and the active
+/// model through two getters rather than holding either, because both move
+/// between turns. The same shape holds here: the implementation lives in the
+/// layer that owns a provider, and `vibe-core` only declares what it must
+/// answer.
+pub trait SamplingHandler: Send + Sync {
+    fn complete<'a>(&'a self, request: SamplingRequest) -> McpFuture<'a, SamplingResponse>;
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "transport", rename_all = "kebab-case")]
@@ -367,21 +416,47 @@ pub struct StdioMcpPeerFactory;
 impl McpPeerFactory for StdioMcpPeerFactory {
     fn connect<'a>(&'a self, config: &'a McpServerConfig) -> McpFuture<'a, Arc<dyn McpPeer>> {
         Box::pin(async move {
-            let peer = StdioMcpPeer::connect(config).await?;
+            let peer = StdioMcpPeer::connect(config, None).await?;
             Ok(Arc::new(peer) as Arc<dyn McpPeer>)
         })
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct DefaultMcpPeerFactory;
+#[derive(Clone, Default)]
+pub struct DefaultMcpPeerFactory {
+    sampling: Option<Arc<dyn SamplingHandler>>,
+}
+
+impl DefaultMcpPeerFactory {
+    /// The same factory serving the completions its servers ask for.
+    ///
+    /// A handler is what turns `sampling_enabled` from a declaration into a
+    /// capability: without one, a server that asks is refused whatever its
+    /// entry says, because there is nothing behind the advertisement.
+    #[must_use]
+    pub fn with_sampling(handler: Arc<dyn SamplingHandler>) -> Self {
+        Self {
+            sampling: Some(handler),
+        }
+    }
+}
 
 impl McpPeerFactory for DefaultMcpPeerFactory {
     fn connect<'a>(&'a self, config: &'a McpServerConfig) -> McpFuture<'a, Arc<dyn McpPeer>> {
         match config.transport {
-            McpTransportConfig::Stdio { .. } => StdioMcpPeerFactory.connect(config),
+            McpTransportConfig::Stdio { .. } => {
+                let sampling = self.sampling.clone();
+                Box::pin(async move {
+                    let peer = StdioMcpPeer::connect(config, sampling).await?;
+                    Ok(Arc::new(peer) as Arc<dyn McpPeer>)
+                })
+            }
             McpTransportConfig::Http { .. } | McpTransportConfig::StreamableHttp { .. } => {
-                HttpMcpPeerFactory.connect(config)
+                let sampling = self.sampling.clone();
+                Box::pin(async move {
+                    let peer = HttpMcpPeer::connect(config, sampling).await?;
+                    Ok(Arc::new(peer) as Arc<dyn McpPeer>)
+                })
             }
         }
     }
@@ -389,6 +464,9 @@ impl McpPeerFactory for DefaultMcpPeerFactory {
 
 struct StdioMcpPeer {
     state: Mutex<StdioMcpState>,
+    /// Present only when the entry enables sampling and the host installed a
+    /// handler, which is exactly when the capability was advertised.
+    sampling: Option<Arc<dyn SamplingHandler>>,
 }
 
 struct StdioMcpState {
@@ -401,7 +479,10 @@ struct StdioMcpState {
 }
 
 impl StdioMcpPeer {
-    async fn connect(config: &McpServerConfig) -> Result<Self, McpError> {
+    async fn connect(
+        config: &McpServerConfig,
+        sampling: Option<Arc<dyn SamplingHandler>>,
+    ) -> Result<Self, McpError> {
         validate_config(config)?;
         let McpTransportConfig::Stdio {
             command,
@@ -440,6 +521,10 @@ impl StdioMcpPeer {
                 next_request_id: 1,
                 closed: false,
             }),
+            // Reference `mcp/tools.py` hands the session a sampling callback
+            // only when the entry enables it, so an entry that disables it has
+            // nothing to advertise and nothing to serve.
+            sampling: sampling.filter(|_| config.sampling_enabled),
         };
         if let Err(error) = peer.initialize().await {
             let _ = peer.close_transport().await;
@@ -454,7 +539,7 @@ impl StdioMcpPeer {
                 "initialize",
                 json!({
                     "protocolVersion": MCP_PROTOCOL_VERSION,
-                    "capabilities": {},
+                    "capabilities": client_capabilities(self.sampling.is_some()),
                     "clientInfo": {
                         "name": "mistral-vibe-rs",
                         "version": env!("CARGO_PKG_VERSION"),
@@ -543,7 +628,7 @@ impl StdioMcpPeer {
                         .map_err(|error| McpError::Tool(error.to_string()))?;
                 }
             } else if message.get("method").is_some() && message.get("id").is_some() {
-                reply_method_not_found(&mut state, &message).await?;
+                self.serve_inbound(&mut state, &message).await?;
             } else if message.get("method").is_none() {
                 return Err(McpError::Transport(format!(
                     "{method} received an unexpected response ID"
@@ -566,6 +651,28 @@ impl StdioMcpPeer {
             }),
         )
         .await
+    }
+
+    /// Answers a request the server made of this client.
+    ///
+    /// Only sampling is served, and only where the capability was advertised;
+    /// everything else keeps the method-not-found answer the protocol expects
+    /// from a client that declared nothing.
+    async fn serve_inbound(
+        &self,
+        state: &mut StdioMcpState,
+        request: &Value,
+    ) -> Result<(), McpError> {
+        let method = request.get("method").and_then(Value::as_str).unwrap_or("");
+        let Some(handler) = self
+            .sampling
+            .as_ref()
+            .filter(|_| method == "sampling/createMessage")
+        else {
+            return reply_method_not_found(state, request).await;
+        };
+        let answer = sampling_answer(handler, request).await;
+        write_message(state, &answer).await
     }
 
     async fn list_tools(&self, max_response_bytes: usize) -> Result<Vec<RemoteTool>, McpError> {
@@ -824,22 +931,155 @@ async fn read_message(
         .map_err(|error| McpError::Transport(format!("invalid stdio JSON-RPC message: {error}")))
 }
 
+/// What the client declares it can answer.
+///
+/// Reference `mcp/tools.py` passes a sampling callback into the session only for
+/// an entry that enables it, and the SDK derives the advertised capability from
+/// that callback, so the declaration and the handler are one decision here too.
+fn client_capabilities(sampling: bool) -> Value {
+    if sampling {
+        json!({"sampling": {}})
+    } else {
+        json!({})
+    }
+}
+
+/// The JSON-RPC answer to one `sampling/createMessage` request.
+///
+/// Both transports send the same envelope, so the mapping and the failure shape
+/// live once rather than once per transport.
+pub(crate) async fn sampling_answer(handler: &Arc<dyn SamplingHandler>, request: &Value) -> Value {
+    let id = request.get("id").cloned().unwrap_or(Value::Null);
+    let parameters = request.get("params").cloned().unwrap_or(Value::Null);
+    match tokio::time::timeout(
+        MCP_OPERATION_TIMEOUT,
+        handler.complete(sampling_request(&parameters)),
+    )
+    .await
+    {
+        Ok(Ok(response)) => json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": {
+                "role": "assistant",
+                "content": {"type": "text", "text": response.text},
+                "model": response.model,
+                "stopReason": "endTurn",
+            },
+        }),
+        // A failure is answered as an error rather than as a partial completion,
+        // so the server never reads half an answer as a whole one. The message
+        // is the handler's, which reports the failure it saw rather than the
+        // request it made, so no credential travels with it.
+        Ok(Err(error)) => sampling_error(&id, &error.to_string()),
+        Err(_) => sampling_error(
+            &id,
+            &format!(
+                "the model did not answer within {}s",
+                MCP_OPERATION_TIMEOUT.as_secs()
+            ),
+        ),
+    }
+}
+
+/// The refusal a client that declared no sampling capability owes a server that
+/// asked anyway.
+pub(crate) fn method_not_found(request: &Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": request.get("id").cloned().unwrap_or(Value::Null),
+        "error": {
+            "code": -32601,
+            "message": "Method not found",
+        },
+    })
+}
+
+/// The request the handler is asked to complete.
+///
+/// Reference `MCPSamplingHandler.__call__` prepends the system prompt as a
+/// message rather than passing it beside them, maps an unknown role onto
+/// assistant, and joins the text blocks of a content list while skipping the
+/// rest. A malformed request therefore reduces to a poorer request rather than
+/// to a failure, which is what keeps a server's own message shapes from failing
+/// the call.
+fn sampling_request(parameters: &Value) -> SamplingRequest {
+    let mut messages = Vec::new();
+    if let Some(system) = parameters
+        .get("systemPrompt")
+        .and_then(Value::as_str)
+        .filter(|prompt| !prompt.is_empty())
+    {
+        messages.push(SamplingMessage {
+            role: SamplingRole::System,
+            content: system.to_owned(),
+        });
+    }
+    if let Some(inbound) = parameters.get("messages").and_then(Value::as_array) {
+        messages.extend(inbound.iter().map(|message| SamplingMessage {
+            role: match message.get("role").and_then(Value::as_str) {
+                Some("user") => SamplingRole::User,
+                _ => SamplingRole::Assistant,
+            },
+            content: sampling_text(message.get("content")),
+        }));
+    }
+    SamplingRequest {
+        messages,
+        max_tokens: parameters
+            .get("maxTokens")
+            .and_then(Value::as_u64)
+            .and_then(|tokens| u32::try_from(tokens).ok()),
+        temperature_millis: parameters
+            .get("temperature")
+            .and_then(Value::as_f64)
+            .map(|temperature| (temperature * 1_000.0).round())
+            .filter(|millis| *millis >= 0.0)
+            .and_then(|millis| u16::try_from(millis as u64).ok()),
+    }
+}
+
+/// The text of one content block, or of the text blocks of a list of them.
+fn sampling_text(content: Option<&Value>) -> String {
+    let block_text = |block: &Value| {
+        (block.get("type").and_then(Value::as_str) == Some("text"))
+            .then(|| {
+                block
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+            })
+            .map(str::to_owned)
+    };
+    match content {
+        Some(Value::Array(blocks)) => blocks
+            .iter()
+            .filter_map(block_text)
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Some(block) => block_text(block).unwrap_or_default(),
+        None => String::new(),
+    }
+}
+
+/// The structured error a failed completion answers with, reference
+/// `ErrorData(code=-1, ...)`.
+fn sampling_error(id: &Value, message: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "error": {
+            "code": -1,
+            "message": format!("sampling failed: {message}"),
+        },
+    })
+}
+
 async fn reply_method_not_found(
     state: &mut StdioMcpState,
     request: &Value,
 ) -> Result<(), McpError> {
-    write_message(
-        state,
-        &json!({
-            "jsonrpc": "2.0",
-            "id": request.get("id").cloned().unwrap_or(Value::Null),
-            "error": {
-                "code": -32601,
-                "message": "Method not found",
-            },
-        }),
-    )
-    .await
+    write_message(state, &method_not_found(request)).await
 }
 
 fn bounded_rpc_error(error: &Value) -> String {
@@ -2069,5 +2309,232 @@ mod tests {
                 ..
             }]
         ));
+    }
+
+    // ----------------------------------------------------------------------
+    // Sampling
+    // ----------------------------------------------------------------------
+
+    /// An MCP server that asks the client to complete a message in the middle
+    /// of a tool call, which is the shape reference `MCPSamplingHandler` serves.
+    ///
+    /// The script answers on its own standard output, so the case drives the
+    /// real stdio transport rather than a fake peer: the inbound request has to
+    /// survive the same framing, the same request loop and the same lock the
+    /// outbound call holds.
+    #[cfg(unix)]
+    const SAMPLING_SERVER: &str = r#"
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+  case "$line" in
+    *'"id":9001'*)
+      case "$line" in
+        *'"error"'*) answer=$(printf '%s' "$line" | sed -e 's/.*"message":"//' -e 's/".*//') ;;
+        *) answer=$(printf '%s' "$line" | sed -e 's/.*"text":"//' -e 's/".*//') ;;
+      esac
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"content":[{"type":"text","text":"%s"}]}}\n' "$pending" "$answer"
+      ;;
+    *'"method":"initialize"'*)
+      case "$line" in
+        *'"capabilities":{"sampling":{}}'*) advertised=yes ;;
+        *) advertised=no ;;
+      esac
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":"2025-06-18","capabilities":{"tools":{}},"serverInfo":{"name":"probe","version":"1"}}}\n' "$id"
+      ;;
+    *'"method":"tools/list"'*)
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"tools":[{"name":"advertised","description":"reports the advertised capability","inputSchema":{"type":"object"}},{"name":"ask","description":"asks the client","inputSchema":{"type":"object"}}]}}\n' "$id"
+      ;;
+    *'"name":"advertised"'*)
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"content":[{"type":"text","text":"%s"}]}}\n' "$id" "$advertised"
+      ;;
+    *'"method":"tools/call"'*)
+      pending="$id"
+      printf '{"jsonrpc":"2.0","id":9001,"method":"sampling/createMessage","params":{"messages":[{"role":"user","content":{"type":"text","text":"ping"}},{"role":"oracle","content":[{"type":"image","data":"x"},{"type":"text","text":"pong"}]}],"systemPrompt":"be brief","maxTokens":16,"temperature":0.25}}\n'
+      ;;
+  esac
+done
+"#;
+
+    #[cfg(unix)]
+    struct RecordingSampler {
+        seen: Arc<Mutex<Vec<SamplingRequest>>>,
+        answer: Result<SamplingResponse, String>,
+    }
+
+    #[cfg(unix)]
+    impl SamplingHandler for RecordingSampler {
+        fn complete<'a>(&'a self, request: SamplingRequest) -> McpFuture<'a, SamplingResponse> {
+            Box::pin(async move {
+                self.seen.lock().await.push(request);
+                self.answer.clone().map_err(McpError::Tool)
+            })
+        }
+    }
+
+    #[cfg(unix)]
+    fn sampling_server(directory: &std::path::Path, sampling_enabled: bool) -> McpServerConfig {
+        let script = directory.join("sampling-server.sh");
+        std::fs::write(&script, SAMPLING_SERVER).expect("the script is written");
+        McpServerConfig {
+            alias: "probe".to_owned(),
+            transport: McpTransportConfig::Stdio {
+                command: "/bin/sh".to_owned(),
+                arguments: vec![script.to_string_lossy().into_owned()],
+                environment: BTreeMap::new(),
+                working_directory: None,
+            },
+            enabled: true,
+            auth: McpAuthConfig::default(),
+            startup_timeout_ms: DEFAULT_MCP_STARTUP_TIMEOUT_MS,
+            tool_timeout_ms: DEFAULT_MCP_TOOL_TIMEOUT_MS,
+            sampling_enabled,
+            disabled_tools: BTreeSet::new(),
+            prompt: None,
+        }
+    }
+
+    /// A server that asks for a completion receives one, and the request it
+    /// made reaches the handler in the shape the reference maps it into.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_server_that_requests_a_completion_receives_one() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let factory = DefaultMcpPeerFactory::with_sampling(Arc::new(RecordingSampler {
+            seen: seen.clone(),
+            answer: Ok(SamplingResponse {
+                text: "sampled".to_owned(),
+                model: "probe-model".to_owned(),
+            }),
+        }));
+        let config = sampling_server(directory.path(), true);
+        let peer = factory.connect(&config).await.expect("the peer connects");
+
+        let advertised = peer
+            .call(
+                "advertised",
+                json!({}),
+                MAX_MCP_DISCOVERY_BYTES,
+                ToolOutputSink::discard(MAX_MCP_DISCOVERY_BYTES),
+            )
+            .await
+            .expect("the capability probe answers");
+        assert_eq!(advertised.model_text.trim(), "yes", "{advertised:?}");
+
+        let sampled = peer
+            .call(
+                "ask",
+                json!({}),
+                MAX_MCP_DISCOVERY_BYTES,
+                ToolOutputSink::discard(MAX_MCP_DISCOVERY_BYTES),
+            )
+            .await
+            .expect("the tool call answers");
+        assert_eq!(sampled.model_text.trim(), "sampled", "{sampled:?}");
+
+        let requests = seen.lock().await;
+        let request = requests.first().expect("the handler was asked");
+        assert_eq!(
+            request.messages,
+            vec![
+                SamplingMessage {
+                    role: SamplingRole::System,
+                    content: "be brief".to_owned(),
+                },
+                SamplingMessage {
+                    role: SamplingRole::User,
+                    content: "ping".to_owned(),
+                },
+                // An unknown role maps onto assistant and the blocks that are
+                // not text are skipped rather than failing the request.
+                SamplingMessage {
+                    role: SamplingRole::Assistant,
+                    content: "pong".to_owned(),
+                },
+            ]
+        );
+        assert_eq!(request.max_tokens, Some(16));
+        assert_eq!(request.temperature_millis, Some(250));
+        let _ = peer.close().await;
+    }
+
+    /// A backend failure is answered as a structured error rather than as a
+    /// partial completion.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_failed_completion_answers_with_a_structured_error() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let factory = DefaultMcpPeerFactory::with_sampling(Arc::new(RecordingSampler {
+            seen: Arc::new(Mutex::new(Vec::new())),
+            answer: Err("the backend refused".to_owned()),
+        }));
+        let config = sampling_server(directory.path(), true);
+        let peer = factory.connect(&config).await.expect("the peer connects");
+        let answered = peer
+            .call(
+                "ask",
+                json!({}),
+                MAX_MCP_DISCOVERY_BYTES,
+                ToolOutputSink::discard(MAX_MCP_DISCOVERY_BYTES),
+            )
+            .await
+            .expect("the tool call answers");
+        assert!(
+            answered.model_text.contains("sampling failed"),
+            "{answered:?}"
+        );
+        assert!(
+            answered.model_text.contains("the backend refused"),
+            "{answered:?}"
+        );
+        let _ = peer.close().await;
+    }
+
+    /// An entry that disables sampling advertises nothing and refuses an
+    /// inbound request with the capability-absent error.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_disabled_entry_refuses_an_inbound_sampling_request() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let factory = DefaultMcpPeerFactory::with_sampling(Arc::new(RecordingSampler {
+            seen: seen.clone(),
+            answer: Ok(SamplingResponse {
+                text: "sampled".to_owned(),
+                model: "probe-model".to_owned(),
+            }),
+        }));
+        let config = sampling_server(directory.path(), false);
+        let peer = factory.connect(&config).await.expect("the peer connects");
+
+        let advertised = peer
+            .call(
+                "advertised",
+                json!({}),
+                MAX_MCP_DISCOVERY_BYTES,
+                ToolOutputSink::discard(MAX_MCP_DISCOVERY_BYTES),
+            )
+            .await
+            .expect("the capability probe answers");
+        assert_eq!(advertised.model_text.trim(), "no", "{advertised:?}");
+
+        let refused = peer
+            .call(
+                "ask",
+                json!({}),
+                MAX_MCP_DISCOVERY_BYTES,
+                ToolOutputSink::discard(MAX_MCP_DISCOVERY_BYTES),
+            )
+            .await
+            .expect("the tool call answers");
+        assert!(
+            refused.model_text.contains("Method not found"),
+            "{refused:?}"
+        );
+        assert!(
+            seen.lock().await.is_empty(),
+            "a disabled entry still reached the handler"
+        );
+        let _ = peer.close().await;
     }
 }
