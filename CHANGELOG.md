@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- Speak the permission vocabulary the Python client speaks. An approval request
+  now names one of the four reference scopes, `command_pattern`,
+  `outside_directory`, `file_pattern` and `url_pattern`, and carries the
+  invocation pattern it applies to, the pattern a session-wide approval would
+  cover and a label, instead of the six unrelated kinds this client used to
+  invent. An approval granted in one client therefore means the same thing in
+  the other. An approval stored under the retired vocabulary is dropped rather
+  than reinterpreted, so a resumed session asks again instead of granting or
+  refusing something it no longer understands.
+- Stop asking once per argument list. An approval is stored under the pattern
+  the reference arity table derives, so approving `git status` covers a later
+  `git status --short`, approving `npm run build` covers `npm run build --watch`,
+  and a chain whose segments reduce to the same pattern is asked about once
+  rather than per command. A command the table does not know falls back to its
+  first word. The table is replayed against a capture of the reference's own,
+  entry by entry.
+- Keep a permanent approval past the session. Choosing "always allow" now writes
+  the granted patterns into `tools.<name>.allowlist`, which is where the Python
+  client writes them and where both read them back, so the next session starts
+  already covered. A session approval still dies with the session, and a
+  configuration file that refuses the write leaves the approval in place for the
+  session and reports why.
+- Resolve a file tool's permission the way the reference resolves it. The
+  session scratchpad is reached without consulting any list, the denylist is
+  read before the allowlist, a name matching `sensitive_patterns` raises a
+  requirement even where the tool is configured to always, and a path leaving
+  the workspace names the directory it would touch. A path that resolves nowhere
+  is treated as outside the workspace rather than inside it, so the guard asks
+  rather than assuming.
 - Read the per-tool configuration an operator writes. `[tools.grep]
   default_max_matches = 500`, `[tools.read_file] max_read_bytes`, `[tools.todo]
   max_todos`, the `web_fetch` and `web_search` timeouts, the shell budgets and

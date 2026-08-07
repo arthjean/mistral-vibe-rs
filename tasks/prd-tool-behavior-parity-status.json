@@ -25,10 +25,10 @@
     {
       "id": "EP-032",
       "title": "Conformant Permission Model",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 4
     },
     {
       "id": "EP-033",
@@ -140,57 +140,57 @@
       "id": "US-105",
       "title": "Publish the four reference permission scopes",
       "epic": "EP-032",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-102"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-106",
       "title": "Port the arity table and the session pattern",
       "epic": "EP-032",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-105"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-107",
       "title": "Cover an invocation with an approved session rule",
       "epic": "EP-032",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-106"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-108",
       "title": "Resolve permission for a file tool",
       "epic": "EP-032",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-107"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-109",

@@ -32,9 +32,10 @@ different one.
    `vibe/permissions.py:11`) and carries `invocation_pattern` plus
    `session_pattern` on every requirement. This port speaks six unrelated kinds
    (`crates/vibe-core/src/policy.rs:42`) and carries neither pattern. The
-   142-entry arity table that turns an approved `npm run build` into the session
-   rule `npm run *` (`vibe/core/tools/arity.py:145`) has no counterpart, so the
-   granularity of every persisted approval diverges.
+   138-entry arity table that turns an approved `npm run build` into the session
+   rule `npm run build *` (`vibe/core/tools/arity.py:145`) has no counterpart,
+   so the granularity of every persisted approval diverges. (Count and example
+   corrected 2026-08-07 from the capture; see the note under US-106.)
 3. **The shell policy is hardcoded and wrong in both directions.**
    `crates/vibe-core/src/shell.rs:173` denies `rm`, `rmdir`, `dd`, `mkfs`,
    `shutdown` and `eval` outright; none of the six is on any reference denylist,
@@ -87,9 +88,9 @@ session override, which is the single dependency shared by the builtin limits
 and the shell lists. EP-032 replaces the permission vocabulary wholesale rather
 than mapping onto it: the four reference scopes, the four-field
 `RequiredPermission`, the arity table and the wildcard rule that lets an
-approved `npm run *` cover a later `npm run test`. Replacing rather than mapping
-is the more expensive choice today and the cheaper one in three months, because
-the vocabulary is persisted.
+approved `npm run build *` cover a later bare `npm run build`. Replacing rather
+than mapping is the more expensive choice today and the cheaper one in three
+months, because the vocabulary is persisted.
 
 EP-033 through EP-035 then close the bodies: the shell policy on tree-sitter-bash
 with four configurable lists, `grep` on the ripgrep library crates, the file
@@ -418,17 +419,29 @@ same thing on both.
 
 #### US-106: Port the arity table and the session pattern
 **Description:** As an operator who approved `npm run build` for the session, I
-want a later `npm run test` to be covered so that I am not asked once per
-subcommand.
+want a later `npm run build --watch` to be covered so that I am not asked once
+per argument list.
+
+> **Corrected 2026-08-07 by measurement.** Two statements below were derived by
+> reading rather than by running, and the capture in
+> `crates/vibe-core/tests/permission-surface/vocabulary.json` refutes both. The
+> table holds **138** entries, not 142: `len(ARITY)` is 138 and the count of 142
+> was the line number of the closing brace. And the arity is a *token count to
+> keep*, not a prefix depth, so `npm run` mapping to 3 makes `npm run build`
+> reduce to `npm run build *` and `git config user.name` to
+> `git config user.name *`. An approval for `npm run build` therefore does not
+> cover `npm run test` upstream either, which is why this story's description
+> now names the case the reference actually covers. The criteria below are the
+> measured ones.
 
 **Priority:** P0
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-105
 
 **Acceptance Criteria:**
-- [ ] Given the arity table, when it is compared against the reference, then it holds the same 142 entries with the same values, asserted by a test that fails when either side changes
+- [ ] Given the arity table, when it is compared against the reference, then it holds the same 138 entries with the same values, asserted by a test that fails when either side changes
 - [ ] Given the tokens of a command, when a session pattern is built, then the longest matching prefix in the table selects the arity, and the pattern is the first *arity* tokens followed by ` *`
-- [ ] Given `npm run build`, when a session pattern is built, then it is `npm run *`; given `git config user.name`, then it is `git config *`; given `ls -la`, then it is `ls *`
+- [ ] Given `npm run build`, when a session pattern is built, then it is `npm run build *`; given `git config user.name`, then it is `git config user.name *`; given `ls -la`, then it is `ls *`
 - [ ] Given a command whose first token is absent from the table, when a session pattern is built, then it is that token followed by ` *`
 - [ ] Given an empty token list, when a session pattern is built, then the result is the empty string and no panic occurs
 - [ ] Given several commands in one chain that reduce to the same session pattern, when requirements are built, then the pattern appears once rather than per command
@@ -682,7 +695,7 @@ upstream.
 - FR-01: The system must resolve a per-tool configuration composed of declared defaults, the merged `tools.<name>` table and the session override, and must re-read it at each publication rather than freezing it at registration.
 - FR-02: The system must coerce scalar arguments exactly as the reference Pydantic does, and must hand the handler the coerced value.
 - FR-03: The system must speak exactly four permission scopes and must carry an invocation pattern and a session pattern on every requirement.
-- FR-04: The system must derive a session pattern from the 142-entry arity table, falling back to the first token followed by ` *`.
+- FR-04: The system must derive a session pattern from the 138-entry arity table, falling back to the first token followed by ` *`.
 - FR-05: When an approved session rule's pattern matches an invocation pattern, including the optional trailing-argument form, the system must not prompt again.
 - FR-06: The system must extract shell command segments with the bash grammar, and must mark a segment whose node has a redirected-statement parent.
 - FR-07: The system must resolve shell policy from four configurable lists whose defaults equal the reference defaults.
