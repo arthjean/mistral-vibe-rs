@@ -1,0 +1,341 @@
+{
+  "prd": {
+    "file": "tasks/prd-checkpoints-parity.md",
+    "title": "Checkpoints Parity",
+    "created_at": "2026-08-07",
+    "status": "IN_PROGRESS"
+  },
+  "epics": [
+    {
+      "id": "EP-036",
+      "title": "The Opcode Engine and Its Oracle",
+      "status": "DONE",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 3,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-037",
+      "title": "The Event Log and the Pure Read Model",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 7,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-038",
+      "title": "Manual Edits, Truncation and the Engine Oracle",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 4,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-039",
+      "title": "The Review Surface on the Real Engine",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-040",
+      "title": "Rewind on Entry Identity and the Scorecard",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 3,
+      "stories_done": 0,
+      "stories_in_review": 0
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-119",
+      "title": "Reproduce Python line splitting for checkpoint text",
+      "epic": "EP-036",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [],
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
+    },
+    {
+      "id": "US-120",
+      "title": "Port SequenceMatcher with the junk heuristic permanently disabled",
+      "epic": "EP-036",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-119"
+      ],
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
+    },
+    {
+      "id": "US-121",
+      "title": "Capture and replay the opcode corpus",
+      "epic": "EP-036",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-120"
+      ],
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
+    },
+    {
+      "id": "US-122",
+      "title": "Declare the checkpoint domain types",
+      "epic": "EP-037",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-119"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-123",
+      "title": "The append-only log and the turn lifecycle",
+      "epic": "EP-037",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-122"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-124",
+      "title": "Compute regions and classify opacity",
+      "epic": "EP-037",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-121",
+        "US-123"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-125",
+      "title": "Compute dependencies from line provenance",
+      "epic": "EP-037",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-124"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-126",
+      "title": "Resolve effective decisions with drag and the revert ratchet",
+      "epic": "EP-037",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-125"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-127",
+      "title": "Reconstruct file states from applied regions",
+      "epic": "EP-037",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-126"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-128",
+      "title": "Anchor pending hunks in rendered diff coordinates",
+      "epic": "EP-037",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-127"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-129",
+      "title": "Capture manual edits by reconciliation",
+      "epic": "EP-038",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-127"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-130",
+      "title": "Truncate the log and plan a restore",
+      "epic": "EP-038",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-123"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-131",
+      "title": "Drive the engine from the turn lifecycle through a filesystem port",
+      "epic": "EP-038",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-130"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-132",
+      "title": "Capture and replay the engine corpus",
+      "epic": "EP-038",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-128",
+        "US-129",
+        "US-130",
+        "US-131"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-133",
+      "title": "Project review state from the engine and delete the stub",
+      "epic": "EP-039",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-132"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-134",
+      "title": "Honor the seven review targets with atomic persistence",
+      "epic": "EP-039",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-133"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-135",
+      "title": "Answer baseline, turn diff and hunks with owner scoping",
+      "epic": "EP-039",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-133"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-136",
+      "title": "Answer rewind read by entry identity",
+      "epic": "EP-040",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-131"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-137",
+      "title": "Rewind by entry identity in the declared response shape",
+      "epic": "EP-040",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "L",
+      "blocked_by": [
+        "US-136"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-138",
+      "title": "Bound the log, ledger the divergences and remeasure the scorecard",
+      "epic": "EP-040",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-134",
+        "US-135",
+        "US-137"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    }
+  ]
+}

@@ -1,0 +1,4503 @@
+{
+  "lineFixtures": [
+    {
+      "binary": false,
+      "lines": {
+        "count": 0,
+        "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb924",
+        "lengths": []
+      },
+      "name": "absent",
+      "text": null
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 0,
+        "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb924",
+        "lengths": []
+      },
+      "name": "empty",
+      "text": ""
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 1,
+        "digest": "sha256:90e1b76e4f33fa48e6025abad49803e3",
+        "lengths": [
+          10
+        ]
+      },
+      "name": "one-line-with-a-newline",
+      "text": "only line\n"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 1,
+        "digest": "sha256:2b892211f499a2174f9d5409808c114e",
+        "lengths": [
+          9
+        ]
+      },
+      "name": "one-line-without-a-newline",
+      "text": "only line"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 3,
+        "digest": "sha256:a6717201adce494b64ae316d1d12ac6d",
+        "lengths": [
+          4,
+          4,
+          6
+        ]
+      },
+      "name": "many-lines",
+      "text": "one\ntwo\nthree\n"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 3,
+        "digest": "sha256:9d5a5fc9275473b63755b51a10ca3cba",
+        "lengths": [
+          4,
+          4,
+          5
+        ]
+      },
+      "name": "many-lines-without-a-final-newline",
+      "text": "one\ntwo\nthree"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 3,
+        "digest": "sha256:98744d8df0be2ac9b3724166bdcfb551",
+        "lengths": [
+          1,
+          1,
+          1
+        ]
+      },
+      "name": "blank-lines-only",
+      "text": "\n\n\n"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:33609bd21a7094178d2face8c7fc6d1a",
+        "lengths": [
+          4,
+          4
+        ]
+      },
+      "name": "crlf-endings",
+      "text": "one\r\ntwo\r\n"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:33609bd21a7094178d2face8c7fc6d1a",
+        "lengths": [
+          4,
+          4
+        ]
+      },
+      "name": "lone-carriage-returns",
+      "text": "one\rtwo\r"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 3,
+        "digest": "sha256:a6717201adce494b64ae316d1d12ac6d",
+        "lengths": [
+          4,
+          4,
+          6
+        ]
+      },
+      "name": "mixed-endings",
+      "text": "one\r\ntwo\rthree\n"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:185cd662de742beecd5e20b39b1a5686",
+        "lengths": [
+          7,
+          5
+        ]
+      },
+      "name": "trailing-whitespace",
+      "text": "one   \n\ttwo\n"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:ff56e536da744626ac2890d94f713cbd",
+        "lengths": [
+          5,
+          6
+        ]
+      },
+      "name": "utf8-multibyte",
+      "text": "café\nnaïve\n"
+    },
+    {
+      "binary": true,
+      "lines": null,
+      "name": "binary-with-an-embedded-nul",
+      "text": "before\u0000after\n"
+    },
+    {
+      "binary": true,
+      "lines": null,
+      "name": "binary-with-a-trailing-nul",
+      "text": "text\n\u0000"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:3bd6aa98bee1aa8664515525d7149a1d",
+        "lengths": [
+          5,
+          4
+        ]
+      },
+      "name": "vertical-tab",
+      "text": "head\u000btail"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 1,
+        "digest": "sha256:ec19d621e138d61e43537ae87c84fedb",
+        "lengths": [
+          5
+        ]
+      },
+      "name": "vertical-tab-at-the-end",
+      "text": "head\u000b"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:ceb93280a4bcdf9ed0ea1852994482f2",
+        "lengths": [
+          5,
+          4
+        ]
+      },
+      "name": "form-feed",
+      "text": "head\ftail"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 1,
+        "digest": "sha256:ce9482bdc74300d91be1a4391906f1d8",
+        "lengths": [
+          5
+        ]
+      },
+      "name": "form-feed-at-the-end",
+      "text": "head\f"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:8e7c3887fa199b2ff12a57909e8705c8",
+        "lengths": [
+          5,
+          4
+        ]
+      },
+      "name": "file-separator",
+      "text": "head\u001ctail"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 1,
+        "digest": "sha256:633ebfb72bee024b24562df423f220b3",
+        "lengths": [
+          5
+        ]
+      },
+      "name": "file-separator-at-the-end",
+      "text": "head\u001c"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:16de733841fe8a7b29bb4689a1918c5a",
+        "lengths": [
+          5,
+          4
+        ]
+      },
+      "name": "group-separator",
+      "text": "head\u001dtail"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 1,
+        "digest": "sha256:9fa202e632a9041bbafe6be4eb242249",
+        "lengths": [
+          5
+        ]
+      },
+      "name": "group-separator-at-the-end",
+      "text": "head\u001d"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:41bc88eef0f82a625e3e92d051d9b0cb",
+        "lengths": [
+          5,
+          4
+        ]
+      },
+      "name": "record-separator",
+      "text": "head\u001etail"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 1,
+        "digest": "sha256:fbf793744d14c93c5ceae0eeafd8546f",
+        "lengths": [
+          5
+        ]
+      },
+      "name": "record-separator-at-the-end",
+      "text": "head\u001e"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:7c6ae3ffe75b716170b37052b9d4d1aa",
+        "lengths": [
+          5,
+          4
+        ]
+      },
+      "name": "next-line",
+      "text": "headtail"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 1,
+        "digest": "sha256:37f523c63321418ed97452910bf95a55",
+        "lengths": [
+          5
+        ]
+      },
+      "name": "next-line-at-the-end",
+      "text": "head"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:1b9dbf36f8a21e57518beb2484cc6c0c",
+        "lengths": [
+          5,
+          4
+        ]
+      },
+      "name": "line-separator",
+      "text": "head tail"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 1,
+        "digest": "sha256:89e033e19d5d6515d70eea3b68598184",
+        "lengths": [
+          5
+        ]
+      },
+      "name": "line-separator-at-the-end",
+      "text": "head "
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:de3492e36f1f67e55ae4ac3e9f72534e",
+        "lengths": [
+          5,
+          4
+        ]
+      },
+      "name": "paragraph-separator",
+      "text": "head tail"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 1,
+        "digest": "sha256:56a8150f95313545779ca1aa7ffb9f8d",
+        "lengths": [
+          5
+        ]
+      },
+      "name": "paragraph-separator-at-the-end",
+      "text": "head "
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 9,
+        "digest": "sha256:08b4b363cf6fe09fd1e0a543a59be476",
+        "lengths": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          1
+        ]
+      },
+      "name": "every-boundary-together",
+      "text": "a\u000bb\fc\u001cd\u001de\u001efg h i"
+    },
+    {
+      "binary": false,
+      "lines": {
+        "count": 2,
+        "digest": "sha256:9021fed7798b149fd5acdc54f515afdb",
+        "lengths": [
+          1,
+          4
+        ]
+      },
+      "name": "leading-boundary",
+      "text": "tail"
+    }
+  ],
+  "note": "Checkpoint opcode corpus: what the pinned reference's _decode_lines and difflib.SequenceMatcher(autojunk=False) answer for fixtures authored in scripts/parity/checkpoint_opcodes.py. Inputs are this repository's own and are committed as they stand; the line sequences the reference produced are committed as a SHA-256 digest with their per-line lengths, and the opcode tuples verbatim because a region ordinal is that tuple's position. No reference-authored text is stored. Regenerate with scripts/parity/checkpoint_opcodes.py when the pinned reference moves.",
+  "opcodeFixtures": [
+    {
+      "a": {
+        "lines": {
+          "count": 1,
+          "digest": "sha256:8d63d9162176cb3ca47f4c018dd7fe35",
+          "lengths": [
+            5
+          ]
+        },
+        "text": "only\n"
+      },
+      "b": {
+        "lines": {
+          "count": 1,
+          "digest": "sha256:8d63d9162176cb3ca47f4c018dd7fe35",
+          "lengths": [
+            5
+          ]
+        },
+        "text": "only\n"
+      },
+      "name": "identical-single-line",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "name": "identical-multi-line",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          5,
+          0,
+          5
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb924",
+          "lengths": []
+        },
+        "text": ""
+      },
+      "b": {
+        "lines": {
+          "count": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb924",
+          "lengths": []
+        },
+        "text": ""
+      },
+      "name": "both-empty",
+      "opcodes": []
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb924",
+          "lengths": []
+        },
+        "text": ""
+      },
+      "b": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "name": "empty-into-content",
+      "opcodes": [
+        [
+          "insert",
+          0,
+          0,
+          0,
+          5
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb924",
+          "lengths": []
+        },
+        "text": ""
+      },
+      "name": "content-into-empty",
+      "opcodes": [
+        [
+          "delete",
+          0,
+          5,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 2,
+          "digest": "sha256:6bc7234802263bfb92376d863ed8ca62",
+          "lengths": [
+            6,
+            5
+          ]
+        },
+        "text": "alpha\nbeta\n"
+      },
+      "b": {
+        "lines": {
+          "count": 3,
+          "digest": "sha256:c729b631e80078fbd711b3d8b3856c0f",
+          "lengths": [
+            6,
+            6,
+            8
+          ]
+        },
+        "text": "gamma\ndelta\nepsilon\n"
+      },
+      "name": "disjoint-lines",
+      "opcodes": [
+        [
+          "replace",
+          0,
+          2,
+          0,
+          3
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 2,
+          "digest": "sha256:cc85fbe930fe3290096fa7927ae196a2",
+          "lengths": [
+            5,
+            4
+          ]
+        },
+        "text": "head\nold\n"
+      },
+      "b": {
+        "lines": {
+          "count": 3,
+          "digest": "sha256:d5111bb818f8782b3b8771791e8d11e9",
+          "lengths": [
+            5,
+            4,
+            6
+          ]
+        },
+        "text": "head\nnew\nextra\n"
+      },
+      "name": "shared-prefix",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "replace",
+          1,
+          2,
+          1,
+          3
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 2,
+          "digest": "sha256:d3ed4849fe24b61e94e73e620845b75f",
+          "lengths": [
+            4,
+            5
+          ]
+        },
+        "text": "old\ntail\n"
+      },
+      "b": {
+        "lines": {
+          "count": 3,
+          "digest": "sha256:b9c42ebf72ec19bcb4ca1112dd369934",
+          "lengths": [
+            4,
+            6,
+            5
+          ]
+        },
+        "text": "new\nextra\ntail\n"
+      },
+      "name": "shared-suffix",
+      "opcodes": [
+        [
+          "replace",
+          0,
+          1,
+          0,
+          2
+        ],
+        [
+          "equal",
+          1,
+          2,
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 3,
+          "digest": "sha256:41a886d9e12b0f05bc80cb0a65dff8e9",
+          "lengths": [
+            5,
+            7,
+            5
+          ]
+        },
+        "text": "head\nmiddle\ntail\n"
+      },
+      "b": {
+        "lines": {
+          "count": 3,
+          "digest": "sha256:639f582416c38e11f26cb8da574504fe",
+          "lengths": [
+            5,
+            8,
+            5
+          ]
+        },
+        "text": "head\nchanged\ntail\n"
+      },
+      "name": "shared-prefix-and-suffix",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "replace",
+          1,
+          2,
+          1,
+          2
+        ],
+        [
+          "equal",
+          2,
+          3,
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:d766c803f0b56c6f1d1e1f3cbcc81042",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nTHREE\nfour\nfive\n"
+      },
+      "name": "one-line-changed-in-the-middle",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          2,
+          0,
+          2
+        ],
+        [
+          "replace",
+          2,
+          3,
+          2,
+          3
+        ],
+        [
+          "equal",
+          3,
+          5,
+          3,
+          5
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 6,
+          "digest": "sha256:4ffcf9cc08f8093d9fcb1fa8ce64e2ad",
+          "lengths": [
+            5,
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "zero\none\ntwo\nthree\nfour\nfive\n"
+      },
+      "name": "insertion-at-the-top",
+      "opcodes": [
+        [
+          "insert",
+          0,
+          0,
+          0,
+          1
+        ],
+        [
+          "equal",
+          0,
+          5,
+          1,
+          6
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 6,
+          "digest": "sha256:5cd0cea99c50d7f9dbd8f7f5c90f9710",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5,
+            4
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\nsix\n"
+      },
+      "name": "insertion-at-the-bottom",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          5,
+          0,
+          5
+        ],
+        [
+          "insert",
+          5,
+          5,
+          5,
+          6
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 6,
+          "digest": "sha256:81c0fa32fe6800621cda89e28c11b26d",
+          "lengths": [
+            4,
+            4,
+            9,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\ninserted\nthree\nfour\nfive\n"
+      },
+      "name": "insertion-in-the-middle",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          2,
+          0,
+          2
+        ],
+        [
+          "insert",
+          2,
+          2,
+          2,
+          3
+        ],
+        [
+          "equal",
+          2,
+          5,
+          3,
+          6
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 4,
+          "digest": "sha256:1d0f4fef779fca10fa8581194e30b08b",
+          "lengths": [
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "two\nthree\nfour\nfive\n"
+      },
+      "name": "deletion-at-the-top",
+      "opcodes": [
+        [
+          "delete",
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          "equal",
+          1,
+          5,
+          0,
+          4
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 4,
+          "digest": "sha256:eb3f1f180841e3490107cf47cc562d51",
+          "lengths": [
+            4,
+            4,
+            6,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\n"
+      },
+      "name": "deletion-at-the-bottom",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          4,
+          0,
+          4
+        ],
+        [
+          "delete",
+          4,
+          5,
+          4,
+          4
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 4,
+          "digest": "sha256:b15de9971cadb31f12cdd98d422176d6",
+          "lengths": [
+            4,
+            4,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nfour\nfive\n"
+      },
+      "name": "deletion-in-the-middle",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          2,
+          0,
+          2
+        ],
+        [
+          "delete",
+          2,
+          3,
+          2,
+          2
+        ],
+        [
+          "equal",
+          3,
+          5,
+          2,
+          4
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 7,
+          "digest": "sha256:759c7534befa41ac3e1e958175909b25",
+          "lengths": [
+            4,
+            8,
+            4,
+            6,
+            8,
+            5,
+            5
+          ]
+        },
+        "text": "one\nadded a\ntwo\nthree\nadded b\nfour\nfive\n"
+      },
+      "name": "two-separate-insertions",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "insert",
+          1,
+          1,
+          1,
+          2
+        ],
+        [
+          "equal",
+          1,
+          3,
+          2,
+          4
+        ],
+        [
+          "insert",
+          3,
+          3,
+          4,
+          5
+        ],
+        [
+          "equal",
+          3,
+          5,
+          5,
+          7
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 3,
+          "digest": "sha256:133d410ecd7330a1b882ee9cb87b3a78",
+          "lengths": [
+            4,
+            6,
+            5
+          ]
+        },
+        "text": "one\nthree\nfive\n"
+      },
+      "name": "two-separate-deletions",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "delete",
+          1,
+          2,
+          1,
+          1
+        ],
+        [
+          "equal",
+          2,
+          3,
+          1,
+          2
+        ],
+        [
+          "delete",
+          3,
+          4,
+          2,
+          2
+        ],
+        [
+          "equal",
+          4,
+          5,
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:b992c1256088139a399fa3847e26843d",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\nfive\n"
+      },
+      "b": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:4dcfa5409547a0e3491baaae0d92a3bb",
+          "lengths": [
+            4,
+            4,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "ONE\ntwo\nTHREE\nfour\nFIVE\n"
+      },
+      "name": "interleaved-replace-and-equal",
+      "opcodes": [
+        [
+          "replace",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "equal",
+          1,
+          2,
+          1,
+          2
+        ],
+        [
+          "replace",
+          2,
+          3,
+          2,
+          3
+        ],
+        [
+          "equal",
+          3,
+          4,
+          3,
+          4
+        ],
+        [
+          "replace",
+          4,
+          5,
+          4,
+          5
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 1,
+          "digest": "sha256:fb5e7ad2f219ba57a01928cedcd2b4f4",
+          "lengths": [
+            4
+          ]
+        },
+        "text": "one\n"
+      },
+      "b": {
+        "lines": {
+          "count": 4,
+          "digest": "sha256:eb3f1f180841e3490107cf47cc562d51",
+          "lengths": [
+            4,
+            4,
+            6,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\n"
+      },
+      "name": "single-line-into-many",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "insert",
+          1,
+          1,
+          1,
+          4
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 4,
+          "digest": "sha256:eb3f1f180841e3490107cf47cc562d51",
+          "lengths": [
+            4,
+            4,
+            6,
+            5
+          ]
+        },
+        "text": "one\ntwo\nthree\nfour\n"
+      },
+      "b": {
+        "lines": {
+          "count": 1,
+          "digest": "sha256:fb5e7ad2f219ba57a01928cedcd2b4f4",
+          "lengths": [
+            4
+          ]
+        },
+        "text": "one\n"
+      },
+      "name": "many-into-a-single-line",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "delete",
+          1,
+          4,
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 3,
+          "digest": "sha256:8690f1c3d3c591bda86b245a9f2aeaeb",
+          "lengths": [
+            5,
+            2,
+            5
+          ]
+        },
+        "text": "same\nx\nsame\n"
+      },
+      "b": {
+        "lines": {
+          "count": 3,
+          "digest": "sha256:afbf24ab9171437f380d49d6300e5b71",
+          "lengths": [
+            5,
+            2,
+            5
+          ]
+        },
+        "text": "same\ny\nsame\n"
+      },
+      "name": "repeated-line-twice",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "replace",
+          1,
+          2,
+          1,
+          2
+        ],
+        [
+          "equal",
+          2,
+          3,
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 4,
+          "digest": "sha256:db4760b856a608108570c5b68921b2be",
+          "lengths": [
+            6,
+            6,
+            5,
+            5
+          ]
+        },
+        "text": "block\nblock\nhead\ntail\n"
+      },
+      "b": {
+        "lines": {
+          "count": 4,
+          "digest": "sha256:32a1d14891bc4a3247cae4a68d4bcb88",
+          "lengths": [
+            5,
+            5,
+            6,
+            6
+          ]
+        },
+        "text": "head\ntail\nblock\nblock\n"
+      },
+      "name": "repeated-block-moved",
+      "opcodes": [
+        [
+          "insert",
+          0,
+          0,
+          0,
+          2
+        ],
+        [
+          "equal",
+          0,
+          2,
+          2,
+          4
+        ],
+        [
+          "delete",
+          2,
+          4,
+          4,
+          4
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 4,
+          "digest": "sha256:c71d7cb1721ab53fc53860352b65862e",
+          "lengths": [
+            6,
+            5,
+            6,
+            5
+          ]
+        },
+        "text": "alpha\nbeta\nalpha\nbeta\n"
+      },
+      "b": {
+        "lines": {
+          "count": 5,
+          "digest": "sha256:631fbc60a01da4777a5b26eb67301a05",
+          "lengths": [
+            6,
+            5,
+            6,
+            6,
+            5
+          ]
+        },
+        "text": "alpha\nbeta\ngamma\nalpha\nbeta\n"
+      },
+      "name": "duplicate-blocks",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          2,
+          0,
+          2
+        ],
+        [
+          "insert",
+          2,
+          2,
+          2,
+          3
+        ],
+        [
+          "equal",
+          2,
+          4,
+          3,
+          5
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 2,
+          "digest": "sha256:33609bd21a7094178d2face8c7fc6d1a",
+          "lengths": [
+            4,
+            4
+          ]
+        },
+        "text": "one\ntwo\n"
+      },
+      "b": {
+        "lines": {
+          "count": 3,
+          "digest": "sha256:43b567daca0e931af9580374797c6890",
+          "lengths": [
+            4,
+            1,
+            4
+          ]
+        },
+        "text": "one\n\ntwo\n"
+      },
+      "name": "blank-line-added",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "insert",
+          1,
+          1,
+          1,
+          2
+        ],
+        [
+          "equal",
+          1,
+          2,
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 1,
+          "digest": "sha256:2ef277e1fb849415cbab666b76fc8b9a",
+          "lengths": [
+            6
+          ]
+        },
+        "text": "value\n"
+      },
+      "b": {
+        "lines": {
+          "count": 1,
+          "digest": "sha256:9c9554be887ad858510a4942cd23fe74",
+          "lengths": [
+            8
+          ]
+        },
+        "text": "  value\n"
+      },
+      "name": "whitespace-only-change",
+      "opcodes": [
+        [
+          "replace",
+          0,
+          1,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 2,
+          "digest": "sha256:659e75228ea321daab0758134c49dc93",
+          "lengths": [
+            4,
+            3
+          ]
+        },
+        "text": "one\ntwo"
+      },
+      "b": {
+        "lines": {
+          "count": 2,
+          "digest": "sha256:33609bd21a7094178d2face8c7fc6d1a",
+          "lengths": [
+            4,
+            4
+          ]
+        },
+        "text": "one\ntwo\n"
+      },
+      "name": "trailing-newline-added",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "replace",
+          1,
+          2,
+          1,
+          2
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 2,
+          "digest": "sha256:33609bd21a7094178d2face8c7fc6d1a",
+          "lengths": [
+            4,
+            4
+          ]
+        },
+        "text": "one\ntwo\n"
+      },
+      "b": {
+        "lines": {
+          "count": 2,
+          "digest": "sha256:659e75228ea321daab0758134c49dc93",
+          "lengths": [
+            4,
+            3
+          ]
+        },
+        "text": "one\ntwo"
+      },
+      "name": "trailing-newline-removed",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "replace",
+          1,
+          2,
+          1,
+          2
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 2,
+          "digest": "sha256:33609bd21a7094178d2face8c7fc6d1a",
+          "lengths": [
+            4,
+            4
+          ]
+        },
+        "text": "one\r\ntwo\r\n"
+      },
+      "b": {
+        "lines": {
+          "count": 2,
+          "digest": "sha256:2c471e671bf66682b30ea558dc62d84f",
+          "lengths": [
+            4,
+            8
+          ]
+        },
+        "text": "one\r\nchanged\r\n"
+      },
+      "name": "crlf-normalized-before-the-diff",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "replace",
+          1,
+          2,
+          1,
+          2
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 4,
+          "digest": "sha256:cb05da3520d17e1685319e529697f335",
+          "lengths": [
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "text": "a\u000bb\fc d\n"
+      },
+      "b": {
+        "lines": {
+          "count": 4,
+          "digest": "sha256:0b5a1fcdbde94ed6d7d03a3ec438895e",
+          "lengths": [
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        "text": "a\u000bB\fc d\n"
+      },
+      "name": "boundary-characters-changed",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          "replace",
+          1,
+          2,
+          1,
+          2
+        ],
+        [
+          "equal",
+          2,
+          4,
+          2,
+          4
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 220,
+          "digest": "sha256:b5c2549ce173653c2271a4d6d934e5db",
+          "lengths": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ]
+        },
+        "text": "body 0\nbody 1\nbody 2\nbody 3\nbody 4\nbody 5\nbody 6\nbody 7\nbody 8\nbody 9\nbody 10\nbody 11\nbody 12\nbody 13\nbody 14\nbody 15\nbody 16\nbody 17\nbody 18\nbody 19\nbody 20\nbody 21\nbody 22\nbody 23\nbody 24\nbody 25\nbody 26\nbody 27\nbody 28\nbody 29\nbody 30\nbody 31\nbody 32\nbody 33\nbody 34\nbody 35\nbody 36\nbody 37\nbody 38\nbody 39\nbody 40\nbody 41\nbody 42\nbody 43\nbody 44\nbody 45\nbody 46\nbody 47\nbody 48\nbody 49\nbody 50\nbody 51\nbody 52\nbody 53\nbody 54\nbody 55\nbody 56\nbody 57\nbody 58\nbody 59\nbody 60\nbody 61\nbody 62\nbody 63\nbody 64\nbody 65\nbody 66\nbody 67\nbody 68\nbody 69\nbody 70\nbody 71\nbody 72\nbody 73\nbody 74\nbody 75\nbody 76\nbody 77\nbody 78\nbody 79\nbody 80\nbody 81\nbody 82\nbody 83\nbody 84\nbody 85\nbody 86\nbody 87\nbody 88\nbody 89\nbody 90\nbody 91\nbody 92\nbody 93\nbody 94\nbody 95\nbody 96\nbody 97\nbody 98\nbody 99\nbody 100\nbody 101\nbody 102\nbody 103\nbody 104\nbody 105\nbody 106\nbody 107\nbody 108\nbody 109\nbody 110\nbody 111\nbody 112\nbody 113\nbody 114\nbody 115\nbody 116\nbody 117\nbody 118\nbody 119\nbody 120\nbody 121\nbody 122\nbody 123\nbody 124\nbody 125\nbody 126\nbody 127\nbody 128\nbody 129\nbody 130\nbody 131\nbody 132\nbody 133\nbody 134\nbody 135\nbody 136\nbody 137\nbody 138\nbody 139\nbody 140\nbody 141\nbody 142\nbody 143\nbody 144\nbody 145\nbody 146\nbody 147\nbody 148\nbody 149\nbody 150\nbody 151\nbody 152\nbody 153\nbody 154\nbody 155\nbody 156\nbody 157\nbody 158\nbody 159\nbody 160\nbody 161\nbody 162\nbody 163\nbody 164\nbody 165\nbody 166\nbody 167\nbody 168\nbody 169\nbody 170\nbody 171\nbody 172\nbody 173\nbody 174\nbody 175\nbody 176\nbody 177\nbody 178\nbody 179\nbody 180\nbody 181\nbody 182\nbody 183\nbody 184\nbody 185\nbody 186\nbody 187\nbody 188\nbody 189\nbody 190\nbody 191\nbody 192\nbody 193\nbody 194\nbody 195\nbody 196\nbody 197\nbody 198\nbody 199\nbody 200\nbody 201\nbody 202\nbody 203\nbody 204\nbody 205\nbody 206\nbody 207\nbody 208\nbody 209\nbody 210\nbody 211\nbody 212\nbody 213\nbody 214\nbody 215\nbody 216\nbody 217\nbody 218\nbody 219\n"
+      },
+      "b": {
+        "lines": {
+          "count": 220,
+          "digest": "sha256:b5c2549ce173653c2271a4d6d934e5db",
+          "lengths": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ]
+        },
+        "text": "body 0\nbody 1\nbody 2\nbody 3\nbody 4\nbody 5\nbody 6\nbody 7\nbody 8\nbody 9\nbody 10\nbody 11\nbody 12\nbody 13\nbody 14\nbody 15\nbody 16\nbody 17\nbody 18\nbody 19\nbody 20\nbody 21\nbody 22\nbody 23\nbody 24\nbody 25\nbody 26\nbody 27\nbody 28\nbody 29\nbody 30\nbody 31\nbody 32\nbody 33\nbody 34\nbody 35\nbody 36\nbody 37\nbody 38\nbody 39\nbody 40\nbody 41\nbody 42\nbody 43\nbody 44\nbody 45\nbody 46\nbody 47\nbody 48\nbody 49\nbody 50\nbody 51\nbody 52\nbody 53\nbody 54\nbody 55\nbody 56\nbody 57\nbody 58\nbody 59\nbody 60\nbody 61\nbody 62\nbody 63\nbody 64\nbody 65\nbody 66\nbody 67\nbody 68\nbody 69\nbody 70\nbody 71\nbody 72\nbody 73\nbody 74\nbody 75\nbody 76\nbody 77\nbody 78\nbody 79\nbody 80\nbody 81\nbody 82\nbody 83\nbody 84\nbody 85\nbody 86\nbody 87\nbody 88\nbody 89\nbody 90\nbody 91\nbody 92\nbody 93\nbody 94\nbody 95\nbody 96\nbody 97\nbody 98\nbody 99\nbody 100\nbody 101\nbody 102\nbody 103\nbody 104\nbody 105\nbody 106\nbody 107\nbody 108\nbody 109\nbody 110\nbody 111\nbody 112\nbody 113\nbody 114\nbody 115\nbody 116\nbody 117\nbody 118\nbody 119\nbody 120\nbody 121\nbody 122\nbody 123\nbody 124\nbody 125\nbody 126\nbody 127\nbody 128\nbody 129\nbody 130\nbody 131\nbody 132\nbody 133\nbody 134\nbody 135\nbody 136\nbody 137\nbody 138\nbody 139\nbody 140\nbody 141\nbody 142\nbody 143\nbody 144\nbody 145\nbody 146\nbody 147\nbody 148\nbody 149\nbody 150\nbody 151\nbody 152\nbody 153\nbody 154\nbody 155\nbody 156\nbody 157\nbody 158\nbody 159\nbody 160\nbody 161\nbody 162\nbody 163\nbody 164\nbody 165\nbody 166\nbody 167\nbody 168\nbody 169\nbody 170\nbody 171\nbody 172\nbody 173\nbody 174\nbody 175\nbody 176\nbody 177\nbody 178\nbody 179\nbody 180\nbody 181\nbody 182\nbody 183\nbody 184\nbody 185\nbody 186\nbody 187\nbody 188\nbody 189\nbody 190\nbody 191\nbody 192\nbody 193\nbody 194\nbody 195\nbody 196\nbody 197\nbody 198\nbody 199\nbody 200\nbody 201\nbody 202\nbody 203\nbody 204\nbody 205\nbody 206\nbody 207\nbody 208\nbody 209\nbody 210\nbody 211\nbody 212\nbody 213\nbody 214\nbody 215\nbody 216\nbody 217\nbody 218\nbody 219\n"
+      },
+      "name": "above-the-threshold-identical",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          220,
+          0,
+          220
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 220,
+          "digest": "sha256:b5c2549ce173653c2271a4d6d934e5db",
+          "lengths": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ]
+        },
+        "text": "body 0\nbody 1\nbody 2\nbody 3\nbody 4\nbody 5\nbody 6\nbody 7\nbody 8\nbody 9\nbody 10\nbody 11\nbody 12\nbody 13\nbody 14\nbody 15\nbody 16\nbody 17\nbody 18\nbody 19\nbody 20\nbody 21\nbody 22\nbody 23\nbody 24\nbody 25\nbody 26\nbody 27\nbody 28\nbody 29\nbody 30\nbody 31\nbody 32\nbody 33\nbody 34\nbody 35\nbody 36\nbody 37\nbody 38\nbody 39\nbody 40\nbody 41\nbody 42\nbody 43\nbody 44\nbody 45\nbody 46\nbody 47\nbody 48\nbody 49\nbody 50\nbody 51\nbody 52\nbody 53\nbody 54\nbody 55\nbody 56\nbody 57\nbody 58\nbody 59\nbody 60\nbody 61\nbody 62\nbody 63\nbody 64\nbody 65\nbody 66\nbody 67\nbody 68\nbody 69\nbody 70\nbody 71\nbody 72\nbody 73\nbody 74\nbody 75\nbody 76\nbody 77\nbody 78\nbody 79\nbody 80\nbody 81\nbody 82\nbody 83\nbody 84\nbody 85\nbody 86\nbody 87\nbody 88\nbody 89\nbody 90\nbody 91\nbody 92\nbody 93\nbody 94\nbody 95\nbody 96\nbody 97\nbody 98\nbody 99\nbody 100\nbody 101\nbody 102\nbody 103\nbody 104\nbody 105\nbody 106\nbody 107\nbody 108\nbody 109\nbody 110\nbody 111\nbody 112\nbody 113\nbody 114\nbody 115\nbody 116\nbody 117\nbody 118\nbody 119\nbody 120\nbody 121\nbody 122\nbody 123\nbody 124\nbody 125\nbody 126\nbody 127\nbody 128\nbody 129\nbody 130\nbody 131\nbody 132\nbody 133\nbody 134\nbody 135\nbody 136\nbody 137\nbody 138\nbody 139\nbody 140\nbody 141\nbody 142\nbody 143\nbody 144\nbody 145\nbody 146\nbody 147\nbody 148\nbody 149\nbody 150\nbody 151\nbody 152\nbody 153\nbody 154\nbody 155\nbody 156\nbody 157\nbody 158\nbody 159\nbody 160\nbody 161\nbody 162\nbody 163\nbody 164\nbody 165\nbody 166\nbody 167\nbody 168\nbody 169\nbody 170\nbody 171\nbody 172\nbody 173\nbody 174\nbody 175\nbody 176\nbody 177\nbody 178\nbody 179\nbody 180\nbody 181\nbody 182\nbody 183\nbody 184\nbody 185\nbody 186\nbody 187\nbody 188\nbody 189\nbody 190\nbody 191\nbody 192\nbody 193\nbody 194\nbody 195\nbody 196\nbody 197\nbody 198\nbody 199\nbody 200\nbody 201\nbody 202\nbody 203\nbody 204\nbody 205\nbody 206\nbody 207\nbody 208\nbody 209\nbody 210\nbody 211\nbody 212\nbody 213\nbody 214\nbody 215\nbody 216\nbody 217\nbody 218\nbody 219\n"
+      },
+      "b": {
+        "lines": {
+          "count": 220,
+          "digest": "sha256:94563d2336b93e694e44d4fbc9c270cd",
+          "lengths": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            12,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ]
+        },
+        "text": "body 0\nbody 1\nbody 2\nbody 3\nbody 4\nbody 5\nbody 6\nbody 7\nbody 8\nbody 9\nbody 10\nbody 11\nbody 12\nbody 13\nbody 14\nbody 15\nbody 16\nbody 17\nbody 18\nbody 19\nbody 20\nbody 21\nbody 22\nbody 23\nbody 24\nbody 25\nbody 26\nbody 27\nbody 28\nbody 29\nbody 30\nbody 31\nbody 32\nbody 33\nbody 34\nbody 35\nbody 36\nbody 37\nbody 38\nbody 39\nbody 40\nbody 41\nbody 42\nbody 43\nbody 44\nbody 45\nbody 46\nbody 47\nbody 48\nbody 49\nbody 50\nbody 51\nbody 52\nbody 53\nbody 54\nbody 55\nbody 56\nbody 57\nbody 58\nbody 59\nbody 60\nbody 61\nbody 62\nbody 63\nbody 64\nbody 65\nbody 66\nbody 67\nbody 68\nbody 69\nbody 70\nbody 71\nbody 72\nbody 73\nbody 74\nbody 75\nbody 76\nbody 77\nbody 78\nbody 79\nbody 80\nbody 81\nbody 82\nbody 83\nbody 84\nbody 85\nbody 86\nbody 87\nbody 88\nbody 89\nbody 90\nbody 91\nbody 92\nbody 93\nbody 94\nbody 95\nbody 96\nbody 97\nbody 98\nbody 99\nchanged 100\nbody 101\nbody 102\nbody 103\nbody 104\nbody 105\nbody 106\nbody 107\nbody 108\nbody 109\nbody 110\nbody 111\nbody 112\nbody 113\nbody 114\nbody 115\nbody 116\nbody 117\nbody 118\nbody 119\nbody 120\nbody 121\nbody 122\nbody 123\nbody 124\nbody 125\nbody 126\nbody 127\nbody 128\nbody 129\nbody 130\nbody 131\nbody 132\nbody 133\nbody 134\nbody 135\nbody 136\nbody 137\nbody 138\nbody 139\nbody 140\nbody 141\nbody 142\nbody 143\nbody 144\nbody 145\nbody 146\nbody 147\nbody 148\nbody 149\nbody 150\nbody 151\nbody 152\nbody 153\nbody 154\nbody 155\nbody 156\nbody 157\nbody 158\nbody 159\nbody 160\nbody 161\nbody 162\nbody 163\nbody 164\nbody 165\nbody 166\nbody 167\nbody 168\nbody 169\nbody 170\nbody 171\nbody 172\nbody 173\nbody 174\nbody 175\nbody 176\nbody 177\nbody 178\nbody 179\nbody 180\nbody 181\nbody 182\nbody 183\nbody 184\nbody 185\nbody 186\nbody 187\nbody 188\nbody 189\nbody 190\nbody 191\nbody 192\nbody 193\nbody 194\nbody 195\nbody 196\nbody 197\nbody 198\nbody 199\nbody 200\nbody 201\nbody 202\nbody 203\nbody 204\nbody 205\nbody 206\nbody 207\nbody 208\nbody 209\nbody 210\nbody 211\nbody 212\nbody 213\nbody 214\nbody 215\nbody 216\nbody 217\nbody 218\nbody 219\n"
+      },
+      "name": "above-the-threshold-single-edit",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          100,
+          0,
+          100
+        ],
+        [
+          "replace",
+          100,
+          101,
+          100,
+          101
+        ],
+        [
+          "equal",
+          101,
+          220,
+          101,
+          220
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 250,
+          "digest": "sha256:d93fe72260c254d8f2bde96ea5af0980",
+          "lengths": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            7,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            7,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            7,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ]
+        },
+        "text": "body 0\nbody 1\nbody 2\nbody 3\nbody 4\nbody 5\nbody 6\nbody 7\nbody 8\nbody 9\nshared\nbody 11\nbody 12\nbody 13\nbody 14\nbody 15\nbody 16\nbody 17\nbody 18\nbody 19\nbody 20\nbody 21\nbody 22\nbody 23\nbody 24\nbody 25\nbody 26\nbody 27\nbody 28\nbody 29\nbody 30\nbody 31\nbody 32\nbody 33\nbody 34\nbody 35\nbody 36\nbody 37\nbody 38\nbody 39\nbody 40\nbody 41\nbody 42\nbody 43\nbody 44\nbody 45\nbody 46\nbody 47\nbody 48\nbody 49\nbody 50\nbody 51\nbody 52\nbody 53\nbody 54\nbody 55\nbody 56\nbody 57\nbody 58\nbody 59\nshared\nbody 61\nbody 62\nbody 63\nbody 64\nbody 65\nbody 66\nbody 67\nbody 68\nbody 69\nbody 70\nbody 71\nbody 72\nbody 73\nbody 74\nbody 75\nbody 76\nbody 77\nbody 78\nbody 79\nbody 80\nbody 81\nbody 82\nbody 83\nbody 84\nbody 85\nbody 86\nbody 87\nbody 88\nbody 89\nbody 90\nbody 91\nbody 92\nbody 93\nbody 94\nbody 95\nbody 96\nbody 97\nbody 98\nbody 99\nbody 100\nbody 101\nbody 102\nbody 103\nbody 104\nbody 105\nbody 106\nbody 107\nbody 108\nbody 109\nshared\nbody 111\nbody 112\nbody 113\nbody 114\nbody 115\nbody 116\nbody 117\nbody 118\nbody 119\nbody 120\nbody 121\nbody 122\nbody 123\nbody 124\nbody 125\nbody 126\nbody 127\nbody 128\nbody 129\nbody 130\nbody 131\nbody 132\nbody 133\nbody 134\nbody 135\nbody 136\nbody 137\nbody 138\nbody 139\nbody 140\nbody 141\nbody 142\nbody 143\nbody 144\nbody 145\nbody 146\nbody 147\nbody 148\nbody 149\nbody 150\nbody 151\nbody 152\nbody 153\nbody 154\nbody 155\nbody 156\nbody 157\nbody 158\nbody 159\nshared\nbody 161\nbody 162\nbody 163\nbody 164\nbody 165\nbody 166\nbody 167\nbody 168\nbody 169\nbody 170\nbody 171\nbody 172\nbody 173\nbody 174\nbody 175\nbody 176\nbody 177\nbody 178\nbody 179\nbody 180\nbody 181\nbody 182\nbody 183\nbody 184\nbody 185\nbody 186\nbody 187\nbody 188\nbody 189\nbody 190\nbody 191\nbody 192\nbody 193\nbody 194\nbody 195\nbody 196\nbody 197\nbody 198\nbody 199\nbody 200\nbody 201\nbody 202\nbody 203\nbody 204\nbody 205\nbody 206\nbody 207\nbody 208\nbody 209\nshared\nbody 211\nbody 212\nbody 213\nbody 214\nbody 215\nbody 216\nbody 217\nbody 218\nbody 219\nbody 220\nbody 221\nbody 222\nbody 223\nbody 224\nbody 225\nbody 226\nbody 227\nbody 228\nbody 229\nbody 230\nbody 231\nbody 232\nbody 233\nbody 234\nbody 235\nbody 236\nbody 237\nbody 238\nbody 239\nbody 240\nbody 241\nbody 242\nbody 243\nbody 244\nbody 245\nbody 246\nbody 247\nbody 248\nbody 249\n"
+      },
+      "b": {
+        "lines": {
+          "count": 250,
+          "digest": "sha256:d0906d21076d86eca14d4c2eeeea5cd1",
+          "lengths": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            10,
+            7,
+            7,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            7,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            7,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            7,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ]
+        },
+        "text": "body 0\nbody 1\nbody 2\nbody 3\nbody 4\nbody 5\nbody 6\nchanged 7\nbody 8\nbody 9\nshared\nbody 11\nbody 12\nbody 13\nbody 14\nbody 15\nbody 16\nbody 17\nbody 18\nbody 19\nbody 20\nbody 21\nbody 22\nbody 23\nbody 24\nbody 25\nbody 26\nbody 27\nbody 28\nbody 29\nbody 30\nbody 31\nbody 32\nbody 33\nbody 34\nbody 35\nbody 36\nbody 37\nbody 38\nbody 39\nbody 40\nbody 41\nbody 42\nbody 43\nbody 44\nbody 45\nbody 46\nbody 47\nbody 48\nbody 49\nbody 50\nbody 51\nbody 52\nbody 53\nbody 54\nbody 55\nbody 56\nbody 57\nbody 58\nbody 59\nshared\nbody 61\nbody 62\nbody 63\nbody 64\nbody 65\nbody 66\nbody 67\nbody 68\nbody 69\nbody 70\nbody 71\nbody 72\nbody 73\nbody 74\nbody 75\nbody 76\nbody 77\nbody 78\nbody 79\nbody 80\nbody 81\nbody 82\nbody 83\nbody 84\nbody 85\nbody 86\nbody 87\nbody 88\nbody 89\nbody 90\nbody 91\nbody 92\nbody 93\nbody 94\nbody 95\nbody 96\nbody 97\nbody 98\nbody 99\nbody 100\nbody 101\nbody 102\nbody 103\nbody 104\nbody 105\nbody 106\nbody 107\nbody 108\nbody 109\nshared\nbody 111\nbody 112\nbody 113\nbody 114\nbody 115\nbody 116\nbody 117\nbody 118\nbody 119\nbody 120\nbody 121\nbody 122\nbody 123\nbody 124\nbody 125\nbody 126\nbody 127\nbody 128\nbody 129\nbody 130\nbody 131\nbody 132\nbody 133\nbody 134\nbody 135\nbody 136\nbody 137\nbody 138\nbody 139\nbody 140\nbody 141\nbody 142\nbody 143\nbody 144\nbody 145\nbody 146\nbody 147\nbody 148\nbody 149\nbody 150\nbody 151\nbody 152\nbody 153\nbody 154\nbody 155\nbody 156\nbody 157\nbody 158\nbody 159\nshared\nbody 161\nbody 162\nbody 163\nbody 164\nbody 165\nbody 166\nbody 167\nbody 168\nbody 169\nbody 170\nbody 171\nbody 172\nbody 173\nbody 174\nbody 175\nbody 176\nbody 177\nbody 178\nbody 179\nbody 180\nbody 181\nbody 182\nbody 183\nbody 184\nbody 185\nbody 186\nbody 187\nbody 188\nbody 189\nbody 190\nbody 191\nbody 192\nbody 193\nbody 194\nbody 195\nbody 196\nbody 197\nbody 198\nbody 199\nbody 200\nbody 201\nbody 202\nbody 203\nbody 204\nbody 205\nbody 206\nbody 207\nbody 208\nbody 209\nshared\nbody 211\nbody 212\nbody 213\nbody 214\nbody 215\nbody 216\nbody 217\nbody 218\nbody 219\nbody 220\nbody 221\nbody 222\nbody 223\nbody 224\nbody 225\nbody 226\nbody 227\nbody 228\nbody 229\nbody 230\nbody 231\nbody 232\nbody 233\nbody 234\nbody 235\nbody 236\nbody 237\nbody 238\nbody 239\nbody 240\nbody 241\nbody 242\nbody 243\nbody 244\nbody 245\nbody 246\nbody 247\nbody 248\nbody 249\n"
+      },
+      "name": "above-the-threshold-with-a-repeated-line",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          7,
+          0,
+          7
+        ],
+        [
+          "replace",
+          7,
+          8,
+          7,
+          8
+        ],
+        [
+          "equal",
+          8,
+          250,
+          8,
+          250
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 3,
+          "digest": "sha256:27c2802f0fd30371feb95477c4611039",
+          "lengths": [
+            6,
+            7,
+            5
+          ]
+        },
+        "text": "first\nshared\nlast\n"
+      },
+      "b": {
+        "lines": {
+          "count": 250,
+          "digest": "sha256:d93fe72260c254d8f2bde96ea5af0980",
+          "lengths": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            7,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            7,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            7,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ]
+        },
+        "text": "body 0\nbody 1\nbody 2\nbody 3\nbody 4\nbody 5\nbody 6\nbody 7\nbody 8\nbody 9\nshared\nbody 11\nbody 12\nbody 13\nbody 14\nbody 15\nbody 16\nbody 17\nbody 18\nbody 19\nbody 20\nbody 21\nbody 22\nbody 23\nbody 24\nbody 25\nbody 26\nbody 27\nbody 28\nbody 29\nbody 30\nbody 31\nbody 32\nbody 33\nbody 34\nbody 35\nbody 36\nbody 37\nbody 38\nbody 39\nbody 40\nbody 41\nbody 42\nbody 43\nbody 44\nbody 45\nbody 46\nbody 47\nbody 48\nbody 49\nbody 50\nbody 51\nbody 52\nbody 53\nbody 54\nbody 55\nbody 56\nbody 57\nbody 58\nbody 59\nshared\nbody 61\nbody 62\nbody 63\nbody 64\nbody 65\nbody 66\nbody 67\nbody 68\nbody 69\nbody 70\nbody 71\nbody 72\nbody 73\nbody 74\nbody 75\nbody 76\nbody 77\nbody 78\nbody 79\nbody 80\nbody 81\nbody 82\nbody 83\nbody 84\nbody 85\nbody 86\nbody 87\nbody 88\nbody 89\nbody 90\nbody 91\nbody 92\nbody 93\nbody 94\nbody 95\nbody 96\nbody 97\nbody 98\nbody 99\nbody 100\nbody 101\nbody 102\nbody 103\nbody 104\nbody 105\nbody 106\nbody 107\nbody 108\nbody 109\nshared\nbody 111\nbody 112\nbody 113\nbody 114\nbody 115\nbody 116\nbody 117\nbody 118\nbody 119\nbody 120\nbody 121\nbody 122\nbody 123\nbody 124\nbody 125\nbody 126\nbody 127\nbody 128\nbody 129\nbody 130\nbody 131\nbody 132\nbody 133\nbody 134\nbody 135\nbody 136\nbody 137\nbody 138\nbody 139\nbody 140\nbody 141\nbody 142\nbody 143\nbody 144\nbody 145\nbody 146\nbody 147\nbody 148\nbody 149\nbody 150\nbody 151\nbody 152\nbody 153\nbody 154\nbody 155\nbody 156\nbody 157\nbody 158\nbody 159\nshared\nbody 161\nbody 162\nbody 163\nbody 164\nbody 165\nbody 166\nbody 167\nbody 168\nbody 169\nbody 170\nbody 171\nbody 172\nbody 173\nbody 174\nbody 175\nbody 176\nbody 177\nbody 178\nbody 179\nbody 180\nbody 181\nbody 182\nbody 183\nbody 184\nbody 185\nbody 186\nbody 187\nbody 188\nbody 189\nbody 190\nbody 191\nbody 192\nbody 193\nbody 194\nbody 195\nbody 196\nbody 197\nbody 198\nbody 199\nbody 200\nbody 201\nbody 202\nbody 203\nbody 204\nbody 205\nbody 206\nbody 207\nbody 208\nbody 209\nshared\nbody 211\nbody 212\nbody 213\nbody 214\nbody 215\nbody 216\nbody 217\nbody 218\nbody 219\nbody 220\nbody 221\nbody 222\nbody 223\nbody 224\nbody 225\nbody 226\nbody 227\nbody 228\nbody 229\nbody 230\nbody 231\nbody 232\nbody 233\nbody 234\nbody 235\nbody 236\nbody 237\nbody 238\nbody 239\nbody 240\nbody 241\nbody 242\nbody 243\nbody 244\nbody 245\nbody 246\nbody 247\nbody 248\nbody 249\n"
+      },
+      "name": "above-the-threshold-popular-line-is-the-only-match",
+      "opcodes": [
+        [
+          "replace",
+          0,
+          1,
+          0,
+          10
+        ],
+        [
+          "equal",
+          1,
+          2,
+          10,
+          11
+        ],
+        [
+          "replace",
+          2,
+          3,
+          11,
+          250
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 210,
+          "digest": "sha256:e51d5621c484fc1b923fa26b1b9724aa",
+          "lengths": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ]
+        },
+        "text": "body 0\nbody 1\nbody 2\nbody 3\nbody 4\nbody 5\nbody 6\nbody 7\nbody 8\nbody 9\nbody 10\nbody 11\nbody 12\nbody 13\nbody 14\nbody 15\nbody 16\nbody 17\nbody 18\nbody 19\nbody 20\nbody 21\nbody 22\nbody 23\nbody 24\nbody 25\nbody 26\nbody 27\nbody 28\nbody 29\nbody 30\nbody 31\nbody 32\nbody 33\nbody 34\nbody 35\nbody 36\nbody 37\nbody 38\nbody 39\nbody 40\nbody 41\nbody 42\nbody 43\nbody 44\nbody 45\nbody 46\nbody 47\nbody 48\nbody 49\nbody 50\nbody 51\nbody 52\nbody 53\nbody 54\nbody 55\nbody 56\nbody 57\nbody 58\nbody 59\nbody 60\nbody 61\nbody 62\nbody 63\nbody 64\nbody 65\nbody 66\nbody 67\nbody 68\nbody 69\nbody 70\nbody 71\nbody 72\nbody 73\nbody 74\nbody 75\nbody 76\nbody 77\nbody 78\nbody 79\nbody 80\nbody 81\nbody 82\nbody 83\nbody 84\nbody 85\nbody 86\nbody 87\nbody 88\nbody 89\nbody 90\nbody 91\nbody 92\nbody 93\nbody 94\nbody 95\nbody 96\nbody 97\nbody 98\nbody 99\nbody 100\nbody 101\nbody 102\nbody 103\nbody 104\nbody 105\nbody 106\nbody 107\nbody 108\nbody 109\nbody 110\nbody 111\nbody 112\nbody 113\nbody 114\nbody 115\nbody 116\nbody 117\nbody 118\nbody 119\nbody 120\nbody 121\nbody 122\nbody 123\nbody 124\nbody 125\nbody 126\nbody 127\nbody 128\nbody 129\nbody 130\nbody 131\nbody 132\nbody 133\nbody 134\nbody 135\nbody 136\nbody 137\nbody 138\nbody 139\nbody 140\nbody 141\nbody 142\nbody 143\nbody 144\nbody 145\nbody 146\nbody 147\nbody 148\nbody 149\nbody 150\nbody 151\nbody 152\nbody 153\nbody 154\nbody 155\nbody 156\nbody 157\nbody 158\nbody 159\nbody 160\nbody 161\nbody 162\nbody 163\nbody 164\nbody 165\nbody 166\nbody 167\nbody 168\nbody 169\nbody 170\nbody 171\nbody 172\nbody 173\nbody 174\nbody 175\nbody 176\nbody 177\nbody 178\nbody 179\nbody 180\nbody 181\nbody 182\nbody 183\nbody 184\nbody 185\nbody 186\nbody 187\nbody 188\nbody 189\nbody 190\nbody 191\nbody 192\nbody 193\nbody 194\nbody 195\nbody 196\nbody 197\nbody 198\nbody 199\nbody 200\nbody 201\nbody 202\nbody 203\nbody 204\nbody 205\nbody 206\nbody 207\nbody 208\nbody 209\n"
+      },
+      "b": {
+        "lines": {
+          "count": 230,
+          "digest": "sha256:afee1047065183159bfd0febb618f101",
+          "lengths": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "text": "body 0\nbody 1\nbody 2\nbody 3\nbody 4\nbody 5\nbody 6\nbody 7\nbody 8\nbody 9\nbody 10\nbody 11\nbody 12\nbody 13\nbody 14\nbody 15\nbody 16\nbody 17\nbody 18\nbody 19\nbody 20\nbody 21\nbody 22\nbody 23\nbody 24\nbody 25\nbody 26\nbody 27\nbody 28\nbody 29\nbody 30\nbody 31\nbody 32\nbody 33\nbody 34\nbody 35\nbody 36\nbody 37\nbody 38\nbody 39\nbody 40\nbody 41\nbody 42\nbody 43\nbody 44\nbody 45\nbody 46\nbody 47\nbody 48\nbody 49\nbody 50\nbody 51\nbody 52\nbody 53\nbody 54\nbody 55\nbody 56\nbody 57\nbody 58\nbody 59\nbody 60\nbody 61\nbody 62\nbody 63\nbody 64\nbody 65\nbody 66\nbody 67\nbody 68\nbody 69\nbody 70\nbody 71\nbody 72\nbody 73\nbody 74\nbody 75\nbody 76\nbody 77\nbody 78\nbody 79\nbody 80\nbody 81\nbody 82\nbody 83\nbody 84\nbody 85\nbody 86\nbody 87\nbody 88\nbody 89\nbody 90\nbody 91\nbody 92\nbody 93\nbody 94\nbody 95\nbody 96\nbody 97\nbody 98\nbody 99\nbody 100\nbody 101\nbody 102\nbody 103\nbody 104\nbody 105\nbody 106\nbody 107\nbody 108\nbody 109\nbody 110\nbody 111\nbody 112\nbody 113\nbody 114\nbody 115\nbody 116\nbody 117\nbody 118\nbody 119\nbody 120\nbody 121\nbody 122\nbody 123\nbody 124\nbody 125\nbody 126\nbody 127\nbody 128\nbody 129\nbody 130\nbody 131\nbody 132\nbody 133\nbody 134\nbody 135\nbody 136\nbody 137\nbody 138\nbody 139\nbody 140\nbody 141\nbody 142\nbody 143\nbody 144\nbody 145\nbody 146\nbody 147\nbody 148\nbody 149\nbody 150\nbody 151\nbody 152\nbody 153\nbody 154\nbody 155\nbody 156\nbody 157\nbody 158\nbody 159\nbody 160\nbody 161\nbody 162\nbody 163\nbody 164\nbody 165\nbody 166\nbody 167\nbody 168\nbody 169\nbody 170\nbody 171\nbody 172\nbody 173\nbody 174\nbody 175\nbody 176\nbody 177\nbody 178\nbody 179\nbody 180\nbody 181\nbody 182\nbody 183\nbody 184\nbody 185\nbody 186\nbody 187\nbody 188\nbody 189\nbody 190\nbody 191\nbody 192\nbody 193\nbody 194\nbody 195\nbody 196\nbody 197\nbody 198\nbody 199\nbody 200\nbody 201\nbody 202\nbody 203\nbody 204\nbody 205\nbody 206\nbody 207\nbody 208\nbody 209\ntail 0\ntail 1\ntail 2\ntail 3\ntail 4\ntail 5\ntail 6\ntail 7\ntail 8\ntail 9\ntail 10\ntail 11\ntail 12\ntail 13\ntail 14\ntail 15\ntail 16\ntail 17\ntail 18\ntail 19\n"
+      },
+      "name": "above-the-threshold-block-inserted",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          210,
+          0,
+          210
+        ],
+        [
+          "insert",
+          210,
+          210,
+          210,
+          230
+        ]
+      ]
+    },
+    {
+      "a": {
+        "lines": {
+          "count": 205,
+          "digest": "sha256:3dfc91580c0d336fafd0dee6525f8356",
+          "lengths": [
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5
+          ]
+        },
+        "text": "same\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\n"
+      },
+      "b": {
+        "lines": {
+          "count": 205,
+          "digest": "sha256:8e4766d2a8b3b68b57e233f12b074095",
+          "lengths": [
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            5,
+            6,
+            6,
+            6,
+            6,
+            6
+          ]
+        },
+        "text": "same\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nsame\nother\nother\nother\nother\nother\n"
+      },
+      "name": "above-the-threshold-uniform-lines",
+      "opcodes": [
+        [
+          "equal",
+          0,
+          200,
+          0,
+          200
+        ],
+        [
+          "replace",
+          200,
+          205,
+          200,
+          205
+        ]
+      ]
+    }
+  ],
+  "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+  "schemaVersion": 1
+}
