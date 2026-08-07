@@ -16,6 +16,7 @@ getrandom.workspace = true
 grep-regex.workspace = true
 grep-searcher.workspace = true
 ignore.workspace = true
+portable-pty.workspace = true
 regex.workspace = true
 reqwest.workspace = true
 secrecy.workspace = true
