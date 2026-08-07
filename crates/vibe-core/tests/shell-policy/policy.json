@@ -1,0 +1,1033 @@
+{
+  "commandSets": {
+    "allowlist": [
+      "cd",
+      "echo",
+      "git diff",
+      "git log",
+      "git status",
+      "tree",
+      "whoami",
+      "basename",
+      "cat",
+      "comm",
+      "cut",
+      "date",
+      "diff",
+      "dirname",
+      "du",
+      "file",
+      "find",
+      "fmt",
+      "fold",
+      "grep",
+      "head",
+      "join",
+      "less",
+      "ls",
+      "md5sum",
+      "more",
+      "nl",
+      "od",
+      "paste",
+      "pwd",
+      "readlink",
+      "sha1sum",
+      "sha256sum",
+      "shasum",
+      "sort",
+      "stat",
+      "sum",
+      "tac",
+      "tail",
+      "tr",
+      "uname",
+      "uniq",
+      "wc",
+      "which"
+    ],
+    "findExecutionPredicates": [
+      "-exec",
+      "-execdir",
+      "-ok",
+      "-okdir"
+    ],
+    "mutatingPathCommands": [
+      "cd",
+      "chmod",
+      "chown",
+      "cp",
+      "mkdir",
+      "mv",
+      "rm",
+      "touch"
+    ],
+    "pathCommands": [
+      "basename",
+      "cat",
+      "cd",
+      "chmod",
+      "chown",
+      "comm",
+      "cp",
+      "cut",
+      "date",
+      "diff",
+      "dirname",
+      "du",
+      "file",
+      "find",
+      "fmt",
+      "fold",
+      "grep",
+      "head",
+      "join",
+      "less",
+      "ls",
+      "md5sum",
+      "mkdir",
+      "more",
+      "mv",
+      "nl",
+      "od",
+      "paste",
+      "pwd",
+      "readlink",
+      "rm",
+      "sha1sum",
+      "sha256sum",
+      "shasum",
+      "sort",
+      "stat",
+      "sum",
+      "tac",
+      "tail",
+      "touch",
+      "tr",
+      "uname",
+      "uniq",
+      "wc",
+      "which"
+    ],
+    "pathCommandsCoverReaders": true,
+    "readOnlyCommands": [
+      "basename",
+      "cat",
+      "comm",
+      "cut",
+      "date",
+      "diff",
+      "dirname",
+      "du",
+      "file",
+      "find",
+      "fmt",
+      "fold",
+      "grep",
+      "head",
+      "join",
+      "less",
+      "ls",
+      "md5sum",
+      "more",
+      "nl",
+      "od",
+      "paste",
+      "pwd",
+      "readlink",
+      "sha1sum",
+      "sha256sum",
+      "shasum",
+      "sort",
+      "stat",
+      "sum",
+      "tac",
+      "tail",
+      "tr",
+      "uname",
+      "uniq",
+      "wc",
+      "which"
+    ]
+  },
+  "counts": {
+    "extractionCases": 28,
+    "outsideDirCases": 23,
+    "pathCommands": 45,
+    "resolutionCases": 63
+  },
+  "extraction": [
+    {
+      "command": "",
+      "segments": []
+    },
+    {
+      "command": "ls",
+      "segments": [
+        "ls"
+      ]
+    },
+    {
+      "command": "ls -la",
+      "segments": [
+        "ls -la"
+      ]
+    },
+    {
+      "command": "python3 << 'EOF'",
+      "segments": [
+        "python3"
+      ]
+    },
+    {
+      "command": "python3 <<'EOF'\nprint(1)\nEOF",
+      "segments": [
+        "python3 <redirect>"
+      ]
+    },
+    {
+      "command": "cat README.md && rm -rf build",
+      "segments": [
+        "cat README.md",
+        "rm -rf build"
+      ]
+    },
+    {
+      "command": "grep needle src | wc -l",
+      "segments": [
+        "grep needle src",
+        "wc -l"
+      ]
+    },
+    {
+      "command": "ls; pwd",
+      "segments": [
+        "ls",
+        "pwd"
+      ]
+    },
+    {
+      "command": "cd /tmp || true",
+      "segments": [
+        "cd /tmp",
+        "true"
+      ]
+    },
+    {
+      "command": "cat file.txt > out.txt",
+      "segments": [
+        "cat file.txt <redirect>"
+      ]
+    },
+    {
+      "command": "wc -l < input.txt",
+      "segments": [
+        "wc -l <redirect>"
+      ]
+    },
+    {
+      "command": "echo 'hello world'",
+      "segments": [
+        "echo 'hello world'"
+      ]
+    },
+    {
+      "command": "echo \"hello world\"",
+      "segments": [
+        "echo \"hello world\""
+      ]
+    },
+    {
+      "command": "echo hello\\ world",
+      "segments": [
+        "echo hello\\ world"
+      ]
+    },
+    {
+      "command": "ls -la 'my dir'",
+      "segments": [
+        "ls -la 'my dir'"
+      ]
+    },
+    {
+      "command": "git config user.name",
+      "segments": [
+        "git config user.name"
+      ]
+    },
+    {
+      "command": "npm run build -- --watch",
+      "segments": [
+        "npm run build -- --watch"
+      ]
+    },
+    {
+      "command": "find . -name '*.rs' -exec rm {} ;",
+      "segments": [
+        "find . -name '*.rs' -exec rm {}"
+      ]
+    },
+    {
+      "command": "cat $(which ls)",
+      "segments": [
+        "cat",
+        "which ls"
+      ]
+    },
+    {
+      "command": "VAR=1 ./script.sh",
+      "segments": [
+        "./script.sh"
+      ]
+    },
+    {
+      "command": "if [ -f x ]; then cat x; fi",
+      "segments": [
+        "cat x"
+      ]
+    },
+    {
+      "command": "for f in *.txt; do cat $f; done",
+      "segments": [
+        "cat"
+      ]
+    },
+    {
+      "command": "/usr/bin/vim notes.txt",
+      "segments": [
+        "/usr/bin/vim notes.txt"
+      ]
+    },
+    {
+      "command": "sudo apt update",
+      "segments": [
+        "sudo apt update"
+      ]
+    },
+    {
+      "command": "cat 'unterminated",
+      "segments": [
+        "cat"
+      ]
+    },
+    {
+      "command": "cat file.txt 2>&1",
+      "segments": [
+        "cat file.txt <redirect>"
+      ]
+    },
+    {
+      "command": "ls & pwd",
+      "segments": [
+        "ls",
+        "pwd"
+      ]
+    },
+    {
+      "command": "( cd src && ls )",
+      "segments": [
+        "cd src",
+        "ls"
+      ]
+    }
+  ],
+  "note": "Captured from the pinned reference by scripts/parity/shell_policy.py. Command names, node-kind names, scope values, booleans and the answers to cases this repository authored are observations; no reference-authored description or refusal text is recorded here.",
+  "outsideDirs": [
+    {
+      "command": "cat <workdir>/inside.txt",
+      "directories": []
+    },
+    {
+      "command": "cat ./inside.txt",
+      "directories": []
+    },
+    {
+      "command": "cat inside.txt",
+      "directories": []
+    },
+    {
+      "command": "cat <outside>/secret.txt",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "cat <outside>/nested/secret.txt",
+      "directories": [
+        "<outside>/nested"
+      ]
+    },
+    {
+      "command": "grep needle <outside>/secret.txt",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "wc -l <outside>/secret.txt",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "ls <outside>",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "cat <scratchpad>/note.txt",
+      "directories": []
+    },
+    {
+      "command": "rm <outside>/secret.txt",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "cp <outside>/secret.txt <workdir>/copy.txt",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "chmod +x <outside>/secret.txt",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "chmod 755 <outside>/secret.txt",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "cat -n <outside>/secret.txt",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "ls --color <outside>",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "cat <outside>/a.txt && cat <outside>/b.txt",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "echo <outside>/secret.txt",
+      "directories": []
+    },
+    {
+      "command": "cat ~/.ssh/id_rsa",
+      "directories": [
+        "<home>/.ssh"
+      ]
+    },
+    {
+      "command": "cat /etc/passwd",
+      "directories": [
+        "/etc"
+      ]
+    },
+    {
+      "command": "cat ../elsewhere/secret.txt",
+      "directories": [
+        "<outside>"
+      ]
+    },
+    {
+      "command": "cat <workdir>/../elsewhere/nested/secret.txt",
+      "directories": [
+        "<outside>/nested"
+      ]
+    },
+    {
+      "command": "cat sub/../inside.txt",
+      "directories": []
+    },
+    {
+      "command": "cat ../../../../etc/passwd",
+      "directories": [
+        "/etc"
+      ]
+    }
+  ],
+  "reference": {
+    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477"
+  },
+  "resolutions": [
+    {
+      "command": "ls -la",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "cat README.md",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "wc -l src/main.rs",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git status",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git diff --stat",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "rm -rf build",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "rm -rf build",
+          "label": "rm *",
+          "scope": "command_pattern",
+          "sessionPattern": "rm *"
+        }
+      ]
+    },
+    {
+      "command": "rm file.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "rm file.txt",
+          "label": "rm *",
+          "scope": "command_pattern",
+          "sessionPattern": "rm *"
+        }
+      ]
+    },
+    {
+      "command": "dd if=/dev/zero of=disk.img",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "dd if=/dev/zero of=disk.img",
+          "label": "dd *",
+          "scope": "command_pattern",
+          "sessionPattern": "dd *"
+        }
+      ]
+    },
+    {
+      "command": "mkfs.ext4 /dev/sdb1",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "mkfs.ext4 /dev/sdb1",
+          "label": "mkfs.ext4 *",
+          "scope": "command_pattern",
+          "sessionPattern": "mkfs.ext4 *"
+        }
+      ]
+    },
+    {
+      "command": "shutdown -h now",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "shutdown -h now",
+          "label": "shutdown *",
+          "scope": "command_pattern",
+          "sessionPattern": "shutdown *"
+        }
+      ]
+    },
+    {
+      "command": "eval echo hi",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "eval echo hi",
+          "label": "eval *",
+          "scope": "command_pattern",
+          "sessionPattern": "eval *"
+        }
+      ]
+    },
+    {
+      "command": "vim notes.txt",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "vi",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "nano",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "emacs",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "tmux",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "screen",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "gdb ./binary",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "pdb script.py",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "passwd",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "bash -i",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "sh -i",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "zsh -i",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "python3",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "python",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "ipython",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "bash",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "sh",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "su",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "nohup",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "python3 script.py",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "python3 script.py",
+          "label": "python3 *",
+          "scope": "command_pattern",
+          "sessionPattern": "python3 *"
+        }
+      ]
+    },
+    {
+      "command": "/usr/bin/python3",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "/usr/bin/vim notes.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "/usr/bin/vim notes.txt",
+          "label": "/usr/bin/vim *",
+          "scope": "command_pattern",
+          "sessionPattern": "/usr/bin/vim *"
+        }
+      ]
+    },
+    {
+      "command": "python3 << 'EOF'",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "python3 <<'EOF'\nprint(1)\nEOF",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "python3 <redirect>",
+          "label": "python3 *",
+          "scope": "command_pattern",
+          "sessionPattern": "python3 *"
+        }
+      ]
+    },
+    {
+      "command": "",
+      "permission": null
+    },
+    {
+      "command": "cat 'unterminated",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "sudo apt update",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "sudo apt update",
+          "label": "sudo apt update",
+          "scope": "command_pattern",
+          "sessionPattern": "sudo apt update"
+        }
+      ]
+    },
+    {
+      "command": "sudo ls",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "sudo ls",
+          "label": "sudo ls",
+          "scope": "command_pattern",
+          "sessionPattern": "sudo ls"
+        }
+      ]
+    },
+    {
+      "command": "find . -name '*.rs'",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "find . -exec rm {} ;",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "find . -exec rm {}",
+          "label": "find . -exec rm {}",
+          "scope": "command_pattern",
+          "sessionPattern": "find . -exec rm {}"
+        }
+      ]
+    },
+    {
+      "command": "find . -execdir rm {} ;",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "find . -execdir rm {}",
+          "label": "find . -execdir rm {}",
+          "scope": "command_pattern",
+          "sessionPattern": "find . -execdir rm {}"
+        }
+      ]
+    },
+    {
+      "command": "find . -ok rm {} ;",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "find . -ok rm {}",
+          "label": "find . -ok rm {}",
+          "scope": "command_pattern",
+          "sessionPattern": "find . -ok rm {}"
+        }
+      ]
+    },
+    {
+      "command": "find . -okdir rm {} ;",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "find . -okdir rm {}",
+          "label": "find . -okdir rm {}",
+          "scope": "command_pattern",
+          "sessionPattern": "find . -okdir rm {}"
+        }
+      ]
+    },
+    {
+      "command": "find . -exec rm {} ; && find . -exec rm {} ;",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "find . -exec rm {}",
+          "label": "find . -exec rm {}",
+          "scope": "command_pattern",
+          "sessionPattern": "find . -exec rm {}"
+        }
+      ]
+    },
+    {
+      "command": "cargo build",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "cargo build",
+          "label": "cargo build *",
+          "scope": "command_pattern",
+          "sessionPattern": "cargo build *"
+        }
+      ]
+    },
+    {
+      "command": "npm run build",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "npm run build",
+          "label": "npm run build *",
+          "scope": "command_pattern",
+          "sessionPattern": "npm run build *"
+        }
+      ]
+    },
+    {
+      "command": "npm run test",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "npm run test",
+          "label": "npm run test *",
+          "scope": "command_pattern",
+          "sessionPattern": "npm run test *"
+        }
+      ]
+    },
+    {
+      "command": "cat README.md && rm -rf build",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "rm -rf build",
+          "label": "rm *",
+          "scope": "command_pattern",
+          "sessionPattern": "rm *"
+        }
+      ]
+    },
+    {
+      "command": "cat README.md && cat CHANGELOG.md",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "echo one && echo two",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "cargo build && cargo test",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "cargo build",
+          "label": "cargo build *",
+          "scope": "command_pattern",
+          "sessionPattern": "cargo build *"
+        },
+        {
+          "invocationPattern": "cargo test",
+          "label": "cargo test *",
+          "scope": "command_pattern",
+          "sessionPattern": "cargo test *"
+        }
+      ]
+    },
+    {
+      "command": "unknown-binary --flag",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "unknown-binary --flag",
+          "label": "unknown-binary *",
+          "scope": "command_pattern",
+          "sessionPattern": "unknown-binary *"
+        }
+      ]
+    },
+    {
+      "command": "cd src",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "tree",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "whoami",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "cat $(which ls)",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "cat file.txt > out.txt",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git -c core.pager=sh log",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git -c core.pager=sh log",
+          "label": "git -c *",
+          "scope": "command_pattern",
+          "sessionPattern": "git -c *"
+        }
+      ]
+    },
+    {
+      "command": "git diff --no-index /etc/passwd /dev/null",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "rg --pre helper needle .",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "rg --pre helper needle .",
+          "label": "rg *",
+          "scope": "command_pattern",
+          "sessionPattern": "rg *"
+        }
+      ]
+    },
+    {
+      "command": "git reset --hard",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git reset --hard",
+          "label": "git reset *",
+          "scope": "command_pattern",
+          "sessionPattern": "git reset *"
+        }
+      ]
+    },
+    {
+      "command": "git reset --hard -- src",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git reset --hard -- src",
+          "label": "git reset *",
+          "scope": "command_pattern",
+          "sessionPattern": "git reset *"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 1
+}

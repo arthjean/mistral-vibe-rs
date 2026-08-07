@@ -10,6 +10,9 @@ use crate::tools::config::ShellCommandConfig;
 
 mod extract;
 
+#[cfg(test)]
+mod shell_parity_tests;
+
 pub use extract::{REDIRECT_MARKER, extract_commands};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
