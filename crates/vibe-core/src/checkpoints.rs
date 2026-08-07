@@ -1,5 +1,16 @@
-//! The checkpoint engine, starting with the two things every later part of it
-//! is addressed in: lines and opcodes.
+//! The checkpoint engine: an append-only log of what happened to the tracked
+//! files, and a read model that turns it into reviewable changes.
+//!
+//! [`Checkpointer`] owns the log and its lifecycle, and [`History`] answers
+//! every question about it: which regions a file carries, what each was built
+//! on, what decision is in force after dragging, what the file looks like with
+//! those decisions applied, and where each pending change sits in a rendered
+//! diff. Neither reads or writes a file. A caller feeds in the bytes it read
+//! and applies the bytes it gets back, which is what lets the whole model be
+//! exercised without a filesystem.
+//!
+//! The two halves below are what all of that is addressed in: lines and
+//! opcodes.
 //!
 //! A region identity in this engine is a pair of a producing edit's sequence
 //! number and that region's position in the edit's opcode list. Both halves are
@@ -21,15 +32,31 @@
 //! already holds, which is the split that lets the read model be exercised
 //! without a filesystem.
 
+mod checkpointer;
+mod events;
+mod history;
 mod lines;
 mod matcher;
+mod models;
 
+pub use checkpointer::Checkpointer;
+pub use history::History;
 pub use lines::{FileState, decode_lines, split_lines};
 pub use matcher::{Match, Opcode, SequenceMatcher, Tag};
+pub use models::{
+    Change, CheckpointError, Decision, HunkAnchor, HunkSide, OpaqueChange, OpaqueReason, Owner,
+    Region, RegionId, TurnRegion,
+};
 
 #[cfg(test)]
 mod checkpoint_parity_tests;
 #[cfg(test)]
+mod checkpointer_tests;
+#[cfg(test)]
+mod history_tests;
+#[cfg(test)]
 mod lines_tests;
 #[cfg(test)]
 mod matcher_tests;
+#[cfg(test)]
+mod models_tests;

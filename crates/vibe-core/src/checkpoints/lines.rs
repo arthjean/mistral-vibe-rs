@@ -10,6 +10,8 @@
 //! the boundary set is reproduced in full here rather than approximated, and
 //! the parity corpus records what the reference answered for each of them.
 
+use std::sync::Arc;
+
 use crate::workspace::text_file::decode;
 
 /// One file's bytes at a point in the log, or its absence.
@@ -18,9 +20,14 @@ use crate::workspace::text_file::decode;
 /// it has not created yet are both reviewable, and a revert has to be able to
 /// restore either side. Mirrors the reference `FileState`
 /// (`vibe/core/checkpoints/models.py:22`).
+///
+/// The bytes sit behind an [`Arc`] because the log holds a state per side of
+/// every edit and a reconstruction hands the same state along a chain of
+/// splices. Cloning is what the log does constantly, so cloning is what has to
+/// be cheap; equality still compares the bytes.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FileState {
-    data: Option<Vec<u8>>,
+    data: Option<Arc<[u8]>>,
 }
 
 impl FileState {
@@ -34,7 +41,7 @@ impl FileState {
     #[must_use]
     pub fn from_bytes(bytes: impl Into<Vec<u8>>) -> Self {
         Self {
-            data: Some(bytes.into()),
+            data: Some(Arc::from(bytes.into().into_boxed_slice())),
         }
     }
 
