@@ -551,7 +551,7 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
 
     // The vocabularies this port already spells. Everything else is in the
     // backlog above until the story that models it lands.
-    let declared: [(&str, Vec<String>); 18] = [
+    let declared: [(&str, Vec<String>); 19] = [
         (
             "AccountActionKind",
             wire_values(&crate::vocabulary::AccountActionKind::ALL),
@@ -633,6 +633,14 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
         (
             "ToolEffectKind",
             wire_values(&vibe_core::events::ToolEffectKind::ALL),
+        ),
+        (
+            // US-105: the four scopes an approval is granted under. The
+            // comparison is what refuses a fifth value, which the Python client
+            // could not read, and a missing one, which would leave a
+            // requirement unnameable.
+            "PermissionScope",
+            wire_values(&vibe_core::policy::PermissionScope::ALL),
         ),
         (
             "PublicEntryGenerationStatus",

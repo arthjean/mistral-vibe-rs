@@ -684,6 +684,15 @@
       ]
     },
     {
+      "name": "PermissionScope",
+      "values": [
+        "command_pattern",
+        "outside_directory",
+        "file_pattern",
+        "url_pattern"
+      ]
+    },
+    {
       "name": "ProtocolErrorCode",
       "values": [
         "invalid_request",

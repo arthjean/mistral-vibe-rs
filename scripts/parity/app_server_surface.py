@@ -382,6 +382,10 @@ EXTRA_MODEL_ROOTS: tuple[str, ...] = (
 #: corpus reports a vocabulary that arrived after the pin.
 NAMED_ENUMS: tuple[str, ...] = (
     "MCPSourceStatus",
+    # `PermissionScope` reaches the wire through `RequiredPermission`, which is
+    # a plain model rather than a `ProtocolModel`, so the field walk stops at
+    # the list and never records the vocabulary inside it.
+    "PermissionScope",
     "PublicRetryCategory",
     "TurnErrorCode",
     "ToolEffectKind",
@@ -398,11 +402,13 @@ SOURCE_MODULES: tuple[str, ...] = (
     "vibe.app_server._effect_models",
     "vibe.app_server.config",
     "vibe.app_server.review",
-    # Two contracts the app-server publishes are declared outside it: the
-    # effect displays every entry detail carries, and the question models the
-    # user-input callback and the `ask_user_question` effect take.
+    # Three contracts the app-server publishes are declared outside it: the
+    # effect displays every entry detail carries, the question models the
+    # user-input callback and the `ask_user_question` effect take, and the
+    # permission vocabulary the approval callback names.
     "vibe.utils.tool_presentation",
     "vibe.questions",
+    "vibe.permissions",
 )
 
 #: The base classes whose subclasses cross the wire. They differ only in which
