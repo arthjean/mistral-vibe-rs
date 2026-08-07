@@ -15,7 +15,8 @@ use tokio::process::{ChildStdin, Command};
 use tokio::sync::{Mutex, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 
-use crate::child::{ChildGroup, Rung, TerminationError};
+use crate::child::{ChildExit, ChildGroup, Rung, TerminationError};
+use crate::pty::{PTY_BACKEND, PtySpec, PtyTerminal, PtyWriter};
 use crate::workspace::{GitInspector, GitInspectorFuture, GitState, WorkspaceError};
 
 const DEFAULT_QUEUE_CAPACITY: usize = 128;
@@ -66,6 +67,12 @@ pub struct ProcessSpec {
     pub environment: BTreeMap<String, String>,
     pub queue_capacity: usize,
     pub max_output_bytes: usize,
+    /// Whether the child should run under a terminal.
+    ///
+    /// A request rather than a requirement: a host that provides no terminal
+    /// falls back to the pipe backend, which is what keeps a session startable
+    /// on a platform the reference would refuse to open one on.
+    pub terminal: bool,
 }
 
 impl ProcessSpec {
@@ -78,8 +85,20 @@ impl ProcessSpec {
             environment: BTreeMap::new(),
             queue_capacity: DEFAULT_QUEUE_CAPACITY,
             max_output_bytes: DEFAULT_MAX_OUTPUT_BYTES,
+            terminal: false,
         }
     }
+}
+
+/// Which backend a terminal ended up on, and why it is not the requested one.
+///
+/// The reference carries `pty_backend` on every session it reports, and a
+/// session that could not get a terminal is a session with reduced capability
+/// rather than a session that failed to start, so the reason travels with it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TerminalBackend {
+    pub pty: Option<&'static str>,
+    pub degraded: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,12 +112,59 @@ pub struct ProcessRead {
 
 struct ManagedProcess {
     id: String,
-    child: Mutex<ChildGroup>,
-    stdin: Mutex<Option<ChildStdin>>,
+    child: Mutex<TerminalChild>,
+    stdin: Mutex<Option<TerminalInput>>,
     chunks: Mutex<mpsc::Receiver<ProcessChunk>>,
     readers: Mutex<Vec<JoinHandle<()>>>,
     state: Mutex<TerminalState>,
     output_dropped: Arc<AtomicBool>,
+    backend: TerminalBackend,
+}
+
+/// The child behind one terminal, whichever backend owns it.
+///
+/// Both backends answer the same four questions, so every caller below stays
+/// written once instead of once per backend.
+enum TerminalChild {
+    Piped(ChildGroup),
+    Terminal(Box<PtyTerminal>),
+}
+
+impl TerminalChild {
+    fn try_wait(&mut self) -> std::io::Result<Option<ChildExit>> {
+        match self {
+            Self::Piped(child) => child.try_wait(),
+            Self::Terminal(child) => child.try_wait(),
+        }
+    }
+
+    async fn shut_down(
+        &mut self,
+        grace: Duration,
+        from: Rung,
+    ) -> Result<ChildExit, TerminationError> {
+        match self {
+            Self::Piped(child) => child.shut_down(grace, from).await,
+            Self::Terminal(child) => child.shut_down(grace, from).await,
+        }
+    }
+
+    async fn reap_group(
+        &mut self,
+        grace: Duration,
+        already_signaled: bool,
+    ) -> Result<(), TerminationError> {
+        match self {
+            Self::Piped(child) => child.reap_group(grace, already_signaled).await,
+            Self::Terminal(child) => child.reap_group(grace, already_signaled).await,
+        }
+    }
+}
+
+/// The writing half of one terminal.
+enum TerminalInput {
+    Piped(ChildStdin),
+    Terminal(PtyWriter),
 }
 
 #[derive(Clone)]
@@ -131,45 +197,89 @@ impl TerminalManager {
         if spec.program.as_os_str().is_empty() {
             return Err(ProcessError::InvalidProgram);
         }
-        let mut command = Command::new(&spec.program);
-        command
-            .args(&spec.arguments)
-            .current_dir(&spec.working_directory)
-            .envs(&spec.environment);
-        let (child, pipes) =
-            ChildGroup::spawn(&mut command).map_err(|source| ProcessError::Spawn {
-                program: spec.program.clone(),
-                source,
-            })?;
-        let stdin = pipes.stdin;
-        let stdout = pipes.stdout.ok_or(ProcessError::MissingPipe("stdout"))?;
-        let stderr = pipes.stderr.ok_or(ProcessError::MissingPipe("stderr"))?;
-        let terminal_sequence = self.next_terminal.fetch_add(1, Ordering::Relaxed);
-        let terminal_id = format!("terminal-{terminal_sequence}");
         let (sender, receiver) = mpsc::channel(spec.queue_capacity.max(1));
         let cursor = Arc::new(AtomicU64::new(0));
         let output_bytes = Arc::new(AtomicUsize::new(0));
         let output_dropped = Arc::new(AtomicBool::new(false));
-        let readers = vec![
-            tokio::spawn(read_stream(
-                stdout,
-                ProcessStream::Stdout,
-                sender.clone(),
-                cursor.clone(),
-                output_bytes.clone(),
-                output_dropped.clone(),
-                spec.max_output_bytes,
-            )),
-            tokio::spawn(read_stream(
-                stderr,
-                ProcessStream::Stderr,
-                sender,
-                cursor,
-                output_bytes,
-                output_dropped.clone(),
-                spec.max_output_bytes,
-            )),
-        ];
+        let mut backend = TerminalBackend::default();
+        let started = if spec.terminal {
+            match crate::pty::spawn(PtySpec {
+                program: &spec.program,
+                arguments: &spec.arguments,
+                working_directory: &spec.working_directory,
+                environment: &spec.environment,
+            }) {
+                Ok((child, streams)) => {
+                    backend.pty = Some(PTY_BACKEND);
+                    // A terminal merges the two streams into one, so a chunk
+                    // read off it is reported the way the child wrote it: in
+                    // order, on the stream a terminal has.
+                    let reader = spawn_terminal_reader(
+                        streams.reader,
+                        sender.clone(),
+                        cursor.clone(),
+                        output_bytes.clone(),
+                        output_dropped.clone(),
+                        spec.max_output_bytes,
+                    );
+                    Some((
+                        TerminalChild::Terminal(Box::new(child)),
+                        Some(TerminalInput::Terminal(streams.writer)),
+                        vec![reader],
+                    ))
+                }
+                Err(reason) => {
+                    backend.degraded = Some(reason);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let (child, stdin, readers) = match started {
+            Some(started) => started,
+            None => {
+                let mut command = Command::new(&spec.program);
+                command
+                    .args(&spec.arguments)
+                    .current_dir(&spec.working_directory)
+                    .envs(&spec.environment);
+                let (child, pipes) =
+                    ChildGroup::spawn(&mut command).map_err(|source| ProcessError::Spawn {
+                        program: spec.program.clone(),
+                        source,
+                    })?;
+                let stdout = pipes.stdout.ok_or(ProcessError::MissingPipe("stdout"))?;
+                let stderr = pipes.stderr.ok_or(ProcessError::MissingPipe("stderr"))?;
+                let readers = vec![
+                    tokio::spawn(read_stream(
+                        stdout,
+                        ProcessStream::Stdout,
+                        sender.clone(),
+                        cursor.clone(),
+                        output_bytes.clone(),
+                        output_dropped.clone(),
+                        spec.max_output_bytes,
+                    )),
+                    tokio::spawn(read_stream(
+                        stderr,
+                        ProcessStream::Stderr,
+                        sender,
+                        cursor,
+                        output_bytes,
+                        output_dropped.clone(),
+                        spec.max_output_bytes,
+                    )),
+                ];
+                (
+                    TerminalChild::Piped(child),
+                    pipes.stdin.map(TerminalInput::Piped),
+                    readers,
+                )
+            }
+        };
+        let terminal_sequence = self.next_terminal.fetch_add(1, Ordering::Relaxed);
+        let terminal_id = format!("terminal-{terminal_sequence}");
         let process = Arc::new(ManagedProcess {
             id: terminal_id.clone(),
             child: Mutex::new(child),
@@ -178,12 +288,20 @@ impl TerminalManager {
             readers: Mutex::new(readers),
             state: Mutex::new(TerminalState::Running),
             output_dropped,
+            backend,
         });
         self.processes
             .lock()
             .await
             .insert(terminal_id.clone(), process);
         Ok(terminal_id)
+    }
+
+    /// Which backend `terminal_id` runs on, and why it is not the requested one.
+    pub async fn backend(&self, terminal_id: &str) -> Result<TerminalBackend, ProcessError> {
+        self.process(terminal_id)
+            .await
+            .map(|process| process.backend.clone())
     }
 
     pub async fn write(&self, terminal_id: &str, bytes: &[u8]) -> Result<(), ProcessError> {
@@ -195,18 +313,24 @@ impl TerminalManager {
         let input = stdin
             .as_mut()
             .ok_or_else(|| ProcessError::StdinClosed(terminal_id.to_owned()))?;
-        input
-            .write_all(bytes)
-            .await
-            .map_err(|source| ProcessError::Io {
-                terminal_id: terminal_id.to_owned(),
-                source,
-            })
+        match input {
+            TerminalInput::Piped(input) => input.write_all(bytes).await,
+            // A terminal write reaches the line discipline rather than a pipe,
+            // which is what turns a control byte into a signal for the
+            // foreground process group.
+            TerminalInput::Terminal(writer) => writer.write_all(bytes.to_vec()).await,
+        }
+        .map_err(|source| ProcessError::Io {
+            terminal_id: terminal_id.to_owned(),
+            source,
+        })
     }
 
     pub async fn close_stdin(&self, terminal_id: &str) -> Result<(), ProcessError> {
         let process = self.process(terminal_id).await?;
-        process.stdin.lock().await.take();
+        if let Some(TerminalInput::Terminal(writer)) = process.stdin.lock().await.take() {
+            writer.close();
+        }
         Ok(())
     }
 
@@ -287,9 +411,7 @@ impl TerminalManager {
             .reap_group(self.cleanup_grace, true)
             .await
             .map_err(|error| process.termination_error(error))?;
-        *process.state.lock().await = TerminalState::Interrupted {
-            code: status.code(),
-        };
+        *process.state.lock().await = TerminalState::Interrupted { code: status.code };
         Ok(())
     }
 
@@ -391,8 +513,8 @@ impl TerminalManager {
             })?;
         if let Some(status) = status {
             *process.state.lock().await = TerminalState::Exited {
-                code: status.code(),
-                success: status.success(),
+                code: status.code,
+                success: status.success,
             };
         }
         Ok(())
@@ -460,6 +582,59 @@ impl GitInspector for TerminalManager {
             Ok(GitState::from_porcelain(&text))
         })
     }
+}
+
+/// Drains a terminal into the same queue the pipe readers feed.
+///
+/// The handle is blocking and cannot be aborted, so it runs on its own thread
+/// and the join handle the manager keeps waits on a signal instead: aborting
+/// that wait is instant, where aborting a blocking task would not be.
+fn spawn_terminal_reader(
+    mut reader: Box<dyn std::io::Read + Send>,
+    sender: mpsc::Sender<ProcessChunk>,
+    cursor: Arc<AtomicU64>,
+    output_bytes: Arc<AtomicUsize>,
+    output_dropped: Arc<AtomicBool>,
+    max_output_bytes: usize,
+) -> JoinHandle<()> {
+    let (finished, wait) = oneshot::channel();
+    std::thread::spawn(move || {
+        use std::io::Read as _;
+
+        let mut buffer = vec![0_u8; 8_192];
+        loop {
+            // A terminal whose child is gone reports `EIO` rather than end of
+            // file, so any error ends the drain the way a zero-length read does.
+            let read = match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(read) => read,
+            };
+            let previous = output_bytes.fetch_add(read, Ordering::AcqRel);
+            if previous >= max_output_bytes {
+                output_dropped.store(true, Ordering::Release);
+                continue;
+            }
+            let accepted = read.min(max_output_bytes.saturating_sub(previous));
+            if accepted < read {
+                output_dropped.store(true, Ordering::Release);
+            }
+            let chunk_cursor = cursor.fetch_add(1, Ordering::Relaxed);
+            if sender
+                .try_send(ProcessChunk {
+                    cursor: chunk_cursor,
+                    stream: ProcessStream::Stdout,
+                    bytes: buffer[..accepted].to_vec(),
+                })
+                .is_err()
+            {
+                output_dropped.store(true, Ordering::Release);
+            }
+        }
+        let _ = finished.send(());
+    });
+    tokio::spawn(async move {
+        let _ = wait.await;
+    })
 }
 
 async fn read_stream<R>(

@@ -26,6 +26,7 @@ pub mod policy;
 pub mod process;
 pub mod prompt;
 pub mod provider;
+mod pty;
 mod remote_tools;
 pub mod schema;
 pub mod scratchpad;

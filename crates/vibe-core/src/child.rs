@@ -22,7 +22,27 @@ type PlatformChild = AsyncGroupChild;
 #[cfg(not(windows))]
 type PlatformChild = Child;
 
-const GROUP_POLL_INTERVAL: Duration = Duration::from_millis(10);
+pub(crate) const GROUP_POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+/// How a child ended, normalized across the two backends that can own one.
+///
+/// A PTY child is reaped by `portable-pty`, which reports its own status type
+/// rather than a [`std::process::ExitStatus`], so the ladder speaks this instead
+/// of a type only one backend can produce.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ChildExit {
+    pub(crate) code: Option<i32>,
+    pub(crate) success: bool,
+}
+
+impl From<ExitStatus> for ChildExit {
+    fn from(status: ExitStatus) -> Self {
+        Self {
+            code: status.code(),
+            success: status.success(),
+        }
+    }
+}
 
 /// The pipes of a freshly spawned child.
 pub(crate) struct ChildPipes {
@@ -88,26 +108,31 @@ impl ChildGroup {
     }
 
     /// Waits for the group leader to exit.
-    pub(crate) async fn wait(&mut self) -> std::io::Result<ExitStatus> {
+    pub(crate) async fn wait(&mut self) -> std::io::Result<ChildExit> {
         #[cfg(not(windows))]
         {
-            self.child.wait().await
+            self.child.wait().await.map(ChildExit::from)
         }
         #[cfg(windows)]
         {
-            self.child.inner().wait().await
+            self.child.inner().wait().await.map(ChildExit::from)
         }
     }
 
     /// Reports the leader's exit status without blocking.
-    pub(crate) fn try_wait(&mut self) -> std::io::Result<Option<ExitStatus>> {
+    pub(crate) fn try_wait(&mut self) -> std::io::Result<Option<ChildExit>> {
         #[cfg(not(windows))]
         {
-            self.child.try_wait()
+            self.child
+                .try_wait()
+                .map(|status| status.map(ChildExit::from))
         }
         #[cfg(windows)]
         {
-            self.child.inner().try_wait()
+            self.child
+                .inner()
+                .try_wait()
+                .map(|status| status.map(ChildExit::from))
         }
     }
 
@@ -118,7 +143,7 @@ impl ChildGroup {
         &mut self,
         grace: Duration,
         from: Rung,
-    ) -> Result<ExitStatus, TerminationError> {
+    ) -> Result<ChildExit, TerminationError> {
         for rung in [Rung::Wait, Rung::Terminate, Rung::Kill] {
             if rung < from {
                 continue;
@@ -177,25 +202,13 @@ impl ChildGroup {
     /// Signals the whole group, falling back to the leader when no group is owned.
     #[cfg(unix)]
     pub(crate) fn signal(&mut self, force: bool) -> Result<(), TerminationError> {
-        use nix::errno::Errno;
-        use nix::sys::signal::{Signal, killpg};
-        use nix::unistd::Pid;
-
         let Some(group) = self.group else {
             return self
                 .child
                 .start_kill()
                 .map_err(|error| TerminationError::Signal(error.to_string()));
         };
-        let signal = if force {
-            Signal::SIGKILL
-        } else {
-            Signal::SIGTERM
-        };
-        match killpg(Pid::from_raw(group), signal) {
-            Ok(()) | Err(Errno::ESRCH) => Ok(()),
-            Err(error) => Err(TerminationError::Signal(error.to_string())),
-        }
+        signal_group(group, force)
     }
 
     #[cfg(windows)]
@@ -208,32 +221,68 @@ impl ChildGroup {
     /// Reports whether any member of the group is still alive.
     #[cfg(unix)]
     pub(crate) fn group_alive(&self) -> Result<bool, TerminationError> {
-        use nix::errno::Errno;
-        use nix::sys::signal::kill;
-        use nix::unistd::Pid;
-
-        let Some(group) = self.group else {
-            return Ok(false);
-        };
-        match kill(Pid::from_raw(-group), None) {
-            Ok(()) | Err(Errno::EPERM) => Ok(true),
-            Err(Errno::ESRCH) => Ok(false),
-            Err(error) => Err(TerminationError::Signal(error.to_string())),
-        }
+        self.group.map_or(Ok(false), group_alive)
     }
 
     #[cfg(unix)]
     async fn wait_for_group_exit(&self, grace: Duration) -> Result<bool, TerminationError> {
-        let deadline = tokio::time::Instant::now() + grace;
-        loop {
-            if !self.group_alive()? {
-                return Ok(true);
-            }
-            if tokio::time::Instant::now() >= deadline {
-                return Ok(false);
-            }
-            tokio::time::sleep(GROUP_POLL_INTERVAL).await;
+        match self.group {
+            Some(group) => wait_for_group_exit(group, grace).await,
+            None => Ok(true),
         }
+    }
+}
+
+/// Signals every member of `group`.
+///
+/// A group nobody is left in is a group already shut down, so `ESRCH` is a
+/// success rather than a failure to report.
+#[cfg(unix)]
+pub(crate) fn signal_group(group: i32, force: bool) -> Result<(), TerminationError> {
+    use nix::errno::Errno;
+    use nix::sys::signal::{Signal, killpg};
+    use nix::unistd::Pid;
+
+    let signal = if force {
+        Signal::SIGKILL
+    } else {
+        Signal::SIGTERM
+    };
+    match killpg(Pid::from_raw(group), signal) {
+        Ok(()) | Err(Errno::ESRCH) => Ok(()),
+        Err(error) => Err(TerminationError::Signal(error.to_string())),
+    }
+}
+
+/// Reports whether any member of `group` is still alive.
+#[cfg(unix)]
+pub(crate) fn group_alive(group: i32) -> Result<bool, TerminationError> {
+    use nix::errno::Errno;
+    use nix::sys::signal::kill;
+    use nix::unistd::Pid;
+
+    match kill(Pid::from_raw(-group), None) {
+        Ok(()) | Err(Errno::EPERM) => Ok(true),
+        Err(Errno::ESRCH) => Ok(false),
+        Err(error) => Err(TerminationError::Signal(error.to_string())),
+    }
+}
+
+/// Waits up to `grace` for every member of `group` to leave it.
+#[cfg(unix)]
+pub(crate) async fn wait_for_group_exit(
+    group: i32,
+    grace: Duration,
+) -> Result<bool, TerminationError> {
+    let deadline = tokio::time::Instant::now() + grace;
+    loop {
+        if !group_alive(group)? {
+            return Ok(true);
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Ok(false);
+        }
+        tokio::time::sleep(GROUP_POLL_INTERVAL).await;
     }
 }
 
