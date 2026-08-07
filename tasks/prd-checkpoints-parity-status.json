@@ -3,7 +3,7 @@
     "file": "tasks/prd-checkpoints-parity.md",
     "title": "Checkpoints Parity",
     "created_at": "2026-08-07",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -45,10 +45,10 @@
     {
       "id": "EP-040",
       "title": "Rewind on Entry Identity and the Scorecard",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 3,
-      "stories_done": 0,
+      "stories_done": 3,
       "stories_in_review": 0
     }
   ],
@@ -297,35 +297,35 @@
       "id": "US-136",
       "title": "Answer rewind read by entry identity",
       "epic": "EP-040",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-131"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-137",
       "title": "Rewind by entry identity in the declared response shape",
       "epic": "EP-040",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-136"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-138",
       "title": "Bound the log, ledger the divergences and remeasure the scorecard",
       "epic": "EP-040",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
@@ -333,9 +333,9 @@
         "US-135",
         "US-137"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     }
   ]
 }
