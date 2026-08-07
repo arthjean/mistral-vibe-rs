@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use super::{
     Checkpoint, EditOperation, MutationResult, ReviewHunk, ReviewView, Workspace, WorkspaceError,
-    path_display, unified_diff,
+    path_display, text_file, unified_diff,
 };
 
 /// Applies one edit's operations to the text it was written against.
@@ -112,24 +112,40 @@ impl ReviewManager {
         self.workspace.write_new(&relative, content.as_ref())
     }
 
+    /// Applies one edit, preserving what the file was written in.
+    ///
+    /// The read, the replacement and the write-back sit inside one per-path
+    /// lock, so two turns editing the same file serialize instead of both
+    /// reading the same original and one of the two writes disappearing. The
+    /// codec and the line ending come back out of the decode and go into the
+    /// encode, which is what keeps a one-line change to a CRLF file written in
+    /// a single-byte codec from rewriting the whole file.
     pub fn edit(
         &self,
         path: impl AsRef<Path>,
         operations: &[EditOperation],
     ) -> Result<MutationResult, WorkspaceError> {
         let relative = self.workspace.confined(path.as_ref(), true)?;
+        let lock = self.workspace.write_lock(&relative)?;
+        let _guard = lock.lock().map_err(|_| WorkspaceError::LockPoisoned {
+            surface: "file write locks",
+        })?;
         self.capture_baseline(&relative)?;
         let original = self.workspace.read_raw(&relative)?;
-        let original_text = String::from_utf8(original.clone())
-            .map_err(|_| WorkspaceError::InvalidEncoding(relative.clone()))?;
-        let updated = apply_edit_operations(&relative, &original_text, operations)?;
-        self.workspace
-            .atomic_replace(&relative, updated.as_bytes())?;
+        if original.contains(&0) {
+            return Err(WorkspaceError::Binary(relative.clone()));
+        }
+        let decoded = text_file::decode(&original);
+        let updated = apply_edit_operations(&relative, &decoded.text, operations)?;
+        let bytes = text_file::encode(&updated, decoded.encoding, decoded.newline);
+        if bytes != original {
+            self.workspace.atomic_replace(&relative, &bytes)?;
+        }
         Ok(MutationResult {
             path: path_display(&relative),
-            bytes_written: updated.len(),
+            bytes_written: bytes.len(),
             files_changed: 1,
-            diff: unified_diff(&original_text, &updated),
+            diff: unified_diff(&decoded.text, &updated),
         })
     }
 

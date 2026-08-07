@@ -1,15 +1,14 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use cap_std::ambient_authority;
 use cap_std::fs::{Dir, OpenOptions};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -19,11 +18,12 @@ use crate::policy::{
 };
 use crate::process::ClientToolIo;
 use crate::schema::{ObjectSchema, Property};
-use crate::text::{matches_wildcard, truncate_utf8};
+use crate::text::matches_wildcard;
 use crate::tools::config::SharedToolConfig;
 use crate::tools::config::{
     GrepConfig, ReadFileConfig, ToolConfigResolver, WriteFileConfig, declared_document,
 };
+use crate::tools::reference_text;
 use crate::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolError, ToolExecutionOutput,
     ToolHandler, ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource,
@@ -31,10 +31,17 @@ use crate::tools::{
 };
 
 mod review;
+mod search;
+pub mod text_file;
 
 pub use review::{RestoreTransaction, ReviewManager};
+pub use search::GrepOutcome;
 
 pub const DEFAULT_MAX_READ_BYTES: usize = 1_048_576;
+/// The tag a model-facing notice is wrapped in, matching the reference name.
+const WARNING_TAG: &str = "vibe_warning";
+/// The per-directory instruction file both implementations read.
+const INSTRUCTION_FILE: &str = "AGENTS.md";
 pub const DEFAULT_MAX_LINES: usize = 2_000;
 pub const DEFAULT_MAX_DISCOVERED_FILES: usize = 10_000;
 const DIFF_CONTEXT_LINES: usize = 3;
@@ -97,20 +104,106 @@ pub struct FileRead {
     pub truncated: bool,
 }
 
+/// What `read_file` publishes, matching reference `ReadFileResult`.
+///
+/// The field names and their order are the contract: the reference agent loop
+/// renders the result one `field: value` line at a time, so a renamed or
+/// reordered field changes what the model reads.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadFileResult {
+    pub file_path: String,
+    pub content: String,
+    pub num_lines: usize,
+    pub start_line: usize,
+    pub requested_offset: Option<usize>,
+    pub requested_limit: usize,
+    /// [`None`] when the read stopped at a budget, because the file's real
+    /// length is unknown without reading the rest of it.
+    pub total_lines: Option<usize>,
+    pub was_truncated: bool,
+}
+
+impl ReadFileResult {
+    /// The text the model reads back.
+    #[must_use]
+    pub fn model_text(&self) -> String {
+        reference_text::joined(&[
+            ("file_path", self.file_path.clone()),
+            ("content", self.content.clone()),
+            ("num_lines", self.num_lines.to_string()),
+            ("start_line", self.start_line.to_string()),
+            (
+                "requested_offset",
+                reference_text::optional(self.requested_offset),
+            ),
+            ("requested_limit", self.requested_limit.to_string()),
+            ("total_lines", reference_text::optional(self.total_lines)),
+            (
+                "was_truncated",
+                reference_text::boolean(self.was_truncated).to_owned(),
+            ),
+        ])
+    }
+}
+
+/// What `write_file` publishes, matching reference `WriteFileResult`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WriteFileResult {
+    pub file_path: String,
+    pub bytes_written: usize,
+    pub content: String,
+}
+
+impl WriteFileResult {
+    #[must_use]
+    pub fn model_text(&self) -> String {
+        reference_text::joined(&[
+            ("file_path", self.file_path.clone()),
+            ("bytes_written", self.bytes_written.to_string()),
+            ("content", self.content.clone()),
+        ])
+    }
+}
+
+/// What `edit` publishes, matching reference `EditResult`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditResult {
+    pub file: String,
+    pub message: String,
+    pub old_string: String,
+    pub new_string: String,
+}
+
+impl EditResult {
+    #[must_use]
+    pub fn model_text(&self) -> String {
+        reference_text::joined(&[
+            ("file", self.file.clone()),
+            ("message", self.message.clone()),
+            ("old_string", self.old_string.clone()),
+            ("new_string", self.new_string.clone()),
+        ])
+    }
+}
+
+/// One bounded read, the way reference `read_lines_safe` bounds one.
+///
+/// The line budget and the byte budget both stop the read, and either one
+/// leaves `total_lines` unknown: the reference only reports a total when it
+/// reached the end of the file, because anything else would be a guess.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundedRead {
+    pub lines: Vec<String>,
+    pub total_lines: Option<usize>,
+    pub was_truncated: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileEntry {
     pub path: String,
     pub is_directory: bool,
     pub bytes: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchMatch {
-    pub path: String,
-    pub line: usize,
-    pub text: String,
 }
 
 /// What one search reads off the `grep` configuration.
@@ -128,6 +221,8 @@ pub struct SearchOptions {
     /// [`None`] runs without a deadline, which is what a caller with no
     /// configured timeout asks for.
     pub timeout: Option<Duration>,
+    /// The budget the joined match list is clipped to.
+    pub max_output_bytes: usize,
 }
 
 impl SearchOptions {
@@ -151,6 +246,7 @@ impl SearchOptions {
             codeignore_file: config.codeignore_file.clone(),
             timeout: (config.default_timeout > 0)
                 .then(|| Duration::from_secs(config.default_timeout)),
+            max_output_bytes: config.max_output_bytes,
         }
     }
 }
@@ -217,6 +313,9 @@ pub struct Workspace {
     max_lines: usize,
     max_discovered_files: usize,
     injected_instructions: Mutex<BTreeSet<PathBuf>>,
+    /// One lock per path, so two edits of the same file serialize their
+    /// read-modify-write instead of racing and losing one of the two.
+    write_locks: Mutex<BTreeMap<PathBuf, Arc<Mutex<()>>>>,
     next_temporary: AtomicU64,
 }
 
@@ -241,6 +340,7 @@ impl Workspace {
             max_lines: DEFAULT_MAX_LINES,
             max_discovered_files: DEFAULT_MAX_DISCOVERED_FILES,
             injected_instructions: Mutex::new(BTreeSet::new()),
+            write_locks: Mutex::new(BTreeMap::new()),
             next_temporary: AtomicU64::new(1),
         })
     }
@@ -248,6 +348,27 @@ impl Workspace {
     #[must_use]
     pub fn root(&self) -> &Path {
         &self.canonical_root
+    }
+
+    /// The absolute path a tool result names, which is what the reference
+    /// publishes and what a client can resolve without a working directory.
+    #[must_use]
+    pub fn absolute_display(&self, relative: &Path) -> String {
+        self.canonical_root
+            .join(relative)
+            .to_string_lossy()
+            .replace('\\', "/")
+    }
+
+    /// The lock guarding one path's read-modify-write.
+    pub(crate) fn write_lock(&self, relative: &Path) -> Result<Arc<Mutex<()>>, WorkspaceError> {
+        let mut locks = self
+            .write_locks
+            .lock()
+            .map_err(|_| WorkspaceError::LockPoisoned {
+                surface: "file write locks",
+            })?;
+        Ok(locks.entry(relative.to_path_buf()).or_default().clone())
     }
 
     /// Reads a whole workspace file as text, bounded by the byte budget.
@@ -346,6 +467,72 @@ impl Workspace {
         })
     }
 
+    /// Reads at most `limit` lines from `start_line`, bounded by `max_bytes`.
+    ///
+    /// Mirrors reference `read_lines_safe` (`vibe/utils/io.py:169`): the file is
+    /// streamed a line at a time and the read stops at whichever budget it
+    /// reaches first, so a large file is never held whole. Stopping early is
+    /// what leaves the total line count unknown, and the reference says so by
+    /// reporting no total rather than the count it happened to reach.
+    pub fn read_lines_bounded(
+        &self,
+        path: impl AsRef<Path>,
+        start_line: usize,
+        limit: usize,
+        max_bytes: usize,
+    ) -> Result<BoundedRead, WorkspaceError> {
+        let relative = self.confined(path.as_ref(), true)?;
+        let file = self
+            .directory
+            .open(&relative)
+            .map_err(|source| WorkspaceError::Io {
+                path: relative.clone(),
+                source,
+            })?;
+        let mut reader = io::BufReader::new(file);
+        let mut collected = Vec::new();
+        let mut collected_lines = 0_usize;
+        let mut bytes_read = 0_usize;
+        let mut line_number = 0_usize;
+        let mut was_truncated = true;
+        loop {
+            let mut raw = Vec::new();
+            let read = reader
+                .read_until(b'\n', &mut raw)
+                .map_err(|source| WorkspaceError::Io {
+                    path: relative.clone(),
+                    source,
+                })?;
+            if read == 0 {
+                was_truncated = false;
+                break;
+            }
+            line_number = line_number.saturating_add(1);
+            if line_number < start_line.max(1) {
+                continue;
+            }
+            if collected_lines >= limit {
+                break;
+            }
+            if bytes_read.saturating_add(raw.len()) > max_bytes {
+                let remaining = max_bytes.saturating_sub(bytes_read);
+                if remaining > 0 {
+                    collected.extend_from_slice(raw.get(..remaining).unwrap_or(&raw));
+                }
+                break;
+            }
+            collected.extend_from_slice(&raw);
+            bytes_read = bytes_read.saturating_add(raw.len());
+            collected_lines = collected_lines.saturating_add(1);
+        }
+        let decoded = text_file::decode(&collected);
+        Ok(BoundedRead {
+            lines: decoded.text.lines().map(str::to_owned).collect(),
+            total_lines: (!was_truncated).then_some(line_number),
+            was_truncated,
+        })
+    }
+
     pub fn list(&self, path: impl AsRef<Path>) -> Result<Vec<FileEntry>, WorkspaceError> {
         let relative = self.confined(path.as_ref(), true)?;
         let mut entries = self
@@ -413,101 +600,17 @@ impl Workspace {
 
     /// Regex search over `path`, the contract the reference `grep` publishes.
     ///
-    /// The pattern is always a regular expression, `path` narrows the walk to
-    /// one file or one subtree, and [`SearchOptions`] carries what the operator
-    /// configured: how many matches to return, which globs to exclude, which
-    /// ignore file to read and how long the walk may take.
+    /// The answer is the reference's own: one `path:line:text` string, the
+    /// count that survived the cap, and whether the cap or the byte budget cut
+    /// it short. Every caller inside this port reads that string, which is what
+    /// keeps one shape of the answer rather than two.
     pub fn search(
         &self,
         pattern: &str,
-        path: impl AsRef<Path>,
+        path: &str,
         options: &SearchOptions,
-    ) -> Result<Vec<SearchMatch>, WorkspaceError> {
-        let compiled = Regex::new(pattern)
-            .map_err(|error| WorkspaceError::InvalidPattern(error.to_string()))?;
-        let relative = self.confined(path.as_ref(), true)?;
-        let is_directory = self
-            .directory
-            .metadata(&relative)
-            .map(|metadata| metadata.is_dir())
-            .unwrap_or(false);
-        let deadline = options.timeout.map(|timeout| Instant::now() + timeout);
-        let targets = if is_directory {
-            // `use_default_ignore` governs the `.gitignore` entries only: the
-            // reference keeps its own exclusion list applied either way, and
-            // adds whatever the codeignore file names.
-            let mut ignores = self.configured_ignores(options);
-            if options.use_default_ignore {
-                ignores.extend(self.load_ignores());
-            } else {
-                ignores.extend([".git".to_owned(), "target".to_owned()]);
-            }
-            self.discover_under(&relative, &ignores)?
-                .into_iter()
-                .filter(|entry| !entry.is_directory)
-                .map(|entry| entry.path)
-                .collect::<Vec<_>>()
-        } else {
-            vec![path_display(&relative)]
-        };
-        let mut matches = Vec::new();
-        for target in targets {
-            if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-                // A partial answer is discarded rather than returned as a whole
-                // one: a search that ran out of time answers nothing.
-                return Err(WorkspaceError::SearchTimeout {
-                    seconds: options.timeout.unwrap_or_default().as_secs(),
-                });
-            }
-            let relative = self.confined(Path::new(&target), true)?;
-            // Search the whole file, not just the first page a reader would get.
-            let content = match self.read_text(&relative) {
-                Ok((content, _)) => content,
-                Err(WorkspaceError::Binary(_) | WorkspaceError::InvalidEncoding(_)) => continue,
-                Err(error) => return Err(error),
-            };
-            for (index, line) in content.lines().enumerate() {
-                if compiled.is_match(line) {
-                    matches.push(SearchMatch {
-                        path: target.clone(),
-                        line: index.saturating_add(1),
-                        text: line.to_owned(),
-                    });
-                    if matches.len() >= options.limit {
-                        return Ok(matches);
-                    }
-                }
-            }
-        }
-        Ok(matches)
-    }
-
-    /// The exclusion set the configuration contributes: the configured globs,
-    /// plus every non-comment line of the configured codeignore file.
-    fn configured_ignores(&self, options: &SearchOptions) -> Vec<String> {
-        let mut ignores = options
-            .exclude_patterns
-            .iter()
-            .map(|pattern| pattern.trim_end_matches('/').to_owned())
-            .filter(|pattern| !pattern.is_empty())
-            .collect::<Vec<_>>();
-        if options.codeignore_file.is_empty() {
-            return ignores;
-        }
-        if let Ok(read) = self.read(&options.codeignore_file, 1, Some(self.max_lines)) {
-            ignores.extend(
-                read.content
-                    .lines()
-                    .map(str::trim)
-                    .filter(|line| !line.is_empty() && !line.starts_with('#'))
-                    .map(|line| {
-                        line.trim_start_matches('/')
-                            .trim_end_matches('/')
-                            .to_owned()
-                    }),
-            );
-        }
-        ignores
+    ) -> Result<GrepOutcome, WorkspaceError> {
+        search::run(self, path, pattern, options)
     }
 
     pub async fn project_context(
@@ -697,6 +800,71 @@ impl Workspace {
         self.directory.metadata(relative).is_ok()
     }
 
+    /// Whether a confined path names a directory.
+    fn is_directory(&self, relative: &Path) -> bool {
+        self.directory
+            .metadata(relative)
+            .map(|metadata| metadata.is_dir())
+            .unwrap_or(false)
+    }
+
+    /// Whether the path a caller wrote resolves to something that exists.
+    #[must_use]
+    pub fn exists_at(&self, path: &str) -> bool {
+        self.confined(Path::new(path), false)
+            .is_ok_and(|relative| self.exists(&relative))
+    }
+
+    /// The `AGENTS.md` files between a read file and the workspace root that
+    /// this session has not injected yet, outermost first.
+    ///
+    /// Mirrors reference `find_subdirectory_agents_md`
+    /// (`vibe/core/config/harness_files/_harness_manager.py:215`): the walk
+    /// starts at the file's own directory and stops *before* the root, whose
+    /// own instructions the session prompt already carries. Recording each
+    /// directory as it is returned is what makes the injection happen once per
+    /// directory per session.
+    pub fn undiscovered_instructions(
+        &self,
+        file_path: &str,
+    ) -> Result<Vec<(String, String)>, WorkspaceError> {
+        let relative = match self.confined(Path::new(file_path), false) {
+            Ok(relative) => relative,
+            // A path this workspace cannot resolve carries no instructions,
+            // which is the answer the reference gives for the same case.
+            Err(_) => return Ok(Vec::new()),
+        };
+        let start = if self.is_directory(&relative) {
+            relative.clone()
+        } else {
+            relative.parent().unwrap_or(Path::new("")).to_path_buf()
+        };
+        let mut injected =
+            self.injected_instructions
+                .lock()
+                .map_err(|_| WorkspaceError::LockPoisoned {
+                    surface: "instruction injection",
+                })?;
+        let mut discovered = Vec::new();
+        let mut current = start;
+        while !current.as_os_str().is_empty() && current != Path::new(".") {
+            let candidate = current.join(INSTRUCTION_FILE);
+            if !injected.contains(&candidate)
+                && let Ok(read) =
+                    self.read_lines_bounded(&candidate, 1, self.max_lines, self.max_read_bytes)
+            {
+                let content = read.lines.join("\n").trim().to_owned();
+                if !content.is_empty() {
+                    injected.insert(candidate);
+                    discovered.push((self.absolute_display(&current), content));
+                }
+            }
+            current = current.parent().unwrap_or(Path::new("")).to_path_buf();
+        }
+        discovered.reverse();
+        Ok(discovered)
+    }
+
     fn confined(&self, requested: &Path, must_exist: bool) -> Result<PathBuf, WorkspaceError> {
         let lexical = if requested.is_absolute() {
             requested
@@ -829,7 +997,7 @@ impl WorkspaceTools {
         let read_client = self.client_io.clone();
         let read_config = config.clone();
         let read: Arc<dyn ToolHandler> = Arc::new(
-            move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
+            move |invocation: &ToolInvocation, output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let workspace = read_workspace.clone();
                 let client = read_client.clone();
                 // The budget is read per call, so an operator who raises it
@@ -841,39 +1009,64 @@ impl WorkspaceTools {
                     .to_owned();
                 // `offset` is nullable and defaults to null, so an absent or
                 // explicitly null offset both mean "start at line one".
-                let start_line = invocation.arguments["offset"].as_u64().unwrap_or(1);
+                let offset = invocation.arguments["offset"]
+                    .as_u64()
+                    .and_then(|value| usize::try_from(value).ok());
                 let limit = invocation.arguments["limit"]
                     .as_u64()
+                    .and_then(|value| usize::try_from(value).ok())
                     .unwrap_or(DEFAULT_READ_LINE_LIMIT);
                 Box::pin(async move {
-                    let start_line = usize::try_from(start_line).unwrap_or(usize::MAX);
-                    let limit = usize::try_from(limit).unwrap_or(usize::MAX);
                     let result =
-                        match delegated_read(&workspace, client.as_ref(), &path, start_line, limit)
+                        match delegated_read(&workspace, client.as_ref(), &path, offset, limit)
                             .await?
                         {
                             Some(result) => result,
-                            None => workspace
-                                .read(path, start_line, Some(limit))
-                                .map_err(|error| ToolError::Execution(error.to_string()))?,
+                            None => local_read(&workspace, &path, offset, limit, &settings)?,
                         };
-                    let model_text = read_model_text(&result);
                     // Reference `read_file` raises rather than truncating when
-                    // the rendered output passes the budget, because a silently
+                    // the rendered content passes the budget, because a silently
                     // clipped file reads as a complete one.
-                    if model_text.len() > settings.max_read_bytes {
+                    if result.content.len() > settings.max_read_bytes {
                         return Err(ToolError::Execution(format!(
                             "the rendered output is {} bytes, over the {}-byte budget; narrow it \
                              with offset and limit",
-                            model_text.len(),
+                            result.content.len(),
                             settings.max_read_bytes
                         )));
                     }
+                    let discovered = workspace
+                        .undiscovered_instructions(&result.file_path)
+                        .map_err(|error| ToolError::Execution(error.to_string()))?;
+                    let model_text = match instruction_extra(&discovered) {
+                        Some(extra) => {
+                            // The reference announces the discovery as it
+                            // happens, so the operator sees why the turn grew
+                            // rather than only reading the result.
+                            output.emit(format!(
+                                "discovered {}\n",
+                                discovered
+                                    .iter()
+                                    .map(|(directory, _)| format!("{directory}/{INSTRUCTION_FILE}"))
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ))?;
+                            format!("{}\n\n{extra}", result.model_text())
+                        }
+                        None => result.model_text(),
+                    };
                     Ok(ToolExecutionOutput {
+                        display: json!({
+                            "kind": "read",
+                            "path": result.file_path,
+                            "discovered": discovered
+                                .iter()
+                                .map(|(directory, _)| directory.clone())
+                                .collect::<Vec<_>>(),
+                        }),
                         typed_result: serde_json::to_value(&result)
                             .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
                         model_text,
-                        display: json!({"kind": "read", "path": result.path}),
                         chunks: Vec::new(),
                     })
                 })
@@ -902,23 +1095,28 @@ impl WorkspaceTools {
                 Box::pin(async move {
                     let options =
                         SearchOptions::from_config(&settings, requested, use_default_ignore);
-                    let result = workspace
-                        .search(&pattern, path, &options)
+                    let outcome = workspace
+                        .search(&pattern, &path, &options)
                         .map_err(|error| ToolError::Execution(error.to_string()))?;
-                    let rendered = result
-                        .iter()
-                        .map(|entry| format!("{}:{}:{}", entry.path, entry.line, entry.text))
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    // The byte budget clips the model-facing text rather than
-                    // failing the call, which is what the reference does with
-                    // its own output cap.
-                    let model_text = truncate_utf8(&rendered, settings.max_output_bytes).to_owned();
+                    let result = json!({
+                        "matches": outcome.matches,
+                        "match_count": outcome.match_count,
+                        "pattern": pattern,
+                        "was_truncated": outcome.was_truncated,
+                    });
+                    let model_text = reference_text::joined(&[
+                        ("matches", outcome.matches.clone()),
+                        ("match_count", outcome.match_count.to_string()),
+                        ("pattern", pattern),
+                        (
+                            "was_truncated",
+                            reference_text::boolean(outcome.was_truncated).to_owned(),
+                        ),
+                    ]);
                     Ok(ToolExecutionOutput {
-                        typed_result: serde_json::to_value(&result)
-                            .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
+                        typed_result: result,
                         model_text,
-                        display: json!({"kind": "search", "matches": result.len()}),
+                        display: json!({"kind": "search", "matches": outcome.match_count}),
                         chunks: Vec::new(),
                     })
                 })
@@ -948,25 +1146,55 @@ impl WorkspaceTools {
                     .as_bool()
                     .unwrap_or(false);
                 Box::pin(async move {
+                    // The three refusals the reference raises before it opens
+                    // anything, each naming its own cause.
+                    if path.trim().is_empty() {
+                        return Err(ToolError::Execution(
+                            "edit file_path cannot be empty".to_owned(),
+                        ));
+                    }
+                    if old_text.is_empty() {
+                        return Err(ToolError::Execution(
+                            "edit old_string cannot be empty; write_file creates a new file"
+                                .to_owned(),
+                        ));
+                    }
+                    if old_text == new_text {
+                        return Err(ToolError::Execution(
+                            "edit old_string and new_string are identical, so there is nothing to \
+                             change"
+                                .to_owned(),
+                        ));
+                    }
                     let operations = [EditOperation {
-                        old_text,
-                        new_text,
+                        old_text: old_text.clone(),
+                        new_text: new_text.clone(),
                         replace_all,
                     }];
-                    let result =
+                    let mutation =
                         match delegated_edit(&workspace, client.as_ref(), &path, &operations)
                             .await?
                         {
                             Some(result) => result,
                             None => review
-                                .edit(path, &operations)
+                                .edit(&path, &operations)
                                 .map_err(|error| ToolError::Execution(error.to_string()))?,
                         };
+                    let result = EditResult {
+                        file: workspace.absolute_display(Path::new(&mutation.path)),
+                        message: edit_message(replace_all),
+                        old_string: old_text,
+                        new_string: new_text,
+                    };
                     Ok(ToolExecutionOutput {
                         typed_result: serde_json::to_value(&result)
                             .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
-                        model_text: result.diff.clone(),
-                        display: json!({"kind": "diff", "path": result.path}),
+                        model_text: result.model_text(),
+                        display: json!({
+                            "kind": "diff",
+                            "path": result.file,
+                            "diff": mutation.diff,
+                        }),
                         chunks: Vec::new(),
                     })
                 })
@@ -976,64 +1204,82 @@ impl WorkspaceTools {
         let write_client = self.client_io.clone();
         let write_workspace = self.workspace.clone();
         let write_config = config.clone();
-        let write: Arc<dyn ToolHandler> = Arc::new(
-            move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
-                let review = write_review.clone();
-                let client = write_client.clone();
-                let workspace = write_workspace.clone();
-                let settings: WriteFileConfig = write_config.view("write_file");
-                let path = invocation.arguments["file_path"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_owned();
-                let content = invocation.arguments["content"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_owned();
-                Box::pin(async move {
-                    if path.trim().is_empty() {
-                        return Err(ToolError::Execution(
-                            "write_file file_path cannot be empty".to_owned(),
-                        ));
-                    }
-                    // Both checks run before anything touches the filesystem,
-                    // so a refused write leaves no directory behind.
-                    if content.len() > settings.max_write_bytes {
-                        return Err(ToolError::Execution(format!(
-                            "the content is {} bytes, exceeding the {}-byte write budget",
-                            content.len(),
-                            settings.max_write_bytes
-                        )));
-                    }
-                    if !settings.create_parent_dirs
-                        && let Some(missing) = missing_parent(&workspace, &path)
-                    {
-                        return Err(ToolError::Execution(format!(
-                            "the parent directory `{missing}` does not exist and \
+        let write: Arc<dyn ToolHandler> =
+            Arc::new(
+                move |invocation: &ToolInvocation,
+                      _output: ToolOutputSink|
+                      -> OwnedToolHandlerFuture {
+                    let review = write_review.clone();
+                    let client = write_client.clone();
+                    let workspace = write_workspace.clone();
+                    let settings: WriteFileConfig = write_config.view("write_file");
+                    let path = invocation.arguments["file_path"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned();
+                    let content = invocation.arguments["content"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned();
+                    Box::pin(async move {
+                        if path.trim().is_empty() {
+                            return Err(ToolError::Execution(
+                                "write_file file_path cannot be empty".to_owned(),
+                            ));
+                        }
+                        // Every check runs before anything touches the filesystem,
+                        // so a refused write leaves no directory behind. The
+                        // existence check runs again inside the write itself, which
+                        // is what keeps a race from overwriting a file that
+                        // appeared in between.
+                        if content.len() > settings.max_write_bytes {
+                            return Err(ToolError::Execution(format!(
+                                "the content is {} bytes, exceeding the {}-byte write budget",
+                                content.len(),
+                                settings.max_write_bytes
+                            )));
+                        }
+                        if workspace.exists_at(&path) {
+                            return Err(ToolError::Execution(format!(
+                                "`{path}` already exists; use edit to modify it"
+                            )));
+                        }
+                        if !settings.create_parent_dirs
+                            && let Some(missing) = missing_parent(&workspace, &path)
+                        {
+                            return Err(ToolError::Execution(format!(
+                                "the parent directory `{missing}` does not exist and \
                              create_parent_dirs is off"
-                        )));
-                    }
-                    let result = match delegated_write(&workspace, client.as_ref(), &path, &content)
-                        .await?
-                    {
-                        Some(result) => result,
-                        None => review
-                            .write(&path, content.as_bytes())
-                            .map_err(|error| ToolError::Execution(error.to_string()))?,
-                    };
-                    Ok(ToolExecutionOutput {
-                        model_text: format!(
-                            "Wrote {} bytes to {}",
-                            result.bytes_written, result.path
-                        ),
-                        display: json!({"kind": "write", "path": result.path}),
-                        typed_result: serde_json::to_value(&result)
-                            .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
-                        chunks: Vec::new(),
+                            )));
+                        }
+                        let mutation =
+                            match delegated_write(&workspace, client.as_ref(), &path, &content)
+                                .await?
+                            {
+                                Some(result) => result,
+                                None => review
+                                    .write(&path, content.as_bytes())
+                                    .map_err(|error| ToolError::Execution(error.to_string()))?,
+                            };
+                        let result = WriteFileResult {
+                            file_path: workspace.absolute_display(Path::new(&mutation.path)),
+                            bytes_written: content.len(),
+                            content,
+                        };
+                        Ok(ToolExecutionOutput {
+                            model_text: result.model_text(),
+                            display: json!({
+                                "kind": "write",
+                                "path": result.file_path,
+                                "diff": mutation.diff,
+                            }),
+                            typed_result: serde_json::to_value(&result)
+                                .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
+                            chunks: Vec::new(),
+                        })
                     })
-                })
-            },
-        );
+                },
+            );
         let root = self.workspace.root().to_path_buf();
         let guarded_read = Arc::new(PolicyGuardedTool::new(
             "read_file",
@@ -1154,29 +1400,29 @@ fn delegated_path(
 
 /// Reads one file through the client, or `None` when it hosts no filesystem.
 ///
-/// The client answers with a window rather than a file, so the line count it
-/// implies is what it returned: the reference reports zero only for an empty
-/// answer at the top of the file, and this keeps that distinction so an offset
-/// past the end still reads as one rather than as an empty file.
+/// The client answers with a window rather than a file, so the totals it
+/// implies are what it returned: asking for one line past the budget is how the
+/// answer reports that it stopped short without a second round trip, and a
+/// short answer at the top of the file is the only one that can be called
+/// complete.
 async fn delegated_read(
     workspace: &Workspace,
     client: Option<&ClientToolIo>,
     path: &str,
-    start_line: usize,
+    offset: Option<usize>,
     limit: usize,
-) -> Result<Option<FileRead>, ToolError> {
+) -> Result<Option<ReadFileResult>, ToolError> {
     let Some(client) = client.filter(|client| client.supports_read()) else {
         return Ok(None);
     };
-    let (absolute, display) = delegated_path(workspace, path, true)?;
-    let start = start_line.max(1);
+    let (absolute, _) = delegated_path(workspace, path, true)?;
+    let display = absolute.to_string_lossy().replace('\\', "/");
+    let start = offset.unwrap_or(1).max(1);
     let line_limit = limit.min(workspace.max_lines);
     let content = client
         .read_text_file(
             &absolute.to_string_lossy(),
             u64::try_from(start).ok(),
-            // One line past the budget, which is how the answer reports that it
-            // stopped short without a second round trip.
             u64::try_from(line_limit.saturating_add(1)).ok(),
         )
         .await
@@ -1186,34 +1432,34 @@ async fn delegated_read(
         cut = cut.saturating_sub(1);
     }
     let byte_truncated = cut < content.len();
-    let all_lines = content[..cut].lines().collect::<Vec<_>>();
+    let all_lines = content
+        .get(..cut)
+        .unwrap_or_default()
+        .lines()
+        .collect::<Vec<_>>();
     let selected = all_lines
         .iter()
         .take(line_limit)
-        .copied()
+        .map(|line| (*line).to_owned())
         .collect::<Vec<_>>();
-    let selected_content = selected.join("\n");
-    let numbered_content = selected
-        .iter()
-        .enumerate()
-        .map(|(index, line)| format!("{}|{line}", start.saturating_add(index)))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let total_lines = if selected.is_empty() && start == 1 {
-        0
+    let was_truncated = byte_truncated || all_lines.len() > line_limit;
+    let total_lines = if was_truncated {
+        None
+    } else if selected.is_empty() && start == 1 {
+        Some(0)
     } else {
-        start.saturating_sub(1).saturating_add(selected.len())
+        Some(start.saturating_sub(1).saturating_add(selected.len()))
     };
-    Ok(Some(FileRead {
-        path: display,
-        content_bytes: selected_content.len(),
-        content: selected_content,
-        numbered_content,
-        start_line: start,
-        end_line: start.saturating_add(selected.len().saturating_sub(1)),
-        total_lines,
-        truncated: byte_truncated || all_lines.len() > line_limit,
-    }))
+    Ok(Some(build_read_result(
+        display,
+        BoundedRead {
+            lines: selected,
+            total_lines,
+            was_truncated,
+        },
+        offset,
+        limit,
+    )))
 }
 
 /// Writes one file through the client, or `None` when it hosts no filesystem.
@@ -1307,6 +1553,10 @@ pub enum WorkspaceError {
     AlreadyExists(PathBuf),
     #[error("invalid search pattern: {0}")]
     InvalidPattern(String),
+    #[error("the search pattern is empty")]
+    EmptyPattern,
+    #[error("the search path `{0}` does not exist")]
+    MissingSearchPath(String),
     #[error("the search did not finish inside the {seconds}-second budget")]
     SearchTimeout { seconds: u64 },
     #[error("git inspection failed: {0}")]
@@ -1329,31 +1579,128 @@ pub enum WorkspaceError {
     LimitOverflow,
 }
 
-/// What the model reads back from a `read_file` call.
+/// One `read_file` call answered from the workspace itself.
 ///
-/// An empty selection is not an empty success: the reference distinguishes an
-/// empty file from an offset past the last line, and says so in the text the
-/// model receives rather than returning nothing. It branches on whether any
-/// line was selected, not on whether those lines carry text, so a file holding
-/// one blank line reads back as that blank line.
-fn read_model_text(result: &FileRead) -> String {
-    if result.total_lines == 0 {
-        return format!(
-            "<warning>`{}` exists but holds no content.</warning>",
-            result.path
-        );
+/// The three refusals the reference raises each name their own cause: an empty
+/// argument, a path that does not exist, and a directory. Collapsing them into
+/// one message would leave a model unable to tell a typo from a wrong kind of
+/// target.
+fn local_read(
+    workspace: &Workspace,
+    path: &str,
+    offset: Option<usize>,
+    limit: usize,
+    settings: &ReadFileConfig,
+) -> Result<ReadFileResult, ToolError> {
+    if path.trim().is_empty() {
+        return Err(ToolError::Execution(
+            "read_file file_path cannot be empty".to_owned(),
+        ));
     }
-    if result.start_line > result.total_lines {
-        return format!(
-            "<warning>`{}` holds {} lines, which stops short of the requested offset {}.</warning>",
-            result.path, result.total_lines, result.start_line
-        );
+    let relative = workspace
+        .confined(Path::new(path), false)
+        .map_err(|error| ToolError::Execution(error.to_string()))?;
+    let display = workspace.absolute_display(&relative);
+    if !workspace.exists(&relative) {
+        return Err(ToolError::Execution(format!(
+            "no file exists at `{display}`"
+        )));
     }
-    result.numbered_content.clone()
+    if workspace.is_directory(&relative) {
+        return Err(ToolError::Execution(format!(
+            "`{display}` is a directory, not a file"
+        )));
+    }
+    let start = offset.unwrap_or(1).max(1);
+    let read = workspace
+        .read_lines_bounded(&relative, start, limit, settings.max_read_bytes)
+        .map_err(|error| ToolError::Execution(error.to_string()))?;
+    Ok(build_read_result(display, read, offset, limit))
+}
+
+/// The result one bounded read produces, warnings included.
+///
+/// An empty selection is not an empty success: the reference tells an empty
+/// file from an offset past the last line from a read that returned nothing at
+/// all, and says which in the content the model receives.
+fn build_read_result(
+    file_path: String,
+    read: BoundedRead,
+    offset: Option<usize>,
+    limit: usize,
+) -> ReadFileResult {
+    let start = offset.unwrap_or(1).max(1);
+    let content = if read.lines.is_empty() {
+        match read.total_lines {
+            Some(0) => warning("this file exists and holds no content".to_owned()),
+            Some(total) => warning(format!(
+                "this file holds {total} lines, which stops short of the requested offset {start}"
+            )),
+            None => warning(format!("no content was returned for offset {start}")),
+        }
+    } else {
+        read.lines
+            .iter()
+            .enumerate()
+            .map(|(index, line)| format!("{:>9}\u{2192}{line}", start.saturating_add(index)))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    ReadFileResult {
+        file_path,
+        content,
+        num_lines: read.lines.len(),
+        start_line: start,
+        requested_offset: offset,
+        requested_limit: limit,
+        total_lines: read.total_lines,
+        was_truncated: read.was_truncated,
+    }
+}
+
+/// A notice the model reads as one, under the tag the reference publishes.
+fn warning(message: String) -> String {
+    format!("<{WARNING_TAG}>{message}</{WARNING_TAG}>")
+}
+
+/// The block appended to a read whose directories carry their own `AGENTS.md`.
+///
+/// The prose is this port's own: `NOTICE` forbids reproducing the reference's,
+/// and what the block has to do is name the directory and carry its
+/// instructions.
+fn instruction_extra(discovered: &[(String, String)]) -> Option<String> {
+    if discovered.is_empty() {
+        return None;
+    }
+    let sections = discovered
+        .iter()
+        .map(|(directory, content)| {
+            format!(
+                "Instructions from {directory}/{INSTRUCTION_FILE}, which apply to this \
+                 directory:\n\n{content}"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    Some(format!("<{WARNING_TAG}>\n{sections}\n</{WARNING_TAG}>"))
+}
+
+/// What an edit reports once it has been applied.
+///
+/// Two messages rather than one, because the reference distinguishes the single
+/// replacement from the sweep, and a model that asked for `replace_all` needs to
+/// read back that every occurrence moved.
+fn edit_message(replace_all: bool) -> String {
+    if replace_all {
+        "the file was updated and every occurrence was replaced".to_owned()
+    } else {
+        "the file was updated".to_owned()
+    }
 }
 
 /// Reference `ReadFileArgs.limit` default.
-const DEFAULT_READ_LINE_LIMIT: u64 = 2000;
+/// Reference `ReadFileArgs.limit` default.
+const DEFAULT_READ_LINE_LIMIT: usize = 2000;
 
 fn read_file_spec() -> ToolSpec {
     ToolSpec {
@@ -1381,7 +1728,7 @@ fn read_file_spec() -> ToolSpec {
                 Property::integer()
                     .constrained("exclusiveMinimum", 0)
                     .described("How many lines to read at most")
-                    .with_default(DEFAULT_READ_LINE_LIMIT),
+                    .with_default(json!(DEFAULT_READ_LINE_LIMIT)),
             )
             .build(),
         output_schema: None,
@@ -1649,6 +1996,10 @@ mod tests {
     #[test]
     fn discovery_reads_searches_and_honors_ignore_order() {
         let directory = tempdir().expect("tempdir");
+        // `rg` reads a `.gitignore` only inside a repository, and so does the
+        // `ignore` crate it is built on, so the marker is what makes this
+        // fixture's ignore file apply at all.
+        std::fs::create_dir(directory.path().join(".git")).expect("git marker");
         std::fs::write(directory.path().join(".gitignore"), "ignored.txt\n").expect("ignore");
         std::fs::write(directory.path().join("visible.txt"), "alpha\nbeta\n").expect("visible");
         std::fs::write(directory.path().join("ignored.txt"), "alpha\n").expect("ignored");
@@ -1658,18 +2009,18 @@ mod tests {
         assert!(discovered.iter().all(|entry| entry.path != "ignored.txt"));
         let read = workspace.read("visible.txt", 2, Some(1)).expect("read");
         assert_eq!(read.numbered_content, "2|beta");
-        let matches = workspace
+        let matched = workspace
             .search("alpha", ".", &probe_options(10, true))
             .expect("search");
-        assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].path, "visible.txt");
+        assert_eq!(matched.match_count, 1);
+        assert_eq!(matched.matches, "./visible.txt:1:alpha");
 
         // `use_default_ignore: false` drops the .gitignore entries and keeps
         // the always-excluded directories, matching the reference split.
         let unfiltered = workspace
             .search("alpha", ".", &probe_options(10, false))
             .expect("search");
-        assert_eq!(unfiltered.len(), 2);
+        assert_eq!(unfiltered.match_count, 2);
     }
 
     #[test]
@@ -1680,12 +2031,15 @@ mod tests {
         std::fs::write(directory.path().join("long.txt"), content).expect("long file");
         let workspace = Workspace::open(directory.path()).expect("workspace");
 
-        let matches = workspace
+        let matched = workspace
             .search("needle", ".", &probe_options(10, true))
             .expect("search");
 
-        assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].line, DEFAULT_MAX_LINES + 11);
+        assert_eq!(matched.match_count, 1);
+        assert_eq!(
+            matched.matches,
+            format!("./long.txt:{}:needle", DEFAULT_MAX_LINES + 11)
+        );
     }
 
     #[test]
@@ -1932,7 +2286,7 @@ mod tests {
             )
             .await
             .expect("trusted read");
-        assert_eq!(result.model_text, "1|safe");
+        assert_eq!(result.typed_result["content"], "        1\u{2192}safe");
 
         policy.revoke_trust(directory.path()).await.expect("revoke");
         let denied = registry
@@ -1974,7 +2328,8 @@ mod tests {
             )
             .await
             .expect("read_file accepts the reference keys");
-        assert_eq!(read.model_text, "2|beta");
+        assert_eq!(read.typed_result["content"], "        2\u{2192}beta");
+        assert_eq!(read.typed_result["requested_offset"], 2);
 
         let grep = registry
             .invoke(
@@ -1986,7 +2341,8 @@ mod tests {
             )
             .await
             .expect("grep treats its pattern as a regular expression");
-        assert_eq!(grep.model_text, "visible.txt:1:alpha");
+        assert_eq!(grep.typed_result["matches"], "./visible.txt:1:alpha");
+        assert_eq!(grep.typed_result["match_count"], 1);
     }
 
     /// An offset past the last line is an explicit out-of-range answer, never
@@ -2035,7 +2391,8 @@ mod tests {
             .await
             .expect("a blank line is content");
 
-        assert_eq!(blank.model_text, "1|");
+        assert_eq!(blank.typed_result["content"], "        1\u{2192}");
+        assert_eq!(blank.typed_result["num_lines"], 1);
     }
 
     /// The reference resolves `max_matches` with `or`, so a zero is not a cap
@@ -2057,7 +2414,7 @@ mod tests {
             .await
             .expect("grep answers");
 
-        assert_eq!(matched.model_text.lines().count(), 3);
+        assert_eq!(matched.typed_result["match_count"], 3);
     }
 
     #[tokio::test]
@@ -2195,7 +2552,19 @@ mod tests {
             )
             .await
             .expect("replace_all resolves the ambiguity");
-        assert!(replaced.model_text.contains("+two"));
+        // The diff moved to the display payload: the model reads the reference
+        // fields, and the transcript renders the hunk.
+        assert!(
+            replaced.display["diff"]
+                .as_str()
+                .is_some_and(|diff| diff.contains("+two")),
+            "{replaced:?}"
+        );
+        assert!(
+            replaced
+                .model_text
+                .contains("every occurrence was replaced")
+        );
     }
 
     /// A trusted workspace with the file tools registered and every approval
@@ -2366,7 +2735,7 @@ mod tests {
             )
             .await
             .expect("the raised budget carries the same file");
-        assert_eq!(read.typed_result["totalLines"], json!(200));
+        assert_eq!(read.typed_result["total_lines"], json!(200));
     }
 
     /// US-103: `grep` reads its cap, its exclusion globs and its codeignore file
@@ -2400,16 +2769,9 @@ mod tests {
             )
             .await
             .expect("search");
-        let paths = matched.typed_result["matches"]
-            .as_array()
-            .map(|entries| entries.len())
-            .unwrap_or_else(|| {
-                matched
-                    .typed_result
-                    .as_array()
-                    .map(Vec::len)
-                    .expect("an array of matches")
-            });
+        let paths = matched.typed_result["match_count"]
+            .as_u64()
+            .expect("a match count");
         assert_eq!(
             paths, 3,
             "the declared exclusions drop `build/` and the codeignore file drops `generated/`: {}",
@@ -2433,8 +2795,7 @@ mod tests {
             .await
             .expect("search");
         assert_eq!(
-            capped.model_text.lines().count(),
-            2,
+            capped.typed_result["match_count"], 2,
             "{}",
             capped.model_text
         );
@@ -2455,7 +2816,15 @@ mod tests {
             )
             .await
             .expect("search");
-        assert!(clipped.model_text.len() <= 12, "{}", clipped.model_text);
+        // The budget clips the match list rather than the rendered result, and
+        // the flag is what tells the model the answer was cut short.
+        assert_eq!(
+            clipped.typed_result["matches"].as_str().map(str::len),
+            Some(12),
+            "{}",
+            clipped.model_text
+        );
+        assert_eq!(clipped.typed_result["was_truncated"], true);
     }
 
     /// US-103: `write_file` reads its byte budget and its parent-creation flag
@@ -2635,7 +3004,10 @@ mod tests {
             )
             .await
             .expect("the client answers the read");
-        assert_eq!(read.model_text, "1|unsaved one\n2|unsaved two");
+        assert_eq!(
+            read.typed_result["content"],
+            "        1\u{2192}unsaved one\n        2\u{2192}unsaved two"
+        );
         assert_eq!(client.methods(), ["clientTool/readTextFile"]);
         // The request carries the confined absolute path, which is the only
         // form a client can resolve, and the result keeps the workspace-
@@ -2704,7 +3076,13 @@ mod tests {
             )
             .await
             .expect("the client answers the edit");
-        assert!(edited.model_text.contains("+gamma"), "{edited:?}");
+        assert_eq!(edited.typed_result["new_string"], "gamma");
+        assert!(
+            edited.display["diff"]
+                .as_str()
+                .is_some_and(|diff| diff.contains("+gamma")),
+            "{edited:?}"
+        );
         assert_eq!(
             *client.buffer.lock().expect("buffer"),
             "gamma\n",
@@ -2749,7 +3127,7 @@ mod tests {
             )
             .await
             .expect("the workspace answers the read");
-        assert_eq!(read.model_text, "1|on disk");
+        assert_eq!(read.typed_result["content"], "        1\u{2192}on disk");
         registry
             .invoke(
                 "write_file",
@@ -2905,5 +3283,428 @@ mod tests {
             "{oversized}"
         );
         assert!(!directory.path().join("big.txt").exists());
+    }
+
+    // ----------------------------------------------------------------
+    // EP-034: the builtin bodies
+    // ----------------------------------------------------------------
+
+    /// US-112: the walk honors `.gitignore` and `.ignore` inside a repository
+    /// and drops both when the call asks, while the configured exclusion globs
+    /// apply either way.
+    #[tokio::test]
+    async fn grep_separates_the_ignore_files_from_the_configured_exclusions() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::create_dir(directory.path().join(".git")).expect("git marker");
+        std::fs::create_dir(directory.path().join("build")).expect("build");
+        std::fs::write(directory.path().join(".gitignore"), "gitignored.txt\n").expect("gitignore");
+        std::fs::write(directory.path().join(".ignore"), "plainignored.txt\n").expect("ignore");
+        for name in [
+            "kept.txt",
+            "gitignored.txt",
+            "plainignored.txt",
+            "build/out.txt",
+        ] {
+            std::fs::write(directory.path().join(name), "needle\n").expect("seed");
+        }
+        let (registry, _) = registered_with_settings(directory.path(), "").await;
+
+        let honored = registry
+            .invoke(
+                "grep",
+                ToolInvocation {
+                    call_id: "grep-1".to_owned(),
+                    arguments: json!({"pattern": "needle"}),
+                },
+            )
+            .await
+            .expect("search");
+        assert_eq!(
+            honored.typed_result["matches"], "./kept.txt:1:needle",
+            "both ignore files and the declared `build/` exclusion apply"
+        );
+
+        let unfiltered = registry
+            .invoke(
+                "grep",
+                ToolInvocation {
+                    call_id: "grep-2".to_owned(),
+                    arguments: json!({"pattern": "needle", "use_default_ignore": false}),
+                },
+            )
+            .await
+            .expect("search");
+        let matches = unfiltered.typed_result["matches"]
+            .as_str()
+            .expect("a match list");
+        assert!(matches.contains("./gitignored.txt:1:needle"), "{matches}");
+        assert!(matches.contains("./plainignored.txt:1:needle"), "{matches}");
+        assert!(
+            !matches.contains("build/out.txt"),
+            "the configured exclusions survive `use_default_ignore: false`: {matches}"
+        );
+    }
+
+    /// US-112: a binary file is walked past rather than matched or raised on,
+    /// and a hidden file is skipped the way `rg` skips one.
+    #[tokio::test]
+    async fn grep_skips_a_binary_file_without_failing_the_call() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("text.txt"), "needle\n").expect("text");
+        std::fs::write(directory.path().join("blob.bin"), b"needle\0needle\n").expect("binary");
+        let (registry, _) = registered_with_settings(directory.path(), "").await;
+
+        let matched = registry
+            .invoke(
+                "grep",
+                ToolInvocation {
+                    call_id: "grep-1".to_owned(),
+                    arguments: json!({"pattern": "needle"}),
+                },
+            )
+            .await
+            .expect("a binary file is not an error");
+
+        assert_eq!(matched.typed_result["matches"], "./text.txt:1:needle");
+    }
+
+    /// US-112: a search that runs out of time answers nothing rather than
+    /// returning what it had as though it were complete.
+    #[test]
+    fn a_search_past_its_timeout_discards_the_partial_answer() {
+        let directory = tempdir().expect("tempdir");
+        for index in 0..64 {
+            std::fs::write(directory.path().join(format!("f{index}.txt")), "needle\n")
+                .expect("seed");
+        }
+        let workspace = Workspace::open(directory.path()).expect("workspace");
+        let options = SearchOptions {
+            timeout: Some(Duration::ZERO),
+            ..SearchOptions::default()
+        };
+
+        let error = workspace
+            .search("needle", ".", &options)
+            .expect_err("an expired budget answers nothing");
+
+        assert!(error.to_string().contains("did not finish"), "{error}");
+    }
+
+    /// US-113: a subdirectory's `AGENTS.md` reaches the model once, and the
+    /// second read of the same directory pays for it again in neither the text
+    /// nor the progress stream.
+    #[tokio::test]
+    async fn a_subdirectory_instruction_file_is_injected_once_per_session() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::create_dir_all(directory.path().join("nested/deeper")).expect("nested");
+        std::fs::write(directory.path().join("AGENTS.md"), "the root rules\n").expect("root");
+        std::fs::write(
+            directory.path().join("nested/AGENTS.md"),
+            "the nested rules\n",
+        )
+        .expect("nested rules");
+        std::fs::write(directory.path().join("nested/deeper/main.rs"), "body\n").expect("file");
+        let (registry, _) = registered_with_settings(directory.path(), "").await;
+
+        let invocation = || ToolInvocation {
+            call_id: "read-1".to_owned(),
+            arguments: json!({"file_path": "nested/deeper/main.rs"}),
+        };
+        let first = registry
+            .invoke("read_file", invocation())
+            .await
+            .expect("read");
+        assert!(
+            first.model_text.contains("the nested rules"),
+            "{}",
+            first.model_text
+        );
+        assert!(
+            !first.model_text.contains("the root rules"),
+            "the root's own instructions travel with the session prompt, not with a read: {}",
+            first.model_text
+        );
+        assert_eq!(
+            first.display["discovered"],
+            json!([format!(
+                "{}/nested",
+                std::fs::canonicalize(directory.path())
+                    .expect("canonical")
+                    .display()
+            )])
+        );
+
+        let second = registry
+            .invoke("read_file", invocation())
+            .await
+            .expect("read");
+        assert!(
+            !second.model_text.contains("the nested rules"),
+            "{}",
+            second.model_text
+        );
+        assert_eq!(second.display["discovered"], json!([]));
+    }
+
+    /// US-113: the three ways a path can be unreadable each name their own
+    /// cause, so a model can tell a typo from a directory.
+    #[tokio::test]
+    async fn read_file_names_each_unreadable_path_for_what_it_is() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::create_dir(directory.path().join("nested")).expect("nested");
+        let (registry, _) = registered_with_settings(directory.path(), "").await;
+
+        let mut messages = Vec::new();
+        for (index, path) in ["", "nowhere.txt", "nested"].iter().enumerate() {
+            let error = registry
+                .invoke(
+                    "read_file",
+                    ToolInvocation {
+                        call_id: format!("read-{index}"),
+                        arguments: json!({"file_path": path}),
+                    },
+                )
+                .await
+                .expect_err("an unreadable path is refused");
+            messages.push(error.to_string());
+        }
+
+        assert!(messages[0].contains("file_path"), "{:?}", messages[0]);
+        assert!(messages[1].contains("no file exists"), "{:?}", messages[1]);
+        assert!(messages[2].contains("is a directory"), "{:?}", messages[2]);
+        assert_eq!(
+            messages.iter().collect::<BTreeSet<_>>().len(),
+            3,
+            "each cause needs its own message: {messages:?}"
+        );
+    }
+
+    /// US-114: `write_file` refuses an existing file before it opens anything,
+    /// and the create-new open refuses it again for a file that appeared in
+    /// between.
+    #[tokio::test]
+    async fn write_file_refuses_an_existing_file_before_and_during_the_write() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("taken.txt"), "original\n").expect("seed");
+        let workspace = Arc::new(Workspace::open(directory.path()).expect("workspace"));
+        let review = ReviewManager::new(workspace.clone());
+        review.begin_turn("turn-1").expect("turn");
+        let (registry, _) = registered_with_settings(directory.path(), "").await;
+
+        let refused = registry
+            .invoke(
+                "write_file",
+                ToolInvocation {
+                    call_id: "write-1".to_owned(),
+                    arguments: json!({"file_path": "taken.txt", "content": "replacement\n"}),
+                },
+            )
+            .await
+            .expect_err("an existing file is refused");
+        assert!(refused.to_string().contains("already exists"), "{refused}");
+
+        // The same refusal without the pre-check, which is the path a file
+        // created between the check and the open would take.
+        let raced = review
+            .write("taken.txt", b"replacement\n")
+            .expect_err("the create-new open refuses it too");
+        assert!(raced.to_string().contains("already exists"), "{raced}");
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("taken.txt")).expect("unchanged"),
+            "original\n"
+        );
+    }
+
+    /// US-114: a file written in another codec with another line ending keeps
+    /// both, so a one-line change does not rewrite the whole file.
+    #[tokio::test]
+    async fn edit_preserves_the_encoding_and_the_line_ending_it_found() {
+        let directory = tempdir().expect("tempdir");
+        // "café\r\nlatin\r\n" in Latin-1: the accented byte is 0xE9, which is
+        // not valid UTF-8 on its own.
+        std::fs::write(
+            directory.path().join("legacy.txt"),
+            b"caf\xe9\r\nlatin\r\n".as_slice(),
+        )
+        .expect("seed");
+        let (registry, _) = registered_with_settings(directory.path(), "").await;
+
+        registry
+            .invoke(
+                "edit",
+                ToolInvocation {
+                    call_id: "edit-1".to_owned(),
+                    arguments: json!({
+                        "file_path": "legacy.txt",
+                        "old_string": "latin",
+                        "new_string": "changed",
+                    }),
+                },
+            )
+            .await
+            .expect("the edit applies");
+
+        assert_eq!(
+            std::fs::read(directory.path().join("legacy.txt")).expect("read back"),
+            b"caf\xe9\r\nchanged\r\n".as_slice()
+        );
+    }
+
+    /// US-114: the four ways an edit can be refused each name their own cause.
+    #[tokio::test]
+    async fn edit_names_each_refusal_for_what_it_is() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("file.txt"), "one\none\n").expect("seed");
+        let (registry, _) = registered_with_settings(directory.path(), "").await;
+
+        let cases = [
+            (
+                json!({"file_path": "file.txt", "old_string": "", "new_string": "x"}),
+                "empty",
+            ),
+            (
+                json!({"file_path": "file.txt", "old_string": "one", "new_string": "one"}),
+                "identical",
+            ),
+            (
+                json!({"file_path": "file.txt", "old_string": "absent", "new_string": "x"}),
+                "is stale",
+            ),
+            (
+                json!({"file_path": "file.txt", "old_string": "one", "new_string": "two"}),
+                "matches 2 locations",
+            ),
+        ];
+        for (index, (arguments, expected)) in cases.into_iter().enumerate() {
+            let error = registry
+                .invoke(
+                    "edit",
+                    ToolInvocation {
+                        call_id: format!("edit-{index}"),
+                        arguments,
+                    },
+                )
+                .await
+                .expect_err("the edit is refused");
+            assert!(error.to_string().contains(expected), "{error}");
+        }
+    }
+
+    /// US-114: two edits of one file serialize, so the second reads what the
+    /// first wrote rather than the original, and neither sees a half-written
+    /// file.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn two_edits_of_one_file_serialize_rather_than_losing_one() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("file.txt"), "alpha beta\n").expect("seed");
+        let (registry, _) = registered_with_settings(directory.path(), "").await;
+        let registry = Arc::new(registry);
+
+        let first = {
+            let registry = registry.clone();
+            tokio::spawn(async move {
+                registry
+                    .invoke(
+                        "edit",
+                        ToolInvocation {
+                            call_id: "edit-1".to_owned(),
+                            arguments: json!({
+                                "file_path": "file.txt",
+                                "old_string": "alpha",
+                                "new_string": "ALPHA",
+                            }),
+                        },
+                    )
+                    .await
+            })
+        };
+        let second = {
+            let registry = registry.clone();
+            tokio::spawn(async move {
+                registry
+                    .invoke(
+                        "edit",
+                        ToolInvocation {
+                            call_id: "edit-2".to_owned(),
+                            arguments: json!({
+                                "file_path": "file.txt",
+                                "old_string": "beta",
+                                "new_string": "BETA",
+                            }),
+                        },
+                    )
+                    .await
+            })
+        };
+        first.await.expect("join").expect("the first edit applies");
+        second
+            .await
+            .expect("join")
+            .expect("the second edit applies");
+
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("file.txt")).expect("read back"),
+            "ALPHA BETA\n",
+            "one of the two edits was written over the other"
+        );
+    }
+
+    /// US-114: the file an edit is about to change is snapshotted before the
+    /// handler runs, so a revert restores what was there.
+    #[tokio::test]
+    async fn a_mutating_call_snapshots_the_file_before_it_changes_it() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join("file.txt"), "before\n").expect("seed");
+        let workspace = Arc::new(Workspace::open(directory.path()).expect("workspace"));
+        let review = Arc::new(ReviewManager::new(workspace.clone()));
+        review.begin_turn("turn-1").expect("turn");
+        let policy = PermissionStore::default();
+        policy.set_tool_permission("edit", PermissionMode::Always);
+        policy
+            .set_trust(
+                directory.path(),
+                TrustDecision::Trusted,
+                TrustRootKind::Workspace,
+            )
+            .await
+            .expect("trust");
+        let registry = ToolRegistry::default();
+        WorkspaceTools::new(workspace, review.clone())
+            .register(
+                &registry,
+                &ToolGuard {
+                    policy: policy.clone(),
+                    approval: Arc::new(RejectApproval),
+                    config: policy.tool_config(),
+                    scratchpad: None,
+                },
+            )
+            .expect("register");
+
+        registry
+            .invoke(
+                "edit",
+                ToolInvocation {
+                    call_id: "edit-1".to_owned(),
+                    arguments: json!({
+                        "file_path": "file.txt",
+                        "old_string": "before",
+                        "new_string": "after",
+                    }),
+                },
+            )
+            .await
+            .expect("the edit applies");
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("file.txt")).expect("changed"),
+            "after\n"
+        );
+
+        review.seal_turn().expect("the turn seals");
+        review.revert().expect("the turn reverts");
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("file.txt")).expect("restored"),
+            "before\n"
+        );
     }
 }
