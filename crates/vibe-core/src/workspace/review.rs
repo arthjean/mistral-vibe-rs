@@ -6,6 +6,9 @@ use super::{
     Checkpoint, EditOperation, MutationResult, ReviewHunk, ReviewView, Workspace, WorkspaceError,
     path_display, text_file, unified_diff,
 };
+use crate::checkpoints::{
+    CheckpointFiles, CheckpointRecorder, Checkpointer, FileAccessError, FileState, FileStore,
+};
 
 /// Applies one edit's operations to the text it was written against.
 ///
@@ -67,18 +70,107 @@ struct ReviewState {
     checkpoint_bytes: usize,
 }
 
+/// The checkpoint engine's filesystem port, backed by the workspace.
+///
+/// Every path arrives in the display form the engine keys its log by and is
+/// confined before it is touched, so the engine cannot address anything the
+/// rest of the workspace would refuse. A path that resolves outside the root
+/// fails rather than reading as absent, because the engine would otherwise
+/// record a deletion for a file it was never allowed to look at.
+#[derive(Clone)]
+struct WorkspaceFiles {
+    workspace: Arc<Workspace>,
+}
+
+impl WorkspaceFiles {
+    fn confined(&self, path: &str, operation: &'static str) -> Result<PathBuf, FileAccessError> {
+        self.workspace
+            .confined(Path::new(path), false)
+            .map_err(|error| FileAccessError::new(operation, path, error))
+    }
+}
+
+impl CheckpointFiles for WorkspaceFiles {
+    fn read_bytes(&self, path: &str) -> Result<Option<Vec<u8>>, FileAccessError> {
+        let relative = self.confined(path, "reading")?;
+        // One read, classified by what it failed with, rather than a presence
+        // check followed by a read: the check answers for a moment that has
+        // passed by the time the read lands, and a file deleted in between
+        // would fail the turn it was carried into. These two kinds are what
+        // absence means; anything else is a file that is there and would not
+        // open, which must never be recorded as a deletion.
+        match self.workspace.read_raw(&relative) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(WorkspaceError::Io { source, .. })
+                if matches!(
+                    source.kind(),
+                    std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+                ) =>
+            {
+                Ok(None)
+            }
+            Err(error) => Err(FileAccessError::new("reading", path, error)),
+        }
+    }
+
+    fn write_bytes(&self, path: &str, data: &[u8]) -> Result<(), FileAccessError> {
+        let relative = self.confined(path, "writing")?;
+        self.workspace
+            .atomic_replace(&relative, data)
+            .map_err(|error| FileAccessError::new("writing", path, error))
+    }
+
+    fn remove(&self, path: &str) -> Result<(), FileAccessError> {
+        let relative = self.confined(path, "deleting")?;
+        self.workspace
+            .remove(&relative)
+            .map_err(|error| FileAccessError::new("deleting", path, error))
+    }
+
+    fn exists(&self, path: &str) -> bool {
+        self.confined(path, "reading")
+            .is_ok_and(|relative| self.workspace.exists(&relative))
+    }
+}
+
 pub struct ReviewManager {
     workspace: Arc<Workspace>,
     state: Mutex<ReviewState>,
+    /// The checkpoint engine's log, driven by the same turn boundaries as the
+    /// snapshot state beside it. The two are captured together because they
+    /// answer different questions: the snapshots answer what to restore on a
+    /// rewind, and the log answers which region of which file each turn and
+    /// each hand edit produced.
+    log: Mutex<Checkpointer>,
+    recorder: CheckpointRecorder<WorkspaceFiles>,
 }
 
 impl ReviewManager {
     #[must_use]
     pub fn new(workspace: Arc<Workspace>) -> Self {
         Self {
+            recorder: CheckpointRecorder::new(FileStore::new(WorkspaceFiles {
+                workspace: workspace.clone(),
+            })),
             workspace,
             state: Mutex::new(ReviewState::default()),
+            log: Mutex::new(Checkpointer::new()),
         }
+    }
+
+    /// Runs `body` against the checkpoint log.
+    ///
+    /// # Errors
+    ///
+    /// Fails when another thread poisoned the log.
+    pub fn with_log<T>(
+        &self,
+        body: impl FnOnce(&mut Checkpointer) -> T,
+    ) -> Result<T, WorkspaceError> {
+        let mut log = self.log.lock().map_err(|_| WorkspaceError::LockPoisoned {
+            surface: "checkpoint log",
+        })?;
+        Ok(body(&mut log))
     }
 
     pub fn begin_turn(&self, turn_id: impl Into<String>) -> Result<(), WorkspaceError> {
@@ -94,6 +186,12 @@ impl ReviewManager {
         if state.active_turn.is_some() {
             return Err(WorkspaceError::ReviewBusy);
         }
+        // The engine numbers its turns by the message index, which is what a
+        // rewind addresses and what a restore plan is cut at.
+        let engine_turn =
+            u64::try_from(message_index).map_err(|_| WorkspaceError::LimitOverflow)?;
+        self.with_log(|log| self.recorder.create_checkpoint(log, engine_turn))?
+            .map_err(|error| WorkspaceError::Checkpoint(error.to_string()))?;
         state.active_turn = Some(ActiveReviewTurn {
             turn_id: turn_id.into(),
             message_index,
@@ -155,6 +253,10 @@ impl ReviewManager {
             .active_turn
             .as_ref()
             .ok_or(WorkspaceError::NoActiveTurn)?;
+        // A path that went unreadable while the turn ran keeps its change out
+        // of the log rather than sealing it as unchanged; the turn closes
+        // either way, and the snapshot path below still answers for it.
+        let _unreadable = self.with_log(|log| self.recorder.seal_turn(log))?;
         let hunks = reconcile_hunks(&self.workspace, &active.baseline)?;
         let active = state
             .active_turn
@@ -235,6 +337,13 @@ impl ReviewManager {
             .iter()
             .map(|checkpoint| checkpoint.snapshot_bytes)
             .sum();
+        let forked_log = self.with_log(|log| {
+            let mut forked = log.clone();
+            if let Ok(turn) = u64::try_from(message_index) {
+                forked.drop_turns_from(turn);
+            }
+            forked
+        })?;
         Ok(Self {
             workspace: self.workspace.clone(),
             state: Mutex::new(ReviewState {
@@ -243,6 +352,8 @@ impl ReviewManager {
                 checkpoints,
                 checkpoint_bytes,
             }),
+            log: Mutex::new(forked_log),
+            recorder: self.recorder.clone(),
         })
     }
 
@@ -252,6 +363,7 @@ impl ReviewManager {
             return Err(WorkspaceError::ReviewBusy);
         }
         clear_review(&mut state);
+        self.with_log(Checkpointer::clear)?;
         drop(state);
         self.view()
     }
@@ -263,6 +375,7 @@ impl ReviewManager {
         }
         apply_file_states_atomic(&self.workspace, &state.baseline)?;
         clear_review(&mut state);
+        self.with_log(Checkpointer::clear)?;
         drop(state);
         self.view()
     }
@@ -304,6 +417,18 @@ impl ReviewManager {
         let snapshot_limit =
             global_remaining.min(MAX_REWIND_SNAPSHOT_BYTES.saturating_sub(active_bytes));
         let baseline = current_file_state_bounded(&self.workspace, relative, snapshot_limit)?;
+        // The tool has read the file and is about to write it, so this is the
+        // state its change is computed against. Handing the bytes already read
+        // to the engine keeps the two captures from disagreeing about what was
+        // there.
+        let snapshot = baseline
+            .clone()
+            .map_or_else(FileState::absent, FileState::from_bytes);
+        self.with_log(|log| {
+            self.recorder
+                .add_snapshot(log, &path_display(relative), snapshot)
+        })?
+        .map_err(|error| WorkspaceError::Checkpoint(error.to_string()))?;
         state
             .baseline
             .entry(relative.to_path_buf())
@@ -520,5 +645,136 @@ mod tests {
         let checkpoints = review.view().expect("view").checkpoints;
         assert_eq!(checkpoints.len(), MAX_REWIND_CHECKPOINTS);
         assert_eq!(checkpoints[0].turn_id, "turn-2");
+    }
+
+    /// The one distinction the port carries, on the implementation the server
+    /// actually runs: nothing there is absence, and something there that will
+    /// not open is a failure. Collapsing the second into the first would have
+    /// the engine record a deletion nobody performed and offer to revert it.
+    #[test]
+    fn the_workspace_port_tells_an_absent_path_apart_from_an_unreadable_one() {
+        let root = tempdir().expect("workspace");
+        std::fs::write(root.path().join("there.txt"), "body\n").expect("seed file");
+        std::fs::create_dir(root.path().join("a-directory")).expect("seed directory");
+        let files = WorkspaceFiles {
+            workspace: Arc::new(Workspace::open(root.path()).expect("open")),
+        };
+
+        assert_eq!(files.read_bytes("there.txt"), Ok(Some(b"body\n".to_vec())));
+        assert_eq!(files.read_bytes("gone.txt"), Ok(None));
+        assert_eq!(files.read_bytes("gone/deeper.txt"), Ok(None));
+        assert!(
+            files.read_bytes("a-directory").is_err(),
+            "something that is there and will not open is never absence"
+        );
+        assert!(
+            files.read_bytes("../outside.txt").is_err(),
+            "a path the workspace refuses is never absence either"
+        );
+    }
+
+    /// The engine is fed by the turn boundaries the server already drives, so a
+    /// session that ran two turns and saw one hand edit carries three owners
+    /// and can answer what each of them changed.
+    #[test]
+    fn the_checkpoint_engine_records_the_turns_the_manager_runs() {
+        let root = tempdir().expect("workspace");
+        std::fs::write(root.path().join("wired.txt"), "one\n").expect("seed file");
+        let review = ReviewManager::new(Arc::new(Workspace::open(root.path()).expect("open")));
+
+        review.begin_turn_at("turn-1", 1).expect("begin turn");
+        review
+            .edit(
+                "wired.txt",
+                &[EditOperation {
+                    old_text: "one\n".to_owned(),
+                    new_text: "one\ntwo\n".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("edit");
+        review.seal_turn().expect("seal turn");
+
+        // The user edits the file between the turns, and nothing announces it.
+        std::fs::write(root.path().join("wired.txt"), "one\ntwo\nby hand\n").expect("hand edit");
+
+        review.begin_turn_at("turn-2", 2).expect("begin turn");
+        review
+            .edit(
+                "wired.txt",
+                &[EditOperation {
+                    old_text: "by hand\n".to_owned(),
+                    new_text: "by hand\nthree\n".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("edit");
+        review.seal_turn().expect("seal turn");
+
+        let owners = review
+            .with_log(|log| {
+                log.history()
+                    .regions("wired.txt")
+                    .into_iter()
+                    .map(|region| region.owner)
+                    .collect::<Vec<_>>()
+            })
+            .expect("log");
+        assert_eq!(
+            owners,
+            vec![
+                crate::checkpoints::Owner::Agent { turn_id: 1 },
+                crate::checkpoints::Owner::Manual { index: 1 },
+                crate::checkpoints::Owner::Agent { turn_id: 2 },
+            ],
+            "the hand edit keeps its own slot between the two turns"
+        );
+
+        let restorable = review
+            .with_log(|log| {
+                let plan = log.history().restore_plan_to_turn(2);
+                plan.iter()
+                    .map(|(path, _state)| path.clone())
+                    .collect::<Vec<_>>()
+            })
+            .expect("log");
+        assert_eq!(restorable, vec!["wired.txt"]);
+    }
+
+    /// Forking drops the turns at and after the fork point from the log, the
+    /// way it already drops their snapshots.
+    #[test]
+    fn forking_truncates_the_engine_log_at_the_fork_point() {
+        let root = tempdir().expect("workspace");
+        std::fs::write(root.path().join("forked.txt"), "one\n").expect("seed file");
+        let review = ReviewManager::new(Arc::new(Workspace::open(root.path()).expect("open")));
+        for turn in 1..=3 {
+            review
+                .begin_turn_at(format!("turn-{turn}"), turn)
+                .expect("begin turn");
+            review
+                .edit(
+                    "forked.txt",
+                    &[EditOperation {
+                        old_text: "one\n".to_owned(),
+                        new_text: format!("one\nturn {turn}\n"),
+                        replace_all: false,
+                    }],
+                )
+                .expect("edit");
+            review.seal_turn().expect("seal turn");
+        }
+
+        let forked = review.fork_at(2).expect("fork");
+
+        let turns = forked
+            .with_log(|log| {
+                let history = log.history();
+                (1..=3)
+                    .filter(|turn| history.has_turn(*turn))
+                    .collect::<Vec<_>>()
+            })
+            .expect("log");
+        assert_eq!(turns, vec![1]);
     }
 }

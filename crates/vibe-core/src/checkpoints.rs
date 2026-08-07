@@ -28,18 +28,24 @@
 //! pinned reference answered for a set of fixtures, and
 //! `checkpoint_parity_tests` replays it unconditionally.
 //!
-//! Nothing here reads or writes a file: a [`FileState`] is bytes the caller
-//! already holds, which is the split that lets the read model be exercised
-//! without a filesystem.
+//! Nothing in the log or the read model reads or writes a file: a [`FileState`]
+//! is bytes the caller already holds, which is the split that lets the read
+//! model be exercised without a filesystem. The two parts that do need disk are
+//! kept apart from both and reach it through one port: [`FileStore`] reads a
+//! state and applies a restore plan, and [`CheckpointRecorder`] decides when a
+//! turn's two readings happen. Neither knows what a workspace is.
 
 mod checkpointer;
 mod events;
+mod files;
 mod history;
 mod lines;
 mod matcher;
 mod models;
+mod recorder;
 
 pub use checkpointer::Checkpointer;
+pub use files::{CheckpointFiles, FileAccessError, FileStore, RestoreOutcome};
 pub use history::History;
 pub use lines::{FileState, decode_lines, split_lines};
 pub use matcher::{Match, Opcode, SequenceMatcher, Tag};
@@ -47,11 +53,14 @@ pub use models::{
     Change, CheckpointError, Decision, HunkAnchor, HunkSide, OpaqueChange, OpaqueReason, Owner,
     Region, RegionId, TurnRegion,
 };
+pub use recorder::{CheckpointRecorder, RecorderError};
 
 #[cfg(test)]
 mod checkpoint_parity_tests;
 #[cfg(test)]
 mod checkpointer_tests;
+#[cfg(test)]
+mod files_tests;
 #[cfg(test)]
 mod history_tests;
 #[cfg(test)]
@@ -60,3 +69,5 @@ mod lines_tests;
 mod matcher_tests;
 #[cfg(test)]
 mod models_tests;
+#[cfg(test)]
+mod recorder_tests;

@@ -325,3 +325,211 @@ fn a_pending_decision_is_refused_wherever_it_is_passed() {
         Err(CheckpointError::PendingDecision)
     );
 }
+
+// -- US-129: manual edits ----------------------------------------------------
+
+fn owners(log: &Checkpointer) -> Vec<Owner> {
+    log.history()
+        .regions(PATH)
+        .into_iter()
+        .map(|region| region.owner)
+        .collect()
+}
+
+#[test]
+fn a_hand_edit_between_turns_is_appended_as_its_own_owner() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("a\n"), text("a\nagent\n"));
+
+    log.reconcile(PATH, text("a\nagent\nby hand\n"));
+
+    assert_eq!(
+        owners(&log),
+        vec![Owner::Agent { turn_id: 1 }, Owner::Manual { index: 1 }],
+        "the hand edit takes the next slot rather than joining the turn"
+    );
+    assert_eq!(log.history().content(PATH), text("a\nagent\nby hand\n"));
+}
+
+#[test]
+fn reconciling_content_that_matches_the_projection_appends_nothing() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("a\n"), text("b\n"));
+
+    log.reconcile(PATH, text("b\n"));
+    log.reconcile(PATH, text("c\n"));
+    let after_first_drift = ids(&log);
+    log.reconcile(PATH, text("c\n"));
+
+    assert_eq!(
+        ids(&log),
+        after_first_drift,
+        "reconciling twice against the same content records the drift once"
+    );
+    assert_eq!(owners(&log).len(), 2);
+}
+
+#[test]
+fn reconciling_during_a_turn_records_nothing_because_that_disk_is_the_turns() {
+    let mut log = Checkpointer::new();
+    log.begin_turn(1).unwrap();
+    log.record_pre_edit(PATH, text("a\n")).unwrap();
+
+    log.reconcile(PATH, text("mid turn\n"));
+
+    log.record_post_edit(PATH, text("agent\n")).unwrap();
+    log.seal_turn();
+    assert_eq!(owners(&log), vec![Owner::Agent { turn_id: 1 }]);
+}
+
+#[test]
+fn a_drift_seen_at_the_start_of_a_turn_is_sealed_before_that_turns_mark() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("one\n"), text("one\ntwo\n"));
+
+    // The user edited the file between the turns, and the next turn is the
+    // first thing to notice.
+    log.begin_turn(2).unwrap();
+    log.record_pre_edit(PATH, text("one\ntwo\nthree\n"))
+        .unwrap();
+    log.record_post_edit(PATH, text("one\ntwo\nthree\nfour\n"))
+        .unwrap();
+    log.seal_turn();
+
+    assert_eq!(
+        owners(&log),
+        vec![
+            Owner::Agent { turn_id: 1 },
+            Owner::Manual { index: 1 },
+            Owner::Agent { turn_id: 2 },
+        ],
+        "the hand edit is ordered where it happened, between the two turns"
+    );
+
+    // Ordered before the mark means a truncation to that turn keeps it.
+    log.drop_turns_from(2);
+    assert_eq!(
+        owners(&log),
+        vec![Owner::Agent { turn_id: 1 }, Owner::Manual { index: 1 }]
+    );
+    assert_eq!(log.history().content(PATH), text("one\ntwo\nthree\n"));
+}
+
+#[test]
+fn a_hand_edit_disjoint_from_a_reverted_turn_survives_it() {
+    let mut log = Checkpointer::new();
+    turn_from(
+        &mut log,
+        1,
+        text("head\nbody\ntail\n"),
+        text("head\nAGENT\ntail\n"),
+    );
+    log.reconcile(PATH, text("head\nAGENT\ntail\nby hand\n"));
+    let regions = ids(&log);
+
+    log.decide_region(PATH, regions[0], Decision::Revert)
+        .unwrap();
+
+    assert_eq!(
+        decisions(&log),
+        vec![Decision::Revert, Decision::Pending],
+        "the hand edit sat on its own lines, so nothing drags it"
+    );
+    assert_eq!(
+        log.history().content(PATH),
+        text("head\nbody\ntail\nby hand\n")
+    );
+}
+
+#[test]
+fn a_hand_edit_built_on_a_reverted_turn_is_dragged_with_it() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("head\nbody\n"), text("head\nAGENT\n"));
+    log.reconcile(PATH, text("head\nAGENT AND HAND\n"));
+    let regions = ids(&log);
+
+    log.decide_region(PATH, regions[0], Decision::Revert)
+        .unwrap();
+
+    assert_eq!(decisions(&log), vec![Decision::Revert, Decision::Revert]);
+    assert_eq!(log.history().content(PATH), text("head\nbody\n"));
+}
+
+#[test]
+fn each_owner_keeps_its_slot_when_a_sibling_is_decided() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("a\n"), text("a\nb\n"));
+    log.reconcile(PATH, text("a\nb\nc\n"));
+    turn_from(&mut log, 2, text("a\nb\nc\n"), text("a\nb\nc\nd\n"));
+    let before = owners(&log);
+
+    log.decide_scope(PATH, Owner::Manual { index: 1 }, Decision::Keep)
+        .unwrap();
+    log.reconcile(PATH, text("a\nb\nc\nd\ne\n"));
+
+    assert_eq!(
+        owners(&log),
+        [before, vec![Owner::Manual { index: 2 }]].concat(),
+        "deciding one slot renumbers nothing, and the next hand edit takes the next index"
+    );
+}
+
+// -- US-130: truncation and the restore plan ---------------------------------
+
+#[test]
+fn truncating_at_a_turn_drops_that_turn_and_everything_after_it() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("a\n"), text("b\n"));
+    turn_from(&mut log, 2, text("b\n"), text("c\n"));
+    let region = ids(&log)[1];
+    log.decide_region(PATH, region, Decision::Keep).unwrap();
+
+    log.drop_turns_from(2);
+
+    assert_eq!(owners(&log), vec![Owner::Agent { turn_id: 1 }]);
+    assert_eq!(
+        decisions(&log),
+        vec![Decision::Pending],
+        "a decision recorded after the cut goes with it"
+    );
+    assert_eq!(log.history().content(PATH), text("b\n"));
+}
+
+#[test]
+fn truncating_at_an_absent_turn_uses_the_earliest_later_one() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("a\n"), text("b\n"));
+    turn_from(&mut log, 4, text("b\n"), text("c\n"));
+
+    log.drop_turns_from(3);
+
+    assert_eq!(owners(&log), vec![Owner::Agent { turn_id: 1 }]);
+}
+
+#[test]
+fn truncating_past_every_turn_leaves_the_log_alone() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("a\n"), text("b\n"));
+    let before = ids(&log);
+
+    log.drop_turns_from(9);
+
+    assert_eq!(ids(&log), before);
+    assert_eq!(log.history().content(PATH), text("b\n"));
+}
+
+#[test]
+fn truncating_closes_an_open_turn() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("a\n"), text("b\n"));
+    log.begin_turn(2).unwrap();
+    log.record_pre_edit(PATH, text("b\n")).unwrap();
+
+    log.drop_turns_from(2);
+
+    assert!(
+        !log.has_open_turn(),
+        "the cut dropped the mark it was open on"
+    );
+    assert!(log.begin_turn(2).is_ok());
+}

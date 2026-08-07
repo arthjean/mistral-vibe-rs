@@ -27,10 +27,10 @@
     {
       "id": "EP-038",
       "title": "Manual Edits, Truncation and the Engine Oracle",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0,
+      "stories_done": 4,
       "stories_in_review": 0
     },
     {
@@ -196,49 +196,49 @@
       "id": "US-129",
       "title": "Capture manual edits by reconciliation",
       "epic": "EP-038",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-127"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-130",
       "title": "Truncate the log and plan a restore",
       "epic": "EP-038",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-123"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-131",
       "title": "Drive the engine from the turn lifecycle through a filesystem port",
       "epic": "EP-038",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-130"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-132",
       "title": "Capture and replay the engine corpus",
       "epic": "EP-038",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
@@ -247,9 +247,9 @@
         "US-130",
         "US-131"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-133",

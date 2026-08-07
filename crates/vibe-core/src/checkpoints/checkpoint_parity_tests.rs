@@ -520,3 +520,843 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
          `{CAPTURE_SCRIPT}`"
     );
 }
+
+// ---------------------------------------------------------------------------
+// The engine corpus
+// ---------------------------------------------------------------------------
+//
+// The opcode families above pin the diff a region identity is numbered by. The
+// families below pin everything built on it: which regions an edit produces,
+// what each was built on, what decision is in force after dragging, what the
+// file looks like with those decisions applied, where a pending change sits in
+// a rendered diff, and what a truncation would restore. Each scenario is a list
+// of steps `scripts/parity/checkpoints.py` drove through the reference; this
+// module drives the same steps through this port and compares family by family.
+
+use std::collections::BTreeMap;
+
+use super::checkpointer::Checkpointer;
+use super::models::{
+    Change, CheckpointError, Decision, HunkAnchor, HunkSide, OpaqueReason, Owner, RegionId,
+};
+
+const ENGINE_CAPTURE_SCRIPT: &str = "scripts/parity/checkpoints.py";
+const ENGINE_CORPUS_RELATIVE: &str = "tests/checkpoints/engine.json";
+/// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
+/// capture script.
+const ENGINE_SCHEMA_VERSION: u32 = 1;
+/// The scenario floor this epic commits to, mirroring `MINIMUM_SCENARIOS` in
+/// the capture script.
+const MINIMUM_SCENARIOS: usize = 40;
+
+/// A divergence this port accepts, with what holds it in place.
+///
+/// An entry that no longer matches a real divergence fails the replay, because
+/// a ledger nobody prunes is a list of things that used to be true. Nothing is
+/// listed today: every family below is expected to match exactly, and a
+/// divergence in any of them is a different protocol rather than a tolerable
+/// gap.
+struct LedgerEntry {
+    scenario: &'static str,
+    family: &'static str,
+    #[expect(dead_code, reason = "the reason documents the entry for its readers")]
+    reason: &'static str,
+}
+
+const LEDGER: &[LedgerEntry] = &[];
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct EngineCorpus {
+    schema_version: u32,
+    reference_commit: String,
+    #[expect(dead_code, reason = "the note documents the file for its readers")]
+    note: String,
+    /// The turn identifier no scenario opens, which pins what a restore plan
+    /// answers for a turn the log does not carry.
+    absent_turn: u64,
+    scenarios: Vec<Scenario>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Scenario {
+    name: String,
+    /// The behavior the scenario was authored for, which the coverage test
+    /// reads.
+    covers: String,
+    steps: Vec<Step>,
+    /// What the reference did with each step, in order.
+    outcomes: Vec<String>,
+    has_open_turn: bool,
+    tracked_paths: Vec<String>,
+    last_turn_paths: Vec<String>,
+    scopes: Vec<Owner>,
+    files: Vec<FileObservation>,
+    restore_plans: Vec<RestorePlanObservation>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(
+    tag = "op",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum Step {
+    BeginTurn {
+        turn_id: u64,
+    },
+    PreEdit {
+        path: String,
+        text: Option<String>,
+    },
+    PostEdit {
+        path: String,
+        text: Option<String>,
+    },
+    SealTurn,
+    Reconcile {
+        path: String,
+        text: Option<String>,
+    },
+    DecideRegion {
+        path: String,
+        version_index: u64,
+        ordinal: usize,
+        decision: Decision,
+    },
+    DecideScope {
+        path: String,
+        owner: Owner,
+        decision: Decision,
+    },
+    DecideFile {
+        path: String,
+        decision: Decision,
+    },
+    DropTurnsFrom {
+        turn_id: u64,
+    },
+    Clear,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FileObservation {
+    path: String,
+    regions: Vec<RegionObservation>,
+    content: String,
+    accepted_baseline: String,
+    original: String,
+    fully_reviewed: bool,
+    anchors: Vec<AnchorObservation>,
+    scopes: Vec<ScopeObservation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RegionObservation {
+    version_index: u64,
+    ordinal: usize,
+    owner: Owner,
+    decision: Decision,
+    depends_on: Vec<(u64, usize)>,
+    change: ChangeObservation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum ChangeObservation {
+    /// One non-equal opcode, with both sides' spans and the lines they hold.
+    Text {
+        baseline_start: usize,
+        baseline_line_count: usize,
+        baseline_lines: String,
+        current_start: usize,
+        current_line_count: usize,
+        current_lines: String,
+    },
+    /// One whole-file unit, with both sides' states.
+    Opaque {
+        reason: OpaqueReason,
+        baseline: String,
+        current: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AnchorObservation {
+    side: HunkSide,
+    line: usize,
+    regions: Vec<(u64, usize)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ScopeObservation {
+    owner: Owner,
+    /// The scope's own pending diff, or nothing when it has none left.
+    diff: Option<DiffObservation>,
+    anchors: Vec<AnchorObservation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DiffObservation {
+    baseline: String,
+    current: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RestorePlanObservation {
+    turn_id: u64,
+    has_turn: bool,
+    plan: Vec<PlanEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlanEntry {
+    path: String,
+    state: String,
+}
+
+fn engine_corpus_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(ENGINE_CORPUS_RELATIVE)
+}
+
+fn engine_corpus() -> EngineCorpus {
+    let raw = fs::read_to_string(engine_corpus_path()).expect("the corpus is committed");
+    let corpus: EngineCorpus = serde_json::from_str(&raw).expect("the corpus parses");
+    assert_eq!(
+        corpus.schema_version, ENGINE_SCHEMA_VERSION,
+        "the corpus layout moved; regenerate with `{ENGINE_CAPTURE_SCRIPT}`"
+    );
+    assert_eq!(
+        corpus.reference_commit, REFERENCE_COMMIT,
+        "the corpus was captured from another commit than this build asserts"
+    );
+    assert!(
+        corpus.scenarios.len() >= MINIMUM_SCENARIOS,
+        "the corpus shrank to {} scenarios",
+        corpus.scenarios.len()
+    );
+    corpus
+}
+
+/// A file state's identity, with absence answering apart from emptiness.
+fn state_digest(state: &FileState) -> String {
+    match state.data() {
+        None => "absent".to_owned(),
+        Some(bytes) => {
+            let mut hasher = Sha256::new();
+            hasher.update(bytes);
+            let hash = hasher.finalize();
+            let hex = hash.iter().fold(String::new(), |mut accumulator, byte| {
+                use std::fmt::Write;
+                let _ = write!(accumulator, "{byte:02x}");
+                accumulator
+            });
+            format!("sha256:{}", &hex[..32])
+        }
+    }
+}
+
+fn state_of(text: Option<&str>) -> FileState {
+    text.map_or_else(FileState::absent, FileState::from_text)
+}
+
+/// The family the reference would have refused this step with.
+fn outcome_of(result: Result<(), CheckpointError>) -> &'static str {
+    match result {
+        Ok(()) => "ok",
+        Err(
+            CheckpointError::TurnAlreadyOpen
+            | CheckpointError::NoOpenTurn { .. }
+            | CheckpointError::DecisionDuringTurn,
+        ) => "turnState",
+        Err(CheckpointError::UnknownRegion { .. } | CheckpointError::PendingDecision) => {
+            "fileState"
+        }
+    }
+}
+
+/// One step against the log, answering what this port did with it.
+fn apply_step(log: &mut Checkpointer, step: &Step) -> &'static str {
+    match step {
+        Step::BeginTurn { turn_id } => outcome_of(log.begin_turn(*turn_id)),
+        Step::PreEdit { path, text } => {
+            outcome_of(log.record_pre_edit(path, state_of(text.as_deref())))
+        }
+        Step::PostEdit { path, text } => {
+            outcome_of(log.record_post_edit(path, state_of(text.as_deref())))
+        }
+        Step::SealTurn => {
+            log.seal_turn();
+            "ok"
+        }
+        Step::Reconcile { path, text } => {
+            log.reconcile(path, state_of(text.as_deref()));
+            "ok"
+        }
+        Step::DecideRegion {
+            path,
+            version_index,
+            ordinal,
+            decision,
+        } => {
+            outcome_of(log.decide_region(path, RegionId::new(*version_index, *ordinal), *decision))
+        }
+        Step::DecideScope {
+            path,
+            owner,
+            decision,
+        } => outcome_of(log.decide_scope(path, *owner, *decision)),
+        Step::DecideFile { path, decision } => outcome_of(log.decide_file(path, *decision)),
+        Step::DropTurnsFrom { turn_id } => {
+            log.drop_turns_from(*turn_id);
+            "ok"
+        }
+        Step::Clear => {
+            log.clear();
+            "ok"
+        }
+    }
+}
+
+fn anchor_observations(anchors: &[HunkAnchor]) -> Vec<AnchorObservation> {
+    anchors
+        .iter()
+        .map(|anchor| AnchorObservation {
+            side: anchor.side,
+            line: anchor.line,
+            regions: anchor
+                .regions
+                .iter()
+                .map(|region| (region.version_index, region.ordinal))
+                .collect(),
+        })
+        .collect()
+}
+
+/// Everything this port answers about one file, in the corpus's shape.
+fn observe_file(log: &Checkpointer, path: &str) -> FileObservation {
+    let history = log.history();
+    let regions = history.regions(path);
+    let mut owners: Vec<Owner> = Vec::new();
+    for region in &regions {
+        if !owners.contains(&region.owner) {
+            owners.push(region.owner);
+        }
+    }
+    FileObservation {
+        path: path.to_owned(),
+        regions: regions
+            .iter()
+            .map(|region| RegionObservation {
+                version_index: region.region_id.version_index,
+                ordinal: region.region_id.ordinal,
+                owner: region.owner,
+                decision: region.decision,
+                depends_on: region
+                    .depends_on
+                    .iter()
+                    .map(|dep| (dep.version_index, dep.ordinal))
+                    .collect(),
+                change: match &region.change {
+                    Change::Text(text) => ChangeObservation::Text {
+                        baseline_start: text.baseline_start,
+                        baseline_line_count: text.baseline_lines.len(),
+                        baseline_lines: digest(&text.baseline_lines),
+                        current_start: text.current_start,
+                        current_line_count: text.current_lines.len(),
+                        current_lines: digest(&text.current_lines),
+                    },
+                    Change::Opaque(opaque) => ChangeObservation::Opaque {
+                        reason: opaque.reason,
+                        baseline: state_digest(&opaque.baseline),
+                        current: state_digest(&opaque.current),
+                    },
+                },
+            })
+            .collect(),
+        content: state_digest(&history.content(path)),
+        accepted_baseline: state_digest(&history.accepted_baseline(path)),
+        original: state_digest(&history.original(path)),
+        fully_reviewed: history.is_fully_reviewed(path),
+        anchors: anchor_observations(&history.pending_hunks(path, None)),
+        scopes: owners
+            .into_iter()
+            .map(|owner| ScopeObservation {
+                owner,
+                diff: history
+                    .scope_pending_diff(path, owner)
+                    .map(|(baseline, current)| DiffObservation {
+                        baseline: state_digest(&baseline),
+                        current: state_digest(&current),
+                    }),
+                anchors: anchor_observations(&history.pending_hunks(path, Some(owner))),
+            })
+            .collect(),
+    }
+}
+
+fn observe_restore_plan(log: &Checkpointer, turn_id: u64) -> RestorePlanObservation {
+    let history = log.history();
+    RestorePlanObservation {
+        turn_id,
+        has_turn: history.has_turn(turn_id),
+        plan: history
+            .restore_plan_to_turn(turn_id)
+            .iter()
+            .map(|(path, state)| PlanEntry {
+                path: path.clone(),
+                state: state_digest(state),
+            })
+            .collect(),
+    }
+}
+
+/// One divergence, named by the scenario and the family it belongs to.
+#[derive(Debug)]
+struct Divergence {
+    scenario: String,
+    family: &'static str,
+    detail: String,
+}
+
+impl std::fmt::Display for Divergence {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "{} [{}]: {}",
+            self.scenario, self.family, self.detail
+        )
+    }
+}
+
+/// Replays one scenario and reports every family that answered differently.
+fn scenario_divergences(scenario: &Scenario) -> Vec<Divergence> {
+    let mut found = Vec::new();
+    let mut report = |family: &'static str, detail: String| {
+        found.push(Divergence {
+            scenario: scenario.name.clone(),
+            family,
+            detail,
+        });
+    };
+
+    let mut log = Checkpointer::new();
+    let outcomes: Vec<&str> = scenario
+        .steps
+        .iter()
+        .map(|step| apply_step(&mut log, step))
+        .collect();
+    if outcomes != scenario.outcomes {
+        report(
+            "steps",
+            format!(
+                "the reference answered {:?}, this port {:?}",
+                scenario.outcomes, outcomes
+            ),
+        );
+    }
+
+    let history = log.history();
+    if history.tracked_paths() != scenario.tracked_paths {
+        report(
+            "logShape",
+            format!(
+                "the reference tracked {:?}, this port {:?}",
+                scenario.tracked_paths,
+                history.tracked_paths()
+            ),
+        );
+    }
+    if history.last_turn_paths() != scenario.last_turn_paths {
+        report(
+            "logShape",
+            format!(
+                "the reference's last turn tracked {:?}, this port's {:?}",
+                scenario.last_turn_paths,
+                history.last_turn_paths()
+            ),
+        );
+    }
+    if history.scopes() != scenario.scopes {
+        report(
+            "logShape",
+            format!(
+                "the reference held the slots {:?}, this port {:?}",
+                scenario.scopes,
+                history.scopes()
+            ),
+        );
+    }
+    if log.has_open_turn() != scenario.has_open_turn {
+        report(
+            "logShape",
+            format!(
+                "the reference left the turn {}, this port {}",
+                if scenario.has_open_turn {
+                    "open"
+                } else {
+                    "closed"
+                },
+                if log.has_open_turn() {
+                    "open"
+                } else {
+                    "closed"
+                }
+            ),
+        );
+    }
+    drop(history);
+
+    for expected in &scenario.files {
+        let observed = observe_file(&log, &expected.path);
+        if observed.regions != expected.regions {
+            report(
+                "regions",
+                format!(
+                    "{}: the reference held {:?}, this port {:?}",
+                    expected.path, expected.regions, observed.regions
+                ),
+            );
+        }
+        if (
+            &observed.content,
+            &observed.accepted_baseline,
+            &observed.original,
+            observed.fully_reviewed,
+        ) != (
+            &expected.content,
+            &expected.accepted_baseline,
+            &expected.original,
+            expected.fully_reviewed,
+        ) {
+            report(
+                "projections",
+                format!(
+                    "{}: the reference projected content {} baseline {} original {} reviewed {}, \
+                     this port {} {} {} {}",
+                    expected.path,
+                    expected.content,
+                    expected.accepted_baseline,
+                    expected.original,
+                    expected.fully_reviewed,
+                    observed.content,
+                    observed.accepted_baseline,
+                    observed.original,
+                    observed.fully_reviewed
+                ),
+            );
+        }
+        if observed.anchors != expected.anchors {
+            report(
+                "anchors",
+                format!(
+                    "{}: the reference anchored {:?}, this port {:?}",
+                    expected.path, expected.anchors, observed.anchors
+                ),
+            );
+        }
+        if observed.scopes != expected.scopes {
+            report(
+                "scopes",
+                format!(
+                    "{}: the reference scoped {:?}, this port {:?}",
+                    expected.path, expected.scopes, observed.scopes
+                ),
+            );
+        }
+    }
+    let observed_paths: Vec<String> = scenario
+        .files
+        .iter()
+        .map(|file| file.path.clone())
+        .collect();
+    if observed_paths != scenario.tracked_paths {
+        report(
+            "logShape",
+            format!(
+                "the corpus observed {observed_paths:?} but recorded {:?} as tracked",
+                scenario.tracked_paths
+            ),
+        );
+    }
+
+    for expected in &scenario.restore_plans {
+        let observed = observe_restore_plan(&log, expected.turn_id);
+        if &observed != expected {
+            report(
+                "restorePlans",
+                format!(
+                    "turn {}: the reference planned {:?} (has_turn {}), this port {:?} (has_turn \
+                     {})",
+                    expected.turn_id,
+                    expected.plan,
+                    expected.has_turn,
+                    observed.plan,
+                    observed.has_turn
+                ),
+            );
+        }
+    }
+    found
+}
+
+/// The divergences left after the ledger has taken the ones it accounts for,
+/// with the ledger entries nothing matched.
+fn against_ledger(
+    divergences: Vec<Divergence>,
+    ledger: &[LedgerEntry],
+) -> (Vec<Divergence>, Vec<String>) {
+    let mut unaccounted = Vec::new();
+    let mut matched = vec![false; ledger.len()];
+    for divergence in divergences {
+        match ledger.iter().position(|entry| {
+            entry.scenario == divergence.scenario && entry.family == divergence.family
+        }) {
+            Some(index) => matched[index] = true,
+            None => unaccounted.push(divergence),
+        }
+    }
+    let stale = ledger
+        .iter()
+        .zip(matched)
+        .filter(|(_entry, hit)| !hit)
+        .map(|(entry, _hit)| format!("{} [{}]", entry.scenario, entry.family))
+        .collect();
+    (unaccounted, stale)
+}
+
+#[test]
+fn the_engine_matches_the_reference_over_every_scenario() {
+    let corpus = engine_corpus();
+    let mut per_family: BTreeMap<&'static str, (usize, usize)> = BTreeMap::new();
+    let mut all = Vec::new();
+    for scenario in &corpus.scenarios {
+        let divergences = scenario_divergences(scenario);
+        let diverged: Vec<&'static str> = divergences
+            .iter()
+            .map(|divergence| divergence.family)
+            .collect();
+        for family in [
+            "steps",
+            "logShape",
+            "regions",
+            "projections",
+            "anchors",
+            "scopes",
+            "restorePlans",
+        ] {
+            let counts = per_family.entry(family).or_default();
+            if diverged.contains(&family) {
+                counts.1 += 1;
+            } else {
+                counts.0 += 1;
+            }
+        }
+        all.extend(divergences);
+    }
+    let (unaccounted, stale) = against_ledger(all, LEDGER);
+
+    println!(
+        "checkpoint engine: {} scenarios replayed against the reference at {}",
+        corpus.scenarios.len(),
+        &corpus.reference_commit[..12]
+    );
+    for (family, (conforming, divergent)) in &per_family {
+        println!("  {family}: {conforming} conforming, {divergent} divergent");
+    }
+    assert!(
+        stale.is_empty(),
+        "the ledger names divergences that no longer happen, so it is stale:\n  {}",
+        stale.join("\n  ")
+    );
+    assert!(
+        unaccounted.is_empty(),
+        "engine divergences outside the ledger:\n  {}",
+        unaccounted
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n  ")
+    );
+}
+
+#[test]
+fn the_engine_corpus_covers_the_behaviors_the_epic_names() {
+    let corpus = engine_corpus();
+    let covered: Vec<&str> = corpus
+        .scenarios
+        .iter()
+        .map(|scenario| scenario.covers.as_str())
+        .collect();
+    for required in [
+        "attribution",
+        "per-turn-revert",
+        "per-region-revert",
+        "incremental-revert",
+        "dependency-cascade",
+        "opaque",
+        "turn-gate",
+        "manual-edit",
+        "manual-edit-dependency",
+        "ratchet",
+        "scope-diff",
+        "bulk-decisions",
+        "truncation",
+    ] {
+        assert!(
+            covered.contains(&required),
+            "the corpus no longer covers {required}"
+        );
+    }
+
+    // The opaque family has to carry all three of its causes, or the reason
+    // field would be pinned by one case.
+    let reasons: Vec<OpaqueReason> = corpus
+        .scenarios
+        .iter()
+        .flat_map(|scenario| &scenario.files)
+        .flat_map(|file| &file.regions)
+        .filter_map(|region| match region.change {
+            ChangeObservation::Opaque { reason, .. } => Some(reason),
+            ChangeObservation::Text { .. } => None,
+        })
+        .collect();
+    assert!(reasons.contains(&OpaqueReason::Missing));
+    assert!(reasons.contains(&OpaqueReason::BinaryOrUndecodable));
+
+    // A turn refusal and a target refusal are different families, and both have
+    // to be exercised or the outcome comparison would be a formality.
+    let outcomes: Vec<&str> = corpus
+        .scenarios
+        .iter()
+        .flat_map(|scenario| &scenario.outcomes)
+        .map(String::as_str)
+        .collect();
+    assert!(outcomes.contains(&"turnState"));
+    assert!(outcomes.contains(&"fileState"));
+
+    // A hand edit has to appear as an owner somewhere, and a dependency edge
+    // has to be non-empty somewhere.
+    assert!(
+        corpus
+            .scenarios
+            .iter()
+            .flat_map(|scenario| &scenario.scopes)
+            .any(|owner| matches!(owner, Owner::Manual { .. })),
+        "no scenario produced a hand edit"
+    );
+    assert!(
+        corpus
+            .scenarios
+            .iter()
+            .flat_map(|scenario| &scenario.files)
+            .flat_map(|file| &file.regions)
+            .any(|region| !region.depends_on.is_empty()),
+        "no scenario produced a dependency edge"
+    );
+    assert!(
+        corpus.scenarios.iter().any(|scenario| scenario
+            .restore_plans
+            .iter()
+            .any(|plan| plan.turn_id == corpus.absent_turn && !plan.has_turn)),
+        "no scenario asks what a turn the log does not carry restores"
+    );
+}
+
+#[test]
+fn a_divergent_scenario_is_reported_by_name_and_family() {
+    let corpus = engine_corpus();
+    let mut scenario = corpus
+        .scenarios
+        .iter()
+        .find(|scenario| scenario.name == "per-region-revert-keeps-the-sibling")
+        .expect("the scenario is committed")
+        .clone();
+    assert!(scenario_divergences(&scenario).is_empty());
+
+    // What a real divergence looks like: the same steps, one decision moved.
+    scenario.files[0].regions[0].decision = Decision::Keep;
+    let found = scenario_divergences(&scenario);
+
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].family, "regions");
+    assert_eq!(found[0].scenario, "per-region-revert-keeps-the-sibling");
+}
+
+#[test]
+fn a_ledger_entry_nothing_diverges_on_is_reported_as_stale() {
+    let ledger = &[LedgerEntry {
+        scenario: "one-turn-two-regions",
+        family: "regions",
+        reason: "a divergence this port does not actually have",
+    }];
+
+    let (unaccounted, stale) = against_ledger(Vec::new(), ledger);
+
+    assert!(unaccounted.is_empty());
+    assert_eq!(stale, vec!["one-turn-two-regions [regions]"]);
+
+    // And an entry that does match takes its divergence out of the report.
+    let divergence = Divergence {
+        scenario: "one-turn-two-regions".to_owned(),
+        family: "regions",
+        detail: "for the sake of the argument".to_owned(),
+    };
+    let (unaccounted, stale) = against_ledger(vec![divergence], ledger);
+    assert!(unaccounted.is_empty());
+    assert!(stale.is_empty());
+}
+
+#[test]
+fn the_committed_engine_corpus_still_matches_the_pinned_reference() {
+    let root = reference_root();
+    if let Some(reason) = off_pin_reason(&root, "checkpoint engine oracle") {
+        eprintln!("{reason}");
+        return;
+    }
+    let Some(interpreter) = pinned_interpreter(&root) else {
+        eprintln!(
+            "skipping the live checkpoint engine probe: no interpreter that can import the \
+             reference"
+        );
+        return;
+    };
+    let workspace = repo_root();
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let captured = temporary.path().join("engine.json");
+    let output = Command::new(&interpreter)
+        .arg(workspace.join(ENGINE_CAPTURE_SCRIPT))
+        .arg("--reference")
+        .arg(&root)
+        .arg("--output")
+        .arg(&captured)
+        .current_dir(&workspace)
+        .output()
+        .expect("the capture script runs");
+    assert!(
+        output.status.success(),
+        "{ENGINE_CAPTURE_SCRIPT} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let recaptured = fs::read_to_string(&captured).expect("captured corpus reads");
+    let committed = fs::read_to_string(engine_corpus_path()).expect("committed corpus reads");
+    assert_eq!(
+        recaptured, committed,
+        "the committed corpus no longer matches the pinned reference; regenerate it with \
+         `{ENGINE_CAPTURE_SCRIPT}`"
+    );
+}

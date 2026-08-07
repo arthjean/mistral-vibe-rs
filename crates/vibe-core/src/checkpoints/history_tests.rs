@@ -745,3 +745,140 @@ fn a_decided_region_leaves_only_the_pending_one_anchored() {
     );
     assert_eq!(reverted.history().content(PATH), text("a\nb\nC\n"));
 }
+
+// -- US-130: what a truncation would restore ---------------------------------
+
+/// A restore plan flattened to paths and their target text, so an expectation
+/// reads in the order the plan names them.
+fn plan_summary(plan: &[(String, FileState)]) -> Vec<(String, Option<String>)> {
+    plan.iter()
+        .map(|(path, state)| {
+            (
+                path.clone(),
+                state
+                    .data()
+                    .map(|bytes| String::from_utf8_lossy(bytes).into_owned()),
+            )
+        })
+        .collect()
+}
+
+/// One turn writing `after` to `path`, starting from what the log projects.
+fn turn_on(log: &mut Checkpointer, turn_id: u64, path: &str, after: FileState) {
+    let before = log.history().content(path);
+    log.begin_turn(turn_id).unwrap();
+    log.record_pre_edit(path, before).unwrap();
+    log.record_post_edit(path, after).unwrap();
+    log.seal_turn();
+}
+
+#[test]
+fn the_log_names_every_path_it_touched_in_the_order_it_first_touched_it() {
+    let mut log = Checkpointer::new();
+    turn_on(&mut log, 1, "b", text("b\n"));
+    turn_on(&mut log, 2, "a", text("a\n"));
+    // A path a turn recorded but never changed is still tracked: the recording
+    // is what a later drift is measured against.
+    log.begin_turn(3).unwrap();
+    log.record_pre_edit("c", text("c\n")).unwrap();
+    log.seal_turn();
+
+    assert_eq!(log.history().tracked_paths(), vec!["b", "a", "c"]);
+    assert_eq!(log.history().last_turn_paths(), vec!["c"]);
+    assert!(Checkpointer::new().history().last_turn_paths().is_empty());
+}
+
+#[test]
+fn a_turn_resolves_to_its_own_mark_and_an_absent_one_to_the_next() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 2, text("a\n"), text("b\n"));
+    turn_from(&mut log, 5, text("b\n"), text("c\n"));
+    let history = log.history();
+
+    assert!(history.has_turn(2));
+    assert!(!history.has_turn(3));
+    assert_eq!(history.event_index_of_turn(2), Some(0));
+    assert_eq!(
+        history.event_index_of_turn(3),
+        history.event_index_of_turn(5),
+        "a turn the log never carried cuts where the next one begins"
+    );
+    assert_eq!(history.event_index_of_turn(9), None);
+}
+
+#[test]
+fn a_reused_turn_identifier_resolves_to_the_newest_mark_carrying_it() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("a\n"), text("b\n"));
+    // A transcript reset can hand the same identifier back out.
+    turn_from(&mut log, 1, text("b\n"), text("c\n"));
+
+    let index = log
+        .history()
+        .event_index_of_turn(1)
+        .expect("both marks carry the identifier");
+
+    assert_eq!(
+        plan_summary(&log.history().restore_plan(index)),
+        vec![(PATH.to_owned(), Some("b\n".to_owned()))],
+        "the newest mark wins, so the cut restores what the second turn found"
+    );
+}
+
+#[test]
+fn a_dropped_turns_files_restore_to_what_that_turn_found() {
+    let mut log = Checkpointer::new();
+    turn_on(&mut log, 1, "kept", text("kept once\n"));
+    turn_on(&mut log, 2, "rolled", text("rolled once\n"));
+    turn_on(&mut log, 3, "rolled", text("rolled twice\n"));
+
+    let plan = log.history().restore_plan_to_turn(2);
+
+    assert_eq!(
+        plan_summary(&plan),
+        vec![("rolled".to_owned(), None)],
+        "the earliest dropped turn's recording wins, and it found no file there"
+    );
+    assert!(
+        log.history().restore_plan_to_turn(9).is_empty(),
+        "a turn the log does not carry restores nothing"
+    );
+}
+
+#[test]
+fn a_file_only_a_dropped_hand_edit_touched_restores_to_the_kept_projection() {
+    let mut log = Checkpointer::new();
+    turn_on(&mut log, 1, PATH, text("agent\n"));
+    turn_on(&mut log, 2, "other", text("other\n"));
+    log.reconcile(PATH, text("agent\nby hand\n"));
+
+    // Cutting at turn 2 drops the turn's own path and the later hand edit.
+    let plan = log.history().restore_plan_to_turn(2);
+
+    assert_eq!(
+        plan_summary(&plan),
+        vec![
+            ("other".to_owned(), None),
+            (PATH.to_owned(), Some("agent\n".to_owned())),
+        ],
+        "the hand edit left no recording, so its path restores to what the kept log projects"
+    );
+}
+
+#[test]
+fn a_decision_taken_after_the_cut_does_not_shape_the_plan() {
+    let mut log = Checkpointer::new();
+    turn_on(&mut log, 1, PATH, text("one\n"));
+    turn_on(&mut log, 2, PATH, text("one\ntwo\n"));
+    let regions = ids(&log);
+    log.decide_region(PATH, regions[1], Decision::Revert)
+        .unwrap();
+
+    let plan = log.history().restore_plan_to_turn(2);
+
+    assert_eq!(
+        plan_summary(&plan),
+        vec![(PATH.to_owned(), Some("one\n".to_owned()))],
+        "the plan is the recording, not the projection the revert already produced"
+    );
+}

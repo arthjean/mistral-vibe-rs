@@ -43,7 +43,7 @@ struct OpenTurn {
 /// the content this hands back. That is what lets the whole model be exercised
 /// without a filesystem, and it is the split the reference draws in the same
 /// place.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Checkpointer {
     events: Vec<Event>,
     seq: u64,
@@ -98,18 +98,43 @@ impl Checkpointer {
 
     /// Records the state `path` held before the running turn wrote to it.
     ///
-    /// Only the first recording of a path counts for the turn.
+    /// Only the first recording of a path counts for the turn, and a path that
+    /// drifted since the log last saw it has that drift sealed as a manual edit
+    /// ordered just before this turn's mark.
     ///
     /// # Errors
     ///
     /// Returns [`CheckpointError::NoOpenTurn`] when no turn is running.
     pub fn record_pre_edit(&mut self, path: &str, pre: FileState) -> Result<(), CheckpointError> {
-        let Some(mark) = self.open_mark_mut() else {
+        let Some(mark_seq) = self.open.as_ref().map(|open| open.mark_seq) else {
             return Err(CheckpointError::NoOpenTurn {
                 operation: "a pre-edit state",
             });
         };
-        mark.pre.insert_if_absent(path, pre);
+        if self
+            .mark(mark_seq)
+            .is_some_and(|mark| mark.pre.contains(path))
+        {
+            return Ok(());
+        }
+        // The drift happened before the turn began, so it is sealed before the
+        // mark: a truncation to this turn keeps the hand edit, and the turn's
+        // own regions are built on top of it rather than swallowing it.
+        let drifted = {
+            let history = self.history();
+            history
+                .tracked_paths()
+                .iter()
+                .any(|tracked| tracked == path)
+                .then(|| history.project(path, false))
+                .filter(|projection| *projection != pre)
+        };
+        if let Some(projection) = drifted {
+            self.insert_manual_before(mark_seq, path, projection, pre.clone());
+        }
+        if let Some(mark) = self.open_mark_mut() {
+            mark.pre.insert_if_absent(path, pre);
+        }
         Ok(())
     }
 
@@ -201,6 +226,41 @@ impl Checkpointer {
         }
     }
 
+    /// Appends the change live content holds over the projection as a manual
+    /// edit, unless a turn is running or nothing drifted.
+    ///
+    /// Comparing against the projection rather than against a remembered
+    /// snapshot is what makes this idempotent: once the drift is in the log, the
+    /// projection carries it and a second call sees nothing to record. During a
+    /// turn the disk belongs to that turn, so nothing is captured.
+    pub fn reconcile(&mut self, path: &str, current: FileState) {
+        if self.open.is_some() {
+            return;
+        }
+        let projection = self.history().project(path, false);
+        if projection == current {
+            return;
+        }
+        let index = self.next_manual_index();
+        self.append_edit(Owner::Manual { index }, path, projection, current);
+    }
+
+    // -- Truncation ----------------------------------------------------------
+
+    /// Drops the mark carrying `turn_id` and everything after it, decisions
+    /// included, and closes any open turn.
+    ///
+    /// A turn identifier the log never carried resolves to the earliest later
+    /// turn, and to nothing at all when there is none, which leaves the log
+    /// untouched.
+    pub fn drop_turns_from(&mut self, turn_id: u64) {
+        let Some(index) = self.history().event_index_of_turn(turn_id) else {
+            return;
+        };
+        self.events.truncate(index);
+        self.open = None;
+    }
+
     // -- Review decisions ----------------------------------------------------
 
     /// Decides one region of `path`.
@@ -274,6 +334,47 @@ impl Checkpointer {
     fn bump(&mut self) -> u64 {
         self.seq += 1;
         self.seq
+    }
+
+    /// The next hand edit's slot, counted from one and never reused.
+    fn next_manual_index(&mut self) -> usize {
+        self.manual_index += 1;
+        self.manual_index
+    }
+
+    /// Appends a manual edit in list order just before the mark numbered
+    /// `mark_seq`, while numbering it after everything already in the log.
+    ///
+    /// The two orders part ways here, which is why both exist: the edit
+    /// happened before the turn, so a truncation to that turn has to keep it,
+    /// but its regions are newer than every region already recorded and their
+    /// identities have to say so.
+    fn insert_manual_before(
+        &mut self,
+        mark_seq: u64,
+        path: &str,
+        before: FileState,
+        after: FileState,
+    ) {
+        let deps = self.history().compute_deps(path, &before, &after);
+        let seq = self.bump();
+        let index = self.next_manual_index();
+        let edit = Event::Edit(Edit {
+            seq,
+            owner: Owner::Manual { index },
+            path: path.to_owned(),
+            before,
+            after,
+            deps,
+        });
+        match self
+            .events
+            .iter()
+            .position(|event| event.as_mark().is_some_and(|mark| mark.seq == mark_seq))
+        {
+            Some(position) => self.events.insert(position, edit),
+            None => self.events.push(edit),
+        }
     }
 
     /// The mark numbered `seq`, newest first because a transcript reset can

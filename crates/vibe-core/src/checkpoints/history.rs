@@ -526,6 +526,142 @@ impl<'a> History<'a> {
         self.anchor_pending(path, &baseline, &current, &pending)
     }
 
+    // -- The log's shape -----------------------------------------------------
+
+    /// Every path this log has touched, in the order it first touched it.
+    ///
+    /// A path counts as touched once a turn recorded a state for it, even when
+    /// the turn went on to change nothing, because that recording is what a
+    /// later drift is measured against.
+    #[must_use]
+    pub fn tracked_paths(&self) -> Vec<String> {
+        let mut seen: Vec<String> = Vec::new();
+        let mut push = |path: &str| {
+            if !seen.iter().any(|known| known == path) {
+                seen.push(path.to_owned());
+            }
+        };
+        for event in self.events {
+            match event {
+                Event::Edit(edit) => push(&edit.path),
+                Event::TurnMark(mark) => {
+                    for (path, _state) in mark.pre.iter() {
+                        push(path);
+                    }
+                }
+                Event::Decide(_) => {}
+            }
+        }
+        seen
+    }
+
+    /// The paths the newest turn recorded a state for.
+    ///
+    /// This is what the next turn re-reads, so a file a tool mutated without
+    /// announcing it is still captured.
+    #[must_use]
+    pub fn last_turn_paths(&self) -> Vec<String> {
+        self.events
+            .iter()
+            .filter_map(Event::as_mark)
+            .next_back()
+            .map(|mark| {
+                mark.pre
+                    .iter()
+                    .map(|(path, _state)| path.to_owned())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Every owner that produced a change, in log order.
+    ///
+    /// This is the review slot list, and its order is a contract: a slot keeps
+    /// its position for the life of the log, so resolving one never renumbers
+    /// another under a client that is looking at both.
+    #[must_use]
+    pub fn scopes(&self) -> Vec<Owner> {
+        let mut seen: Vec<Owner> = Vec::new();
+        for edit in self.events.iter().filter_map(Event::as_edit) {
+            if !seen.contains(&edit.owner) {
+                seen.push(edit.owner);
+            }
+        }
+        seen
+    }
+
+    /// Whether any mark carries `turn_id`.
+    #[must_use]
+    pub fn has_turn(&self, turn_id: u64) -> bool {
+        self.events
+            .iter()
+            .filter_map(Event::as_mark)
+            .any(|mark| mark.turn_id == turn_id)
+    }
+
+    /// Where a truncation to `turn_id` cuts the log.
+    ///
+    /// The newest exact match wins, because a transcript reset can reuse an
+    /// identifier while an older mark still carries it. With no exact match the
+    /// earliest later turn is the cut, so rewinding to a turn that never opened
+    /// still drops everything after where it would have been.
+    #[must_use]
+    pub fn event_index_of_turn(&self, turn_id: u64) -> Option<usize> {
+        let mut exact = None;
+        let mut later = None;
+        for (index, event) in self.events.iter().enumerate() {
+            let Some(mark) = event.as_mark() else {
+                continue;
+            };
+            if mark.turn_id == turn_id {
+                exact = Some(index);
+            } else if mark.turn_id > turn_id && later.is_none() {
+                later = Some(index);
+            }
+        }
+        exact.or(later)
+    }
+
+    /// What each file affected by a truncation at `index` should hold once the
+    /// cut is applied, in the order the dropped events named them.
+    ///
+    /// A file a dropped turn touched restores to that turn's own recording,
+    /// taking the earliest dropped turn's, which is its state when the cut
+    /// began. A file only a dropped manual edit touched has no such recording,
+    /// so it restores to what the kept log projects.
+    #[must_use]
+    pub fn restore_plan(&self, index: usize) -> Vec<(String, FileState)> {
+        let index = index.min(self.events.len());
+        let kept = Self::new(&self.events[..index]);
+        let dropped = &self.events[index..];
+        let mut plan: Vec<(String, FileState)> = Vec::new();
+        for mark in dropped.iter().filter_map(Event::as_mark) {
+            for (path, pre) in mark.pre.iter() {
+                if !plan.iter().any(|(known, _state)| known == path) {
+                    plan.push((path.to_owned(), pre.clone()));
+                }
+            }
+        }
+        for edit in dropped.iter().filter_map(Event::as_edit) {
+            if !plan.iter().any(|(known, _state)| *known == edit.path) {
+                plan.push((edit.path.clone(), kept.project(&edit.path, false)));
+            }
+        }
+        plan
+    }
+
+    /// The restore plan for truncating at `turn_id`, empty when the log carries
+    /// no such turn.
+    #[must_use]
+    pub fn restore_plan_to_turn(&self, turn_id: u64) -> Vec<(String, FileState)> {
+        if !self.has_turn(turn_id) {
+            return Vec::new();
+        }
+        self.event_index_of_turn(turn_id)
+            .map(|index| self.restore_plan(index))
+            .unwrap_or_default()
+    }
+
     // -- Resolution ----------------------------------------------------------
 
     /// Every edit of `path`, in log order.

@@ -1573,6 +1573,8 @@ pub enum WorkspaceError {
     RestoreRollback { cause: String, rollback: String },
     #[error("review snapshots are {actual} bytes, exceeding the {limit}-byte limit")]
     ReviewSnapshotLimit { actual: usize, limit: usize },
+    #[error("checkpoint capture failed: {0}")]
+    Checkpoint(String),
     #[error("{surface} lock is poisoned")]
     LockPoisoned { surface: &'static str },
     #[error("numeric limit cannot be represented on this platform")]
