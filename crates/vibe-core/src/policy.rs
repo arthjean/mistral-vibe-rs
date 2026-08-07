@@ -8,14 +8,29 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
-use url::Url;
 
 use crate::matching::pattern_matches;
+use crate::scratchpad::is_scratchpad_path;
 use crate::tools::config::{SharedToolConfig, ToolConfigResolver, permission_label};
 use crate::tools::{ToolError, ToolHandler, ToolInvocation, ToolOutputSink};
 
+pub mod arity;
+
+/// The rationale a rule stored by an approval carries, which is also what tells
+/// the two apart when a session is rebuilt.
+const SESSION_APPROVAL: &str = "session approval";
+const PERMANENT_APPROVAL: &str = "permanent approval";
+
 pub type ApprovalFuture<'a> =
     Pin<Box<dyn Future<Output = Result<ApprovalDecision, PolicyError>> + Send + 'a>>;
+
+/// Where a permanent approval writes the patterns it grants.
+///
+/// Reference `approve_always(save_permanently=True)` extends
+/// `tools.<name>.allowlist` through the configuration orchestrator. The store
+/// lives one layer below the configuration writer, so the session hands it this
+/// instead of reaching up.
+pub type AllowlistPersistence = Arc<dyn Fn(&str, &[String]) -> Result<(), String> + Send + Sync>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -41,90 +56,250 @@ pub enum TrustRootKind {
     Ancestor,
 }
 
+/// The four scopes an approval is granted under.
+///
+/// Reference `vibe/permissions.py::PermissionScope`. The wire value is the
+/// lowercase member name, which is what its `StrEnum` with `auto()` produces,
+/// and no fifth value exists: a permission this port cannot express as one of
+/// these four is a permission the Python client cannot read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionScope {
+    CommandPattern,
+    OutsideDirectory,
+    FilePattern,
+    UrlPattern,
+}
+
+impl PermissionScope {
+    /// Every scope, in the order the reference declares them.
+    ///
+    /// The vocabulary's own inventory, which is what the app-server surface
+    /// oracle compares against the reference enumeration, the way every other
+    /// published vocabulary in this workspace declares an `ALL`.
+    pub const ALL: [Self; 4] = [
+        Self::CommandPattern,
+        Self::OutsideDirectory,
+        Self::FilePattern,
+        Self::UrlPattern,
+    ];
+}
+
+/// One thing an operator is asked to approve.
+///
+/// Reference `vibe/permissions.py::RequiredPermission`, which forbids surplus
+/// fields and serializes under a camelCase alias. The two patterns are what
+/// separate the call from the grant: `invocation_pattern` names this
+/// invocation, `session_pattern` names everything a session-wide approval would
+/// also cover.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum PermissionRequirement {
-    Read { path: PathBuf },
-    Write { path: PathBuf },
-    Shell { command: String },
-    Network { url: Url },
-    Mcp { server: String, tool: String },
-    Destructive { action: String },
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PermissionRequirement {
+    pub scope: PermissionScope,
+    pub invocation_pattern: String,
+    pub session_pattern: String,
+    pub label: String,
 }
 
 impl PermissionRequirement {
-    #[must_use]
-    pub fn scope(&self) -> String {
-        match self {
-            Self::Read { path } => format!("read {}", path.display()),
-            Self::Write { path } => format!("write {}", path.display()),
-            Self::Shell { command } => format!("shell {command}"),
-            Self::Network { url } => format!("network {url}"),
-            Self::Mcp { server, tool } => format!("mcp {server}/{tool}"),
-            Self::Destructive { action } => format!("destructive {action}"),
-        }
-    }
-
-    #[must_use]
-    pub fn label(&self) -> String {
-        match self {
-            Self::Read { path } | Self::Write { path } => {
-                format!("outside workdir ({})", path.display())
-            }
-            Self::Shell { command } => command.clone(),
-            Self::Network { url } => format!(
-                "fetching from {}",
-                url.host_str().unwrap_or_else(|| url.as_str())
-            ),
-            Self::Mcp { server, tool } => format!("MCP tool ({server}/{tool})"),
-            Self::Destructive { action } => action.clone(),
-        }
-    }
-
-    fn path(&self) -> Option<&Path> {
-        match self {
-            Self::Read { path } | Self::Write { path } => Some(path),
-            _ => None,
-        }
-    }
-
-    /// The text a tool's configured `allowlist`, `denylist` and
-    /// `sensitive_patterns` are matched against.
+    /// A command segment, under the session pattern its arity derives.
     ///
-    /// Reference `resolve_path_permission` matches a file tool's lists against
-    /// the resolved absolute path, and `BashTool._is_allowlisted` matches the
-    /// shell's against one extracted command segment.
+    /// Reference `BashTool._build_required_permissions`, which labels the
+    /// requirement with the session pattern rather than with the segment.
     #[must_use]
-    pub fn subject(&self) -> String {
-        match self {
-            Self::Read { path } | Self::Write { path } => path.display().to_string(),
-            Self::Shell { command } => command.clone(),
-            Self::Network { url } => url.to_string(),
-            Self::Mcp { server, tool } => format!("{server}/{tool}"),
-            Self::Destructive { action } => action.clone(),
+    pub fn command(segment: &str) -> Self {
+        let tokens = segment.split_whitespace().collect::<Vec<_>>();
+        let session_pattern = arity::build_session_pattern(&tokens);
+        Self {
+            scope: PermissionScope::CommandPattern,
+            invocation_pattern: segment.to_owned(),
+            session_pattern: session_pattern.clone(),
+            label: session_pattern,
         }
     }
 
-    /// Whether the configured lists decide this requirement here, or the tool
-    /// that produced it already composed them.
+    /// A command segment whose grant may not widen past itself.
     ///
-    /// A shell command is the one case they do not: reference
-    /// `_is_unconditionally_allowed` grants an allowlisted command only when no
-    /// operand leaves the working directory, a condition that lives in the
-    /// shell analysis and not in the requirement. Matching the same lists again
-    /// here would drop that condition and auto-allow `cat /etc/passwd`.
-    fn lists_decide(&self) -> bool {
-        !matches!(self, Self::Shell { .. })
+    /// Reference `_build_required_permissions` takes this branch for a
+    /// sensitive segment and for a `find` carrying an execution predicate: both
+    /// carry the segment as its own session pattern, so approving `sudo apt
+    /// update` never approves `sudo rm`.
+    #[must_use]
+    pub fn exact_command(segment: &str) -> Self {
+        Self {
+            scope: PermissionScope::CommandPattern,
+            invocation_pattern: segment.to_owned(),
+            session_pattern: segment.to_owned(),
+            label: segment.to_owned(),
+        }
+    }
+
+    /// A directory the call reaches outside every root.
+    ///
+    /// Reference `_build_outside_directory_permission` and the shared file-tool
+    /// chain, which both carry the glob as both patterns.
+    #[must_use]
+    pub fn outside_directory(glob: &str) -> Self {
+        Self {
+            scope: PermissionScope::OutsideDirectory,
+            invocation_pattern: glob.to_owned(),
+            session_pattern: glob.to_owned(),
+            label: format!("outside workdir ({glob})"),
+        }
+    }
+
+    /// A file whose name matched the tool's `sensitive_patterns`.
+    ///
+    /// Reference `resolve_file_tool_permission` names the file itself and grants
+    /// the whole class for the session, which is why the session pattern is `*`.
+    #[must_use]
+    pub fn sensitive_file(file_name: &str, tool: &str) -> Self {
+        Self {
+            scope: PermissionScope::FilePattern,
+            invocation_pattern: file_name.to_owned(),
+            session_pattern: "*".to_owned(),
+            label: format!("accessing sensitive files ({tool})"),
+        }
+    }
+
+    /// A host a fetch reaches. Reference `WebFetchTool.resolve_permission`.
+    #[must_use]
+    pub fn url_domain(domain: &str) -> Self {
+        Self {
+            scope: PermissionScope::UrlPattern,
+            invocation_pattern: domain.to_owned(),
+            session_pattern: domain.to_owned(),
+            label: format!("fetching from {domain}"),
+        }
+    }
+
+    /// The rule an approval for the session stores this requirement under.
+    #[must_use]
+    pub fn approved_rule(&self, tool: &str, rationale: &str) -> PermissionRule {
+        PermissionRule {
+            tool: tool.to_owned(),
+            scope: Some(self.scope),
+            pattern: self.session_pattern.clone(),
+            mode: PermissionMode::Always,
+            rationale: rationale.to_owned(),
+        }
     }
 }
 
+/// What a tool's own permission resolution answers.
+///
+/// Reference `PermissionContext`, plus the paths this port checks against its
+/// trust roots. The reference reads its project roots inside the file-tool
+/// chain; this port keeps them in the store so a revocation can invalidate a
+/// lease that was granted a moment earlier, which is why the paths travel with
+/// the context rather than being resolved once by the tool.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PermissionContext {
+    /// What the tool decided on its own, or [`None`] to fall back to the
+    /// configured permission, which is the reference's `resolve_permission`
+    /// returning `None`.
+    pub permission: Option<PermissionMode>,
+    pub requirements: Vec<PermissionRequirement>,
+    /// Paths the call touches, positioned against the trust roots.
+    pub paths: Vec<PathBuf>,
+    pub reason: Option<String>,
+}
+
+impl PermissionContext {
+    /// A context deciding nothing, which defers to the configured permission.
+    #[must_use]
+    pub fn deferred() -> Self {
+        Self::default()
+    }
+
+    /// A context settling the call outright.
+    #[must_use]
+    pub fn settled(permission: PermissionMode) -> Self {
+        Self {
+            permission: Some(permission),
+            ..Self::default()
+        }
+    }
+
+    /// A context asking for `requirements`.
+    #[must_use]
+    pub fn asking(requirements: Vec<PermissionRequirement>) -> Self {
+        Self {
+            permission: Some(PermissionMode::Ask),
+            requirements,
+            ..Self::default()
+        }
+    }
+
+    /// The same context carrying `reason`.
+    #[must_use]
+    pub fn because(mut self, reason: impl Into<String>) -> Self {
+        self.reason = Some(reason.into());
+        self
+    }
+
+    /// The same context checking `paths` against the trust roots.
+    #[must_use]
+    pub fn over_paths(mut self, paths: Vec<PathBuf>) -> Self {
+        self.paths = paths;
+        self
+    }
+}
+
+/// A stored permission decision, matched against a requirement's invocation
+/// pattern.
+///
+/// Reference `ApprovedRule` carries a tool, a scope and a session pattern.
+/// This port adds a mode and a rationale, which is what lets an agent profile
+/// install a refusal through the same table rather than through a second one; a
+/// rule with no scope answers for every scope, which is the profile's `*`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionRule {
     pub tool: String,
-    pub scope: String,
+    #[serde(default)]
+    pub scope: Option<PermissionScope>,
+    pub pattern: String,
     pub mode: PermissionMode,
     pub rationale: String,
+}
+
+impl PermissionRule {
+    /// Whether this rule answers for `requirement` on `tool`.
+    ///
+    /// Reference `PermissionStore.covers`: the tool and the scope have to be
+    /// the rule's own, and the requirement's invocation pattern has to match the
+    /// rule's session pattern under [`wildcard_match`].
+    #[must_use]
+    pub fn covers(&self, tool: &str, requirement: &PermissionRequirement) -> bool {
+        (self.tool == tool || self.tool == "*")
+            && self.scope.is_none_or(|scope| scope == requirement.scope)
+            && wildcard_match(&requirement.invocation_pattern, &self.pattern)
+    }
+
+    /// How much of a requirement this rule pins down, used to prefer the more
+    /// specific of two rules answering for the same requirement.
+    fn specificity(&self) -> (usize, usize) {
+        (
+            usize::from(self.scope.is_some()),
+            self.pattern.trim_end_matches(" *").len(),
+        )
+    }
+}
+
+/// Whether `text` matches `pattern`, with the trailing arguments optional.
+///
+/// Reference `wildcard_match`: a pattern ending in ` *` also matches the text
+/// that is the pattern without that suffix, so an approval stored for
+/// `git status *` covers a later bare `git status`.
+#[must_use]
+pub fn wildcard_match(text: &str, pattern: &str) -> bool {
+    if pattern_matches(pattern, text) {
+        return true;
+    }
+    pattern
+        .strip_suffix(" *")
+        .is_some_and(|prefix| pattern_matches(prefix, text))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,7 +307,10 @@ pub struct PolicyResolution {
     pub mode: PermissionMode,
     pub rationale: String,
     pub matched_rule: Option<PermissionRule>,
-    pub required_permissions: Vec<String>,
+    /// The requirements no stored rule covers, which is exactly what a prompt
+    /// lists. Reference `_resolve_tool_decision` filters the covered ones out
+    /// before asking.
+    pub required_permissions: Vec<PermissionRequirement>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,6 +346,10 @@ pub struct ToolGuard {
     pub policy: PermissionStore,
     pub approval: Arc<dyn ApprovalAgent>,
     pub config: ToolConfigResolver,
+    /// The session's own scratchpad, which every file tool grants outright.
+    /// [`None`] for a session whose scratchpad could not be opened, where the
+    /// chain simply never takes that branch.
+    pub scratchpad: Option<PathBuf>,
 }
 
 impl ToolGuard {
@@ -178,12 +360,20 @@ impl ToolGuard {
             policy,
             approval,
             config,
+            scratchpad: None,
         }
+    }
+
+    /// The same guard whose file tools may always reach `scratchpad`.
+    #[must_use]
+    pub fn with_scratchpad(mut self, scratchpad: Option<PathBuf>) -> Self {
+        self.scratchpad = scratchpad;
+        self
     }
 }
 
 pub type RequirementResolver =
-    dyn Fn(&ToolInvocation) -> Result<Vec<PermissionRequirement>, ToolError> + Send + Sync;
+    dyn Fn(&ToolInvocation) -> Result<PermissionContext, ToolError> + Send + Sync;
 
 pub struct PolicyGuardedTool {
     name: String,
@@ -225,18 +415,12 @@ impl ToolHandler for PolicyGuardedTool {
         let requirements = self.requirements.clone();
         let inner = self.inner.clone();
         Box::pin(async move {
-            let requirements = requirements(&invocation)?;
-            let subjects = requirements
-                .iter()
-                .filter(|requirement| requirement.lists_decide())
-                .map(PermissionRequirement::subject)
-                .collect();
+            let context = requirements(&invocation)?;
             let lease = store
                 .authorize(
                     &name,
                     invocation.arguments.clone(),
-                    requirements,
-                    subjects,
+                    context,
                     approval.as_ref(),
                 )
                 .await
@@ -302,7 +486,7 @@ impl PolicyState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PermissionStore {
     state: Arc<RwLock<PolicyState>>,
     approvals: Arc<Mutex<()>>,
@@ -313,6 +497,24 @@ pub struct PermissionStore {
     /// The configuration each tool's permission, allowlist, denylist and
     /// sensitive patterns are read from at every resolution.
     tool_config: ToolConfigResolver,
+    /// Where a permanent approval writes, or [`None`] when this session has
+    /// nowhere to write and every approval dies with it.
+    persist_allowlist: Option<AllowlistPersistence>,
+    /// What went wrong while persisting an approval, read by the session that
+    /// reports it. A failed write never fails the call the operator approved,
+    /// so the failure has to be readable somewhere.
+    diagnostics: Arc<StdRwLock<Vec<String>>>,
+}
+
+impl std::fmt::Debug for PermissionStore {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PermissionStore")
+            .field("state", &self.state)
+            .field("tool_config", &self.tool_config)
+            .field("persist_allowlist", &self.persist_allowlist.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for PermissionStore {
@@ -326,12 +528,30 @@ impl Default for PermissionStore {
             approvals: Arc::default(),
             tool_permissions: Arc::default(),
             tool_config: ToolConfigResolver::new(),
+            persist_allowlist: None,
+            diagnostics: Arc::default(),
         }
         .with_tool_config(ToolConfigResolver::new())
     }
 }
 
 impl PermissionStore {
+    /// The same store writing a permanent approval through `persist`.
+    #[must_use]
+    pub fn with_allowlist_persistence(mut self, persist: AllowlistPersistence) -> Self {
+        self.persist_allowlist = Some(persist);
+        self
+    }
+
+    /// What went wrong while persisting an approval, oldest first.
+    #[must_use]
+    pub fn diagnostics(&self) -> Vec<String> {
+        self.diagnostics
+            .read()
+            .map(|stored| stored.clone())
+            .unwrap_or_default()
+    }
+
     /// The same store reading its per-tool settings from `resolver`.
     ///
     /// The resolver returned by [`Self::tool_config`] is this one narrowed to
@@ -452,54 +672,42 @@ impl PermissionStore {
     pub async fn resolve(
         &self,
         tool: &str,
-        requirements: &[PermissionRequirement],
+        context: &PermissionContext,
     ) -> Result<PolicyResolution, PolicyError> {
         let settings = self.tool_settings(tool);
-        let subjects = requirements
-            .iter()
-            .filter(|requirement| requirement.lists_decide())
-            .map(PermissionRequirement::subject)
-            .collect::<Vec<_>>();
         let state = self.state.read().await;
-        resolve_locked(&state, tool, requirements, &subjects, &settings)
+        resolve_locked(&state, tool, context, &settings)
     }
 
     pub async fn authorize(
         &self,
         tool: &str,
         input: Value,
-        requirements: Vec<PermissionRequirement>,
-        subjects: Vec<String>,
+        context: PermissionContext,
         approval: &dyn ApprovalAgent,
     ) -> Result<PolicyLease, PolicyError> {
         // The settings are read once per call rather than held: an operator who
         // raises a budget or a permission between two turns is obeyed on the
         // next one without the surface being registered again.
         let settings = Arc::new(self.tool_settings(tool));
-        let subjects = Arc::new(subjects);
+        let context = Arc::new(context);
         let state = self.state.read().await;
-        let resolution = resolve_locked(&state, tool, &requirements, &subjects, &settings)?;
+        let resolution = resolve_locked(&state, tool, &context, &settings)?;
         match resolution.mode {
             PermissionMode::Always => {
                 let revision = state.revision;
                 drop(state);
-                Ok(self.lease(revision, tool, requirements, subjects, settings))
+                Ok(self.lease(revision, tool, context, settings))
             }
             PermissionMode::Never => Err(PolicyError::Denied(resolution.rationale)),
             PermissionMode::Ask => {
                 drop(state);
                 let _approval_guard = self.approvals.lock().await;
                 let state = self.state.read().await;
-                let resolution = resolve_locked(&state, tool, &requirements, &subjects, &settings)?;
+                let resolution = resolve_locked(&state, tool, &context, &settings)?;
                 match resolution.mode {
                     PermissionMode::Always => {
-                        return Ok(self.lease(
-                            state.revision,
-                            tool,
-                            requirements,
-                            subjects,
-                            settings,
-                        ));
+                        return Ok(self.lease(state.revision, tool, context, settings));
                     }
                     PermissionMode::Never => {
                         return Err(PolicyError::Denied(resolution.rationale));
@@ -508,11 +716,15 @@ impl PermissionStore {
                 }
                 let revision = state.revision;
                 drop(state);
+                // Only the uncovered requirements are presented: a rule the
+                // operator already granted is not asked again, which is what
+                // reference `_resolve_tool_decision` filters before prompting.
+                let uncovered = resolution.required_permissions;
                 let decision = approval
                     .request(ApprovalRequest {
                         tool: tool.to_owned(),
                         input,
-                        requirements: requirements.clone(),
+                        requirements: uncovered.clone(),
                         rationale: resolution.rationale,
                     })
                     .await?;
@@ -520,38 +732,41 @@ impl PermissionStore {
                     ApprovalDecision::ApproveOnce => {
                         let state = self.state.read().await;
                         if state.revision != revision {
-                            let current =
-                                resolve_locked(&state, tool, &requirements, &subjects, &settings)?;
+                            let current = resolve_locked(&state, tool, &context, &settings)?;
                             if current.mode == PermissionMode::Never {
                                 return Err(PolicyError::Denied(current.rationale));
                             }
                         }
-                        Ok(self.lease(state.revision, tool, requirements, subjects, settings))
+                        Ok(self.lease(state.revision, tool, context, settings))
                     }
                     ApprovalDecision::ApproveForSession | ApprovalDecision::ApprovePermanently => {
-                        let persistence = if decision == ApprovalDecision::ApprovePermanently {
-                            "permanent approval"
+                        let permanent = decision == ApprovalDecision::ApprovePermanently;
+                        let persistence = if permanent {
+                            PERMANENT_APPROVAL
                         } else {
-                            "session approval"
+                            SESSION_APPROVAL
                         };
                         // An approval carrying no granular requirement has no
                         // pattern to store a rule under, so what was approved is
                         // the tool: reference `approve_always` sets the session
                         // permission for exactly that case.
-                        if requirements.is_empty() {
+                        if uncovered.is_empty() {
                             self.set_tool_permission(tool, PermissionMode::Always);
+                        } else if permanent {
+                            // Reference `approve_always(save_permanently=True)`
+                            // extends the tool's configured allowlist, which is
+                            // the only half of an approval that outlives the
+                            // session.
+                            self.persist_allowlist(tool, &uncovered);
                         }
                         let mut state = self.state.write().await;
-                        state
-                            .rules
-                            .extend(requirements.iter().map(|requirement| PermissionRule {
-                                tool: tool.to_owned(),
-                                scope: requirement.scope(),
-                                mode: PermissionMode::Always,
-                                rationale: persistence.to_owned(),
-                            }));
+                        state.rules.extend(
+                            uncovered
+                                .iter()
+                                .map(|requirement| requirement.approved_rule(tool, persistence)),
+                        );
                         state.revision = state.revision.saturating_add(1);
-                        Ok(self.lease(state.revision, tool, requirements, subjects, settings))
+                        Ok(self.lease(state.revision, tool, context, settings))
                     }
                     ApprovalDecision::Deny => {
                         Err(PolicyError::Denied("approval denied".to_owned()))
@@ -562,20 +777,45 @@ impl PermissionStore {
         }
     }
 
+    /// Extends `tool`'s configured allowlist with the session patterns of
+    /// `requirements`, when the session was handed somewhere to write them.
+    ///
+    /// A store with no persistence hook keeps the approval for the session
+    /// only, which is what a bare `PermissionStore` in a test wants; the
+    /// app-server hands the real one so a permanent approval survives a
+    /// restart. A failed write is reported and never fails the call the
+    /// operator just approved.
+    fn persist_allowlist(&self, tool: &str, requirements: &[PermissionRequirement]) {
+        let Some(persist) = &self.persist_allowlist else {
+            return;
+        };
+        let mut patterns = requirements
+            .iter()
+            .map(|requirement| requirement.session_pattern.clone())
+            .collect::<Vec<_>>();
+        patterns.sort();
+        patterns.dedup();
+        if let Err(error) = persist(tool, &patterns)
+            && let Ok(mut diagnostics) = self.diagnostics.write()
+        {
+            diagnostics.push(format!(
+                "the permanent approval for `{tool}` was kept for this session only: {error}"
+            ));
+        }
+    }
+
     fn lease(
         &self,
         revision: u64,
         tool: &str,
-        requirements: Vec<PermissionRequirement>,
-        subjects: Arc<Vec<String>>,
+        context: Arc<PermissionContext>,
         settings: Arc<SharedToolConfig>,
     ) -> PolicyLease {
         PolicyLease {
             store: self.clone(),
             revision,
             tool: tool.to_owned(),
-            requirements,
-            subjects,
+            context,
             settings,
         }
     }
@@ -586,10 +826,9 @@ pub struct PolicyLease {
     store: PermissionStore,
     revision: u64,
     tool: String,
-    requirements: Vec<PermissionRequirement>,
-    /// What the lists were matched against, carried so revalidation asks the
-    /// same question rather than a newer one.
-    subjects: Arc<Vec<String>>,
+    /// What was authorized, carried so revalidation asks the same question
+    /// rather than a newer one.
+    context: Arc<PermissionContext>,
     settings: Arc<SharedToolConfig>,
 }
 
@@ -607,13 +846,7 @@ impl PolicyLease {
         if state.revision == self.revision {
             return Ok(());
         }
-        let resolution = resolve_locked(
-            state,
-            &self.tool,
-            &self.requirements,
-            &self.subjects,
-            &self.settings,
-        )?;
+        let resolution = resolve_locked(state, &self.tool, &self.context, &self.settings)?;
         if resolution.mode == PermissionMode::Always {
             Ok(())
         } else {
@@ -644,137 +877,211 @@ pub enum PolicyError {
     Busy,
 }
 
+/// Resolves what a call may do, from the tool's own context and the stored
+/// rules.
+///
+/// Reference `AgentLoop._resolve_tool_decision`: a context answering `ALWAYS`
+/// or `NEVER` settles the call, and a context asking is filtered against the
+/// stored rules so an approval already granted is not asked again. The trust
+/// roots are this port's own step, and they run before the tool's own answer so
+/// a root the operator revoked closes a call the tool would have granted.
 fn resolve_locked(
     state: &PolicyState,
     tool: &str,
-    requirements: &[PermissionRequirement],
-    subjects: &[String],
+    context: &PermissionContext,
     settings: &SharedToolConfig,
 ) -> Result<PolicyResolution, PolicyError> {
-    let required_permissions = requirements
-        .iter()
-        .map(PermissionRequirement::scope)
-        .collect::<Vec<_>>();
+    let refusal = |rationale: String| PolicyResolution {
+        mode: PermissionMode::Never,
+        rationale,
+        matched_rule: None,
+        required_permissions: Vec::new(),
+    };
     // A tool configured to `never` is refused outright, whatever a rule or a
     // trusted root would otherwise say: reference `get_tool_config` composes
     // that permission from the operator's table and the session override, and
-    // no approval reopens it.
+    // no approval reopens it. A path leaving the working directory under that
+    // permission is refused here rather than turned into a requirement, which
+    // is the reference's early `NEVER` in the file-tool chain.
     if settings.permission == PermissionMode::Never {
+        return Ok(refusal(format!("`{tool}` is configured to never run")));
+    }
+    // A path the operator refused closes the call before the tool's own answer
+    // is read, so neither an allowlist match nor a stored approval reopens it.
+    // A path that resolves nowhere is positioned outside every root rather than
+    // inside one, which is where reference `is_path_within_workdir` puts what it
+    // cannot resolve; the guard then fails toward asking rather than refusing.
+    let positioned = context
+        .paths
+        .iter()
+        .map(|path| (path, canonicalize_for_policy(path).ok()))
+        .collect::<Vec<_>>();
+    for (_, canonical) in &positioned {
+        if let Some(root) = canonical
+            .as_ref()
+            .and_then(|canonical| state.closest_root(canonical))
+            && root.decision == TrustDecision::Untrusted
+        {
+            return Ok(refusal(format!(
+                "closest {:?} root `{}` is untrusted",
+                root.kind,
+                root.canonical_path.display()
+            )));
+        }
+    }
+    if context.permission == Some(PermissionMode::Never) {
+        return Ok(refusal(
+            context
+                .reason
+                .clone()
+                .unwrap_or_else(|| format!("`{tool}` refused this call")),
+        ));
+    }
+    // A tool that already granted the call answers for its own paths: the
+    // reference returns `ALWAYS` on an allowlist match without ever reaching the
+    // working-directory check, so an allowlisted path outside it stays granted.
+    if context.permission == Some(PermissionMode::Always) && context.requirements.is_empty() {
         return Ok(PolicyResolution {
-            mode: PermissionMode::Never,
-            rationale: format!("`{tool}` is configured to never run"),
+            mode: PermissionMode::Always,
+            rationale: context
+                .reason
+                .clone()
+                .unwrap_or_else(|| format!("`{tool}` granted this call")),
             matched_rule: None,
-            required_permissions,
+            required_permissions: Vec::new(),
         });
     }
-    let listed = list_decision(tool, subjects, settings);
-    // The denylist closes a subject before anything else looks at it, so
-    // neither a stored approval nor a trusted root reopens it. Reference
-    // `resolve_path_permission` answers NEVER before it answers ALWAYS.
-    if let Some((PermissionMode::Never, rationale)) = &listed {
-        return Ok(PolicyResolution {
-            mode: PermissionMode::Never,
-            rationale: rationale.clone(),
-            matched_rule: None,
-            required_permissions,
-        });
+    // Every path outside every root carries its own requirement, deduplicated
+    // by the directory it names: reference `_build_outside_directory_permission`
+    // over a set of directories rather than over one per file.
+    let mut requirements = context.requirements.clone();
+    for (path, canonical) in &positioned {
+        if canonical
+            .as_ref()
+            .is_some_and(|canonical| state.closest_root(canonical).is_some())
+        {
+            continue;
+        }
+        let named = canonical.as_deref().unwrap_or(path.as_path());
+        let requirement = PermissionRequirement::outside_directory(&outside_glob(named));
+        if !requirements.contains(&requirement) {
+            requirements.push(requirement);
+        }
     }
-    let mut effective = PermissionMode::Always;
-    let mut rationales = Vec::new();
+    let had_requirements = !requirements.is_empty();
     let mut matched_rule = None;
+    let mut uncovered = Vec::new();
+    let mut refused = None;
     for requirement in requirements {
-        let scope = requirement.scope();
-        let rule = best_rule(&state.rules, tool, &scope);
-        let (mode, rationale) = if let Some(rule) = rule {
+        let rule = best_rule(&state.rules, tool, &requirement);
+        if let Some(rule) = rule {
             matched_rule = Some(rule.clone());
-            (rule.mode, rule.rationale.clone())
-        } else if let Some(path) = requirement.path() {
-            // A list match only ever tightens what the path itself resolves
-            // to. The sensitive patterns exist to turn a granted read into a
-            // prompt, not to turn a root the operator refused into one.
-            let resolved = resolve_path(state, path)?;
-            match listed.clone() {
-                Some(decision) if decision.0 < resolved.0 => decision,
-                _ => resolved,
+            match rule.mode {
+                PermissionMode::Never => {
+                    refused.get_or_insert_with(|| rule.rationale.clone());
+                    continue;
+                }
+                PermissionMode::Always => continue,
+                PermissionMode::Ask => {}
             }
-        } else if let Some(decision) = listed.clone() {
-            decision
-        } else {
-            (
-                settings.permission,
-                format!(
-                    "no explicit policy covers `{scope}`; `{tool}` is configured to {}",
-                    permission_label(settings.permission)
-                ),
-            )
-        };
-        effective = effective.min(mode);
-        rationales.push(rationale);
+        }
+        uncovered.push(requirement);
     }
-    if requirements.is_empty() {
-        // Reference `get_tool_config().permission` is the whole decision for a
-        // tool that produces no granular requirement, unless its own lists
-        // already answered for what it was called on.
-        let (mode, rationale) = listed.unwrap_or_else(|| {
-            (
-                settings.permission,
-                format!(
-                    "`{tool}` declared no permission requirement and is configured to {}",
-                    permission_label(settings.permission)
-                ),
-            )
-        });
-        effective = mode;
-        rationales.push(rationale);
+    if let Some(rationale) = refused {
+        return Ok(refusal(rationale));
     }
+    // Reference `_resolve_tool_decision`: a call that raised requirements and
+    // has none left uncovered runs without asking, and one that raised none is
+    // decided by the permission alone.
+    let (mode, rationale) = match (had_requirements, uncovered.is_empty()) {
+        (true, true) => (
+            PermissionMode::Always,
+            format!("every permission `{tool}` requires is already approved"),
+        ),
+        (true, false) => (
+            PermissionMode::Ask,
+            context.reason.clone().unwrap_or_else(|| {
+                let labels = uncovered
+                    .iter()
+                    .map(|requirement| requirement.label.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("`{tool}` needs approval for {labels}")
+            }),
+        ),
+        (false, _) => {
+            let mode = context.permission.unwrap_or(settings.permission);
+            (
+                mode,
+                context.reason.clone().unwrap_or_else(|| {
+                    format!(
+                        "`{tool}` declared no permission requirement and is configured to {}",
+                        permission_label(mode)
+                    )
+                }),
+            )
+        }
+    };
     Ok(PolicyResolution {
-        mode: effective,
-        rationale: rationales.join("; "),
+        mode,
+        rationale,
         matched_rule,
-        required_permissions,
+        required_permissions: uncovered,
     })
 }
 
-/// What the tool's three configured lists say about what it was called on, or
-/// [`None`] when none of them matches.
+/// Resolves what a file tool may do with `path`, before the trust roots.
 ///
-/// Reference `resolve_path_permission` and `BashTool._is_unconditionally_allowed`
-/// compose the same order: a denylist match refuses, a sensitive match asks even
-/// at permission `always`, and a grant needs every subject allowlisted rather
-/// than any one of them.
-fn list_decision(
+/// Reference `resolve_file_tool_permission`, in its order: the scratchpad is
+/// the runtime's own capability and is granted first; the denylist refuses and
+/// the allowlist grants, both against the resolved absolute path and both
+/// before anything else is read; a sensitive match then raises a `file_pattern`
+/// requirement even where the configured permission is `always`. The
+/// working-directory boundary is the one step this port answers elsewhere: the
+/// roots live in the store, so the path travels on the context and
+/// [`resolve_locked`] positions it.
+#[must_use]
+pub fn resolve_file_tool_permission(
+    path: &Path,
     tool: &str,
-    subjects: &[String],
     settings: &SharedToolConfig,
-) -> Option<(PermissionMode, String)> {
-    if subjects.is_empty() {
-        return None;
+    scratchpad: Option<&Path>,
+) -> PermissionContext {
+    if is_scratchpad_path(path, scratchpad) {
+        return PermissionContext::settled(PermissionMode::Always)
+            .because(format!("`{tool}` may always reach its own scratchpad"));
     }
-    for subject in subjects {
-        if let Some(pattern) = matched_pattern(&settings.denylist, subject) {
-            return Some((
-                PermissionMode::Never,
-                format!("`{subject}` matches the `{tool}` denylist entry `{pattern}`"),
-            ));
-        }
+    // The lists are matched against the resolved absolute path, which is what
+    // makes `**/.env` mean the same thing here and upstream. A path that cannot
+    // be resolved is matched as written rather than skipped: refusing to look is
+    // not a reason to grant.
+    let resolved = canonicalize_for_policy(path).unwrap_or_else(|_| path.to_path_buf());
+    let subject = resolved.display().to_string();
+    if let Some(pattern) = matched_pattern(&settings.denylist, &subject) {
+        return PermissionContext::settled(PermissionMode::Never).because(format!(
+            "`{subject}` matches the `{tool}` denylist entry `{pattern}`"
+        ));
     }
-    for subject in subjects {
-        if let Some(pattern) = matched_pattern(&settings.sensitive_patterns, subject) {
-            return Some((
-                PermissionMode::Ask,
-                format!("`{subject}` matches the `{tool}` sensitive pattern `{pattern}`"),
-            ));
-        }
+    if let Some(pattern) = matched_pattern(&settings.allowlist, &subject) {
+        return PermissionContext::settled(PermissionMode::Always).because(format!(
+            "`{subject}` matches the `{tool}` allowlist entry `{pattern}`"
+        ));
     }
-    let granted = subjects
-        .iter()
-        .map(|subject| matched_pattern(&settings.allowlist, subject))
-        .collect::<Option<Vec<_>>>()?;
-    let pattern = granted.first()?;
-    Some((
-        PermissionMode::Always,
-        format!("every subject matches the `{tool}` allowlist, first `{pattern}`"),
-    ))
+    let mut context = PermissionContext::deferred().over_paths(vec![path.to_path_buf()]);
+    if let Some(pattern) = matched_pattern(&settings.sensitive_patterns, &subject) {
+        let file_name = resolved.file_name().map_or_else(
+            || subject.clone(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        context.permission = Some(PermissionMode::Ask);
+        context.reason = Some(format!(
+            "`{subject}` matches the `{tool}` sensitive pattern `{pattern}`"
+        ));
+        context
+            .requirements
+            .push(PermissionRequirement::sensitive_file(&file_name, tool));
+    }
+    context
 }
 
 /// The first entry of `patterns` matching `subject`, in the order the operator
@@ -785,65 +1092,38 @@ fn matched_pattern<'a>(patterns: &'a [String], subject: &str) -> Option<&'a Stri
         .find(|pattern| pattern_matches(pattern, subject))
 }
 
+/// The glob an outside path is named by: the parent for a file, the directory
+/// itself for a directory, joined with `*`.
+///
+/// Reference `resolve_file_tool_permission` names `parent / "*"`, and
+/// `_collect_outside_dirs` names the directory a command operand resolves to.
+fn outside_glob(canonical: &Path) -> String {
+    let directory = if canonical.is_dir() {
+        canonical
+    } else {
+        canonical.parent().unwrap_or(canonical)
+    };
+    directory.join("*").display().to_string()
+}
+
+/// The most specific rule answering for `requirement`, or [`None`] when none
+/// does.
+///
+/// A rule naming the tool outranks the `*` one, and a rule naming a scope
+/// outranks one answering for every scope, so a profile's blanket refusal never
+/// hides the narrower grant written next to it.
 fn best_rule<'a>(
     rules: &'a [PermissionRule],
     tool: &str,
-    scope: &str,
+    requirement: &PermissionRequirement,
 ) -> Option<&'a PermissionRule> {
     rules
         .iter()
-        .filter(|rule| rule.tool == tool || rule.tool == "*")
-        .filter(|rule| scope_matches(&rule.scope, scope))
-        .max_by_key(|rule| {
-            (
-                usize::from(rule.tool == tool),
-                scope_specificity(&rule.scope),
-            )
-        })
+        .filter(|rule| rule.covers(tool, requirement))
+        .max_by_key(|rule| (usize::from(rule.tool == tool), rule.specificity()))
 }
 
-fn scope_matches(pattern: &str, scope: &str) -> bool {
-    pattern == "*"
-        || pattern == scope
-        || pattern
-            .strip_suffix(" *")
-            .is_some_and(|prefix| scope == prefix || scope.starts_with(&format!("{prefix} ")))
-}
-
-fn scope_specificity(pattern: &str) -> usize {
-    pattern.trim_end_matches(" *").len()
-}
-
-fn resolve_path(
-    state: &PolicyState,
-    requested: &Path,
-) -> Result<(PermissionMode, String), PolicyError> {
-    let canonical = canonicalize_for_policy(requested)?;
-    Ok(match state.closest_root(&canonical) {
-        Some(root) if root.decision == TrustDecision::Untrusted => (
-            PermissionMode::Never,
-            format!(
-                "closest {:?} root `{}` is untrusted",
-                root.kind,
-                root.canonical_path.display()
-            ),
-        ),
-        Some(root) => (
-            PermissionMode::Always,
-            format!(
-                "path is inside {:?} root `{}`",
-                root.kind,
-                root.canonical_path.display()
-            ),
-        ),
-        None => (
-            PermissionMode::Ask,
-            format!("path `{}` is outside trusted roots", canonical.display()),
-        ),
-    })
-}
-
-fn canonicalize_for_policy(path: &Path) -> Result<PathBuf, PolicyError> {
+pub(crate) fn canonicalize_for_policy(path: &Path) -> Result<PathBuf, PolicyError> {
     if path.exists() {
         return std::fs::canonicalize(path).map_err(|source| PolicyError::PathResolution {
             path: path.to_path_buf(),
@@ -881,515 +1161,6 @@ fn canonicalize_for_policy(path: &Path) -> Result<PathBuf, PolicyError> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::tools::{
-        OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolPresentationKind,
-        ToolRegistry, ToolSource, ToolSpec,
-    };
-    use serde_json::{Value, json};
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use tempfile::tempdir;
-    use tokio::sync::Notify;
-
-    struct FixedApproval(ApprovalDecision);
-
-    impl ApprovalAgent for FixedApproval {
-        fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
-            Box::pin(async move { Ok(self.0) })
-        }
-    }
-
-    /// A write into a directory that does not exist yet resolves against the
-    /// deepest ancestor that does, and a traversal hidden behind that missing
-    /// directory is refused rather than resolved into the trusted root.
-    #[test]
-    fn a_path_below_a_missing_directory_resolves_without_admitting_a_traversal() {
-        let root = tempdir().expect("tempdir");
-        let canonical = std::fs::canonicalize(root.path()).expect("canonical root");
-
-        assert_eq!(
-            canonicalize_for_policy(&canonical.join("missing/deeper/file.txt"))
-                .expect("a missing parent chain resolves"),
-            canonical.join("missing/deeper/file.txt")
-        );
-        assert!(matches!(
-            canonicalize_for_policy(&canonical.join("missing/../../escape.txt")),
-            Err(PolicyError::Denied(_))
-        ));
-    }
-
-    /// US-103: a path matching the tool's `sensitive_patterns` asks even where
-    /// the configured permission is `always` and the path sits in a trusted
-    /// root.
-    #[tokio::test]
-    async fn a_sensitive_path_asks_even_at_permission_always() {
-        let directory = tempdir().expect("tempdir");
-        let store = PermissionStore::default();
-        store
-            .set_trust(
-                directory.path(),
-                TrustDecision::Trusted,
-                TrustRootKind::Workspace,
-            )
-            .await
-            .expect("trust");
-        assert_eq!(
-            store.tool_settings("read_file").permission,
-            PermissionMode::Always,
-            "the reference declares read_file as always"
-        );
-
-        let ordinary = store
-            .resolve(
-                "read_file",
-                &[PermissionRequirement::Read {
-                    path: directory.path().join("notes.txt"),
-                }],
-            )
-            .await
-            .expect("resolution");
-        assert_eq!(ordinary.mode, PermissionMode::Always);
-
-        let sensitive = store
-            .resolve(
-                "read_file",
-                &[PermissionRequirement::Read {
-                    path: directory.path().join(".env"),
-                }],
-            )
-            .await
-            .expect("resolution");
-        assert_eq!(sensitive.mode, PermissionMode::Ask);
-        assert!(
-            sensitive.rationale.contains("sensitive pattern"),
-            "{}",
-            sensitive.rationale
-        );
-    }
-
-    /// A list match may only tighten what the path itself resolves to. A root
-    /// the operator refused stays refused, so a sensitive pattern cannot turn a
-    /// denial into a prompt.
-    #[tokio::test]
-    async fn a_listed_subject_never_reopens_an_untrusted_root() {
-        let directory = tempdir().expect("tempdir");
-        let store = PermissionStore::default();
-        store
-            .set_trust(
-                directory.path(),
-                TrustDecision::Untrusted,
-                TrustRootKind::Workspace,
-            )
-            .await
-            .expect("trust");
-
-        for name in ["notes.txt", ".env"] {
-            let resolution = store
-                .resolve(
-                    "read_file",
-                    &[PermissionRequirement::Read {
-                        path: directory.path().join(name),
-                    }],
-                )
-                .await
-                .expect("resolution");
-            assert_eq!(
-                resolution.mode,
-                PermissionMode::Never,
-                "`{name}` sits in an untrusted root: {}",
-                resolution.rationale
-            );
-        }
-    }
-
-    /// US-102: the configured permission is the whole decision for a tool that
-    /// produces no granular requirement, and `never` refuses outright.
-    #[tokio::test]
-    async fn the_configured_permission_decides_a_tool_with_no_requirement() {
-        let store = PermissionStore::default();
-        let granted = store.resolve("todo", &[]).await.expect("resolution");
-        assert_eq!(
-            granted.mode,
-            PermissionMode::Always,
-            "the reference declares todo as always"
-        );
-
-        let resolver = ToolConfigResolver::new();
-        resolver.update(
-            "[todo]\npermission = \"never\"\n"
-                .parse::<toml::Table>()
-                .expect("settings parse"),
-        );
-        let refusing = PermissionStore::default().with_tool_config(resolver);
-        let refused = refusing.resolve("todo", &[]).await.expect("resolution");
-        assert_eq!(refused.mode, PermissionMode::Never);
-
-        // The session override outranks the configured value, both ways.
-        refusing.set_tool_permission("todo", PermissionMode::Always);
-        assert_eq!(
-            refusing
-                .resolve("todo", &[])
-                .await
-                .expect("resolution")
-                .mode,
-            PermissionMode::Always
-        );
-    }
-
-    /// An approval carrying no granular requirement has no pattern to store a
-    /// rule under, so what it grants is the tool for the session.
-    #[tokio::test]
-    async fn an_approval_without_a_requirement_grants_the_tool_for_the_session() {
-        // A store nobody handed a resolver still observes its own session
-        // overrides: the reference declares `web_fetch` as `ask`, so the grant
-        // below is what moves it.
-        let store = PermissionStore::default();
-        assert_eq!(
-            store.tool_settings("web_fetch").permission,
-            PermissionMode::Ask
-        );
-        assert!(store.tool_permission("web_fetch").is_none());
-
-        store
-            .authorize(
-                "web_fetch",
-                Value::Null,
-                Vec::new(),
-                Vec::new(),
-                &FixedApproval(ApprovalDecision::ApproveForSession),
-            )
-            .await
-            .expect("the operator approves");
-        assert_eq!(
-            store.tool_permission("web_fetch"),
-            Some(PermissionMode::Always)
-        );
-        // The next call resolves without asking again.
-        assert_eq!(
-            store
-                .resolve("web_fetch", &[])
-                .await
-                .expect("resolution")
-                .mode,
-            PermissionMode::Always
-        );
-    }
-
-    #[derive(Default)]
-    struct GatedApproval {
-        entered: Notify,
-        release: Notify,
-    }
-
-    impl ApprovalAgent for GatedApproval {
-        fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
-            Box::pin(async move {
-                self.entered.notify_one();
-                self.release.notified().await;
-                Ok(ApprovalDecision::ApproveOnce)
-            })
-        }
-    }
-
-    #[tokio::test]
-    async fn closest_untrusted_root_overrides_trusted_ancestor() {
-        let directory = tempdir().expect("tempdir");
-        let nested = directory.path().join("nested");
-        std::fs::create_dir(&nested).expect("nested");
-        let store = PermissionStore::default();
-        store
-            .set_trust(
-                directory.path(),
-                TrustDecision::Trusted,
-                TrustRootKind::Ancestor,
-            )
-            .await
-            .expect("trust ancestor");
-        store
-            .set_trust(&nested, TrustDecision::Untrusted, TrustRootKind::Workspace)
-            .await
-            .expect("deny nested");
-        let resolution = store
-            .resolve(
-                "read",
-                &[PermissionRequirement::Read {
-                    path: nested.join("missing.txt"),
-                }],
-            )
-            .await
-            .expect("resolve");
-        assert_eq!(resolution.mode, PermissionMode::Never);
-    }
-
-    #[tokio::test]
-    async fn wildcard_scope_covers_bare_command_and_more_specific_rule_wins() {
-        let store = PermissionStore::default();
-        store
-            .add_rule(PermissionRule {
-                tool: "shell".to_owned(),
-                scope: "shell git *".to_owned(),
-                mode: PermissionMode::Always,
-                rationale: "read-only git".to_owned(),
-            })
-            .await;
-        store
-            .add_rule(PermissionRule {
-                tool: "shell".to_owned(),
-                scope: "shell git push".to_owned(),
-                mode: PermissionMode::Never,
-                rationale: "network mutation".to_owned(),
-            })
-            .await;
-        let git = store
-            .resolve(
-                "shell",
-                &[PermissionRequirement::Shell {
-                    command: "git".to_owned(),
-                }],
-            )
-            .await
-            .expect("git");
-        assert_eq!(git.mode, PermissionMode::Always);
-        let push = store
-            .resolve(
-                "shell",
-                &[PermissionRequirement::Shell {
-                    command: "git push".to_owned(),
-                }],
-            )
-            .await
-            .expect("push");
-        assert_eq!(push.mode, PermissionMode::Never);
-    }
-
-    #[tokio::test]
-    async fn approval_lock_serializes_user_decisions_without_holding_policy_state() {
-        let store = PermissionStore::default();
-        let directory = tempdir().expect("tempdir");
-        store
-            .set_trust(
-                directory.path(),
-                TrustDecision::Trusted,
-                TrustRootKind::Workspace,
-            )
-            .await
-            .expect("trust");
-        let approval = Arc::new(GatedApproval::default());
-        let first_store = store.clone();
-        let first_approval = approval.clone();
-        let first = tokio::spawn(async move {
-            first_store
-                .authorize(
-                    "network",
-                    Value::Null,
-                    vec![PermissionRequirement::Network {
-                        url: Url::parse("https://one.example").expect("url"),
-                    }],
-                    Vec::new(),
-                    first_approval.as_ref(),
-                )
-                .await
-        });
-        approval.entered.notified().await;
-        let safe = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            store.resolve(
-                "read",
-                &[PermissionRequirement::Read {
-                    path: directory.path().join("safe.txt"),
-                }],
-            ),
-        )
-        .await
-        .expect("safe policy resolution is not blocked")
-        .expect("safe policy resolution");
-        assert_eq!(safe.mode, PermissionMode::Always);
-        let second_store = store.clone();
-        let second_approval = approval.clone();
-        let second = tokio::spawn(async move {
-            second_store
-                .authorize(
-                    "network",
-                    Value::Null,
-                    vec![PermissionRequirement::Network {
-                        url: Url::parse("https://two.example").expect("url"),
-                    }],
-                    Vec::new(),
-                    second_approval.as_ref(),
-                )
-                .await
-        });
-        tokio::task::yield_now().await;
-        approval.release.notify_one();
-        first.await.expect("join first").expect("first approval");
-        approval.entered.notified().await;
-        approval.release.notify_one();
-        second.await.expect("join second").expect("second approval");
-    }
-
-    #[tokio::test]
-    async fn trust_revocation_invalidates_lease_before_side_effect() {
-        let directory = tempdir().expect("tempdir");
-        let store = PermissionStore::default();
-        store
-            .set_trust(
-                directory.path(),
-                TrustDecision::Trusted,
-                TrustRootKind::Workspace,
-            )
-            .await
-            .expect("trust");
-        let lease = store
-            .authorize(
-                "write",
-                Value::Null,
-                vec![PermissionRequirement::Write {
-                    path: directory.path().join("file.txt"),
-                }],
-                Vec::new(),
-                &FixedApproval(ApprovalDecision::Deny),
-            )
-            .await
-            .expect("trusted root");
-        store.revoke_trust(directory.path()).await.expect("revoke");
-        assert!(matches!(
-            lease.revalidate().await,
-            Err(PolicyError::StaleApproval)
-        ));
-    }
-
-    #[tokio::test]
-    async fn revocation_is_atomic_with_guarded_side_effects() {
-        let directory = tempdir().expect("tempdir");
-        let store = PermissionStore::default();
-        store
-            .set_trust(
-                directory.path(),
-                TrustDecision::Trusted,
-                TrustRootKind::Workspace,
-            )
-            .await
-            .expect("trust");
-
-        let entered = Arc::new(Notify::new());
-        let release = Arc::new(Notify::new());
-        let calls = Arc::new(AtomicUsize::new(0));
-        let handler: Arc<dyn ToolHandler> = Arc::new({
-            let entered = entered.clone();
-            let release = release.clone();
-            let calls = calls.clone();
-            move |_invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
-                let entered = entered.clone();
-                let release = release.clone();
-                let calls = calls.clone();
-                Box::pin(async move {
-                    calls.fetch_add(1, Ordering::SeqCst);
-                    entered.notify_one();
-                    release.notified().await;
-                    Ok(ToolExecutionOutput::text("done"))
-                })
-            }
-        });
-        let required_path = directory.path().join("file.txt");
-        let guarded = Arc::new(PolicyGuardedTool::new(
-            "write",
-            store.clone(),
-            Arc::new(FixedApproval(ApprovalDecision::Deny)),
-            Arc::new(move |_invocation| {
-                Ok(vec![PermissionRequirement::Write {
-                    path: required_path.clone(),
-                }])
-            }),
-            handler,
-        ));
-        let registry = ToolRegistry::default();
-        registry
-            .register(
-                ToolSpec {
-                    name: "write".to_owned(),
-                    description: "write".to_owned(),
-                    input_schema: json!({"type": "object", "additionalProperties": false}),
-                    output_schema: None,
-                    config: Value::Null,
-                    state: Value::Null,
-                    availability: ToolAvailability::Available,
-                    presentation: ToolPresentationKind::Generic,
-                    source: ToolSource::BuiltIn,
-                    selection_priority: 0,
-                },
-                guarded,
-            )
-            .expect("register");
-
-        let first_registry = registry.clone();
-        let first = tokio::spawn(async move {
-            first_registry
-                .invoke(
-                    "write",
-                    ToolInvocation {
-                        call_id: "first".to_owned(),
-                        arguments: json!({}),
-                    },
-                )
-                .await
-        });
-        entered.notified().await;
-
-        let revoking_store = store.clone();
-        let revoking_path = directory.path().to_path_buf();
-        let revoke = tokio::spawn(async move { revoking_store.revoke_trust(revoking_path).await });
-        tokio::task::yield_now().await;
-        assert!(
-            !revoke.is_finished(),
-            "revocation waits for the active effect"
-        );
-        let second_registry = registry.clone();
-        let second = tokio::spawn(async move {
-            second_registry
-                .invoke(
-                    "write",
-                    ToolInvocation {
-                        call_id: "second".to_owned(),
-                        arguments: json!({}),
-                    },
-                )
-                .await
-        });
-
-        release.notify_one();
-        first.await.expect("first join").expect("first completes");
-        revoke.await.expect("revoke join").expect("revoke");
-        assert!(second.await.expect("second join").is_err());
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn symlink_escape_requires_external_permission() {
-        use std::os::unix::fs::symlink;
-
-        let workspace = tempdir().expect("workspace");
-        let outside = tempdir().expect("outside");
-        symlink(outside.path(), workspace.path().join("escape")).expect("symlink");
-        let store = PermissionStore::default();
-        store
-            .set_trust(
-                workspace.path(),
-                TrustDecision::Trusted,
-                TrustRootKind::Workspace,
-            )
-            .await
-            .expect("trust");
-        let resolution = store
-            .resolve(
-                "read",
-                &[PermissionRequirement::Read {
-                    path: workspace.path().join("escape/secret.txt"),
-                }],
-            )
-            .await
-            .expect("resolve");
-        assert_eq!(resolution.mode, PermissionMode::Ask);
-    }
-}
+mod permission_parity_tests;
+#[cfg(test)]
+mod policy_tests;

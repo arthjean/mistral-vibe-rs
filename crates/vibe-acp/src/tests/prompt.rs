@@ -217,10 +217,19 @@ async fn canonical_approval_callback_routes_through_the_acp_client() {
         params["toolCall"]["rawInput"]["effect"]["toolName"],
         "read_file"
     );
+    // US-105: the requirement crosses to the editor as the reference model, so
+    // the client can render what an approval for the session would cover.
+    let requirement = &params["toolCall"]["rawInput"]["requiredPermissions"][0];
+    assert_eq!(requirement["scope"], "outside_directory");
+    assert_eq!(
+        requirement["invocationPattern"],
+        requirement["sessionPattern"]
+    );
     assert!(
-        params["toolCall"]["rawInput"]["requiredPermissions"][0]
+        requirement["label"]
             .as_str()
-            .is_some_and(|permission| permission.starts_with("outside workdir ("))
+            .is_some_and(|label| label.starts_with("outside workdir (")),
+        "{requirement}"
     );
     agent.disconnect().await.expect("disconnect");
 }

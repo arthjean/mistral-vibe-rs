@@ -22,10 +22,13 @@ use url::Url;
 
 use crate::config::DotenvValues;
 use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
-use crate::policy::{PermissionRequirement, PolicyGuardedTool, ToolGuard};
+use crate::policy::{
+    PermissionContext, PermissionMode, PermissionRequirement, PolicyGuardedTool, ToolGuard,
+};
 use crate::schema::{ObjectSchema, Property};
 use crate::tools::config::{
-    TodoConfig, ToolConfigResolver, WebFetchConfig, WebSearchConfig, declared_document,
+    SharedToolConfig, TodoConfig, ToolConfigResolver, WebFetchConfig, WebSearchConfig,
+    declared_document,
 };
 use crate::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolError, ToolExecutionOutput,
@@ -166,6 +169,7 @@ impl BuiltinTools {
             policy,
             approval,
             config,
+            scratchpad: _,
         } = guard;
         let mut outcomes = vec![
             // `todo` and `skill` are configured `always` upstream, and the
@@ -177,7 +181,7 @@ impl BuiltinTools {
                     "todo",
                     policy.clone(),
                     approval.clone(),
-                    Arc::new(|_invocation| Ok(Vec::new())),
+                    Arc::new(|_invocation| Ok(PermissionContext::deferred())),
                     self.todo_handler(session_id, config),
                 )),
             )?,
@@ -187,7 +191,10 @@ impl BuiltinTools {
                     "skill",
                     policy.clone(),
                     approval.clone(),
-                    Arc::new(|_invocation| Ok(Vec::new())),
+                    // Reference `SkillTool.resolve_permission` grants outright
+                    // rather than deferring, so a session that moved `skill` to
+                    // `ask` still loads a skill without a prompt.
+                    Arc::new(|_invocation| Ok(PermissionContext::settled(PermissionMode::Always))),
                     self.skill_handler(working_directory, project_trusted),
                 )),
             )?,
@@ -197,17 +204,34 @@ impl BuiltinTools {
                     "web_fetch",
                     policy.clone(),
                     approval.clone(),
-                    Arc::new(|invocation| {
-                        let url = fetch_url(&invocation.arguments)?;
-                        Ok(vec![PermissionRequirement::Network { url }])
-                    }),
+                    // Reference `WebFetchTool.resolve_permission`: a configured
+                    // `always` or `never` settles the call, and everything else
+                    // asks for the host the fetch reaches.
+                    {
+                        let settings = config.clone();
+                        Arc::new(move |invocation: &ToolInvocation| {
+                            let configured = settings.view::<SharedToolConfig>("web_fetch");
+                            if configured.permission != PermissionMode::Ask {
+                                return Ok(PermissionContext::settled(configured.permission));
+                            }
+                            let url = fetch_url(&invocation.arguments)?;
+                            let Some(domain) = url.host_str() else {
+                                return Ok(PermissionContext::deferred());
+                            };
+                            Ok(PermissionContext::asking(vec![
+                                PermissionRequirement::url_domain(domain),
+                            ]))
+                        })
+                    },
                     web_fetch_handler(config.clone()),
                 )),
             )?,
         ];
         if let Some(access) = &self.web_search {
             let access = access.clone();
-            let scope = Url::parse(&access.endpoint).map_err(|error| {
+            // The endpoint is still parsed here rather than at the first call:
+            // a malformed one is a registration failure, not a turn failure.
+            Url::parse(&access.endpoint).map_err(|error| {
                 ToolError::Execution(format!(
                     "the web search endpoint `{}` is not a URL: {error}",
                     access.endpoint
@@ -219,9 +243,11 @@ impl BuiltinTools {
                     "web_search",
                     policy.clone(),
                     approval.clone(),
-                    Arc::new(move |_invocation| {
-                        Ok(vec![PermissionRequirement::Network { url: scope.clone() }])
-                    }),
+                    // The reference declares no `resolve_permission` for
+                    // `web_search`, so the configured permission is the whole
+                    // decision and an approval for the session grants the tool
+                    // rather than one host.
+                    Arc::new(|_invocation| Ok(PermissionContext::deferred())),
                     web_search_handler(access, config.clone()),
                 )),
             )?);
@@ -1270,6 +1296,7 @@ mod tests {
                     policy,
                     approval: Arc::new(AllowApproval),
                     config: config.clone(),
+                    scratchpad: None,
                 },
             )
             .expect("register");
@@ -1340,6 +1367,7 @@ mod tests {
                 policy,
                 approval: Arc::new(AllowApproval),
                 config: config.clone(),
+                scratchpad: None,
             },
         )
         .expect("register");

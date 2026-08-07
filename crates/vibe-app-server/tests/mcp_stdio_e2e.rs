@@ -10,9 +10,7 @@ use vibe_app_server::resources::{CoreResourceBackend, ResourceBackend, ResourceS
 use vibe_app_server::server::SessionIntent;
 use vibe_core::engine::{CompletionProvider, ProviderFuture};
 use vibe_core::events::{ModelMessage, ModelToolCall, PublicContentBlock};
-use vibe_core::policy::{
-    PermissionMode, PermissionRule, PermissionStore, TrustDecision, TrustRootKind,
-};
+use vibe_core::policy::{PermissionMode, PermissionStore, TrustDecision, TrustRootKind};
 use vibe_core::provider::{AssistantMessage, ProviderInput, ToolDefinition, Usage};
 use vibe_core::tools::ToolRegistry;
 
@@ -95,14 +93,9 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
         )
         .await
         .expect("workspace trust");
-    policy
-        .add_rule(PermissionRule {
-            tool: "fixture_echo".to_owned(),
-            scope: "mcp fixture/echo".to_owned(),
-            mode: PermissionMode::Always,
-            rationale: "fixture server is operator-trusted".to_owned(),
-        })
-        .await;
+    // An MCP tool raises no granular requirement, so an operator who trusts the
+    // server grants the tool itself for the session.
+    policy.set_tool_permission("fixture_echo", PermissionMode::Always);
     let tools = ToolRegistry::default();
     let backend = CoreResourceBackend::default();
     backend

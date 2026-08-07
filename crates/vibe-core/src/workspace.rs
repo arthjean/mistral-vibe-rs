@@ -14,10 +14,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
 
-use crate::policy::{PermissionRequirement, PolicyGuardedTool, ToolGuard};
+use crate::policy::{
+    PolicyGuardedTool, RequirementResolver, ToolGuard, resolve_file_tool_permission,
+};
 use crate::process::ClientToolIo;
 use crate::schema::{ObjectSchema, Property};
 use crate::text::{matches_wildcard, truncate_utf8};
+use crate::tools::config::SharedToolConfig;
 use crate::tools::config::{
     GrepConfig, ReadFileConfig, ToolConfigResolver, WriteFileConfig, declared_document,
 };
@@ -820,6 +823,7 @@ impl WorkspaceTools {
             policy,
             approval,
             config,
+            scratchpad: _,
         } = guard;
         let read_workspace = self.workspace.clone();
         let read_client = self.client_io.clone();
@@ -1030,61 +1034,36 @@ impl WorkspaceTools {
                 })
             },
         );
-        let read_root = self.workspace.root().to_path_buf();
+        let root = self.workspace.root().to_path_buf();
         let guarded_read = Arc::new(PolicyGuardedTool::new(
             "read_file",
             policy.clone(),
             approval.clone(),
-            Arc::new(move |invocation| {
-                let path = invocation.arguments["file_path"].as_str().ok_or_else(|| {
-                    ToolError::Execution("read_file file_path is missing".to_owned())
-                })?;
-                Ok(vec![PermissionRequirement::Read {
-                    path: read_root.join(path),
-                }])
-            }),
+            file_tool_permission("read_file", "file_path", &root, guard),
             read,
         ));
-        let search_root = self.workspace.root().to_path_buf();
         let guarded_search = Arc::new(PolicyGuardedTool::new(
             "grep",
             policy.clone(),
             approval.clone(),
-            Arc::new(move |_invocation| {
-                Ok(vec![PermissionRequirement::Read {
-                    path: search_root.clone(),
-                }])
-            }),
+            // Reference `GrepTool.resolve_permission` runs the same chain over
+            // `args.path`, which defaults to the working directory when the call
+            // names none.
+            file_tool_permission("grep", "path", &root, guard),
             search,
         ));
-        let edit_root = self.workspace.root().to_path_buf();
         let guarded_edit = Arc::new(PolicyGuardedTool::new(
             "edit",
             policy.clone(),
             approval.clone(),
-            Arc::new(move |invocation| {
-                let path = invocation.arguments["file_path"]
-                    .as_str()
-                    .ok_or_else(|| ToolError::Execution("edit file_path is missing".to_owned()))?;
-                Ok(vec![PermissionRequirement::Write {
-                    path: edit_root.join(path),
-                }])
-            }),
+            file_tool_permission("edit", "file_path", &root, guard),
             edit,
         ));
-        let write_root = self.workspace.root().to_path_buf();
         let guarded_write = Arc::new(PolicyGuardedTool::new(
             "write_file",
             policy.clone(),
             approval.clone(),
-            Arc::new(move |invocation| {
-                let path = invocation.arguments["file_path"].as_str().ok_or_else(|| {
-                    ToolError::Execution("write_file file_path is missing".to_owned())
-                })?;
-                Ok(vec![PermissionRequirement::Write {
-                    path: write_root.join(path),
-                }])
-            }),
+            file_tool_permission("write_file", "file_path", &root, guard),
             write,
         ));
         Ok(vec![
@@ -1094,6 +1073,46 @@ impl WorkspaceTools {
             registry.register(write_file_spec(), guarded_write)?,
         ])
     }
+}
+
+/// The permission resolver a file tool is published behind.
+///
+/// Reference `ReadFileTool`, `GrepTool`, `EditTool` and `WriteFileTool` all
+/// answer `resolve_permission` by handing their own name, configuration and
+/// path argument to one shared chain. This is that chain's entry point: the
+/// argument is resolved against the workspace root, the configuration is read
+/// at every call so an operator's edit lands without a re-registration, and the
+/// call that names no path at all falls back to the root, which is what
+/// `GrepArgs.path` defaults to.
+fn file_tool_permission(
+    tool: &'static str,
+    argument: &'static str,
+    root: &Path,
+    guard: &ToolGuard,
+) -> Arc<RequirementResolver> {
+    let root = root.to_path_buf();
+    let config = guard.config.clone();
+    let scratchpad = guard.scratchpad.clone();
+    Arc::new(move |invocation: &ToolInvocation| {
+        let requested = invocation.arguments[argument].as_str().unwrap_or_default();
+        if requested.is_empty() && argument != "path" {
+            return Err(ToolError::Execution(format!(
+                "{tool} {argument} is missing"
+            )));
+        }
+        let path = if requested.is_empty() {
+            root.clone()
+        } else {
+            root.join(requested)
+        };
+        let settings: SharedToolConfig = config.view(tool);
+        Ok(resolve_file_tool_permission(
+            &path,
+            tool,
+            &settings,
+            scratchpad.as_deref(),
+        ))
+    })
 }
 
 /// The parent directory `path` needs and does not have, or [`None`] when it
@@ -1603,9 +1622,9 @@ fn path_display(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::policy::{ApprovalAgent, PermissionStore};
     use crate::policy::{
-        ApprovalDecision, ApprovalFuture, ApprovalRequest, TrustDecision, TrustRootKind,
+        ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionMode,
+        PermissionStore, TrustDecision, TrustRootKind,
     };
     use tempfile::tempdir;
 
@@ -2104,6 +2123,12 @@ mod tests {
         let review = Arc::new(ReviewManager::new(workspace.clone()));
         review.begin_turn("turn-1").expect("turn");
         let policy = PermissionStore::default();
+        // The reference declares `edit` and `write_file` as `ask`, so a harness
+        // exercising their bodies grants them the way an operator's "allow
+        // always" does rather than answering a prompt per call.
+        for tool in ["edit", "write_file"] {
+            policy.set_tool_permission(tool, PermissionMode::Always);
+        }
         policy
             .set_trust(
                 directory.path(),
@@ -2179,6 +2204,80 @@ mod tests {
         registered_with_settings(root, "").await.0
     }
 
+    /// US-108: a registered file tool passes the guard for the session
+    /// scratchpad without an approval, even for a name its own
+    /// `sensitive_patterns` would otherwise stop, and the same name inside the
+    /// workspace still asks.
+    ///
+    /// What stops the scratchpad read here is the workspace confinement, one
+    /// layer past the permission: this port serves the file tools through a
+    /// `cap-std` root while the reference serves any absolute path. That
+    /// boundary is `read_file`'s own contract and moves with US-113, so the
+    /// assertion below names the confinement rather than an approval, which is
+    /// what proves the permission chain granted the path.
+    #[tokio::test]
+    async fn a_registered_file_tool_reaches_the_scratchpad_without_asking() {
+        let root = tempdir().expect("workspace");
+        let scratchpad =
+            crate::scratchpad::init_scratchpad("workspace-scratchpad-probe").expect("scratchpad");
+        std::fs::write(scratchpad.join(".env"), "SECRET=1\n").expect("scratchpad file");
+        std::fs::write(root.path().join(".env"), "SECRET=2\n").expect("workspace file");
+
+        let workspace = Arc::new(Workspace::open(root.path()).expect("workspace"));
+        let review = Arc::new(ReviewManager::new(workspace.clone()));
+        let policy = PermissionStore::default();
+        policy
+            .set_trust(
+                root.path(),
+                TrustDecision::Trusted,
+                TrustRootKind::Workspace,
+            )
+            .await
+            .expect("trust");
+        let registry = ToolRegistry::default();
+        WorkspaceTools::new(workspace, review)
+            .register(
+                &registry,
+                &ToolGuard::new(policy, Arc::new(RejectApproval))
+                    .with_scratchpad(Some(scratchpad.clone())),
+            )
+            .expect("register");
+
+        let granted = registry
+            .invoke(
+                "read_file",
+                ToolInvocation {
+                    call_id: "scratchpad-read".to_owned(),
+                    arguments: json!({"file_path": scratchpad.join(".env").to_string_lossy()}),
+                },
+            )
+            .await
+            .expect_err("the workspace confinement stops it one layer past the guard");
+        let granted = granted.to_string();
+        assert!(
+            granted.contains("escapes the authorized root"),
+            "the scratchpad passed the permission chain: {granted}"
+        );
+
+        let asked = registry
+            .invoke(
+                "read_file",
+                ToolInvocation {
+                    call_id: "workspace-read".to_owned(),
+                    arguments: json!({"file_path": ".env"}),
+                },
+            )
+            .await
+            .expect_err("a sensitive name inside the workspace asks");
+        let asked = asked.to_string();
+        assert!(
+            asked.contains("approval denied"),
+            "the same name inside the workspace reaches the operator: {asked}"
+        );
+
+        crate::scratchpad::cleanup_scratchpad(Some(&scratchpad));
+    }
+
     /// The file tools of a trusted workspace, published against a resolver the
     /// caller can move afterward.
     ///
@@ -2196,6 +2295,12 @@ mod tests {
         // only allows inside a turn, so the helper opens one.
         review.begin_turn("turn-1").expect("a turn opens");
         let policy = PermissionStore::default();
+        // The reference declares `edit` and `write_file` as `ask`, so a harness
+        // exercising their bodies grants them the way an operator's "allow
+        // always" does rather than answering a prompt per call.
+        for tool in ["edit", "write_file"] {
+            policy.set_tool_permission(tool, PermissionMode::Always);
+        }
         policy
             .set_trust(root, TrustDecision::Trusted, TrustRootKind::Workspace)
             .await
@@ -2210,6 +2315,7 @@ mod tests {
                     policy,
                     approval: Arc::new(RejectApproval),
                     config: config.clone(),
+                    scratchpad: None,
                 },
             )
             .expect("register");
@@ -2482,6 +2588,12 @@ mod tests {
         let review = Arc::new(ReviewManager::new(workspace.clone()));
         review.begin_turn("turn-1").expect("turn");
         let policy = PermissionStore::default();
+        // The reference declares `edit` and `write_file` as `ask`, so a harness
+        // exercising their bodies grants them the way an operator's "allow
+        // always" does rather than answering a prompt per call.
+        for tool in ["edit", "write_file"] {
+            policy.set_tool_permission(tool, PermissionMode::Always);
+        }
         policy
             .set_trust(root, TrustDecision::Trusted, TrustRootKind::Workspace)
             .await
@@ -2668,6 +2780,12 @@ mod tests {
         let review = Arc::new(ReviewManager::new(workspace.clone()));
         review.begin_turn("turn-1").expect("turn");
         let policy = PermissionStore::default();
+        // The reference declares `edit` and `write_file` as `ask`, so a harness
+        // exercising their bodies grants them the way an operator's "allow
+        // always" does rather than answering a prompt per call.
+        for tool in ["edit", "write_file"] {
+            policy.set_tool_permission(tool, PermissionMode::Always);
+        }
         policy
             .set_trust(root, TrustDecision::Trusted, TrustRootKind::Workspace)
             .await

@@ -218,11 +218,9 @@ pub(super) fn validate_callback_request(
                     return Err("Approval callback permissions must be an array");
                 };
                 if permissions.len() > MAX_CALLBACK_OPTIONS
-                    || permissions.iter().any(|permission| {
-                        !permission.as_str().is_some_and(|value| {
-                            !value.trim().is_empty() && value.len() <= MAX_CALLBACK_TEXT_BYTES
-                        })
-                    })
+                    || permissions
+                        .iter()
+                        .any(|permission| !valid_permission(permission))
                 {
                     return Err("Approval callback permission is invalid");
                 }
@@ -232,6 +230,27 @@ pub(super) fn validate_callback_request(
         EngineCallbackKind::UserInput => validate_user_input_request(detail),
         EngineCallbackKind::ConnectorAuth => Err("Connector-auth callbacks are unsupported"),
     }
+}
+
+/// Whether one entry of `requiredPermissions` is a requirement this server may
+/// forward.
+///
+/// The entry is the reference `RequiredPermission` model: a scope from the
+/// four-value vocabulary and three bounded texts. Deserializing it is what
+/// refuses a surplus field and an invented scope, and the length checks keep a
+/// pattern from filling a client's prompt.
+fn valid_permission(permission: &Value) -> bool {
+    let Ok(requirement) = serde_json::from_value::<PermissionRequirement>(permission.clone())
+    else {
+        return false;
+    };
+    [
+        &requirement.invocation_pattern,
+        &requirement.session_pattern,
+        &requirement.label,
+    ]
+    .into_iter()
+    .all(|text| !text.trim().is_empty() && text.len() <= MAX_CALLBACK_TEXT_BYTES)
 }
 
 pub(super) fn validate_user_input_request(detail: &Value) -> Result<(), &'static str> {

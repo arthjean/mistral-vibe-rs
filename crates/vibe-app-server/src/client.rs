@@ -2266,11 +2266,11 @@ fn approval_callback_detail(request: &ApprovalRequest) -> Value {
     json!({
         "kind": "approval",
         "effect": effect,
-        "requiredPermissions": request
-            .requirements
-            .iter()
-            .map(vibe_core::policy::PermissionRequirement::label)
-            .collect::<Vec<_>>(),
+        // Reference `ApprovalCallbackDetail.required_permissions` is a list of
+        // the requirement model itself, not of its labels: the client needs the
+        // scope and the two patterns to render what an "allow always" would
+        // grant.
+        "requiredPermissions": request.requirements,
         "choices": [
             "approve",
             "approve_for_session",
@@ -6471,9 +6471,9 @@ command = "/must-not-run"
                 .request(ApprovalRequest {
                     tool: "shell".to_owned(),
                     input: json!({"command": "cargo test"}),
-                    requirements: vec![vibe_core::policy::PermissionRequirement::Shell {
-                        command: "cargo test".to_owned(),
-                    }],
+                    requirements: vec![vibe_core::policy::PermissionRequirement::command(
+                        "cargo test",
+                    )],
                     rationale: "shell command requires approval".to_owned(),
                 })
                 .await
@@ -6502,7 +6502,15 @@ command = "/must-not-run"
             return;
         };
         let detail = serde_json::to_value(&detail).expect("the callback detail serializes");
-        assert_eq!(detail["requiredPermissions"], json!(["cargo test"]));
+        assert_eq!(
+            detail["requiredPermissions"],
+            json!([{
+                "scope": "command_pattern",
+                "invocationPattern": "cargo test",
+                "sessionPattern": "cargo test *",
+                "label": "cargo test *",
+            }])
+        );
         assert_eq!(detail["effect"]["input"], json!({"command": "cargo test"}));
         assert_eq!(detail["effect"]["kind"], "shell");
         service

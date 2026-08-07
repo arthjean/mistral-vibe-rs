@@ -21,7 +21,9 @@ use shared::{
     validate_connector_tool_specs, validate_definition,
 };
 
-use crate::policy::{ApprovalAgent, PermissionRequirement, PermissionStore, PolicyGuardedTool};
+use crate::policy::{
+    ApprovalAgent, PermissionContext, PermissionRequirement, PermissionStore, PolicyGuardedTool,
+};
 use crate::remote_tools::{public_tool_name, set_all};
 use crate::text::canonical_url;
 use crate::tools::{
@@ -572,10 +574,17 @@ impl ConnectorRegistry {
                     public_name.clone(),
                     policy.clone(),
                     approval.clone(),
+                    // A connector tool reaches exactly one host, which is the
+                    // `url_pattern` shape reference `WebFetchTool` uses for the
+                    // same question, so an approval for the session covers the
+                    // connector rather than one of its operations.
                     Arc::new(move |_invocation| {
-                        Ok(vec![PermissionRequirement::Network {
-                            url: endpoint.clone(),
-                        }])
+                        let Some(domain) = endpoint.host_str() else {
+                            return Ok(PermissionContext::deferred());
+                        };
+                        Ok(PermissionContext::asking(vec![
+                            PermissionRequirement::url_domain(domain),
+                        ]))
                     }),
                     handler,
                 ));
@@ -599,6 +608,7 @@ mod tests {
     use super::*;
     use crate::policy::{
         ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionMode, PermissionRule,
+        PermissionScope,
     };
     use crate::tools::ToolExecutionOutput;
     use serde_json::json;
@@ -794,7 +804,8 @@ mod tests {
         policy
             .add_rule(PermissionRule {
                 tool: "connector_Tracker_search".to_owned(),
-                scope: "network https://connectors.example/".to_owned(),
+                scope: Some(PermissionScope::UrlPattern),
+                pattern: "connectors.example".to_owned(),
                 mode: PermissionMode::Always,
                 rationale: "test connector".to_owned(),
             })
@@ -926,7 +937,8 @@ mod tests {
         policy
             .add_rule(PermissionRule {
                 tool: "connector_Tracker_search".to_owned(),
-                scope: "network https://connectors.example/".to_owned(),
+                scope: Some(PermissionScope::UrlPattern),
+                pattern: "connectors.example".to_owned(),
                 mode: PermissionMode::Always,
                 rationale: "test connector".to_owned(),
             })

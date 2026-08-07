@@ -579,17 +579,21 @@ fn callback_effect(detail: &Value) -> Result<CallbackEffect, String> {
         .map(|value| callback_effect_content(tool_name, value))
         .unwrap_or_default();
     bounded_callback_text(&content, "approval effect content")?;
+    // US-105: each entry is the reference `RequiredPermission` model. The
+    // terminal renders its label, which is the one field written to be read by
+    // a person; the two patterns are what a client with a richer prompt shows.
     let permissions = detail
         .get("requiredPermissions")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .map(|permission| {
-            let permission = permission
-                .as_str()
-                .ok_or_else(|| "approval permission must be text".to_owned())?;
-            required_callback_text(permission, "approval permission")?;
-            Ok(permission.to_owned())
+            let label = permission
+                .get("label")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "approval permission must carry a label".to_owned())?;
+            required_callback_text(label, "approval permission")?;
+            Ok(label.to_owned())
         })
         .collect::<Result<Vec<_>, String>>()?;
     Ok(CallbackEffect {

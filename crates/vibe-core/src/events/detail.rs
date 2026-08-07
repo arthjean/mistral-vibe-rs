@@ -15,6 +15,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use crate::policy::PermissionRequirement;
+
 // --------------------------------------------------------------------------
 // Vocabularies
 // --------------------------------------------------------------------------
@@ -930,8 +932,11 @@ pub struct ApprovalDecision {
 pub enum CallbackDetail {
     Approval {
         effect: Box<EffectDetail>,
+        /// Reference `ApprovalCallbackDetail.required_permissions`: the
+        /// requirement models themselves, because a client renders what an
+        /// "allow always" would grant from the scope and the two patterns.
         #[serde(default)]
-        required_permissions: Vec<String>,
+        required_permissions: Vec<PermissionRequirement>,
         #[serde(default)]
         choices: Vec<ApprovalDecisionType>,
         #[serde(default)]

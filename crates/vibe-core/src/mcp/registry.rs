@@ -772,19 +772,18 @@ fn register_remote_tools(
                 })
             },
         );
-        let server = alias.to_owned();
         let origin = format!("MCP server `{alias}` tool `{}`", remote.name);
-        let remote_permission_name = remote.name.clone();
         let guarded = Arc::new(PolicyGuardedTool::new(
             public_name.clone(),
             policy.clone(),
             approval.clone(),
-            Arc::new(move |_invocation| {
-                Ok(vec![PermissionRequirement::Mcp {
-                    server: server.clone(),
-                    tool: remote_permission_name.clone(),
-                }])
-            }),
+            // The reference publishes an MCP tool through the same base class as
+            // a builtin and declares no `resolve_permission` for it, so its
+            // configured permission is the whole decision and an approval for
+            // the session grants the tool itself. There is no fifth scope to
+            // name a server under, and inventing one would be a value the Python
+            // client cannot read.
+            Arc::new(|_invocation| Ok(PermissionContext::deferred())),
             handler,
         ));
         let spec = ToolSpec {

@@ -42,7 +42,7 @@ impl ApprovalAgent for ScriptedApproval {
             let labels = request
                 .requirements
                 .iter()
-                .map(PermissionRequirement::label)
+                .map(|requirement| requirement.label.clone())
                 .collect::<Vec<_>>()
                 .join("; ");
             requests.push(format!("{}: {labels}", request.tool));
@@ -58,6 +58,9 @@ struct Harness {
     tools: ShellTools,
     family: ShellFamily,
     requests: Arc<StdMutex<Vec<String>>>,
+    /// The store the family was published behind, so a case can move the trust
+    /// roots the way an operator does mid-session.
+    policy: PermissionStore,
 }
 
 impl Harness {
@@ -164,7 +167,7 @@ async fn harness_on(
             directory.path(),
             &registry,
             None,
-            &ToolGuard::new(policy, approval as Arc<dyn ApprovalAgent>),
+            &ToolGuard::new(policy.clone(), approval as Arc<dyn ApprovalAgent>),
         )
         .expect("the shell family registers");
     Harness {
@@ -173,6 +176,7 @@ async fn harness_on(
         tools,
         family,
         requests,
+        policy,
     }
 }
 
@@ -437,6 +441,37 @@ async fn a_managed_override_stops_an_allowlisted_command_from_running_outright()
     }
 }
 
+/// A `cwd` override is a directory the call reaches, so it is positioned
+/// against the trust roots rather than only named in the prompt: a root the
+/// operator revoked refuses the call outright instead of offering it for
+/// approval, which is the guarantee `revoke_trust` carries everywhere else.
+#[tokio::test]
+async fn a_working_directory_under_a_revoked_root_is_refused_rather_than_asked() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let outside = tempdir().expect("outside");
+    harness
+        .policy
+        .revoke_trust(outside.path())
+        .await
+        .expect("the operator revokes the directory");
+
+    let refused = harness
+        .call(
+            "bash",
+            json!({"command": "pwd", "cwd": outside.path().to_string_lossy()}),
+        )
+        .await
+        .expect_err("an untrusted root is not something an approval reopens");
+
+    assert!(refused.to_string().contains("untrusted"), "{refused}");
+    assert_eq!(
+        harness.approval_count(),
+        0,
+        "the operator is never asked to reopen a root they revoked: {}",
+        harness.approvals()
+    );
+}
+
 /// The escalation is bound to what the override actually changes: a working
 /// directory inside the session root is where the command would have run
 /// anyway, so it is not a reason to ask.
@@ -453,6 +488,38 @@ async fn a_working_directory_inside_the_session_root_does_not_ask() {
         .await
         .expect("an allowlisted command in the session root needs no approval");
     assert_eq!(harness.approval_count(), 0);
+}
+
+/// US-106: a chain whose segments reduce to the same session pattern is asked
+/// about once, because an approval for the session would cover all of them.
+///
+/// Reference `_build_required_permissions` deduplicates on the session pattern
+/// rather than on the segment text, so `git log` and `git diff` collapse while
+/// a third command keeps its own entry.
+#[tokio::test]
+async fn segments_sharing_a_session_pattern_are_asked_about_once() {
+    let harness = harness(ShellRollout::Legacy, ApprovalDecision::Deny).await;
+
+    // The call is refused, which is what keeps the assertion on the shape of
+    // the request rather than on what the commands would have done.
+    let _ = harness
+        .call(
+            "bash",
+            json!({"command": "npm run build && npm run build --watch && npm run test"}),
+        )
+        .await;
+
+    assert_eq!(harness.approval_count(), 1, "{}", harness.approvals());
+    let approvals = harness.approvals();
+    assert_eq!(
+        approvals.matches("npm run build *").count(),
+        1,
+        "the two `npm run build` segments collapse onto one pattern: {approvals}"
+    );
+    assert!(
+        approvals.contains("npm run test *"),
+        "a segment reducing to another pattern keeps its own entry: {approvals}"
+    );
 }
 
 /// The legacy variant publishes none of the overrides and honors none of
@@ -1731,7 +1798,7 @@ async fn terminal_client_harness(client: Arc<TerminalClient>) -> Harness {
             directory.path(),
             &registry,
             Some(ClientToolIo::new("session-1", client)),
-            &ToolGuard::new(policy, approval as Arc<dyn ApprovalAgent>),
+            &ToolGuard::new(policy.clone(), approval as Arc<dyn ApprovalAgent>),
         )
         .expect("the shell family registers");
     Harness {
@@ -1740,6 +1807,7 @@ async fn terminal_client_harness(client: Arc<TerminalClient>) -> Harness {
         tools,
         family: ShellFamily::Bash,
         requests,
+        policy,
     }
 }
 

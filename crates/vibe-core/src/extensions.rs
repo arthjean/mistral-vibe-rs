@@ -18,7 +18,7 @@ use toml::Table;
 
 use crate::atomic_file::write_atomically;
 use crate::engine::CancellationToken;
-use crate::policy::{PermissionMode, PermissionRule};
+use crate::policy::{PermissionMode, PermissionRule, PermissionScope};
 use crate::storage::{SessionStore, StorageError};
 use crate::text::{bounded_utf8, matches_wildcard, truncate_utf8};
 
@@ -207,7 +207,7 @@ fn profile_permission_rules(profile_name: &str, overrides: &Table) -> Vec<Permis
             .filter_map(toml::Value::as_str)
             .collect::<Vec<_>>();
         if allowlist.is_empty() || mode == PermissionMode::Never {
-            insert_profile_rule(&mut rules, profile_name, &tool, "*".to_owned(), mode);
+            insert_profile_rule(&mut rules, profile_name, &tool, None, "*".to_owned(), mode);
         }
         for pattern in allowlist {
             let allowlist_mode = if mode == PermissionMode::Never {
@@ -219,7 +219,8 @@ fn profile_permission_rules(profile_name: &str, overrides: &Table) -> Vec<Permis
                 &mut rules,
                 profile_name,
                 &tool,
-                profile_permission_scope(&tool, pattern),
+                Some(profile_permission_scope(&tool)),
+                pattern.to_owned(),
                 allowlist_mode,
             );
         }
@@ -231,14 +232,16 @@ fn insert_profile_rule(
     rules: &mut BTreeMap<(String, String), PermissionRule>,
     profile_name: &str,
     tool: &str,
-    scope: String,
+    scope: Option<PermissionScope>,
+    pattern: String,
     mode: PermissionMode,
 ) {
     rules.insert(
-        (tool.to_owned(), scope.clone()),
+        (tool.to_owned(), pattern.clone()),
         PermissionRule {
             tool: tool.to_owned(),
             scope,
+            pattern,
             mode,
             rationale: format!("agent-profile:{profile_name}"),
         },
@@ -254,20 +257,19 @@ fn profile_permission_mode(value: &str) -> Option<PermissionMode> {
     }
 }
 
-fn profile_permission_scope(tool: &str, pattern: &str) -> String {
-    if pattern == "*" {
-        return "*".to_owned();
+/// The scope a profile's `allowlist` entry answers for.
+///
+/// A file tool's entry is a path glob, which is the shape an
+/// `outside_directory` requirement carries; every other tool's is a command or
+/// a name, which is the `command_pattern` shape. The reference reaches the same
+/// place through the tool's own configured allowlist rather than through a
+/// rule, so this mapping is what keeps a profile written for one client
+/// meaningful on the other.
+fn profile_permission_scope(tool: &str) -> PermissionScope {
+    match tool {
+        "read_file" | "grep" | "edit" | "write_file" => PermissionScope::OutsideDirectory,
+        _ => PermissionScope::CommandPattern,
     }
-    let requirement = match tool {
-        "read_file" | "grep" => "read",
-        "edit" => "write",
-        "shell" | "bash" => "shell",
-        _ => return pattern.to_owned(),
-    };
-    pattern.strip_suffix("/*").map_or_else(
-        || format!("{requirement} {pattern}"),
-        |prefix| format!("{requirement} {prefix} *"),
-    )
 }
 
 /// Maps a profile's tool name onto the name this port publishes.
@@ -1695,16 +1697,19 @@ mod tests {
 
     /// The rename moved the profile vocabulary onto the reference names, and
     /// the permission scope each one maps to has to survive that move.
+    ///
+    /// US-105 replaced the invented scope strings with the four reference
+    /// scopes, so a file tool's path glob answers for `outside_directory` and
+    /// every other tool's entry for `command_pattern`.
     #[test]
     fn reference_tool_names_keep_the_permission_scope_the_invented_names_produced() {
-        assert_eq!(profile_permission_scope("read_file", "src/*"), "read src *");
-        assert_eq!(profile_permission_scope("grep", "src/*"), "read src *");
-        assert_eq!(
-            profile_permission_scope("read_file", "notes.md"),
-            "read notes.md"
-        );
-        assert_eq!(profile_permission_scope("edit", "src/*"), "write src *");
-        assert_eq!(profile_permission_scope("read_file", "*"), "*");
+        for tool in ["read_file", "grep", "edit", "write_file"] {
+            assert_eq!(
+                profile_permission_scope(tool),
+                PermissionScope::OutsideDirectory,
+                "`{tool}` allowlists paths"
+            );
+        }
 
         // Nothing rewrites the reference file-tool names any more.
         assert_eq!(canonical_tool_name("read_file"), "read_file");
@@ -1712,7 +1717,10 @@ mod tests {
         // `bash` is the published name now, so a profile naming it must reach
         // the tool the registry serves rather than the manual shell resource.
         assert_eq!(canonical_tool_name("bash"), "bash");
-        assert_eq!(profile_permission_scope("bash", "cargo *"), "shell cargo *");
+        assert_eq!(
+            profile_permission_scope("bash"),
+            PermissionScope::CommandPattern
+        );
     }
 
     /// `_plan_overrides` and the accept-edits profile both name `write_file`
@@ -1848,11 +1856,12 @@ mod tests {
 
         assert!(settings.disabled_tools.is_empty());
         assert!(settings.permission_rules.iter().any(|rule| {
-            rule.tool == "edit" && rule.scope == "*" && rule.mode == PermissionMode::Never
+            rule.tool == "edit" && rule.scope.is_none() && rule.mode == PermissionMode::Never
         }));
         assert!(settings.permission_rules.iter().any(|rule| {
             rule.tool == "edit"
-                && rule.scope == "write /workspace/plans *"
+                && rule.scope == Some(PermissionScope::OutsideDirectory)
+                && rule.pattern == "/workspace/plans/*"
                 && rule.mode == PermissionMode::Always
         }));
     }
@@ -1885,7 +1894,11 @@ mod tests {
         assert_eq!(settings.permission_rules.len(), 1);
         assert_eq!(
             settings.permission_rules[0].scope,
-            "write /workspace/generated *"
+            Some(PermissionScope::OutsideDirectory)
+        );
+        assert_eq!(
+            settings.permission_rules[0].pattern,
+            "/workspace/generated/*"
         );
     }
 

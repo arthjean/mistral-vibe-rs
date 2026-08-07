@@ -322,7 +322,7 @@ fn a_callback_detail_names_what_it_asks_for() {
             "bash",
             r#"{"command":"rm -rf /"}"#,
         )),
-        required_permissions: vec!["shell".to_owned()],
+        required_permissions: vec![PermissionRequirement::command("rm -rf /")],
         choices: ApprovalDecisionType::ALL.to_vec(),
         related_entry_id: Some("entry-1".to_owned()),
     };

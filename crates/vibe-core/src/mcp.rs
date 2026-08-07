@@ -16,7 +16,7 @@ use tokio::task::JoinHandle;
 use url::Url;
 
 use crate::child::{ChildGroup, Rung, TerminationError};
-use crate::policy::{ApprovalAgent, PermissionRequirement, PermissionStore, PolicyGuardedTool};
+use crate::policy::{ApprovalAgent, PermissionContext, PermissionStore, PolicyGuardedTool};
 use crate::remote_tools::{
     ProviderReach, public_tool_name, sanitize_mcp_name, set_all, tool_availability,
 };
@@ -1077,9 +1077,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use super::*;
-    use crate::policy::{
-        ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionMode, PermissionRule,
-    };
+    use crate::policy::{ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionMode};
     use crate::tools::ToolExecutionOutput;
     use serde_json::json;
     use tokio::sync::Notify;
@@ -1321,14 +1319,9 @@ mod tests {
         let registry = McpRegistry::default();
         let tools = ToolRegistry::default();
         let policy = PermissionStore::default();
-        policy
-            .add_rule(PermissionRule {
-                tool: "good_search".to_owned(),
-                scope: "mcp good/search".to_owned(),
-                mode: PermissionMode::Always,
-                rationale: "test server".to_owned(),
-            })
-            .await;
+        // An MCP tool raises no granular requirement, so what grants it is the
+        // session permission an "allow always" sets.
+        policy.set_tool_permission("good_search", PermissionMode::Always);
         let diagnostics = registry
             .discover_all(
                 vec![config("good"), config("failed")],
@@ -1843,14 +1836,9 @@ mod tests {
         let registry = McpRegistry::default();
         let tools = ToolRegistry::default();
         let policy = PermissionStore::default();
-        policy
-            .add_rule(PermissionRule {
-                tool: "good_search".to_owned(),
-                scope: "mcp good/search".to_owned(),
-                mode: PermissionMode::Always,
-                rationale: "test server".to_owned(),
-            })
-            .await;
+        // An MCP tool raises no granular requirement, so what grants it is the
+        // session permission an "allow always" sets.
+        policy.set_tool_permission("good_search", PermissionMode::Always);
         assert!(
             registry
                 .discover_all(
@@ -1905,14 +1893,9 @@ mod tests {
         let registry = McpRegistry::default();
         let tools = ToolRegistry::default();
         let policy = PermissionStore::default();
-        policy
-            .add_rule(PermissionRule {
-                tool: "good_search".to_owned(),
-                scope: "mcp good/search".to_owned(),
-                mode: PermissionMode::Always,
-                rationale: "test server".to_owned(),
-            })
-            .await;
+        // An MCP tool raises no granular requirement, so what grants it is the
+        // session permission an "allow always" sets.
+        policy.set_tool_permission("good_search", PermissionMode::Always);
         let mut server = config("good");
         server.tool_timeout_ms = 10;
         registry
@@ -1951,14 +1934,9 @@ mod tests {
         let registry = McpRegistry::default();
         let tools = ToolRegistry::default();
         let policy = PermissionStore::default();
-        policy
-            .add_rule(PermissionRule {
-                tool: "good_search".to_owned(),
-                scope: "mcp good/search".to_owned(),
-                mode: PermissionMode::Always,
-                rationale: "test server".to_owned(),
-            })
-            .await;
+        // An MCP tool raises no granular requirement, so what grants it is the
+        // session permission an "allow always" sets.
+        policy.set_tool_permission("good_search", PermissionMode::Always);
         registry
             .discover_all(
                 vec![config("good")],

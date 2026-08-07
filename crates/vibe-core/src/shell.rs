@@ -117,7 +117,7 @@ impl ShellCommandLists {
 
     /// Reference `_is_sensitive`: the first word of the segment, matched
     /// exactly.
-    fn sensitive(&self, segment: &str) -> Option<&str> {
+    pub fn sensitive(&self, segment: &str) -> Option<&str> {
         let first = segment.split_whitespace().next()?;
         self.sensitive_patterns
             .iter()

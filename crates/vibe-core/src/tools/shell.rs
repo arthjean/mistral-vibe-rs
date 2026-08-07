@@ -24,7 +24,7 @@
 //! every terminal this family opens is owned by a guard, so a dropped turn
 //! terminates the process group instead of leaving it behind.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -36,8 +36,8 @@ use tokio::sync::Mutex;
 
 use crate::platform::{Platform, parse_policy_path};
 use crate::policy::{
-    ApprovalAgent, PermissionMode, PermissionRequirement, PermissionStore, PolicyGuardedTool,
-    ToolGuard,
+    ApprovalAgent, PermissionContext, PermissionMode, PermissionRequirement, PermissionStore,
+    PolicyGuardedTool, ToolGuard,
 };
 use crate::process::{
     ClientShellRequest, ClientToolIo, ProcessChunk, ProcessError, ProcessSpec, ProcessStream,
@@ -479,6 +479,7 @@ impl ShellTools {
             policy,
             approval,
             config,
+            scratchpad: _,
         } = guard;
         let host = (self.host)();
         let Some((family, managed)) = published_family(&host, self.rollout) else {
@@ -1095,28 +1096,47 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
         Arc::new(move |invocation: &ToolInvocation| {
             let command = command_argument(&invocation.arguments)?;
             let settings: ShellCommandConfig = requirement_config.view(&requirement_tool);
+            let lists = ShellCommandLists::from_config(&settings);
             let analysis = analyze(
                 requirement_flavor,
                 platform,
                 &requirement_root,
                 &command,
-                &ShellCommandLists::from_config(&settings),
+                &lists,
             );
             // Every analyzed segment is named on its own, so approving one
-            // command does not silently approve the rest of a chain.
-            let mut requirements = analysis
+            // command does not silently approve the rest of a chain. Two
+            // segments reducing to the same session pattern are asked once:
+            // reference `_build_required_permissions` deduplicates on exactly
+            // that key rather than on the segment text.
+            let mut requirements = Vec::new();
+            let mut seen_session = BTreeSet::new();
+            let segments = analysis
                 .commands
                 .iter()
-                .map(|node| PermissionRequirement::Shell {
-                    command: std::iter::once(node.program.clone())
-                        .chain(node.arguments.iter().cloned())
+                .map(|node| {
+                    std::iter::once(node.program.as_str())
+                        .chain(node.arguments.iter().map(String::as_str))
                         .collect::<Vec<_>>()
-                        .join(" "),
+                        .join(" ")
                 })
                 .collect::<Vec<_>>();
-            requirements.dedup();
-            if requirements.is_empty() {
-                requirements.push(PermissionRequirement::Shell { command });
+            for segment in if segments.is_empty() {
+                std::slice::from_ref(&command)
+            } else {
+                &segments
+            } {
+                // A segment whose first word is sensitive carries itself as its
+                // own session pattern, so approving `sudo apt update` for the
+                // session never approves `sudo rm`.
+                let requirement = if lists.sensitive(segment).is_some() {
+                    PermissionRequirement::exact_command(segment)
+                } else {
+                    PermissionRequirement::command(segment)
+                };
+                if seen_session.insert(requirement.session_pattern.clone()) {
+                    requirements.push(requirement);
+                }
             }
             if overrides {
                 requirements.extend(override_requirements(
@@ -1124,7 +1144,15 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
                     &requirement_root,
                 ));
             }
-            Ok(requirements)
+            let mut context = PermissionContext::asking(requirements);
+            // A `cwd` override is a directory the call reaches, so it travels
+            // on the context and is positioned against the trust roots the way
+            // a file tool's path is. A root the operator revoked refuses the
+            // call rather than becoming one more thing an approval reopens.
+            if overrides && let Some(directory) = string_argument(&invocation.arguments, "cwd") {
+                context.paths.push(PathBuf::from(directory));
+            }
+            Ok(context)
         }),
         inner.clone(),
     ));
@@ -1204,18 +1232,28 @@ fn override_requirements(arguments: &Value, root: &Path) -> Vec<PermissionRequir
     if let Some(directory) = string_argument(arguments, "cwd")
         && !is_inside(root, Path::new(directory))
     {
-        requirements.push(PermissionRequirement::Write {
-            path: PathBuf::from(directory),
-        });
+        // Reference `_collect_outside_dirs` names the directory itself, joined
+        // with `*`, rather than the file-shaped parent a file tool names.
+        requirements.push(PermissionRequirement::outside_directory(
+            &Path::new(directory).join("*").display().to_string(),
+        ));
     }
     if let Some(shell) = string_argument(arguments, "shell") {
-        requirements.push(PermissionRequirement::Shell {
-            command: format!("shell override: {shell}"),
-        });
+        // Reference `_build_context_permissions` carries the override verbatim
+        // as both patterns, so approving one interpreter never approves another.
+        requirements.push(PermissionRequirement::exact_command(&format!(
+            "shell override: {shell}"
+        )));
     }
     if let Some(names) = environment_names(arguments) {
-        requirements.push(PermissionRequirement::Shell {
-            command: format!("env override: {names}"),
+        // The environment override is the one context permission the reference
+        // widens for the session: the names change per call, so the session
+        // pattern covers any of them.
+        requirements.push(PermissionRequirement {
+            scope: crate::policy::PermissionScope::CommandPattern,
+            invocation_pattern: format!("env override: {names}"),
+            session_pattern: "env override *".to_owned(),
+            label: format!("env override: {names}"),
         });
     }
     requirements
@@ -1241,15 +1279,17 @@ fn is_inside(root: &Path, candidate: &Path) -> bool {
         .is_ok_and(|resolved| resolved.starts_with(&root))
 }
 
+/// The log a `*_log_file` call touches, positioned against the trust roots.
+///
+/// The reference declares no requirement of its own here, so what decides is
+/// the configured permission plus whether the log sits inside the workspace: a
+/// session whose log directory was redirected outside it is asked about.
 fn log_file_requirements(
     shell: &SessionShell,
     arguments: &Value,
-) -> Result<Vec<PermissionRequirement>, ToolError> {
+) -> Result<PermissionContext, ToolError> {
     let path = resolve_log_path(shell, arguments)?;
-    Ok(vec![match string_argument(arguments, "action") {
-        Some("read") => PermissionRequirement::Read { path },
-        _ => PermissionRequirement::Write { path },
-    }])
+    Ok(PermissionContext::deferred().over_paths(vec![path]))
 }
 
 // --------------------------------------------------------------------------
@@ -2057,7 +2097,7 @@ fn guarded_session(
         tool,
         policy.clone(),
         approval.clone(),
-        Arc::new(|_invocation| Ok(Vec::new())),
+        Arc::new(|_invocation| Ok(PermissionContext::deferred())),
         inner,
     ))
 }

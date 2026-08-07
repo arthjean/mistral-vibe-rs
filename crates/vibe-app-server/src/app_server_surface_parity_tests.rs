@@ -1454,7 +1454,9 @@ fn every_callback_union_form_validates_against_the_census() {
                     "bash",
                     r#"{"command":"cargo test"}"#,
                 )),
-                required_permissions: vec!["shell".to_owned()],
+                required_permissions: vec![vibe_core::policy::PermissionRequirement::command(
+                    "cargo test",
+                )],
                 choices: ApprovalDecisionType::ALL.to_vec(),
                 related_entry_id: Some("entry-1".to_owned()),
             },

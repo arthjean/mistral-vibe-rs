@@ -46,6 +46,7 @@ pub use vibe_core::policy::{
     PolicyError,
 };
 use vibe_core::policy::{PermissionRule, PermissionStore, ToolGuard, TrustDecision, TrustRootKind};
+use vibe_core::scratchpad::{cleanup_scratchpad, init_scratchpad, scratchpad_path};
 use vibe_core::storage::HydratedSession;
 pub use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
 use vibe_core::tools::shell::{ShellRollout, ShellTools};
@@ -1777,7 +1778,12 @@ impl AppServer {
         // turns reaches the handlers without the surface being registered
         // again. The store narrows it with this session's permission
         // overrides, which is the one per-session part of the composition.
-        let guard = ToolGuard::new(policy.clone(), approval);
+        //
+        // The scratchpad opens with the session and is the one directory the
+        // file tools reach without consulting a list, which is the capability
+        // reference `init_scratchpad` gives the agent-loop runtime.
+        let guard =
+            ToolGuard::new(policy.clone(), approval).with_scratchpad(init_scratchpad(session_id));
         self.builtin_tools
             .register(
                 session_id,
@@ -2881,6 +2887,10 @@ impl ServerConnection {
         if let Ok(mut resources) = self.server.resources.lock() {
             resources.close_session(&session_id);
         }
+        // The scratchpad is a capability of the runtime, not of the workspace,
+        // so it goes with the session that opened it. Reference
+        // `cleanup_scratchpad` on the agent-loop shutdown path.
+        cleanup_scratchpad(scratchpad_path(&session_id).as_path().into());
         self.state = ConnectionState::Closed;
         let mut deferred = active_turn
             .map(|turn_id| DeferredWork::InterruptTurn {
@@ -4724,7 +4734,6 @@ fn generated_session_id(sequence: u64) -> String {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::PathBuf;
     use vibe_core::events::ApprovalDecisionType;
 
     /// `SERVER_METHODS` is the reference contract, not this build's routing
@@ -5653,9 +5662,7 @@ mod tests {
             .request(ApprovalRequest {
                 tool: "edit".to_owned(),
                 input: Value::Null,
-                requirements: vec![PermissionRequirement::Write {
-                    path: PathBuf::from("/workspace/file.rs"),
-                }],
+                requirements: vec![PermissionRequirement::outside_directory("/workspace/*")],
                 rationale: "edit file".to_owned(),
             })
             .await
@@ -5664,9 +5671,7 @@ mod tests {
             .request(ApprovalRequest {
                 tool: "read_file".to_owned(),
                 input: Value::Null,
-                requirements: vec![PermissionRequirement::Read {
-                    path: PathBuf::from("/workspace/file.rs"),
-                }],
+                requirements: vec![PermissionRequirement::outside_directory("/workspace/*")],
                 rationale: "read file".to_owned(),
             })
             .await
@@ -5696,7 +5701,7 @@ mod tests {
         assert_eq!(intent.disabled_tools, ["shell"]);
         assert!(intent.agent_permission_rules.iter().any(|rule| {
             rule.tool == "edit"
-                && rule.scope.ends_with("/plans *")
+                && rule.pattern.ends_with("/plans/*")
                 && rule.mode == vibe_core::policy::PermissionMode::Always
         }));
         assert!(intent.auto_approve);
