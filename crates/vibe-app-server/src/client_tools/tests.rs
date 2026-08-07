@@ -162,7 +162,7 @@ async fn a_declared_filesystem_read_reaches_the_client_and_comes_back() {
     );
 
     let output = call.await.expect("the tool task joins").expect("the read");
-    assert_eq!(output.model_text, "1|unsaved");
+    assert_eq!(output.typed_result["content"], "        1\u{2192}unsaved");
 }
 
 /// A rejected delegation is a tool failure carrying what the client said, not a
@@ -232,7 +232,7 @@ async fn a_client_declaring_nothing_is_never_asked() {
         )
         .await
         .expect("this host answers the read");
-    assert_eq!(output.model_text, "1|on disk");
+    assert_eq!(output.typed_result["content"], "        1\u{2192}on disk");
     assert!(
         requests.try_recv().is_err(),
         "an undeclared capability still reached the client"
@@ -366,7 +366,7 @@ async fn a_connection_with_no_write_side_leaves_the_tools_on_this_host() {
         )
         .await
         .expect("this host answers the read");
-    assert_eq!(output.model_text, "1|on disk");
+    assert_eq!(output.typed_result["content"], "        1\u{2192}on disk");
 }
 
 /// Hosting the filesystem is not a way around the workspace boundary: a path

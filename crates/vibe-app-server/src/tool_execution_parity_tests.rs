@@ -62,109 +62,83 @@ const MINIMUM_CASES: usize = 40;
 const DOT_PREFIX: &str = "dot-";
 const TREE_PLACEHOLDER: &str = "{tree}";
 
-/// The divergences this port still carries, each with the story that closes it.
+/// The divergences this port still carries, each with what closes it.
 ///
 /// A pointer is matched by prefix, so `/typedResult` covers every field under
 /// it. Keep the list ordered by tool then by case.
+///
+/// Two kinds of entry live here. One names the story that closes it, and the
+/// staleness check below deletes it as soon as the story lands. The other names
+/// [`LICENSING`], which is the boundary `NOTICE` draws: reaching those digests
+/// would mean writing the reference's own sentences into this repository, and
+/// the PRD lists byte-identical message text as a non-goal for exactly that
+/// reason. Everything around them still compares byte for byte, which is why
+/// they are scoped to the one field rather than to the tool.
 const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "read_file",
-        case: "*",
-        pointer: "/typedResult",
-        story: "US-113",
-        why: "the whole result shape diverges: the reference publishes file_path, content, \
-               num_lines, start_line, requested_offset, requested_limit, total_lines and \
-               was_truncated, this port publishes path, numberedContent, contentBytes, startLine, \
-               endLine, totalLines and truncated",
+        case: "empty-file",
+        pointer: "/typedResult/content",
+        closed_by: LICENSING,
+        why: "an empty file is answered with a warning sentence rather than with content, and \
+               this port writes its own",
     },
     Divergence {
         tool: "read_file",
-        case: "*",
+        case: "empty-file",
         pointer: "/modelText",
-        story: "US-113",
-        why: "each tool renders its own model-facing text here, while the reference joins the \
-               result fields in the agent loop and appends any subdirectory AGENTS.md",
+        closed_by: LICENSING,
+        why: "the rendered result carries the warning above, so it diverges with it",
     },
     Divergence {
-        tool: "grep",
-        case: "*",
-        pointer: "/typedResult",
-        story: "US-112",
-        why: "this port walks the tree with the regex crate, case-sensitively, against a \
-               two-entry hardcoded ignore set, so both the match set and the field names differ \
-               until grep moves onto the ripgrep library crates",
+        tool: "read_file",
+        case: "offset-past-the-end",
+        pointer: "/typedResult/content",
+        closed_by: LICENSING,
+        why: "an offset past the last line is answered with a warning naming the offset and the \
+               total, in this port's own wording",
     },
     Divergence {
-        tool: "grep",
-        case: "*",
+        tool: "read_file",
+        case: "offset-past-the-end",
         pointer: "/modelText",
-        story: "US-112",
-        why: "follows the result divergence above, plus the same rendering difference",
+        closed_by: LICENSING,
+        why: "the rendered result carries the warning above, so it diverges with it",
     },
     Divergence {
-        tool: "write_file",
-        case: "*",
-        pointer: "/typedResult",
-        story: "US-114",
-        why: "the reference publishes file_path, content and bytes_written; this port publishes \
-               path, bytesWritten, filesChanged and a diff",
+        tool: "read_file",
+        case: "offset-one-past-the-last-line",
+        pointer: "/typedResult/content",
+        closed_by: LICENSING,
+        why: "the same warning, one line further: the two cases stay distinct on both sides",
     },
     Divergence {
-        tool: "write_file",
-        case: "*",
+        tool: "read_file",
+        case: "offset-one-past-the-last-line",
         pointer: "/modelText",
-        story: "US-114",
-        why: "follows the result divergence above",
+        closed_by: LICENSING,
+        why: "the rendered result carries the warning above, so it diverges with it",
     },
     Divergence {
         tool: "edit",
         case: "*",
-        pointer: "/typedResult",
-        story: "US-114",
-        why: "the reference publishes file, old_string, new_string and a message; this port \
-               publishes path, bytesWritten, filesChanged and a diff",
+        pointer: "/typedResult/message",
+        closed_by: LICENSING,
+        why: "the applied-edit message is a sentence, and this port reports the same two outcomes \
+               (one replacement, every occurrence) in its own words",
     },
     Divergence {
         tool: "edit",
         case: "*",
         pointer: "/modelText",
-        story: "US-114",
-        why: "follows the result divergence above",
-    },
-    // Scoped to the one case, so fixing it retires exactly these two entries
-    // rather than hiding behind the tool-wide ones above.
-    Divergence {
-        tool: "edit",
-        case: "identical-strings",
-        pointer: "/outcome",
-        story: "US-114",
-        why: "an edit whose old_string equals its new_string is refused upstream and succeeds \
-               here, writing the file back unchanged with an empty diff",
-    },
-    Divergence {
-        tool: "edit",
-        case: "identical-strings",
-        pointer: "/error",
-        story: "US-114",
-        why: "the same case: the reference raises where this port returns, so it reports no error \
-               at all",
-    },
-    Divergence {
-        tool: "todo",
-        case: "*",
-        pointer: "/typedResult",
-        story: "US-115",
-        why: "the reference publishes total_count and a message; this port publishes totalCount \
-               and no message",
-    },
-    Divergence {
-        tool: "todo",
-        case: "*",
-        pointer: "/modelText",
-        story: "US-115",
-        why: "follows the result divergence above",
+        closed_by: LICENSING,
+        why: "the rendered result carries the message above, so it diverges with it",
     },
 ];
+
+/// What a divergence names when no story can close it, because closing it would
+/// mean shipping reference prose.
+const LICENSING: &str = "NOTICE";
 
 /// One tolerated gap between this port and the reference.
 #[derive(Debug, Clone, Copy)]
@@ -174,7 +148,8 @@ struct Divergence {
     case: &'static str,
     /// Matched by prefix against the reported JSON pointer.
     pointer: &'static str,
-    story: &'static str,
+    /// The story that closes this gap, or [`LICENSING`] when none can.
+    closed_by: &'static str,
     /// Why the gap stands, asserted non-empty so an entry cannot be added
     /// without a stated reason.
     why: &'static str,
@@ -592,7 +567,7 @@ async fn tool_execution_matches_the_reference_except_for_the_recorded_gap() {
                 Some(entry) => {
                     tolerated.insert((
                         format!("{}:{}", entry.tool, entry.pointer),
-                        entry.story.to_owned(),
+                        entry.closed_by.to_owned(),
                     ));
                 }
                 None => unlisted.push(format!(
@@ -613,8 +588,8 @@ async fn tool_execution_matches_the_reference_except_for_the_recorded_gap() {
         &corpus.reference_commit[..12],
         tolerated.len()
     );
-    for (entry, story) in &tolerated {
-        println!("  tolerated {entry} until {story}");
+    for (entry, closed_by) in &tolerated {
+        println!("  tolerated {entry} until {closed_by}");
     }
 
     assert!(
@@ -658,7 +633,7 @@ async fn a_ledger_entry_whose_divergence_is_fixed_fails_the_suite() {
         .map(|(_, entry)| {
             format!(
                 "{}/{} at {} ({})",
-                entry.tool, entry.case, entry.pointer, entry.story
+                entry.tool, entry.case, entry.pointer, entry.closed_by
             )
         })
         .collect::<Vec<_>>();
@@ -732,12 +707,13 @@ fn the_projection_agrees_with_the_capture_script() {
 }
 
 #[test]
-fn every_ledger_entry_names_a_story_that_closes_it() {
+fn every_ledger_entry_names_what_closes_it() {
     for entry in LEDGER {
         assert!(
-            entry.story.starts_with("US-"),
-            "a tolerated divergence names the story that closes it, not {}",
-            entry.story
+            entry.closed_by.starts_with("US-") || entry.closed_by == LICENSING,
+            "a tolerated divergence names the story that closes it or the licensing boundary \
+             that keeps it open, not {}",
+            entry.closed_by
         );
         assert!(entry.pointer.starts_with('/'), "{}", entry.pointer);
         assert!(!entry.why.is_empty(), "{}/{}", entry.tool, entry.case);

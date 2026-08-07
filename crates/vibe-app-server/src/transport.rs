@@ -999,7 +999,7 @@ mod tests {
         client_write.write_all(b"\n").await.expect("answer newline");
 
         let output = call.await.expect("the tool task joins").expect("the read");
-        assert_eq!(output.model_text, "1|unsaved");
+        assert_eq!(output.typed_result["content"], "        1\u{2192}unsaved");
 
         drop(client_write);
         drop(frames);

@@ -279,7 +279,7 @@
       },
       "case": "lowercase-is-case-insensitive",
       "modelText": {
-        "digest": "sha256:5a9ac70ed464ea7a368ab3bb43744f6a",
+        "digest": "sha256:2cc7b1d38ed14bbc32feeb3f2c56c577",
         "length": 300
       },
       "outcome": "returned",
@@ -287,7 +287,7 @@
       "typedResult": {
         "match_count": 4,
         "matches": {
-          "digest": "sha256:a92615a8ee02d3e8cc920f0311a6ae66",
+          "digest": "sha256:4343e2b22973e3648b3a5313b3966a86",
           "length": 239
         },
         "pattern": "gather",
@@ -431,7 +431,7 @@
       },
       "case": "ignore-disabled",
       "modelText": {
-        "digest": "sha256:5a9ac70ed464ea7a368ab3bb43744f6a",
+        "digest": "sha256:2cc7b1d38ed14bbc32feeb3f2c56c577",
         "length": 300
       },
       "outcome": "returned",
@@ -439,7 +439,7 @@
       "typedResult": {
         "match_count": 4,
         "matches": {
-          "digest": "sha256:a92615a8ee02d3e8cc920f0311a6ae66",
+          "digest": "sha256:4343e2b22973e3648b3a5313b3966a86",
           "length": 239
         },
         "pattern": "gather",

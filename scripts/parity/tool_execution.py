@@ -489,7 +489,7 @@ async def run_case(case: dict[str, Any], tree: Path, scratchpad: Path) -> dict[s
         record["error"] = {"type": type(error).__name__, "message": str(error)}
         return record
 
-    typed = result_model.model_dump(mode="json")
+    typed = stabilize(case["tool"], result_model.model_dump(mode="json"))
     # Exactly what `_loop.py` sends to the model: the field-per-line rendering
     # plus whatever the tool appends through `get_result_extra`.
     text = "\n".join(f"{key}: {value}" for key, value in typed.items())
@@ -500,6 +500,33 @@ async def run_case(case: dict[str, Any], tree: Path, scratchpad: Path) -> dict[s
     record["typedResult"] = typed
     record["modelText"] = text
     return record
+
+
+def _match_order(line: str) -> tuple[str, int]:
+    path, _, rest = line.partition(":")
+    number, _, _ = rest.partition(":")
+    return (path, int(number) if number.isdigit() else 0)
+
+
+def stabilize(tool: str, typed: dict[str, Any]) -> dict[str, Any]:
+    """Removes the one nondeterminism a captured result carries.
+
+    ``rg`` walks in parallel and emits whichever file finished first, so the
+    order of ``grep``'s match lines is not a contract anything can conform to:
+    one capture recorded two different orders for the same query. Sorting by
+    path and then by line is the normalization that makes the answer
+    comparable, exactly as the tree root and the scratchpad are normalized
+    below, and the Rust side sorts the same way. The match *set* is still
+    compared byte for byte.
+    """
+
+    if tool != "grep":
+        return typed
+    stabilized = dict(typed)
+    stabilized["matches"] = "\n".join(
+        sorted(typed["matches"].splitlines(), key=_match_order)
+    )
+    return stabilized
 
 
 async def capture(tree_source: Path) -> list[dict[str, Any]]:

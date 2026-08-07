@@ -8293,8 +8293,8 @@ tool_timeout_sec = 2
                 .invoke_tool("session-1", "read_file", invocation())
                 .await
                 .expect("the declared budget carries this file")
-                .model_text,
-            "1|safe"
+                .typed_result["content"],
+            "        1\u{2192}safe"
         );
 
         // No re-registration: the same published surface, a moved budget.
@@ -8355,8 +8355,8 @@ tool_timeout_sec = 2
                 .invoke_tool("session-1", "read_file", invocation())
                 .await
                 .expect("trusted read")
-                .model_text,
-            "1|safe"
+                .typed_result["content"],
+            "        1\u{2192}safe"
         );
 
         connection.dispatch(&request(
