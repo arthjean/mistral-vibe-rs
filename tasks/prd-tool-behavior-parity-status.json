@@ -33,10 +33,10 @@
     {
       "id": "EP-033",
       "title": "Conformant Shell Policy",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3
     },
     {
       "id": "EP-034",
@@ -196,44 +196,44 @@
       "id": "US-109",
       "title": "Extract shell commands with the reference grammar",
       "epic": "EP-033",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-102"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-110",
       "title": "Replace the hardcoded policy with the four configurable lists",
       "epic": "EP-033",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-109",
         "US-106"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-111",
       "title": "Collect path operands that leave the working directory",
       "epic": "EP-033",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-110"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-112",

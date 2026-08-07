@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Guard shell commands the way the Python client guards them. Commands are now
+  extracted with the same bash grammar, so `python3 <<'EOF'` with a body is
+  recognized as a heredoc instead of being refused as a bare interpreter, and
+  each segment of a chain is judged on its own. The policy comes from the four
+  configurable lists rather than from a hardcoded table: nothing is refused
+  outright unless a denylist entry matches it, so `rm -rf build/`, `dd`, `mkfs`,
+  `shutdown`, `eval` and `git reset --hard` now reach an approval prompt instead
+  of a flat refusal, while `vim`, `nano`, `emacs`, `tmux`, `screen`, `gdb`,
+  `passwd` and a bare `bash`, `sh`, `python3` or `su` are refused as they are
+  upstream. Emptying the allowlist asks once per segment rather than making the
+  tool unusable.
+- Ask before a shell command reads or writes outside the workspace. The path
+  operands of every command the reference inspects are resolved against the
+  working directory, with `~` expanded and `..` folded first, so `grep secret
+  /etc/passwd`, `cat ~/.ssh/id_rsa` and `cat ../elsewhere/secret.txt` raise an
+  outside-directory approval naming the directory they reach, while the session
+  scratchpad, an ascent that lands back inside and a file the call is about to
+  create inside the workspace raise nothing. Two operands in one directory are
+  one approval. A `find` asked to run a program is approved under the whole
+  segment, whatever the allowlist says about `find`.
 - Speak the permission vocabulary the Python client speaks. An approval request
   now names one of the four reference scopes, `command_pattern`,
   `outside_directory`, `file_pattern` and `url_pattern`, and carries the

@@ -502,10 +502,20 @@ be recognized so that the call is not refused as a bare standalone `python3`.
 **Size:** M (3 pts)
 **Dependencies:** Blocked by US-102
 
+> **Corrected 2026-08-07 by measurement.** The third criterion below named the
+> wrong case. `python3 << 'EOF'` with no body parses to a bare `command` node
+> with no `redirected_statement` parent, so the reference extracts it as
+> `python3` and refuses it on the standalone denylist. The redirect marker
+> appears only once the heredoc carries a body, which is the shape an operator
+> actually sends. The capture in `crates/vibe-core/tests/shell-policy/policy.json`
+> records both forms: `python3 << 'EOF'` resolves to `never` upstream and
+> `python3 <<'EOF'\nprint(1)\nEOF` to `ask` under the pattern `python3 *`. The
+> criterion below is the measured one.
+
 **Acceptance Criteria:**
 - [ ] Given a shell command, when it is parsed, then each `command` node yields its command name, words, strings, raw strings and concatenations joined by single spaces, matching the reference extraction
 - [ ] Given a command whose node has a `redirected_statement` parent, when it is extracted, then a redirect marker is appended so it is no longer a bare standalone command
-- [ ] Given `python3 << 'EOF'`, when policy is resolved, then it is not refused by the standalone denylist
+- [ ] Given a heredoc carrying a body, when policy is resolved, then the command under it is not refused by the standalone denylist
 - [ ] Given a chain joined by `&&`, `||`, `;` or a pipe, when it is parsed, then each segment is extracted separately so approving one does not approve the rest
 - [ ] Given a command the grammar cannot parse, when it is extracted, then the result is empty and the caller falls back to asking rather than to allowing
 - [ ] Given the parser, when it is constructed, then it is built once and reused, and parsing a 64 KB command completes in under 100 ms
@@ -519,11 +529,23 @@ guards, and nothing else.
 **Size:** L (5 pts)
 **Dependencies:** Blocked by US-109, US-106
 
+> **Corrected 2026-08-07 by measurement.** Three statements below were derived by
+> reading. The capture in `crates/vibe-core/tests/shell-policy/policy.json` and
+> the one in `crates/vibe-core/tests/tool-config/defaults.json` refute all three.
+> The POSIX `denylist` holds **14** entries, 3 shared plus 11 POSIX-specific, and
+> `denylist_standalone` holds **11**, 3 shared plus 8 POSIX-specific; the counts
+> of 13 and 8 read only the branch-specific half. The denylist matches the
+> **full command text only**, never a basename: `/usr/bin/vim notes.txt` resolves
+> to `ask` upstream, because basename matching belongs to the standalone rule and
+> to it alone. And the loosening set is **six**, not five: `git reset --hard` is
+> on no reference denylist either, so it joins the list. The criteria below are
+> the measured ones.
+
 **Acceptance Criteria:**
-- [ ] Given the four lists, when their defaults are compared to the reference, then `allowlist` holds the 7 common entries plus the 37 POSIX read-only commands, `denylist` the 13 POSIX entries, `denylist_standalone` the 8 POSIX entries and `sensitive_patterns` the single `sudo` entry, with 0 divergence
-- [ ] Given a command matching a denylist entry by full command or by basename, when policy is resolved, then it is refused with a reason naming the offending segment and the matched pattern
+- [ ] Given the four lists, when their defaults are compared to the reference, then `allowlist` holds the 7 common entries plus the 37 POSIX read-only commands, `denylist` its 14 POSIX entries, `denylist_standalone` its 11 POSIX entries and `sensitive_patterns` the single `sudo` entry, with 0 divergence
+- [ ] Given a command whose text matches a denylist entry as its whole text or as its first words, when policy is resolved, then it is refused with a reason naming the offending segment and the matched pattern
 - [ ] Given a single-token command whose basename is on the standalone denylist, when policy is resolved, then it is refused; given the same command with arguments, then it is not refused by that rule
-- [ ] Given `rm -rf build/`, `dd`, `mkfs`, `shutdown` or `eval`, when policy is resolved, then the call reaches an approval prompt rather than an outright refusal, and a named regression test records each of these five loosenings
+- [ ] Given `rm -rf build/`, `dd`, `mkfs`, `shutdown`, `eval` or `git reset --hard`, when policy is resolved, then the call reaches an approval prompt rather than an outright refusal, and a named regression test records each of these six loosenings
 - [ ] Given a command whose first token is on `sensitive_patterns`, when policy is resolved, then it always produces a requirement even when the configured permission is always, and it is never covered by an allowlist match
 - [ ] Given `find` with `-exec`, `-execdir`, `-ok` or `-okdir`, when policy is resolved, then a `command_pattern` requirement carrying the whole segment is produced, deduplicated across repeated identical segments
 - [ ] Given an operator who set the allowlist to the empty list, when any command runs, then every segment produces a requirement rather than the tool becoming unusable
