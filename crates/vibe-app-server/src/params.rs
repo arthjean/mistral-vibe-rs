@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 /// The largest string the boundary accepts for a single parameter.
 pub(crate) const MAX_PARAM_STRING_BYTES: usize = 65_536;
@@ -61,16 +61,6 @@ pub(crate) fn required_bool(
         .get(key)
         .and_then(Value::as_bool)
         .ok_or_else(|| ParamError(format!("{key} must be a boolean")))
-}
-
-pub(crate) fn required_object<'a>(
-    params: &'a BTreeMap<String, Value>,
-    key: &str,
-) -> Result<&'a Map<String, Value>, ParamError> {
-    params
-        .get(key)
-        .and_then(Value::as_object)
-        .ok_or_else(|| ParamError(format!("{key} must be an object")))
 }
 
 pub(crate) fn optional_u64(

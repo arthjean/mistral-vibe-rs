@@ -43,6 +43,7 @@ mod lines;
 mod matcher;
 mod models;
 mod recorder;
+mod review;
 
 pub use checkpointer::Checkpointer;
 pub use files::{CheckpointFiles, FileAccessError, FileStore, RestoreOutcome};
@@ -54,6 +55,11 @@ pub use models::{
     Region, RegionId, TurnRegion,
 };
 pub use recorder::{CheckpointRecorder, RecorderError};
+pub use review::{
+    OpaqueReviewRegion, ReviewError, ReviewFile, ReviewFileStatus, ReviewHunk, ReviewRegion,
+    ReviewScope, ReviewScopeFile, ReviewState, ReviewTarget, TextReviewRegion, TurnFileDiff,
+    decide_target, project_scope_diff, project_state, state_text,
+};
 
 #[cfg(test)]
 mod checkpoint_parity_tests;
@@ -71,3 +77,5 @@ mod matcher_tests;
 mod models_tests;
 #[cfg(test)]
 mod recorder_tests;
+#[cfg(test)]
+mod review_tests;

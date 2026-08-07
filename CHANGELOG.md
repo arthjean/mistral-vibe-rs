@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Review what the agent actually changed. The six `review/*` methods now answer
+  from the session's checkpoint engine instead of from a stub production never
+  wrote to, so `review/state` lists the real changed files with a hunk per
+  change, each carrying the turn or the hand edit that produced it, the earlier
+  hunks it was built on and the decision in force. All seven decision
+  granularities are honored, from one hunk to every file, `review/turnDiff`
+  answers the owner it is asked about, and `review/hunks` locates each pending
+  change in the rendered diff so an inline control can be pinned to it. An
+  approval leaves disk alone, a revert is written back immediately, and a write
+  that does not land rolls the decision back rather than recording a decision
+  against a file that did not change.
 - Run a managed shell session under a real terminal. A program that checks
   whether it is attached to one now finds it is, a control key sent through
   `<family>_stdin` reaches the foreground program instead of landing in a pipe,

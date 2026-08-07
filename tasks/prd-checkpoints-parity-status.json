@@ -36,10 +36,10 @@
     {
       "id": "EP-039",
       "title": "The Review Surface on the Real Engine",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0,
+      "stories_done": 3,
       "stories_in_review": 0
     },
     {
@@ -255,43 +255,43 @@
       "id": "US-133",
       "title": "Project review state from the engine and delete the stub",
       "epic": "EP-039",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-132"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-134",
       "title": "Honor the seven review targets with atomic persistence",
       "epic": "EP-039",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-133"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-135",
       "title": "Answer baseline, turn diff and hunks with owner scoping",
       "epic": "EP-039",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-133"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-07",
+      "completed_at": "2026-08-07",
+      "reviewed_at": "2026-08-07"
     },
     {
       "id": "US-136",

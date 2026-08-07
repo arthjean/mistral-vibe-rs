@@ -110,7 +110,29 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
             "projectLinks/inspectRoot",
             json!({"rootPath": "/workspace"}),
         ),
+        // The four review reads. A bare probe session has tracked no file, so
+        // each answers its empty shape, which is the shape the census is read
+        // for. The path they name is deliberately one no workspace carries, so
+        // the probe reads nothing of the operator's own. The two mutations are
+        // not probed: `EmptyResponse` declares no field, and the surface test
+        // that drives a real engine asserts the empty object they answer.
         ("review/state", session.clone()),
+        (
+            "review/baseline",
+            json!({"sessionId": PROBE_SESSION, "path": "probe-untracked.txt"}),
+        ),
+        (
+            "review/hunks",
+            json!({"sessionId": PROBE_SESSION, "path": "probe-untracked.txt"}),
+        ),
+        (
+            "review/turnDiff",
+            json!({
+                "sessionId": PROBE_SESSION,
+                "path": "probe-untracked.txt",
+                "owner": {"kind": "agent", "turnId": 0}
+            }),
+        ),
         ("runtime/read", session.clone()),
         ("session/list", json!({})),
         ("session/read", session.clone()),

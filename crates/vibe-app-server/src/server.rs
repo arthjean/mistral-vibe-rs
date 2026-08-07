@@ -7,6 +7,7 @@ mod batch;
 mod callbacks;
 mod projection;
 mod registry;
+mod review;
 mod session_management;
 
 use batch::*;
@@ -3649,6 +3650,34 @@ impl ServerConnection {
                 .is_some_and(|session| session.active_turn.is_some()),
             Err(error) => return internal_error_batch(request.id, &error),
         };
+        // The review surface is composed here for the same reason the live-state
+        // reads are: all six of its methods answer from the session's checkpoint
+        // engine, and the resource service holds no session.
+        if review::is_review_method(&request.method) {
+            let review = match self.server.lock_sessions() {
+                Ok(sessions) => sessions
+                    .get(&session_id)
+                    .and_then(|session| session.review.clone()),
+                Err(error) => return internal_error_batch(request.id, &error),
+            };
+            let result = review::dispatch(
+                &request.method,
+                &request.params,
+                review.as_deref(),
+                session_active,
+            )
+            .map(|result| ResourceDispatch {
+                result,
+                signals: ResourceSignals::default(),
+            });
+            return resource_result_batch(
+                request.id,
+                &self.server,
+                &session_id,
+                &request.method,
+                result,
+            );
+        }
         if BACKEND_RESOURCE_METHODS.contains(&request.method.as_str())
             && self.server.resource_backend.is_some()
         {
@@ -6424,6 +6453,233 @@ mod tests {
             vec!["source-session"]
         );
         assert!(server.session("source-session").is_ok());
+    }
+
+    /// The six review methods, end to end over a real connection, against the
+    /// engine the turn boundaries drive. This is the whole point of the epic:
+    /// the panel used to be answered from a map production never wrote to, so
+    /// `review/state` published an empty file list in every session and the
+    /// other five answered `NotFound` for every path.
+    #[test]
+    fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
+        let temporary = tempfile::tempdir().expect("review surface stores");
+        let session_root = temporary.path().join("sessions");
+        let working_directory = temporary.path().join("workspace");
+        fs::create_dir_all(&working_directory).expect("workspace");
+        fs::write(working_directory.join("main.txt"), "one\n").expect("workspace fixture");
+        let store = vibe_core::storage::SessionStore::new(&session_root);
+        store
+            .create(
+                "review-session",
+                &working_directory.to_string_lossy(),
+                None,
+                1,
+            )
+            .expect("source session");
+        let release3 =
+            Release3Service::for_runtime_session_root(session_root, working_directory.clone());
+        let server = AppServer::with_release3_service(release3);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({"sessionId": "review-session", "resume": "review-session"}),
+        ));
+        let review = server
+            .lock_sessions()
+            .expect("runtime sessions")
+            .get("review-session")
+            .and_then(|session| session.review.clone())
+            .expect("review manager");
+        review.begin_turn_at("turn-1", 1).expect("begin turn");
+        review
+            .edit(
+                "main.txt",
+                &[vibe_core::workspace::EditOperation {
+                    old_text: "one\n".to_owned(),
+                    new_text: "one\ntwo\n".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("edit");
+        review.seal_turn().expect("seal turn");
+
+        let answer = |connection: &mut ServerConnection, id: i64, method: &str, params: Value| {
+            let batch = connection.dispatch(&request(id, method, params));
+            match decode_frame(&batch.outbound[0]).expect("an answer") {
+                Envelope::Success(SuccessResponse { result, .. }) => result,
+                other => unreachable!("{method} did not answer: {other:?}"),
+            }
+        };
+        let session = json!({"sessionId": "review-session"});
+
+        let state = answer(&mut connection, 3, "review/state", session.clone());
+        let files = state["files"].as_array().expect("a file list");
+        assert_eq!(files.len(), 1, "the turn's change is reviewable: {state:?}");
+        assert_eq!(files[0]["path"], "main.txt");
+        assert_eq!(files[0]["status"], "modified");
+        let region = &files[0]["regions"][0];
+        assert_eq!(region["kind"], "text");
+        assert_eq!(region["owner"], json!({"kind": "agent", "turnId": 1}));
+        assert_eq!(region["decision"], "pending");
+        assert_eq!(region["dependsOn"], json!([]));
+        assert_eq!(
+            state["scopes"][0]["owner"],
+            json!({"kind": "agent", "turnId": 1}),
+            "the turn keeps its own review slot"
+        );
+        assert_eq!(state["scopes"][0]["files"][0]["regionCount"], 1);
+
+        let baseline = answer(
+            &mut connection,
+            4,
+            "review/baseline",
+            json!({"sessionId": "review-session", "path": "main.txt"}),
+        );
+        assert_eq!(baseline["content"], "one\n");
+
+        let hunks = answer(
+            &mut connection,
+            5,
+            "review/hunks",
+            json!({"sessionId": "review-session", "path": "main.txt"}),
+        );
+        assert_eq!(hunks["hunks"].as_array().expect("anchors").len(), 1);
+        assert_eq!(hunks["hunks"][0]["side"], "additions");
+        assert_eq!(hunks["hunks"][0]["line"], 1);
+
+        let diff = answer(
+            &mut connection,
+            6,
+            "review/turnDiff",
+            json!({
+                "sessionId": "review-session",
+                "path": "main.txt",
+                "owner": {"kind": "agent", "turnId": 1}
+            }),
+        );
+        assert_eq!(diff["status"], "modified");
+        assert_eq!(diff["baseline"], "one\n");
+        assert_eq!(
+            diff["current"], "one\ntwo\n",
+            "the owner's own change is what turnDiff answers"
+        );
+
+        // The region the panel was shown is the region it sends back.
+        let target = json!({
+            "kind": "region",
+            "path": "main.txt",
+            "versionIndex": region["versionIndex"],
+            "ordinal": region["ordinal"]
+        });
+        let approved = answer(
+            &mut connection,
+            7,
+            "review/approve",
+            json!({"sessionId": "review-session", "target": target}),
+        );
+        // `EmptyResponse` declares no field, so an empty object is exactly what
+        // the census requires of both mutations. They are asserted here rather
+        // than in the surface probe, which only calls read-only methods.
+        assert!(
+            approved.is_empty(),
+            "an approval answers nothing: {approved:?}"
+        );
+        assert_eq!(
+            fs::read_to_string(working_directory.join("main.txt")).expect("read"),
+            "one\ntwo\n",
+            "an approval leaves disk alone"
+        );
+        let resolved = answer(&mut connection, 8, "review/state", session.clone());
+        assert_eq!(
+            resolved["files"].as_array().expect("a file list").len(),
+            0,
+            "the file is resolved once its one region is decided"
+        );
+        assert_eq!(
+            answer(
+                &mut connection,
+                9,
+                "review/baseline",
+                json!({"sessionId": "review-session", "path": "main.txt"})
+            )["content"],
+            "one\ntwo\n",
+            "the accepted baseline now carries the kept region"
+        );
+
+        // A second turn, reverted whole, is written back to disk.
+        review.begin_turn_at("turn-2", 2).expect("begin turn");
+        review
+            .edit(
+                "main.txt",
+                &[vibe_core::workspace::EditOperation {
+                    old_text: "two\n".to_owned(),
+                    new_text: "two\nthree\n".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("edit");
+        review.seal_turn().expect("seal turn");
+        let reverted = answer(
+            &mut connection,
+            10,
+            "review/revert",
+            json!({
+                "sessionId": "review-session",
+                "target": {"kind": "scope", "owner": {"kind": "agent", "turnId": 2}}
+            }),
+        );
+        assert!(reverted.is_empty());
+        assert_eq!(
+            fs::read_to_string(working_directory.join("main.txt")).expect("read"),
+            "one\ntwo\n",
+            "a revert is persisted immediately"
+        );
+
+        // What the engine refuses is `invalid_params`, which is the code the
+        // reference answers a review failure with.
+        let refused = connection.dispatch(&request(
+            11,
+            "review/approve",
+            json!({
+                "sessionId": "review-session",
+                "target": {
+                    "kind": "region",
+                    "path": "main.txt",
+                    "versionIndex": 99,
+                    "ordinal": 4
+                }
+            }),
+        ));
+        assert!(
+            matches!(
+                decode_frame(&refused.outbound[0]).expect("a refusal"),
+                Envelope::Error(ErrorResponse {
+                    error: ProtocolError {
+                        code: ProtocolErrorCode::InvalidParams,
+                        ..
+                    },
+                    ..
+                })
+            ),
+            "a region the file does not carry is refused"
+        );
+        let malformed = connection.dispatch(&request(
+            12,
+            "review/revert",
+            json!({"sessionId": "review-session", "target": {"kind": "nonsense"}}),
+        ));
+        assert!(matches!(
+            decode_frame(&malformed.outbound[0]).expect("a rejection"),
+            Envelope::Error(ErrorResponse {
+                error: ProtocolError {
+                    code: ProtocolErrorCode::InvalidParams,
+                    ..
+                },
+                ..
+            })
+        ));
     }
 
     #[test]

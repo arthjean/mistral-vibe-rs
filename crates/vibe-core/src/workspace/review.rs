@@ -7,7 +7,9 @@ use super::{
     path_display, text_file, unified_diff,
 };
 use crate::checkpoints::{
-    CheckpointFiles, CheckpointRecorder, Checkpointer, FileAccessError, FileState, FileStore,
+    CheckpointFiles, CheckpointRecorder, Checkpointer, Decision, FileAccessError, FileState,
+    FileStore, Owner, ReviewError, ReviewHunk as AnchoredHunk, ReviewState, ReviewTarget,
+    TurnFileDiff, decide_target, project_scope_diff, project_state, state_text,
 };
 
 /// Applies one edit's operations to the text it was written against.
@@ -63,7 +65,7 @@ struct StoredCheckpoint {
 }
 
 #[derive(Default)]
-struct ReviewState {
+struct SnapshotState {
     active_turn: Option<ActiveReviewTurn>,
     baseline: BTreeMap<PathBuf, Option<Vec<u8>>>,
     checkpoints: VecDeque<StoredCheckpoint>,
@@ -135,7 +137,7 @@ impl CheckpointFiles for WorkspaceFiles {
 
 pub struct ReviewManager {
     workspace: Arc<Workspace>,
-    state: Mutex<ReviewState>,
+    state: Mutex<SnapshotState>,
     /// The checkpoint engine's log, driven by the same turn boundaries as the
     /// snapshot state beside it. The two are captured together because they
     /// answer different questions: the snapshots answer what to restore on a
@@ -153,7 +155,7 @@ impl ReviewManager {
                 workspace: workspace.clone(),
             })),
             workspace,
-            state: Mutex::new(ReviewState::default()),
+            state: Mutex::new(SnapshotState::default()),
             log: Mutex::new(Checkpointer::new()),
         }
     }
@@ -170,6 +172,176 @@ impl ReviewManager {
         let mut log = self.log.lock().map_err(|_| WorkspaceError::LockPoisoned {
             surface: "checkpoint log",
         })?;
+        Ok(body(&mut log))
+    }
+
+    // -- The review surface ---------------------------------------------------
+    //
+    // Six answers over one log. Every one of them reads disk before it reads the
+    // log, because a hand edit made since the last look is a change the log does
+    // not carry yet, and projecting or deciding without folding it in would
+    // attribute it to whichever turn touched the file next. The reference draws
+    // the same boundary in `vibe/core/review/manager.py`: rendering and deciding
+    // are both acting boundaries.
+
+    /// Every file with something left to review, and every owner's slot.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a tracked path exists but cannot be read, and when another
+    /// thread poisoned the log.
+    pub fn review_state(&self) -> Result<ReviewState, ReviewError> {
+        let tracked = self.with_review_log(|log| log.history().tracked_paths())?;
+        let current = self.read_states(&tracked)?;
+        self.with_review_log(|log| {
+            for (path, state) in &current {
+                log.reconcile(path, state.clone());
+            }
+            project_state(&log.history(), &current)
+        })
+    }
+
+    /// Accepts what `target` names into the accepted baseline, answering the
+    /// paths it touched.
+    ///
+    /// Disk is left alone: approved content is what already sits there.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the log refuses the decision and when a path cannot be read.
+    pub fn approve_review(&self, target: &ReviewTarget) -> Result<Vec<String>, ReviewError> {
+        self.decide_review(target, Decision::Keep)
+    }
+
+    /// Rolls back what `target` names, writing each affected file, and answers
+    /// the paths it touched.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the log refuses the decision, when a path cannot be read, and
+    /// when a write does not land, in which case the log is rolled back so the
+    /// decision is never committed against a file that did not change.
+    pub fn revert_review(&self, target: &ReviewTarget) -> Result<Vec<String>, ReviewError> {
+        self.decide_review(target, Decision::Revert)
+    }
+
+    /// The decoded text of the accepted baseline of `path`: its kept regions
+    /// and nothing else.
+    ///
+    /// A path with no kept region answers its original text, and a baseline that
+    /// is absent answers an empty string, which is what a panel renders as an
+    /// empty left-hand side.
+    ///
+    /// # Errors
+    ///
+    /// Fails when another thread poisoned the log. The file is not read: the
+    /// baseline is the log's answer, not disk's.
+    pub fn baseline_text(&self, path: &str) -> Result<String, ReviewError> {
+        self.with_review_log(|log| state_text(&log.history().accepted_baseline(path)))
+    }
+
+    /// One owner's own change to `path`: its kept regions against its kept plus
+    /// pending ones.
+    ///
+    /// # Errors
+    ///
+    /// Fails when another thread poisoned the log.
+    pub fn scope_file_diff(&self, path: &str, owner: Owner) -> Result<TurnFileDiff, ReviewError> {
+        self.with_review_log(|log| project_scope_diff(&log.history(), path, owner))
+    }
+
+    /// Every pending change of `path`, located in a rendered diff.
+    ///
+    /// With no owner the diff is the accepted baseline against what belongs on
+    /// disk, which is what a whole-file panel renders; with one it is that
+    /// owner's own scope diff.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the path exists but cannot be read, and when another thread
+    /// poisoned the log.
+    pub fn file_hunks(
+        &self,
+        path: &str,
+        owner: Option<Owner>,
+    ) -> Result<Vec<AnchoredHunk>, ReviewError> {
+        let current = self.recorder.files().read(path)?;
+        self.with_review_log(|log| {
+            log.reconcile(path, current);
+            log.history()
+                .pending_hunks(path, owner)
+                .into_iter()
+                .map(|anchor| AnchoredHunk {
+                    side: anchor.side,
+                    line: anchor.line,
+                    regions: anchor.regions,
+                })
+                .collect()
+        })
+    }
+
+    /// Reconciles, decides and persists, with the log rolled back when a write
+    /// fails.
+    fn decide_review(
+        &self,
+        target: &ReviewTarget,
+        decision: Decision,
+    ) -> Result<Vec<String>, ReviewError> {
+        let tracked = self.with_review_log(|log| log.history().tracked_paths())?;
+        let current = self.read_states(&tracked)?;
+        self.with_review_log(|log| {
+            for (path, state) in &current {
+                log.reconcile(path, state.clone());
+            }
+            log.atomic(|log| {
+                let mut affected: Vec<String> = Vec::new();
+                for path in decide_target(log, target, decision)? {
+                    if !affected.contains(&path) {
+                        affected.push(path);
+                    }
+                }
+                for path in &affected {
+                    self.persist(log, path)?;
+                }
+                Ok(affected)
+            })
+        })?
+    }
+
+    /// Writes `path` to what the log now projects, unless disk already holds it.
+    fn persist(&self, log: &Checkpointer, path: &str) -> Result<(), ReviewError> {
+        let files = self.recorder.files();
+        let current = files.read(path)?;
+        let content = log.history().content(path);
+        if content == current {
+            return Ok(());
+        }
+        match files
+            .apply(&[(path.to_owned(), content)])
+            .errors
+            .into_iter()
+            .next()
+        {
+            Some(error) => Err(ReviewError::File(error)),
+            None => Ok(()),
+        }
+    }
+
+    /// What every path of `paths` holds now.
+    fn read_states(&self, paths: &[String]) -> Result<BTreeMap<String, FileState>, ReviewError> {
+        let files = self.recorder.files();
+        paths
+            .iter()
+            .map(|path| Ok((path.clone(), files.read(path)?)))
+            .collect()
+    }
+
+    /// Runs `body` against the log, in the review surface's error vocabulary.
+    fn with_review_log<T>(
+        &self,
+        body: impl FnOnce(&mut Checkpointer) -> T,
+    ) -> Result<T, ReviewError> {
+        let mut log = self.log.lock().map_err(|_| ReviewError::LockPoisoned)?;
         Ok(body(&mut log))
     }
 
@@ -346,7 +518,7 @@ impl ReviewManager {
         })?;
         Ok(Self {
             workspace: self.workspace.clone(),
-            state: Mutex::new(ReviewState {
+            state: Mutex::new(SnapshotState {
                 active_turn: None,
                 baseline: state.baseline.clone(),
                 checkpoints,
@@ -442,7 +614,7 @@ impl ReviewManager {
         Ok(())
     }
 
-    fn lock_state(&self) -> Result<std::sync::MutexGuard<'_, ReviewState>, WorkspaceError> {
+    fn lock_state(&self) -> Result<std::sync::MutexGuard<'_, SnapshotState>, WorkspaceError> {
         self.state
             .lock()
             .map_err(|_| WorkspaceError::LockPoisoned { surface: "review" })
@@ -478,13 +650,13 @@ impl Drop for RestoreTransaction {
     }
 }
 
-fn clear_review(state: &mut ReviewState) {
+fn clear_review(state: &mut SnapshotState) {
     state.baseline.clear();
     state.checkpoints.clear();
     state.checkpoint_bytes = 0;
 }
 
-fn trim_checkpoints(state: &mut ReviewState) {
+fn trim_checkpoints(state: &mut SnapshotState) {
     while state.checkpoints.len() > MAX_REWIND_CHECKPOINTS
         || state.checkpoint_bytes > MAX_REWIND_SNAPSHOT_BYTES
     {
@@ -618,6 +790,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+    use crate::checkpoints::{HunkSide, ReviewFileStatus};
 
     #[test]
     fn checkpoint_retention_is_bounded() {
@@ -776,5 +949,280 @@ mod tests {
             })
             .expect("log");
         assert_eq!(turns, vec![1]);
+    }
+
+    // -- The review surface ---------------------------------------------------
+
+    /// A manager over a fresh workspace holding `seed` at `main.txt`.
+    fn seeded(root: &std::path::Path, seed: &str) -> ReviewManager {
+        std::fs::write(root.join("main.txt"), seed).expect("seed file");
+        ReviewManager::new(Arc::new(Workspace::open(root).expect("open")))
+    }
+
+    /// One turn replacing `from` with `to` in `main.txt`.
+    fn edited_turn(review: &ReviewManager, message_index: usize, from: &str, to: &str) {
+        review
+            .begin_turn_at(format!("turn-{message_index}"), message_index)
+            .expect("begin turn");
+        review
+            .edit(
+                "main.txt",
+                &[EditOperation {
+                    old_text: from.to_owned(),
+                    new_text: to.to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("edit");
+        review.seal_turn().expect("seal turn");
+    }
+
+    #[test]
+    fn the_review_surface_lists_the_file_a_turn_changed_with_its_regions() {
+        let root = tempdir().expect("workspace");
+        let review = seeded(root.path(), "one\n");
+        edited_turn(&review, 1, "one\n", "one\ntwo\n");
+
+        let state = review.review_state().expect("review state");
+        assert_eq!(state.files.len(), 1);
+        assert_eq!(state.files[0].path, "main.txt");
+        assert_eq!(state.files[0].status, ReviewFileStatus::Modified);
+        assert_eq!(state.files[0].regions.len(), 1);
+        assert_eq!(
+            state.files[0].regions[0].owner(),
+            Owner::Agent { turn_id: 1 }
+        );
+        assert_eq!(state.files[0].regions[0].decision(), Decision::Pending);
+        assert_eq!(
+            state
+                .scopes
+                .iter()
+                .map(|scope| scope.owner)
+                .collect::<Vec<_>>(),
+            vec![Owner::Agent { turn_id: 1 }]
+        );
+        assert_eq!(state.scopes[0].files[0].region_count, 1);
+    }
+
+    /// Rendering is an acting boundary. A hand edit made between two turns is
+    /// captured when the panel is projected, in its own slot, rather than being
+    /// absorbed into whichever turn touches the file next.
+    #[test]
+    fn rendering_reconciles_a_hand_edit_into_its_own_slot() {
+        let root = tempdir().expect("workspace");
+        let review = seeded(root.path(), "one\n");
+        edited_turn(&review, 1, "one\n", "one\ntwo\n");
+        std::fs::write(root.path().join("main.txt"), "one\ntwo\nby hand\n").expect("hand edit");
+
+        let state = review.review_state().expect("review state");
+        assert_eq!(
+            state
+                .scopes
+                .iter()
+                .map(|scope| scope.owner)
+                .collect::<Vec<_>>(),
+            vec![Owner::Agent { turn_id: 1 }, Owner::Manual { index: 1 }]
+        );
+        let again = review.review_state().expect("second render");
+        assert_eq!(
+            again.scopes.len(),
+            2,
+            "reconciliation is idempotent, so a second render adds no slot"
+        );
+    }
+
+    #[test]
+    fn approving_leaves_disk_alone_and_reverting_writes_the_file_back() {
+        let root = tempdir().expect("workspace");
+        let review = seeded(root.path(), "one\n");
+        edited_turn(&review, 1, "one\n", "one\ntwo\n");
+
+        let approved = review
+            .approve_review(&ReviewTarget::File {
+                path: "main.txt".to_owned(),
+            })
+            .expect("approve");
+        assert_eq!(approved, vec!["main.txt"]);
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("main.txt")).expect("read"),
+            "one\ntwo\n",
+            "approved content already sits on disk"
+        );
+        assert!(
+            review.review_state().expect("state").files.is_empty(),
+            "an approved file has nothing left to review"
+        );
+
+        let second = tempdir().expect("workspace");
+        let review = seeded(second.path(), "one\n");
+        edited_turn(&review, 1, "one\n", "one\ntwo\n");
+        let reverted = review
+            .revert_review(&ReviewTarget::File {
+                path: "main.txt".to_owned(),
+            })
+            .expect("revert");
+        assert_eq!(reverted, vec!["main.txt"]);
+        assert_eq!(
+            std::fs::read_to_string(second.path().join("main.txt")).expect("read"),
+            "one\n",
+            "a revert is persisted immediately"
+        );
+    }
+
+    /// Deciding is an acting boundary too. A hand edit made since the last look
+    /// is sealed into its own slot before the decision lands, so reverting the
+    /// turn the operator was reviewing does not take their work with it.
+    #[test]
+    fn deciding_reconciles_a_hand_edit_before_the_decision_lands() {
+        let root = tempdir().expect("workspace");
+        let review = seeded(root.path(), "one\ntail\n");
+        edited_turn(&review, 1, "one\n", "one\ntwo\n");
+        // A hand edit nowhere near the turn's line, so nothing drags it.
+        std::fs::write(root.path().join("main.txt"), "one\ntwo\ntail\nby hand\n")
+            .expect("hand edit");
+
+        review
+            .revert_review(&ReviewTarget::Scope {
+                owner: Owner::Agent { turn_id: 1 },
+            })
+            .expect("revert the turn");
+
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("main.txt")).expect("read"),
+            "one\ntail\nby hand\n",
+            "the turn's line is gone and the hand edit is still there"
+        );
+        let state = review.review_state().expect("review state");
+        assert_eq!(
+            state
+                .scopes
+                .iter()
+                .map(|scope| scope.owner)
+                .collect::<Vec<_>>(),
+            vec![Owner::Agent { turn_id: 1 }, Owner::Manual { index: 1 }],
+            "the hand edit kept its own slot rather than being reverted with the turn"
+        );
+    }
+
+    /// Anchoring is an acting boundary for the same reason: the whole-file
+    /// anchors have to line up with the content the panel renders, which is
+    /// disk, so a drift is folded in before the diff is taken.
+    #[test]
+    fn anchoring_reconciles_before_it_locates_the_pending_hunks() {
+        let root = tempdir().expect("workspace");
+        let review = seeded(root.path(), "one\n");
+        edited_turn(&review, 1, "one\n", "one\ntwo\n");
+        std::fs::write(root.path().join("main.txt"), "one\ntwo\nby hand\n").expect("hand edit");
+
+        let hunks = review.file_hunks("main.txt", None).expect("hunks");
+        assert_eq!(
+            hunks.len(),
+            1,
+            "the turn's line and the hand edit render as one adjacent block"
+        );
+        assert_eq!(hunks[0].side, HunkSide::Additions);
+        assert_eq!(
+            hunks[0].line, 2,
+            "the anchor sits on the last line of the rendered block, the hand edit's"
+        );
+        assert_eq!(
+            hunks[0].regions.len(),
+            2,
+            "a control there decides the turn's hunk and the hand edit together"
+        );
+    }
+
+    /// A decision is durable only once what it implies on disk has landed. When
+    /// the write fails the log goes back to what it was, so the surface never
+    /// reports a region decided against a file that did not change.
+    #[cfg(unix)]
+    #[test]
+    fn a_write_that_does_not_land_rolls_the_decision_back() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempdir().expect("workspace");
+        std::fs::create_dir(root.path().join("locked")).expect("locked directory");
+        std::fs::write(root.path().join("locked/main.txt"), "one\n").expect("seed file");
+        let review = ReviewManager::new(Arc::new(Workspace::open(root.path()).expect("open")));
+        review.begin_turn_at("turn-1", 1).expect("begin turn");
+        review
+            .edit(
+                "locked/main.txt",
+                &[EditOperation {
+                    old_text: "one\n".to_owned(),
+                    new_text: "one\ntwo\n".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("edit");
+        review.seal_turn().expect("seal turn");
+
+        let locked = root.path().join("locked");
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555))
+            .expect("seal the directory");
+        let failure = review.revert_review(&ReviewTarget::File {
+            path: "locked/main.txt".to_owned(),
+        });
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755))
+            .expect("reopen the directory");
+
+        assert!(
+            matches!(failure, Err(ReviewError::File(_))),
+            "the write failure is reported: {failure:?}"
+        );
+        let state = review.review_state().expect("review state");
+        assert_eq!(
+            state.files.len(),
+            1,
+            "the file is still pending, so the decision did not stick"
+        );
+        assert_eq!(
+            state.files[0].regions[0].decision(),
+            Decision::Pending,
+            "the log was rolled back to before the refused decision"
+        );
+    }
+
+    #[test]
+    fn the_baseline_the_scope_diff_and_the_hunks_answer_from_the_log() {
+        let root = tempdir().expect("workspace");
+        let review = seeded(root.path(), "one\n");
+        edited_turn(&review, 1, "one\n", "one\ntwo\n");
+
+        assert_eq!(
+            review.baseline_text("main.txt").expect("baseline"),
+            "one\n",
+            "nothing is kept yet, so the accepted baseline is the original"
+        );
+        assert_eq!(
+            review.baseline_text("untracked.txt").expect("baseline"),
+            "",
+            "a path the log never saw answers empty rather than failing"
+        );
+
+        let diff = review
+            .scope_file_diff("main.txt", Owner::Agent { turn_id: 1 })
+            .expect("scope diff");
+        assert_eq!(diff.status, ReviewFileStatus::Modified);
+        assert_eq!(diff.baseline, "one\n");
+        assert_eq!(diff.current, "one\ntwo\n");
+
+        let hunks = review.file_hunks("main.txt", None).expect("hunks");
+        assert_eq!(hunks.len(), 1);
+        assert_eq!(hunks[0].side, HunkSide::Additions);
+        assert_eq!(hunks[0].line, 1);
+        assert_eq!(hunks[0].regions.len(), 1);
+
+        let scoped = review
+            .file_hunks("main.txt", Some(Owner::Agent { turn_id: 1 }))
+            .expect("scoped hunks");
+        assert_eq!(scoped, hunks, "the one turn's scope is the whole diff");
+        assert!(
+            review
+                .file_hunks("main.txt", Some(Owner::Agent { turn_id: 9 }))
+                .expect("absent owner")
+                .is_empty(),
+            "an owner with nothing pending anchors nothing"
+        );
     }
 }

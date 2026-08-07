@@ -103,7 +103,6 @@ const CONNECTOR_TRANSPORT: &str = "connector";
 const MAX_RESOURCE_RECORDS: usize = 1_024;
 const MAX_RESOURCE_SESSIONS: usize = 256;
 const MAX_FEEDBACK_ACTIONS: usize = 256;
-use crate::params::MAX_PARAM_STRING_BYTES as MAX_RESOURCE_STRING_BYTES;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResourceDispatch {
@@ -269,13 +268,11 @@ struct McpSource {
     tools: BTreeMap<String, bool>,
 }
 
-#[derive(Debug, Clone)]
-struct ReviewFile {
-    baseline: String,
-    current: String,
-    approved: bool,
-}
-
+/// The session-scoped resource state.
+///
+/// The six `review/*` methods used to be answered from a map held here. They
+/// are answered from the session's checkpoint engine now, in
+/// `crate::server::review`, so nothing about a review lives in this service.
 #[derive(Clone, Default)]
 pub struct ResourceService {
     ready: bool,
@@ -286,7 +283,6 @@ pub struct ResourceService {
     feedback_actions: Vec<String>,
     connectors: BTreeMap<String, bool>,
     mcp: BTreeMap<String, McpSource>,
-    review: BTreeMap<String, BTreeMap<String, ReviewFile>>,
     policy_stores: BTreeMap<String, PermissionStore>,
     tool_registries: BTreeMap<String, ToolRegistry>,
 }
@@ -314,18 +310,6 @@ impl ResourceService {
                 json!(self.feedback_actions.is_empty()),
             )])),
             "narration/summarize" => self.narration(params),
-            "review/approve" => self.review_mutate(params, session_active, true),
-            "review/revert" => self.review_mutate(params, session_active, false),
-            "review/state" => {
-                let session_id = required_string(params, "sessionId")?;
-                Ok(read_only([
-                    ("files", self.review_files(session_id)),
-                    ("scopes", json!([])),
-                ]))
-            }
-            "review/baseline" => self.review_baseline(params),
-            "review/hunks" => self.review_hunks(params),
-            "review/turnDiff" => self.review_turn_diff(params),
             "session/ready/read" | "session/ready/wait" => {
                 Ok(read_only([("ready", json!(self.ready))]))
             }
@@ -453,38 +437,8 @@ impl ResourceService {
         );
     }
 
-    pub fn record_review_change(
-        &mut self,
-        session_id: &str,
-        path: &str,
-        baseline: &str,
-        current: &str,
-    ) {
-        if !self.review.contains_key(session_id)
-            && self.review.len() >= MAX_RESOURCE_SESSIONS
-            && let Some(oldest) = self.review.keys().next().cloned()
-        {
-            self.review.remove(&oldest);
-        }
-        let files = self.review.entry(session_id.to_owned()).or_default();
-        if files.len() == MAX_RESOURCE_RECORDS
-            && let Some(oldest) = files.keys().next().cloned()
-        {
-            files.remove(&oldest);
-        }
-        files.insert(
-            bounded(path),
-            ReviewFile {
-                baseline: bounded_resource_string(baseline),
-                current: bounded_resource_string(current),
-                approved: false,
-            },
-        );
-    }
-
     pub fn close_session(&mut self, session_id: &str) {
         self.backend_integrations.remove(session_id);
-        self.review.remove(session_id);
         self.policy_stores.remove(session_id);
         self.tool_registries.remove(session_id);
         self.ready = !self.policy_stores.is_empty();
@@ -618,161 +572,6 @@ impl ResourceService {
             "summary",
             json!(source.chars().take(280).collect::<String>()),
         )]))
-    }
-
-    fn review_mutate(
-        &mut self,
-        params: &BTreeMap<String, Value>,
-        session_active: bool,
-        approve: bool,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        if session_active {
-            return Err(ResourceError::Conflict(
-                "review mutations require an idle session".to_owned(),
-            ));
-        }
-        let session_id = required_string(params, "sessionId")?;
-        let review = self.review.get_mut(session_id).ok_or_else(|| {
-            ResourceError::NotFound(format!(
-                "review state for session `{session_id}` was not found"
-            ))
-        })?;
-        let target = required_object(params, "target")?;
-        let kind = target
-            .get("kind")
-            .and_then(Value::as_str)
-            .ok_or_else(|| ResourceError::InvalidParams("target.kind is required".to_owned()))?;
-        match kind {
-            "all" | "lastTurns" | "scope" => {
-                for file in review.values_mut() {
-                    if approve {
-                        file.approved = true;
-                    } else {
-                        file.current.clone_from(&file.baseline);
-                        file.approved = false;
-                    }
-                }
-            }
-            "file" | "scopeFile" | "region" | "regions" => {
-                let path = target.get("path").and_then(Value::as_str).ok_or_else(|| {
-                    ResourceError::InvalidParams("target.path is required".to_owned())
-                })?;
-                let file = review.get_mut(path).ok_or_else(|| {
-                    ResourceError::NotFound(format!("review file `{path}` was not found"))
-                })?;
-                if approve {
-                    file.approved = true;
-                } else {
-                    file.current.clone_from(&file.baseline);
-                    file.approved = false;
-                }
-            }
-            _ => {
-                return Err(ResourceError::InvalidParams(
-                    "unsupported review target".to_owned(),
-                ));
-            }
-        }
-        Ok(read_only([]))
-    }
-
-    fn review_baseline(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let path = required_string(params, "path")?;
-        let session_id = required_string(params, "sessionId")?;
-        let file = self
-            .review
-            .get(session_id)
-            .and_then(|files| files.get(path))
-            .ok_or_else(|| {
-                ResourceError::NotFound(format!("review file `{path}` was not found"))
-            })?;
-        Ok(read_only([("content", json!(file.baseline))]))
-    }
-
-    fn review_hunks(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let path = required_string(params, "path")?;
-        let session_id = required_string(params, "sessionId")?;
-        let file = self
-            .review
-            .get(session_id)
-            .and_then(|files| files.get(path))
-            .ok_or_else(|| {
-                ResourceError::NotFound(format!("review file `{path}` was not found"))
-            })?;
-        let hunks = if file.baseline == file.current {
-            json!([])
-        } else {
-            json!([{
-                "side": "additions",
-                "line": 0,
-                "regions": [{"versionIndex": 0, "ordinal": 0}]
-            }])
-        };
-        Ok(read_only([("hunks", hunks)]))
-    }
-
-    fn review_turn_diff(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let path = required_string(params, "path")?;
-        let session_id = required_string(params, "sessionId")?;
-        let file = self
-            .review
-            .get(session_id)
-            .and_then(|files| files.get(path))
-            .ok_or_else(|| {
-                ResourceError::NotFound(format!("review file `{path}` was not found"))
-            })?;
-        Ok(read_only([
-            (
-                "status",
-                json!(if file.baseline.is_empty() {
-                    "created"
-                } else if file.current.is_empty() {
-                    "deleted"
-                } else {
-                    "modified"
-                }),
-            ),
-            ("baseline", json!(file.baseline)),
-            ("current", json!(file.current)),
-        ]))
-    }
-
-    fn review_files(&self, session_id: &str) -> Value {
-        Value::Array(
-            self.review
-                .get(session_id)
-                .into_iter()
-                .flat_map(|files| files.iter())
-                .filter(|(_, file)| !file.approved && file.baseline != file.current)
-                .map(|(path, file)| {
-                    json!({
-                        "path": path,
-                        "status": if file.baseline.is_empty() { "created" } else if file.current.is_empty() { "deleted" } else { "modified" },
-                        "regions": [{
-                            "kind": "text",
-                            "versionIndex": 0,
-                            "ordinal": 0,
-                            "owner": {"kind": "agent", "turnId": 0},
-                            "baselineStart": 0,
-                            "baselineLineCount": file.baseline.lines().count(),
-                            "currentStart": 0,
-                            "currentLineCount": file.current.lines().count(),
-                            "decision": "pending",
-                            "dependsOn": []
-                        }]
-                    })
-                })
-                .collect(),
-        )
     }
 
     fn trust_status(
@@ -1171,13 +970,6 @@ fn optional_string<'a>(
     params::optional_string(values, key).map_err(invalid_params)
 }
 
-fn required_object<'a>(
-    values: &'a BTreeMap<String, Value>,
-    key: &str,
-) -> Result<&'a Map<String, Value>, ResourceError> {
-    params::required_object(values, key).map_err(invalid_params)
-}
-
 fn usize_param(
     values: &BTreeMap<String, Value>,
     key: &str,
@@ -1204,14 +996,6 @@ pub enum ResourceError {
 
 fn bounded(value: &str) -> String {
     value.chars().take(2_048).collect()
-}
-
-fn bounded_resource_string(value: &str) -> String {
-    let mut end = value.len().min(MAX_RESOURCE_STRING_BYTES);
-    while !value.is_char_boundary(end) {
-        end = end.saturating_sub(1);
-    }
-    value[..end].to_owned()
 }
 
 fn policy_error(error: vibe_core::policy::PolicyError) -> ResourceError {
@@ -1447,28 +1231,29 @@ mod tests {
         );
     }
 
+    /// The stub this service used to answer the review surface from is gone,
+    /// and with it the only reason the service knew what a review was. The
+    /// methods are routed at the server against the session's engine now, so
+    /// this service has to refuse them rather than answer an empty panel.
     #[test]
-    fn review_mutation_rejects_an_active_turn_without_state_change() {
+    fn the_resource_service_no_longer_answers_the_review_surface() {
         let mut resources = ResourceService::default();
-        resources.record_review_change("s1", "src/lib.rs", "old", "new");
-        let session = params(json!({"sessionId": "s1"}));
-        let before = resources
-            .dispatch("review/state", &session, false)
-            .expect("state");
-        let error = resources
-            .dispatch(
-                "review/revert",
-                &params(json!({"sessionId": "s1", "target": {"kind": "all"}})),
-                true,
-            )
-            .expect_err("active turn rejected");
-        assert!(matches!(error, ResourceError::Conflict(_)));
-        assert_eq!(
-            resources
-                .dispatch("review/state", &session, false)
-                .expect("state"),
-            before
-        );
+        for method in [
+            "review/approve",
+            "review/baseline",
+            "review/hunks",
+            "review/revert",
+            "review/state",
+            "review/turnDiff",
+        ] {
+            let error = resources
+                .dispatch(method, &params(json!({"sessionId": "s1"})), false)
+                .expect_err("the service holds no review state");
+            assert!(
+                matches!(error, ResourceError::MethodNotFound(_)),
+                "{method} must not be answered here: {error}"
+            );
+        }
     }
 
     #[test]

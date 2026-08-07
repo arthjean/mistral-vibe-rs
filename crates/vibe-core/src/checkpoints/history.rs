@@ -590,6 +590,47 @@ impl<'a> History<'a> {
         seen
     }
 
+    /// Every turn identifier the log carries, in mark order.
+    ///
+    /// A reset can leave two marks carrying the same identifier, so this is a
+    /// list rather than a set: it is the turn sequence a "last N turns" control
+    /// counts back through, and dropping a repeat would make it count too far.
+    #[must_use]
+    pub fn turn_ids(&self) -> Vec<u64> {
+        self.events
+            .iter()
+            .filter_map(Event::as_mark)
+            .map(|mark| mark.turn_id)
+            .collect()
+    }
+
+    /// How many leading turns have every one of their regions kept.
+    ///
+    /// This is where a bulk decision starts counting: a turn a reviewer already
+    /// accepted in full is behind the frontier, and asking for the last two
+    /// turns means the last two that still have something to decide. A turn that
+    /// produced no region at all is trivially accepted and does not stop the
+    /// scan.
+    #[must_use]
+    pub fn accepted_turn_frontier(&self) -> usize {
+        self.turn_ids()
+            .into_iter()
+            .take_while(|turn_id| self.turn_fully_kept(*turn_id))
+            .count()
+    }
+
+    /// Whether every region the turn produced is in force as a keep.
+    fn turn_fully_kept(&self, turn_id: u64) -> bool {
+        let target = Owner::Agent { turn_id };
+        self.tracked_paths().into_iter().all(|path| {
+            let effective = self.effective(&path);
+            self.owned_hunks(&path)
+                .into_iter()
+                .filter(|(_region_id, owner)| *owner == target)
+                .all(|(region_id, _owner)| effective.get(&region_id) == Some(&Decision::Keep))
+        })
+    }
+
     /// Whether any mark carries `turn_id`.
     #[must_use]
     pub fn has_turn(&self, turn_id: u64) -> bool {
