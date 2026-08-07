@@ -30,6 +30,7 @@ use crate::tools::config::{
     SharedToolConfig, TodoConfig, ToolConfigResolver, WebFetchConfig, WebSearchConfig,
     declared_document,
 };
+use crate::tools::reference_text;
 use crate::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolError, ToolExecutionOutput,
     ToolHandler, ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource,
@@ -42,6 +43,13 @@ const MAX_FETCH_REDIRECTS: usize = 5;
 const MAX_LISTED_SKILLS: usize = 40;
 /// Reference `skill.py:_MAX_LISTED_FILES`.
 const MAX_LISTED_SKILL_FILES: usize = 10;
+
+/// The agent `web_search` presents itself with, keeping the SDK prefix the
+/// reference sends ahead of this port's own product name.
+const SEARCH_USER_AGENT: &str = concat!(
+    "mistral-client-python/mistral-vibe-rs/",
+    env!("CARGO_PKG_VERSION")
+);
 
 /// What `web_search` needs to reach the Mistral conversations endpoint.
 ///
@@ -109,6 +117,16 @@ impl TodoItem {
     fn default_priority() -> String {
         "medium".to_owned()
     }
+
+    /// The entry as one dictionary of the model-facing rendering.
+    fn rendered_fields(&self) -> Vec<(&'static str, String)> {
+        vec![
+            ("id", reference_text::string_repr(&self.id)),
+            ("content", reference_text::string_repr(&self.content)),
+            ("status", reference_text::string_repr(&self.status)),
+            ("priority", reference_text::string_repr(&self.priority)),
+        ]
+    }
 }
 
 /// The universal builtin tools, and the session state they keep.
@@ -121,6 +139,9 @@ pub struct BuiltinTools {
     vibe_home: PathBuf,
     web_search: Option<WebSearchAccess>,
     todos: Arc<Mutex<BTreeMap<String, Vec<TodoItem>>>>,
+    /// Which skills each session has already loaded, so a second request for
+    /// one is acknowledged instead of rendered again.
+    loaded_skills: Arc<Mutex<BTreeMap<String, BTreeSet<String>>>>,
 }
 
 impl std::fmt::Debug for BuiltinTools {
@@ -140,6 +161,7 @@ impl BuiltinTools {
             vibe_home: vibe_home.into(),
             web_search,
             todos: Arc::new(Mutex::new(BTreeMap::new())),
+            loaded_skills: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -195,7 +217,7 @@ impl BuiltinTools {
                     // rather than deferring, so a session that moved `skill` to
                     // `ask` still loads a skill without a prompt.
                     Arc::new(|_invocation| Ok(PermissionContext::settled(PermissionMode::Always))),
-                    self.skill_handler(working_directory, project_trusted),
+                    self.skill_handler(session_id, working_directory, project_trusted),
                 )),
             )?,
             registry.register(
@@ -272,6 +294,7 @@ impl BuiltinTools {
 
     fn skill_handler(
         &self,
+        session_id: &str,
         working_directory: &Path,
         project_trusted: bool,
     ) -> Arc<dyn ToolHandler> {
@@ -281,14 +304,18 @@ impl BuiltinTools {
             user: vec![self.vibe_home.join("extensions")],
             project_trusted,
         };
+        let loaded = self.loaded_skills.clone();
+        let session_id = session_id.to_owned();
         Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let roots = roots.clone();
+                let loaded = loaded.clone();
+                let session_id = session_id.clone();
                 let name = invocation.arguments["name"]
                     .as_str()
                     .unwrap_or_default()
                     .to_owned();
-                Box::pin(async move { run_skill(&roots, &name) })
+                Box::pin(async move { run_skill(&roots, &loaded, &session_id, &name) })
             },
         )
     }
@@ -420,12 +447,29 @@ fn run_todo(
     };
     drop(stored);
     let total = items.len();
+    // Reference `TodoResult.message` is a computed field, so it is rendered
+    // from the verb and the count rather than stored.
+    let message = format!("{verb} {total} todos");
+    let rendered = items
+        .iter()
+        .map(TodoItem::rendered_fields)
+        .collect::<Vec<_>>();
     Ok(ToolExecutionOutput {
-        model_text: format!("{verb} {total} todos"),
+        model_text: reference_text::joined(&[
+            ("verb", verb.to_owned()),
+            ("todos", reference_text::dictionary_list(&rendered)),
+            ("total_count", total.to_string()),
+            ("message", message.clone()),
+        ]),
         display: json!({"kind": "todo", "count": total}),
         // The transcript renders the todo widget from the typed result, so the
         // items travel there rather than in the display metadata.
-        typed_result: json!({"verb": verb, "todos": items, "totalCount": total}),
+        typed_result: json!({
+            "verb": verb,
+            "todos": items,
+            "total_count": total,
+            "message": message,
+        }),
         chunks: Vec::new(),
     })
 }
@@ -486,7 +530,12 @@ fn skill_spec() -> ToolSpec {
     }
 }
 
-fn run_skill(roots: &DiscoveryRoots, name: &str) -> Result<ToolExecutionOutput, ToolError> {
+fn run_skill(
+    roots: &DiscoveryRoots,
+    loaded: &Mutex<BTreeMap<String, BTreeSet<String>>>,
+    session_id: &str,
+    name: &str,
+) -> Result<ToolExecutionOutput, ToolError> {
     let catalog = discover_extensions(roots, BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
     let Some(skill) = catalog.skills.get(name) else {
         // An unknown name is answered with what does exist: a model that
@@ -506,44 +555,118 @@ fn run_skill(roots: &DiscoveryRoots, name: &str) -> Result<ToolExecutionOutput, 
             "skill `{name}` was not found; available skills: {listed}"
         )));
     };
-    let content = render_skill(skill);
+    let directory = skill_directory(skill);
+    // A skill already loaded in this conversation is acknowledged rather than
+    // rendered again: the instructions are still in the transcript, and paying
+    // for them twice buys nothing.
+    let already_loaded = {
+        let mut loaded = loaded
+            .lock()
+            .map_err(|_| ToolError::Execution("the skill ledger lock is poisoned".to_owned()))?;
+        !loaded
+            .entry(session_id.to_owned())
+            .or_default()
+            .insert(skill.name.clone())
+    };
+    let content = if already_loaded {
+        format!(
+            "The skill `{}` was already loaded earlier in this conversation; reuse those \
+             instructions.",
+            skill.name
+        )
+    } else {
+        render_skill(skill, directory.as_deref())
+    };
+    let directory_field = directory
+        .as_deref()
+        .map(|path| path.to_string_lossy().replace('\\', "/"));
     Ok(ToolExecutionOutput {
-        model_text: content.clone(),
+        model_text: reference_text::joined(&[
+            ("name", skill.name.clone()),
+            ("content", content.clone()),
+            (
+                "skill_dir",
+                reference_text::optional(directory_field.clone()),
+            ),
+        ]),
         display: json!({"kind": "skill", "name": skill.name}),
-        typed_result: json!({"name": skill.name, "content": content}),
+        typed_result: json!({
+            "name": skill.name,
+            "content": content,
+            "skill_dir": directory_field,
+        }),
         chunks: Vec::new(),
     })
 }
 
+/// The directory a skill's files sit in, or [`None`] when it has none on disk.
+///
+/// A skill declared without a file on disk has no base directory, and the
+/// reference then omits the two lines that would otherwise name an empty path.
+fn skill_directory(skill: &SkillDefinition) -> Option<PathBuf> {
+    let base = skill.path.parent()?;
+    base.is_dir().then(|| base.to_path_buf())
+}
+
 /// The block the model reads back, carrying the skill body, its base directory
 /// and a sample of the files that sit next to it.
-fn render_skill(skill: &SkillDefinition) -> String {
-    let base = skill.path.parent().unwrap_or(Path::new("."));
-    let mut files = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(base) {
-        let mut names = entries
-            .filter_map(Result::ok)
-            .filter(|entry| entry.file_name() != "SKILL.md")
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .collect::<Vec<_>>();
-        names.sort();
-        names.truncate(MAX_LISTED_SKILL_FILES);
-        files = names;
-    }
-    let file_lines = files
+///
+/// The walk is recursive and the names are relative to the base, which is what
+/// makes a skill shipping `references/api.md` advertise that path rather than
+/// only its top-level directory.
+fn render_skill(skill: &SkillDefinition, base: Option<&Path>) -> String {
+    let file_lines = base
+        .map(skill_files)
+        .unwrap_or_default()
         .iter()
         .map(|file| format!("<file>{file}</file>"))
         .collect::<Vec<_>>()
         .join("\n");
-    format!(
-        "<skill_content name=\"{name}\">\n# Skill: {name}\n\n{body}\n\nBase directory for this \
-         skill: {base}\nRelative paths in this skill are relative to this base \
-         directory.\nNote: file list is sampled.\n\n<skill_files>\n{file_lines}\n</skill_files>\n\
-         </skill_content>",
-        name = skill.name,
-        body = skill.body.trim(),
-        base = base.display(),
-    )
+    let mut lines = vec![
+        format!("<skill_content name=\"{}\">", skill.name),
+        format!("# Skill: {}", skill.name),
+        String::new(),
+        skill.body.trim().to_owned(),
+        String::new(),
+    ];
+    if let Some(base) = base {
+        lines.push(format!("Base directory for this skill: {}", base.display()));
+        lines.push("Relative paths in this skill resolve against that base directory.".to_owned());
+    }
+    lines.extend([
+        "Note: the file list below is a sample.".to_owned(),
+        String::new(),
+        "<skill_files>".to_owned(),
+        file_lines,
+        "</skill_files>".to_owned(),
+        "</skill_content>".to_owned(),
+    ]);
+    lines.join("\n")
+}
+
+/// The files that ship with a skill, sorted, without its own `SKILL.md`, and
+/// capped so a large bundle cannot flood the conversation.
+fn skill_files(base: &Path) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut pending = vec![base.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if entry.file_name() != "SKILL.md"
+                && let Ok(relative) = path.strip_prefix(base)
+            {
+                names.push(relative.to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
+    names.sort();
+    names.truncate(MAX_LISTED_SKILL_FILES);
+    names
 }
 
 // --------------------------------------------------------------------------
@@ -907,6 +1030,11 @@ async fn run_web_search(
     let response = client
         .post(&endpoint)
         .bearer_auth(access.api_key.expose_secret())
+        // The reference sends the SDK's own user agent for this call and tags
+        // the request as a secondary one, which is how the endpoint tells a
+        // tool-issued search from a turn. The product name stays this port's:
+        // the prefix is what the endpoint routes on, not the identity.
+        .header(reqwest::header::USER_AGENT, SEARCH_USER_AGENT)
         .json(&json!({
             "model": settings.model,
             "instructions": "Always use the web_search tool to answer the query. Never answer \
@@ -914,6 +1042,7 @@ async fn run_web_search(
             "tools": [{"type": "web_search"}],
             "inputs": query,
             "store": false,
+            "metadata": search_request_metadata(),
         }))
         .send()
         .await
@@ -940,6 +1069,19 @@ async fn run_web_search(
         display: json!({"kind": "webSearch", "query": query}),
         typed_result: json!({"query": query, "answer": answer, "sources": sources}),
         chunks: Vec::new(),
+    })
+}
+
+/// The request metadata reference `build_request_metadata` attaches, with the
+/// fields this port can answer for.
+///
+/// `exclude_none` upstream means an absent field is left out rather than sent
+/// as null, so the same fields are omitted here.
+fn search_request_metadata() -> Value {
+    json!({
+        "os": std::env::consts::OS,
+        "version": env!("CARGO_PKG_VERSION"),
+        "call_type": "secondary_call",
     })
 }
 
@@ -1217,7 +1359,14 @@ mod tests {
             read.typed_result["todos"],
             json!([{"id": "a", "content": "ship", "status": "in_progress", "priority": "medium"}])
         );
-        assert_eq!(read.model_text, "Retrieved 1 todos");
+        // The model reads the result the way the reference renders one: a
+        // `field: value` line per declared field, the list included.
+        assert_eq!(read.typed_result["message"], "Retrieved 1 todos");
+        assert_eq!(
+            read.model_text,
+            "verb: Retrieved\ntodos: [{'id': 'a', 'content': 'ship', 'status': 'in_progress', \
+             'priority': 'medium'}]\ntotal_count: 1\nmessage: Retrieved 1 todos"
+        );
     }
 
     /// An unknown skill answers with the names that do exist, so a model that
@@ -1263,6 +1412,102 @@ mod tests {
             .expect_err("an unknown skill is refused");
         assert!(missing.to_string().contains("absent"), "{missing}");
         assert!(missing.to_string().contains("probe"), "{missing}");
+    }
+
+    /// US-115: the second request for a skill already in the conversation is
+    /// acknowledged rather than rendered again, and it still names the
+    /// directory so a relative path in the instructions still resolves.
+    #[tokio::test]
+    async fn a_skill_loaded_twice_is_acknowledged_rather_than_rendered_again() {
+        let directory = tempdir().expect("tempdir");
+        let skill_directory = directory.path().join(".vibe/skills/probe");
+        std::fs::create_dir_all(skill_directory.join("references")).expect("skill directory");
+        std::fs::write(
+            skill_directory.join("SKILL.md"),
+            "---\nname: probe\ndescription: a probe\n---\nDo the probing.\n",
+        )
+        .expect("skill file");
+        std::fs::write(skill_directory.join("references/api.md"), "api\n").expect("nested");
+        let registry = registered(directory.path(), None).await;
+
+        let first = registry
+            .invoke(
+                "skill",
+                ToolInvocation {
+                    call_id: "skill-1".to_owned(),
+                    arguments: json!({"name": "probe"}),
+                },
+            )
+            .await
+            .expect("the first load renders the body");
+        assert!(first.model_text.contains("Do the probing."), "{first:?}");
+        // The walk is recursive and the names are relative to the base.
+        assert!(
+            first.model_text.contains("<file>references/api.md</file>"),
+            "{first:?}"
+        );
+        assert!(
+            !first.model_text.contains("SKILL.md"),
+            "the skill's own file is not one of its attachments: {first:?}"
+        );
+
+        let second = registry
+            .invoke(
+                "skill",
+                ToolInvocation {
+                    call_id: "skill-2".to_owned(),
+                    arguments: json!({"name": "probe"}),
+                },
+            )
+            .await
+            .expect("the second load is acknowledged");
+        assert!(!second.model_text.contains("Do the probing."), "{second:?}");
+        assert!(second.model_text.contains("already loaded"), "{second:?}");
+        assert_eq!(
+            second.typed_result["skill_dir"],
+            json!(skill_directory.to_string_lossy().replace('\\', "/"))
+        );
+    }
+
+    /// US-115: the file list stops at ten entries, so a skill shipping a
+    /// hundred files cannot flood the conversation with their names.
+    #[test]
+    fn a_skill_file_list_stops_at_the_published_cap() {
+        let directory = tempdir().expect("tempdir");
+        for index in 0..25 {
+            std::fs::write(directory.path().join(format!("file-{index:02}.md")), "x\n")
+                .expect("seed");
+        }
+        std::fs::write(directory.path().join("SKILL.md"), "skill\n").expect("own file");
+
+        let files = skill_files(directory.path());
+
+        assert_eq!(files.len(), MAX_LISTED_SKILL_FILES);
+        assert_eq!(files[0], "file-00.md");
+        assert!(!files.iter().any(|file| file == "SKILL.md"));
+    }
+
+    /// US-115: a skill with no directory on disk renders without the two lines
+    /// that would otherwise name an empty path.
+    #[test]
+    fn a_skill_with_no_directory_omits_the_base_directory_lines() {
+        let skill = SkillDefinition {
+            name: "inline".to_owned(),
+            description: "declared, not filed".to_owned(),
+            user_invocable: false,
+            body: "Do the thing.".to_owned(),
+            source: crate::extensions::ExtensionSource::Project,
+            path: PathBuf::new(),
+        };
+
+        let rendered = render_skill(&skill, None);
+
+        assert!(!rendered.contains("Base directory"), "{rendered}");
+        assert!(rendered.contains("Do the thing."), "{rendered}");
+        assert!(
+            rendered.contains("<skill_files>\n\n</skill_files>"),
+            "{rendered}"
+        );
     }
 
     /// US-103: `todo` reads its maximum from the configuration, and the failure
@@ -1390,6 +1635,51 @@ mod tests {
         );
         let settings: WebSearchConfig = config.view("web_search");
         assert_eq!(settings.timeout, 9);
+        // US-115: the request metadata and the user agent the reference sends,
+        // and no credential in either.
+        assert!(request.contains("secondary_call"), "{request}");
+        assert!(request.contains("mistral-client-python/"), "{request}");
+        let body = request.split("\r\n\r\n").nth(1).unwrap_or_default();
+        assert!(
+            !body.contains("probe") || !body.contains("Bearer"),
+            "the credential must travel only in the authorization header: {request}"
+        );
+    }
+
+    /// US-115: a response carrying no text is a failure, not an empty answer,
+    /// and the failure names nothing the operator holds in confidence.
+    #[tokio::test]
+    async fn a_web_search_answer_with_no_text_fails_rather_than_returning_nothing() {
+        let directory = tempdir().expect("tempdir");
+        let answer = "{\"outputs\": []}";
+        let endpoint = serve_once(vec![format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: \
+             close\r\n\r\n{answer}",
+            answer.len()
+        )]);
+        let registry = registered_with(
+            directory.path(),
+            Some(WebSearchAccess {
+                endpoint,
+                api_key: SecretString::from("super-secret-key"),
+            }),
+            Arc::new(AllowApproval),
+        )
+        .await;
+
+        let error = registry
+            .invoke(
+                "web_search",
+                ToolInvocation {
+                    call_id: "search-1".to_owned(),
+                    arguments: json!({"query": "who ships parity"}),
+                },
+            )
+            .await
+            .expect_err("an answerless response is a failure");
+
+        assert!(error.to_string().contains("no text"), "{error}");
+        assert!(!error.to_string().contains("super-secret-key"), "{error}");
     }
 
     /// A page past the limit comes back truncated rather than overflowing the
@@ -1548,7 +1838,11 @@ mod tests {
         )
         .expect("reading an unwritten list is not an error");
         assert_eq!(output.typed_result["todos"], json!([]));
-        assert_eq!(output.model_text, "Retrieved 0 todos");
+        assert_eq!(output.typed_result["total_count"], 0);
+        assert_eq!(
+            output.model_text,
+            "verb: Retrieved\ntodos: []\ntotal_count: 0\nmessage: Retrieved 0 todos"
+        );
     }
 
     #[test]
