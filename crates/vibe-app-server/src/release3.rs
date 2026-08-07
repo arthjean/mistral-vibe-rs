@@ -24,6 +24,7 @@ use vibe_core::extensions::{
     SkillDefinition, discover_extensions,
 };
 use vibe_core::mcp::McpServerConfig;
+use vibe_core::policy::AllowlistPersistence;
 use vibe_core::prompt::{
     InstructionLoader, PromptComposition, PromptResolver, SkillSummary, SubagentSummary,
     UserResource, prepare_user_resources,
@@ -302,6 +303,54 @@ impl Release3Service {
     #[must_use]
     pub fn tool_config(&self) -> ToolConfigResolver {
         self.tool_config.clone()
+    }
+
+    /// Where a permanent approval writes the patterns it grants.
+    ///
+    /// Reference `approve_always(save_permanently=True)` merges them into
+    /// `tools.<name>.allowlist` through the configuration orchestrator, which is
+    /// the same table the tool reads back on the next session; the merge is a
+    /// sorted union so a repeated approval writes nothing new.
+    #[must_use]
+    pub fn allowlist_persistence(&self) -> AllowlistPersistence {
+        let config = self.config.clone();
+        Arc::new(move |tool: &str, patterns: &[String]| {
+            let snapshot = config.load().map_err(|error| error.to_string())?;
+            let mut merged = snapshot
+                .effective
+                .get("tools")
+                .and_then(toml::Value::as_table)
+                .and_then(|tools| tools.get(tool))
+                .and_then(toml::Value::as_table)
+                .and_then(|settings| settings.get("allowlist"))
+                .and_then(toml::Value::as_array)
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .filter_map(toml::Value::as_str)
+                        .map(ToOwned::to_owned)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let before = merged.len();
+            merged.extend(patterns.iter().cloned());
+            merged.sort();
+            merged.dedup();
+            if merged.len() == before {
+                return Ok(());
+            }
+            let operation = ConfigPatchOp {
+                mutation: ConfigMutation::set(
+                    ["tools", tool, "allowlist"],
+                    toml::Value::Array(merged.into_iter().map(toml::Value::String).collect()),
+                ),
+                target: None,
+            };
+            config
+                .apply_patch(&[operation], "permanent tool approval")
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        })
     }
 
     /// The active model's compaction threshold, or zero when none declares one.
@@ -2131,6 +2180,90 @@ mod tests {
         let settings: vibe_core::tools::config::WebFetchConfig =
             service.tool_config().view("web_fetch");
         assert_eq!(settings.max_timeout, 7);
+    }
+
+    /// US-107: a permanent approval writes the patterns it granted into
+    /// `tools.<name>.allowlist`, which is the half of an approval that outlives
+    /// the session because the tool reads that list back on the next one.
+    #[tokio::test]
+    async fn a_permanent_approval_reaches_the_configured_allowlist() {
+        let (_temporary, service) = service();
+        let store = vibe_core::policy::PermissionStore::default()
+            .with_tool_config(service.tool_config())
+            .with_allowlist_persistence(service.allowlist_persistence());
+
+        store
+            .authorize(
+                "bash",
+                json!({"command": "cargo test"}),
+                vibe_core::policy::PermissionContext::asking(vec![
+                    vibe_core::policy::PermissionRequirement::command("cargo test"),
+                ]),
+                &AlwaysPermanently,
+            )
+            .await
+            .expect("the operator approves permanently");
+
+        // The merge is against the list the tool actually reads, which already
+        // carries the reference defaults the Discovered layer publishes, so the
+        // approval adds one entry rather than replacing the list.
+        let allowlist = |snapshot: &Value| {
+            snapshot["config"]["tools"]["bash"]["allowlist"]
+                .as_array()
+                .expect("the allowlist is an array")
+                .iter()
+                .filter_map(|entry| entry.as_str().map(ToOwned::to_owned))
+                .collect::<Vec<_>>()
+        };
+        let snapshot = service.config_document().expect("config reads");
+        let after_first = allowlist(&snapshot);
+        assert_eq!(
+            after_first
+                .iter()
+                .filter(|entry| *entry == "cargo test *")
+                .count(),
+            1,
+            "{after_first:?}"
+        );
+        assert!(after_first.contains(&"git status".to_owned()));
+        assert!(store.diagnostics().is_empty(), "{:?}", store.diagnostics());
+
+        // A second approval extends the same list rather than replacing it, and
+        // the merge stays a sorted union.
+        store
+            .authorize(
+                "bash",
+                json!({"command": "cargo build --release"}),
+                vibe_core::policy::PermissionContext::asking(vec![
+                    vibe_core::policy::PermissionRequirement::command("cargo build"),
+                ]),
+                &AlwaysPermanently,
+            )
+            .await
+            .expect("the operator approves permanently again");
+        let snapshot = service.config_document().expect("config reads");
+        let after_second = allowlist(&snapshot);
+        assert!(after_second.contains(&"cargo test *".to_owned()));
+        assert!(after_second.contains(&"cargo build *".to_owned()));
+        assert_eq!(
+            after_second.len(),
+            after_first.len() + 1,
+            "{after_second:?}"
+        );
+        let mut sorted = after_second.clone();
+        sorted.sort();
+        assert_eq!(after_second, sorted, "the merge writes a sorted union");
+    }
+
+    struct AlwaysPermanently;
+
+    impl vibe_core::policy::ApprovalAgent for AlwaysPermanently {
+        fn request<'a>(
+            &'a self,
+            _request: vibe_core::policy::ApprovalRequest,
+        ) -> vibe_core::policy::ApprovalFuture<'a> {
+            Box::pin(async move { Ok(vibe_core::policy::ApprovalDecision::ApprovePermanently) })
+        }
     }
 
     #[test]

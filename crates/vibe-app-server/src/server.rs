@@ -72,7 +72,7 @@ const EXIT_NOTIFICATION: &str = "exit";
 const MANAGED_SHELL_VARIABLE: &str = "VIBE_MANAGED_SHELL_TOOLS";
 /// What a tool-surface diagnostic is attributed to: the tool filters and the
 /// availability conditions both come from the configuration the session loaded.
-const CONFIG_FILE_LABEL: &str = "config.toml";
+pub(crate) const CONFIG_FILE_LABEL: &str = "config.toml";
 const MAX_CALLBACK_OUTPUT_BYTES: usize = 64 * 1024;
 const MAX_CALLBACK_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_CALLBACK_ANSWERS: usize = 16;
@@ -1673,7 +1673,9 @@ impl AppServer {
             drop(sessions);
             return self.refresh_session_workspace_tools(&session_id);
         }
-        let policy = PermissionStore::default().with_tool_config(self.release3.tool_config());
+        let policy = PermissionStore::default()
+            .with_tool_config(self.release3.tool_config())
+            .with_allowlist_persistence(self.release3.allowlist_persistence());
         let tools = ToolRegistry::default();
         // A resumed session runs under the same configuration a fresh one does,
         // so its two filter lists are read again here rather than left empty.
@@ -2676,8 +2678,9 @@ impl ServerConnection {
             .requested_disabled_tools
             .clone_from(&intent.disabled_tools);
         apply_agent_profile_settings(&mut intent, &agent_profile);
-        let permission_store =
-            PermissionStore::default().with_tool_config(self.server.release3.tool_config());
+        let permission_store = PermissionStore::default()
+            .with_tool_config(self.server.release3.tool_config())
+            .with_allowlist_persistence(self.server.release3.allowlist_persistence());
         let tools = ToolRegistry::default();
         if let Err(error) = permission_store.try_replace_rules_with_rationale_prefix(
             "agent-profile:",

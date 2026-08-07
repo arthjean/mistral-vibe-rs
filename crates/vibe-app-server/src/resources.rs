@@ -304,17 +304,7 @@ impl ResourceService {
         }
         match method {
             "diagnostics/list" => Ok(read_only([
-                (
-                    "issues",
-                    Value::Array(
-                        self.diagnostics
-                            .iter()
-                            .map(
-                                |(file, message)| json!({"file": file, "message": redact(message)}),
-                            )
-                            .collect(),
-                    ),
-                ),
+                ("issues", Value::Array(self.reported_issues(None))),
                 ("hooksCount", json!(0)),
             ])),
             "diagnostics/logs/read" => self.logs_read(params),
@@ -517,6 +507,35 @@ impl ResourceService {
         self.tool_registries.insert(session_id.to_owned(), tools);
         self.ready = true;
         Ok(())
+    }
+
+    /// What a client reading issues is told: the ones recorded while the
+    /// sessions started, plus what a permission store could not honor
+    /// afterward. `session` narrows the stores to one, or reads every one.
+    ///
+    /// A permanent approval whose write to `tools.<name>.allowlist` failed is
+    /// kept for the session rather than failing the call the operator just
+    /// approved, so the reason has to be readable somewhere. This is that
+    /// somewhere: the store holds it and these are the two surfaces an operator
+    /// asks.
+    fn reported_issues(&self, session: Option<&str>) -> Vec<Value> {
+        let stores = self
+            .policy_stores
+            .iter()
+            .filter(move |(id, _)| session.is_none_or(|session| session == id.as_str()))
+            .map(|(_, store)| store);
+        self.diagnostics
+            .iter()
+            .map(|(file, message)| json!({"file": file, "message": redact(message)}))
+            .chain(
+                stores
+                    .flat_map(PermissionStore::diagnostics)
+                    .map(|message| {
+                        json!({"file": crate::server::CONFIG_FILE_LABEL, "message": redact(&message)})
+                    }),
+            )
+            .take(MAX_RESOURCE_RECORDS)
+            .collect()
     }
 
     fn connector_counts(&self) -> Value {
@@ -880,12 +899,7 @@ impl ResourceService {
             ("tools".to_owned(), self.tool_list(session_id)?),
             (
                 "issues".to_owned(),
-                Value::Array(
-                    self.diagnostics
-                        .iter()
-                        .map(|(file, message)| json!({"file": file, "message": redact(message)}))
-                        .collect(),
-                ),
+                Value::Array(self.reported_issues(Some(session_id))),
             ),
             (
                 "connectors".to_owned(),
@@ -1480,6 +1494,99 @@ mod tests {
             logs.result["logs"]["entries"][0]["message"],
             "[redacted sensitive error]"
         );
+    }
+
+    /// US-107: a permanent approval the configuration file refused is kept for
+    /// the session rather than failing the call, so the reason has to reach the
+    /// operator. `diagnostics/list` and the runtime snapshot are where they
+    /// read one, and the session that could not write is the session that
+    /// reports it.
+    #[tokio::test]
+    async fn a_permanent_approval_that_could_not_be_written_is_reported() {
+        let mut resources = ResourceService::default();
+        let store = PermissionStore::default().with_allowlist_persistence(Arc::new(
+            |_tool: &str, _patterns: &[String]| {
+                Err("the configuration file is read-only".to_owned())
+            },
+        ));
+        resources
+            .open_session("session-1", store.clone(), ToolRegistry::default())
+            .expect("the session opens");
+
+        store
+            .authorize(
+                "bash",
+                json!({"command": "cargo test"}),
+                vibe_core::policy::PermissionContext::asking(vec![
+                    vibe_core::policy::PermissionRequirement::command("cargo test"),
+                ]),
+                &PermanentApproval,
+            )
+            .await
+            .expect("the call the operator approved still runs");
+
+        let reported = |dispatch: &ResourceDispatch| {
+            dispatch.result["issues"]
+                .as_array()
+                .expect("issues is a list")
+                .iter()
+                .filter_map(|issue| issue["message"].as_str().map(ToOwned::to_owned))
+                .collect::<Vec<_>>()
+        };
+        let diagnostics = resources
+            .dispatch("diagnostics/list", &BTreeMap::new(), true)
+            .expect("diagnostics");
+        let listed = reported(&diagnostics);
+        assert!(
+            listed
+                .iter()
+                .any(|message| message.contains("bash") && message.contains("read-only")),
+            "{listed:?}"
+        );
+        assert_eq!(
+            diagnostics.result["issues"][0]["file"],
+            json!(crate::server::CONFIG_FILE_LABEL)
+        );
+
+        let runtime = resources.runtime("session-1").expect("runtime");
+        let issues = runtime["issues"].as_array().expect("issues is a list");
+        assert!(
+            issues.iter().any(|issue| {
+                issue["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("read-only"))
+            }),
+            "the runtime snapshot names it too: {issues:?}"
+        );
+
+        // Another session's failure is not this session's problem.
+        resources
+            .open_session(
+                "session-2",
+                PermissionStore::default(),
+                ToolRegistry::default(),
+            )
+            .expect("the second session opens");
+        let other = resources.runtime("session-2").expect("runtime");
+        assert!(
+            other["issues"]
+                .as_array()
+                .expect("issues is a list")
+                .is_empty(),
+            "{:?}",
+            other["issues"]
+        );
+    }
+
+    struct PermanentApproval;
+
+    impl vibe_core::policy::ApprovalAgent for PermanentApproval {
+        fn request<'a>(
+            &'a self,
+            _request: vibe_core::policy::ApprovalRequest,
+        ) -> vibe_core::policy::ApprovalFuture<'a> {
+            Box::pin(async move { Ok(vibe_core::policy::ApprovalDecision::ApprovePermanently) })
+        }
     }
 
     #[test]
