@@ -850,7 +850,8 @@ fn a_file_only_a_dropped_hand_edit_touched_restores_to_the_kept_projection() {
     let mut log = Checkpointer::new();
     turn_on(&mut log, 1, PATH, text("agent\n"));
     turn_on(&mut log, 2, "other", text("other\n"));
-    log.reconcile(PATH, text("agent\nby hand\n"));
+    log.reconcile(PATH, text("agent\nby hand\n"))
+        .expect("room for the drift");
 
     // Cutting at turn 2 drops the turn's own path and the later hand edit.
     let plan = log.history().restore_plan_to_turn(2);

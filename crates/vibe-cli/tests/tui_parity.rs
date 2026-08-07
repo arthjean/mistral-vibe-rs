@@ -15,10 +15,10 @@ use vibe_cli::tui::interaction::{
 };
 use vibe_cli::tui::pickers::{
     config_overlay, config_target_overlay, mcp_detail_overlay, mcp_overlay, proxy_overlay,
-    remote_projects_overlay, rewind_state, sessions_overlay,
+    remote_projects_overlay, rewind_targets, sessions_overlay,
 };
 use vibe_cli::tui::render::{BannerContext, TokenState, UiContext, draw};
-use vibe_cli::tui::rewind::RewindAction;
+use vibe_cli::tui::rewind::{RewindAction, RewindState};
 use vibe_cli::tui::setup::{DetectedTheme, Theme, resolve_theme};
 use vibe_cli::tui::state::TuiState;
 use vibe_cli::tui::state::{EntryStatus, TranscriptEntry, TranscriptKind};
@@ -627,19 +627,24 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
             .any(|item| item.id == "voice_mode_enabled")
     );
 
-    let rewind = rewind_state(&serde_json::json!({
-        "messages": [
-            {"messageIndex": 0, "message": "first prompt"},
-            {
-                "messageIndex": 3,
-                "message": "prompt to edit",
-                "hasFileChanges": true
-            }
-        ],
-        "restoreSupported": true
-    }))
-    .expect("rewind targets");
-    assert_eq!(rewind.target().message_index, 3);
+    // The picker lists the stored transcript, so a rewind point is a user
+    // message addressed by its history identity rather than by a position in a
+    // list the next compaction renumbers.
+    let mut targets = rewind_targets(
+        &serde_json::json!({
+            "history": [
+                {"role": "user", "content": "first prompt"},
+                {"role": "assistant", "content": "an answer"},
+                {"role": "system", "content": "a system note"},
+                {"role": "user", "content": "prompt to edit"}
+            ]
+        }),
+        0,
+    );
+    assert_eq!(targets.len(), 2, "only user messages are rewindable");
+    targets[1].has_file_changes = true;
+    let rewind = RewindState::new(targets).expect("rewind targets");
+    assert_eq!(rewind.target().entry_id, "history:3:user");
     assert!(rewind.target().message.contains("prompt to edit"));
     assert_eq!(
         rewind.actions(),

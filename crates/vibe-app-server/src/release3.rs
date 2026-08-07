@@ -564,6 +564,21 @@ impl Release3Service {
         self.store.load(session_id).map_err(storage_error)
     }
 
+    /// Where `entry_id` sits in the stored message list.
+    ///
+    /// # Errors
+    ///
+    /// Reports the session storage failure, and answers `NotFound` when no
+    /// rewindable user entry carries the identifier.
+    pub(crate) fn rewind_entry_index(
+        &self,
+        session_id: &str,
+        entry_id: &str,
+    ) -> Result<usize, Release3Error> {
+        let hydrated = self.store.load(session_id).map_err(storage_error)?;
+        rewind_entry_index(&hydrated.messages, entry_id)
+    }
+
     pub(crate) fn rollback_rewind(
         &self,
         source: HydratedSession,
@@ -1262,19 +1277,7 @@ impl Release3Service {
         workspace_restore_handled: bool,
     ) -> Result<Release3Dispatch, Release3Error> {
         let session_id = required_string(params, "sessionId")?;
-        let message_index = params
-            .get("messageIndex")
-            .map(|value| {
-                value
-                    .as_u64()
-                    .and_then(|value| usize::try_from(value).ok())
-                    .ok_or_else(|| {
-                        Release3Error::InvalidParams(
-                            "messageIndex must be a non-negative integer".to_owned(),
-                        )
-                    })
-            })
-            .transpose()?;
+        let entry_id = required_string(params, "entryId")?;
         let restore_files = params
             .get("restoreFiles")
             .map(|value| {
@@ -1299,26 +1302,15 @@ impl Release3Service {
             .transpose()?
             .unwrap_or(false);
         let source = self.store.load(session_id).map_err(storage_error)?;
-        let message = message_index
-            .map(|index| {
-                source
-                    .messages
-                    .get(index)
-                    .and_then(|message| match message {
-                        ModelMessage::User { content } => Some(content.clone()),
-                        _ => None,
-                    })
-                    .ok_or_else(|| {
-                        Release3Error::InvalidParams(
-                            "messageIndex must identify a stored user message".to_owned(),
-                        )
-                    })
+        let keep_messages = rewind_entry_index(&source.messages, entry_id)?;
+        let message = source
+            .messages
+            .get(keep_messages)
+            .and_then(|message| match message {
+                ModelMessage::User { content } => Some(content.clone()),
+                _ => None,
             })
-            .transpose()?;
-        let keep_messages = match message_index {
-            Some(index) => index,
-            None => usize_param(params, "keepMessages", 0)?,
-        };
+            .unwrap_or_default();
         let requested_statistics = statistics_map(params.get("statistics"))?;
         let rewind_statistics = if requested_statistics.is_empty() {
             source.metadata.statistics.clone()
@@ -1326,7 +1318,11 @@ impl Release3Service {
             requested_statistics
         };
         let timestamp = now_millis();
-        let hydrated = if message_index.is_some() && !inplace {
+        let hydrated = if inplace {
+            self.store
+                .rewind(session_id, keep_messages, rewind_statistics, timestamp)
+                .map_err(storage_error)?
+        } else {
             let new_id = format!(
                 "session-{}-{}",
                 timestamp,
@@ -1341,10 +1337,6 @@ impl Release3Service {
                     timestamp,
                 )
                 .map_err(storage_error)?
-        } else {
-            self.store
-                .rewind(session_id, keep_messages, rewind_statistics, timestamp)
-                .map_err(storage_error)?
         };
         if let Err(error) = self.continuity.refresh(hydrated.clone()) {
             if let Err(rollback) = self.rollback_rewind(source, &hydrated.metadata.id) {
@@ -1354,44 +1346,39 @@ impl Release3Service {
             }
             return Err(Release3Error::Storage(error.to_string()));
         }
-        let mut dispatch = hydrated_result(&hydrated, Some(runtime_attachment(&hydrated)));
-        dispatch
-            .result
-            .insert("message".to_owned(), json!(message.unwrap_or_default()));
-        dispatch
-            .result
-            .insert("restoreErrors".to_owned(), json!([]));
-        dispatch
-            .result
-            .insert("restoredPaths".to_owned(), json!([]));
-        Ok(dispatch)
+        // `SessionRewindResponse` declares five fields and this service can
+        // answer three of them: `state` and `sessionLog` are composed from the
+        // live session the attachment below rebinds, which only the server
+        // holds. The two lists are placeholders the workspace restore replaces.
+        Ok(Release3Dispatch {
+            result: [
+                ("message".to_owned(), json!(message)),
+                ("restoreErrors".to_owned(), json!([])),
+                ("restoredPaths".to_owned(), json!([])),
+            ]
+            .into_iter()
+            .collect(),
+            attachment: Some(runtime_attachment(&hydrated)),
+        })
     }
 
+    /// Whether rewinding to one history entry would change files, and which.
+    ///
+    /// The entry is resolved here so an identifier no rewindable message
+    /// carries is refused before anything reads a workspace. The two fields are
+    /// answered empty: the paths come from the session's checkpoint log, which
+    /// the server holds and fills in.
     fn rewind_read(
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<Release3Dispatch, Release3Error> {
-        let hydrated = self
-            .store
-            .load(required_string(params, "sessionId")?)
-            .map_err(storage_error)?;
-        let messages = hydrated
-            .messages
-            .iter()
-            .enumerate()
-            .filter_map(|(index, message)| match message {
-                ModelMessage::User { content } => Some(json!({
-                    "messageIndex": index,
-                    "message": content,
-                })),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
+        let session_id = required_string(params, "sessionId")?;
+        let entry_id = required_string(params, "entryId")?;
+        let hydrated = self.store.load(session_id).map_err(storage_error)?;
+        rewind_entry_index(&hydrated.messages, entry_id)?;
         Ok(Release3Dispatch::result([
-            ("messageCount", json!(hydrated.messages.len())),
-            ("statistics", json!(hydrated.metadata.statistics)),
-            ("messages", json!(messages)),
-            ("restoreSupported", json!(false)),
+            ("hasFileChanges", json!(false)),
+            ("paths", json!([])),
         ]))
     }
 
@@ -1987,6 +1974,36 @@ fn parse_target(value: &str) -> Result<ConfigTarget, Release3Error> {
             "target must be user or project".to_owned(),
         )),
     }
+}
+
+/// The identity a stored message is addressed by on the wire.
+///
+/// A stored message carries no identifier of its own here, so the identity is
+/// the one the reference falls back to when a message has none: its position in
+/// the list and its role. Mirrors `history_message_id`
+/// (`vibe/app_server/_projection.py:607`).
+pub(crate) fn history_entry_id(index: usize, role: &str) -> String {
+    format!("history:{index}:{role}")
+}
+
+/// Which stored message `entry_id` names, among the ones a rewind may target.
+///
+/// Only a user message is rewindable, which is what makes the position the
+/// rewind cuts at the position of the message the operator is about to edit.
+/// Mirrors `history_user_message_index`
+/// (`vibe/app_server/_projection.py:611`).
+fn rewind_entry_index(messages: &[ModelMessage], entry_id: &str) -> Result<usize, Release3Error> {
+    messages
+        .iter()
+        .enumerate()
+        .find(|(index, message)| {
+            matches!(message, ModelMessage::User { .. })
+                && history_entry_id(*index, "user") == entry_id
+        })
+        .map(|(index, _message)| index)
+        .ok_or_else(|| {
+            Release3Error::NotFound(format!("Rewindable history entry not found: {entry_id}"))
+        })
 }
 
 fn hydrated_result(
@@ -2932,7 +2949,7 @@ mod tests {
     }
 
     #[test]
-    fn rewind_lists_user_messages_and_forks_before_the_selected_message() {
+    fn rewind_resolves_an_entry_identity_and_forks_before_the_selected_message() {
         let (_temporary, service) = service();
         let session_id = "rewind-source";
         let working_directory = service
@@ -2978,18 +2995,32 @@ mod tests {
                 .expect("append message");
         }
 
+        // A rewindable point is addressed by the identity a stored user
+        // message carries, and this service answers the two fields only the
+        // transcript decides; the paths come from the session's engine.
         let preview = service
             .dispatch(
                 "session/rewind/read",
-                &BTreeMap::from([("sessionId".to_owned(), json!(session_id))]),
+                &BTreeMap::from([
+                    ("sessionId".to_owned(), json!(session_id)),
+                    ("entryId".to_owned(), json!("history:2:user")),
+                ]),
             )
             .expect("rewind preview");
-        assert_eq!(
-            preview.result["messages"],
-            json!([
-                {"messageIndex": 0, "message": "first question"},
-                {"messageIndex": 2, "message": "edit this question"},
-            ])
+        assert_eq!(preview.result["hasFileChanges"], json!(false));
+        assert_eq!(preview.result["paths"], json!([]));
+        assert!(
+            matches!(
+                service.dispatch(
+                    "session/rewind/read",
+                    &BTreeMap::from([
+                        ("sessionId".to_owned(), json!(session_id)),
+                        ("entryId".to_owned(), json!("history:1:user")),
+                    ]),
+                ),
+                Err(Release3Error::NotFound(_))
+            ),
+            "an assistant message is not a rewindable entry"
         );
 
         let rewind = service
@@ -2997,7 +3028,7 @@ mod tests {
                 "session/rewind",
                 &BTreeMap::from([
                     ("sessionId".to_owned(), json!(session_id)),
-                    ("messageIndex".to_owned(), json!(2)),
+                    ("entryId".to_owned(), json!("history:2:user")),
                     ("restoreFiles".to_owned(), json!(false)),
                     ("statistics".to_owned(), json!({"tokens": 17})),
                 ]),

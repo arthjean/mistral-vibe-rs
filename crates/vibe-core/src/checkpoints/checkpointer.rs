@@ -37,25 +37,57 @@ struct OpenTurn {
     post: StateMap,
 }
 
+/// How many file bytes one session's log may retain.
+///
+/// The reference holds its log unbounded for the session's lifetime. This port
+/// bounds it, because the two are not exposed to the same lifetime: a long
+/// server session keeps one log per attached session in one process. The bound
+/// is a refusal rather than a trim, which is the part that matters for the
+/// contract: an identity a client already holds must never stop resolving
+/// because the log made room behind it.
+pub const RETAINED_BYTES_LIMIT: usize = 512 * 1_048_576;
+
 /// An append-only log of turns, edits and decisions.
 ///
 /// Nothing here touches disk: a caller feeds in the content it read and applies
 /// the content this hands back. That is what lets the whole model be exercised
 /// without a filesystem, and it is the split the reference draws in the same
 /// place.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Checkpointer {
     events: Vec<Event>,
     seq: u64,
     manual_index: usize,
     open: Option<OpenTurn>,
+    /// How many file bytes this log may retain before it refuses to capture
+    /// any more. Carried per log rather than read from the constant so the
+    /// refusal can be exercised without allocating the production ceiling.
+    retention_limit: usize,
+}
+
+impl Default for Checkpointer {
+    fn default() -> Self {
+        Self::with_retention_limit(RETAINED_BYTES_LIMIT)
+    }
 }
 
 impl Checkpointer {
-    /// An empty log.
+    /// An empty log holding at most [`RETAINED_BYTES_LIMIT`].
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// An empty log holding at most `limit` file bytes.
+    #[must_use]
+    pub fn with_retention_limit(limit: usize) -> Self {
+        Self {
+            events: Vec::new(),
+            seq: 0,
+            manual_index: 0,
+            open: None,
+            retention_limit: limit,
+        }
     }
 
     /// Whether a turn is currently open.
@@ -68,6 +100,34 @@ impl Checkpointer {
     #[must_use]
     pub fn history(&self) -> History<'_> {
         History::new(&self.events)
+    }
+
+    /// How many file bytes the log holds, counting every state it carries.
+    ///
+    /// Identical states share their bytes, so this over-counts what the process
+    /// actually holds. That is the direction a ceiling should err in.
+    #[must_use]
+    pub fn retained_bytes(&self) -> usize {
+        let events = self.events.iter().map(|event| match event {
+            Event::TurnMark(mark) => mark.pre.iter().map(|(_, state)| state_bytes(state)).sum(),
+            Event::Edit(edit) => state_bytes(&edit.before).saturating_add(state_bytes(&edit.after)),
+            Event::Decide(_) => 0,
+        });
+        let open = self
+            .open
+            .iter()
+            .flat_map(|open| open.post.iter().map(|(_, state)| state_bytes(state)));
+        events.chain(open).fold(0, usize::saturating_add)
+    }
+
+    /// Whether `state` still fits under this log's retention limit.
+    fn admits(&self, state: &FileState) -> Result<(), CheckpointError> {
+        if self.retained_bytes().saturating_add(state_bytes(state)) > self.retention_limit {
+            return Err(CheckpointError::RetentionExhausted {
+                limit: self.retention_limit,
+            });
+        }
+        Ok(())
     }
 
     // -- Turn lifecycle ------------------------------------------------------
@@ -104,7 +164,9 @@ impl Checkpointer {
     ///
     /// # Errors
     ///
-    /// Returns [`CheckpointError::NoOpenTurn`] when no turn is running.
+    /// Returns [`CheckpointError::NoOpenTurn`] when no turn is running, and
+    /// [`CheckpointError::RetentionExhausted`] when the log already holds as
+    /// many file bytes as it may.
     pub fn record_pre_edit(&mut self, path: &str, pre: FileState) -> Result<(), CheckpointError> {
         let Some(mark_seq) = self.open.as_ref().map(|open| open.mark_seq) else {
             return Err(CheckpointError::NoOpenTurn {
@@ -117,6 +179,7 @@ impl Checkpointer {
         {
             return Ok(());
         }
+        self.admits(&pre)?;
         // The drift happened before the turn began, so it is sealed before the
         // mark: a truncation to this turn keeps the hand edit, and the turn's
         // own regions are built on top of it rather than swallowing it.
@@ -233,16 +296,25 @@ impl Checkpointer {
     /// snapshot is what makes this idempotent: once the drift is in the log, the
     /// projection carries it and a second call sees nothing to record. During a
     /// turn the disk belongs to that turn, so nothing is captured.
-    pub fn reconcile(&mut self, path: &str, current: FileState) {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CheckpointError::RetentionExhausted`] when the log already
+    /// holds as many file bytes as it may. The drift stays on disk and stays
+    /// unattributed; refusing it is what keeps an earlier event from being
+    /// dropped to make room.
+    pub fn reconcile(&mut self, path: &str, current: FileState) -> Result<(), CheckpointError> {
         if self.open.is_some() {
-            return;
+            return Ok(());
         }
         let projection = self.history().project(path, false);
         if projection == current {
-            return;
+            return Ok(());
         }
+        self.admits(&current)?;
         let index = self.next_manual_index();
         self.append_edit(Owner::Manual { index }, path, projection, current);
+        Ok(())
     }
 
     // -- Truncation ----------------------------------------------------------
@@ -480,4 +552,9 @@ impl Checkpointer {
         }
         Ok(())
     }
+}
+
+/// How many bytes a state holds, absence counting as none.
+fn state_bytes(state: &FileState) -> usize {
+    state.data().map_or(0, <[u8]>::len)
 }

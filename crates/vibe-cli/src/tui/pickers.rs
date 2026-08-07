@@ -12,7 +12,7 @@ pub use remote_projects::{
 
 use super::commands::{COMMANDS, CommandContext, command_available_in};
 use super::interaction::{ConfigLayerTarget, Overlay, OverlayAction, OverlayItem, OverlayKind};
-use super::rewind::{RewindState, RewindTarget};
+use super::rewind::RewindTarget;
 
 const POPULAR_CONFIG_FIELDS: &[&str] = &[
     "active_model",
@@ -288,31 +288,33 @@ fn config_origin(snapshot: &Value, path: &str, configured: bool) -> String {
         .unwrap_or_else(|| if configured { "effective" } else { "defaults" }.to_owned())
 }
 
+/// The rewindable points of one page of saved history.
+///
+/// A rewind targets a user message, addressed by the identity the server
+/// resolves rather than by a position in a list the next compaction renumbers.
+/// The entries come from `history/list`, which pages the stored transcript, so
+/// `offset` is where this page starts in it. Whether each point would change
+/// files is filled in by the caller, which is the only one that can ask.
 #[must_use]
-pub fn rewind_state(result: &Value) -> Option<RewindState> {
-    let targets = result
-        .get("messages")
+pub fn rewind_targets(history: &Value, offset: usize) -> Vec<RewindTarget> {
+    history
+        .get("history")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(|message| {
-            let message_index = message
-                .get("messageIndex")
-                .and_then(Value::as_u64)
-                .and_then(|index| usize::try_from(index).ok())?;
-            let has_file_changes = message
-                .get("hasFileChanges")
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
-            let message = message.get("message").and_then(Value::as_str)?.to_owned();
+        .enumerate()
+        .filter_map(|(position, message)| {
+            if message.get("role").and_then(Value::as_str) != Some("user") {
+                return None;
+            }
+            let content = message.get("content").and_then(Value::as_str)?.to_owned();
             Some(RewindTarget {
-                message_index,
-                message,
-                has_file_changes,
+                entry_id: format!("history:{}:user", offset.saturating_add(position)),
+                message: content,
+                has_file_changes: false,
             })
         })
-        .collect();
-    RewindState::new(targets)
+        .collect()
 }
 
 #[must_use]

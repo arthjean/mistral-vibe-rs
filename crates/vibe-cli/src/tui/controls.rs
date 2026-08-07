@@ -523,7 +523,6 @@ impl ControlState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionCommand {
-    Rewind,
     Clear,
     Compact,
     Fork,
@@ -537,10 +536,6 @@ pub enum SessionCommand {
 impl SessionCommand {
     fn dispatch(self, session_id: &str) -> ControlDispatch {
         let (method, params) = match self {
-            Self::Rewind => (
-                "session/rewind",
-                json!({"sessionId": session_id, "keepMessages": 0}),
-            ),
             Self::Clear => ("session/history/clear", json!({"sessionId": session_id})),
             Self::Compact => ("session/compact/start", json!({"sessionId": session_id})),
             Self::Fork => ("session/fork", json!({"sessionId": session_id})),

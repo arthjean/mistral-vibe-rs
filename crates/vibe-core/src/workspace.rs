@@ -302,7 +302,6 @@ pub struct Checkpoint {
 #[serde(rename_all = "camelCase")]
 pub struct ReviewView {
     pub active_turn: Option<String>,
-    pub checkpoints: Vec<Checkpoint>,
     pub pending_hunks: Vec<ReviewHunk>,
 }
 
@@ -2193,25 +2192,28 @@ mod tests {
             .expect("later write");
         review.seal_turn().expect("second checkpoint");
 
+        // The plan is the log's, so its order is the order the dropped turns
+        // first touched each path rather than an alphabetical one.
         assert_eq!(
             review.restorable_paths_at(4).expect("latest paths"),
-            vec!["generated/later.txt", "main.txt"]
+            vec!["main.txt", "generated/later.txt"]
         );
         assert_eq!(
             review.restorable_paths_at(2).expect("earlier paths"),
-            vec!["generated/first.txt", "generated/later.txt", "main.txt"]
+            vec!["generated/first.txt", "main.txt", "generated/later.txt"]
         );
 
         let staged = review
             .stage_restore_to_message(4)
             .expect("staged restoration");
+        assert!(staged.errors.is_empty(), "every path was writable");
         assert_eq!(
             std::fs::read_to_string(directory.path().join("main.txt")).expect("staged main"),
             "zero\n"
         );
         assert!(!directory.path().join("generated/later.txt").exists());
         assert!(directory.path().join("generated/first.txt").exists());
-        staged.rollback().expect("explicit rollback");
+        staged.transaction.rollback().expect("explicit rollback");
         assert_eq!(
             std::fs::read_to_string(directory.path().join("main.txt")).expect("rolled back main"),
             "two\n"
@@ -2219,14 +2221,22 @@ mod tests {
         assert!(directory.path().join("generated/later.txt").exists());
 
         let fork = review.fork_at(4).expect("checkpoint fork");
-        assert_eq!(fork.view().expect("fork view").checkpoints.len(), 1);
+        assert_eq!(
+            fork.with_log(|log| (1..=4)
+                .filter(|turn| log.history().has_turn(*turn))
+                .collect::<Vec<_>>())
+                .expect("forked log"),
+            vec![2],
+            "the fork keeps the turns before the cut and drops the rest"
+        );
         let restored = review
             .stage_restore_to_message(2)
             .expect("earlier restoration")
+            .transaction
             .commit();
         assert_eq!(
             restored,
-            vec!["generated/first.txt", "generated/later.txt", "main.txt"]
+            vec!["generated/first.txt", "main.txt", "generated/later.txt"]
         );
         assert_eq!(
             std::fs::read_to_string(directory.path().join("main.txt")).expect("restored main"),

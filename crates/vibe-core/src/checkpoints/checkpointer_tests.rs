@@ -341,7 +341,8 @@ fn a_hand_edit_between_turns_is_appended_as_its_own_owner() {
     let mut log = Checkpointer::new();
     turn_from(&mut log, 1, text("a\n"), text("a\nagent\n"));
 
-    log.reconcile(PATH, text("a\nagent\nby hand\n"));
+    log.reconcile(PATH, text("a\nagent\nby hand\n"))
+        .expect("room for the drift");
 
     assert_eq!(
         owners(&log),
@@ -356,10 +357,13 @@ fn reconciling_content_that_matches_the_projection_appends_nothing() {
     let mut log = Checkpointer::new();
     turn_from(&mut log, 1, text("a\n"), text("b\n"));
 
-    log.reconcile(PATH, text("b\n"));
-    log.reconcile(PATH, text("c\n"));
+    log.reconcile(PATH, text("b\n"))
+        .expect("room for the drift");
+    log.reconcile(PATH, text("c\n"))
+        .expect("room for the drift");
     let after_first_drift = ids(&log);
-    log.reconcile(PATH, text("c\n"));
+    log.reconcile(PATH, text("c\n"))
+        .expect("room for the drift");
 
     assert_eq!(
         ids(&log),
@@ -375,7 +379,8 @@ fn reconciling_during_a_turn_records_nothing_because_that_disk_is_the_turns() {
     log.begin_turn(1).unwrap();
     log.record_pre_edit(PATH, text("a\n")).unwrap();
 
-    log.reconcile(PATH, text("mid turn\n"));
+    log.reconcile(PATH, text("mid turn\n"))
+        .expect("room for the drift");
 
     log.record_post_edit(PATH, text("agent\n")).unwrap();
     log.seal_turn();
@@ -424,7 +429,8 @@ fn a_hand_edit_disjoint_from_a_reverted_turn_survives_it() {
         text("head\nbody\ntail\n"),
         text("head\nAGENT\ntail\n"),
     );
-    log.reconcile(PATH, text("head\nAGENT\ntail\nby hand\n"));
+    log.reconcile(PATH, text("head\nAGENT\ntail\nby hand\n"))
+        .expect("room for the drift");
     let regions = ids(&log);
 
     log.decide_region(PATH, regions[0], Decision::Revert)
@@ -445,7 +451,8 @@ fn a_hand_edit_disjoint_from_a_reverted_turn_survives_it() {
 fn a_hand_edit_built_on_a_reverted_turn_is_dragged_with_it() {
     let mut log = Checkpointer::new();
     turn_from(&mut log, 1, text("head\nbody\n"), text("head\nAGENT\n"));
-    log.reconcile(PATH, text("head\nAGENT AND HAND\n"));
+    log.reconcile(PATH, text("head\nAGENT AND HAND\n"))
+        .expect("room for the drift");
     let regions = ids(&log);
 
     log.decide_region(PATH, regions[0], Decision::Revert)
@@ -459,13 +466,15 @@ fn a_hand_edit_built_on_a_reverted_turn_is_dragged_with_it() {
 fn each_owner_keeps_its_slot_when_a_sibling_is_decided() {
     let mut log = Checkpointer::new();
     turn_from(&mut log, 1, text("a\n"), text("a\nb\n"));
-    log.reconcile(PATH, text("a\nb\nc\n"));
+    log.reconcile(PATH, text("a\nb\nc\n"))
+        .expect("room for the drift");
     turn_from(&mut log, 2, text("a\nb\nc\n"), text("a\nb\nc\nd\n"));
     let before = owners(&log);
 
     log.decide_scope(PATH, Owner::Manual { index: 1 }, Decision::Keep)
         .unwrap();
-    log.reconcile(PATH, text("a\nb\nc\nd\ne\n"));
+    log.reconcile(PATH, text("a\nb\nc\nd\ne\n"))
+        .expect("room for the drift");
 
     assert_eq!(
         owners(&log),

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Rewind to a point in the conversation rather than to a position in a list.
+  `session/rewind` and `session/rewind/read` now take the identity of the
+  history entry you picked, so a rewind after a compaction lands where you
+  pointed instead of on whichever turn happens to sit at that index now. Asking
+  about a point answers whether it would change files and which ones, straight
+  from the session's checkpoint log, and the rewind itself reports the paths it
+  restored and one entry per path it could not write, keeping the rest. A
+  history clear or a compaction empties the checkpoint log with the message list
+  it is numbered against, and reopens a turn that was still running so the tools
+  it has left keep being recorded. The `/rewind` picker lists the saved
+  conversation and no longer takes a message count.
+- Stop dropping file history behind your back. A session used to keep its last
+  64 checkpoints and silently discard the ones before, which retired changes a
+  review panel was still showing. Nothing is discarded now: the log keeps every
+  turn it recorded, and if a session ever accumulates more than 512 MiB of
+  tracked file content it stops capturing new changes and says so on
+  `diagnostics/list` rather than quietly forgetting old ones. The files
+  themselves are written either way.
 - Review what the agent actually changed. The six `review/*` methods now answer
   from the session's checkpoint engine instead of from a stub production never
   wrote to, so `review/state` lists the real changed files with a hunk per

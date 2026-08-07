@@ -15,10 +15,10 @@ use super::controls::ControlState;
 use super::debug_console::{DebugConsole, PAGE_SIZE as DEBUG_PAGE_SIZE};
 use super::interaction::{Overlay, OverlayKind, RemoteProjectAction, TeleportPushAction};
 use super::pickers::{
-    config_overlay, help_overlay, model_overlay, proxy_overlay, rewind_state, sessions_overlay,
+    config_overlay, help_overlay, model_overlay, proxy_overlay, rewind_targets, sessions_overlay,
     status_overlay, theme_overlay, thinking_overlay, voice_overlay,
 };
-use super::rewind::{RewindEffect, reduce_key as reduce_rewind_key};
+use super::rewind::{RewindEffect, RewindState, reduce_key as reduce_rewind_key};
 use super::session_picker::{
     SessionDeleteState, SessionPickerEffect, reduce_key as reduce_session_picker_key,
 };
@@ -42,6 +42,12 @@ use mcp::{handle_mcp, refresh_selected_mcp, set_selected_mcp};
 pub(in crate::tui) use mcp::{reduce_auth_action, valid_auth_url};
 use overlay::select_overlay_item;
 pub(in crate::tui) use runtime::handle_runtime_command;
+
+/// How much of the saved transcript the rewind picker lists.
+///
+/// The store caps a page at 500, and a rewind point past that is one the
+/// operator would have to scroll a conversation of that length to reach.
+const REWIND_HISTORY_LIMIT: usize = 500;
 
 const DATA_RETENTION_MESSAGE: &str = "\
 ## Your Data Helps Improve Mistral AI
@@ -68,7 +74,6 @@ pub(super) enum RuntimeCommand {
     Compact(String),
     Rename(String),
     Resume(String),
-    Rewind(String),
     Loop(String),
     Teleport(String),
     RemoteProject(String),
@@ -79,10 +84,7 @@ pub(super) enum RuntimeCommand {
 
 impl RuntimeCommand {
     pub(super) const fn changes_session_projection(&self) -> bool {
-        matches!(
-            self,
-            Self::Clear | Self::Compact(_) | Self::Resume(_) | Self::Rewind(_)
-        )
+        matches!(self, Self::Clear | Self::Compact(_) | Self::Resume(_))
     }
 }
 
@@ -155,9 +157,6 @@ pub(super) async fn dispatch_command(
         }
         CommandId::Resume if !command_arguments.is_empty() => {
             return CommandAction::Runtime(RuntimeCommand::Resume(command_arguments));
-        }
-        CommandId::Rewind if !command_arguments.is_empty() => {
-            return CommandAction::Runtime(RuntimeCommand::Rewind(command_arguments));
         }
         _ => {}
     }
@@ -661,19 +660,31 @@ fn show_sessions(runtime: &mut InteractiveRuntime, working_directory: &Path, sta
     }
 }
 
+/// Opens the rewind picker over the session's saved user messages.
+///
+/// The list is the stored transcript, which is what a rewind cuts, and each
+/// point is addressed by its history identity rather than by a position that
+/// the next compaction would move. Whether a point would change files is asked
+/// for the selected point alone, because only the session's checkpoint log
+/// knows and the panel shows one point at a time.
 pub(super) fn show_rewind(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
-    let Some(result) = call_runtime(
+    let Some(history) = call_runtime(
         runtime,
-        "session/rewind/read",
-        json!({"sessionId": runtime.session_id}),
+        "history/list",
+        json!({
+            "sessionId": runtime.session_id,
+            "offset": 0,
+            "limit": REWIND_HISTORY_LIMIT,
+        }),
         state,
     ) else {
         return;
     };
-    let rewind = rewind_state(&map_value(result));
-    if let Some(rewind) = rewind {
+    let targets = rewind_targets(&map_value(history), 0);
+    if let Some(rewind) = RewindState::new(targets) {
         state.overlay = None;
         state.rewind = Some(rewind);
+        probe_rewind_target(runtime, state);
     } else {
         push_local_notice(
             state,
@@ -929,8 +940,21 @@ fn handle_rewind_key(
     let Some(rewind) = state.rewind.as_mut() else {
         return;
     };
+    let selected = rewind.target().entry_id.clone();
     match reduce_rewind_key(rewind, key) {
-        RewindEffect::None => {}
+        RewindEffect::None => {
+            // Moving to another point changes which actions the panel offers,
+            // and only the log can say whether that point would change files.
+            let moved = state
+                .rewind
+                .as_ref()
+                .is_some_and(|rewind| rewind.target().entry_id != selected);
+            if let Some(runtime) = runtime.as_mut()
+                && moved
+            {
+                probe_rewind_target(runtime, state);
+            }
+        }
         RewindEffect::Cancel => state.rewind = None,
         RewindEffect::Scroll(delta) if delta.is_negative() => {
             state.scroll_up(delta.unsigned_abs());
@@ -939,16 +963,35 @@ fn handle_rewind_key(
             state.scroll_down(delta.unsigned_abs());
         }
         RewindEffect::Accept {
-            message_index,
+            entry_id,
             restore_files,
-        } => accept_rewind(
-            runtime,
-            state,
-            controls,
-            composer,
-            message_index,
-            restore_files,
-        ),
+        } => accept_rewind(runtime, state, controls, composer, &entry_id, restore_files),
+    }
+}
+
+/// Asks the session's checkpoint log whether the selected point would change
+/// files, which is what decides the actions the panel offers.
+///
+/// A point the log carries no turn for answers false, which is the same answer
+/// a session with no engine attached gives.
+fn probe_rewind_target(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
+    let Some(entry_id) = state
+        .rewind
+        .as_ref()
+        .map(|rewind| rewind.target().entry_id.clone())
+    else {
+        return;
+    };
+    let has_file_changes = call_runtime(
+        runtime,
+        "session/rewind/read",
+        json!({"sessionId": runtime.session_id, "entryId": entry_id}),
+        state,
+    )
+    .and_then(|result| result.get("hasFileChanges").and_then(Value::as_bool))
+    .unwrap_or(false);
+    if let Some(rewind) = state.rewind.as_mut() {
+        rewind.set_target_file_changes(has_file_changes);
     }
 }
 
@@ -957,7 +1000,7 @@ fn accept_rewind(
     state: &mut TuiState,
     controls: &mut ControlState,
     composer: &mut ChatInputState,
-    message_index: usize,
+    entry_id: &str,
     restore_files: bool,
 ) {
     let Some(runtime) = runtime.as_mut() else {
@@ -968,7 +1011,7 @@ fn accept_rewind(
         "session/rewind",
         json!({
             "sessionId": runtime.session_id,
-            "messageIndex": message_index,
+            "entryId": entry_id,
             "restoreFiles": restore_files,
         }),
     ) {
@@ -993,7 +1036,14 @@ fn accept_rewind(
         .filter_map(Value::as_str)
         .map(ToOwned::to_owned)
         .collect::<Vec<_>>();
-    if let Some(session_id) = metadata_session_id(&result)
+    // The answer carries the rewound session's public state rather than its
+    // stored metadata, so the session to adopt is named there. A fork lands on
+    // a new identifier and an in-place rewind on the same one.
+    if let Some(session_id) = result
+        .get("state")
+        .and_then(|state| state.pointer("/session/id"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
         && adopt_hydrated_session(runtime, state, controls, session_id)
     {
         composer.replace_text(message);

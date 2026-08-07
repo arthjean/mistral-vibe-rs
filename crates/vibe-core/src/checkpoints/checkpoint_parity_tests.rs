@@ -786,6 +786,9 @@ fn outcome_of(result: Result<(), CheckpointError>) -> &'static str {
         Err(CheckpointError::UnknownRegion { .. } | CheckpointError::PendingDecision) => {
             "fileState"
         }
+        // No scenario reaches the retention ceiling, which the reference does
+        // not have; a corpus step that did would be a divergence, not a family.
+        Err(CheckpointError::RetentionExhausted { .. }) => "retention",
     }
 }
 
@@ -804,7 +807,7 @@ fn apply_step(log: &mut Checkpointer, step: &Step) -> &'static str {
             "ok"
         }
         Step::Reconcile { path, text } => {
-            log.reconcile(path, state_of(text.as_deref()));
+            outcome_of(log.reconcile(path, state_of(text.as_deref())));
             "ok"
         }
         Step::DecideRegion {

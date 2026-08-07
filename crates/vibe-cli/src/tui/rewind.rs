@@ -2,7 +2,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RewindTarget {
-    pub message_index: usize,
+    /// The stable history identity the server resolves the rewind against.
+    pub entry_id: String,
     pub message: String,
     pub has_file_changes: bool,
 }
@@ -21,13 +22,13 @@ pub struct RewindState {
     error: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RewindEffect {
     None,
     Cancel,
     Scroll(isize),
     Accept {
-        message_index: usize,
+        entry_id: String,
         restore_files: bool,
     },
 }
@@ -77,6 +78,17 @@ impl RewindState {
         self.error = Some(error.into());
     }
 
+    /// Records whether the selected point would change files.
+    ///
+    /// The panel shows one point at a time, so this is asked per selection
+    /// rather than for the whole list: the answer costs a read of the stored
+    /// session and of every path a restore to that point would touch.
+    pub fn set_target_file_changes(&mut self, has_file_changes: bool) {
+        if let Some(target) = self.targets.get_mut(self.target) {
+            target.has_file_changes = has_file_changes;
+        }
+    }
+
     fn move_target(&mut self, delta: isize) {
         self.target = self
             .target
@@ -110,7 +122,7 @@ impl RewindState {
 
     fn selection(&self) -> RewindEffect {
         RewindEffect::Accept {
-            message_index: self.target().message_index,
+            entry_id: self.target().entry_id.clone(),
             restore_files: self.selected_action() == RewindAction::RestoreAndEdit,
         }
     }

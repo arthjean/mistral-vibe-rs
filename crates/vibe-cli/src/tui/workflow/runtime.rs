@@ -98,39 +98,6 @@ pub(in crate::tui) async fn handle_runtime_command(
                 Err(error) => state.push_diagnostic(error.to_string()),
             }
         }
-        RuntimeCommand::Rewind(keep) => {
-            let keep_messages = keep
-                .split_whitespace()
-                .next()
-                .map(str::parse::<usize>)
-                .transpose();
-            match keep_messages {
-                Ok(keep_messages) => {
-                    let keep_messages = keep_messages.unwrap_or_default();
-                    if call_runtime(
-                        runtime,
-                        "session/rewind",
-                        json!({
-                            "sessionId": runtime.session_id,
-                            "keepMessages": keep_messages,
-                        }),
-                        state,
-                    )
-                    .is_some()
-                    {
-                        let session_id = runtime.session_id.clone();
-                        if adopt_hydrated_session(runtime, state, controls, session_id) {
-                            push_local_notice(
-                                state,
-                                &format!("Rewound to {keep_messages} stored messages"),
-                                EntryStatus::Completed,
-                            );
-                        }
-                    }
-                }
-                Err(_) => state.push_diagnostic("Usage: /rewind [message-count]"),
-            }
-        }
         RuntimeCommand::Resume(requested) => {
             let Some(session_id) = requested.split_whitespace().next() else {
                 state.push_diagnostic("Usage: /resume <session-id>");

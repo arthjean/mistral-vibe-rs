@@ -86,24 +86,41 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
             }
             if request.method == "session/rewind/read"
                 && let Some(session_id) = target_session_id.as_deref()
-                && let Err(error) = enrich_rewind_targets(connection, session_id, &mut dispatch)
+                && let Err(error) =
+                    enrich_rewind_read(connection, session_id, &request, &mut dispatch)
             {
                 return internal_error_batch(request.id, &error);
             }
             if request.method == "session/agent/update" {
                 update_runtime_agent(connection, &request);
             }
+            // Clearing the history renumbers every turn the log holds, since a
+            // turn is numbered by a position in the list that just emptied. The
+            // rewind path does not come through here: its own truncation owns
+            // the log, and clearing it would throw away the turns it kept.
+            if request.method == "session/history/clear"
+                && let Some(session_id) = target_session_id.as_deref()
+                && let Err(error) = reset_checkpoint_log(connection, session_id, 0)
+            {
+                return internal_error_batch(request.id, &error);
+            }
             if let Some(session_id) = target_session_id.as_deref() {
                 enrich_config_response(connection, session_id, &request.method, &mut dispatch);
                 enrich_active_agent(connection, session_id, &request.method, &mut dispatch);
             }
-            if let Some(paths) = rewind.commit_workspace() {
+            if let Some((paths, errors)) = rewind.commit_workspace() {
                 dispatch
                     .result
                     .insert("restoredPaths".to_owned(), json!(paths));
                 dispatch
                     .result
-                    .insert("restoreErrors".to_owned(), json!([]));
+                    .insert("restoreErrors".to_owned(), json!(errors));
+            }
+            if request.method == "session/rewind"
+                && let Some(session_id) = result_session_id.as_deref()
+                && let Err(error) = enrich_rewind_response(connection, session_id, &mut dispatch)
+            {
+                return internal_error_batch(request.id, &error);
             }
             let mut batch = success_batch(request.id, dispatch.result);
             // The snapshot follows the answer rather than preceding it: the
@@ -267,9 +284,15 @@ fn enrich_config_response(
     }
 }
 
-fn enrich_rewind_targets(
+/// Fills in the two fields only the session's checkpoint log can answer.
+///
+/// A session with no engine attached keeps the empty answer the service
+/// composed: a workspace that never opened has nothing to restore, which is not
+/// the same as a failure a client can act on.
+fn enrich_rewind_read(
     connection: &ServerConnection,
     session_id: &str,
+    request: &ServerRequest,
     dispatch: &mut Release3Dispatch,
 ) -> Result<(), ServerError> {
     let sessions = connection.server.lock_sessions()?;
@@ -279,35 +302,71 @@ fn enrich_rewind_targets(
             .and_then(|session| session.review.clone())
     };
     drop(sessions);
+    let (Some(review), Some(entry_id)) = (
+        review,
+        request.params.get("entryId").and_then(Value::as_str),
+    ) else {
+        return Ok(());
+    };
+    let index = connection
+        .server
+        .release3
+        .rewind_entry_index(session_id, entry_id)
+        .map_err(|error| ServerError::Resource(error.to_string()))?;
+    let paths = review
+        .restorable_paths_at(index)
+        .map_err(|error| ServerError::Resource(error.to_string()))?;
+    dispatch
+        .result
+        .insert("hasFileChanges".to_owned(), json!(!paths.is_empty()));
+    dispatch.result.insert("paths".to_owned(), json!(paths));
+    Ok(())
+}
+
+/// Empties the session's checkpoint log because the message list it is
+/// numbered against was replaced, reopening a turn at `message_count` when one
+/// was running.
+pub(super) fn reset_checkpoint_log(
+    connection: &ServerConnection,
+    session_id: &str,
+    message_count: usize,
+) -> Result<(), ServerError> {
+    let review = {
+        let sessions = connection.server.lock_sessions()?;
+        sessions
+            .get(session_id)
+            .and_then(|session| session.review.clone())
+    };
     let Some(review) = review else {
         return Ok(());
     };
-    let mut restore_supported = false;
-    if let Some(messages) = dispatch
-        .result
-        .get_mut("messages")
-        .and_then(Value::as_array_mut)
-    {
-        for message in messages {
-            let Some(index) = message
-                .get("messageIndex")
-                .and_then(Value::as_u64)
-                .and_then(|index| usize::try_from(index).ok())
-            else {
-                continue;
-            };
-            let paths = review
-                .restorable_paths_at(index)
-                .map_err(|error| ServerError::Resource(error.to_string()))?;
-            let has_changes = !paths.is_empty();
-            restore_supported |= has_changes;
-            message["hasFileChanges"] = json!(has_changes);
-            message["restorablePaths"] = json!(paths);
-        }
-    }
-    dispatch
-        .result
-        .insert("restoreSupported".to_owned(), json!(restore_supported));
+    review
+        .reset_messages(message_count)
+        .map_err(|error| ServerError::Resource(error.to_string()))
+}
+
+/// Adds the two fields `SessionRewindResponse` requires that only the live
+/// session carries.
+///
+/// The rewind may have forked, so the state is read from whichever session the
+/// attachment landed on rather than from the one the request named.
+fn enrich_rewind_response(
+    connection: &ServerConnection,
+    session_id: &str,
+    dispatch: &mut Release3Dispatch,
+) -> Result<(), ServerError> {
+    let state = {
+        let sessions = connection.server.lock_sessions()?;
+        sessions.get(session_id).map(public_session_state)
+    };
+    let Some(state) = state else {
+        return Err(ServerError::SessionNotFound(session_id.to_owned()));
+    };
+    dispatch.result.insert("state".to_owned(), state);
+    dispatch.result.insert(
+        "sessionLog".to_owned(),
+        connection.server.session_log_summary(session_id),
+    );
     Ok(())
 }
 
@@ -339,6 +398,10 @@ struct RewindTransaction {
     source: Option<HydratedSession>,
     rewound_review: Option<Arc<ReviewManager>>,
     workspace: Option<RestoreTransaction>,
+    /// One entry per path the restore could not write. A partial failure does
+    /// not undo the rest, which is why these travel with the answer rather than
+    /// instead of it.
+    restore_errors: Vec<String>,
 }
 
 impl RewindTransaction {
@@ -353,11 +416,17 @@ impl RewindTransaction {
         let Some(session_id) = session_id else {
             return Ok(Self::default());
         };
-        let message_index = request
-            .params
-            .get("messageIndex")
-            .and_then(Value::as_u64)
-            .and_then(|index| usize::try_from(index).ok());
+        // The entry is resolved before anything is staged: an identifier no
+        // rewindable message carries is a `not_found` the service answers, and
+        // staging a restore for it would touch disk for a call about to fail.
+        let entry_id = request.params.get("entryId").and_then(Value::as_str);
+        let message_index = entry_id.and_then(|entry_id| {
+            connection
+                .server
+                .release3
+                .rewind_entry_index(session_id, entry_id)
+                .ok()
+        });
         let source = connection
             .server
             .release3
@@ -390,12 +459,18 @@ impl RewindTransaction {
             .get("restoreFiles")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let workspace = if restore_requested {
+        let staged = if restore_requested {
             let Some(message_index) = message_index else {
+                // Named the way the service names it, so a client reading the
+                // message learns which identifier failed to resolve whether the
+                // refusal came from here or from the rewind itself.
                 return Err(error_batch(
                     request.id.clone(),
-                    ProtocolErrorCode::InvalidParams,
-                    "file restoration requires messageIndex",
+                    ProtocolErrorCode::NotFound,
+                    &format!(
+                        "Rewindable history entry not found: {}",
+                        entry_id.unwrap_or_default()
+                    ),
                 ));
             };
             let Some(review) = review.as_ref() else {
@@ -419,10 +494,14 @@ impl RewindTransaction {
         } else {
             None
         };
+        let (workspace, restore_errors) = staged.map_or((None, Vec::new()), |staged| {
+            (Some(staged.transaction), staged.errors)
+        });
         Ok(Self {
             source: Some(source),
             rewound_review,
             workspace,
+            restore_errors,
         })
     }
 
@@ -430,8 +509,10 @@ impl RewindTransaction {
         self.rewound_review.clone()
     }
 
-    fn commit_workspace(&mut self) -> Option<Vec<String>> {
-        self.workspace.take().map(RestoreTransaction::commit)
+    fn commit_workspace(&mut self) -> Option<(Vec<String>, Vec<String>)> {
+        self.workspace
+            .take()
+            .map(|workspace| (workspace.commit(), std::mem::take(&mut self.restore_errors)))
     }
 
     fn rollback_workspace(&mut self) -> Result<(), WorkspaceError> {

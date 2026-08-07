@@ -45,7 +45,7 @@ mod models;
 mod recorder;
 mod review;
 
-pub use checkpointer::Checkpointer;
+pub use checkpointer::{Checkpointer, RETAINED_BYTES_LIMIT};
 pub use files::{CheckpointFiles, FileAccessError, FileStore, RestoreOutcome};
 pub use history::History;
 pub use lines::{FileState, decode_lines, split_lines};

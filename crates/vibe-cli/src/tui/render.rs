@@ -1329,7 +1329,7 @@ mod tests {
 
     use super::*;
     use crate::tui::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName};
-    use crate::tui::pickers::rewind_state;
+    use crate::tui::rewind::{RewindState, RewindTarget};
     use crate::tui::state::{EntryStatus, TranscriptEntry, TranscriptKind};
 
     fn theme(colors_enabled: bool) -> ResolvedTheme {
@@ -1461,13 +1461,11 @@ mod tests {
             let backend = TestBackend::new(width, 18);
             let mut terminal = Terminal::new(backend).expect("test terminal");
             let mut state = TuiState::new("session");
-            state.rewind = rewind_state(&json!({
-                "messages": [{
-                    "messageIndex": 4,
-                    "message": "edit the runtime checkpoint behavior",
-                    "hasFileChanges": true
-                }]
-            }));
+            state.rewind = RewindState::new(vec![RewindTarget {
+                entry_id: "history:4:user".to_owned(),
+                message: "edit the runtime checkpoint behavior".to_owned(),
+                has_file_changes: true,
+            }]);
             state
                 .rewind
                 .as_mut()

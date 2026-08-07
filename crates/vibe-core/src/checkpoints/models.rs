@@ -46,6 +46,15 @@ pub enum CheckpointError {
     /// A decision was recorded as pending, which decides nothing.
     #[error("a decision is a keep or a revert, never pending")]
     PendingDecision,
+    /// The log already retains as many file bytes as it is allowed to, so the
+    /// capture was refused rather than making room by dropping an event.
+    #[error(
+        "file history for this session has reached its {limit}-byte limit; new changes are no longer tracked"
+    )]
+    RetentionExhausted {
+        /// The ceiling that was reached, named so a reader can size it.
+        limit: usize,
+    },
 }
 
 /// Why a change is reviewable only as a whole file.

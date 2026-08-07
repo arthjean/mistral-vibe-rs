@@ -152,7 +152,8 @@ fn a_files_status_names_deletion_before_opacity_and_creation_before_modification
 fn every_owner_keeps_a_slot_in_log_order_with_its_still_pending_files() {
     let mut log = Checkpointer::new();
     turn(&mut log, 1, text("one\n"));
-    log.reconcile(PATH, text("one\nby hand\n"));
+    log.reconcile(PATH, text("one\nby hand\n"))
+        .expect("room for the drift");
     turn(&mut log, 2, text("one\nby hand\ntwo\n"));
 
     let state = project_state(&log.history(), &on_disk(&log));
@@ -508,7 +509,8 @@ fn a_projected_region_serializes_under_the_names_the_census_records() {
 fn a_manual_owner_and_an_opaque_region_serialize_as_the_census_declares_them() {
     let mut log = Checkpointer::new();
     turn(&mut log, 1, text("one\n"));
-    log.reconcile(PATH, FileState::from_bytes(b"\0by hand".to_vec()));
+    log.reconcile(PATH, FileState::from_bytes(b"\0by hand".to_vec()))
+        .expect("room for the drift");
     let state = project_state(&log.history(), &on_disk(&log));
 
     let encoded = serde_json::to_value(&state).expect("the projection encodes");

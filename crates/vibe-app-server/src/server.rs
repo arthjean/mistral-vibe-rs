@@ -74,6 +74,8 @@ const MANAGED_SHELL_VARIABLE: &str = "VIBE_MANAGED_SHELL_TOOLS";
 /// What a tool-surface diagnostic is attributed to: the tool filters and the
 /// availability conditions both come from the configuration the session loaded.
 pub(crate) const CONFIG_FILE_LABEL: &str = "config.toml";
+/// What a diagnostic about the session's checkpoint log names as its source.
+pub(crate) const FILE_HISTORY_LABEL: &str = "file history";
 const MAX_CALLBACK_OUTPUT_BYTES: usize = 64 * 1024;
 const MAX_CALLBACK_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_CALLBACK_ANSWERS: usize = 16;
@@ -752,6 +754,7 @@ impl AppServer {
             review
                 .seal_turn()
                 .map_err(|error| ServerError::Resource(error.to_string()))?;
+            self.publish_retention_notice(review);
         }
         let turn = PublicTurn {
             id: turn_id.to_owned(),
@@ -832,6 +835,7 @@ impl AppServer {
             review
                 .seal_turn()
                 .map_err(|error| ServerError::Resource(error.to_string()))?;
+            self.publish_retention_notice(review);
         }
         session.active_turn = None;
         session.active_turn_started_at = None;
@@ -1279,6 +1283,17 @@ impl AppServer {
             session.intent.resume = Some(new_session_id.to_owned());
             session.status = SessionStatus::Idle;
             session.compaction_pending = false;
+            // Compaction replaces the message list, so every turn identifier
+            // the checkpoint log holds now points at a position that moved. The
+            // log is emptied rather than renumbered, and a turn that was open
+            // is reopened at the new length so the tool loop still running has
+            // somewhere to record.
+            let message_count = hydrated.messages.len();
+            if let Some(review) = &session.review
+                && let Err(error) = review.reset_messages(message_count)
+            {
+                return internal_error_batch(request_id, &ServerError::Resource(error.to_string()));
+            }
             session.persisted = Some(hydrated);
             session.updated_at = now_millis();
             session.event_watermark = 0;
@@ -1589,6 +1604,23 @@ impl AppServer {
                     .count()
             })
             .unwrap_or(0)
+    }
+
+    /// Publishes the warning a full checkpoint log raised, once.
+    ///
+    /// A log with no room left refuses to capture rather than dropping what it
+    /// already holds, and an operator whose file history quietly stopped being
+    /// tracked has no way to notice. `diagnostics/list` is where a client reads
+    /// what the session could not do, so that is where this lands. A lock this
+    /// cannot take loses the warning rather than failing the turn that carried
+    /// it.
+    pub(crate) fn publish_retention_notice(&self, review: &ReviewManager) {
+        let Ok(Some(notice)) = review.take_retention_notice() else {
+            return;
+        };
+        if let Ok(mut resources) = self.resources.lock() {
+            resources.record_diagnostic(FILE_HISTORY_LABEL, &notice);
+        }
     }
 
     /// The session's logging state as `SessionLogSummary` declares it.
@@ -3463,10 +3495,11 @@ impl ServerConnection {
         {
             return release4_error_batch(request.id, error);
         }
-        if let Some(review) = &session.review
-            && let Err(error) = review.seal_turn()
-        {
-            return internal_error_batch(request.id, &ServerError::Resource(error.to_string()));
+        if let Some(review) = &session.review {
+            if let Err(error) = review.seal_turn() {
+                return internal_error_batch(request.id, &ServerError::Resource(error.to_string()));
+            }
+            self.server.publish_retention_notice(review);
         }
         let started_at = session.active_turn_started_at.unwrap_or_default();
         let canonical_session_id = session.id.clone();
@@ -6300,27 +6333,60 @@ mod tests {
         let read = connection.dispatch(&request(
             5,
             "session/rewind/read",
-            json!({"sessionId": "source-session"}),
+            json!({"sessionId": "source-session", "entryId": "history:5:user"}),
         ));
         let decoded = decode_frame(&read.outbound[0]).expect("rewind read response");
         assert!(matches!(decoded, Envelope::Success(_)));
         let Envelope::Success(SuccessResponse { result, .. }) = decoded else {
             return;
         };
-        let messages = result["messages"].as_array().expect("rewind targets");
-        let live_target = messages
-            .iter()
-            .find(|message| message["messageIndex"] == 5)
-            .expect("live target");
-        assert_eq!(live_target["hasFileChanges"], true);
-        assert_eq!(live_target["restorablePaths"], json!(["main.txt"]));
+        // The read answers the entry it was asked about and nothing else, and
+        // the paths come from the session's own checkpoint log.
+        assert_eq!(result["hasFileChanges"], json!(true));
+        assert_eq!(result["paths"], json!(["main.txt"]));
+        assert!(
+            crate::app_server_surface_parity_tests::census_issues(
+                "session/rewind/read",
+                &Value::Object(result.clone().into_iter().collect()),
+            )
+            .is_empty(),
+            "the read diverges from the reference census: {result:?}"
+        );
+
+        // A point no turn was captured for restores nothing rather than
+        // planning from the nearest turn that was.
+        let untouched = connection.dispatch(&request(
+            52,
+            "session/rewind/read",
+            json!({"sessionId": "source-session", "entryId": "history:0:user"}),
+        ));
+        let Envelope::Success(SuccessResponse { result: quiet, .. }) =
+            decode_frame(&untouched.outbound[0]).expect("untouched read")
+        else {
+            unreachable!("the read answers");
+        };
+        assert_eq!(quiet["hasFileChanges"], json!(false));
+        assert_eq!(quiet["paths"], json!([]));
+
+        let unknown = connection.dispatch(&request(
+            51,
+            "session/rewind/read",
+            json!({"sessionId": "source-session", "entryId": "history:4:user"}),
+        ));
+        assert!(
+            matches!(
+                decode_frame(&unknown.outbound[0]).expect("unknown entry"),
+                Envelope::Error(_)
+            ),
+            "an identifier no rewindable entry carries is refused"
+        );
 
         let rejected = connection.dispatch(&request(
             6,
             "session/rewind",
             json!({
                 "sessionId": "source-session",
-                "messageIndex": 5,
+                "entryId": "history:5:user",
                 "restoreFiles": true,
                 "inplace": "invalid"
             }),
@@ -6339,7 +6405,7 @@ mod tests {
             "session/rewind",
             json!({
                 "sessionId": "source-session",
-                "messageIndex": 5,
+                "entryId": "history:5:user",
                 "restoreFiles": true
             }),
         ));
@@ -6348,10 +6414,32 @@ mod tests {
         let Envelope::Success(SuccessResponse { result, .. }) = decoded else {
             return;
         };
-        let child_id = result["metadata"]["session_id"]
+        // `SessionRewindResponse` declares exactly these five fields, and the
+        // session a client adopts is named by the state rather than by stored
+        // metadata the response no longer carries.
+        assert_eq!(
+            result.keys().cloned().collect::<Vec<_>>(),
+            vec![
+                "message".to_owned(),
+                "restoreErrors".to_owned(),
+                "restoredPaths".to_owned(),
+                "sessionLog".to_owned(),
+                "state".to_owned()
+            ]
+        );
+        assert!(
+            crate::app_server_surface_parity_tests::census_issues(
+                "session/rewind",
+                &Value::Object(result.clone().into_iter().collect()),
+            )
+            .is_empty(),
+            "the rewind diverges from the reference census: {result:?}"
+        );
+        let child_id = result["state"]["session"]["id"]
             .as_str()
             .expect("branch id");
         assert_ne!(child_id, "source-session");
+        assert_eq!(result["message"], json!("restore live target"));
         assert_eq!(result["restoredPaths"], json!(["main.txt"]));
         assert_eq!(result["restoreErrors"], json!([]));
         assert_eq!(
@@ -6361,6 +6449,152 @@ mod tests {
         assert!(store.load("source-session").is_ok());
         assert!(server.session("source-session").is_ok());
         assert!(server.session(child_id).is_ok());
+    }
+
+    /// The three answers a rewind gives that the restoring fork does not: an
+    /// identifier nothing carries, an in-place rewind that creates no session,
+    /// and a rewind that was told to leave the workspace alone.
+    #[test]
+    fn rewind_refuses_an_unknown_entry_and_honors_inplace_and_untouched_files() {
+        let temporary = tempfile::tempdir().expect("rewind stores");
+        let session_root = temporary.path().join("sessions");
+        let working_directory = temporary.path().join("workspace");
+        fs::create_dir_all(&working_directory).expect("workspace");
+        fs::write(working_directory.join("main.txt"), "before\n").expect("workspace fixture");
+        let store = vibe_core::storage::SessionStore::new(&session_root);
+        let mut metadata = store
+            .create(
+                "source-session",
+                &working_directory.to_string_lossy(),
+                None,
+                1,
+            )
+            .expect("source session");
+        for (timestamp, content) in [(2, "first"), (3, "second")] {
+            store
+                .append_message(
+                    &mut metadata,
+                    &ModelMessage::User {
+                        content: content.to_owned(),
+                    },
+                    timestamp,
+                )
+                .expect("user message");
+        }
+        let release3 = Release3Service::for_runtime_session_root(
+            session_root.clone(),
+            working_directory.clone(),
+        );
+        let server = AppServer::with_release3_service(release3);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        connection.dispatch(&request(
+            2,
+            "session/start",
+            json!({"sessionId": "source-session", "resume": "source-session"}),
+        ));
+        let review = server
+            .lock_sessions()
+            .expect("runtime sessions")
+            .get("source-session")
+            .and_then(|session| session.review.clone())
+            .expect("live review manager");
+        review.begin_turn_at("turn-1", 1).expect("begin turn");
+        review
+            .edit(
+                "main.txt",
+                &[vibe_core::workspace::EditOperation {
+                    old_text: "before".to_owned(),
+                    new_text: "after".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("edit");
+        review.seal_turn().expect("seal turn");
+
+        // An identifier nothing carries is refused the same way whether the
+        // restore staging or the rewind itself catches it, and both name it.
+        for (id, restore_files) in [(3, false), (31, true)] {
+            let unknown = connection.dispatch(&request(
+                id,
+                "session/rewind",
+                json!({
+                    "sessionId": "source-session",
+                    "entryId": "history:9:user",
+                    "restoreFiles": restore_files
+                }),
+            ));
+            let Envelope::Error(ErrorResponse { error, .. }) =
+                decode_frame(&unknown.outbound[0]).expect("unknown entry")
+            else {
+                unreachable!("an entry nothing carries is refused");
+            };
+            assert_eq!(error.code, ProtocolErrorCode::NotFound);
+            assert!(
+                error.message.contains("history:9:user"),
+                "the refusal names the entry: {}",
+                error.message
+            );
+            assert_eq!(
+                fs::read_to_string(working_directory.join("main.txt")).expect("workspace"),
+                "after\n",
+                "an entry nothing carries restores nothing"
+            );
+            assert_eq!(
+                store
+                    .load("source-session")
+                    .expect("source is untouched")
+                    .messages
+                    .len(),
+                2,
+                "an entry nothing carries truncates nothing"
+            );
+        }
+
+        let rewound = connection.dispatch(&request(
+            4,
+            "session/rewind",
+            json!({
+                "sessionId": "source-session",
+                "entryId": "history:1:user",
+                "inplace": true,
+                "restoreFiles": false
+            }),
+        ));
+        let Envelope::Success(SuccessResponse { result, .. }) =
+            decode_frame(&rewound.outbound[0]).expect("in-place rewind")
+        else {
+            unreachable!("the rewind answers");
+        };
+        assert_eq!(result["restoredPaths"], json!([]));
+        assert_eq!(result["restoreErrors"], json!([]));
+        assert_eq!(
+            result["state"]["session"]["id"],
+            json!("source-session"),
+            "an in-place rewind stays in the session it was asked about"
+        );
+        assert_eq!(
+            fs::read_to_string(working_directory.join("main.txt")).expect("workspace"),
+            "after\n",
+            "a rewind told not to restore files leaves the workspace alone"
+        );
+        assert_eq!(
+            store
+                .list(None, 0, 100)
+                .expect("saved sessions")
+                .sessions
+                .len(),
+            1,
+            "no session was forked"
+        );
+        assert_eq!(
+            store
+                .load("source-session")
+                .expect("truncated source")
+                .messages
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -6425,7 +6659,7 @@ mod tests {
             "session/rewind",
             json!({
                 "sessionId": "source-session",
-                "messageIndex": 0,
+                "entryId": "history:0:user",
                 "restoreFiles": true
             }),
         ));

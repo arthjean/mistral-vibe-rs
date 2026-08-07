@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -7,9 +7,10 @@ use super::{
     path_display, text_file, unified_diff,
 };
 use crate::checkpoints::{
-    CheckpointFiles, CheckpointRecorder, Checkpointer, Decision, FileAccessError, FileState,
-    FileStore, Owner, ReviewError, ReviewHunk as AnchoredHunk, ReviewState, ReviewTarget,
-    TurnFileDiff, decide_target, project_scope_diff, project_state, state_text,
+    CheckpointError, CheckpointFiles, CheckpointRecorder, Checkpointer, Decision, FileAccessError,
+    FileState, FileStore, Owner, RecorderError, ReviewError, ReviewHunk as AnchoredHunk,
+    ReviewState, ReviewTarget, TurnFileDiff, decide_target, project_scope_diff, project_state,
+    state_text,
 };
 
 /// Applies one edit's operations to the text it was written against.
@@ -46,30 +47,22 @@ pub(crate) fn apply_edit_operations(
     Ok(updated)
 }
 
-const MAX_REWIND_CHECKPOINTS: usize = 64;
 const MAX_REWIND_SNAPSHOT_BYTES: usize = 64 * 1_048_576;
 
 #[derive(Clone)]
 struct ActiveReviewTurn {
     turn_id: String,
-    message_index: usize,
     baseline: BTreeMap<PathBuf, Option<Vec<u8>>>,
-}
-
-#[derive(Clone)]
-struct StoredCheckpoint {
-    public: Checkpoint,
-    message_index: usize,
-    before: BTreeMap<PathBuf, Option<Vec<u8>>>,
-    snapshot_bytes: usize,
 }
 
 #[derive(Default)]
 struct SnapshotState {
     active_turn: Option<ActiveReviewTurn>,
     baseline: BTreeMap<PathBuf, Option<Vec<u8>>>,
-    checkpoints: VecDeque<StoredCheckpoint>,
-    checkpoint_bytes: usize,
+    /// Set once the log refuses a capture for want of room, and taken by
+    /// whoever publishes it. The refusal is not an error the tool that
+    /// triggered it should fail on: the write landed, only its history did not.
+    retention_notice: Option<String>,
 }
 
 /// The checkpoint engine's filesystem port, backed by the workspace.
@@ -193,12 +186,15 @@ impl ReviewManager {
     pub fn review_state(&self) -> Result<ReviewState, ReviewError> {
         let tracked = self.with_review_log(|log| log.history().tracked_paths())?;
         let current = self.read_states(&tracked)?;
-        self.with_review_log(|log| {
+        let (state, refused) = self.with_review_log(|log| {
+            let mut refused = None;
             for (path, state) in &current {
-                log.reconcile(path, state.clone());
+                reconcile_tracked(log, path, state.clone(), &mut refused);
             }
-            project_state(&log.history(), &current)
-        })
+            (project_state(&log.history(), &current), refused)
+        })?;
+        self.note_retention(refused);
+        Ok(state)
     }
 
     /// Accepts what `target` names into the accepted baseline, answering the
@@ -266,9 +262,11 @@ impl ReviewManager {
         owner: Option<Owner>,
     ) -> Result<Vec<AnchoredHunk>, ReviewError> {
         let current = self.recorder.files().read(path)?;
-        self.with_review_log(|log| {
-            log.reconcile(path, current);
-            log.history()
+        let (hunks, refused) = self.with_review_log(|log| {
+            let mut refused = None;
+            reconcile_tracked(log, path, current, &mut refused);
+            let hunks = log
+                .history()
                 .pending_hunks(path, owner)
                 .into_iter()
                 .map(|anchor| AnchoredHunk {
@@ -276,8 +274,11 @@ impl ReviewManager {
                     line: anchor.line,
                     regions: anchor.regions,
                 })
-                .collect()
-        })
+                .collect();
+            (hunks, refused)
+        })?;
+        self.note_retention(refused);
+        Ok(hunks)
     }
 
     /// Reconciles, decides and persists, with the log rolled back when a write
@@ -289,9 +290,10 @@ impl ReviewManager {
     ) -> Result<Vec<String>, ReviewError> {
         let tracked = self.with_review_log(|log| log.history().tracked_paths())?;
         let current = self.read_states(&tracked)?;
-        self.with_review_log(|log| {
+        let mut refused = None;
+        let decided = self.with_review_log(|log| {
             for (path, state) in &current {
-                log.reconcile(path, state.clone());
+                reconcile_tracked(log, path, state.clone(), &mut refused);
             }
             log.atomic(|log| {
                 let mut affected: Vec<String> = Vec::new();
@@ -305,7 +307,23 @@ impl ReviewManager {
                 }
                 Ok(affected)
             })
-        })?
+        })?;
+        self.note_retention(refused);
+        decided
+    }
+
+    /// Keeps the log's refusal for want of room where a caller can publish it.
+    ///
+    /// A poisoned state lock loses the notice rather than failing the read that
+    /// carried it: the notice is a warning about history, and the answer the
+    /// caller asked for is still correct without it.
+    fn note_retention(&self, refused: Option<String>) {
+        let Some(refused) = refused else {
+            return;
+        };
+        if let Ok(mut state) = self.state.lock() {
+            state.retention_notice.get_or_insert(refused);
+        }
     }
 
     /// Writes `path` to what the log now projects, unless disk already holds it.
@@ -366,7 +384,6 @@ impl ReviewManager {
             .map_err(|error| WorkspaceError::Checkpoint(error.to_string()))?;
         state.active_turn = Some(ActiveReviewTurn {
             turn_id: turn_id.into(),
-            message_index,
             baseline: BTreeMap::new(),
         });
         Ok(())
@@ -427,27 +444,17 @@ impl ReviewManager {
             .ok_or(WorkspaceError::NoActiveTurn)?;
         // A path that went unreadable while the turn ran keeps its change out
         // of the log rather than sealing it as unchanged; the turn closes
-        // either way, and the snapshot path below still answers for it.
+        // either way.
         let _unreadable = self.with_log(|log| self.recorder.seal_turn(log))?;
         let hunks = reconcile_hunks(&self.workspace, &active.baseline)?;
         let active = state
             .active_turn
             .take()
             .ok_or(WorkspaceError::NoActiveTurn)?;
-        let checkpoint = Checkpoint {
+        Ok(Checkpoint {
             turn_id: active.turn_id,
             hunks,
-        };
-        let snapshot_bytes = snapshot_bytes(&active.baseline);
-        state.checkpoint_bytes = state.checkpoint_bytes.saturating_add(snapshot_bytes);
-        state.checkpoints.push_back(StoredCheckpoint {
-            public: checkpoint.clone(),
-            message_index: active.message_index,
-            before: active.baseline,
-            snapshot_bytes,
-        });
-        trim_checkpoints(&mut state);
-        Ok(checkpoint)
+        })
     }
 
     pub fn view(&self) -> Result<ReviewView, WorkspaceError> {
@@ -457,58 +464,78 @@ impl ReviewManager {
                 .active_turn
                 .as_ref()
                 .map(|active| active.turn_id.clone()),
-            checkpoints: state
-                .checkpoints
-                .iter()
-                .map(|checkpoint| checkpoint.public.clone())
-                .collect(),
             pending_hunks: reconcile_hunks(&self.workspace, &state.baseline)?,
         })
     }
 
+    /// The paths a rewind to the turn numbered `message_index` would change on
+    /// disk, in the order the log names them.
+    ///
+    /// A message index the log carries no turn for restores nothing, which is
+    /// what a rewind into a conversation this process never ran answers.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a planned path exists but cannot be read, and when another
+    /// thread poisoned the log.
     pub fn restorable_paths_at(&self, message_index: usize) -> Result<Vec<String>, WorkspaceError> {
         let plan = self.restoration_plan(message_index)?;
+        let files = self.recorder.files();
         let mut paths = Vec::new();
         for (path, target) in plan {
-            if current_file_state(&self.workspace, &path)? != target {
-                paths.push(path_display(&path));
+            let current = files
+                .read(&path)
+                .map_err(|error| WorkspaceError::Checkpoint(error.to_string()))?;
+            if current != target {
+                paths.push(path);
             }
         }
         Ok(paths)
     }
 
+    /// Applies the restore plan for `message_index`, keeping what was there so
+    /// the caller can put it back.
+    ///
+    /// Every path is attempted: one that could not be written is reported and
+    /// the rest still land, because a plan that stopped halfway would leave the
+    /// workspace in a state no version of it ever had. That is the reference's
+    /// rule, and it is why the failures come back beside the transaction rather
+    /// than instead of it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a planned path exists but cannot be read, and when another
+    /// thread poisoned the log.
     pub fn stage_restore_to_message(
         &self,
         message_index: usize,
-    ) -> Result<RestoreTransaction, WorkspaceError> {
+    ) -> Result<StagedRestore, WorkspaceError> {
         let plan = self.restoration_plan(message_index)?;
-        let paths = plan.keys().cloned().collect::<Vec<_>>();
-        let previous = snapshot_file_states(&self.workspace, &paths)?;
-        let changed_paths = plan
-            .iter()
-            .filter(|(path, target)| previous.get(*path) != Some(*target))
-            .map(|(path, _)| path_display(path))
-            .collect();
-        apply_file_states_atomic(&self.workspace, &plan)?;
-        Ok(RestoreTransaction {
-            workspace: self.workspace.clone(),
-            previous: Some(previous),
-            changed_paths,
+        let files = self.recorder.files();
+        let mut previous = Vec::new();
+        for (path, _target) in &plan {
+            let state = files
+                .read(path)
+                .map_err(|error| WorkspaceError::Checkpoint(error.to_string()))?;
+            previous.push((path.clone(), state));
+        }
+        let outcome = files.apply(&plan);
+        Ok(StagedRestore {
+            errors: outcome
+                .errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            transaction: RestoreTransaction {
+                files: self.recorder.files().clone(),
+                previous: Some(previous),
+                changed_paths: outcome.restored,
+            },
         })
     }
 
     pub fn fork_at(&self, message_index: usize) -> Result<Self, WorkspaceError> {
         let state = self.lock_state()?;
-        let checkpoints = state
-            .checkpoints
-            .iter()
-            .filter(|checkpoint| checkpoint.message_index < message_index)
-            .cloned()
-            .collect::<VecDeque<_>>();
-        let checkpoint_bytes = checkpoints
-            .iter()
-            .map(|checkpoint| checkpoint.snapshot_bytes)
-            .sum();
         let forked_log = self.with_log(|log| {
             let mut forked = log.clone();
             if let Ok(turn) = u64::try_from(message_index) {
@@ -521,12 +548,60 @@ impl ReviewManager {
             state: Mutex::new(SnapshotState {
                 active_turn: None,
                 baseline: state.baseline.clone(),
-                checkpoints,
-                checkpoint_bytes,
+                retention_notice: None,
             }),
             log: Mutex::new(forked_log),
             recorder: self.recorder.clone(),
         })
+    }
+
+    /// Clears the log because the message list it is numbered against was
+    /// reset, reopening a turn at `message_index` when one was running.
+    ///
+    /// A clear or a compaction invalidates every turn identifier in the log,
+    /// since each one is a position in the list that just changed. Reopening
+    /// matters for a compaction that happens mid-turn: the tool loop keeps
+    /// running afterward, and without a turn to record against its remaining
+    /// writes would be refused. A rewind does not come through here; its own
+    /// truncation owns the log.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the message index does not fit a turn identifier and when
+    /// another thread poisoned the log.
+    pub fn reset_messages(&self, message_index: usize) -> Result<(), WorkspaceError> {
+        let turn_id = u64::try_from(message_index).map_err(|_| WorkspaceError::LimitOverflow)?;
+        let mut state = self.lock_state()?;
+        let was_open = state.active_turn.take();
+        state.baseline.clear();
+        drop(state);
+        self.with_log(|log| {
+            let reopen = log.has_open_turn();
+            log.clear();
+            if reopen {
+                log.begin_turn(turn_id)
+            } else {
+                Ok(())
+            }
+        })?
+        .map_err(|error| WorkspaceError::Checkpoint(error.to_string()))?;
+        if let Some(active) = was_open {
+            let mut state = self.lock_state()?;
+            state.active_turn = Some(ActiveReviewTurn {
+                turn_id: active.turn_id,
+                baseline: BTreeMap::new(),
+            });
+        }
+        Ok(())
+    }
+
+    /// The warning the log raised when it ran out of room, taken once.
+    ///
+    /// # Errors
+    ///
+    /// Fails when another thread poisoned the review state.
+    pub fn take_retention_notice(&self) -> Result<Option<String>, WorkspaceError> {
+        Ok(self.lock_state()?.retention_notice.take())
     }
 
     pub fn approve(&self) -> Result<ReviewView, WorkspaceError> {
@@ -552,23 +627,16 @@ impl ReviewManager {
         self.view()
     }
 
+    /// What each file a rewind to `message_index` touches should hold once the
+    /// cut lands, straight from the log.
     fn restoration_plan(
         &self,
         message_index: usize,
-    ) -> Result<BTreeMap<PathBuf, Option<Vec<u8>>>, WorkspaceError> {
-        let state = self.lock_state()?;
-        let mut plan = BTreeMap::new();
-        for checkpoint in state
-            .checkpoints
-            .iter()
-            .rev()
-            .filter(|checkpoint| checkpoint.message_index >= message_index)
-        {
-            for (path, before) in &checkpoint.before {
-                plan.insert(path.clone(), before.clone());
-            }
-        }
-        Ok(plan)
+    ) -> Result<Vec<(String, FileState)>, WorkspaceError> {
+        let Ok(turn_id) = u64::try_from(message_index) else {
+            return Ok(Vec::new());
+        };
+        self.with_log(|log| log.history().restore_plan_to_turn(turn_id))
     }
 
     fn capture_baseline(&self, relative: &Path) -> Result<(), WorkspaceError> {
@@ -596,11 +664,25 @@ impl ReviewManager {
         let snapshot = baseline
             .clone()
             .map_or_else(FileState::absent, FileState::from_bytes);
-        self.with_log(|log| {
+        if let Err(refusal) = self.with_log(|log| {
             self.recorder
                 .add_snapshot(log, &path_display(relative), snapshot)
-        })?
-        .map_err(|error| WorkspaceError::Checkpoint(error.to_string()))?;
+        })? {
+            // A log with no room left refuses the capture rather than dropping
+            // an earlier event to make space, and the write itself still
+            // happens: the file changes, only its history stops being tracked.
+            // Anything else the log refused is a state error the caller has to
+            // see.
+            if !matches!(
+                refusal,
+                RecorderError::Log(CheckpointError::RetentionExhausted { .. })
+            ) {
+                return Err(WorkspaceError::Checkpoint(refusal.to_string()));
+            }
+            state
+                .retention_notice
+                .get_or_insert_with(|| refusal.to_string());
+        }
         state
             .baseline
             .entry(relative.to_path_buf())
@@ -621,9 +703,21 @@ impl ReviewManager {
     }
 }
 
+/// A restore that landed, with what it could not write.
+///
+/// The two travel together because a partial failure does not undo the rest:
+/// the caller reports the failures and still owns the decision to keep or roll
+/// back what did land.
+pub struct StagedRestore {
+    /// The applied restore, uncommitted.
+    pub transaction: RestoreTransaction,
+    /// One entry per path the plan could not put in the state it asked for.
+    pub errors: Vec<String>,
+}
+
 pub struct RestoreTransaction {
-    workspace: Arc<Workspace>,
-    previous: Option<BTreeMap<PathBuf, Option<Vec<u8>>>>,
+    files: FileStore<WorkspaceFiles>,
+    previous: Option<Vec<(String, FileState)>>,
     changed_paths: Vec<String>,
 }
 
@@ -638,35 +732,38 @@ impl RestoreTransaction {
         let Some(previous) = self.previous.take() else {
             return Ok(());
         };
-        apply_file_states_atomic(&self.workspace, &previous)
+        match self.files.apply(&previous).errors.first() {
+            Some(error) => Err(WorkspaceError::Checkpoint(error.to_string())),
+            None => Ok(()),
+        }
     }
 }
 
 impl Drop for RestoreTransaction {
     fn drop(&mut self) {
         if let Some(previous) = self.previous.take() {
-            let _ = apply_file_states_atomic(&self.workspace, &previous);
+            let _ = self.files.apply(&previous);
         }
+    }
+}
+
+/// Folds `state` into `log`, keeping a refusal for want of room in `refused`.
+///
+/// A refusal is not a failure of the read it precedes: the drift stays on disk
+/// and stays unattributed, and the surface answers what the log does carry.
+fn reconcile_tracked(
+    log: &mut Checkpointer,
+    path: &str,
+    state: FileState,
+    refused: &mut Option<String>,
+) {
+    if let Err(error) = log.reconcile(path, state) {
+        refused.get_or_insert_with(|| error.to_string());
     }
 }
 
 fn clear_review(state: &mut SnapshotState) {
     state.baseline.clear();
-    state.checkpoints.clear();
-    state.checkpoint_bytes = 0;
-}
-
-fn trim_checkpoints(state: &mut SnapshotState) {
-    while state.checkpoints.len() > MAX_REWIND_CHECKPOINTS
-        || state.checkpoint_bytes > MAX_REWIND_SNAPSHOT_BYTES
-    {
-        let Some(checkpoint) = state.checkpoints.pop_front() else {
-            break;
-        };
-        state.checkpoint_bytes = state
-            .checkpoint_bytes
-            .saturating_sub(checkpoint.snapshot_bytes);
-    }
 }
 
 fn snapshot_bytes(snapshot: &BTreeMap<PathBuf, Option<Vec<u8>>>) -> usize {
@@ -790,15 +887,20 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::checkpoints::{HunkSide, ReviewFileStatus};
+    use crate::checkpoints::{HunkSide, RETAINED_BYTES_LIMIT, ReviewFileStatus};
 
+    /// A log is never shortened behind the caller it answers. The port used to
+    /// drop the oldest checkpoint once 64 had accumulated, which silently
+    /// retired identities a client was still holding; the ceiling replaced it,
+    /// and the ceiling refuses rather than trims.
     #[test]
-    fn checkpoint_retention_is_bounded() {
+    fn the_log_is_never_shortened_behind_the_caller() {
         let root = tempdir().expect("workspace");
         std::fs::write(root.path().join("bounded.txt"), "0").expect("seed file");
         let review = ReviewManager::new(Arc::new(Workspace::open(root.path()).expect("open")));
 
-        for turn in 1..=MAX_REWIND_CHECKPOINTS + 1 {
+        let turns = 80;
+        for turn in 1..=turns {
             review
                 .begin_turn_at(format!("turn-{turn}"), turn)
                 .expect("begin turn");
@@ -815,9 +917,179 @@ mod tests {
             review.seal_turn().expect("seal turn");
         }
 
-        let checkpoints = review.view().expect("view").checkpoints;
-        assert_eq!(checkpoints.len(), MAX_REWIND_CHECKPOINTS);
-        assert_eq!(checkpoints[0].turn_id, "turn-2");
+        let (retained, exhausted) = review
+            .with_log(|log| {
+                (
+                    (1..=turns)
+                        .filter(|turn| log.history().has_turn(u64::try_from(*turn).unwrap_or(0)))
+                        .count(),
+                    log.retained_bytes(),
+                )
+            })
+            .expect("log");
+        assert_eq!(retained, turns, "every turn is still addressable");
+        assert!(
+            exhausted < RETAINED_BYTES_LIMIT,
+            "this fixture is nowhere near the ceiling"
+        );
+        assert!(
+            review.take_retention_notice().expect("notice").is_none(),
+            "nothing was refused, so nothing is published"
+        );
+    }
+
+    /// Reaching the ceiling refuses the capture and says so once. The write
+    /// itself still lands: the file changes, only its history stops being
+    /// tracked, and the operator is told rather than left to discover it.
+    #[test]
+    fn a_full_log_refuses_the_capture_and_publishes_it() {
+        let root = tempdir().expect("workspace");
+        std::fs::write(root.path().join("full.txt"), "one\n").expect("seed file");
+        let review = ReviewManager::new(Arc::new(Workspace::open(root.path()).expect("open")));
+        review
+            .with_log(|log| *log = Checkpointer::with_retention_limit(2))
+            .expect("log");
+
+        review.begin_turn_at("turn-1", 1).expect("begin turn");
+        review
+            .edit(
+                "full.txt",
+                &[EditOperation {
+                    old_text: "one".to_owned(),
+                    new_text: "two".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("the write still lands");
+        review.seal_turn().expect("seal turn");
+
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("full.txt")).expect("read"),
+            "two\n",
+            "the file changed even though its history could not be kept"
+        );
+        assert!(
+            review
+                .with_log(|log| log.history().tracked_paths())
+                .expect("log")
+                .is_empty(),
+            "nothing was captured, and nothing already captured was dropped to make room"
+        );
+        assert!(
+            review.restorable_paths_at(1).expect("plan").is_empty(),
+            "a plan is built from what the log holds, never from what it refused"
+        );
+        let notice = review
+            .take_retention_notice()
+            .expect("notice")
+            .expect("the refusal is published");
+        assert!(
+            notice.contains("limit"),
+            "the notice names the limit: {notice}"
+        );
+        assert!(
+            review.take_retention_notice().expect("notice").is_none(),
+            "the notice is published once"
+        );
+    }
+
+    /// A clear or a compaction replaces the message list every turn identifier
+    /// is a position in, so the log is emptied rather than left pointing at
+    /// positions that moved. A turn that was running is reopened at the new
+    /// length, because the tool loop keeps writing after a mid-turn compaction
+    /// and would otherwise have nothing to record against.
+    #[test]
+    fn a_message_list_reset_clears_the_log_and_reopens_a_running_turn() {
+        let root = tempdir().expect("workspace");
+        let review = seeded(root.path(), "one\n");
+        edited_turn(&review, 1, "one\n", "one\ntwo\n");
+        assert!(!review.review_state().expect("state").files.is_empty());
+
+        review.reset_messages(0).expect("history cleared");
+        let state = review.review_state().expect("state");
+        assert!(state.files.is_empty() && state.scopes.is_empty());
+        assert!(
+            !review.with_log(|log| log.has_open_turn()).expect("log"),
+            "no turn was running, so none is reopened"
+        );
+
+        review.begin_turn_at("turn-2", 2).expect("begin turn");
+        review.reset_messages(7).expect("compacted mid-turn");
+        assert!(
+            review.with_log(|log| log.has_open_turn()).expect("log"),
+            "the turn that was running is reopened"
+        );
+        review
+            .edit(
+                "main.txt",
+                &[EditOperation {
+                    old_text: "two\n".to_owned(),
+                    new_text: "three\n".to_owned(),
+                    replace_all: false,
+                }],
+            )
+            .expect("the remaining tool loop still records");
+        review.seal_turn().expect("seal turn");
+        assert_eq!(
+            review
+                .with_log(|log| log.history().turn_ids())
+                .expect("log"),
+            vec![7],
+            "the reopened turn is numbered against the list that replaced the old one"
+        );
+    }
+
+    /// A restore that cannot write every path reports the ones it could not and
+    /// keeps the ones it could: a plan stopped halfway would leave the
+    /// workspace in a state no version of it ever had.
+    #[cfg(unix)]
+    #[test]
+    fn a_partial_restore_reports_its_failures_and_keeps_the_rest() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempdir().expect("workspace");
+        std::fs::create_dir(root.path().join("locked")).expect("locked directory");
+        std::fs::write(root.path().join("locked/held.txt"), "one\n").expect("seed file");
+        std::fs::write(root.path().join("open.txt"), "one\n").expect("seed file");
+        let review = ReviewManager::new(Arc::new(Workspace::open(root.path()).expect("open")));
+        review.begin_turn_at("turn-1", 1).expect("begin turn");
+        for path in ["locked/held.txt", "open.txt"] {
+            review
+                .edit(
+                    path,
+                    &[EditOperation {
+                        old_text: "one\n".to_owned(),
+                        new_text: "one\ntwo\n".to_owned(),
+                        replace_all: false,
+                    }],
+                )
+                .expect("edit");
+        }
+        review.seal_turn().expect("seal turn");
+
+        let locked = root.path().join("locked");
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555))
+            .expect("seal the directory");
+        let staged = review.stage_restore_to_message(1);
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755))
+            .expect("reopen the directory");
+        let staged = staged.expect("the restore still answers");
+
+        assert_eq!(staged.errors.len(), 1, "one path could not be written");
+        assert!(
+            staged.errors[0].contains("locked/held.txt"),
+            "the failure names its path: {:?}",
+            staged.errors
+        );
+        assert_eq!(
+            staged.transaction.commit(),
+            vec!["open.txt"],
+            "the path that could be written was"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("open.txt")).expect("read"),
+            "one\n"
+        );
     }
 
     /// The one distinction the port carries, on the implementation the server

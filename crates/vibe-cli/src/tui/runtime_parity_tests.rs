@@ -158,7 +158,10 @@ impl Ep008Replay {
                     targets
                         .into_iter()
                         .map(|target| RewindTarget {
-                            message_index: target.message_index,
+                            // The corpus records the position the reference
+                            // rewound to; the identity this port addresses is
+                            // the one the server derives from that position.
+                            entry_id: format!("history:{}:user", target.message_index),
                             message: target.message,
                             has_file_changes: target.has_file_changes,
                         })
@@ -180,9 +183,9 @@ impl Ep008Replay {
             }
             Ep008Event::RewindAccept => match self.reduce_rewind(KeyCode::Enter) {
                 RewindEffect::Accept {
-                    message_index,
+                    entry_id,
                     restore_files,
-                } => format!("rewind:dispatch:{message_index}:{restore_files}"),
+                } => format!("rewind:dispatch:{entry_id}:{restore_files}"),
                 effect => panic!("unexpected rewind effect: {effect:?}"),
             },
             Ep008Event::RewindFailure => {
@@ -305,7 +308,7 @@ impl Ep008Replay {
         let rewind = self.rewind.as_ref().expect("rewind is open");
         format!(
             "rewind:{prefix}:target={}:actions={}:selected={:?}",
-            rewind.target().message_index,
+            rewind.target().entry_id,
             rewind.actions().len(),
             rewind.selected_action()
         )

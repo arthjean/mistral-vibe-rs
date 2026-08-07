@@ -120,17 +120,25 @@ fn overlay_latest_saved_history(
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) -> Result<(), CliError> {
-    let count = match runtime.service.public_call(
-        "session/rewind/read",
-        json!({"sessionId": state.session_id}),
-    ) {
+    // How long the stored transcript is decides which page of it to ask for,
+    // and the session record is what carries both that length and the context
+    // accounting. `session/rewind/read` used to answer them, which it no longer
+    // does: it answers what a rewind to one entry would restore.
+    let count = match runtime
+        .service
+        .public_call("session/log/read", json!({"sessionId": state.session_id}))
+    {
         Ok(result) => {
             runtime.context_tokens = result
-                .get("statistics")
+                .get("metadata")
+                .and_then(|metadata| metadata.get("statistics"))
                 .and_then(|statistics| statistics.get("context_tokens"))
                 .and_then(Value::as_u64)
                 .unwrap_or_default();
-            result.get("messageCount").and_then(Value::as_u64)
+            result
+                .get("messages")
+                .and_then(Value::as_array)
+                .and_then(|messages| u64::try_from(messages.len()).ok())
         }
         Err(_) => None,
     };
