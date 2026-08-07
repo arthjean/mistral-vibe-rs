@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- Return the matches the Python client returns. `grep` now runs on the libraries
+  ripgrep is built from instead of walking the tree with a plain regex: a
+  lowercase pattern matches case-insensitively and one carrying a capital does
+  not, `.gitignore` and `.ignore` are honored inside a repository unless the call
+  turns them off, the 23 configured exclusion globs and every `.vibeignore` line
+  apply either way, and a binary file is walked past rather than matched. The
+  answer reports the match list, the count that survived the cap and whether the
+  cap or the byte budget cut it short, with the matches ordered by path and line
+  so the same query gives the same answer twice.
+- Answer a tool call the way the Python client answers one. `read_file`,
+  `write_file`, `edit`, `grep` and `todo` now publish the reference result fields
+  and reach the model through the same field-per-line rendering, so a prompt
+  tuned against one client reads the same result from the other. `read_file`
+  numbers its lines the same way, tells an empty file from an offset past the
+  last line, and reports the requested offset and limit it was given.
+- Inject a subdirectory's `AGENTS.md` when a file under it is read. The
+  instructions of every directory between the file and the workspace root reach
+  the model once per directory per session, and a progress line names the files
+  as they are discovered.
+- Keep a file's encoding and line endings through an edit. A CRLF file written in
+  a single-byte codec is written back as it was found rather than rewritten as
+  UTF-8 with LF, and two edits of one file now serialize instead of one silently
+  overwriting the other. An edit whose `old_string` is empty, equals
+  `new_string`, is absent from the file, or matches more than once without
+  `replace_all` each fails naming its own cause, and `write_file` refuses an
+  existing file both before and during the write.
+- Acknowledge a skill already loaded instead of sending it twice. A second
+  request for the same skill in one conversation answers with a short
+  acknowledgment carrying the skill directory rather than the whole body, and the
+  file list a first load advertises now walks the skill directory recursively.
+- Send `web_search` the request metadata and the user agent the Python client
+  sends, and fail a response carrying no text instead of returning an empty
+  answer.
+
 - Guard shell commands the way the Python client guards them. Commands are now
   extracted with the same bash grammar, so `python3 <<'EOF'` with a body is
   recognized as a heredoc instead of being refused as a bare interpreter, and
