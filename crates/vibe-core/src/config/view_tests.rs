@@ -173,3 +173,97 @@ fn the_active_provider_is_the_one_the_active_model_names() {
         "the shipped active model is served by the Mistral backend"
     );
 }
+
+/// US-148: the five compaction keys, read as one policy.
+#[test]
+fn the_compaction_settings_carry_the_five_declared_keys() {
+    let (_temporary, shipped) = loaded("");
+    let settings = shipped.compaction_settings();
+    assert_eq!(
+        settings.auto_compact_threshold, 200_000,
+        "`auto_compact_threshold` reaches the settings from the active model"
+    );
+    assert_eq!(
+        settings.compaction_prompt_id, "compact",
+        "`compaction_prompt_id` defaults to the built-in request"
+    );
+    assert!(
+        !settings.context_warnings,
+        "`context_warnings` ships disabled"
+    );
+    assert!(
+        !settings.raise_on_compaction_failure,
+        "`raise_on_compaction_failure` ships disabled"
+    );
+
+    let (_temporary, configured) = loaded(concat!(
+        "auto_compact_threshold = 40000\n",
+        "compaction_prompt_id = \"terse\"\n",
+        "context_warnings = true\n",
+        "raise_on_compaction_failure = true\n",
+        "active_model = \"tuned\"\n",
+        "[[models]]\n",
+        "name = \"tuned-model\"\n",
+        "provider = \"mistral\"\n",
+        "alias = \"tuned\"\n",
+    ));
+    let changed = configured.compaction_settings();
+    assert_eq!(
+        changed.auto_compact_threshold, 40_000,
+        "`auto_compact_threshold` changes the threshold policies read"
+    );
+    assert_eq!(
+        changed.compaction_prompt_id, "terse",
+        "`compaction_prompt_id` changes the prompt identifier the request resolves"
+    );
+    assert!(
+        changed.context_warnings,
+        "`context_warnings` changes whether the conversation is warned"
+    );
+    assert!(
+        changed.raise_on_compaction_failure,
+        "`raise_on_compaction_failure` changes whether a failure is fatal"
+    );
+}
+
+/// US-148: `compaction_model` names the model a summarization is sent to, and
+/// an unset one resolves to the active model, as `get_compaction_model` does.
+#[test]
+fn the_compaction_model_falls_back_to_the_active_model() {
+    let (_temporary, shipped) = loaded("");
+    assert_eq!(
+        shipped.compaction_settings().compaction_model.as_deref(),
+        Some("mistral-vibe-cli-latest"),
+        "an unset `compaction_model` resolves to the active model"
+    );
+
+    let (_temporary, configured) = loaded(concat!(
+        "[compaction_model]\n",
+        "name = \"devstral-small-latest\"\n",
+        "provider = \"mistral\"\n",
+        "alias = \"cheap\"\n",
+    ));
+    assert_eq!(
+        configured.compaction_settings().compaction_model.as_deref(),
+        Some("devstral-small-latest"),
+        "`compaction_model` changes the model a summarization is sent to"
+    );
+}
+
+/// US-148: a model that declares no threshold of its own inherits the global
+/// one, which is what the load's propagation already writes.
+#[test]
+fn an_undeclared_model_threshold_falls_back_to_the_global_one() {
+    let (_temporary, snapshot) = loaded(concat!(
+        "auto_compact_threshold = 90000\n",
+        "active_model = \"tiny\"\n",
+        "[[models]]\n",
+        "name = \"tiny-model\"\n",
+        "provider = \"mistral\"\n",
+        "alias = \"tiny\"\n",
+    ));
+    assert_eq!(
+        snapshot.compaction_settings().auto_compact_threshold,
+        90_000
+    );
+}

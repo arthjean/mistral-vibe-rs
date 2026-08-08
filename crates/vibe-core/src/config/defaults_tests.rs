@@ -262,3 +262,63 @@ fn a_persisted_locally_declared_key_still_loads_beside_the_shipped_defaults() {
         "a locally declared key must not be shipped as a default"
     );
 }
+
+/// US-148: reference `_check_compaction_model_provider`. A compaction model
+/// naming a provider nothing configures fails the load rather than reaching a
+/// summarization that cannot be sent.
+#[test]
+fn a_compaction_model_on_an_unconfigured_provider_fails_naming_both() {
+    let error = shipped(concat!(
+        "[compaction_model]\n",
+        "name = \"summarizer\"\n",
+        "provider = \"absent\"\n",
+        "alias = \"cheap\"\n",
+    ))
+    .expect_err("the provider is not configured");
+    assert!(
+        matches!(
+            &error,
+            ConfigError::CompactionModelProviderMissing { alias, provider }
+                if alias == "cheap" && provider == "absent"
+        ),
+        "{error}"
+    );
+    let message = error.to_string();
+    assert!(message.contains("cheap"), "{message}");
+    assert!(message.contains("absent"), "{message}");
+}
+
+/// The reference also refuses a compaction model served by a different provider
+/// than the active model, because the two share one client.
+#[test]
+fn a_compaction_model_on_another_provider_than_the_active_one_fails() {
+    let error = shipped(concat!(
+        "[compaction_model]\n",
+        "name = \"devstral\"\n",
+        "provider = \"llamacpp\"\n",
+        "alias = \"local-summarizer\"\n",
+    ))
+    .expect_err("the two providers differ");
+    assert!(
+        matches!(
+            &error,
+            ConfigError::CompactionModelProviderMismatch { alias, provider, active_provider }
+                if alias == "local-summarizer"
+                    && provider == "llamacpp"
+                    && active_provider == "mistral"
+        ),
+        "{error}"
+    );
+
+    let agreed = shipped(concat!(
+        "[compaction_model]\n",
+        "name = \"devstral-small-latest\"\n",
+        "provider = \"mistral\"\n",
+        "alias = \"cheap\"\n",
+    ))
+    .expect("a compaction model on the active provider loads");
+    assert_eq!(
+        agreed.compaction_settings().compaction_model.as_deref(),
+        Some("devstral-small-latest")
+    );
+}

@@ -14,6 +14,7 @@ use serde_json::{Value as JsonValue, json};
 use toml::{Table, Value};
 
 use super::ConfigSnapshot;
+use crate::middleware::{CompactionSettings, DEFAULT_COMPACTION_PROMPT_ID};
 
 /// The audio client the wire declares. Only one is served today, and an entry
 /// naming anything else is published under it rather than failing the view.
@@ -70,6 +71,46 @@ impl ConfigSnapshot {
         self.entries("providers")
             .into_iter()
             .find(|entry| entry.get("name").and_then(Value::as_str) == Some(provider.as_str()))
+    }
+
+    /// The five compaction keys, read as one policy.
+    ///
+    /// The threshold is the active model's, which the load already filled from
+    /// the global value for a model that declares none
+    /// (`_apply_global_auto_compact_threshold`); the global key is still read
+    /// as a fallback, because a document composed without the shipped defaults
+    /// never went through that propagation. A negative threshold cannot be
+    /// represented and reads as zero, which is the value that disables
+    /// compaction.
+    ///
+    /// The model is resolved the way `get_compaction_model` resolves it: the
+    /// configured `compaction_model` first, the active model otherwise.
+    #[must_use]
+    pub fn compaction_settings(&self) -> CompactionSettings {
+        let active = self.active_model();
+        let threshold = active
+            .as_ref()
+            .and_then(|entry| entry.get("auto_compact_threshold"))
+            .or_else(|| self.effective.get("auto_compact_threshold"))
+            .and_then(Value::as_integer)
+            .and_then(|threshold| u64::try_from(threshold).ok())
+            .unwrap_or_default();
+        let compaction_model = self
+            .effective
+            .get("compaction_model")
+            .and_then(Value::as_table)
+            .and_then(|entry| entry.get("name"))
+            .or_else(|| active.as_ref().and_then(|entry| entry.get("name")))
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned);
+        CompactionSettings {
+            auto_compact_threshold: threshold,
+            compaction_model,
+            compaction_prompt_id: self
+                .string_field("compaction_prompt_id", DEFAULT_COMPACTION_PROMPT_ID),
+            context_warnings: self.bool_field("context_warnings", false),
+            raise_on_compaction_failure: self.bool_field("raise_on_compaction_failure", false),
+        }
     }
 
     /// The active model entry, keyed by the alias `active_model` names.

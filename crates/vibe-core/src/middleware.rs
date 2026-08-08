@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use crate::engine::{EngineLimits, SessionStats, TurnStopReason};
 use crate::events::ModelMessage;
 
@@ -44,14 +46,51 @@ pub enum ResetReason {
     Compact,
 }
 
+/// The identifier of the built-in compaction request, which is what
+/// `compaction_prompt_id` defaults to.
+pub const DEFAULT_COMPACTION_PROMPT_ID: &str = "compact";
+
 /// The compaction policy a middleware reads.
 ///
 /// It is carried on the conversation context rather than read from a global so
-/// that a policy stays a total function of what it is handed.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// that a policy stays a total function of what it is handed. The five fields
+/// are the five configuration keys the reference declares for compaction, read
+/// once per session by [`crate::config::ConfigSnapshot::compaction_settings`].
+///
+/// [`Default`] is the "nothing configured" answer rather than the shipped
+/// defaults: a stack composed without a configuration compacts on no threshold,
+/// which is what the engine's own tests run under. The published defaults live
+/// in the field registry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct CompactionSettings {
     /// The context size at or above which compaction fires. Zero disables it.
     pub auto_compact_threshold: u64,
+    /// The model a compaction request is sent to, already resolved the way
+    /// `get_compaction_model` resolves it: the configured `compaction_model`,
+    /// and otherwise the active model. `None` means no configuration named
+    /// either, so the provider's own model answers.
+    pub compaction_model: Option<String>,
+    /// The identifier of the prompt the compaction request is built from.
+    pub compaction_prompt_id: String,
+    /// Whether the conversation is warned once it approaches the threshold.
+    pub context_warnings: bool,
+    /// Whether a compaction failure fails the turn instead of degrading. It
+    /// also refuses the reactive recovery, which is what `_should_self_heal`
+    /// consults.
+    pub raise_on_compaction_failure: bool,
+}
+
+impl Default for CompactionSettings {
+    fn default() -> Self {
+        Self {
+            auto_compact_threshold: 0,
+            compaction_model: None,
+            compaction_prompt_id: DEFAULT_COMPACTION_PROMPT_ID.to_owned(),
+            context_warnings: false,
+            raise_on_compaction_failure: false,
+        }
+    }
 }
 
 /// Everything a policy is allowed to read.

@@ -91,6 +91,7 @@ fn the_vocabulary_declares_exactly_the_reference_variants() {
 
     let compaction = CompactionSettings {
         auto_compact_threshold: 120_000,
+        ..CompactionSettings::default()
     };
     let carried = stats(2, 10, 5, 15);
     let context = ConversationContext {
@@ -296,6 +297,7 @@ fn the_turn_limit_precedes_compaction_in_registration_order() {
     let at_the_limit = stats(1, 0, 0, 500_000);
     let compaction = CompactionSettings {
         auto_compact_threshold: 1,
+        ..CompactionSettings::default()
     };
     let result = pipeline.before_turn(&context(&at_the_limit, 0, &compaction));
 

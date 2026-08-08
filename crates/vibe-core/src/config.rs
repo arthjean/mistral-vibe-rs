@@ -1924,9 +1924,90 @@ fn finalize_effective(
     require_configured_model(effective)?;
     complete_model_entries(effective);
     propagate_auto_compact_threshold(effective);
-    Ok(apply_active_model_fallback(effective, model_order)
+    let warnings = apply_active_model_fallback(effective, model_order)
         .into_iter()
-        .collect())
+        .collect();
+    // The active-model fallback runs first so the provider comparison reads the
+    // model the session will actually use, which is the order the reference's
+    // validators run in.
+    check_compaction_model_provider(effective)?;
+    Ok(warnings)
+}
+
+/// Reference `_check_compaction_model_provider`: a configured compaction model
+/// must name a provider the configuration declares, and it must be the provider
+/// the active model is served from.
+///
+/// Both refusals name the alias, because that is what an operator wrote in the
+/// file. A configuration that names no compaction model is left alone, and so is
+/// one whose active model has no resolvable provider: the reference gives up on
+/// the comparison there rather than reporting the compaction model for it.
+fn check_compaction_model_provider(effective: &Table) -> Result<(), ConfigError> {
+    let Some(compaction) = effective.get("compaction_model").and_then(Value::as_table) else {
+        return Ok(());
+    };
+    let alias = compaction
+        .get("alias")
+        .or_else(|| compaction.get("name"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let provider = compaction
+        .get("provider")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    if !declares_provider(effective, &provider) {
+        return Err(ConfigError::CompactionModelProviderMissing { alias, provider });
+    }
+    let active = active_model_entry(effective);
+    let Some(active_provider) = active
+        .as_ref()
+        .and_then(|entry| entry.get("provider"))
+        .and_then(Value::as_str)
+        .filter(|name| declares_provider(effective, name))
+    else {
+        return Ok(());
+    };
+    if active_provider != provider {
+        return Err(ConfigError::CompactionModelProviderMismatch {
+            alias,
+            provider,
+            active_provider: active_provider.to_owned(),
+        });
+    }
+    Ok(())
+}
+
+/// Whether `providers` holds an entry named `name`.
+fn declares_provider(effective: &Table, name: &str) -> bool {
+    effective
+        .get("providers")
+        .and_then(Value::as_array)
+        .is_some_and(|entries| {
+            entries
+                .iter()
+                .filter_map(Value::as_table)
+                .any(|entry| entry.get("name").and_then(Value::as_str) == Some(name))
+        })
+}
+
+/// The merged entry `active_model` names, in either persisted shape.
+fn active_model_entry(effective: &Table) -> Option<Table> {
+    let alias = effective.get("active_model")?.as_str()?;
+    match effective.get("models") {
+        Some(Value::Table(models)) => models.get(alias).and_then(Value::as_table).cloned(),
+        Some(Value::Array(models)) => models
+            .iter()
+            .filter_map(Value::as_table)
+            .find(|entry| {
+                ["alias", "name"]
+                    .into_iter()
+                    .any(|key| entry.get(key).and_then(Value::as_str) == Some(alias))
+            })
+            .cloned(),
+        _ => None,
+    }
 }
 
 /// Fills each merged model entry with the per-entry defaults the reference
@@ -2323,6 +2404,18 @@ pub enum ConfigError {
     ModelAliasMismatch { key: String, alias: String },
     #[error("no model is configured; define at least one entry under `[[models]]`")]
     NoConfiguredModel,
+    #[error(
+        "compaction model `{alias}` names provider `{provider}`, which is not configured under `[[providers]]`"
+    )]
+    CompactionModelProviderMissing { alias: String, provider: String },
+    #[error(
+        "compaction model `{alias}` uses provider `{provider}` but the active model uses provider `{active_provider}`; they must share one"
+    )]
+    CompactionModelProviderMismatch {
+        alias: String,
+        provider: String,
+        active_provider: String,
+    },
     #[error("`{field}` cannot be resolved to an absolute path")]
     UnresolvablePath { field: &'static str },
 }
