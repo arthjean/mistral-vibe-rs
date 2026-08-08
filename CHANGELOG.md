@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Summarize a compaction the way the reference does. The summarizer that made
+  one blind call and gave up on an empty answer is replaced: the request comes
+  from `compaction_prompt_id`, resolved from a `.md` file in your project's
+  `.vibe/prompts`, then in `{vibe_home}/prompts`, then from the shipped prompt,
+  and it rides your conversation's own token prefix with the live tools
+  attached. A model that answers with a tool call instead of a summary is now a
+  named failure rather than a generic one, and either failure gets one dedicated
+  second attempt with its own prompt, no tools and the conversation rendered as
+  a transcript. A summarization that is itself too large to send sheds its
+  oldest round and retries, up to three times, rather than failing on the very
+  condition compaction exists to solve. Outside strict mode a conversation whose
+  summarization failed twice is still compacted, under a placeholder, and the
+  reason it degraded from is reported; with `raise_on_compaction_failure` it
+  fails instead, and no attempt is silently swallowed. Every call a compaction
+  makes now counts against the token and price ceilings you set, so a ceiling
+  covers every request the tool makes rather than only the ones you asked for.
+  A compaction entry finally carries its declared details on the wire:
+  `currentContextTokens` and `threshold` while it runs, then `summaryLength`,
+  `oldSessionId` and `newSessionId` when it lands, so an editor can render the
+  progress instead of only the aftermath.
+
 - Compact before the wall instead of after it. A conversation whose context
   reaches `auto_compact_threshold` is now compacted before the request that
   would have overflowed, so a long session no longer runs into a provider
