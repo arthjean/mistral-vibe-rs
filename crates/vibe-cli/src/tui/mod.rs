@@ -1304,7 +1304,11 @@ fn start_runtime(
     let preferences = startup_preferences(arguments, &release3)?;
     let telemetry = telemetry_event_observer(arguments, &credential, "tui")?;
     let mut driver = LiveTurnDriver::from_credential(
-        bootstrap::live_driver_config(arguments, &preferences.model)?,
+        bootstrap::live_driver_config(
+            arguments,
+            &preferences.model,
+            release3.compaction_prompts(),
+        )?,
         credential.clone(),
     )?;
     if let Some(observer) = telemetry.as_ref() {

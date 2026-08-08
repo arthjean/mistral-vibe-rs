@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use thiserror::Error;
 use toml::{Table, Value as TomlValue};
+use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::{
     ConfigDiscovery, ConfigMutation, ConfigPatchOp, ConfigPaths, ConfigSnapshot, ConfigTarget,
     ConfigWrite, DotenvValues, JsonPointer, LayeredConfig, PatchOperation, ProxyEnvironmentStore,
@@ -381,6 +382,21 @@ impl Release3Service {
             .load()
             .map(|snapshot| snapshot.compaction_settings())
             .unwrap_or_default()
+    }
+
+    /// The three compaction texts `compaction_prompt_id` resolves to, or the
+    /// message saying why the identifier named nothing.
+    ///
+    /// The chain is the reference's: a `.md` file in a project prompt directory
+    /// wins, then one in the user prompt directory, then the built-in. A failure
+    /// is carried rather than raised, because the reference resolves lazily and
+    /// the operator meets the error when a compaction runs.
+    #[must_use]
+    pub fn compaction_prompts(&self) -> CompactionPromptResolution {
+        CompactionPromptResolution::resolve(
+            &self.compaction_settings().compaction_prompt_id,
+            &self.config.harness_files().prompts_dirs(),
+        )
     }
 
     /// Brings the configuration files this session reads forward, once.

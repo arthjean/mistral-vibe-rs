@@ -139,7 +139,11 @@ pub async fn run(
         )
         .await
     } else {
-        let config = bootstrap::live_driver_config(&arguments, &arguments.model)?;
+        let config = bootstrap::live_driver_config(
+            &arguments,
+            &arguments.model,
+            Release3Service::default().compaction_prompts(),
+        )?;
         let credential = bootstrap::credential(&arguments)?;
         let telemetry = telemetry_event_observer(&arguments, &credential, "cli")?;
         let mut driver = LiveTurnDriver::from_credential(config, credential)?;

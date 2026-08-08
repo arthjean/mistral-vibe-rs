@@ -6,6 +6,7 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf, duplex, split};
 use tokio::task::JoinHandle;
 use vibe_app_server::client::{EchoTurnDriver, TurnReservation};
+use vibe_core::compaction::manager::CompactionPromptResolution;
 
 use super::*;
 
@@ -238,6 +239,7 @@ async fn initialize_and_session_lifecycle_do_not_require_provider_credentials() 
                     credential_environment: MISSING_CREDENTIAL.to_owned(),
                     system_prompt: "test".to_owned(),
                     session_root: None,
+                    compaction_prompts: CompactionPromptResolution::default(),
                     input_price_per_million_micros: 0,
                     output_price_per_million_micros: 0,
                 },

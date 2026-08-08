@@ -15,6 +15,7 @@ use vibe_app_server::resources::{
     CoreResourceBackend, MistralConnectorClient, production_mcp_adapters,
 };
 use vibe_app_server::server::{AppServer, WebSearchAccess};
+use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
 use vibe_core::mcp::SamplingHandler;
 
@@ -51,8 +52,10 @@ pub(crate) fn credential(arguments: &Arguments) -> Result<String, DriverError> {
 pub(crate) fn live_driver_config(
     arguments: &Arguments,
     model: &str,
+    compaction_prompts: CompactionPromptResolution,
 ) -> Result<LiveDriverConfig, CliError> {
     Ok(LiveDriverConfig {
+        compaction_prompts,
         style: arguments.provider_style.clone(),
         endpoint: arguments.api_base.clone(),
         model: model.to_owned(),

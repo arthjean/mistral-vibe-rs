@@ -10,7 +10,10 @@ use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
-use vibe_core::compaction::{CompactionFailure, CompactionFailureReason};
+use vibe_core::compaction::CompactionFailure;
+use vibe_core::compaction::manager::{
+    self as compaction_manager, CompactionPlan, CompactionPromptResolution,
+};
 use vibe_core::engine::{
     CancellationToken, CompactionResult, Compactor, CompletionProvider, CompositeEventObserver,
     ConversationEngine, EngineError, EngineLimits, NoopEventObserver, SessionStats,
@@ -36,7 +39,7 @@ use vibe_core::policy::{
 };
 use vibe_core::provider::{
     HttpTransport, ProviderBackend, ProviderError, ProviderInput, ProviderStyle, RequestLimits,
-    ToolDefinition, TransportError, Usage,
+    ToolChoice, ToolDefinition, TransportError, Usage,
 };
 use vibe_core::schema::{ObjectSchema, Property};
 use vibe_core::storage::{HydratedSession, SessionStore};
@@ -2903,6 +2906,9 @@ pub struct LiveDriverConfig {
     pub session_root: Option<PathBuf>,
     pub input_price_per_million_micros: u64,
     pub output_price_per_million_micros: u64,
+    /// The three compaction texts this process summarizes under, already
+    /// resolved through `compaction_prompt_id`.
+    pub compaction_prompts: CompactionPromptResolution,
 }
 
 pub struct LiveTurnDriver {
@@ -2917,14 +2923,21 @@ pub struct LiveTurnDriver {
     event_observer: Arc<dyn EventObserver>,
 }
 
+/// The provider-bound half of compaction: it mints the identifier the compacted
+/// session continues under and hands everything else to the core manager.
+///
+/// The summarization itself lives one layer down, in
+/// [`vibe_core::compaction::manager`], because it is provider-neutral: the call
+/// shape, the failure taxonomy, the fallback and the retry ladder are the same
+/// whichever backend answers, and keeping them there is what lets the compaction
+/// corpus drive them with a scripted provider.
 #[derive(Clone)]
 struct ProviderSessionCompactor {
     provider: Arc<dyn CompletionProvider>,
     next_session: Arc<AtomicU64>,
-    /// The model `compaction_model` resolved to, which the summarization
-    /// request overrides the provider's own with. `None` leaves the provider to
-    /// answer with the model it was configured for.
-    model: Option<String>,
+    /// The prompts, the model, the tools and the strict flag this session
+    /// summarizes under.
+    plan: Arc<CompactionPlan>,
 }
 
 impl ProviderSessionCompactor {
@@ -2932,18 +2945,18 @@ impl ProviderSessionCompactor {
         Self {
             provider,
             next_session: Arc::new(AtomicU64::new(1)),
-            model: None,
+            plan: Arc::new(CompactionPlan::default()),
         }
     }
 
-    /// The same compactor, summarizing with `model`. The identifier counter is
+    /// The same compactor, summarizing under `plan`. The identifier counter is
     /// shared with the compactor this was taken from, so a per-turn copy never
     /// mints an identifier another turn already used.
-    fn with_model(&self, model: Option<String>) -> Self {
+    fn with_plan(&self, plan: CompactionPlan) -> Self {
         Self {
             provider: Arc::clone(&self.provider),
             next_session: Arc::clone(&self.next_session),
-            model,
+            plan: Arc::new(plan),
         }
     }
 
@@ -2953,71 +2966,57 @@ impl ProviderSessionCompactor {
         messages: &[ModelMessage],
         extra_instructions: &str,
     ) -> Result<CompactionResult, CompactionFailure> {
-        let mut prompt =
-            "Summarize the conversation for a continuation agent. Preserve goals, decisions, \
-             constraints, file paths, commands, failures, and unfinished work. Return only the \
-             compact summary."
-                .to_owned();
-        if !extra_instructions.trim().is_empty() {
-            prompt.push_str("\n\nAdditional instructions:\n");
-            prompt.push_str(extra_instructions.trim());
+        let summarized = compaction_manager::compact(
+            self.provider.as_ref(),
+            &self.plan,
+            messages,
+            extra_instructions.trim(),
+        )
+        .await?;
+        Ok(CompactionResult {
+            new_session_id: self.mint_session_id(current_session_id, "compact")?,
+            summary: summarized.summary,
+            messages: summarized.messages,
+            usage: summarized.usage,
+            failure: summarized.failure,
+        })
+    }
+
+    /// The plan one session summarizes under: this process's resolved prompts,
+    /// with the model, the strict flag and the live tool surface the session
+    /// itself carries.
+    fn session_plan(
+        &self,
+        settings: &CompactionSettings,
+        tools: Vec<ToolDefinition>,
+        tool_choice: Option<ToolChoice>,
+        thinking: bool,
+    ) -> CompactionPlan {
+        CompactionPlan {
+            prompts: self.plan.prompts.clone(),
+            model: settings.compaction_model.clone(),
+            thinking,
+            tools,
+            tool_choice,
+            strict: settings.raise_on_compaction_failure,
+            ..CompactionPlan::default()
         }
-        let mut input_messages = messages.to_vec();
-        input_messages.push(ModelMessage::user(prompt));
-        let response = self
-            .provider
-            .complete(&ProviderInput {
-                turn_id: None,
-                model_override: self.model.clone(),
-                messages: input_messages,
-                stream: false,
-                images: Vec::new(),
-                tools: Vec::new(),
-                tool_choice: None,
-                thinking: false,
-                reasoning_effort: None,
-                headers: BTreeMap::new(),
-                limits: RequestLimits {
-                    max_tokens: 4096,
-                    temperature_millis: None,
-                    max_response_bytes: 2 * 1024 * 1024,
-                },
-                metadata: BTreeMap::from([(
-                    "operation".to_owned(),
-                    "session_compaction".to_owned(),
-                )]),
-            })
-            .await
-            .map_err(|error| CompactionFailure::from(error.to_string()))?;
-        let summary = response.text.trim().to_owned();
-        if summary.is_empty() {
-            // The one failure this summarizer can classify today. The tool-call
-            // reason arrives with the manager that passes tools at all.
-            return Err(CompactionFailure::classified(
-                CompactionFailureReason::EmptySummary,
-                "provider returned an empty compaction summary",
-            ));
-        }
+    }
+
+    /// The identifier a handoff rotates onto, unique within the process.
+    fn mint_session_id(
+        &self,
+        current_session_id: &str,
+        cause: &str,
+    ) -> Result<String, CompactionFailure> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| CompactionFailure::from("system clock precedes UNIX epoch"))?
             .as_millis();
         let sequence = self.next_session.fetch_add(1, Ordering::Relaxed);
-        let new_session_id = format!("{current_session_id}-compact-{timestamp}-{sequence}");
-        let mut compacted = messages
-            .iter()
-            .find(|message| matches!(message, ModelMessage::System { .. }))
-            .cloned()
-            .into_iter()
-            .collect::<Vec<_>>();
-        compacted.push(ModelMessage::user(format!(
-            "[Conversation summary]\n{summary}"
-        )));
-        Ok(CompactionResult {
-            new_session_id,
-            summary,
-            messages: compacted,
-        })
+        Ok(format!(
+            "{current_session_id}-{cause}-{timestamp}-{sequence}"
+        ))
     }
 }
 
@@ -3034,14 +3033,8 @@ impl Compactor for ProviderSessionCompactor {
     }
 
     fn cleared_session_id(&self, current_session_id: &str) -> Result<String, String> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| "system clock precedes UNIX epoch".to_owned())?
-            .as_millis();
-        let sequence = self.next_session.fetch_add(1, Ordering::Relaxed);
-        Ok(format!(
-            "{current_session_id}-cleared-{timestamp}-{sequence}"
-        ))
+        self.mint_session_id(current_session_id, "cleared")
+            .map_err(|failure| failure.message)
     }
 }
 
@@ -3194,7 +3187,10 @@ impl LiveTurnDriver {
             transport,
         );
         let provider: Arc<dyn CompletionProvider> = Arc::new(provider);
-        let compactor = ProviderSessionCompactor::new(provider.clone());
+        let compactor = ProviderSessionCompactor::new(provider.clone()).with_plan(CompactionPlan {
+            prompts: config.compaction_prompts,
+            ..CompactionPlan::default()
+        });
         let session_root = config.session_root.or_else(default_session_root);
         Ok(Self {
             provider,
@@ -3406,10 +3402,12 @@ impl LiveTurnDriver {
             );
             ConversationEngine::new(Arc::clone(&self.provider))
                 .with_tools(session_tools.clone())
-                .with_compactor(
-                    self.compactor
-                        .with_model(reservation.compaction.compaction_model.clone()),
-                )
+                .with_compactor(self.compactor.with_plan(self.compactor.session_plan(
+                    &reservation.compaction,
+                    input.tools.clone(),
+                    input.tool_choice.clone(),
+                    input.thinking,
+                )))
                 .with_sink(SessionTranscriptSink::new(store, metadata))
                 .with_limits(limits)
                 .with_baseline(baseline)
@@ -3438,10 +3436,12 @@ impl LiveTurnDriver {
             );
             ConversationEngine::new(Arc::clone(&self.provider))
                 .with_tools(session_tools)
-                .with_compactor(
-                    self.compactor
-                        .with_model(reservation.compaction.compaction_model.clone()),
-                )
+                .with_compactor(self.compactor.with_plan(self.compactor.session_plan(
+                    &reservation.compaction,
+                    input.tools.clone(),
+                    input.tool_choice.clone(),
+                    input.thinking,
+                )))
                 .with_limits(limits)
                 .with_compaction_settings(reservation.compaction.clone())
                 .with_observer(observer)
@@ -4428,6 +4428,8 @@ mod tests {
         Release4Service, TeleportCloud, TeleportStartRequest,
     };
     use crate::server::SessionStatus;
+    use vibe_core::compaction::CompactionFailureReason;
+    use vibe_core::compaction::manager::PLACEHOLDER_SUMMARY;
     use vibe_core::events::ModelToolCall;
     use vibe_core::provider::{AssistantMessage, ImageInput, Usage};
     use vibe_core::schema::{ObjectSchema, Property};
@@ -6147,7 +6149,7 @@ command = "/must-not-run"
                         })?
                         .push(input.model_override.clone());
                     Ok(AssistantMessage {
-                        text: "a summary".to_owned(),
+                        text: "<summary>a summary</summary>".to_owned(),
                         reasoning: None,
                         reasoning_signature: None,
                         reasoning_state: Vec::new(),
@@ -6174,7 +6176,10 @@ command = "/must-not-run"
             .await
             .expect("the default compaction summarizes");
         compactor
-            .with_model(Some("devstral-small-latest".to_owned()))
+            .with_plan(CompactionPlan {
+                model: Some("devstral-small-latest".to_owned()),
+                ..CompactionPlan::default()
+            })
             .compact("session-1", &messages)
             .await
             .expect("the configured compaction summarizes");
@@ -6186,8 +6191,10 @@ command = "/must-not-run"
         );
     }
 
-    /// US-151: the only failure this summarizer can classify is the empty one,
-    /// which is what the failure telemetry record is written from.
+    /// US-152, US-153: an answer with no summary element is classified as the
+    /// empty-summary failure, the fallback gets its one attempt, and outside
+    /// strict mode the conversation still compacts under the placeholder while
+    /// the classified reason is reported. Strict mode fails instead.
     #[tokio::test]
     async fn an_empty_summary_is_reported_as_the_classified_failure() {
         struct SilentProvider;
@@ -6213,25 +6220,73 @@ command = "/must-not-run"
             }
         }
 
+        let messages = [ModelMessage::System {
+            content: "system".to_owned(),
+        }];
         let compactor = ProviderSessionCompactor::new(Arc::new(SilentProvider) as Arc<_>);
-        let failure = compactor
-            .compact(
-                "session-1",
-                &[ModelMessage::System {
-                    content: "system".to_owned(),
-                }],
-            )
+        let degraded = compactor
+            .compact("session-1", &messages)
             .await
-            .expect_err("an empty summary is a failure");
+            .expect("outside strict mode the conversation still compacts");
+        assert_eq!(
+            degraded.failure,
+            Some(CompactionFailureReason::EmptySummary),
+            "the placeholder still reports what it degraded from"
+        );
+        assert_eq!(degraded.summary, PLACEHOLDER_SUMMARY);
+
+        let failure = compactor
+            .with_plan(CompactionPlan {
+                strict: true,
+                ..CompactionPlan::default()
+            })
+            .compact("session-1", &messages)
+            .await
+            .expect_err("strict mode fails the compaction");
         assert_eq!(failure.reason, Some(CompactionFailureReason::EmptySummary));
     }
 
     #[tokio::test]
     async fn manual_compaction_uses_provider_summary_and_durable_handoff() {
+        /// Answers with the summary element the summarizer reads, which is what
+        /// a model that followed the compaction request returns.
+        struct SummarizingProvider {
+            seen: Arc<Mutex<Vec<ModelMessage>>>,
+        }
+
+        impl CompletionProvider for SummarizingProvider {
+            fn complete<'a>(
+                &'a self,
+                input: &'a ProviderInput,
+            ) -> vibe_core::engine::ProviderFuture<'a> {
+                Box::pin(async move {
+                    *self.seen.lock().map_err(|_| {
+                        vibe_core::provider::ProviderError::MalformedStream(
+                            "test lock poisoned".to_owned(),
+                        )
+                    })? = input.messages.clone();
+                    Ok(AssistantMessage {
+                        text: "<summary>resumed answer</summary>".to_owned(),
+                        reasoning: None,
+                        reasoning_signature: None,
+                        reasoning_state: Vec::new(),
+                        tool_calls: Vec::new(),
+                        usage: Usage {
+                            input_tokens: 3,
+                            output_tokens: 2,
+                        },
+                        refusal: None,
+                        stop_reason: "stop".to_owned(),
+                        correlation_id: None,
+                    })
+                })
+            }
+        }
+
         let temporary = tempfile::tempdir().expect("temporary session root");
         let seen = Arc::new(Mutex::new(Vec::new()));
         let driver = LiveTurnDriver::from_provider_for_tests(
-            Arc::new(RecordingProvider {
+            Arc::new(SummarizingProvider {
                 seen: Arc::clone(&seen),
             }),
             "current system",
@@ -6268,12 +6323,16 @@ command = "/must-not-run"
             compacted.metadata.parent_session_id.as_deref(),
             Some(session_id.as_str())
         );
+        // US-152, US-156: the manual method's response shape is unchanged, and
+        // what it now leaves on disk is the envelope, which carries the
+        // operator's own turn instead of discarding it.
         assert!(compacted.messages.iter().any(|message| {
             matches!(
                 message,
-                ModelMessage::User { content, .. }
-                    if content.contains("[Conversation summary]")
+                ModelMessage::User { content, injected: true }
+                    if content.contains("<compaction_summary>")
                         && content.contains("resumed answer")
+                        && content.contains("retain this decision")
             )
         }));
         assert_eq!(

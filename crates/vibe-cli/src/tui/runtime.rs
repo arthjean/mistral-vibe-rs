@@ -246,6 +246,7 @@ pub(in crate::tui) fn interactive_test_runtime_with_server(
     server: vibe_app_server::server::AppServer,
 ) -> InteractiveRuntime {
     use vibe_app_server::client::{LiveDriverConfig, SessionOptions};
+    use vibe_core::compaction::manager::CompactionPromptResolution;
 
     let driver = Arc::new(
         LiveTurnDriver::from_credential(
@@ -256,6 +257,7 @@ pub(in crate::tui) fn interactive_test_runtime_with_server(
                 credential_environment: "TEST_CREDENTIAL".to_owned(),
                 system_prompt: "test".to_owned(),
                 session_root: None,
+                compaction_prompts: CompactionPromptResolution::default(),
                 input_price_per_million_micros: 0,
                 output_price_per_million_micros: 0,
             },

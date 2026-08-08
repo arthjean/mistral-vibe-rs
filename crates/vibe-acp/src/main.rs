@@ -20,6 +20,7 @@ use vibe_app_server::client::{
     LiveTurnDriver, TurnDriver, TurnReservation,
 };
 use vibe_app_server::transport::{MAX_FRAME_BYTES, read_bounded_frame};
+use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
 
 const WRITER_QUEUE_CAPACITY: usize = 1_024;
@@ -280,6 +281,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .variable("VIBE_CREDENTIAL_ENV")
         .unwrap_or_else(|| "MISTRAL_API_KEY".to_owned());
     let config = LiveDriverConfig {
+        compaction_prompts: CompactionPromptResolution::default(),
         style: dotenv
             .variable("VIBE_PROVIDER_STYLE")
             .unwrap_or_else(|| "mistral".to_owned()),

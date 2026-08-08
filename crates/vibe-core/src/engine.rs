@@ -11,7 +11,7 @@ use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 
-use crate::compaction::{CompactionFailure, CompactionStatus};
+use crate::compaction::{CompactionFailure, CompactionFailureReason, CompactionStatus};
 use crate::events::{
     EngineEvent, EventEnvelope, LifecycleState, ModelMessage, ModelToolCall, ProjectionError,
     ProjectionReducer, ProjectionSnapshot, SessionHandoffCause,
@@ -489,11 +489,18 @@ impl Default for EngineLimits {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CompactionResult {
     pub new_session_id: String,
     pub summary: String,
     pub messages: Vec<ModelMessage>,
+    /// What the summarization spent. The reference makes every compaction call
+    /// through the same accounted path a turn's own requests go through, so the
+    /// token and price ceilings an operator set cover them too.
+    pub usage: Usage,
+    /// The classified failure a compaction degraded from, when its summary is
+    /// the placeholder. A compaction that produced a real summary carries none.
+    pub failure: Option<CompactionFailureReason>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -736,7 +743,7 @@ where
                             &mut recorder,
                             &mut messages,
                             &pipeline,
-                            ledger.context_tokens,
+                            &mut ledger,
                             &cancellation,
                         )
                         .await?
@@ -787,7 +794,7 @@ where
                             &mut recorder,
                             &mut messages,
                             &pipeline,
-                            ledger.context_tokens,
+                            &mut ledger,
                             &cancellation,
                         )
                         .await?
@@ -1082,9 +1089,10 @@ where
         recorder: &mut TurnRecorder<'_>,
         messages: &mut Vec<ModelMessage>,
         pipeline: &MiddlewarePipeline,
-        context_tokens: u64,
+        ledger: &mut TurnLedger,
         cancellation: &CancellationToken,
     ) -> Result<Option<()>, EngineError> {
+        let context_tokens = ledger.context_tokens;
         let compaction_id = new_compaction_id();
         let threshold = self.compaction.auto_compact_threshold;
         let old_session_id = recorder.state().session_id.clone();
@@ -1110,10 +1118,14 @@ where
         let compaction = match compaction {
             Ok(compaction) => compaction,
             Err(failure) => {
+                // A failed compaction still made the calls it made, and the
+                // transcript it read is left exactly as it was.
+                ledger.record_compaction(&failure.usage, &self.limits, false);
                 recorder.emit(outcome(CompactionStatus::Failure, failure.reason))?;
                 return Err(EngineError::Compaction(failure.message));
             }
         };
+        ledger.record_compaction(&compaction.usage, &self.limits, true);
         let summary_length = u64::try_from(compaction.summary.chars().count()).unwrap_or(u64::MAX);
         let new_session_id = compaction.new_session_id;
         // The completed event precedes the handoff because the handoff is what
@@ -1131,7 +1143,11 @@ where
             to_session_id: new_session_id,
             cause: SessionHandoffCause::Compaction,
         })?;
-        recorder.emit(outcome(CompactionStatus::Success, None))?;
+        // A compaction that degraded to the placeholder still succeeded: the
+        // conversation is compacted. It reports the reason it degraded from, so
+        // the failure record the reference sends alongside the success is
+        // written here too.
+        recorder.emit(outcome(CompactionStatus::Success, compaction.failure))?;
         *messages = compaction.messages;
         pipeline.reset(ResetReason::Compact);
         Ok(Some(()))
@@ -1305,6 +1321,23 @@ impl TurnLedger {
         self.usage.input_tokens = self.usage.input_tokens.saturating_add(usage.input_tokens);
         self.usage.output_tokens = self.usage.output_tokens.saturating_add(usage.output_tokens);
         self.price_micros = total_price_micros(&self.usage, limits);
+    }
+
+    /// Credits what a compaction spent, without spending a step.
+    ///
+    /// A compaction is not a turn of the conversation, so it never advances the
+    /// step budget, which is what lets a reactive recovery retry the request it
+    /// made room for. `context_tokens` is not set from this usage either: the
+    /// transcript it described no longer exists. The reference zeroes it and
+    /// lets the next completion recompute it from real usage, which is the one
+    /// number nothing can approximate without a request.
+    fn record_compaction(&mut self, usage: &Usage, limits: &EngineLimits, replaced: bool) {
+        self.usage.input_tokens = self.usage.input_tokens.saturating_add(usage.input_tokens);
+        self.usage.output_tokens = self.usage.output_tokens.saturating_add(usage.output_tokens);
+        self.price_micros = total_price_micros(&self.usage, limits);
+        if replaced {
+            self.context_tokens = 0;
+        }
     }
 }
 
@@ -1509,7 +1542,6 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
     use super::*;
-    use crate::compaction::CompactionFailureReason;
     use crate::events::ModelToolCall;
     use crate::middleware::MiddlewareResult;
     use crate::provider::{ProviderChunk, RequestLimits};
@@ -1653,6 +1685,11 @@ mod tests {
                     messages: vec![ModelMessage::System {
                         content: "summary".to_owned(),
                     }],
+                    usage: Usage {
+                        input_tokens: 30,
+                        output_tokens: 5,
+                    },
+                    failure: None,
                 })
             })
         }
@@ -1978,6 +2015,54 @@ mod tests {
                 .events
                 .iter()
                 .any(|event| matches!(event.event, EngineEvent::SessionHandoff { .. }))
+        );
+    }
+
+    /// US-155: the calls a compaction makes are credited to the turn, so the
+    /// token and price ceilings an operator set cover every request the tool
+    /// makes rather than only the ones the operator asked for. The compaction
+    /// still spends no step, and the context size it zeroed is recomputed by the
+    /// completion that follows it.
+    #[tokio::test]
+    async fn a_compaction_credits_its_own_calls_to_the_turn_ledger() {
+        let provider = ScriptedProvider::new([
+            Err(ProviderError::ContextOverflow),
+            Ok(completion("after compact", Vec::new())),
+        ]);
+        let outcome = ConversationEngine::new(provider)
+            .with_compactor(FakeCompactor)
+            .with_limits(EngineLimits {
+                input_price_per_million_micros: 1_000_000,
+                output_price_per_million_micros: 2_000_000,
+                ..EngineLimits::default()
+            })
+            .run_turn(
+                "session-1",
+                provider_input(),
+                "hello",
+                CancellationToken::default(),
+            )
+            .await
+            .expect("compacted turn completes");
+
+        // The one completion spends 2 and 3; the compaction spends 30 and 5.
+        assert_eq!(
+            outcome.usage,
+            Usage {
+                input_tokens: 32,
+                output_tokens: 8,
+            },
+            "the summarization is part of what the turn spent"
+        );
+        assert_eq!(
+            outcome.price_micros,
+            32 + 16,
+            "the price ceiling is evaluated against a total that includes the compaction"
+        );
+        assert_eq!(outcome.steps, 1, "a compaction advances no step budget");
+        assert_eq!(
+            outcome.context_tokens, 5,
+            "the compaction zeroed the context size and the completion recomputed it"
         );
     }
 
