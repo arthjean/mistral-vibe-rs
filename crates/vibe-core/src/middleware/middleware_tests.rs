@@ -399,3 +399,114 @@ fn a_limit_and_the_threshold_in_one_cycle_resolve_to_stop() {
     let only_threshold = pipeline.before_turn(&context(&stats(0, 0, 0, 500_000), 0, &compaction));
     assert_eq!(only_threshold.action, MiddlewareAction::Compact);
 }
+
+/// US-157: the warning fires once, at half the window, and names the three
+/// quantities the reference's message names.
+#[test]
+fn the_context_warning_fires_once_at_half_the_window() {
+    let window = CompactionSettings {
+        auto_compact_threshold: 200_000,
+        context_warnings: true,
+        ..CompactionSettings::default()
+    };
+    let policy = ContextWarningMiddleware::default();
+
+    assert_eq!(
+        policy
+            .before_turn(&context(&stats(1, 0, 0, 99_999), 0, &window))
+            .action,
+        MiddlewareAction::Continue,
+        "a context below half the window says nothing"
+    );
+
+    let warning = policy.before_turn(&context(&stats(1, 0, 0, 100_000), 0, &window));
+    assert_eq!(warning.action, MiddlewareAction::InjectMessage);
+    let message = warning.message.expect("the warning carries its message");
+    assert!(
+        message.starts_with("<vibe_warning>") && message.ends_with("</vibe_warning>"),
+        "the message is wrapped in the reference's warning tag: {message}"
+    );
+    assert!(
+        message.contains("50%") && message.contains("100000") && message.contains("200000"),
+        "the message names the percentage, the current tokens and the window: {message}"
+    );
+
+    assert_eq!(
+        policy
+            .before_turn(&context(&stats(2, 0, 0, 180_000), 0, &window))
+            .action,
+        MiddlewareAction::Continue,
+        "the latch holds, so a session is warned once"
+    );
+}
+
+/// US-157: a window of zero silences the policy, and only the compaction reset
+/// clears its latch, because this port also resets at the top of every turn.
+#[test]
+fn the_context_warning_is_silent_without_a_window_and_relatches_on_a_compaction() {
+    let policy = ContextWarningMiddleware::default();
+    let disabled = CompactionSettings {
+        auto_compact_threshold: 0,
+        context_warnings: true,
+        ..CompactionSettings::default()
+    };
+    assert_eq!(
+        policy
+            .before_turn(&context(&stats(1, 0, 0, u64::MAX), 0, &disabled))
+            .action,
+        MiddlewareAction::Continue,
+        "no window means nothing to warn about"
+    );
+
+    let window = CompactionSettings {
+        auto_compact_threshold: 1_000,
+        context_warnings: true,
+        ..CompactionSettings::default()
+    };
+    assert_eq!(
+        policy
+            .before_turn(&context(&stats(1, 0, 0, 900), 0, &window))
+            .action,
+        MiddlewareAction::InjectMessage
+    );
+
+    policy.reset(ResetReason::Stop);
+    assert_eq!(
+        policy
+            .before_turn(&context(&stats(2, 0, 0, 900), 0, &window))
+            .action,
+        MiddlewareAction::Continue,
+        "a turn boundary does not re-arm the warning"
+    );
+
+    policy.reset(ResetReason::Compact);
+    assert_eq!(
+        policy
+            .before_turn(&context(&stats(3, 0, 0, 900), 0, &window))
+            .action,
+        MiddlewareAction::InjectMessage,
+        "a compaction re-arms the warning, because the window it measured was replaced"
+    );
+}
+
+/// US-157: an injecting policy that fires alongside another leaves one
+/// injection joined by two newlines, in registration order.
+#[test]
+fn the_context_warning_aggregates_with_another_injection() {
+    let mut pipeline = MiddlewarePipeline::new();
+    pipeline.add(Arc::new(ContextWarningMiddleware::default()));
+    pipeline.add(Scripted::new(MiddlewareResult::inject("second")));
+    let window = CompactionSettings {
+        auto_compact_threshold: 100,
+        context_warnings: true,
+        ..CompactionSettings::default()
+    };
+
+    let combined = pipeline.before_turn(&context(&stats(1, 0, 0, 100), 0, &window));
+    assert_eq!(combined.action, MiddlewareAction::InjectMessage);
+    let message = combined.message.expect("the injection carries its message");
+    let parts: Vec<&str> = message.split("\n\n").collect();
+    assert_eq!(parts.len(), 2, "exactly two runs joined: {message}");
+    assert!(parts[0].starts_with("<vibe_warning>"));
+    assert_eq!(parts[1], "second");
+}

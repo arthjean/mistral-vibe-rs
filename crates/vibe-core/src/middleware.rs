@@ -13,11 +13,13 @@
 //! order.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
 use crate::engine::{EngineLimits, SessionStats, TurnStopReason};
 use crate::events::ModelMessage;
+use crate::workspace::WARNING_TAG;
 
 #[cfg(test)]
 mod middleware_tests;
@@ -272,6 +274,108 @@ impl ConversationMiddleware for AutoCompactMiddleware {
             return MiddlewareResult::compact();
         }
         MiddlewareResult::proceed()
+    }
+}
+
+/// The share of the window at which the conversation is warned, which is the
+/// only value the reference ever constructs its warning policy with.
+pub const CONTEXT_WARNING_FRACTION: f64 = 0.5;
+
+/// Tells the conversation, once, that it is halfway through its window.
+///
+/// The window is `auto_compact_threshold`, which is what the reference reads as
+/// `max_context`: the warning is a heads-up that compaction is coming, so it is
+/// measured against the size that triggers it rather than against the model's
+/// physical context. A threshold of zero disables the warning the same way it
+/// disables the compaction.
+///
+/// Two divergences from the reference, both forced by what surrounds this
+/// policy here and neither observable as a different firing decision:
+///
+/// - The message is original prose. `NOTICE` forbids shipping the reference's,
+///   so this one covers the same directive with its own words and reuses only
+///   the tag name, which is an identifier a client matches on.
+/// - The latch clears on [`ResetReason::Compact`] alone. The reference clears it
+///   on either reason, but it resets its pipeline only when the conversation is
+///   compacted or cleared, where this port also resets at the top of every turn
+///   ([`crate::engine::ConversationEngine::run_turn_controlled`]). Clearing on
+///   both reasons here would warn once per turn instead of once per session,
+///   which is the behavior the reference's own cadence produces.
+pub struct ContextWarningMiddleware {
+    fraction: f64,
+    warned: AtomicBool,
+}
+
+impl std::fmt::Debug for ContextWarningMiddleware {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ContextWarningMiddleware")
+            .field("fraction", &self.fraction)
+            .field("warned", &self.warned.load(Ordering::SeqCst))
+            .finish()
+    }
+}
+
+impl Default for ContextWarningMiddleware {
+    fn default() -> Self {
+        Self::new(CONTEXT_WARNING_FRACTION)
+    }
+}
+
+impl ContextWarningMiddleware {
+    #[must_use]
+    pub fn new(fraction: f64) -> Self {
+        Self {
+            fraction,
+            warned: AtomicBool::new(false),
+        }
+    }
+}
+
+impl ConversationMiddleware for ContextWarningMiddleware {
+    fn before_turn(&self, context: &ConversationContext<'_>) -> MiddlewareResult {
+        if self.warned.load(Ordering::SeqCst) {
+            return MiddlewareResult::proceed();
+        }
+        let window = context.compaction.auto_compact_threshold;
+        if window == 0 {
+            return MiddlewareResult::proceed();
+        }
+        let used = context.stats.context_tokens;
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "the comparison the reference makes is the same float product"
+        )]
+        let trigger = window as f64 * self.fraction;
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a token count large enough to lose precision is far past any window"
+        )]
+        let used_exactly = used as f64;
+        if used_exactly < trigger {
+            return MiddlewareResult::proceed();
+        }
+        self.warned.store(true, Ordering::SeqCst);
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "the percentage the reference reports is the same float ratio"
+        )]
+        let window_exactly = window as f64;
+        // Formatted rather than rounded first: `{:.0}` rounds a half to even,
+        // which is what the reference's own `:.0f` does, and rounding ahead of
+        // it would round the same half away from zero instead.
+        let percentage = used_exactly / window_exactly * 100.0;
+        MiddlewareResult::inject(format!(
+            "<{WARNING_TAG}>This conversation has consumed {percentage:.0}% of its context \
+             window: {used} tokens of {window}. It is compacted once the window is full, so \
+             record anything that has to survive that.</{WARNING_TAG}>"
+        ))
+    }
+
+    fn reset(&self, reset_reason: ResetReason) {
+        if matches!(reset_reason, ResetReason::Compact) {
+            self.warned.store(false, Ordering::SeqCst);
+        }
     }
 }
 

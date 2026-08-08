@@ -33,7 +33,7 @@ use vibe_core::mcp::{
     McpError, McpFuture, McpServerConfig, SamplingHandler, SamplingRequest, SamplingResponse,
     SamplingRole,
 };
-use vibe_core::middleware::CompactionSettings;
+use vibe_core::middleware::{CompactionSettings, ContextWarningMiddleware};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PolicyError,
 };
@@ -2920,6 +2920,12 @@ pub struct LiveTurnDriver {
     output_price_per_million_micros: u64,
     controls: Mutex<HashMap<(String, String), LiveTurnControl>>,
     pending_context: Mutex<HashMap<String, Vec<String>>>,
+    /// The context-warning policy each session latches on.
+    ///
+    /// The engine is rebuilt for every turn, so a policy that speaks once per
+    /// session cannot live on it. It lives here, where it outlives the turns,
+    /// and the engine borrows it for the length of each one.
+    context_warnings: Mutex<HashMap<String, Arc<ContextWarningMiddleware>>>,
     event_observer: Arc<dyn EventObserver>,
 }
 
@@ -3142,6 +3148,7 @@ impl LiveTurnDriver {
             output_price_per_million_micros: 0,
             controls: Mutex::new(HashMap::new()),
             pending_context: Mutex::new(HashMap::new()),
+            context_warnings: Mutex::new(HashMap::new()),
             event_observer: Arc::new(NoopEventObserver),
         }
     }
@@ -3201,6 +3208,7 @@ impl LiveTurnDriver {
             output_price_per_million_micros: config.output_price_per_million_micros,
             controls: Mutex::new(HashMap::new()),
             pending_context: Mutex::new(HashMap::new()),
+            context_warnings: Mutex::new(HashMap::new()),
             event_observer: Arc::new(NoopEventObserver),
         })
     }
@@ -3340,6 +3348,11 @@ impl LiveTurnDriver {
             .lock()
             .map_err(|_| DriverError::StatePoisoned)?
             .remove(&reservation.session_id);
+        // Registered after automatic compaction and before nothing, which is
+        // where `_setup_middleware` puts it: a cycle that reached the threshold
+        // compacts instead of warning about a window it is about to replace.
+        let context_warning =
+            self.context_warning(&reservation.session_id, &reservation.compaction)?;
         if let Some(root) = &self.session_root {
             let store = SessionStore::new(root);
             let hydrated = if let Some(selector) = &reservation.intent.resume {
@@ -3400,7 +3413,7 @@ impl LiveTurnDriver {
                     .into_iter()
                     .map(ModelMessage::user),
             );
-            ConversationEngine::new(Arc::clone(&self.provider))
+            let mut engine = ConversationEngine::new(Arc::clone(&self.provider))
                 .with_tools(session_tools.clone())
                 .with_compactor(self.compactor.with_plan(self.compactor.session_plan(
                     &reservation.compaction,
@@ -3412,7 +3425,11 @@ impl LiveTurnDriver {
                 .with_limits(limits)
                 .with_baseline(baseline)
                 .with_compaction_settings(reservation.compaction.clone())
-                .with_observer(observer)
+                .with_observer(observer);
+            if let Some(warning) = context_warning {
+                engine = engine.with_middleware(warning);
+            }
+            engine
                 .run_turn_controlled(
                     engine_session_id,
                     input,
@@ -3434,7 +3451,7 @@ impl LiveTurnDriver {
                     .into_iter()
                     .map(ModelMessage::user),
             );
-            ConversationEngine::new(Arc::clone(&self.provider))
+            let mut engine = ConversationEngine::new(Arc::clone(&self.provider))
                 .with_tools(session_tools)
                 .with_compactor(self.compactor.with_plan(self.compactor.session_plan(
                     &reservation.compaction,
@@ -3444,7 +3461,11 @@ impl LiveTurnDriver {
                 )))
                 .with_limits(limits)
                 .with_compaction_settings(reservation.compaction.clone())
-                .with_observer(observer)
+                .with_observer(observer);
+            if let Some(warning) = context_warning {
+                engine = engine.with_middleware(warning);
+            }
+            engine
                 .run_turn_controlled(
                     &reservation.session_id,
                     input,
@@ -3935,6 +3956,30 @@ impl TurnDriver for LiveTurnDriver {
 }
 
 impl LiveTurnDriver {
+    /// The warning policy this session speaks through, created on its first
+    /// turn and kept afterward.
+    ///
+    /// `context_warnings` decides whether the policy is registered at all, the
+    /// way the reference's `_setup_middleware` does, rather than registering a
+    /// silent one: an unregistered policy cannot latch, so turning the key off
+    /// mid-session leaves nothing behind.
+    fn context_warning(
+        &self,
+        session_id: &str,
+        settings: &CompactionSettings,
+    ) -> Result<Option<Arc<ContextWarningMiddleware>>, DriverError> {
+        if !settings.context_warnings {
+            return Ok(None);
+        }
+        let mut warnings = self
+            .context_warnings
+            .lock()
+            .map_err(|_| DriverError::StatePoisoned)?;
+        Ok(Some(Arc::clone(
+            warnings.entry(session_id.to_owned()).or_default(),
+        )))
+    }
+
     fn send_control(
         &self,
         session_id: &str,
@@ -6123,6 +6168,140 @@ command = "/must-not-run"
         );
         assert_eq!(persisted.metadata.statistics["context_tokens"], 5);
         assert_eq!(persisted.metadata.statistics["steps"], 3);
+    }
+
+    /// US-157: the warning reaches the model itself, once, on the turn that
+    /// crosses half the window, and never again while the session lives.
+    ///
+    /// The proof starts at the driver rather than at the pipeline, because the
+    /// latch is what the wiring has to get right: the engine is rebuilt for
+    /// every turn, so a policy owned by the engine would warn on each of them.
+    #[tokio::test]
+    async fn the_context_warning_reaches_the_model_once_per_session() {
+        struct TranscriptRecordingProvider {
+            turns: Arc<Mutex<Vec<Vec<ModelMessage>>>>,
+        }
+
+        impl CompletionProvider for TranscriptRecordingProvider {
+            fn complete<'a>(
+                &'a self,
+                input: &'a ProviderInput,
+            ) -> vibe_core::engine::ProviderFuture<'a> {
+                Box::pin(async move {
+                    self.turns
+                        .lock()
+                        .map_err(|_| {
+                            vibe_core::provider::ProviderError::MalformedStream(
+                                "test lock poisoned".to_owned(),
+                            )
+                        })?
+                        .push(input.messages.clone());
+                    Ok(AssistantMessage {
+                        text: "answered".to_owned(),
+                        reasoning: None,
+                        reasoning_signature: None,
+                        reasoning_state: Vec::new(),
+                        tool_calls: Vec::new(),
+                        // The context stays above half the window and below it,
+                        // so the second turn is a real chance to warn again.
+                        usage: Usage {
+                            input_tokens: 150,
+                            output_tokens: 10,
+                        },
+                        refusal: None,
+                        stop_reason: "stop".to_owned(),
+                        correlation_id: None,
+                    })
+                })
+            }
+        }
+
+        async fn run_two_turns(context_warnings: bool) -> Vec<Vec<ModelMessage>> {
+            let temporary = tempfile::tempdir().expect("temporary session root");
+            let store = SessionStore::new(temporary.path());
+            let mut metadata = store
+                .create("warned", "/workspace", None, 1)
+                .expect("session creates");
+            metadata
+                .statistics
+                .insert("context_tokens".to_owned(), serde_json::Value::from(100));
+            store
+                .update_metadata(&metadata)
+                .expect("baseline stats persist");
+            let turns = Arc::new(Mutex::new(Vec::new()));
+            let driver = LiveTurnDriver::from_provider_for_tests(
+                Arc::new(TranscriptRecordingProvider {
+                    turns: Arc::clone(&turns),
+                }),
+                "system",
+            )
+            .with_session_root_for_tests(Some(temporary.path().to_path_buf()));
+            let compaction = CompactionSettings {
+                auto_compact_threshold: 200,
+                context_warnings,
+                ..CompactionSettings::default()
+            };
+            for turn in ["turn-1", "turn-2"] {
+                driver
+                    .run(&TurnReservation {
+                        session_id: "warned".to_owned(),
+                        turn_id: turn.to_owned(),
+                        prompt: "question".to_owned(),
+                        input: vec![PublicContentBlock::Text {
+                            text: "question".to_owned(),
+                        }],
+                        prepared_images: None,
+                        client_user_message_id: None,
+                        auto_title: None,
+                        user_display_content: None,
+                        mention_stats: None,
+                        working_directory: "/workspace".to_owned(),
+                        compaction: compaction.clone(),
+                        intent: SessionIntent {
+                            resume: Some("warned".to_owned()),
+                            ..SessionIntent::default()
+                        },
+                        tools: ToolRegistry::default(),
+                    })
+                    .await
+                    .expect("the turn completes");
+            }
+            let recorded = turns.lock().expect("recorded turns");
+            recorded.clone()
+        }
+
+        // The second request replays the first one's transcript, warning
+        // included, so the falsifier is the count rather than the presence.
+        let warnings = |messages: &[ModelMessage]| {
+            messages
+                .iter()
+                .filter(|message| {
+                    matches!(message, ModelMessage::User { content, injected }
+                        if *injected && content.contains("<vibe_warning>"))
+                })
+                .count()
+        };
+
+        let enabled = run_two_turns(true).await;
+        assert_eq!(enabled.len(), 2, "both turns reached the provider");
+        assert_eq!(
+            warnings(&enabled[0]),
+            1,
+            "the first turn past half the window carries the warning: {:?}",
+            enabled[0]
+        );
+        assert_eq!(
+            warnings(&enabled[1]),
+            1,
+            "the second turn replays the first warning and adds none: {:?}",
+            enabled[1]
+        );
+
+        let disabled = run_two_turns(false).await;
+        assert!(
+            disabled.iter().all(|messages| warnings(messages) == 0),
+            "context_warnings off registers no policy, so nothing is injected"
+        );
     }
 
     /// US-148: `compaction_model` reaches the summarization request as the

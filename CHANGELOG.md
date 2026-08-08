@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Warn the agent before the window closes. With `context_warnings` enabled, a
+  session that has consumed half of `auto_compact_threshold` now tells the model
+  so, once, naming the share used, the current token count and the window. The
+  agent can wrap up or record what has to survive instead of discovering the
+  wall, and the warning arms again after a compaction replaces the context it
+  measured. Leaving the key off registers nothing, so nothing is injected.
+
 - Summarize a compaction the way the reference does. The summarizer that made
   one blind call and gave up on an empty answer is replaced: the request comes
   from `compaction_prompt_id`, resolved from a `.md` file in your project's
