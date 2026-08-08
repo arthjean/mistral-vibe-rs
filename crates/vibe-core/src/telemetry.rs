@@ -59,11 +59,13 @@ pub enum TelemetryField {
     AgentProfile,
     ApprovalType,
     AttachmentCount,
+    AutoCompactThreshold,
     CallType,
     ClientName,
     ClientVersion,
     CommandType,
     ContextMessageCount,
+    ContextTokensBefore,
     Decision,
     DurationMs,
     Entrypoint,
@@ -89,11 +91,13 @@ impl TelemetryField {
             Self::AgentProfile => "agent_profile",
             Self::ApprovalType => "approval_type",
             Self::AttachmentCount => "attachment_count",
+            Self::AutoCompactThreshold => "auto_compact_threshold",
             Self::CallType => "call_type",
             Self::ClientName => "client_name",
             Self::ClientVersion => "client_version",
             Self::CommandType => "command_type",
             Self::ContextMessageCount => "context_message_count",
+            Self::ContextTokensBefore => "nb_context_tokens_before",
             Self::Decision => "decision",
             Self::DurationMs => "duration_ms",
             Self::Entrypoint => "entrypoint",
@@ -429,32 +433,37 @@ where
         if !self.client.is_active() {
             return Ok(());
         }
-        let Some(projection) =
-            TelemetryProjection::from_engine_event(event).map_err(|error| error.to_string())?
-        else {
-            return Ok(());
-        };
-        let envelope = TelemetryEnvelope::new(
-            projection.event,
-            self.metadata.clone(),
-            projection.attributes,
-            projection.correlation_id,
-        )
-        .map_err(|error| error.to_string())?;
-        let client = Arc::clone(&self.client);
-        let task = tokio::spawn(async move {
-            let _ = client.record(&envelope).await;
-        });
-        if let Ok(mut pending) = self.pending.lock() {
-            pending.retain(|task| !task.is_finished());
-            pending.push(task);
+        let projections =
+            TelemetryProjection::from_engine_event(event).map_err(|error| error.to_string())?;
+        for projection in projections {
+            let envelope = TelemetryEnvelope::new(
+                projection.event,
+                self.metadata.clone(),
+                projection.attributes,
+                projection.correlation_id,
+            )
+            .map_err(|error| error.to_string())?;
+            let client = Arc::clone(&self.client);
+            let task = tokio::spawn(async move {
+                let _ = client.record(&envelope).await;
+            });
+            if let Ok(mut pending) = self.pending.lock() {
+                pending.retain(|task| !task.is_finished());
+                pending.push(task);
+            }
         }
         Ok(())
     }
 }
 
 impl TelemetryProjection {
-    pub fn from_engine_event(event: &EventEnvelope) -> Result<Option<Self>, TelemetryError> {
+    /// The records one engine event reports.
+    ///
+    /// Most events report one or none; a compaction reports two when its
+    /// summarization failed with a classified reason, because the reference
+    /// sends the auto-compaction record from the loop and the failure record
+    /// from the manager, for the same compaction.
+    pub fn from_engine_event(event: &EventEnvelope) -> Result<Vec<Self>, TelemetryError> {
         let mut attributes = TelemetryAttributes::default();
         let projected = match &event.event {
             EngineEvent::ToolResult {
@@ -477,6 +486,42 @@ impl TelemetryProjection {
                     )?;
                 Some(TelemetryEvent::ToolCallFinished)
             }
+            EngineEvent::CompactionOutcome {
+                status,
+                context_tokens_before,
+                threshold,
+                reason,
+                ..
+            } => {
+                attributes
+                    .count(TelemetryField::ContextTokensBefore, *context_tokens_before)
+                    .count(TelemetryField::AutoCompactThreshold, *threshold)
+                    .label(TelemetryField::Status, status.label())?;
+                if let Some(reason) = reason {
+                    // The reference's failure record carries the classified
+                    // reason and nothing else: no prompt, no transcript, no
+                    // summary text.
+                    let mut failure = TelemetryAttributes::default();
+                    failure.label(TelemetryField::Reason, reason.label())?;
+                    return Ok(vec![
+                        Self {
+                            event: TelemetryEvent::AutoCompactTriggered,
+                            attributes,
+                            correlation_id: event.turn_id.clone(),
+                        },
+                        Self {
+                            event: TelemetryEvent::CompactionFailed,
+                            attributes: failure,
+                            correlation_id: event.turn_id.clone(),
+                        },
+                    ]);
+                }
+                Some(TelemetryEvent::AutoCompactTriggered)
+            }
+            // The variant this port emitted before the boundary pair existed.
+            // Nothing emits it any more; a transcript that carries one still
+            // reports the compaction it recorded, without a status it never
+            // held.
             EngineEvent::Compaction { .. } => Some(TelemetryEvent::AutoCompactTriggered),
             EngineEvent::Lifecycle { state, .. } => match state {
                 LifecycleState::Running => {
@@ -491,11 +536,14 @@ impl TelemetryProjection {
             },
             _ => None,
         };
-        Ok(projected.map(|projected| Self {
-            event: projected,
-            attributes,
-            correlation_id: event.turn_id.clone(),
-        }))
+        Ok(projected
+            .map(|projected| Self {
+                event: projected,
+                attributes,
+                correlation_id: event.turn_id.clone(),
+            })
+            .into_iter()
+            .collect())
     }
 }
 
@@ -563,6 +611,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::compaction::{CompactionFailureReason, CompactionStatus};
 
     struct CountingTransport {
         calls: AtomicUsize,
@@ -745,6 +794,7 @@ mod tests {
         };
         let projection = TelemetryProjection::from_engine_event(&event)
             .expect("projection")
+            .pop()
             .expect("telemetry event");
         let envelope = TelemetryEnvelope::new(
             projection.event,
@@ -774,7 +824,7 @@ mod tests {
         assert!(
             TelemetryProjection::from_engine_event(&event)
                 .expect("projection")
-                .is_none()
+                .is_empty()
         );
     }
 
@@ -807,5 +857,90 @@ mod tests {
             .expect("observe");
         observer.flush().await;
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    fn compaction_outcome(
+        status: CompactionStatus,
+        reason: Option<CompactionFailureReason>,
+    ) -> EventEnvelope {
+        EventEnvelope {
+            session_id: "session".to_owned(),
+            turn_id: Some("turn-1".to_owned()),
+            emitted_at: 1,
+            event_id: 1,
+            event: EngineEvent::CompactionOutcome {
+                compaction_id: "compaction-1".to_owned(),
+                status,
+                context_tokens_before: 150_000,
+                threshold: 120_000,
+                reason,
+            },
+        }
+    }
+
+    /// US-151: the auto-compaction record carries the tokens before, the
+    /// threshold and the status, which is the reference's payload.
+    #[test]
+    fn a_compaction_outcome_reports_the_reference_payload() {
+        for (status, label) in [
+            (CompactionStatus::Success, "success"),
+            (CompactionStatus::Failure, "failure"),
+            (CompactionStatus::Cancelled, "cancelled"),
+        ] {
+            let projections =
+                TelemetryProjection::from_engine_event(&compaction_outcome(status, None))
+                    .expect("projection");
+            let [record] = projections.as_slice() else {
+                panic!("an unclassified outcome reports one record");
+            };
+            assert_eq!(record.event, TelemetryEvent::AutoCompactTriggered);
+            let encoded = serde_json::to_value(&record.attributes).expect("attributes");
+            assert_eq!(encoded["nb_context_tokens_before"], 150_000);
+            assert_eq!(encoded["auto_compact_threshold"], 120_000);
+            assert_eq!(encoded["status"], label);
+        }
+    }
+
+    /// US-151: a classified failure reports the failure record too, carrying
+    /// the reason and nothing else.
+    #[test]
+    fn a_classified_failure_reports_both_records() {
+        let projections = TelemetryProjection::from_engine_event(&compaction_outcome(
+            CompactionStatus::Failure,
+            Some(CompactionFailureReason::ToolCall),
+        ))
+        .expect("projection");
+        let [triggered, failed] = projections.as_slice() else {
+            panic!("a classified failure reports two records");
+        };
+        assert_eq!(triggered.event, TelemetryEvent::AutoCompactTriggered);
+        assert_eq!(failed.event, TelemetryEvent::CompactionFailed);
+        assert_eq!(
+            serde_json::to_value(&failed.attributes).expect("attributes"),
+            json!({"reason": "tool_call"}),
+            "the failure record carries the reason and no transcript"
+        );
+    }
+
+    /// US-151: telemetry disabled writes nothing, whatever the compaction did.
+    #[tokio::test]
+    async fn a_disabled_client_writes_no_compaction_record() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let client = TelemetryClient::new(
+            TelemetryConfig::new(false, &endpoint(), Some(SecretString::from("key")))
+                .expect("config"),
+            SharedCountingTransport {
+                calls: Arc::clone(&calls),
+            },
+        );
+        let observer = TelemetryEventObserver::new(client, metadata());
+        observer
+            .observe(&compaction_outcome(
+                CompactionStatus::Failure,
+                Some(CompactionFailureReason::EmptySummary),
+            ))
+            .expect("observe");
+        observer.flush().await;
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }

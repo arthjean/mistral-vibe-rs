@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
 
+use crate::compaction::{CompactionFailureReason, CompactionStatus};
+
 pub mod detail;
 
 pub use detail::{
@@ -80,8 +82,51 @@ pub enum EngineEvent {
         name: String,
         message: String,
     },
+    /// A finished compaction, as this port published it before it emitted the
+    /// reference's pair.
+    ///
+    /// Nothing emits it any more. It stays declared, and stays projected, so a
+    /// transcript written before [`EngineEvent::CompactionStarted`] existed
+    /// still replays; the precedent is [`SessionHandoffCause`], which kept its
+    /// default for the same reason.
     Compaction {
         summary: String,
+    },
+    /// A compaction that is about to call the model. Reference
+    /// `CompactStartEvent`.
+    CompactionStarted {
+        /// Correlates the pair, and is the identifier the projected entry is
+        /// patched through. The reference calls it a tool call identifier
+        /// because it borrows the tool-call channel to reach a client.
+        compaction_id: String,
+        current_context_tokens: u64,
+        threshold: u64,
+    },
+    /// A compaction that replaced the transcript. Reference `CompactEndEvent`.
+    CompactionCompleted {
+        compaction_id: String,
+        /// The summary's length in characters, which is what the reference
+        /// publishes; the summary itself reaches a client as the transcript.
+        summary_length: u64,
+        old_session_id: String,
+        new_session_id: String,
+    },
+    /// How a compaction ended, whatever the outcome.
+    ///
+    /// It carries no history, like [`EngineEvent::Stats`]: the projection
+    /// ignores it and only a live observer reads it. It exists because this
+    /// port reports telemetry from the event stream where the reference calls
+    /// an injected client, and the reference reports the status of a compaction
+    /// that failed or was cancelled, neither of which ends with a completed
+    /// event.
+    CompactionOutcome {
+        compaction_id: String,
+        status: CompactionStatus,
+        context_tokens_before: u64,
+        threshold: u64,
+        /// The classified summarization failure, when the summarizer named one.
+        #[serde(default)]
+        reason: Option<CompactionFailureReason>,
     },
     Title {
         title: String,
@@ -657,6 +702,14 @@ pub enum ProjectionError {
     InvalidHandoff { expected: String, actual: String },
 }
 
+/// The checkpoint kind a compaction is published under, and the two labels its
+/// entry carries: the reference creates the entry with the first and patches it
+/// to the second. They are values a client renders, so they are reproduced
+/// rather than reworded.
+const COMPACTION_ENTRY_KIND: &str = "compaction";
+const COMPACTION_STARTED_MESSAGE: &str = "Compacting context";
+const COMPACTION_COMPLETED_MESSAGE: &str = "Context compacted";
+
 fn reduce_event(
     state: &mut ProjectionSnapshot,
     event_id: u64,
@@ -1030,6 +1083,56 @@ fn reduce_event(
                 details: Value::Null,
             });
         }
+        EngineEvent::CompactionStarted { .. } => {
+            require_active(state, "compaction_started")?;
+            complete_streaming_entries(state, emitted_at);
+            state.history.push(PublicHistoryEntry::Checkpoint {
+                metadata: entry_metadata(
+                    state,
+                    event_id,
+                    emitted_at,
+                    PublicEntryGenerationStatus::InProgress,
+                ),
+                kind: COMPACTION_ENTRY_KIND.to_owned(),
+                message: Some(COMPACTION_STARTED_MESSAGE.to_owned()),
+                details: Value::Null,
+            });
+        }
+        EngineEvent::CompactionCompleted { .. } => {
+            require_active(state, "compaction_completed")?;
+            // The entry the start created is the one that is patched. A late
+            // subscriber that never saw the start still gets a coherent entry,
+            // which is why a missing one is created here rather than refused.
+            let open = state.history.iter_mut().rev().find(|entry| {
+                matches!(
+                    entry,
+                    PublicHistoryEntry::Checkpoint { metadata, kind, .. }
+                        if kind == COMPACTION_ENTRY_KIND
+                            && metadata.generation_status
+                                == PublicEntryGenerationStatus::InProgress
+                )
+            });
+            match open {
+                Some(PublicHistoryEntry::Checkpoint {
+                    metadata, message, ..
+                }) => {
+                    metadata.updated_at = emitted_at;
+                    metadata.generation_status = PublicEntryGenerationStatus::Completed;
+                    *message = Some(COMPACTION_COMPLETED_MESSAGE.to_owned());
+                }
+                _ => state.history.push(PublicHistoryEntry::Checkpoint {
+                    metadata: entry_metadata(
+                        state,
+                        event_id,
+                        emitted_at,
+                        PublicEntryGenerationStatus::Completed,
+                    ),
+                    kind: COMPACTION_ENTRY_KIND.to_owned(),
+                    message: Some(COMPACTION_COMPLETED_MESSAGE.to_owned()),
+                    details: Value::Null,
+                }),
+            }
+        }
         EngineEvent::Title { title } => {
             require_active(state, "title")?;
             state.title = Some(title.clone());
@@ -1085,7 +1188,9 @@ fn reduce_event(
                 });
             }
         }
-        EngineEvent::Stats { .. } | EngineEvent::Retrying { .. } => {}
+        EngineEvent::Stats { .. }
+        | EngineEvent::Retrying { .. }
+        | EngineEvent::CompactionOutcome { .. } => {}
         EngineEvent::Lifecycle {
             state: next,
             message,
@@ -1419,6 +1524,137 @@ mod tests {
                 },
                 ..
             }) if feedback.as_deref() == Some("yes")
+        ));
+    }
+
+    /// US-151: the boundary pair is one entry, created in progress and patched
+    /// where the reference patches it.
+    #[test]
+    fn the_compaction_pair_projects_as_one_entry_that_is_patched() {
+        let mut reducer = ProjectionReducer::new("session-1");
+        for envelope in [
+            event(
+                1,
+                EngineEvent::UserMessage {
+                    content: "compact".to_owned(),
+                },
+            ),
+            event(
+                2,
+                EngineEvent::CompactionStarted {
+                    compaction_id: "compaction-1".to_owned(),
+                    current_context_tokens: 150_000,
+                    threshold: 120_000,
+                },
+            ),
+        ] {
+            reducer.apply(&envelope).expect("valid lifecycle event");
+        }
+        let entries = reducer.state().history.len();
+        assert!(matches!(
+            reducer.state().history.last(),
+            Some(PublicHistoryEntry::Checkpoint { metadata, kind, message, .. })
+                if kind == "compaction"
+                    && metadata.generation_status == PublicEntryGenerationStatus::InProgress
+                    && message.as_deref() == Some("Compacting context")
+        ));
+
+        reducer
+            .apply(&event(
+                3,
+                EngineEvent::CompactionCompleted {
+                    compaction_id: "compaction-1".to_owned(),
+                    summary_length: 15,
+                    old_session_id: "session-1".to_owned(),
+                    new_session_id: "session-2".to_owned(),
+                },
+            ))
+            .expect("the end event applies");
+        assert_eq!(
+            reducer.state().history.len(),
+            entries,
+            "the end event patches the entry the start created rather than adding one"
+        );
+        assert!(matches!(
+            reducer.state().history.last(),
+            Some(PublicHistoryEntry::Checkpoint { metadata, message, .. })
+                if metadata.generation_status == PublicEntryGenerationStatus::Completed
+                    && message.as_deref() == Some("Context compacted")
+        ));
+
+        // The outcome event carries no history, like the stats event.
+        reducer
+            .apply(&event(
+                4,
+                EngineEvent::CompactionOutcome {
+                    compaction_id: "compaction-1".to_owned(),
+                    status: CompactionStatus::Success,
+                    context_tokens_before: 150_000,
+                    threshold: 120_000,
+                    reason: None,
+                },
+            ))
+            .expect("the outcome applies");
+        assert_eq!(reducer.state().history.len(), entries);
+    }
+
+    /// US-151: an end event whose start was never seen still leaves a coherent
+    /// entry, which is what a late subscriber reads.
+    #[test]
+    fn an_end_event_without_its_start_still_projects_an_entry() {
+        let mut reducer = ProjectionReducer::new("session-1");
+        for envelope in [
+            event(
+                1,
+                EngineEvent::UserMessage {
+                    content: "compact".to_owned(),
+                },
+            ),
+            event(
+                2,
+                EngineEvent::CompactionCompleted {
+                    compaction_id: "compaction-1".to_owned(),
+                    summary_length: 15,
+                    old_session_id: "session-1".to_owned(),
+                    new_session_id: "session-2".to_owned(),
+                },
+            ),
+        ] {
+            reducer.apply(&envelope).expect("valid lifecycle event");
+        }
+        assert!(matches!(
+            reducer.state().history.last(),
+            Some(PublicHistoryEntry::Checkpoint { metadata, kind, message, .. })
+                if kind == "compaction"
+                    && metadata.generation_status == PublicEntryGenerationStatus::Completed
+                    && message.as_deref() == Some("Context compacted")
+        ));
+    }
+
+    /// US-151: the variant this port emitted before the pair still projects the
+    /// entry a stored transcript was written with.
+    #[test]
+    fn a_stored_compaction_event_projects_as_it_did() {
+        let stored: EventEnvelope = serde_json::from_value(
+            json!({"sessionId": "session-1", "eventId": 2, "type": "compaction", "summary": "short"}),
+        )
+        .expect("a stored compaction still deserializes");
+        let mut reducer = ProjectionReducer::new("session-1");
+        reducer
+            .apply(&event(
+                1,
+                EngineEvent::UserMessage {
+                    content: "compact".to_owned(),
+                },
+            ))
+            .expect("the prompt applies");
+        reducer.apply(&stored).expect("the stored event applies");
+        assert!(matches!(
+            reducer.state().history.last(),
+            Some(PublicHistoryEntry::Checkpoint { metadata, kind, message, .. })
+                if kind == "compaction"
+                    && metadata.generation_status == PublicEntryGenerationStatus::Completed
+                    && message.as_deref() == Some("short")
         ));
     }
 
