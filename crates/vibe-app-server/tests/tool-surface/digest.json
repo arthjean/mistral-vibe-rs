@@ -669,7 +669,7 @@
   },
   "note": "Canonical tool-surface digest: published names and schema structure only, with every description replaced by a sentinel so no reference prose is committed. Regenerate with scripts/parity/tool_surface.py --digest when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
   "schemaVersion": 1,
   "tools": {
     "ask_user_question": {

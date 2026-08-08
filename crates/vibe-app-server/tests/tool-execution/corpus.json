@@ -868,6 +868,6 @@
   ],
   "note": "Tool execution corpus: what the pinned reference's tools return for each case over the checked-in fixture tree. A captured string is committed as it stands only when it is a value these arguments supplied, a normalized path, or an identifier-shaped token; everything else, including every error message, is committed as a SHA-256 digest and its length, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/tool_execution.py --corpus when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
   "schemaVersion": 1
 }

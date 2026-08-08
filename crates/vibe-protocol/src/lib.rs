@@ -28,7 +28,7 @@ use thiserror::Error;
 /// Lifecycle methods (`initialize`, `initialized`, `shutdown`, `exit`) are
 /// deliberately absent: they are handled before method dispatch and are not
 /// part of the negotiated surface.
-pub const SERVER_METHODS: [&str; 89] = [
+pub const SERVER_METHODS: [&str; 91] = [
     "account/read",
     "agents/install",
     "agents/list",
@@ -50,6 +50,7 @@ pub const SERVER_METHODS: [&str; 89] = [
     "feedback/record",
     "feedback/shouldShow",
     "history/list",
+    "identity/read",
     "loops/clear",
     "loops/create",
     "loops/delete",
@@ -118,6 +119,7 @@ pub const SERVER_METHODS: [&str; 89] = [
     "workspace/prompt/prepare",
     "workspace/trust/decision",
     "workspace/trust/status",
+    "workspace/worktrees/list",
 ];
 
 /// Methods this port routes that the reference does not declare, sorted and

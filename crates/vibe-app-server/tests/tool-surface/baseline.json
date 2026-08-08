@@ -1,5 +1,5 @@
 {
-  "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
   "platform": "linux",
   "note": "No divergence remains on the Linux surface: EP-013 emptied the invented-name and schema-divergence sets, EP-014 the universal-tool half of the missing-name set, and EP-015 the shell half. All three must stay empty. The managed shell rollout is a separate surface with its own diff, and EP-016 adds the Windows families. Names and JSON pointers only, because the corpus that carries reference description text stays gitignored.",
   "missingNames": [],

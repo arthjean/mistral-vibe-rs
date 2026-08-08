@@ -1,6 +1,6 @@
 {
   "oracle": {
-    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
     "deterministicRuns": 10,
     "engine": "python-textual-capture"
   },
@@ -24,7 +24,7 @@
     "script": "ep010-python-oracle.py"
   },
   "reference": {
-    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
     "sourceFiles": [
       "vibe/cli/textual_ui/handlers/event_handler.py",
       "vibe/cli/textual_ui/widgets/tools.py",

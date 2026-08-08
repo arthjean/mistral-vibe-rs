@@ -22,10 +22,10 @@ import sys
 
 #: The reference commit every committed corpus was captured from. A checkout at
 #: any other revision is not an oracle for those corpora.
-EXPECTED_COMMIT = "68ff32e6a92e80a874c8153312f0aa8ae4955477"
+EXPECTED_COMMIT = "b78b451c39eab9213393ad2f45908e8562a5c5e7"
 
 #: The package version :data:`EXPECTED_COMMIT` publishes.
-EXPECTED_VERSION = "2.23.3"
+EXPECTED_VERSION = "2.24.0"
 
 #: Where the read-only reference checkout lives. ``VIBE_REFERENCE`` overrides
 #: the default for machines that hold it elsewhere, and ``--reference`` wins

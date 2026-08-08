@@ -55,9 +55,19 @@ const PROBE_SESSION: &str = "session-1";
 /// Reference methods this build does not route yet, each with the story that
 /// adds it. A method routed while listed here fails the replay as a stale entry.
 ///
-/// US-098 routed the last of them, so the list is empty and a method that stops
-/// being routed has to earn an entry here before the replay accepts it.
-const UNROUTED_METHODS: &[(&str, &str)] = &[];
+/// US-098 routed the last of them. The two that remain arrived with the v2.24.0
+/// re-pin (US-142): the reference declares and routes them, this port declares
+/// them in `SERVER_METHODS` so a client reading the inventory sees the same
+/// names, and routing them is app-server parity work rather than compaction
+/// work. Any other method that stops being routed has to earn an entry here
+/// before the replay accepts it.
+const UNROUTED_METHODS: &[(&str, &str)] = &[
+    ("identity/read", "US-142: declared at the v2.24.0 re-pin"),
+    (
+        "workspace/worktrees/list",
+        "US-142: declared at the v2.24.0 re-pin",
+    ),
+];
 
 /// Reference notifications this build does not emit yet.
 ///
@@ -73,14 +83,37 @@ const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[];
 const LOCAL_NOTIFICATIONS: &[(&str, &str)] = &[];
 
 /// Enum vocabularies the reference declares that this port does not model yet.
-const UNMODELED_ENUMS: &[(&str, &str)] = &[("TerminalEmulator", "US-081")];
+///
+/// `PublicRetryCategory` was recorded as absent until v2.24.0, which reaches it
+/// from `turn/error`; nothing in this port classifies a retry, so US-142
+/// recorded it here rather than inventing a vocabulary no code produces.
+const UNMODELED_ENUMS: &[(&str, &str)] = &[
+    ("TerminalEmulator", "US-081"),
+    (
+        "PublicRetryCategory",
+        "US-142: reachable from v2.24.0, unmodeled here",
+    ),
+];
 
 /// Methods whose probed response does not validate against the census yet, each
 /// with the story that fixes it. A method that starts validating while listed
 /// here fails the replay as a stale entry.
-/// US-093 closed the last one, so a response that stops validating has to earn
-/// an entry here before the replay accepts it.
-const DIVERGENT_RESPONSES: &[(&str, &str)] = &[];
+/// US-093 closed the last one. The two that remain arrived with the v2.24.0
+/// re-pin (US-142), which gave `ConfigView` the three fields the unpinned
+/// active-model feature publishes: `activeModelPinned`, `defaultModelAlias` and
+/// `showGreeting`. Producing them means porting that feature, which is
+/// configuration parity work. Any other response that stops validating has to
+/// earn an entry here before the replay accepts it.
+const DIVERGENT_RESPONSES: &[(&str, &str)] = &[
+    (
+        "config/read",
+        "US-142: ConfigView gained three unpinned-model fields at v2.24.0",
+    ),
+    (
+        "runtime/read",
+        "US-142: ConfigView gained three unpinned-model fields at v2.24.0",
+    ),
+];
 
 /// Read-only methods the probe calls, with the parameters they take.
 ///
@@ -727,7 +760,7 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
     );
     assert_eq!(
         corpus.absent_enums,
-        ["PublicRetryCategory"],
+        [] as [String; 0],
         "the pinned reference declares a vocabulary this corpus recorded as absent"
     );
     eprintln!(

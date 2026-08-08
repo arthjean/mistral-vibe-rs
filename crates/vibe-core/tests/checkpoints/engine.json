@@ -1,7 +1,7 @@
 {
   "absentTurn": 9999,
   "note": "Checkpoint engine corpus: what the pinned reference's Checkpointer, History and ReviewManager answered for scenarios authored in scripts/parity/checkpoints.py. The steps are this repository's own inputs and are committed as they stand, because a replay cannot run without them; every observation is structural, and every file content the reference produced is a SHA-256 digest. No reference-authored text is stored. Regenerate with scripts/parity/checkpoints.py when the pinned reference moves.",
-  "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
   "scenarios": [
     {
       "covers": "attribution",

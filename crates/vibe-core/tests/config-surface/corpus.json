@@ -1,7 +1,7 @@
 {
   "defaults": {
     "document": {
-      "active_model": "mistral-medium-3.5",
+      "active_model": "",
       "active_transcribe_model": "voxtral-realtime",
       "active_tts_model": "voxtral-tts",
       "agent_paths": [],
@@ -44,6 +44,7 @@
       "include_project_context": true,
       "include_prompt_detail": true,
       "installed_agents": [],
+      "managed_shell_tools_enabled": false,
       "mcp_servers": [],
       "models": [
         {
@@ -116,11 +117,13 @@
         }
       ],
       "raise_on_compaction_failure": false,
+      "routed_default_model": "",
       "session_logging": {
         "enabled": true,
         "save_dir": "{vibe_home}/logs/session",
         "session_prefix": "session"
       },
+      "show_greeting": true,
       "show_thinking_nodes": false,
       "skill_paths": [],
       "system_prompt_id": "cli",
@@ -204,6 +207,22 @@
       "mergeKey": null,
       "name": "active_model",
       "popular": true,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "routed_default_model",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": null,
+      "name": "routed_model_config",
+      "popular": false,
       "strategy": "replace"
     },
     {
@@ -494,6 +513,14 @@
       "choices": [],
       "kind": "bool",
       "mergeKey": null,
+      "name": "show_greeting",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
       "name": "autocopy_to_clipboard",
       "popular": true,
       "strategy": "replace"
@@ -583,6 +610,14 @@
       "kind": "str",
       "mergeKey": null,
       "name": "system_prompt_id",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "managed_shell_tools_enabled",
       "popular": false,
       "strategy": "replace"
     },
@@ -1273,7 +1308,7 @@
   },
   "modelScenarios": [
     {
-      "activeModel": "mistral-medium-3.5",
+      "activeModel": "",
       "layers": [],
       "models": {
         "devstral-small": {
@@ -1317,7 +1352,7 @@
       "validationWarnings": 0
     },
     {
-      "activeModel": "mistral-medium-3.5",
+      "activeModel": "",
       "layers": [
         {
           "name": "user",
@@ -1366,7 +1401,7 @@
       "validationWarnings": 0
     },
     {
-      "activeModel": "mistral-medium-3.5",
+      "activeModel": "",
       "layers": [
         {
           "name": "user",
@@ -1415,7 +1450,7 @@
       "validationWarnings": 0
     },
     {
-      "activeModel": "mistral-medium-3.5",
+      "activeModel": "",
       "layers": [
         {
           "name": "user",
@@ -1476,7 +1511,7 @@
       "validationWarnings": 0
     },
     {
-      "activeModel": "mistral-medium-3.5",
+      "activeModel": "",
       "layers": [
         {
           "name": "user",
@@ -1647,7 +1682,7 @@
       "validationWarnings": 0
     },
     {
-      "activeModel": "mistral-medium-3.5",
+      "activeModel": "",
       "layers": [
         {
           "name": "user",
@@ -1702,7 +1737,7 @@
   ],
   "note": "Captured from the pinned reference by scripts/parity/config_surface.py. Field names, merge strategies, merge keys, editor kinds and merged documents are observations; no reference-authored description text is recorded here.",
   "reference": {
-    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477"
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
   },
   "scenarios": [
     {

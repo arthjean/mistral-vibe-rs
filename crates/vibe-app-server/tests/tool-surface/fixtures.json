@@ -850,6 +850,6 @@
   ],
   "note": "Argument fixtures with the verdict the reference Pydantic gave them. Payloads and case names are authored by scripts/parity/tool_surface.py; the only captured value is the accepted flag. Schemas come from digest.json. Regenerate with scripts/parity/tool_surface.py --fixtures when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
   "schemaVersion": 1
 }

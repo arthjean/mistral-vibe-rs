@@ -110,23 +110,28 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
     sys.path.insert(0, str(reference))
     from vibe.core.config import VibeConfigSchema
     from vibe.core.config.harness_files import init_harness_files_manager
-    from vibe.core.tools.manager import ShellToolPolicy, ToolManager
+    from vibe.core.tools.manager import ToolManager
 
     init_harness_files_manager()
     config = VibeConfigSchema()
     with tempfile.TemporaryDirectory() as workdir:
         # An empty working directory keeps project-local tool and prompt
         # overrides out of the captured surface.
-        def surface(policy: Any) -> dict[str, Any]:
+        #
+        # v2.24.0 replaced the injected `ShellToolPolicy` with the
+        # `managed_shell_tools_enabled` configuration field, so the rollout is
+        # now selected by the configuration the manager reads rather than by a
+        # constructor argument. The two surfaces below are the same two the
+        # policy object used to select.
+        def surface(rollout_config: Any) -> dict[str, Any]:
             manager = ToolManager(
-                lambda: config,
+                lambda: rollout_config,
                 defer_mcp=True,
-                shell_policy=policy,
                 cwd=Path(workdir),
             )
             return manager.available_tools
 
-        available = surface(ShellToolPolicy())
+        available = surface(config)
         tools = [
             {"name": name, "parameters": available[name].get_parameters()}
             for name in sorted(available)
@@ -140,10 +145,7 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
         # variant it selects for `bash` and the four session tools it adds are
         # only reachable with the experiment variant resolved to `managed`.
         managed_available = surface(
-            ShellToolPolicy(
-                managed_tools_enabled=lambda: True,
-                local_managed_tools_enabled=True,
-            )
+            VibeConfigSchema(managed_shell_tools_enabled=True)
         )
         managed_tools = [
             {"name": name, "parameters": managed_available[name].get_parameters()}

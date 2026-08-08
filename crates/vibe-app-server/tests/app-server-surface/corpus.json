@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "reference": {
-    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477"
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
   },
   "note": "Captured by scripts/parity/app_server_surface.py from the pinned reference. Names, aliases, required flags, type kinds, enum values and discriminator values only: no reference-authored prose.",
   "methods": [
@@ -109,6 +109,11 @@
       "name": "history/list",
       "params": "HistoryListParams",
       "response": "HistoryListResponse"
+    },
+    {
+      "name": "identity/read",
+      "params": "IdentityReadParams",
+      "response": "IdentityReadResponse"
     },
     {
       "name": "loops/clear",
@@ -449,6 +454,11 @@
       "name": "workspace/trust/status",
       "params": "WorkspaceTrustStatusParams",
       "response": "WorkspaceTrustStatusResponse"
+    },
+    {
+      "name": "workspace/worktrees/list",
+      "params": "WorkspaceWorktreeListParams",
+      "response": "WorkspaceWorktreeListResponse"
     }
   ],
   "clientToolMethods": [
@@ -717,6 +727,16 @@
       ]
     },
     {
+      "name": "PublicRetryCategory",
+      "values": [
+        "rate_limited",
+        "server_error",
+        "timed_out",
+        "connection",
+        "unknown"
+      ]
+    },
+    {
       "name": "PublicTurnStatus",
       "values": [
         "in_progress",
@@ -798,9 +818,7 @@
       ]
     }
   ],
-  "absentEnums": [
-    "PublicRetryCategory"
-  ],
+  "absentEnums": [],
   "unions": [
     {
       "name": "EffectDetail",
@@ -2647,6 +2665,16 @@
           "models": [],
           "enums": [],
           "literals": []
+        },
+        {
+          "name": "value_labels",
+          "alias": "valueLabels",
+          "required": false,
+          "kind": "dict",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
         }
       ]
     },
@@ -3133,6 +3161,16 @@
           "literals": []
         },
         {
+          "name": "active_model_pinned",
+          "alias": "activeModelPinned",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "ask_confirmation_on_exit",
           "alias": "askConfirmationOnExit",
           "required": true,
@@ -3147,6 +3185,16 @@
           "alias": "autocopyToClipboard",
           "required": true,
           "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "default_model_alias",
+          "alias": "defaultModelAlias",
+          "required": true,
+          "kind": "str",
           "optional": false,
           "models": [],
           "enums": [],
@@ -3207,6 +3255,16 @@
         {
           "name": "narrator_enabled",
           "alias": "narratorEnabled",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "show_greeting",
+          "alias": "showGreeting",
           "required": true,
           "kind": "bool",
           "optional": false,
@@ -3574,6 +3632,43 @@
             "PublicNoticeEntry",
             "PublicReasoningEntry"
           ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "CreateLocalWorkspaceSelection",
+      "fields": [
+        {
+          "name": "branch",
+          "alias": "branch",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "kind",
+          "alias": "kind",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "create"
+          ]
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
           "enums": [],
           "literals": []
         }
@@ -3961,6 +4056,33 @@
           "models": [],
           "enums": [],
           "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ExistingLocalWorkspaceSelection",
+      "fields": [
+        {
+          "name": "cwd",
+          "alias": "cwd",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "kind",
+          "alias": "kind",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "existing"
+          ]
         }
       ]
     },
@@ -5137,6 +5259,132 @@
           "kind": "str",
           "optional": true,
           "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "IdentityEntityView",
+      "fields": [
+        {
+          "name": "id",
+          "alias": "id",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "IdentityReadParams",
+      "fields": [
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "IdentityReadResponse",
+      "fields": [
+        {
+          "name": "identity",
+          "alias": "identity",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "IdentityView"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "IdentityView",
+      "fields": [
+        {
+          "name": "email",
+          "alias": "email",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "first_name",
+          "alias": "firstName",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "id",
+          "alias": "id",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "last_name",
+          "alias": "lastName",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "organization",
+          "alias": "organization",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "IdentityEntityView"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "workspace",
+          "alias": "workspace",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "IdentityEntityView"
+          ],
           "enums": [],
           "literals": []
         }
@@ -10076,6 +10324,19 @@
           "literals": []
         },
         {
+          "name": "local_workspace_selection",
+          "alias": "localWorkspaceSelection",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "CreateLocalWorkspaceSelection",
+            "ExistingLocalWorkspaceSelection"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "max_price",
           "alias": "maxPrice",
           "required": false,
@@ -10675,6 +10936,19 @@
           "literals": []
         },
         {
+          "name": "local_workspace_selection",
+          "alias": "localWorkspaceSelection",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "CreateLocalWorkspaceSelection",
+            "ExistingLocalWorkspaceSelection"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "max_price",
           "alias": "maxPrice",
           "required": false,
@@ -10799,6 +11073,19 @@
           "kind": "bool",
           "optional": false,
           "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "local_workspace_selection",
+          "alias": "localWorkspaceSelection",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "CreateLocalWorkspaceSelection",
+            "ExistingLocalWorkspaceSelection"
+          ],
           "enums": [],
           "literals": []
         },
@@ -10958,6 +11245,16 @@
       "name": "SessionReadyWaitResponse",
       "fields": [
         {
+          "name": "init_duration_ms",
+          "alias": "initDurationMs",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "ready",
           "alias": "ready",
           "required": false,
@@ -11039,6 +11336,19 @@
           "kind": "int",
           "optional": false,
           "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "local_workspace_selection",
+          "alias": "localWorkspaceSelection",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "CreateLocalWorkspaceSelection",
+            "ExistingLocalWorkspaceSelection"
+          ],
           "enums": [],
           "literals": []
         },
@@ -11440,6 +11750,19 @@
           "kind": "int",
           "optional": false,
           "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "local_workspace_selection",
+          "alias": "localWorkspaceSelection",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "CreateLocalWorkspaceSelection",
+            "ExistingLocalWorkspaceSelection"
+          ],
           "enums": [],
           "literals": []
         },
@@ -13421,8 +13744,20 @@
       "name": "TurnRetryingParams",
       "fields": [
         {
-          "name": "reason",
-          "alias": "reason",
+          "name": "category",
+          "alias": "category",
+          "required": true,
+          "kind": "enum",
+          "optional": false,
+          "models": [],
+          "enums": [
+            "PublicRetryCategory"
+          ],
+          "literals": []
+        },
+        {
+          "name": "detail",
+          "alias": "detail",
           "required": true,
           "kind": "str",
           "optional": false,
@@ -14936,6 +15271,61 @@
       ]
     },
     {
+      "name": "WorkspaceLinkedWorktree",
+      "fields": [
+        {
+          "name": "branch",
+          "alias": "branch",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "cwd",
+          "alias": "cwd",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "repo_root",
+          "alias": "repoRoot",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "root",
+          "alias": "root",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "WorkspacePromptPrepareParams",
       "fields": [
         {
@@ -15152,6 +15542,38 @@
             "session",
             "untrusted"
           ]
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceWorktreeListParams",
+      "fields": [
+        {
+          "name": "cwd",
+          "alias": "cwd",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceWorktreeListResponse",
+      "fields": [
+        {
+          "name": "worktrees",
+          "alias": "worktrees",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "WorkspaceLinkedWorktree"
+          ],
+          "enums": [],
+          "literals": []
         }
       ]
     }

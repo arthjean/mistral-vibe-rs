@@ -168,6 +168,7 @@ METHOD_MODELS: dict[str, tuple[str, str]] = {
     "feedback/record": ("FeedbackRecordParams", "EmptyResponse"),
     "feedback/shouldShow": ("FeedbackShouldShowParams", "FeedbackShouldShowResponse"),
     "history/list": ("HistoryListParams", "HistoryListResponse"),
+    "identity/read": ("IdentityReadParams", "IdentityReadResponse"),
     "loops/clear": ("LoopsClearParams", "LoopsClearResponse"),
     "loops/create": ("LoopsCreateParams", "LoopsCreateResponse"),
     "loops/delete": ("LoopsDeleteParams", "LoopsDeleteResponse"),
@@ -277,6 +278,10 @@ METHOD_MODELS: dict[str, tuple[str, str]] = {
     "workspace/trust/status": (
         "WorkspaceTrustStatusParams",
         "WorkspaceTrustStatusResponse",
+    ),
+    "workspace/worktrees/list": (
+        "WorkspaceWorktreeListParams",
+        "WorkspaceWorktreeListResponse",
     ),
 }
 

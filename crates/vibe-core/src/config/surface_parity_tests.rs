@@ -46,6 +46,52 @@ const MINIMUM_SCENARIOS: usize = 24;
 /// What the capture writes where the vibe home is machine-dependent.
 const VIBE_HOME_PLACEHOLDER: &str = "{vibe_home}";
 
+/// Reference fields this port does not declare, each with the reason.
+///
+/// All four arrived with the v2.24.0 re-pin (US-142) and belong to one upstream
+/// feature: an `active_model` that may be left unpinned, resolved at read time
+/// from a routed default, plus the greeting and managed-shell toggles that
+/// shipped with it. Declaring the keys without the resolution they feed would
+/// publish a schema whose values change nothing, which is the failure mode
+/// `docs/parity.md` names. They are recorded here so the gap is visible and the
+/// replay still fails on any *other* undeclared field.
+///
+/// An entry whose field becomes declared fails the replay as stale.
+const UNDECLARED_FIELDS: &[(&str, &str)] = &[
+    (
+        "managed_shell_tools_enabled",
+        "US-142: v2.24.0 managed shell rollout, unported",
+    ),
+    (
+        "routed_default_model",
+        "US-142: v2.24.0 unpinned active model, unported",
+    ),
+    (
+        "routed_model_config",
+        "US-142: v2.24.0 unpinned active model, unported",
+    ),
+    ("show_greeting", "US-142: v2.24.0 greeting toggle, unported"),
+];
+
+/// The sentinel v2.24.0 ships for `active_model`, meaning "not pinned": the
+/// reference resolves it to a default model when it reads the value, so the
+/// document it ships now carries an empty alias where this port still ships the
+/// alias itself. The consequence of the same unported feature as
+/// [`UNDECLARED_FIELDS`], recorded as a value rather than as a field.
+const UNPINNED_ACTIVE_MODEL: &str = "";
+
+/// The alias this port pins instead, which is what the reference resolves the
+/// sentinel to when no routed default is configured.
+const PINNED_ACTIVE_MODEL: &str = "mistral-medium-3.5";
+
+/// A ledger as a lookup, so a divergence is named once and read by name.
+fn ledger(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
+    entries
+        .iter()
+        .map(|(name, reason)| ((*name).to_owned(), (*reason).to_owned()))
+        .collect()
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Corpus {
@@ -150,12 +196,20 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
         .iter()
         .map(|spec| (spec.name, spec))
         .collect::<BTreeMap<_, _>>();
+    let recorded = ledger(UNDECLARED_FIELDS);
     let mut missing = Vec::new();
     for field in &corpus.fields {
         let Some(spec) = declared.get(field.name.as_str()) else {
-            missing.push(field.name.clone());
+            if !recorded.contains_key(&field.name) {
+                missing.push(field.name.clone());
+            }
             continue;
         };
+        assert!(
+            !recorded.contains_key(&field.name),
+            "field `{}` is declared now and its recorded gap is stale",
+            field.name
+        );
         assert_eq!(
             spec.strategy.as_str(),
             field.strategy,
@@ -197,6 +251,14 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
     assert!(
         missing.is_empty(),
         "the registry does not declare these reference fields: {missing:?}"
+    );
+    let withdrawn = recorded
+        .keys()
+        .filter(|name| !corpus.fields.iter().any(|field| &field.name == *name))
+        .collect::<Vec<_>>();
+    assert!(
+        withdrawn.is_empty(),
+        "these recorded gaps name fields the reference no longer declares: {withdrawn:?}"
     );
     let local = FIELDS
         .iter()
@@ -262,7 +324,31 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
     .expect("the shipped defaults load on their own");
     let actual = serde_json::to_value(&snapshot.effective).expect("effective serializes");
 
+    let recorded = ledger(UNDECLARED_FIELDS);
+    let mut unpinned_observed = false;
     for (key, expected) in &corpus.defaults.document {
+        // The unpinned sentinel is the one value this port deliberately still
+        // ships differently, and it is asserted rather than skipped: the port
+        // must pin exactly the alias the reference resolves the sentinel to.
+        if key == "active_model" && expected.as_str() == Some(UNPINNED_ACTIVE_MODEL) {
+            assert_eq!(
+                actual.get(key).and_then(JsonValue::as_str),
+                Some(PINNED_ACTIVE_MODEL),
+                "the port ships neither the reference sentinel nor the alias it resolves to"
+            );
+            unpinned_observed = true;
+            continue;
+        }
+        // A field the reference declares and this port does not cannot appear
+        // in a document this port composes; the census test above is what names
+        // the gap, and this loop would report it a second time.
+        if recorded.contains_key(key.as_str()) {
+            assert!(
+                actual.get(key).is_none(),
+                "`{key}` is composed now and its recorded gap is stale"
+            );
+            continue;
+        }
         // The reference serializes models as a list on write and reads them
         // back keyed by alias; the effective document carries the read form.
         let expected = if key == "models" {
@@ -282,6 +368,11 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
             panic!("the shipped defaults diverge at {pointer}: reference {want}, port {got}");
         }
     }
+    assert!(
+        unpinned_observed,
+        "the reference no longer ships the unpinned `active_model` sentinel; \
+         drop the recorded divergence instead of carrying it"
+    );
 
     let extra = snapshot
         .effective
@@ -376,6 +467,7 @@ fn resolve_vibe_home(value: &JsonValue, home: &Path) -> JsonValue {
 fn every_model_scenario_validates_to_the_document_the_reference_validates() {
     let corpus = corpus();
     assert!(!corpus.model_scenarios.is_empty());
+    let mut unpinned_observed = false;
     for scenario in &corpus.model_scenarios {
         let temporary = tempfile::tempdir().expect("temporary root");
         let home = temporary.path().join("home/.vibe");
@@ -407,12 +499,22 @@ fn every_model_scenario_validates_to_the_document_the_reference_validates() {
         let snapshot = config
             .load()
             .unwrap_or_else(|error| panic!("{}: {error}", scenario.name));
+        // The unpinned sentinel is the recorded v2.24.0 divergence: where the
+        // reference leaves the alias empty and resolves it on read, this port
+        // pins the alias the reference would resolve to. Every other scenario
+        // is compared as it stands.
+        let expected_alias = if scenario.active_model == UNPINNED_ACTIVE_MODEL {
+            unpinned_observed = true;
+            PINNED_ACTIVE_MODEL
+        } else {
+            scenario.active_model.as_str()
+        };
         assert_eq!(
             snapshot
                 .effective
                 .get("active_model")
                 .and_then(Value::as_str),
-            Some(scenario.active_model.as_str()),
+            Some(expected_alias),
             "{}: the active model diverges",
             scenario.name
         );
@@ -439,6 +541,11 @@ fn every_model_scenario_validates_to_the_document_the_reference_validates() {
             );
         }
     }
+    assert!(
+        unpinned_observed,
+        "no model scenario leaves `active_model` unpinned; drop the recorded \
+         divergence instead of carrying it"
+    );
     println!(
         "config surface: {}/{} model scenarios conform at {}",
         corpus.model_scenarios.len(),

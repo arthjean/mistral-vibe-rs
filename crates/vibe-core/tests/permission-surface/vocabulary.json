@@ -158,7 +158,7 @@
   },
   "note": "Captured from the pinned reference by scripts/parity/permission_surface.py. Scope values, requirement field names, command names, arities and the answers to cases this repository authored are observations; no reference-authored description text is recorded here.",
   "reference": {
-    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477"
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
   },
   "requirement": {
     "fields": [

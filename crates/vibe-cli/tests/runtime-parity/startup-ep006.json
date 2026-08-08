@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "reference": {
-    "commit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
-    "version": "2.23.3",
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "version": "2.24.0",
     "sourceFiles": [
       "vibe/cli/cli.py",
       "vibe/cli/entrypoint.py",
@@ -16,7 +16,7 @@
     {
       "id": "trust-before-session-initialization",
       "story": "US-020",
-      "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+      "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
       "arguments": {
         "initialPrompt": null,
         "prompt": null,
@@ -33,7 +33,7 @@
     {
       "id": "worktree-before-trust-and-session",
       "story": "US-021",
-      "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+      "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
       "arguments": {
         "initialPrompt": "inspect the checkout",
         "prompt": null,
@@ -53,7 +53,7 @@
     {
       "id": "positional-prompt-after-mount",
       "story": "US-022",
-      "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+      "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
       "arguments": {
         "initialPrompt": "explain this repository",
         "prompt": null,
@@ -73,7 +73,7 @@
     {
       "id": "stdin-prompt-after-mount",
       "story": "US-022",
-      "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+      "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
       "arguments": {
         "initialPrompt": "piped request",
         "prompt": null,
@@ -93,7 +93,7 @@
     {
       "id": "explicit-programmatic-prompt",
       "story": "US-022",
-      "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+      "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
       "arguments": {
         "initialPrompt": null,
         "prompt": "headless request",
@@ -110,7 +110,7 @@
     {
       "id": "teleport-after-mount-without-prompt",
       "story": "US-022",
-      "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+      "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
       "arguments": {
         "initialPrompt": null,
         "prompt": null,
@@ -130,7 +130,7 @@
     {
       "id": "teleport-after-mount-without-agent-turn",
       "story": "US-022",
-      "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+      "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
       "arguments": {
         "initialPrompt": "deployment context",
         "prompt": null,
@@ -150,7 +150,7 @@
     {
       "id": "bare-resume-picker-before-session-initialization",
       "story": "US-023",
-      "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+      "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
       "arguments": {
         "initialPrompt": null,
         "prompt": null,
@@ -167,7 +167,7 @@
     {
       "id": "direct-resume-without-picker",
       "story": "US-023",
-      "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+      "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
       "arguments": {
         "initialPrompt": null,
         "prompt": null,
@@ -184,7 +184,7 @@
     {
       "id": "continue-without-picker",
       "story": "US-023",
-      "referenceCommit": "68ff32e6a92e80a874c8153312f0aa8ae4955477",
+      "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
       "arguments": {
         "initialPrompt": null,
         "prompt": null,
