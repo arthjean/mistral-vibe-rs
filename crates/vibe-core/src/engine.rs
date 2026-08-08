@@ -15,6 +15,10 @@ use crate::events::{
     EngineEvent, EventEnvelope, LifecycleState, ModelMessage, ModelToolCall, ProjectionError,
     ProjectionReducer, ProjectionSnapshot, SessionHandoffCause,
 };
+use crate::middleware::{
+    CompactionSettings, ConversationContext, ConversationMiddleware, MiddlewareAction,
+    MiddlewarePipeline, ResetReason,
+};
 use crate::provider::{
     AssistantMessage, ProviderBackend, ProviderChunk, ProviderError, ProviderInput, ProviderStream,
     ProviderTransport, RetrySink, TransportError, Usage, aggregate_provider_chunks,
@@ -526,6 +530,10 @@ pub struct ConversationEngine<P, T = NoTools, C = RejectCompaction, S = NoopTran
     limits: EngineLimits,
     baseline: SessionStats,
     observer: Arc<dyn EventObserver>,
+    /// Policies registered after the budget ones, which is where the reference
+    /// registers automatic compaction and everything that follows it.
+    middleware: Vec<Arc<dyn ConversationMiddleware>>,
+    compaction: CompactionSettings,
 }
 
 impl<P> ConversationEngine<P> {
@@ -539,6 +547,8 @@ impl<P> ConversationEngine<P> {
             limits: EngineLimits::default(),
             baseline: SessionStats::default(),
             observer: Arc::new(NoopEventObserver),
+            middleware: Vec::new(),
+            compaction: CompactionSettings::default(),
         }
     }
 }
@@ -554,6 +564,8 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             limits: self.limits,
             baseline: self.baseline,
             observer: self.observer,
+            middleware: self.middleware,
+            compaction: self.compaction,
         }
     }
 
@@ -567,6 +579,8 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             limits: self.limits,
             baseline: self.baseline,
             observer: self.observer,
+            middleware: self.middleware,
+            compaction: self.compaction,
         }
     }
 
@@ -580,12 +594,27 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             limits: self.limits,
             baseline: self.baseline,
             observer: self.observer,
+            middleware: self.middleware,
+            compaction: self.compaction,
         }
     }
 
     #[must_use]
     pub fn with_limits(mut self, limits: EngineLimits) -> Self {
         self.limits = limits;
+        self
+    }
+
+    /// Registers one conversation policy after the budget policies.
+    #[must_use]
+    pub fn with_middleware(mut self, middleware: Arc<dyn ConversationMiddleware>) -> Self {
+        self.middleware.push(middleware);
+        self
+    }
+
+    #[must_use]
+    pub fn with_compaction_settings(mut self, compaction: CompactionSettings) -> Self {
+        self.compaction = compaction;
         self
     }
 
@@ -640,6 +669,16 @@ where
         let mut messages = input.messages.clone();
         let mut ledger = TurnLedger::new(&self.baseline, &self.limits);
         let mut checkpoints = 0_u32;
+        // The budget policies answer twice per cycle: once at the top, where
+        // they are part of the full pipeline, and once mid-cycle, where a
+        // reached limit must not leave a tool call unanswered. Both readings
+        // come from the same middlewares, so there is one budget authority.
+        let budget = MiddlewarePipeline::from_limits(&self.limits);
+        let mut pipeline = budget.clone();
+        for middleware in &self.middleware {
+            pipeline.add(Arc::clone(middleware));
+        }
+        pipeline.reset(ResetReason::Stop);
 
         recorder.emit(EngineEvent::UserMessage {
             content: prompt.clone(),
@@ -652,8 +691,10 @@ where
         checkpoints = checkpoints.saturating_add(1);
 
         let stop_reason = loop {
-            if let Some(reason) = self.exhausted_budget(&ledger, &cancellation) {
-                break reason;
+            // Cancellation answers before any policy does: a cancelled turn has
+            // no budget question left to ask.
+            if cancellation.is_cancelled() {
+                break TurnStopReason::Cancelled;
             }
             match self.apply_controls(&mut recorder, &mut messages, &controls)? {
                 ControlOutcome::Stop(reason) => break reason,
@@ -666,6 +707,44 @@ where
                 }
                 ControlOutcome::Continue(false) => {}
             }
+            let policy = pipeline.before_turn(&ConversationContext {
+                messages: &messages,
+                stats: &ledger.session_stats(),
+                price_micros: ledger.price_micros,
+                compaction: &self.compaction,
+            });
+            match policy.action {
+                // A policy that stops without naming a public status ends the
+                // turn the way a finished conversation does.
+                MiddlewareAction::Stop => {
+                    break policy.stop_reason.unwrap_or(TurnStopReason::Complete);
+                }
+                MiddlewareAction::Compact => {
+                    match self
+                        .compact(&mut recorder, &mut messages, &pipeline, &cancellation)
+                        .await?
+                    {
+                        // The reference does not re-enter the pipeline after a
+                        // compaction: the policy that asked for it would read
+                        // the same context size and ask again.
+                        Some(()) => {
+                            persist(&self.sink, &messages, recorder.state()).await?;
+                            checkpoints = checkpoints.saturating_add(1);
+                        }
+                        None => break TurnStopReason::Cancelled,
+                    }
+                }
+                MiddlewareAction::InjectMessage => {
+                    if let Some(content) = policy.message {
+                        recorder.emit(EngineEvent::ContextInjected {
+                            content: content.clone(),
+                            as_message: false,
+                        })?;
+                        messages.push(ModelMessage::User { content });
+                    }
+                }
+                MiddlewareAction::Continue => {}
+            }
             input.messages.clone_from(&messages);
             let completion = match self
                 .stream_completion(&mut recorder, &input, &cancellation)
@@ -675,7 +754,7 @@ where
                 StreamOutcome::Completed(Ok(completion)) => *completion,
                 StreamOutcome::Completed(Err(ProviderError::ContextOverflow)) => {
                     match self
-                        .compact(&mut recorder, &mut messages, &cancellation)
+                        .compact(&mut recorder, &mut messages, &pipeline, &cancellation)
                         .await?
                     {
                         Some(()) => {
@@ -717,7 +796,8 @@ where
             };
             // A limit reached mid-cycle keeps a tool-free reply, but never a
             // reply whose tool calls would be left unanswered.
-            if let Some(reason) = self.exhausted_budget(&ledger, &cancellation) {
+            if let Some(reason) = self.exhausted_budget(&budget, &messages, &ledger, &cancellation)
+            {
                 if completion.tool_calls.is_empty() {
                     messages.push(assistant_message);
                 }
@@ -753,15 +833,7 @@ where
             message: Some(stop_message(&stop_reason).to_owned()),
         })?;
         persist(&self.sink, &messages, recorder.state()).await?;
-        persist_stats(
-            &self.sink,
-            &SessionStats {
-                usage: ledger.usage.clone(),
-                context_tokens: ledger.context_tokens,
-                steps: ledger.steps,
-            },
-        )
-        .await?;
+        persist_stats(&self.sink, &ledger.session_stats()).await?;
         let (events, snapshot) = recorder.finish();
         Ok(TurnOutcome {
             session_id: snapshot.session_id.clone(),
@@ -778,24 +850,30 @@ where
     }
 
     /// Reports the limit that ends the turn, if any is already reached.
+    ///
+    /// The answer comes from the budget middlewares rather than from a second
+    /// copy of their arithmetic, so mid-cycle and top-of-cycle can never
+    /// disagree about whether a limit is reached.
     fn exhausted_budget(
         &self,
+        budget: &MiddlewarePipeline,
+        messages: &[ModelMessage],
         ledger: &TurnLedger,
         cancellation: &CancellationToken,
     ) -> Option<TurnStopReason> {
         if cancellation.is_cancelled() {
             return Some(TurnStopReason::Cancelled);
         }
-        if ledger.steps >= self.limits.max_steps {
-            return Some(TurnStopReason::MaxSteps);
+        let result = budget.before_turn(&ConversationContext {
+            messages,
+            stats: &ledger.session_stats(),
+            price_micros: ledger.price_micros,
+            compaction: &self.compaction,
+        });
+        match result.action {
+            MiddlewareAction::Stop => result.stop_reason,
+            _ => None,
         }
-        if ledger.total_tokens() > self.limits.max_total_tokens {
-            return Some(TurnStopReason::TokenLimit);
-        }
-        if ledger.price_micros > self.limits.max_price_micros {
-            return Some(TurnStopReason::PriceLimit);
-        }
-        None
     }
 
     /// Drains queued steering, context injection, callback resolutions and
@@ -943,13 +1021,20 @@ where
         ))
     }
 
-    /// Compacts the transcript after a context overflow.
+    /// Compacts the transcript, whether a policy asked for it or an overflow
+    /// forced it.
+    ///
+    /// Both entries clear the pipeline's latched state here rather than at
+    /// their own call site, because a policy measured against the transcript is
+    /// stale either way and the reference resets from the one function both
+    /// paths share.
     ///
     /// `None` means the turn was cancelled while compaction was running.
     async fn compact(
         &self,
         recorder: &mut TurnRecorder<'_>,
         messages: &mut Vec<ModelMessage>,
+        pipeline: &MiddlewarePipeline,
         cancellation: &CancellationToken,
     ) -> Result<Option<()>, EngineError> {
         let compaction = tokio::select! {
@@ -967,6 +1052,7 @@ where
             cause: SessionHandoffCause::Compaction,
         })?;
         *messages = compaction.messages;
+        pipeline.reset(ResetReason::Compact);
         Ok(Some(()))
     }
 
@@ -1123,10 +1209,13 @@ impl TurnLedger {
         }
     }
 
-    fn total_tokens(&self) -> u64 {
-        self.usage
-            .input_tokens
-            .saturating_add(self.usage.output_tokens)
+    /// The stats a conversation policy reads, and the stats a turn persists.
+    fn session_stats(&self) -> SessionStats {
+        SessionStats {
+            usage: self.usage.clone(),
+            context_tokens: self.context_tokens,
+            steps: self.steps,
+        }
     }
 
     fn record_completion(&mut self, usage: &Usage, limits: &EngineLimits) {
@@ -1319,12 +1408,16 @@ mod tests {
 
     use super::*;
     use crate::events::ModelToolCall;
+    use crate::middleware::MiddlewareResult;
     use crate::provider::{ProviderChunk, RequestLimits};
     use serde_json::json;
 
     #[derive(Default)]
     struct ScriptedProvider {
         responses: Mutex<VecDeque<Result<AssistantMessage, ProviderError>>>,
+        /// Every request's transcript, so a test can prove what the model was
+        /// actually shown rather than what the turn ended up holding.
+        requests: Mutex<Vec<Vec<ModelMessage>>>,
     }
 
     impl ScriptedProvider {
@@ -1333,13 +1426,18 @@ mod tests {
         ) -> Self {
             Self {
                 responses: Mutex::new(responses.into_iter().collect()),
+                requests: Mutex::new(Vec::new()),
             }
         }
     }
 
     impl CompletionProvider for ScriptedProvider {
-        fn complete<'a>(&'a self, _input: &'a ProviderInput) -> ProviderFuture<'a> {
+        fn complete<'a>(&'a self, input: &'a ProviderInput) -> ProviderFuture<'a> {
             Box::pin(async move {
+                self.requests
+                    .lock()
+                    .map_err(|_| ProviderError::MalformedStream("fake lock poisoned".to_owned()))?
+                    .push(input.messages.clone());
                 self.responses
                     .lock()
                     .map_err(|_| ProviderError::MalformedStream("fake lock poisoned".to_owned()))?
@@ -2253,6 +2351,272 @@ mod tests {
         assert_eq!(
             serde_json::to_value(chunk).expect("chunk serializes")["type"],
             "text"
+        );
+    }
+
+    /// A policy whose answer is spent on the first poll, so a turn that would
+    /// otherwise ask for the same thing on every cycle terminates.
+    struct OnceThen {
+        first: Mutex<Option<MiddlewareResult>>,
+        resets: Mutex<Vec<ResetReason>>,
+    }
+
+    impl OnceThen {
+        fn new(first: MiddlewareResult) -> Arc<Self> {
+            Arc::new(Self {
+                first: Mutex::new(Some(first)),
+                resets: Mutex::new(Vec::new()),
+            })
+        }
+
+        fn resets(&self) -> Vec<ResetReason> {
+            self.resets
+                .lock()
+                .expect("reset log is not poisoned")
+                .clone()
+        }
+    }
+
+    impl ConversationMiddleware for OnceThen {
+        fn before_turn(&self, _context: &ConversationContext<'_>) -> MiddlewareResult {
+            self.first
+                .lock()
+                .expect("policy state is not poisoned")
+                .take()
+                .unwrap_or_default()
+        }
+
+        fn reset(&self, reset_reason: ResetReason) {
+            self.resets
+                .lock()
+                .expect("reset log is not poisoned")
+                .push(reset_reason);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_policy_stop_ends_the_turn_before_any_request_is_built() {
+        // The scripted provider holds no response, so reaching it at all would
+        // fail the turn rather than stop it.
+        let outcome = ConversationEngine::new(ScriptedProvider::default())
+            .with_middleware(OnceThen::new(MiddlewareResult::stop(
+                "policy said so",
+                TurnStopReason::PriceLimit,
+            )))
+            .run_turn(
+                "session-1",
+                provider_input(),
+                "hello",
+                CancellationToken::default(),
+            )
+            .await
+            .expect("a policy stop is an outcome, not an error");
+
+        assert_eq!(outcome.stop_reason, TurnStopReason::PriceLimit);
+        assert_eq!(outcome.steps, 0);
+        assert!(
+            !outcome
+                .events
+                .iter()
+                .any(|envelope| matches!(envelope.event, EngineEvent::ModelText { .. })),
+            "no request was built, so no model text was produced"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancellation_answers_before_any_policy_does() {
+        let policy = OnceThen::new(MiddlewareResult::stop(
+            "policy said so",
+            TurnStopReason::PriceLimit,
+        ));
+        let cancellation = CancellationToken::default();
+        cancellation.cancel();
+        let outcome = ConversationEngine::new(ScriptedProvider::default())
+            .with_middleware(Arc::clone(&policy) as Arc<dyn ConversationMiddleware>)
+            .run_turn("session-1", provider_input(), "hello", cancellation)
+            .await
+            .expect("a cancelled turn is an outcome");
+
+        assert_eq!(outcome.stop_reason, TurnStopReason::Cancelled);
+        assert!(
+            policy
+                .first
+                .lock()
+                .expect("policy state is not poisoned")
+                .is_some(),
+            "the policy was never polled"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_injected_policy_message_rides_the_next_request() {
+        let engine = ConversationEngine::new(ScriptedProvider::new([Ok(completion(
+            "answered",
+            Vec::new(),
+        ))]))
+        .with_middleware(OnceThen::new(MiddlewareResult::inject("half the window")));
+        let outcome = engine
+            .run_turn(
+                "session-1",
+                provider_input(),
+                "hello",
+                CancellationToken::default(),
+            )
+            .await
+            .expect("the turn runs");
+
+        assert_eq!(outcome.stop_reason, TurnStopReason::Complete);
+        assert!(
+            outcome.events.iter().any(|envelope| matches!(
+                &envelope.event,
+                EngineEvent::ContextInjected { content, as_message }
+                    if content == "half the window" && !*as_message
+            )),
+            "the injection is marked on the wire rather than told as a user turn"
+        );
+        let requested = engine
+            .provider
+            .requests
+            .lock()
+            .expect("request log is not poisoned")
+            .clone();
+        assert_eq!(requested.len(), 1);
+        assert!(
+            requested[0].iter().any(|message| matches!(
+                message,
+                ModelMessage::User { content } if content == "half the window"
+            )),
+            "the request that follows the injection carries it: {requested:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_policy_compact_runs_before_any_request_and_resets_the_pipeline() {
+        let policy = OnceThen::new(MiddlewareResult::compact());
+        let engine = ConversationEngine::new(ScriptedProvider::new([Ok(completion(
+            "answered",
+            Vec::new(),
+        ))]))
+        .with_compactor(FakeCompactor)
+        .with_middleware(Arc::clone(&policy) as Arc<dyn ConversationMiddleware>);
+        let outcome = engine
+            .run_turn(
+                "session-1",
+                provider_input(),
+                "hello",
+                CancellationToken::default(),
+            )
+            .await
+            .expect("the turn runs");
+
+        assert_eq!(outcome.stop_reason, TurnStopReason::Complete);
+        let compaction_index = outcome
+            .events
+            .iter()
+            .position(|envelope| matches!(envelope.event, EngineEvent::Compaction { .. }))
+            .expect("the compaction path was entered");
+        let first_text = outcome
+            .events
+            .iter()
+            .position(|envelope| matches!(envelope.event, EngineEvent::ModelText { .. }))
+            .expect("a request was built afterward");
+        assert!(
+            compaction_index < first_text,
+            "compaction happens before the request it makes room for"
+        );
+        let requested = engine
+            .provider
+            .requests
+            .lock()
+            .expect("request log is not poisoned")
+            .clone();
+        assert_eq!(
+            requested,
+            vec![vec![ModelMessage::System {
+                content: "summary".to_owned(),
+            }]],
+            "the only request was built from the compacted transcript"
+        );
+        assert_eq!(
+            policy.resets(),
+            vec![ResetReason::Stop, ResetReason::Compact],
+            "the turn opened with a stop reset and the compaction added its own"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_reactive_compaction_resets_the_pipeline_too() {
+        // An overflow recovery replaces the transcript exactly like a policy
+        // compaction does, so anything a policy latched against the old one is
+        // just as stale.
+        let policy = OnceThen::new(MiddlewareResult::default());
+        let engine = ConversationEngine::new(ScriptedProvider::new([
+            Err(ProviderError::ContextOverflow),
+            Ok(completion("answered", Vec::new())),
+        ]))
+        .with_compactor(FakeCompactor)
+        .with_middleware(Arc::clone(&policy) as Arc<dyn ConversationMiddleware>);
+        let outcome = engine
+            .run_turn(
+                "session-1",
+                provider_input(),
+                "hello",
+                CancellationToken::default(),
+            )
+            .await
+            .expect("the turn recovers");
+
+        assert_eq!(outcome.stop_reason, TurnStopReason::Complete);
+        assert_eq!(
+            policy.resets(),
+            vec![ResetReason::Stop, ResetReason::Compact]
+        );
+    }
+
+    #[tokio::test]
+    async fn every_user_turn_opens_with_a_stop_reset() {
+        let policy = OnceThen::new(MiddlewareResult::default());
+        let engine = ConversationEngine::new(ScriptedProvider::new([
+            Ok(completion("first", Vec::new())),
+            Ok(completion("second", Vec::new())),
+        ]))
+        .with_middleware(Arc::clone(&policy) as Arc<dyn ConversationMiddleware>);
+
+        for prompt in ["hello", "again"] {
+            engine
+                .run_turn(
+                    "session-1",
+                    provider_input(),
+                    prompt,
+                    CancellationToken::default(),
+                )
+                .await
+                .expect("the turn runs");
+        }
+
+        assert_eq!(policy.resets(), vec![ResetReason::Stop, ResetReason::Stop]);
+    }
+
+    #[test]
+    fn a_transcript_written_before_the_pipeline_still_deserializes() {
+        // The pipeline added no event variant and no message field, so every
+        // envelope a previous release wrote still reads back.
+        for stored in [
+            json!({"sessionId": "s", "eventId": 1, "type": "user_message", "content": "hello"}),
+            json!({"sessionId": "s", "eventId": 2, "type": "context_injected", "content": "note", "as_message": false}),
+            json!({"sessionId": "s", "eventId": 3, "type": "compaction", "summary": "short"}),
+        ] {
+            serde_json::from_value::<EventEnvelope>(stored.clone())
+                .unwrap_or_else(|error| panic!("{stored} still deserializes: {error}"));
+        }
+        let message: ModelMessage =
+            serde_json::from_value(json!({"role": "user", "content": "hello"}))
+                .expect("a stored user message still deserializes");
+        assert_eq!(
+            message,
+            ModelMessage::User {
+                content: "hello".to_owned()
+            }
         );
     }
 }

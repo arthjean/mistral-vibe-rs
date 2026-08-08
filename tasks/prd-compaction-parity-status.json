@@ -1,0 +1,349 @@
+{
+  "prd": {
+    "file": "tasks/prd-compaction-parity.md",
+    "title": "Compaction Parity",
+    "created_at": "2026-08-08",
+    "status": "IN_PROGRESS"
+  },
+  "epics": [
+    {
+      "id": "EP-041",
+      "title": "The Conversation Policy Pipeline",
+      "status": "DONE",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 3,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-042",
+      "title": "The Pure Calculation and Its Oracle",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 6,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-043",
+      "title": "Automatic Compaction in the Loop",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 4,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-044",
+      "title": "The Faithful Summarizer and Its Wire Surface",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 5,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-045",
+      "title": "Periphery, Identity and the Scorecard",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 3,
+      "stories_done": 0,
+      "stories_in_review": 0
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-139",
+      "title": "Declare the middleware vocabulary and its pipeline",
+      "epic": "EP-041",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [],
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
+    },
+    {
+      "id": "US-140",
+      "title": "Port the three limit middlewares without changing any stop reason",
+      "epic": "EP-041",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-139"
+      ],
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
+    },
+    {
+      "id": "US-141",
+      "title": "Consult the pipeline at every turn boundary",
+      "epic": "EP-041",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-140"
+      ],
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
+    },
+    {
+      "id": "US-142",
+      "title": "Re-pin the reference to v2.24.0 and regenerate every corpus",
+      "epic": "EP-042",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-143",
+      "title": "Reproduce the token approximation and the middle truncation",
+      "epic": "EP-042",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-144",
+      "title": "Reproduce summary extraction and oldest-round dropping",
+      "epic": "EP-042",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-145",
+      "title": "Render and parse the compaction envelope",
+      "epic": "EP-042",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-144"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-146",
+      "title": "Select the user messages that survive under budget",
+      "epic": "EP-042",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-143",
+        "US-145"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-147",
+      "title": "Capture the compaction oracle and replay it",
+      "epic": "EP-042",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-142",
+        "US-146"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-148",
+      "title": "Read the five declared compaction keys",
+      "epic": "EP-043",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-141"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-149",
+      "title": "Fire compaction when the threshold is reached",
+      "epic": "EP-043",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-148"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-150",
+      "title": "Bound the reactive recovery and honor strict mode",
+      "epic": "EP-043",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-149"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-151",
+      "title": "Publish the compaction event pair and its telemetry",
+      "epic": "EP-043",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-149"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-152",
+      "title": "Resolve the compaction request and make the primary call",
+      "epic": "EP-044",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-147",
+        "US-148"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-153",
+      "title": "Fall back to a dedicated summarizer call",
+      "epic": "EP-044",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-152"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-154",
+      "title": "Retry the summarization on overflow",
+      "epic": "EP-044",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-153"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-155",
+      "title": "Account the compaction and reset the context",
+      "epic": "EP-044",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-152"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-156",
+      "title": "Project compaction onto the wire",
+      "epic": "EP-044",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-151"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-157",
+      "title": "Inject the context warning once per session",
+      "epic": "EP-045",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "S",
+      "blocked_by": [
+        "US-148"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-158",
+      "title": "Mint the compacted session identity the reference way",
+      "epic": "EP-045",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-155"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-159",
+      "title": "Remeasure the scorecard from the new oracle",
+      "epic": "EP-045",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "S",
+      "blocked_by": [
+        "US-147",
+        "US-156",
+        "US-157",
+        "US-158"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    }
+  ]
+}
