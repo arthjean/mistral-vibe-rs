@@ -5,6 +5,7 @@
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.1 | 2026-08-08 | Arthur Jean | EP-048 review: US-166 loses its cross-layer concat criterion, which measured configuration layering rather than skill discovery. The port composes one TOML layer, so a user file is discarded whole in the presence of a trusted project file; the defect is recorded on US-166 and belongs to the configuration PRD |
 | 1.0 | 2026-08-08 | Arthur Jean | Initial PRD from the measured skills audit against the Python reference at commit `b78b451`: the 2 124-line surface formed by `vibe/core/skills/` plus its five consumers has a frontmatter reader that is not YAML, a model missing six fields, five search roots reduced to one invented path, three configuration keys declared and read by nobody, no builtin skills at all, an invoked-skill path that writes a different history than the reference, and no oracle measuring any of it |
 
 ## Problem Statement
@@ -338,8 +339,21 @@ Give discovery the five roots the reference walks, the configuration that feeds 
 - [ ] Given a `skill_paths` entry that is not a directory or does not exist, when the catalog is built, then it is skipped silently and the remaining roots are still walked
 - [ ] Given a relative `skill_paths` entry, when the catalog is built, then it resolves against the current working directory
 - [ ] Given an entry containing `~`, when the catalog is built, then it expands to the home directory, matching the reference's before-validator
-- [ ] Given the same key set at the user layer and the project layer, when the document merges, then both entries survive, matching the declared concat strategy
 - [ ] Given the key changed between two catalog builds, when the second runs, then the published set changes accordingly, which is the behavior-change proof this story owes
+
+**Out of scope, measured during review:** this story originally required that a
+`skill_paths` set at both the user layer and the project layer concatenate. It
+cannot, and the cause is not skills: `LayeredConfig::load`
+(`crates/vibe-core/src/config.rs:585`) composes exactly one TOML layer,
+`SelectedToml`, which is the project file while the workspace is trusted and the
+user file otherwise. The two never reach the merge together, so no key
+concatenates across them however the registry annotates it, and a `theme` set in
+`~/.vibe/config.toml` falls back to its default the moment a trusted project
+ships a `.vibe/config.toml` of its own. That is a configuration-layering defect
+with a far wider blast radius than three skill keys, it belongs to
+`tasks/prd-config-parity.md`, whose problem statement already names it at points
+3 and 5 while the PRD is marked `DONE`, and no change inside this epic would fix
+it.
 
 #### US-167: Apply `enabled_skills` and `disabled_skills` with the reference precedence
 **Description:** As an operator, I want to publish or withhold skills by pattern so that a workspace can narrow what the agent sees without deleting files.

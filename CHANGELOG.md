@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- Read skills from the directories the documentation names. Discovery walked
+  one project directory and one path this port invented; it now walks the five
+  the reference does, in its order: every directory `skill_paths` names, then
+  each trusted project root's `.vibe/skills` and `.agents/skills`, then
+  `~/.vibe/skills` and `~/.agents/skills`. Roots are resolved before they are
+  compared, so two spellings of one directory are walked once, and the first
+  root holding a name wins. `~/.vibe/extensions/skills` is deprecated: it is
+  still read, ranked last, so nothing you already installed stops loading, and
+  a skill of the same name in either documented user directory now wins over
+  it. An untrusted workspace still contributes no directory at all.
+
+- Make the three skill configuration keys do something. `skill_paths`,
+  `enabled_skills` and `disabled_skills` were declared, published and read by
+  nobody. Each entry of `skill_paths` now adds a directory, ahead of every
+  other root, with `~` expanded and a relative entry anchored on the working
+  directory; an entry that names nothing walkable is skipped and the remaining
+  directories are still read. `enabled_skills` publishes only what it matches
+  and `disabled_skills` is not consulted while it holds an entry; both take the
+  glob and `re:` patterns the tool filters already take, and a pattern that
+  does not compile matches nothing rather than failing the catalog. The filter
+  runs where the catalog is built, so the `skill` tool and `skills/list` cannot
+  disagree about what exists.
+
+- Say why a skill did not load. A `SKILL.md` that will not parse used to
+  disappear silently. It is now an issue naming the file and the reason on
+  `diagnostics/list`, three malformed files are three issues rather than one
+  aborted walk, and asking the `skill` tool for a name that failed to load is
+  answered with the file and the reason instead of a bare "not found". A
+  directory that ships no `SKILL.md` is still not an error.
+
 - Read skill frontmatter as YAML. The line-by-line reader that split on the
   first colon is replaced by a real YAML parse behind the reference's own
   boundary rules, so a nested `metadata:` block, a folded description, a
