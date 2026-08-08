@@ -6,6 +6,7 @@
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
 | 1.0 | 2026-08-08 | Arthur Jean | Initial PRD from the measured compaction audit against the Python reference at commit `b78b451`: the 708-line surface formed by `vibe/core/compaction/`, `vibe/core/middleware.py` and the compaction slice of `vibe/core/agent_loop/_loop.py` has no middleware counterpart at all, no threshold-driven trigger, and a summarizer whose prompt, envelope, failure taxonomy, fallback and retry ladder are all absent |
+| 1.2 | 2026-08-08 | Arthur Jean | Amended EP-043's definition of done and US-148's criteria during the epic review, which measured a contradiction the plan carried from the start: EP-043 claimed all five compaction keys have an observable effect, while the two consumers that give `compaction_prompt_id` and `context_warnings` theirs are US-152 and US-157, both blocked by US-148 and both in later epics. The epic now owns reading all five into one policy and the observable effect of the three it acts on; the five-of-five target stays in the goal table, where EP-045 closes it. No requirement was removed and no scope was added |
 | 1.1 | 2026-08-08 | Arthur Jean | Retargeted from the superseded pin `68ff32e` (v2.23.3) to `b78b451` (v2.24.0), the head of `upstream/main`. Every line anchor remeasured against it. The compaction surface itself is byte-identical across the two releases, `vibe/core/compaction/` and `vibe/core/middleware.py` unchanged and no line of the `_loop.py` compaction slice touched, so only the anchors moved and no requirement changed. The re-pin itself enters scope as US-142, which `AGENTS.md` requires to move both pin sources and regenerate every committed corpus in one change |
 
 ## Problem Statement
@@ -374,10 +375,12 @@ Move the pin to the reference's current release, then port the seven total funct
 
 Read the declared configuration, fire compaction on the threshold, bound the reactive path, and publish the event pair and its telemetry.
 
-**Definition of Done:** All five compaction keys have an observable effect; compaction fires before the request when the threshold is reached; a reactive recovery happens at most once per turn and never in strict mode; and both events and both telemetry records are emitted.
+**Definition of Done:** All five compaction keys are read into one policy and carried on the session, and the three this epic acts on have an observable effect: the threshold fires the compaction, `compaction_model` addresses the summarization, and `raise_on_compaction_failure` refuses the recovery. Compaction fires before the request when the threshold is reached; a reactive recovery happens at most once per turn and never in strict mode; and both events and both telemetry records are emitted.
+
+The remaining two keys reach their consumer in a later epic, because this PRD's own dependency graph puts them there: `compaction_prompt_id` is read by US-152 and `context_warnings` by US-157, and both are blocked by US-148. The goal table's `5 of 5 keys consumed by a real code path` is therefore a PRD-level target, closed by EP-045, not an EP-043 one.
 
 #### US-148: Read the five declared compaction keys
-**Description:** As an operator who configured compaction, I want each key I set to change what the tool does so that the published schema stops advertising features that do not exist.
+**Description:** As an operator who configured compaction, I want each key I set to reach one resolved policy so that the feature that consumes it has a single conformant source, and the published schema stops advertising keys nothing reads.
 
 **Priority:** P0
 **Size:** M (3 pts)
@@ -389,7 +392,8 @@ Read the declared configuration, fire compaction on the threshold, bound the rea
 - [ ] Given a configuration where the active model declares no threshold, when settings are built, then the global value is used, which is the behavior `propagate_auto_compact_threshold` already implements
 - [ ] Given a configuration with no compaction model, when the model is resolved, then the active model is used
 - [ ] Given a compaction model whose provider does not exist, when the configuration is validated, then validation fails naming the model alias and the missing provider
-- [ ] Given each of the five keys in turn, when its value changes, then a test observes a different behavior, and the test names the key
+- [ ] Given each of the five keys in turn, when its value changes, then a test observes the resolved policy change, and the test names the key
+- [ ] Given the threshold, the compaction model and the strict flag, when each changes, then a test observes the behavior change itself: the compaction fires or does not, the summarization request carries the model, and the reactive recovery is refused
 - [ ] Given the app-server, when a session opens, then the settings are read once and carried on the session alongside the existing context window
 
 #### US-149: Fire compaction when the threshold is reached

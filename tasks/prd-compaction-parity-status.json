@@ -27,10 +27,10 @@
     {
       "id": "EP-043",
       "title": "Automatic Compaction in the Loop",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0,
+      "stories_done": 4,
       "stories_in_review": 0
     },
     {
@@ -177,57 +177,57 @@
       "id": "US-148",
       "title": "Read the five declared compaction keys",
       "epic": "EP-043",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-141"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-149",
       "title": "Fire compaction when the threshold is reached",
       "epic": "EP-043",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-148"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-150",
       "title": "Bound the reactive recovery and honor strict mode",
       "epic": "EP-043",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-149"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-151",
       "title": "Publish the compaction event pair and its telemetry",
       "epic": "EP-043",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-149"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-152",
