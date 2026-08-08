@@ -21,7 +21,7 @@ use crate::engine::CancellationToken;
 use crate::policy::{PermissionMode, PermissionRule, PermissionScope};
 use crate::skills::parser::parse_skill_markdown;
 use crate::skills::schema::SkillMetadata;
-use crate::skills::{SkillScope, SkillSource};
+use crate::skills::{SkillDiscovery, SkillScope, SkillSource};
 use crate::storage::{SessionStore, StorageError};
 use crate::text::{bounded_utf8, matches_wildcard, truncate_utf8};
 
@@ -384,6 +384,11 @@ pub struct DiscoveryRoots {
     pub project: Vec<PathBuf>,
     pub user: Vec<PathBuf>,
     pub project_trusted: bool,
+    /// Where skills come from, which is not `{root}/skills` for any of the
+    /// roots above: the reference reads five directories that do not share a
+    /// parent, so [`crate::skills::search_paths`] resolves them and the trust
+    /// gate is applied there rather than by [`DiscoveryRoots::ordered`].
+    pub skills: SkillDiscovery,
 }
 
 impl DiscoveryRoots {
@@ -429,9 +434,16 @@ pub fn discover_extensions(
     };
     let builtin_skill_names = catalog.skills.keys().cloned().collect::<BTreeSet<_>>();
 
+    // The skill roots are their own ordered list rather than a subdirectory of
+    // each extension root, and they are walked before the rest so precedence
+    // reads in one place.
+    for directory in &roots.skills.roots {
+        discover_skills(&mut catalog, directory, &builtin_skill_names);
+    }
+    crate::skills::apply_filters(&mut catalog.skills, &roots.skills);
+
     for (source, root) in roots.ordered() {
         discover_agents(&mut catalog, source, &root.join("agents"));
-        discover_skills(&mut catalog, &root.join("skills"), &builtin_skill_names);
         discover_text_extensions(
             &mut catalog.prompts,
             &mut catalog.issues,
@@ -1888,6 +1900,12 @@ mod tests {
             fs::create_dir_all(root.join("agents")).expect("agent directory");
             fs::create_dir_all(root.join("skills/probe")).expect("skill directory");
         }
+        // The skill roots are their own ordered list: the agent roots above
+        // decide nothing about where a skill is read from.
+        let skill_roots = crate::skills::SkillDiscovery {
+            roots: vec![configured.join("skills"), user.join("skills")],
+            ..crate::skills::SkillDiscovery::default()
+        };
         fs::write(
             configured.join("agents/default.toml"),
             "description = \"configured\"\nagent_type = \"agent\"\n",
@@ -1915,6 +1933,7 @@ mod tests {
             project: vec![project],
             user: vec![user],
             project_trusted: false,
+            skills: skill_roots,
         };
         let catalog = discover_extensions(
             &roots,
@@ -1947,7 +1966,11 @@ mod tests {
         fs::write(user.join("hooks.toml"), "[[hooks]]\nname = \"bad\"\n").expect("bad hook");
         let catalog = discover_extensions(
             &DiscoveryRoots {
-                user: vec![user],
+                user: vec![user.clone()],
+                skills: crate::skills::SkillDiscovery {
+                    roots: vec![user.join("skills")],
+                    ..crate::skills::SkillDiscovery::default()
+                },
                 ..DiscoveryRoots::default()
             },
             BTreeMap::new(),

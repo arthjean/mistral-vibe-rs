@@ -29,6 +29,7 @@ use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore, ToolGuard,
     TrustDecision, TrustRootKind,
 };
+use vibe_core::skills::SkillDiscovery;
 use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
 use vibe_core::tools::{
     ToolError, ToolHandler, ToolHandlerFuture, ToolInvocation, ToolOutputSink, ToolRegistry,
@@ -312,7 +313,13 @@ async fn published_specs_with(
     });
     let guard = ToolGuard::new(policy, Arc::new(RejectApproval));
     BuiltinTools::new(directory.path(), access)
-        .register("session-1", directory.path(), true, &registry, &guard)
+        .register(
+            "session-1",
+            // The census reads the published surface, never a skill body.
+            SkillDiscovery::default(),
+            &registry,
+            &guard,
+        )
         .expect("universal tools register");
     WorkspaceTools::new(workspace, review)
         .register(&registry, &guard)

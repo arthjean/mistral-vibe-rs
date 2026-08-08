@@ -1826,8 +1826,8 @@ impl AppServer {
         self.builtin_tools
             .register(
                 session_id,
-                Path::new(working_directory),
-                intent.trusted,
+                self.release3
+                    .skill_discovery(Path::new(working_directory), intent.trusted),
                 tools,
                 &guard,
             )

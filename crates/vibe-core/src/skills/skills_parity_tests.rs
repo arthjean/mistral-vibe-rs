@@ -15,10 +15,13 @@
 //! is one `family/*` entry naming the story that implements it, and the stale
 //! check retires each entry the moment its family conforms. `frontmatter`,
 //! `metadata` and `projection` are compared for real since EP-047 landed the
-//! parser, the schema and the whole model. `discovery` is compared for real
-//! against the production wiring reproduced from `tools/builtins.rs` and
-//! `release3.rs`: one project root at `.vibe`, one user root at the invented
-//! `.vibe/extensions`, no configured roots and no builtin seeding.
+//! parser, the schema and the whole model. `discovery` and `filtering` are
+//! compared for real since EP-048 landed the five roots, the configured paths
+//! and the two filter keys: the wiring reproduced here is
+//! `Release3Service::skill_discovery`, which resolves the roots through
+//! `search_paths` and hands them plus the filters to `discover_extensions`. No
+//! builtin is seeded yet, which is the whole of what those two families still
+//! diverge on.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -32,7 +35,10 @@ use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 use crate::skills::parser::{SkillParseErrorKind, parse_skill_markdown};
 use crate::skills::schema::SkillMetadata;
-use crate::skills::{SkillScope, SkillSource, skill_summary};
+use crate::skills::{
+    SearchInputs, SkillDiscovery, SkillScope, SkillSource, apply_filters, search_paths,
+    skill_summary,
+};
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/skills/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/skills.py";
@@ -55,14 +61,20 @@ const MINIMUM_SCENARIOS: usize = 120;
 const DIVERGENCES: &[(&str, &str)] = &[
     (
         "discovery/*",
-        "PENDING US-165, US-166 and US-169: the port walks one project root and an invented \
-         user root, reads no skill_paths, and seeds no builtin, so every scenario diverges \
-         on the published set",
+        "PENDING US-169: EP-048 landed the five roots, the configured paths and the filter, so \
+         every scenario now agrees on the roots it walks and on the disk skills it publishes; \
+         the two builtins the reference seeds are still missing from every published set",
+    ),
+    (
+        "discovery/legacy-extensions-root-unread",
+        "ACCEPTED: US-165 keeps `{vibe_home}/extensions/skills` readable as a deprecated root \
+         this port published before the documented ones existed, so a skill sitting there is \
+         published here and unread upstream",
     ),
     (
         "filtering/*",
-        "PENDING US-167: enabled_skills and disabled_skills are declared in the configuration \
-         registry and no code path reads them",
+        "PENDING US-169: the filter itself conforms, and the cases whose kept set contains a \
+         builtin diverge because no builtin is seeded yet",
     ),
     (
         "command/*",
@@ -167,27 +179,14 @@ struct MetadataCase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct DiscoveryScenario {
     case: String,
-    #[expect(
-        dead_code,
-        reason = "US-166 feeds skill_paths into the port's discovery"
-    )]
     skill_paths: Vec<String>,
-    #[expect(
-        dead_code,
-        reason = "US-167 feeds the filter keys into discovery scenarios"
-    )]
     enabled_skills: Vec<String>,
-    #[expect(
-        dead_code,
-        reason = "US-167 feeds the filter keys into discovery scenarios"
-    )]
     disabled_skills: Vec<String>,
     project_trusted: bool,
     symlinks: Vec<SymlinkSpec>,
     tree: BTreeMap<String, BTreeMap<String, String>>,
     /// The resolved search roots the reference walked, as `[label, relative]`
-    /// pairs. Recorded for US-165, which gives the port comparable roots.
-    #[expect(dead_code, reason = "compared once US-165 resolves the five roots")]
+    /// pairs.
     search_paths: Vec<Vec<String>>,
     published: Vec<PublishedSkill>,
     issues: Vec<RecordedIssue>,
@@ -225,16 +224,20 @@ struct RecordedIssue {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct FilteringCase {
     case: String,
-    #[expect(dead_code, reason = "US-167's filter replays over these names")]
     skills: Vec<String>,
-    #[expect(dead_code, reason = "US-167's filter reads the enabled patterns")]
     enabled_skills: Vec<String>,
-    #[expect(dead_code, reason = "US-167's filter reads the disabled patterns")]
     disabled_skills: Vec<String>,
     kept: Vec<String>,
     #[expect(dead_code, reason = "US-171 compares the custom count")]
     custom_skills_count: usize,
-    #[expect(dead_code, reason = "US-167 holds get_skill to the filtered set")]
+    /// Always true upstream, and structural here: the filter runs inside
+    /// `discover_extensions`, which is the same call the `skill` tool makes, so
+    /// `a_filtered_skill_is_invisible_to_the_skill_tool` proves it rather than
+    /// this replay.
+    #[expect(
+        dead_code,
+        reason = "proven by a behavior test rather than by the replay"
+    )]
     withheld_lookup_misses: bool,
 }
 
@@ -518,6 +521,7 @@ fn settle(report: &Report, family: &str) -> usize {
 /// name, source, scope, root label, root-relative path, user invocability and
 /// description.
 type CatalogAnswer = (
+    Vec<(String, String)>,
     Vec<(
         String,
         String,
@@ -541,6 +545,11 @@ fn vocabulary<T: Serialize>(value: T) -> String {
 }
 
 fn expected_catalog(scenario: &DiscoveryScenario) -> CatalogAnswer {
+    let search_paths = scenario
+        .search_paths
+        .iter()
+        .filter_map(|pair| Some((pair.first()?.clone(), pair.get(1)?.clone())))
+        .collect();
     let published = scenario
         .published
         .iter()
@@ -561,14 +570,39 @@ fn expected_catalog(scenario: &DiscoveryScenario) -> CatalogAnswer {
         .iter()
         .map(|issue| (issue.root.clone(), issue.rel_path.clone()))
         .collect();
-    (published, issues, scenario.custom_skills_count)
+    (
+        search_paths,
+        published,
+        issues,
+        scenario.custom_skills_count,
+    )
 }
 
-/// The label and root-relative path of `path`, against the scenario roots.
+/// The scenario's own spelling of a root, with `${label}` standing for the
+/// materialized directory the capture script anchored the entry on.
+fn substitute(entry: &str, roots: &BTreeMap<String, PathBuf>) -> String {
+    let mut rendered = entry.to_owned();
+    for (label, root) in roots {
+        rendered = rendered.replace(
+            &format!("${{{label}}}"),
+            &root.to_string_lossy().replace('\\', "/"),
+        );
+    }
+    rendered
+}
+
+/// The label and root-relative path of `path`, against the scenario roots. The
+/// root itself is spelled `.`, which is how the capture script records it.
 fn label_path(path: &Path, roots: &BTreeMap<String, PathBuf>) -> Option<(String, String)> {
     for (label, root) in roots {
         if let Ok(relative) = path.strip_prefix(root) {
-            return Some((label.clone(), relative.to_string_lossy().replace('\\', "/")));
+            let relative = relative.to_string_lossy().replace('\\', "/");
+            let relative = if relative.is_empty() {
+                ".".to_owned()
+            } else {
+                relative
+            };
+            return Some((label.clone(), relative));
         }
     }
     None
@@ -618,15 +652,41 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
         }
     }
 
-    // The production wiring, verbatim: `tools/builtins.rs` and `release3.rs`
-    // both pass no configured roots, the working directory's `.vibe`, and the
-    // invented `extensions` prefix under the vibe home, with no builtin seed.
+    // The production wiring, verbatim: `Release3Service::skill_discovery`
+    // resolves the roots through `search_paths` over the configured entries and
+    // the project directories a trusted workspace contributes, then filters the
+    // catalog with the two keys. The scenario's `home` stands in for the
+    // operator's home and `home/.vibe` for the Vibe home, and no builtin is
+    // seeded because nothing publishes one yet.
+    let projects = if scenario.project_trusted {
+        vec![roots["project"].clone()]
+    } else {
+        Vec::new()
+    };
+    let configured = scenario
+        .skill_paths
+        .iter()
+        .map(|entry| substitute(entry, &roots))
+        .collect::<Vec<_>>();
+    let walked = search_paths(&SearchInputs {
+        configured: &configured,
+        projects: &projects,
+        vibe_home: &roots["home"].join(".vibe"),
+        user_home: Some(&roots["home"]),
+        working_directory: &roots["project"],
+    });
+    let observed_paths = walked
+        .iter()
+        .filter_map(|path| label_path(path, &roots))
+        .collect::<Vec<_>>();
     let catalog = discover_extensions(
         &DiscoveryRoots {
-            configured: Vec::new(),
-            project: vec![roots["project"].join(".vibe")],
-            user: vec![roots["home"].join(".vibe").join("extensions")],
-            project_trusted: scenario.project_trusted,
+            skills: SkillDiscovery {
+                roots: walked,
+                enabled: scenario.enabled_skills.clone(),
+                disabled: scenario.disabled_skills.clone(),
+            },
+            ..DiscoveryRoots::default()
         },
         BTreeMap::new(),
         BTreeMap::new(),
@@ -674,7 +734,7 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
         .filter_map(|issue| label_path(&issue.path, &roots))
         .collect();
     issues.sort();
-    Some((published, issues, catalog.skills.len()))
+    Some((observed_paths, published, issues, catalog.skills.len()))
 }
 
 // --------------------------------------------------------------------------
@@ -701,6 +761,23 @@ fn metadata_fields(metadata: &SkillMetadata) -> Value {
         "name": metadata.name,
         "user_invocable": metadata.user_invocable,
     })
+}
+
+/// A skill that carries nothing but its name, which is all the filter reads.
+fn named_definition(name: &str) -> SkillDefinition {
+    SkillDefinition {
+        name: name.to_owned(),
+        description: String::new(),
+        license: None,
+        compatibility: None,
+        metadata: BTreeMap::new(),
+        allowed_tools: Vec::new(),
+        user_invocable: true,
+        body: String::new(),
+        source: SkillSource::Local,
+        scope: SkillScope::Global,
+        path: None,
+    }
 }
 
 /// A [`SkillDefinition`] materialized from a projection case's model record,
@@ -824,11 +901,30 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
 
     let mut report = Report::default();
     for case in &corpus.filtering {
-        report.pending(
+        // The candidate set is the scenario's own skills plus whatever the port
+        // seeds, which is nothing until US-169; the reference seeds two
+        // builtins and filters them with the same two keys.
+        let mut skills = case
+            .skills
+            .iter()
+            .map(|name| (name.clone(), named_definition(name)))
+            .collect::<BTreeMap<_, _>>();
+        apply_filters(
+            &mut skills,
+            &SkillDiscovery {
+                roots: Vec::new(),
+                enabled: case.enabled_skills.clone(),
+                disabled: case.disabled_skills.clone(),
+            },
+        );
+        let mut kept = case.kept.clone();
+        kept.sort();
+        report.check(
             "filtering",
             &case.case,
-            format!("keeps {:?}", case.kept),
-            "US-167",
+            "kept",
+            &kept,
+            &skills.keys().cloned().collect::<Vec<_>>(),
         );
     }
     scenarios += settle(&report, "filtering");

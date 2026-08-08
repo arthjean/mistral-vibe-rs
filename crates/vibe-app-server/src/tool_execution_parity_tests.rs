@@ -30,6 +30,7 @@ use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore, ToolGuard,
     TrustDecision, TrustRootKind,
 };
+use vibe_core::skills::SkillDiscovery;
 use vibe_core::tools::builtins::BuiltinTools;
 use vibe_core::tools::{ToolError, ToolInvocation, ToolRegistry};
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
@@ -386,7 +387,13 @@ async fn registry_for(tree: &Path, home: &Path) -> ToolRegistry {
     let registry = ToolRegistry::default();
     let guard = ToolGuard::new(policy, Arc::new(GrantApproval));
     BuiltinTools::new(home, None)
-        .register("session-1", tree, true, &registry, &guard)
+        .register(
+            "session-1",
+            // No scenario reads a skill, so no root is resolved.
+            SkillDiscovery::default(),
+            &registry,
+            &guard,
+        )
         .expect("universal tools register");
     WorkspaceTools::new(workspace, review)
         .register(&registry, &guard)

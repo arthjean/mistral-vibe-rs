@@ -3480,6 +3480,9 @@ impl LiveTurnDriver {
                 project: vec![PathBuf::from(&reservation.working_directory).join(".vibe")],
                 user: vec![vibe_home.join("extensions")],
                 project_trusted: reservation.intent.trusted,
+                // Only the agent profiles are read here, so no skill root is
+                // resolved and no skill is walked.
+                ..DiscoveryRoots::default()
             },
             BTreeMap::from([(built_in.name.clone(), built_in)]),
             BTreeMap::new(),

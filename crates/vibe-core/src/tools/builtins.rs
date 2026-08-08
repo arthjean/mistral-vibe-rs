@@ -26,6 +26,7 @@ use crate::policy::{
     PermissionContext, PermissionMode, PermissionRequirement, PolicyGuardedTool, ToolGuard,
 };
 use crate::schema::{ObjectSchema, Property};
+use crate::skills::SkillDiscovery;
 use crate::tools::config::{
     SharedToolConfig, TodoConfig, ToolConfigResolver, WebFetchConfig, WebSearchConfig,
     declared_document,
@@ -177,13 +178,13 @@ impl BuiltinTools {
 
     /// Publishes the universal tools for one session.
     ///
-    /// `working_directory` and `project_trusted` reach the skill catalog, which
-    /// is discovered per session because a project may ship its own skills.
+    /// `skills` reaches the skill catalog, which is discovered per session
+    /// because a project may ship its own skills and because the roots and the
+    /// filters both come from the merged configuration the session opened with.
     pub fn register(
         &self,
         session_id: &str,
-        working_directory: &Path,
-        project_trusted: bool,
+        skills: SkillDiscovery,
         registry: &ToolRegistry,
         guard: &ToolGuard,
     ) -> Result<Vec<RegistrationOutcome>, ToolError> {
@@ -217,7 +218,7 @@ impl BuiltinTools {
                     // rather than deferring, so a session that moved `skill` to
                     // `ask` still loads a skill without a prompt.
                     Arc::new(|_invocation| Ok(PermissionContext::settled(PermissionMode::Always))),
-                    self.skill_handler(session_id, working_directory, project_trusted),
+                    self.skill_handler(session_id, skills),
                 )),
             )?,
             registry.register(
@@ -292,17 +293,10 @@ impl BuiltinTools {
         )
     }
 
-    fn skill_handler(
-        &self,
-        session_id: &str,
-        working_directory: &Path,
-        project_trusted: bool,
-    ) -> Arc<dyn ToolHandler> {
+    fn skill_handler(&self, session_id: &str, skills: SkillDiscovery) -> Arc<dyn ToolHandler> {
         let roots = DiscoveryRoots {
-            configured: Vec::new(),
-            project: vec![working_directory.join(".vibe")],
-            user: vec![self.vibe_home.join("extensions")],
-            project_trusted,
+            skills,
+            ..DiscoveryRoots::default()
         };
         let loaded = self.loaded_skills.clone();
         let session_id = session_id.to_owned();
@@ -1176,13 +1170,29 @@ mod tests {
         BuiltinTools::new(root, access)
             .register(
                 "session-1",
-                root,
-                true,
+                trusted_skills(root),
                 &registry,
                 &ToolGuard::new(policy, approval),
             )
             .expect("register");
         registry
+    }
+
+    /// The skill discovery a trusted session opened at `root` resolves, which
+    /// is the wiring `AppServer::register_session_tools` hands `register`.
+    fn trusted_skills(root: &Path) -> SkillDiscovery {
+        let projects = vec![root.to_path_buf()];
+        let vibe_home = root.join(".vibe");
+        SkillDiscovery {
+            roots: crate::skills::search_paths(&crate::skills::SearchInputs {
+                configured: &[],
+                projects: &projects,
+                vibe_home: &vibe_home,
+                user_home: None,
+                working_directory: root,
+            }),
+            ..SkillDiscovery::default()
+        }
     }
 
     /// The declared `todo` configuration, which is what the handler resolves
@@ -1414,6 +1424,66 @@ mod tests {
         assert!(missing.to_string().contains("probe"), "{missing}");
     }
 
+    /// US-167: the filter runs inside the same catalog build the tool reads, so
+    /// a skill `disabled_skills` withholds is not found by the model either.
+    /// Filtering and lookup cannot disagree.
+    #[tokio::test]
+    async fn a_filtered_skill_is_invisible_to_the_skill_tool() {
+        let directory = tempdir().expect("tempdir");
+        let skills = directory.path().join(".vibe/skills");
+        for name in ["probe", "withheld"] {
+            std::fs::create_dir_all(skills.join(name)).expect("skill directory");
+            std::fs::write(
+                skills.join(name).join("SKILL.md"),
+                format!("---\nname: {name}\ndescription: a {name}\n---\nDo the {name}ing.\n"),
+            )
+            .expect("skill file");
+        }
+        let policy = PermissionStore::default();
+        policy
+            .set_trust(
+                directory.path(),
+                TrustDecision::Trusted,
+                TrustRootKind::Workspace,
+            )
+            .await
+            .expect("trust");
+        let registry = ToolRegistry::default();
+        let mut discovery = trusted_skills(directory.path());
+        discovery.disabled = vec!["with*".to_owned()];
+        BuiltinTools::new(directory.path(), None)
+            .register(
+                "session-1",
+                discovery,
+                &registry,
+                &ToolGuard::new(policy, Arc::new(RejectApproval)),
+            )
+            .expect("register");
+
+        registry
+            .invoke(
+                "skill",
+                ToolInvocation {
+                    call_id: "skill-1".to_owned(),
+                    arguments: json!({"name": "probe"}),
+                },
+            )
+            .await
+            .expect("the published skill still loads");
+        let refused = registry
+            .invoke(
+                "skill",
+                ToolInvocation {
+                    call_id: "skill-2".to_owned(),
+                    arguments: json!({"name": "withheld"}),
+                },
+            )
+            .await
+            .expect_err("a withheld skill is not found");
+        assert!(!refused.to_string().contains("withheld,"), "{refused}");
+        assert!(refused.to_string().contains("probe"), "{refused}");
+    }
+
     /// US-115: the second request for a skill already in the conversation is
     /// acknowledged rather than rendered again, and it still names the
     /// directory so a relative path in the instructions still resolves.
@@ -1539,8 +1609,7 @@ mod tests {
         BuiltinTools::new(directory.path(), None)
             .register(
                 "session-1",
-                directory.path(),
-                true,
+                trusted_skills(directory.path()),
                 &registry,
                 &ToolGuard {
                     policy,
@@ -1610,8 +1679,7 @@ mod tests {
         )
         .register(
             "session-1",
-            directory.path(),
-            true,
+            trusted_skills(directory.path()),
             &registry,
             &ToolGuard {
                 policy,

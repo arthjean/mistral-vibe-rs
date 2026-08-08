@@ -31,7 +31,7 @@ use vibe_core::prompt::{
     InstructionLoader, PromptComposition, PromptResolver, SkillSummary, SubagentSummary,
     UserResource, prepare_user_resources,
 };
-use vibe_core::skills::skill_summary;
+use vibe_core::skills::{SearchInputs, SkillDiscovery, search_paths, skill_summary};
 use vibe_core::storage::{HydratedSession, SessionStore, StorageError};
 use vibe_core::tools::config::ToolConfigResolver;
 
@@ -178,6 +178,16 @@ fn vibe_environment(vibe_home: &Path) -> BTreeMap<String, String> {
 /// open directories; each one carries its own `.vibe` directory. An untrusted
 /// workspace contributes none, which is the filter [`DiscoveryRoots`] applies
 /// anyway.
+/// The project directories skill discovery walks, which are the roots
+/// themselves rather than their `.vibe` subdirectory: a project contributes
+/// both `.vibe/skills` and `.agents/skills`, and only the root names both.
+fn project_skill_roots(config: &LayeredConfig, project_trusted: bool) -> Vec<PathBuf> {
+    if !project_trusted {
+        return Vec::new();
+    }
+    config.harness_files().project_roots()
+}
+
 fn project_discovery_roots(config: &LayeredConfig, project_trusted: bool) -> Vec<PathBuf> {
     if !project_trusted {
         return Vec::new();
@@ -252,6 +262,10 @@ impl Release3Service {
             project: project_discovery_roots(&config, project_trusted),
             user: vec![user_extensions.clone()],
             project_trusted,
+            // The skill roots are resolved per catalog build rather than
+            // stored, so a `skill_paths` written between two builds changes
+            // what the next one publishes.
+            skills: SkillDiscovery::default(),
         };
         let mut registry = AgentRegistry::with_initial(
             builtin_agents::default_profile(),
@@ -1780,12 +1794,58 @@ impl Release3Service {
                     .collect()
             })
             .unwrap_or_default();
+        let mut roots = self.discovery_roots.clone();
+        roots.skills = self.skill_discovery(&self.paths.working_directory, self.project_trusted);
         discover_extensions(
-            &self.discovery_roots,
+            &roots,
             builtin_agents,
             BTreeMap::<String, SkillDefinition>::new(),
             BTreeMap::new(),
         )
+    }
+
+    /// Where a session looks for skills and what it publishes once it has
+    /// looked, read from the merged document at call time.
+    ///
+    /// Reference `SkillManager` holds a `config_getter` and recomputes its
+    /// search paths per construction, so a `skill_paths` entry written between
+    /// two sessions is read by the second. Reading the snapshot here rather
+    /// than caching the roots is what reproduces that.
+    #[must_use]
+    pub fn skill_discovery(&self, working_directory: &Path, trusted: bool) -> SkillDiscovery {
+        let snapshot = self.config.load().ok();
+        let configured = snapshot
+            .as_ref()
+            .map(ConfigSnapshot::skill_paths)
+            .unwrap_or_default();
+        let mut projects = Vec::new();
+        if trusted {
+            projects.push(working_directory.to_path_buf());
+            projects.extend(project_skill_roots(&self.config, trusted));
+        }
+        SkillDiscovery {
+            roots: search_paths(&SearchInputs {
+                configured: &configured,
+                projects: &projects,
+                vibe_home: &self.paths.vibe_home,
+                // The operator's home is the Vibe home's parent, which is what
+                // `prompt_prepare` already reads it as. Reference `AGENTS_HOME`
+                // hangs off `Path.home()` and ignores `VIBE_HOME`; the two
+                // agree on every default installation, where the Vibe home is
+                // `~/.vibe`, and this spelling keeps a relocated home from
+                // reaching outside itself.
+                user_home: self.paths.vibe_home.parent(),
+                working_directory,
+            }),
+            enabled: snapshot
+                .as_ref()
+                .map(ConfigSnapshot::enabled_skills)
+                .unwrap_or_default(),
+            disabled: snapshot
+                .as_ref()
+                .map(ConfigSnapshot::disabled_skills)
+                .unwrap_or_default(),
+        }
     }
 }
 
@@ -3299,6 +3359,123 @@ tool_timeout_sec = 2
                 .collect::<Vec<_>>(),
             vec!["project-hook", "user-hook"],
             "each open root's hook file is read, then the user-level one"
+        );
+    }
+
+    /// The names `skills/list` publishes, which is the wire surface every
+    /// discovery criterion is finally measured on.
+    fn listed_skills(service: &Release3Service) -> Vec<String> {
+        service
+            .dispatch("skills/list", &BTreeMap::new())
+            .expect("skills/list answers")
+            .result["skills"]
+            .as_array()
+            .expect("the response carries an array")
+            .iter()
+            .filter_map(|skill| skill["name"].as_str().map(ToOwned::to_owned))
+            .collect()
+    }
+
+    fn write_skill(root: &Path, name: &str) {
+        let directory = root.join(name);
+        std::fs::create_dir_all(&directory).expect("skill directory");
+        std::fs::write(
+            directory.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: a {name}\n---\nbody\n"),
+        )
+        .expect("skill fixture");
+    }
+
+    /// US-166: `skill_paths` is read from the merged document per catalog build,
+    /// so writing the key changes what the next `skills/list` publishes, from
+    /// whichever file the configuration selected.
+    ///
+    /// A user entry and a project entry do not both survive here, and the
+    /// reason is not skills: this port composes one selected TOML layer, the
+    /// project file while the workspace is trusted and the user file otherwise
+    /// (`crates/vibe-core/src/config.rs:585`), so no key concatenates across the
+    /// two files and a user document is discarded whole once a trusted project
+    /// ships its own. That is configuration layering, owned by
+    /// `tasks/prd-config-parity.md`; US-166 records it as out of scope.
+    #[test]
+    fn skill_paths_is_read_from_the_merged_document() {
+        let temporary = tempdir().expect("tempdir");
+        let workspace = temporary.path().join("workspace");
+        let vibe_home = temporary.path().join("home");
+        let user_skills = temporary.path().join("from-user");
+        let project_skills = temporary.path().join("from-project");
+        std::fs::create_dir_all(workspace.join(".vibe")).expect("workspace");
+        std::fs::create_dir_all(&vibe_home).expect("vibe home");
+        write_skill(&user_skills, "from-user");
+        write_skill(&project_skills, "from-project");
+
+        let service = Release3Service::new(
+            Release3Paths {
+                vibe_home: vibe_home.clone(),
+                working_directory: workspace.clone(),
+                session_root: temporary.path().join("sessions"),
+            },
+            true,
+        )
+        .expect("service");
+        assert!(
+            !listed_skills(&service).contains(&"from-user".to_owned()),
+            "nothing names the directory yet"
+        );
+
+        std::fs::write(
+            vibe_home.join("config.toml"),
+            format!("skill_paths = [{:?}]\n", user_skills.to_string_lossy()),
+        )
+        .expect("user fixture");
+        assert_eq!(
+            listed_skills(&service),
+            vec!["from-user"],
+            "the key is re-read per build, so the next one publishes what it names"
+        );
+
+        std::fs::write(
+            workspace.join(".vibe/config.toml"),
+            format!("skill_paths = [{:?}]\n", project_skills.to_string_lossy()),
+        )
+        .expect("project fixture");
+        assert_eq!(
+            listed_skills(&service),
+            vec!["from-project"],
+            "the selected file moves to the trusted project's, and its entry is read"
+        );
+    }
+
+    /// US-167: the two filter keys are read from the same document and narrow
+    /// what the wire publishes, with the allowlist deciding alone.
+    #[test]
+    fn the_skill_filters_narrow_what_the_wire_publishes() {
+        let temporary = tempdir().expect("tempdir");
+        let workspace = temporary.path().join("workspace");
+        let vibe_home = temporary.path().join("home");
+        std::fs::create_dir_all(&vibe_home).expect("vibe home");
+        for name in ["alpha", "beta"] {
+            write_skill(&workspace.join(".vibe/skills"), name);
+        }
+        let service = Release3Service::new(
+            Release3Paths {
+                vibe_home: vibe_home.clone(),
+                working_directory: workspace,
+                session_root: temporary.path().join("sessions"),
+            },
+            true,
+        )
+        .expect("service");
+        let published = |document: &str| {
+            std::fs::write(vibe_home.join("config.toml"), document).expect("user fixture");
+            listed_skills(&service)
+        };
+
+        assert_eq!(published("disabled_skills = [\"beta\"]\n"), vec!["alpha"]);
+        assert_eq!(
+            published("enabled_skills = [\"beta\"]\ndisabled_skills = [\"beta\"]\n"),
+            vec!["beta"],
+            "the allowlist decides alone and the denylist is not consulted"
         );
     }
 

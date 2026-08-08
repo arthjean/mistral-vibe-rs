@@ -250,6 +250,31 @@ impl ConfigSnapshot {
         self.string_array("disabled_tools")
     }
 
+    /// The extra skill directories the configuration names.
+    ///
+    /// Reference `VibeConfigSchema.skill_paths`: entries are concatenated
+    /// across layers and expanded by `_expand_paths`. They stay strings here
+    /// because expansion needs the home and the working directory, which
+    /// [`crate::skills::search_paths`] is the one place that knows.
+    #[must_use]
+    pub fn skill_paths(&self) -> Vec<String> {
+        self.string_array("skill_paths")
+    }
+
+    /// The `enabled_skills` allowlist. When it holds an entry, only the skills
+    /// it matches are published and `disabled_skills` is ignored.
+    #[must_use]
+    pub fn enabled_skills(&self) -> Vec<String> {
+        self.string_array("enabled_skills")
+    }
+
+    /// The `disabled_skills` denylist, consulted only when `enabled_skills`
+    /// holds nothing.
+    #[must_use]
+    pub fn disabled_skills(&self) -> Vec<String> {
+        self.string_array("disabled_skills")
+    }
+
     /// The string entries of a top-level array key, skipping anything that is
     /// not a string so one mistyped entry cannot take the session down.
     fn string_array(&self, key: &str) -> Vec<String> {

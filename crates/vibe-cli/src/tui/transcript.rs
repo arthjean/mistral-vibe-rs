@@ -801,8 +801,7 @@ mod tests {
         vibe_core::tools::builtins::BuiltinTools::new(directory.path(), None)
             .register(
                 "session-1",
-                directory.path(),
-                true,
+                vibe_core::skills::SkillDiscovery::default(),
                 &registry,
                 &vibe_core::policy::ToolGuard::new(policy, Arc::new(DenyEverything)),
             )
