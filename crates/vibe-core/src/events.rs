@@ -710,6 +710,35 @@ const COMPACTION_ENTRY_KIND: &str = "compaction";
 const COMPACTION_STARTED_MESSAGE: &str = "Compacting context";
 const COMPACTION_COMPLETED_MESSAGE: &str = "Context compacted";
 
+/// What a running compaction publishes: how large the context was and the
+/// threshold it crossed, which is what a client renders progress against.
+///
+/// The field names are the aliases the `CompactionDetails` model declares, and
+/// only the fields the reference sends at this point are present: every field of
+/// that model is optional, so a client reads the pair it was given rather than
+/// five keys of which three are null. Reference `_project_compaction_started`.
+fn compaction_progress_details(current_context_tokens: u64, threshold: u64) -> Value {
+    json!({
+        "currentContextTokens": current_context_tokens,
+        "threshold": threshold,
+    })
+}
+
+/// What a finished compaction publishes: how long the summary is and the two
+/// identifiers the session moved between. Reference
+/// `_project_compaction_completed`.
+fn compaction_handoff_details(
+    summary_length: u64,
+    old_session_id: &str,
+    new_session_id: &str,
+) -> Value {
+    json!({
+        "summaryLength": summary_length,
+        "oldSessionId": old_session_id,
+        "newSessionId": new_session_id,
+    })
+}
+
 fn reduce_event(
     state: &mut ProjectionSnapshot,
     event_id: u64,
@@ -1083,7 +1112,11 @@ fn reduce_event(
                 details: Value::Null,
             });
         }
-        EngineEvent::CompactionStarted { .. } => {
+        EngineEvent::CompactionStarted {
+            current_context_tokens,
+            threshold,
+            ..
+        } => {
             require_active(state, "compaction_started")?;
             complete_streaming_entries(state, emitted_at);
             state.history.push(PublicHistoryEntry::Checkpoint {
@@ -1095,10 +1128,15 @@ fn reduce_event(
                 ),
                 kind: COMPACTION_ENTRY_KIND.to_owned(),
                 message: Some(COMPACTION_STARTED_MESSAGE.to_owned()),
-                details: Value::Null,
+                details: compaction_progress_details(*current_context_tokens, *threshold),
             });
         }
-        EngineEvent::CompactionCompleted { .. } => {
+        EngineEvent::CompactionCompleted {
+            summary_length,
+            old_session_id,
+            new_session_id,
+            ..
+        } => {
             require_active(state, "compaction_completed")?;
             // The entry the start created is the one that is patched. A late
             // subscriber that never saw the start still gets a coherent entry,
@@ -1112,13 +1150,22 @@ fn reduce_event(
                                 == PublicEntryGenerationStatus::InProgress
                 )
             });
+            // The end replaces the details rather than merging them, which is
+            // what the reference's patch does: the two progress numbers describe
+            // a compaction that is still running and are stale once it is not.
+            let handoff =
+                compaction_handoff_details(*summary_length, old_session_id, new_session_id);
             match open {
                 Some(PublicHistoryEntry::Checkpoint {
-                    metadata, message, ..
+                    metadata,
+                    message,
+                    details,
+                    ..
                 }) => {
                     metadata.updated_at = emitted_at;
                     metadata.generation_status = PublicEntryGenerationStatus::Completed;
                     *message = Some(COMPACTION_COMPLETED_MESSAGE.to_owned());
+                    *details = handoff;
                 }
                 _ => state.history.push(PublicHistoryEntry::Checkpoint {
                     metadata: entry_metadata(
@@ -1129,7 +1176,7 @@ fn reduce_event(
                     ),
                     kind: COMPACTION_ENTRY_KIND.to_owned(),
                     message: Some(COMPACTION_COMPLETED_MESSAGE.to_owned()),
-                    details: Value::Null,
+                    details: handoff,
                 }),
             }
         }

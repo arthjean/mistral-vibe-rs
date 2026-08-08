@@ -1227,6 +1227,100 @@ fn projected_history(events: &[vibe_core::events::EngineEvent]) -> Vec<Value> {
         .collect()
 }
 
+/// US-156: a compaction publishes one checkpoint entry, created in progress and
+/// then patched, and both details validate against the `CompactionDetails` the
+/// census declares.
+///
+/// The model was in the census and produced by nothing before this epic, which
+/// is exactly the kind of declared-but-unserved surface this replay exists to
+/// catch: validating the entry proves the field names and aliases a client reads
+/// are the ones this port writes.
+#[test]
+fn a_compaction_publishes_one_entry_whose_details_validate_against_the_census() {
+    use vibe_core::events::EngineEvent;
+
+    let corpus = corpus();
+    let census = Census::new(&corpus);
+    let mut issues = Vec::new();
+
+    let started = projected_history(&[
+        EngineEvent::UserMessage {
+            content: "go".to_owned(),
+        },
+        EngineEvent::CompactionStarted {
+            compaction_id: "compaction-1".to_owned(),
+            current_context_tokens: 180_000,
+            threshold: 150_000,
+        },
+    ]);
+    let entry = started
+        .iter()
+        .find(|entry| entry["kind"] == "compaction")
+        .unwrap_or_else(|| unreachable!("a started compaction projects a checkpoint entry"));
+    assert_eq!(entry["generationStatus"], "in_progress");
+    assert_eq!(entry["message"], "Compacting context");
+    census.validate("", "CompactionDetails", &entry["details"], &mut issues);
+    assert_eq!(entry["details"]["currentContextTokens"], 180_000);
+    assert_eq!(entry["details"]["threshold"], 150_000);
+
+    let completed = projected_history(&[
+        EngineEvent::UserMessage {
+            content: "go".to_owned(),
+        },
+        EngineEvent::CompactionStarted {
+            compaction_id: "compaction-1".to_owned(),
+            current_context_tokens: 180_000,
+            threshold: 150_000,
+        },
+        EngineEvent::CompactionCompleted {
+            compaction_id: "compaction-1".to_owned(),
+            summary_length: 412,
+            old_session_id: "session-old".to_owned(),
+            new_session_id: "session-new".to_owned(),
+        },
+    ]);
+    let entries: Vec<&Value> = completed
+        .iter()
+        .filter(|entry| entry["kind"] == "compaction")
+        .collect();
+    assert_eq!(
+        entries.len(),
+        1,
+        "the end patches the entry the start created rather than adding a second"
+    );
+    let entry = entries[0];
+    assert_eq!(entry["generationStatus"], "completed");
+    assert_eq!(entry["message"], "Context compacted");
+    census.validate("", "CompactionDetails", &entry["details"], &mut issues);
+    assert_eq!(entry["details"]["summaryLength"], 412);
+    assert_eq!(entry["details"]["oldSessionId"], "session-old");
+    assert_eq!(entry["details"]["newSessionId"], "session-new");
+
+    // A late subscriber that never saw the start still gets a coherent entry.
+    let orphaned = projected_history(&[
+        EngineEvent::UserMessage {
+            content: "go".to_owned(),
+        },
+        EngineEvent::CompactionCompleted {
+            compaction_id: "compaction-1".to_owned(),
+            summary_length: 7,
+            old_session_id: "session-old".to_owned(),
+            new_session_id: "session-new".to_owned(),
+        },
+    ]);
+    let entry = orphaned
+        .iter()
+        .find(|entry| entry["kind"] == "compaction")
+        .unwrap_or_else(|| unreachable!("an unmatched end still projects an entry"));
+    census.validate("", "CompactionDetails", &entry["details"], &mut issues);
+
+    assert!(
+        issues.is_empty(),
+        "the compaction details diverge from the census: {issues:?}"
+    );
+    eprintln!("app-server surface: CompactionDetails 3/3 projections validate");
+}
+
 /// Every `ToolEffectKind` is published with a detail that validates, which is
 /// what proves the union is served rather than merely declared.
 #[test]
