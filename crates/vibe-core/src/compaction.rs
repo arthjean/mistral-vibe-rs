@@ -13,9 +13,12 @@
 //! pinned commit.
 
 pub mod context;
+pub mod manager;
 pub mod tokens;
 
 use serde::{Deserialize, Serialize};
+
+use crate::provider::Usage;
 
 /// Why a summarization produced nothing usable.
 ///
@@ -52,10 +55,16 @@ impl CompactionFailureReason {
 /// transport error, a refused request or an unavailable compactor carries none,
 /// which is the distinction the reference draws by raising
 /// `CompactionFailedError` for the first and letting the rest propagate.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `usage` is what the failed attempt already spent. The reference makes every
+/// compaction call through the same accounted path whether or not it ends in a
+/// summary, so a turn's ceilings cover a compaction that failed exactly as they
+/// cover one that succeeded.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CompactionFailure {
     pub reason: Option<CompactionFailureReason>,
     pub message: String,
+    pub usage: Usage,
 }
 
 impl CompactionFailure {
@@ -65,6 +74,7 @@ impl CompactionFailure {
         Self {
             reason: Some(reason),
             message: message.into(),
+            usage: Usage::default(),
         }
     }
 }
@@ -74,6 +84,7 @@ impl From<String> for CompactionFailure {
         Self {
             reason: None,
             message,
+            usage: Usage::default(),
         }
     }
 }
@@ -115,5 +126,7 @@ impl CompactionStatus {
 mod compaction_parity_tests;
 #[cfg(test)]
 mod context_tests;
+#[cfg(test)]
+mod manager_tests;
 #[cfg(test)]
 mod tokens_tests;
