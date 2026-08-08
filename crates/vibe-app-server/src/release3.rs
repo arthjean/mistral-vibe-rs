@@ -24,6 +24,7 @@ use vibe_core::extensions::{
     SkillDefinition, discover_extensions,
 };
 use vibe_core::mcp::McpServerConfig;
+use vibe_core::middleware::CompactionSettings;
 use vibe_core::policy::AllowlistPersistence;
 use vibe_core::prompt::{
     InstructionLoader, PromptComposition, PromptResolver, SkillSummary, SubagentSummary,
@@ -358,30 +359,27 @@ impl Release3Service {
     /// A client renders context pressure against this number, so an unknown
     /// threshold is published as zero rather than guessed: the reference reports
     /// zero for the same case.
+    ///
+    /// It is the same number the compaction policy fires on, read through the
+    /// same resolver, so what a client renders and what triggers a compaction
+    /// can never be two readings of one key. The reader this replaced looked the
+    /// active model up in the persisted list form, which a merged configuration
+    /// never carries, so it published zero for every real configuration.
     #[must_use]
     pub fn context_window(&self) -> u64 {
-        let Ok(snapshot) = self.config.load() else {
-            return 0;
-        };
-        let active = snapshot
-            .effective
-            .get("active_model")
-            .and_then(toml::Value::as_str)
-            .unwrap_or_default();
-        snapshot
-            .effective
-            .get("models")
-            .and_then(toml::Value::as_array)
-            .into_iter()
-            .flatten()
-            .find(|model| {
-                ["name", "alias"]
-                    .into_iter()
-                    .any(|key| model.get(key).and_then(toml::Value::as_str) == Some(active))
-            })
-            .and_then(|model| model.get("auto_compact_threshold"))
-            .and_then(toml::Value::as_integer)
-            .and_then(|threshold| u64::try_from(threshold).ok())
+        self.compaction_settings().auto_compact_threshold
+    }
+
+    /// The five compaction keys, read once for a session that is opening.
+    ///
+    /// A configuration that cannot be loaded compacts on nothing rather than on
+    /// a guess, which is the same answer [`Release3Service::context_window`]
+    /// gives for the threshold it publishes.
+    #[must_use]
+    pub fn compaction_settings(&self) -> CompactionSettings {
+        self.config
+            .load()
+            .map(|snapshot| snapshot.compaction_settings())
             .unwrap_or_default()
     }
 

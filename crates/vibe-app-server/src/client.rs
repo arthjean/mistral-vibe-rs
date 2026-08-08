@@ -10,6 +10,7 @@ use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
+use vibe_core::compaction::{CompactionFailure, CompactionFailureReason};
 use vibe_core::engine::{
     CancellationToken, CompactionResult, Compactor, CompletionProvider, CompositeEventObserver,
     ConversationEngine, EngineError, EngineLimits, NoopEventObserver, SessionStats,
@@ -29,6 +30,7 @@ use vibe_core::mcp::{
     McpError, McpFuture, McpServerConfig, SamplingHandler, SamplingRequest, SamplingResponse,
     SamplingRole,
 };
+use vibe_core::middleware::CompactionSettings;
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PolicyError,
 };
@@ -211,6 +213,9 @@ pub struct TurnReservation {
     pub mention_stats: Option<Value>,
     pub working_directory: String,
     pub intent: SessionIntent,
+    /// The compaction policy the session read when it opened, which the engine
+    /// hands to its policy layer and its reactive recovery.
+    pub compaction: CompactionSettings,
     pub tools: ToolRegistry,
 }
 
@@ -927,6 +932,7 @@ impl InProcessClient {
             mention_stats: turn.mention_stats.clone(),
             working_directory: session.working_directory,
             intent: session.intent,
+            compaction: session.compaction,
             tools,
         })
     }
@@ -970,6 +976,7 @@ impl InProcessClient {
                 mention_stats,
                 working_directory: session.working_directory,
                 intent: session.intent,
+                compaction: session.compaction,
                 tools,
             },
             notice: PublicNotification {
@@ -2914,6 +2921,10 @@ pub struct LiveTurnDriver {
 struct ProviderSessionCompactor {
     provider: Arc<dyn CompletionProvider>,
     next_session: Arc<AtomicU64>,
+    /// The model `compaction_model` resolved to, which the summarization
+    /// request overrides the provider's own with. `None` leaves the provider to
+    /// answer with the model it was configured for.
+    model: Option<String>,
 }
 
 impl ProviderSessionCompactor {
@@ -2921,6 +2932,18 @@ impl ProviderSessionCompactor {
         Self {
             provider,
             next_session: Arc::new(AtomicU64::new(1)),
+            model: None,
+        }
+    }
+
+    /// The same compactor, summarizing with `model`. The identifier counter is
+    /// shared with the compactor this was taken from, so a per-turn copy never
+    /// mints an identifier another turn already used.
+    fn with_model(&self, model: Option<String>) -> Self {
+        Self {
+            provider: Arc::clone(&self.provider),
+            next_session: Arc::clone(&self.next_session),
+            model,
         }
     }
 
@@ -2929,7 +2952,7 @@ impl ProviderSessionCompactor {
         current_session_id: &str,
         messages: &[ModelMessage],
         extra_instructions: &str,
-    ) -> Result<CompactionResult, String> {
+    ) -> Result<CompactionResult, CompactionFailure> {
         let mut prompt =
             "Summarize the conversation for a continuation agent. Preserve goals, decisions, \
              constraints, file paths, commands, failures, and unfinished work. Return only the \
@@ -2945,7 +2968,7 @@ impl ProviderSessionCompactor {
             .provider
             .complete(&ProviderInput {
                 turn_id: None,
-                model_override: None,
+                model_override: self.model.clone(),
                 messages: input_messages,
                 stream: false,
                 images: Vec::new(),
@@ -2965,14 +2988,19 @@ impl ProviderSessionCompactor {
                 )]),
             })
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| CompactionFailure::from(error.to_string()))?;
         let summary = response.text.trim().to_owned();
         if summary.is_empty() {
-            return Err("provider returned an empty compaction summary".to_owned());
+            // The one failure this summarizer can classify today. The tool-call
+            // reason arrives with the manager that passes tools at all.
+            return Err(CompactionFailure::classified(
+                CompactionFailureReason::EmptySummary,
+                "provider returned an empty compaction summary",
+            ));
         }
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| "system clock precedes UNIX epoch".to_owned())?
+            .map_err(|_| CompactionFailure::from("system clock precedes UNIX epoch"))?
             .as_millis();
         let sequence = self.next_session.fetch_add(1, Ordering::Relaxed);
         let new_session_id = format!("{current_session_id}-compact-{timestamp}-{sequence}");
@@ -3378,10 +3406,14 @@ impl LiveTurnDriver {
             );
             ConversationEngine::new(Arc::clone(&self.provider))
                 .with_tools(session_tools.clone())
-                .with_compactor(self.compactor.clone())
+                .with_compactor(
+                    self.compactor
+                        .with_model(reservation.compaction.compaction_model.clone()),
+                )
                 .with_sink(SessionTranscriptSink::new(store, metadata))
                 .with_limits(limits)
                 .with_baseline(baseline)
+                .with_compaction_settings(reservation.compaction.clone())
                 .with_observer(observer)
                 .run_turn_controlled(
                     engine_session_id,
@@ -3406,8 +3438,12 @@ impl LiveTurnDriver {
             );
             ConversationEngine::new(Arc::clone(&self.provider))
                 .with_tools(session_tools)
-                .with_compactor(self.compactor.clone())
+                .with_compactor(
+                    self.compactor
+                        .with_model(reservation.compaction.compaction_model.clone()),
+                )
                 .with_limits(limits)
+                .with_compaction_settings(reservation.compaction.clone())
                 .with_observer(observer)
                 .run_turn_controlled(
                     &reservation.session_id,
@@ -3803,7 +3839,7 @@ impl TurnDriver for LiveTurnDriver {
                     extra_instructions,
                 )
                 .await
-                .map_err(DriverError::Compaction)?;
+                .map_err(|failure| DriverError::Compaction(failure.message))?;
             store
                 .handoff_messages(
                     &hydrated.metadata,
@@ -5773,6 +5809,7 @@ command = "/must-not-run"
                 user_display_content: None,
                 mention_stats: None,
                 working_directory: temporary.path().to_string_lossy().into_owned(),
+                compaction: CompactionSettings::default(),
                 intent: SessionIntent {
                     trusted: true,
                     ..SessionIntent::default()
@@ -5894,6 +5931,7 @@ command = "/must-not-run"
                 user_display_content: None,
                 mention_stats: None,
                 working_directory: temporary.path().to_string_lossy().into_owned(),
+                compaction: CompactionSettings::default(),
                 intent: SessionIntent {
                     trusted: true,
                     enabled_tools: vec!["task".to_owned(), "read".to_owned(), "edit".to_owned()],
@@ -6047,6 +6085,7 @@ command = "/must-not-run"
                 user_display_content: None,
                 mention_stats: None,
                 working_directory: "/workspace".to_owned(),
+                compaction: CompactionSettings::default(),
                 intent: SessionIntent {
                     resume: Some("session-resume".to_owned()),
                     ..SessionIntent::default()
@@ -6082,6 +6121,109 @@ command = "/must-not-run"
         );
         assert_eq!(persisted.metadata.statistics["context_tokens"], 5);
         assert_eq!(persisted.metadata.statistics["steps"], 3);
+    }
+
+    /// US-148: `compaction_model` reaches the summarization request as the
+    /// model it overrides the provider's own with, which is what
+    /// `get_compaction_model` selects upstream.
+    #[tokio::test]
+    async fn the_configured_compaction_model_overrides_the_summarization_request() {
+        struct ModelRecordingProvider {
+            models: Mutex<Vec<Option<String>>>,
+        }
+
+        impl CompletionProvider for ModelRecordingProvider {
+            fn complete<'a>(
+                &'a self,
+                input: &'a ProviderInput,
+            ) -> vibe_core::engine::ProviderFuture<'a> {
+                Box::pin(async move {
+                    self.models
+                        .lock()
+                        .map_err(|_| {
+                            vibe_core::provider::ProviderError::MalformedStream(
+                                "test lock poisoned".to_owned(),
+                            )
+                        })?
+                        .push(input.model_override.clone());
+                    Ok(AssistantMessage {
+                        text: "a summary".to_owned(),
+                        reasoning: None,
+                        reasoning_signature: None,
+                        reasoning_state: Vec::new(),
+                        tool_calls: Vec::new(),
+                        usage: Usage::default(),
+                        refusal: None,
+                        stop_reason: "stop".to_owned(),
+                        correlation_id: None,
+                    })
+                })
+            }
+        }
+
+        let provider = Arc::new(ModelRecordingProvider {
+            models: Mutex::new(Vec::new()),
+        });
+        let compactor = ProviderSessionCompactor::new(Arc::clone(&provider) as Arc<_>);
+        let messages = [ModelMessage::System {
+            content: "system".to_owned(),
+        }];
+
+        compactor
+            .compact("session-1", &messages)
+            .await
+            .expect("the default compaction summarizes");
+        compactor
+            .with_model(Some("devstral-small-latest".to_owned()))
+            .compact("session-1", &messages)
+            .await
+            .expect("the configured compaction summarizes");
+
+        assert_eq!(
+            provider.models.lock().expect("model log").clone(),
+            vec![None, Some("devstral-small-latest".to_owned())],
+            "an unset key leaves the provider's model, and a set one overrides it"
+        );
+    }
+
+    /// US-151: the only failure this summarizer can classify is the empty one,
+    /// which is what the failure telemetry record is written from.
+    #[tokio::test]
+    async fn an_empty_summary_is_reported_as_the_classified_failure() {
+        struct SilentProvider;
+
+        impl CompletionProvider for SilentProvider {
+            fn complete<'a>(
+                &'a self,
+                _input: &'a ProviderInput,
+            ) -> vibe_core::engine::ProviderFuture<'a> {
+                Box::pin(async {
+                    Ok(AssistantMessage {
+                        text: "   ".to_owned(),
+                        reasoning: None,
+                        reasoning_signature: None,
+                        reasoning_state: Vec::new(),
+                        tool_calls: Vec::new(),
+                        usage: Usage::default(),
+                        refusal: None,
+                        stop_reason: "stop".to_owned(),
+                        correlation_id: None,
+                    })
+                })
+            }
+        }
+
+        let compactor = ProviderSessionCompactor::new(Arc::new(SilentProvider) as Arc<_>);
+        let failure = compactor
+            .compact(
+                "session-1",
+                &[ModelMessage::System {
+                    content: "system".to_owned(),
+                }],
+            )
+            .await
+            .expect_err("an empty summary is a failure");
+        assert_eq!(failure.reason, Some(CompactionFailureReason::EmptySummary));
     }
 
     #[tokio::test]
@@ -6203,6 +6345,7 @@ command = "/must-not-run"
                 user_display_content: None,
                 mention_stats: None,
                 working_directory: "/workspace".to_owned(),
+                compaction: CompactionSettings::default(),
                 intent: SessionIntent::default(),
                 tools,
             })

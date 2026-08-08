@@ -10,6 +10,7 @@ use vibe_app_server::resources::{CoreResourceBackend, ResourceBackend, ResourceS
 use vibe_app_server::server::SessionIntent;
 use vibe_core::engine::{CompletionProvider, ProviderFuture};
 use vibe_core::events::{ModelMessage, ModelToolCall, PublicContentBlock};
+use vibe_core::middleware::CompactionSettings;
 use vibe_core::policy::{PermissionMode, PermissionStore, TrustDecision, TrustRootKind};
 use vibe_core::provider::{AssistantMessage, ProviderInput, ToolDefinition, Usage};
 use vibe_core::tools::ToolRegistry;
@@ -206,6 +207,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
             user_display_content: None,
             mention_stats: None,
             working_directory: temporary.path().to_string_lossy().into_owned(),
+            compaction: CompactionSettings::default(),
             intent: SessionIntent::default(),
             tools: tools.clone(),
         })

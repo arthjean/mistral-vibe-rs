@@ -11,13 +11,14 @@ use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 
+use crate::compaction::{CompactionFailure, CompactionStatus};
 use crate::events::{
     EngineEvent, EventEnvelope, LifecycleState, ModelMessage, ModelToolCall, ProjectionError,
     ProjectionReducer, ProjectionSnapshot, SessionHandoffCause,
 };
 use crate::middleware::{
-    CompactionSettings, ConversationContext, ConversationMiddleware, MiddlewareAction,
-    MiddlewarePipeline, ResetReason,
+    AutoCompactMiddleware, CompactionSettings, ConversationContext, ConversationMiddleware,
+    MiddlewareAction, MiddlewarePipeline, ResetReason,
 };
 use crate::provider::{
     AssistantMessage, ProviderBackend, ProviderChunk, ProviderError, ProviderInput, ProviderStream,
@@ -35,7 +36,7 @@ pub type ToolFuture<'a> =
     Pin<Box<dyn Future<Output = Result<ToolExecutionOutput, String>> + Send + 'a>>;
 pub type ToolStreamSink = Arc<dyn Fn(String) -> Result<(), String> + Send + Sync>;
 pub type CompactionFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<CompactionResult, String>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<CompactionResult, CompactionFailure>> + Send + 'a>>;
 pub type PersistenceFuture<'a> = Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'a>>;
 
 /// Buffered tool output chunks awaiting projection.
@@ -259,7 +260,7 @@ impl Compactor for RejectCompaction {
         _current_session_id: &'a str,
         _messages: &'a [ModelMessage],
     ) -> CompactionFuture<'a> {
-        Box::pin(async { Err("compaction is unavailable".to_owned()) })
+        Box::pin(async { Err(CompactionFailure::from("compaction is unavailable")) })
     }
 
     fn cleared_session_id(&self, _current_session_id: &str) -> Result<String, String> {
@@ -669,12 +670,22 @@ where
         let mut messages = input.messages.clone();
         let mut ledger = TurnLedger::new(&self.baseline, &self.limits);
         let mut checkpoints = 0_u32;
+        // Reference `_reactive_recovery_used`, reset at the top of every run:
+        // an overflow is recovered from at most once per user turn, so a
+        // transcript that still overflows after a compaction is reported
+        // instead of compacting again.
+        let mut reactive_recovery_used = false;
         // The budget policies answer twice per cycle: once at the top, where
         // they are part of the full pipeline, and once mid-cycle, where a
         // reached limit must not leave a tool call unanswered. Both readings
         // come from the same middlewares, so there is one budget authority.
         let budget = MiddlewarePipeline::from_limits(&self.limits);
         let mut pipeline = budget.clone();
+        // Automatic compaction is registered after the budget policies and
+        // before anything a caller added, which is the reference's order in
+        // `_setup_middleware`: a cycle that reaches a limit and the threshold at
+        // once stops instead of compacting.
+        pipeline.add(Arc::new(AutoCompactMiddleware));
         for middleware in &self.middleware {
             pipeline.add(Arc::clone(middleware));
         }
@@ -721,7 +732,13 @@ where
                 }
                 MiddlewareAction::Compact => {
                     match self
-                        .compact(&mut recorder, &mut messages, &pipeline, &cancellation)
+                        .compact(
+                            &mut recorder,
+                            &mut messages,
+                            &pipeline,
+                            ledger.context_tokens,
+                            &cancellation,
+                        )
                         .await?
                     {
                         // The reference does not re-enter the pipeline after a
@@ -753,8 +770,26 @@ where
                 StreamOutcome::Cancelled => break TurnStopReason::Cancelled,
                 StreamOutcome::Completed(Ok(completion)) => *completion,
                 StreamOutcome::Completed(Err(ProviderError::ContextOverflow)) => {
+                    // Reference `_should_self_heal`: one recovery per turn, and
+                    // none at all in strict mode, where the operator asked for
+                    // the overflow rather than for a silent repair.
+                    if reactive_recovery_used || self.compaction.raise_on_compaction_failure {
+                        recorder.emit(EngineEvent::Lifecycle {
+                            state: LifecycleState::Failed,
+                            message: Some(ProviderError::ContextOverflow.to_string()),
+                        })?;
+                        persist(&self.sink, &messages, recorder.state()).await?;
+                        return Err(EngineError::Provider(ProviderError::ContextOverflow));
+                    }
+                    reactive_recovery_used = true;
                     match self
-                        .compact(&mut recorder, &mut messages, &pipeline, &cancellation)
+                        .compact(
+                            &mut recorder,
+                            &mut messages,
+                            &pipeline,
+                            ledger.context_tokens,
+                            &cancellation,
+                        )
                         .await?
                     {
                         Some(()) => {
@@ -1036,27 +1071,67 @@ where
     /// paths share.
     ///
     /// `None` means the turn was cancelled while compaction was running.
+    ///
+    /// The boundary events bracket the model call the way the reference's
+    /// `_run_compaction` does: the start event is emitted before the compactor
+    /// is asked for anything, the completed event only once there is a summary
+    /// and a new identifier, and the outcome event on every path, because a
+    /// compaction that failed or was cancelled still reports its status.
     async fn compact(
         &self,
         recorder: &mut TurnRecorder<'_>,
         messages: &mut Vec<ModelMessage>,
         pipeline: &MiddlewarePipeline,
+        context_tokens: u64,
         cancellation: &CancellationToken,
     ) -> Result<Option<()>, EngineError> {
-        let compaction = tokio::select! {
-            result = self.compactor.compact(&recorder.state().session_id, messages) => result,
-            () = cancellation.cancelled() => return Ok(None),
-        }
-        .map_err(EngineError::Compaction)?;
-        recorder.emit(EngineEvent::Compaction {
-            summary: compaction.summary,
+        let compaction_id = new_compaction_id();
+        let threshold = self.compaction.auto_compact_threshold;
+        let old_session_id = recorder.state().session_id.clone();
+        recorder.emit(EngineEvent::CompactionStarted {
+            compaction_id: compaction_id.clone(),
+            current_context_tokens: context_tokens,
+            threshold,
         })?;
-        let from_session_id = recorder.state().session_id.clone();
+        let outcome = |status, reason| EngineEvent::CompactionOutcome {
+            compaction_id: compaction_id.clone(),
+            status,
+            context_tokens_before: context_tokens,
+            threshold,
+            reason,
+        };
+        let compaction = tokio::select! {
+            result = self.compactor.compact(&old_session_id, messages) => result,
+            () = cancellation.cancelled() => {
+                recorder.emit(outcome(CompactionStatus::Cancelled, None))?;
+                return Ok(None);
+            }
+        };
+        let compaction = match compaction {
+            Ok(compaction) => compaction,
+            Err(failure) => {
+                recorder.emit(outcome(CompactionStatus::Failure, failure.reason))?;
+                return Err(EngineError::Compaction(failure.message));
+            }
+        };
+        let summary_length = u64::try_from(compaction.summary.chars().count()).unwrap_or(u64::MAX);
+        let new_session_id = compaction.new_session_id;
+        // The completed event precedes the handoff because the handoff is what
+        // raises `session/compacted` here, and the reference raises that
+        // notification from the end event itself: the summary length has to be
+        // known by the time the session rotates.
+        recorder.emit(EngineEvent::CompactionCompleted {
+            compaction_id: compaction_id.clone(),
+            summary_length,
+            old_session_id: old_session_id.clone(),
+            new_session_id: new_session_id.clone(),
+        })?;
         recorder.emit(EngineEvent::SessionHandoff {
-            from_session_id,
-            to_session_id: compaction.new_session_id,
+            from_session_id: old_session_id,
+            to_session_id: new_session_id,
             cause: SessionHandoffCause::Compaction,
         })?;
+        recorder.emit(outcome(CompactionStatus::Success, None))?;
         *messages = compaction.messages;
         pipeline.reset(ResetReason::Compact);
         Ok(Some(()))
@@ -1358,6 +1433,27 @@ fn current_time_millis() -> u64 {
         })
 }
 
+/// The identifier that correlates a compaction's boundary events.
+///
+/// The reference mints a UUID; what matters here is that two compactions in one
+/// session never collide, so the identifier carries real entropy and falls back
+/// to the event stream's own ordering when the platform has none.
+fn new_compaction_id() -> String {
+    let mut bytes = [0_u8; 16];
+    if getrandom::fill(&mut bytes).is_err() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|since| since.as_nanos())
+            .unwrap_or_default();
+        bytes[..16].copy_from_slice(&stamp.to_le_bytes());
+    }
+    let hexadecimal = bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("compaction-{hexadecimal}")
+}
+
 fn title_from_messages(messages: &[ModelMessage]) -> String {
     messages
         .iter()
@@ -1413,6 +1509,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
     use super::*;
+    use crate::compaction::CompactionFailureReason;
     use crate::events::ModelToolCall;
     use crate::middleware::MiddlewareResult;
     use crate::provider::{ProviderChunk, RequestLimits};
@@ -1602,7 +1699,7 @@ mod tests {
         ) -> CompactionFuture<'a> {
             Box::pin(async move {
                 self.started.notify_one();
-                std::future::pending::<Result<CompactionResult, String>>().await
+                std::future::pending::<Result<CompactionResult, CompactionFailure>>().await
             })
         }
 
@@ -2294,6 +2391,19 @@ mod tests {
             .expect("cancellation is an outcome");
         assert_eq!(outcome.stop_reason, TurnStopReason::Cancelled);
         assert_eq!(outcome.snapshot.lifecycle, LifecycleState::Cancelled);
+        // US-151: a cancelled compaction reports its status and publishes no
+        // end event, so nothing renders a handoff that never happened.
+        assert!(outcome.events.iter().any(|envelope| matches!(
+            envelope.event,
+            EngineEvent::CompactionOutcome {
+                status: CompactionStatus::Cancelled,
+                ..
+            }
+        )));
+        assert!(!outcome.events.iter().any(|envelope| matches!(
+            envelope.event,
+            EngineEvent::CompactionCompleted { .. } | EngineEvent::SessionHandoff { .. }
+        )));
     }
 
     #[tokio::test]
@@ -2513,7 +2623,7 @@ mod tests {
         let compaction_index = outcome
             .events
             .iter()
-            .position(|envelope| matches!(envelope.event, EngineEvent::Compaction { .. }))
+            .position(|envelope| matches!(envelope.event, EngineEvent::CompactionStarted { .. }))
             .expect("the compaction path was entered");
         let first_text = outcome
             .events
@@ -2595,6 +2705,389 @@ mod tests {
         }
 
         assert_eq!(policy.resets(), vec![ResetReason::Stop, ResetReason::Stop]);
+    }
+
+    /// US-149: the threshold fires before the request is built, from the
+    /// context size the ledger carries into the turn.
+    #[tokio::test]
+    async fn the_threshold_compacts_before_the_first_request() {
+        let engine = ConversationEngine::new(ScriptedProvider::new([Ok(completion(
+            "after compact",
+            Vec::new(),
+        ))]))
+        .with_compactor(FakeCompactor)
+        .with_baseline(SessionStats {
+            context_tokens: 150_000,
+            ..SessionStats::default()
+        })
+        .with_compaction_settings(CompactionSettings {
+            auto_compact_threshold: 120_000,
+            ..CompactionSettings::default()
+        });
+        let outcome = engine
+            .run_turn(
+                "session-1",
+                provider_input(),
+                "hello",
+                CancellationToken::default(),
+            )
+            .await
+            .expect("the turn runs");
+
+        assert_eq!(outcome.stop_reason, TurnStopReason::Complete);
+        assert_eq!(
+            outcome.session_id, "session-2",
+            "the threshold compaction rotated the session"
+        );
+        assert_eq!(
+            engine
+                .provider
+                .requests
+                .lock()
+                .expect("request log is not poisoned")
+                .clone(),
+            vec![vec![ModelMessage::System {
+                content: "summary".to_owned(),
+            }]],
+            "the only request was built from the compacted transcript, so no \
+             provider overflow was ever reached"
+        );
+    }
+
+    /// US-149: below the threshold nothing compacts, which is what makes the
+    /// test above a threshold test rather than a compactor test.
+    #[tokio::test]
+    async fn a_context_below_the_threshold_builds_its_request_untouched() {
+        let outcome = ConversationEngine::new(ScriptedProvider::new([Ok(completion(
+            "answered",
+            Vec::new(),
+        ))]))
+        .with_compactor(FakeCompactor)
+        .with_baseline(SessionStats {
+            context_tokens: 119_999,
+            ..SessionStats::default()
+        })
+        .with_compaction_settings(CompactionSettings {
+            auto_compact_threshold: 120_000,
+            ..CompactionSettings::default()
+        })
+        .run_turn(
+            "session-1",
+            provider_input(),
+            "hello",
+            CancellationToken::default(),
+        )
+        .await
+        .expect("the turn runs");
+
+        assert_eq!(outcome.session_id, "session-1");
+        assert!(
+            !outcome
+                .events
+                .iter()
+                .any(|event| matches!(event.event, EngineEvent::CompactionStarted { .. }))
+        );
+    }
+
+    /// US-149: the value the policy reads is the one `record_completion` wrote,
+    /// which is the reference's `context_tokens`: the last completion's prompt
+    /// and completion tokens, not the session totals.
+    #[tokio::test]
+    async fn the_threshold_reads_the_last_completion_usage() {
+        let engine = ConversationEngine::new(ScriptedProvider::new([
+            Ok(completion(
+                "",
+                vec![ModelToolCall {
+                    id: "call-1".to_owned(),
+                    name: "read".to_owned(),
+                    arguments: "{}".to_owned(),
+                }],
+            )),
+            Ok(completion("done", Vec::new())),
+        ]))
+        .with_tools(FakeTools)
+        .with_compactor(FakeCompactor)
+        // Two completions of 5 tokens each spend 10 in total, and the context
+        // is 5: a threshold of 6 must not fire.
+        .with_compaction_settings(CompactionSettings {
+            auto_compact_threshold: 6,
+            ..CompactionSettings::default()
+        });
+        let outcome = engine
+            .run_turn(
+                "session-1",
+                provider_input(),
+                "hello",
+                CancellationToken::default(),
+            )
+            .await
+            .expect("the turn runs");
+
+        assert_eq!(
+            outcome.context_tokens, 5,
+            "input plus output of the last completion"
+        );
+        assert_eq!(outcome.usage.input_tokens + outcome.usage.output_tokens, 10);
+        assert!(
+            !outcome
+                .events
+                .iter()
+                .any(|event| matches!(event.event, EngineEvent::CompactionStarted { .. })),
+            "the policy compares the context size, not the session total"
+        );
+    }
+
+    /// US-150: an overflow is recovered from once per turn. A second one is
+    /// reported instead of compacting again.
+    #[tokio::test]
+    async fn a_second_overflow_in_one_turn_is_reported_rather_than_compacted() {
+        let engine = ConversationEngine::new(ScriptedProvider::new([
+            Err(ProviderError::ContextOverflow),
+            Err(ProviderError::ContextOverflow),
+            Ok(completion("never reached", Vec::new())),
+        ]))
+        .with_compactor(FakeCompactor);
+        let error = engine
+            .run_turn(
+                "session-1",
+                provider_input(),
+                "hello",
+                CancellationToken::default(),
+            )
+            .await
+            .expect_err("the second overflow is not recovered from");
+        assert!(
+            matches!(error, EngineError::Provider(ProviderError::ContextOverflow)),
+            "{error}"
+        );
+        assert_eq!(
+            engine
+                .provider
+                .requests
+                .lock()
+                .expect("request log is not poisoned")
+                .len(),
+            2,
+            "the turn stopped after the second overflow rather than retrying"
+        );
+    }
+
+    /// US-150: the guard is per turn, so the next user turn may recover again.
+    #[tokio::test]
+    async fn a_new_turn_may_recover_from_an_overflow_again() {
+        let engine = ConversationEngine::new(ScriptedProvider::new([
+            Err(ProviderError::ContextOverflow),
+            Ok(completion("first", Vec::new())),
+            Err(ProviderError::ContextOverflow),
+            Ok(completion("second", Vec::new())),
+        ]))
+        .with_compactor(FakeCompactor);
+        for prompt in ["hello", "again"] {
+            engine
+                .run_turn(
+                    "session-1",
+                    provider_input(),
+                    prompt,
+                    CancellationToken::default(),
+                )
+                .await
+                .unwrap_or_else(|error| panic!("the `{prompt}` turn recovers: {error}"));
+        }
+    }
+
+    /// US-150: strict mode refuses the recovery outright, which is what
+    /// `_should_self_heal` reads `raise_on_compaction_failure` for.
+    #[tokio::test]
+    async fn strict_mode_reports_an_overflow_without_recovering() {
+        let engine = ConversationEngine::new(ScriptedProvider::new([
+            Err(ProviderError::ContextOverflow),
+            Ok(completion("never reached", Vec::new())),
+        ]))
+        .with_compactor(FakeCompactor)
+        .with_compaction_settings(CompactionSettings {
+            raise_on_compaction_failure: true,
+            ..CompactionSettings::default()
+        });
+        let error = engine
+            .run_turn(
+                "session-1",
+                provider_input(),
+                "hello",
+                CancellationToken::default(),
+            )
+            .await
+            .expect_err("strict mode surfaces the overflow");
+        assert!(
+            matches!(error, EngineError::Provider(ProviderError::ContextOverflow)),
+            "{error}"
+        );
+        assert_eq!(
+            engine
+                .provider
+                .requests
+                .lock()
+                .expect("request log is not poisoned")
+                .len(),
+            1,
+            "no compaction and no retry was attempted"
+        );
+    }
+
+    /// US-151: the boundary pair brackets the model call, and the outcome
+    /// reports the status the telemetry record carries.
+    #[tokio::test]
+    async fn a_compaction_publishes_its_boundary_pair_and_its_outcome() {
+        let outcome = ConversationEngine::new(ScriptedProvider::new([Ok(completion(
+            "after compact",
+            Vec::new(),
+        ))]))
+        .with_compactor(FakeCompactor)
+        .with_baseline(SessionStats {
+            context_tokens: 150_000,
+            ..SessionStats::default()
+        })
+        .with_compaction_settings(CompactionSettings {
+            auto_compact_threshold: 120_000,
+            ..CompactionSettings::default()
+        })
+        .run_turn(
+            "session-1",
+            provider_input(),
+            "hello",
+            CancellationToken::default(),
+        )
+        .await
+        .expect("the turn runs");
+
+        let compaction_events = outcome
+            .events
+            .iter()
+            .filter(|envelope| {
+                matches!(
+                    envelope.event,
+                    EngineEvent::CompactionStarted { .. }
+                        | EngineEvent::CompactionCompleted { .. }
+                        | EngineEvent::CompactionOutcome { .. }
+                )
+            })
+            .map(|envelope| envelope.event.clone())
+            .collect::<Vec<_>>();
+        let [started, completed, reported] = compaction_events.as_slice() else {
+            panic!("a compaction publishes three events, got {compaction_events:?}");
+        };
+        let EngineEvent::CompactionStarted {
+            compaction_id,
+            current_context_tokens,
+            threshold,
+        } = started
+        else {
+            unreachable!("the first event is the start");
+        };
+        assert_eq!(*current_context_tokens, 150_000);
+        assert_eq!(*threshold, 120_000);
+        assert_eq!(
+            completed,
+            &EngineEvent::CompactionCompleted {
+                compaction_id: compaction_id.clone(),
+                summary_length: 15,
+                old_session_id: "session-1".to_owned(),
+                new_session_id: "session-2".to_owned(),
+            },
+            "the pair is correlated and the length is the summary's characters"
+        );
+        assert_eq!(
+            reported,
+            &EngineEvent::CompactionOutcome {
+                compaction_id: compaction_id.clone(),
+                status: CompactionStatus::Success,
+                context_tokens_before: 150_000,
+                threshold: 120_000,
+                reason: None,
+            }
+        );
+        // The start is emitted before the model call the compaction makes, so a
+        // client renders the operation rather than its aftermath.
+        let started_at = outcome
+            .events
+            .iter()
+            .position(|envelope| matches!(envelope.event, EngineEvent::CompactionStarted { .. }));
+        let handoff_at = outcome
+            .events
+            .iter()
+            .position(|envelope| matches!(envelope.event, EngineEvent::SessionHandoff { .. }));
+        assert!(started_at < handoff_at);
+    }
+
+    /// US-151: a failed compaction reports its classified reason and publishes
+    /// no completed event, so nothing renders a handoff that never happened.
+    #[tokio::test]
+    async fn a_failed_compaction_reports_its_reason_and_no_end_event() {
+        struct FailingCompactor;
+
+        impl Compactor for FailingCompactor {
+            fn compact<'a>(
+                &'a self,
+                _current_session_id: &'a str,
+                _messages: &'a [ModelMessage],
+            ) -> CompactionFuture<'a> {
+                Box::pin(async {
+                    Err(CompactionFailure::classified(
+                        CompactionFailureReason::EmptySummary,
+                        "the summarizer answered with nothing",
+                    ))
+                })
+            }
+
+            fn cleared_session_id(&self, _current_session_id: &str) -> Result<String, String> {
+                Err("unused".to_owned())
+            }
+        }
+
+        let recorded = Arc::new(RecordingObserver::default());
+        let error =
+            ConversationEngine::new(ScriptedProvider::new([Err(ProviderError::ContextOverflow)]))
+                .with_compactor(FailingCompactor)
+                .with_observer(Arc::clone(&recorded) as Arc<dyn EventObserver>)
+                .run_turn(
+                    "session-1",
+                    provider_input(),
+                    "hello",
+                    CancellationToken::default(),
+                )
+                .await
+                .expect_err("a failed compaction fails the turn");
+        assert!(matches!(error, EngineError::Compaction(_)), "{error}");
+
+        let events = recorded.events.lock().expect("observer lock").clone();
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::CompactionStarted { .. })),
+            "the start was published before the failure"
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::CompactionCompleted { .. })),
+            "a failure publishes no end event"
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::SessionHandoff { .. })),
+            "a failure records no handoff"
+        );
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EngineEvent::CompactionOutcome {
+                    status: CompactionStatus::Failure,
+                    reason: Some(CompactionFailureReason::EmptySummary),
+                    ..
+                }
+            )),
+            "the outcome carries the classified reason: {events:?}"
+        );
     }
 
     #[test]

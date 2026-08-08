@@ -114,8 +114,14 @@ impl EventObserver for AppServerEventObserver {
             return Ok(());
         }
 
+        // Either shape of a finished compaction answers the same question the
+        // handoff notification asks next: how long the summary was. The first
+        // is what a transcript written before the boundary pair carries.
         if let EngineEvent::Compaction { summary } = &event.event {
             projection.summary_length = summary.chars().count();
+        }
+        if let EngineEvent::CompactionCompleted { summary_length, .. } = &event.event {
+            projection.summary_length = usize::try_from(*summary_length).unwrap_or(usize::MAX);
         }
         if let EngineEvent::Retrying { reason } = &event.event {
             self.sender
@@ -601,8 +607,10 @@ mod tests {
                 turn_id: Some("turn-1".to_owned()),
                 emitted_at: 11,
                 event_id: 2,
-                event: EngineEvent::Compaction {
-                    summary: "short".to_owned(),
+                event: EngineEvent::CompactionStarted {
+                    compaction_id: "compaction-1".to_owned(),
+                    current_context_tokens: 150_000,
+                    threshold: 120_000,
                 },
             },
             EventEnvelope {
@@ -610,6 +618,18 @@ mod tests {
                 turn_id: Some("turn-1".to_owned()),
                 emitted_at: 12,
                 event_id: 3,
+                event: EngineEvent::CompactionCompleted {
+                    compaction_id: "compaction-1".to_owned(),
+                    summary_length: 5,
+                    old_session_id: "session-1".to_owned(),
+                    new_session_id: "session-2".to_owned(),
+                },
+            },
+            EventEnvelope {
+                session_id: "session-1".to_owned(),
+                turn_id: Some("turn-1".to_owned()),
+                emitted_at: 13,
+                event_id: 4,
                 event: EngineEvent::SessionHandoff {
                     from_session_id: "session-1".to_owned(),
                     to_session_id: "session-2".to_owned(),
@@ -626,7 +646,7 @@ mod tests {
                     .expect("notification projects")
             })
             .collect::<Vec<_>>();
-        assert_eq!(notifications.len(), 3);
+        assert_eq!(notifications.len(), 4);
         assert!(matches!(
             &notifications[0],
             Envelope::Notification(Notification { method, params, .. })
@@ -637,8 +657,15 @@ mod tests {
             Envelope::Notification(Notification { method, params, .. })
                 if method == "history/entryAdded" && params["eventId"] == 5
         ));
+        // The end event patches the entry the start added rather than adding a
+        // second one, which is what a client renders in place.
         assert!(matches!(
             &notifications[2],
+            Envelope::Notification(Notification { method, params, .. })
+                if method == "history/entryUpdated" && params["eventId"] == 6
+        ));
+        assert!(matches!(
+            &notifications[3],
             Envelope::Notification(Notification { method, params, .. })
                 if method == "session/compacted"
                     && params["eventId"] == 1

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Compact before the wall instead of after it. A conversation whose context
+  reaches `auto_compact_threshold` is now compacted before the request that
+  would have overflowed, so a long session no longer runs into a provider
+  refusal the configuration was meant to prevent. The compaction keys the schema
+  advertises are read for the first time and carried on the session: the
+  threshold fires the compaction, `compaction_model` sends the summarization to
+  the model you chose, and `raise_on_compaction_failure` makes an overflow fail
+  the turn loudly instead of being repaired silently. An overflow is now recovered from at most
+  once per turn rather than compacting without bound. A compaction also reports
+  itself while it runs: an entry appears when it starts and is patched in place
+  when it ends, carrying the session handoff, where a client used to see nothing
+  until it was over. The context window a client renders against is fixed at the
+  same time: it was published as zero for every real configuration, because it
+  looked the active model up in a shape a merged configuration never carries.
+
 - Pick up a model response that stopped in the middle. `/retry` submits a
   continuation that asks the model to resume where the stream broke off without
   repeating what it already wrote, and takes optional instructions to steer the

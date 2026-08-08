@@ -42,6 +42,7 @@ use vibe_core::extensions::{AgentApproval, AgentProfile};
 use vibe_core::integrations::redact;
 use vibe_core::matching::NameFilter;
 use vibe_core::mcp::McpServerConfig;
+use vibe_core::middleware::CompactionSettings;
 pub use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionRequirement,
     PolicyError,
@@ -1767,6 +1768,7 @@ impl AppServer {
             .as_ref()
             .map(crate::release3::agent_summary);
         session.context_window = self.release3.context_window();
+        session.compaction = self.release3.compaction_settings();
         sessions.insert(session);
         self.open_session_resources(
             &mut sessions,
@@ -2806,6 +2808,7 @@ impl ServerConnection {
         session.persisted = persisted;
         session.agent_summary = Some(crate::release3::agent_summary(&agent_profile));
         session.context_window = self.server.release3.context_window();
+        session.compaction = self.server.release3.compaction_settings();
         sessions.insert(session);
         if let Err(error) = self.server.open_session_resources(
             &mut sessions,
@@ -4011,6 +4014,10 @@ struct SessionRuntime {
     /// The active model's compaction threshold, read once when the session
     /// opens. Zero means no model declares one.
     context_window: u64,
+    /// The five compaction keys, read once when the session opens, beside the
+    /// threshold the client renders. A turn carries them to the engine, where
+    /// the policy layer and the reactive recovery both read them.
+    compaction: CompactionSettings,
     policy: PermissionStore,
     tools: ToolRegistry,
     persisted: Option<HydratedSession>,
@@ -4055,6 +4062,7 @@ impl SessionRuntime {
             event_watermark: 0,
             stats: SessionStats::default(),
             context_window: 0,
+            compaction: CompactionSettings::default(),
             policy,
             tools,
             persisted: None,
@@ -4249,6 +4257,7 @@ pub struct SessionView {
     pub id: String,
     pub working_directory: String,
     pub intent: SessionIntent,
+    pub compaction: CompactionSettings,
     pub status: SessionStatus,
     pub active_turn: Option<String>,
     pub pending_callback: Option<String>,
@@ -4264,6 +4273,7 @@ impl From<&SessionRuntime> for SessionView {
             id: session.id.clone(),
             working_directory: session.working_directory.clone(),
             intent: session.intent.clone(),
+            compaction: session.compaction.clone(),
             status: session.status,
             active_turn: session.active_turn.clone(),
             pending_callback: session
@@ -5235,6 +5245,58 @@ mod tests {
             call(&mut connection, 11, "agents/list")["active"],
             session["agent"]
         );
+    }
+
+    /// US-148: the compaction policy is read once when a session opens and
+    /// carried on the session, beside the threshold the client renders.
+    #[test]
+    fn a_session_carries_the_compaction_policy_its_configuration_declares() {
+        let temporary = tempfile::tempdir().expect("temporary home");
+        let home = temporary.path().join("home");
+        std::fs::create_dir_all(&home).expect("home directory");
+        std::fs::write(
+            home.join("config.toml"),
+            concat!(
+                "auto_compact_threshold = 30000\n",
+                "compaction_prompt_id = \"terse\"\n",
+                "context_warnings = true\n",
+                "raise_on_compaction_failure = true\n",
+                "active_model = \"tuned\"\n",
+                "[[models]]\n",
+                "name = \"tuned-model\"\n",
+                "provider = \"mistral\"\n",
+                "alias = \"tuned\"\n",
+            ),
+        )
+        .expect("configuration fixture");
+        let release3 = Release3Service::new(
+            crate::release3::Release3Paths {
+                vibe_home: home,
+                working_directory: temporary.path().join("workspace"),
+                session_root: temporary.path().join("sessions"),
+            },
+            false,
+        )
+        .expect("release-3 service");
+        let server = AppServer::with_release3_service(release3);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+
+        let session = server.session("session-1").expect("the session is open");
+        assert_eq!(session.compaction.auto_compact_threshold, 30_000);
+        assert_eq!(
+            server.release3.context_window(),
+            30_000,
+            "the published threshold and the policy read the same key"
+        );
+        assert_eq!(
+            session.compaction.compaction_model.as_deref(),
+            Some("tuned-model")
+        );
+        assert_eq!(session.compaction.compaction_prompt_id, "terse");
+        assert!(session.compaction.context_warnings);
+        assert!(session.compaction.raise_on_compaction_failure);
     }
 
     /// US-091: the configuration answers carry the two views and the runtime the

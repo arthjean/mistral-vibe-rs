@@ -303,6 +303,7 @@ where
                 mention_stats,
                 working_directory: session.working_directory,
                 intent: session.intent,
+                compaction: session.compaction,
                 tools,
             };
             active.insert((session_id, turn_id));
