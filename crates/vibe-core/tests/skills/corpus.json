@@ -1,0 +1,3357 @@
+{
+  "builtins": {
+    "count": 2,
+    "skills": [
+      {
+        "description": {
+          "digest": "c6e85bed9c5d1c1fc9d3320bd3e06a6685563dfd363539cbd5b8aebf9cab49f3",
+          "length": 245
+        },
+        "hasPath": false,
+        "name": "skill-creator",
+        "prompt": {
+          "digest": "110717a952efd6ede24dc38468e4292e5b2f19634962d68dd65ff9ea363dd3c7",
+          "length": 4500
+        },
+        "scope": "global",
+        "source": "builtin",
+        "userInvocable": true
+      },
+      {
+        "description": {
+          "digest": "14fb2f5715571fb7ae3577a38a8233e71fe66949f8fcd7c0acd408234e9bbf42",
+          "length": 833
+        },
+        "hasPath": false,
+        "name": "vibe",
+        "prompt": {
+          "digest": "4e3771ef93a833011413db827418ba6e7653c94ba095aa26b6b1af952181db69",
+          "length": 39666
+        },
+        "scope": "global",
+        "source": "builtin",
+        "userInvocable": false
+      }
+    ]
+  },
+  "command": {
+    "cases": [
+      {
+        "case": "plain-text",
+        "prompt": "hello world",
+        "result": null
+      },
+      {
+        "case": "slash-only",
+        "prompt": "/",
+        "result": null
+      },
+      {
+        "case": "unknown-skill",
+        "prompt": "/nonexistent",
+        "result": null
+      },
+      {
+        "case": "simple",
+        "prompt": "/probe",
+        "result": {
+          "content": {
+            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
+            "length": 24
+          },
+          "extraInstructions": null,
+          "name": "probe"
+        }
+      },
+      {
+        "case": "with-args",
+        "prompt": "/probe fix the bug",
+        "result": {
+          "content": {
+            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
+            "length": 24
+          },
+          "extraInstructions": "fix the bug",
+          "name": "probe"
+        }
+      },
+      {
+        "case": "multiple-spaces-kept-in-args",
+        "prompt": "/probe   spaced   args",
+        "result": {
+          "content": {
+            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
+            "length": 24
+          },
+          "extraInstructions": "spaced   args",
+          "name": "probe"
+        }
+      },
+      {
+        "case": "uppercase-name",
+        "prompt": "/PROBE",
+        "result": {
+          "content": {
+            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
+            "length": 24
+          },
+          "extraInstructions": null,
+          "name": "probe"
+        }
+      },
+      {
+        "case": "leading-and-trailing-whitespace",
+        "prompt": "   /probe trailing   ",
+        "result": {
+          "content": {
+            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
+            "length": 24
+          },
+          "extraInstructions": "trailing",
+          "name": "probe"
+        }
+      },
+      {
+        "case": "newline-separated-args",
+        "prompt": "/probe\nsecond line",
+        "result": {
+          "content": {
+            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
+            "length": 24
+          },
+          "extraInstructions": "second line",
+          "name": "probe"
+        }
+      },
+      {
+        "case": "not-user-invocable",
+        "prompt": "/hidden",
+        "result": null
+      },
+      {
+        "case": "builtin-skill-creator",
+        "prompt": "/skill-creator",
+        "result": {
+          "content": {
+            "digest": "110717a952efd6ede24dc38468e4292e5b2f19634962d68dd65ff9ea363dd3c7",
+            "length": 4500
+          },
+          "extraInstructions": null,
+          "name": "skill-creator"
+        }
+      },
+      {
+        "case": "builtin-vibe-not-invocable",
+        "prompt": "/vibe",
+        "result": null
+      },
+      {
+        "case": "slash-inside-text",
+        "prompt": "run /probe later",
+        "result": null
+      }
+    ],
+    "skills": [
+      {
+        "body": "Run the probe checklist.",
+        "description": "A probe",
+        "invocable": true,
+        "name": "probe"
+      },
+      {
+        "body": "Hidden body.",
+        "description": "Model only",
+        "invocable": false,
+        "name": "hidden"
+      }
+    ]
+  },
+  "discovery": [
+    {
+      "case": "empty-everywhere",
+      "customSkillsCount": 0,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {}
+    },
+    {
+      "case": "project-vibe-skills",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "From project .vibe",
+          "name": "alpha",
+          "relPath": ".vibe/skills/alpha/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".vibe/skills/alpha/SKILL.md": "---\nname: alpha\ndescription: From project .vibe\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "project-agents-skills",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "From project .agents",
+          "name": "beta",
+          "relPath": ".agents/skills/beta/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".agents/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".agents/skills/beta/SKILL.md": "---\nname: beta\ndescription: From project .agents\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "project-both-roots",
+      "customSkillsCount": 2,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "From project .vibe",
+          "name": "alpha",
+          "relPath": ".vibe/skills/alpha/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": "From project .agents",
+          "name": "beta",
+          "relPath": ".agents/skills/beta/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ],
+        [
+          "project",
+          ".agents/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".agents/skills/beta/SKILL.md": "---\nname: beta\ndescription: From project .agents\n---\n\nProbe body.\n",
+          ".vibe/skills/alpha/SKILL.md": "---\nname: alpha\ndescription: From project .vibe\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "project-vibe-beats-agents",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Winner from .vibe",
+          "name": "shared",
+          "relPath": ".vibe/skills/shared/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ],
+        [
+          "project",
+          ".agents/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".agents/skills/shared/SKILL.md": "---\nname: shared\ndescription: Loser from .agents\n---\n\nProbe body.\n",
+          ".vibe/skills/shared/SKILL.md": "---\nname: shared\ndescription: Winner from .vibe\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "user-vibe-skills",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "From user .vibe",
+          "name": "gamma",
+          "relPath": ".vibe/skills/gamma/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "home",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "home": {
+          ".vibe/skills/gamma/SKILL.md": "---\nname: gamma\ndescription: From user .vibe\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "user-agents-skills",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "From user .agents",
+          "name": "delta",
+          "relPath": ".agents/skills/delta/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "home",
+          ".agents/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "home": {
+          ".agents/skills/delta/SKILL.md": "---\nname: delta\ndescription: From user .agents\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "user-vibe-beats-agents",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Winner from user .vibe",
+          "name": "shared",
+          "relPath": ".vibe/skills/shared/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "home",
+          ".vibe/skills"
+        ],
+        [
+          "home",
+          ".agents/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "home": {
+          ".agents/skills/shared/SKILL.md": "---\nname: shared\ndescription: Loser from user .agents\n---\n\nProbe body.\n",
+          ".vibe/skills/shared/SKILL.md": "---\nname: shared\ndescription: Winner from user .vibe\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "legacy-extensions-root-unread",
+      "customSkillsCount": 0,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "home": {
+          ".vibe/extensions/skills/ghost/SKILL.md": "---\nname: ghost\ndescription: Invented path\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "configured-path",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "From configured",
+          "name": "epsilon",
+          "relPath": "epsilon/SKILL.md",
+          "root": "configured",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "configured",
+          "."
+        ]
+      ],
+      "skillPaths": [
+        "${configured}"
+      ],
+      "symlinks": [],
+      "tree": {
+        "configured": {
+          "epsilon/SKILL.md": "---\nname: epsilon\ndescription: From configured\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "configured-beats-project-beats-user",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Winner from configured",
+          "name": "shared",
+          "relPath": "shared/SKILL.md",
+          "root": "configured",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "configured",
+          "."
+        ],
+        [
+          "project",
+          ".vibe/skills"
+        ],
+        [
+          "home",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [
+        "${configured}"
+      ],
+      "symlinks": [],
+      "tree": {
+        "configured": {
+          "shared/SKILL.md": "---\nname: shared\ndescription: Winner from configured\n---\n\nProbe body.\n"
+        },
+        "home": {
+          ".vibe/skills/shared/SKILL.md": "---\nname: shared\ndescription: Loser from user\n---\n\nProbe body.\n"
+        },
+        "project": {
+          ".vibe/skills/shared/SKILL.md": "---\nname: shared\ndescription: Loser from project\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "project-beats-user",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Winner from project",
+          "name": "shared",
+          "relPath": ".vibe/skills/shared/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ],
+        [
+          "home",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "home": {
+          ".vibe/skills/shared/SKILL.md": "---\nname: shared\ndescription: Loser from user\n---\n\nProbe body.\n"
+        },
+        "project": {
+          ".vibe/skills/shared/SKILL.md": "---\nname: shared\ndescription: Winner from project\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "two-configured-paths-in-order",
+      "customSkillsCount": 2,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Winner from first path",
+          "name": "shared",
+          "relPath": "shared/SKILL.md",
+          "root": "configured",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        },
+        {
+          "description": "Only in second path",
+          "name": "zeta",
+          "relPath": "zeta/SKILL.md",
+          "root": "configured2",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        }
+      ],
+      "searchPaths": [
+        [
+          "configured",
+          "."
+        ],
+        [
+          "configured2",
+          "."
+        ]
+      ],
+      "skillPaths": [
+        "${configured}",
+        "${configured2}"
+      ],
+      "symlinks": [],
+      "tree": {
+        "configured": {
+          "shared/SKILL.md": "---\nname: shared\ndescription: Winner from first path\n---\n\nProbe body.\n"
+        },
+        "configured2": {
+          "shared/SKILL.md": "---\nname: shared\ndescription: Loser from second path\n---\n\nProbe body.\n",
+          "zeta/SKILL.md": "---\nname: zeta\ndescription: Only in second path\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "nonexistent-configured-path",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Still found",
+          "name": "alpha",
+          "relPath": ".vibe/skills/alpha/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [
+        "${configured}/missing"
+      ],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".vibe/skills/alpha/SKILL.md": "---\nname: alpha\ndescription: Still found\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "configured-path-is-a-file",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Still found",
+          "name": "alpha",
+          "relPath": ".vibe/skills/alpha/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [
+        "${configured}/plain.txt"
+      ],
+      "symlinks": [],
+      "tree": {
+        "configured": {
+          "plain.txt": "not a directory\n"
+        },
+        "project": {
+          ".vibe/skills/alpha/SKILL.md": "---\nname: alpha\ndescription: Still found\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "relative-configured-path",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "From relative path",
+          "name": "eta",
+          "relPath": "rel-skills/eta/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          "rel-skills"
+        ]
+      ],
+      "skillPaths": [
+        "./rel-skills"
+      ],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          "rel-skills/eta/SKILL.md": "---\nname: eta\ndescription: From relative path\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "tilde-configured-path",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": "From tilde path",
+          "name": "theta",
+          "relPath": "tilde-skills/theta/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "home",
+          "tilde-skills"
+        ]
+      ],
+      "skillPaths": [
+        "~/tilde-skills"
+      ],
+      "symlinks": [],
+      "tree": {
+        "home": {
+          "tilde-skills/theta/SKILL.md": "---\nname: theta\ndescription: From tilde path\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "symlinked-root-walked-once",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Behind a symlink too",
+          "name": "iota",
+          "relPath": "iota/SKILL.md",
+          "root": "configured",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "configured",
+          "."
+        ]
+      ],
+      "skillPaths": [
+        "${configured}",
+        "${configured}-link"
+      ],
+      "symlinks": [
+        {
+          "link": "configured-link",
+          "target": "configured"
+        }
+      ],
+      "tree": {
+        "configured": {
+          "iota/SKILL.md": "---\nname: iota\ndescription: Behind a symlink too\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "duplicate-name-within-one-root",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": "Same either way",
+          "name": "twin",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".vibe/skills/dir-a/SKILL.md": "---\nname: twin\ndescription: Same either way\n---\n\nProbe body.\n",
+          ".vibe/skills/dir-b/SKILL.md": "---\nname: twin\ndescription: Same either way\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "clutter-ignored",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "The only real one",
+          "name": "alpha",
+          "relPath": ".vibe/skills/alpha/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".vibe/skills/alpha/SKILL.md": "---\nname: alpha\ndescription: The only real one\n---\n\nProbe body.\n",
+          ".vibe/skills/no-manifest/README.md": "not a skill\n",
+          ".vibe/skills/stray-file.md": "just a file\n"
+        }
+      }
+    },
+    {
+      "case": "malformed-skill-becomes-issue",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [
+        {
+          "relPath": ".vibe/skills/broken/SKILL.md",
+          "root": "project"
+        }
+      ],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Still loads",
+          "name": "alpha",
+          "relPath": ".vibe/skills/alpha/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".vibe/skills/alpha/SKILL.md": "---\nname: alpha\ndescription: Still loads\n---\n\nProbe body.\n",
+          ".vibe/skills/broken/SKILL.md": "no frontmatter here\n"
+        }
+      }
+    },
+    {
+      "case": "missing-description-becomes-issue",
+      "customSkillsCount": 0,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [
+        {
+          "relPath": ".vibe/skills/bare/SKILL.md",
+          "root": "project"
+        }
+      ],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".vibe/skills/bare/SKILL.md": "---\nname: bare\n---\n\nBody.\n"
+        }
+      }
+    },
+    {
+      "case": "three-issues-accumulate",
+      "customSkillsCount": 0,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [
+        {
+          "relPath": ".vibe/skills/bad-a/SKILL.md",
+          "root": "project"
+        },
+        {
+          "relPath": ".vibe/skills/bad-b/SKILL.md",
+          "root": "project"
+        },
+        {
+          "relPath": ".vibe/skills/bad-c/SKILL.md",
+          "root": "project"
+        }
+      ],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".vibe/skills/bad-a/SKILL.md": "nope\n",
+          ".vibe/skills/bad-b/SKILL.md": "---\nname: [\n---\n",
+          ".vibe/skills/bad-c/SKILL.md": "---\nname: bad-c\n---\n\nBody.\n"
+        }
+      }
+    },
+    {
+      "case": "builtin-name-reserved",
+      "customSkillsCount": 0,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".vibe/skills/vibe/SKILL.md": "---\nname: vibe\ndescription: Impostor\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "frontmatter-name-wins-over-directory",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Named by frontmatter",
+          "name": "real-name",
+          "relPath": ".vibe/skills/folder-name/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".vibe/skills/folder-name/SKILL.md": "---\nname: real-name\ndescription: Named by frontmatter\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "untrusted-project-not-walked",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": false,
+      "published": [
+        {
+          "description": "Still loads",
+          "name": "gamma",
+          "relPath": ".vibe/skills/gamma/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "home",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "home": {
+          ".vibe/skills/gamma/SKILL.md": "---\nname: gamma\ndescription: Still loads\n---\n\nProbe body.\n"
+        },
+        "project": {
+          ".vibe/skills/alpha/SKILL.md": "---\nname: alpha\ndescription: Should not load\n---\n\nProbe body.\n"
+        }
+      }
+    }
+  ],
+  "filtering": [
+    {
+      "case": "no-filters",
+      "customSkillsCount": 2,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "kept": [
+        "alpha",
+        "beta",
+        "skill-creator",
+        "vibe"
+      ],
+      "skills": [
+        "alpha",
+        "beta"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "enabled-only",
+      "customSkillsCount": 2,
+      "disabledSkills": [],
+      "enabledSkills": [
+        "alpha",
+        "gamma"
+      ],
+      "kept": [
+        "alpha",
+        "gamma"
+      ],
+      "skills": [
+        "alpha",
+        "beta",
+        "gamma"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "disabled-only",
+      "customSkillsCount": 2,
+      "disabledSkills": [
+        "beta"
+      ],
+      "enabledSkills": [],
+      "kept": [
+        "alpha",
+        "gamma",
+        "skill-creator",
+        "vibe"
+      ],
+      "skills": [
+        "alpha",
+        "beta",
+        "gamma"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "enabled-precedence",
+      "customSkillsCount": 1,
+      "disabledSkills": [
+        "alpha"
+      ],
+      "enabledSkills": [
+        "alpha"
+      ],
+      "kept": [
+        "alpha"
+      ],
+      "skills": [
+        "alpha",
+        "beta"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "glob-pattern",
+      "customSkillsCount": 2,
+      "disabledSkills": [],
+      "enabledSkills": [
+        "search-*"
+      ],
+      "kept": [
+        "search-code",
+        "search-docs"
+      ],
+      "skills": [
+        "search-code",
+        "search-docs",
+        "other"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "glob-case-insensitive",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [
+        "SEARCH-*"
+      ],
+      "kept": [
+        "search-code"
+      ],
+      "skills": [
+        "search-code",
+        "other"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "regex-pattern",
+      "customSkillsCount": 2,
+      "disabledSkills": [],
+      "enabledSkills": [
+        "re:skill-v\\d+"
+      ],
+      "kept": [
+        "skill-v1",
+        "skill-v2"
+      ],
+      "skills": [
+        "skill-v1",
+        "skill-v2",
+        "other"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "regex-case-insensitive",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [
+        "re:SKILL-V\\d+"
+      ],
+      "kept": [
+        "skill-v1"
+      ],
+      "skills": [
+        "skill-v1",
+        "other"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "invalid-regex-matches-nothing",
+      "customSkillsCount": 0,
+      "disabledSkills": [],
+      "enabledSkills": [
+        "re:["
+      ],
+      "kept": [],
+      "skills": [
+        "alpha",
+        "beta"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "invalid-regex-disables-nothing",
+      "customSkillsCount": 2,
+      "disabledSkills": [
+        "re:["
+      ],
+      "enabledSkills": [],
+      "kept": [
+        "alpha",
+        "beta",
+        "skill-creator",
+        "vibe"
+      ],
+      "skills": [
+        "alpha",
+        "beta"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "enabled-can-select-a-builtin",
+      "customSkillsCount": 0,
+      "disabledSkills": [],
+      "enabledSkills": [
+        "vibe"
+      ],
+      "kept": [
+        "vibe"
+      ],
+      "skills": [
+        "alpha"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "disabled-can-withhold-a-builtin",
+      "customSkillsCount": 1,
+      "disabledSkills": [
+        "vibe",
+        "skill-creator"
+      ],
+      "enabledSkills": [],
+      "kept": [
+        "alpha"
+      ],
+      "skills": [
+        "alpha"
+      ],
+      "withheldLookupMisses": true
+    },
+    {
+      "case": "blank-patterns-ignored",
+      "customSkillsCount": 2,
+      "disabledSkills": [
+        "",
+        "  "
+      ],
+      "enabledSkills": [],
+      "kept": [
+        "alpha",
+        "beta",
+        "skill-creator",
+        "vibe"
+      ],
+      "skills": [
+        "alpha",
+        "beta"
+      ],
+      "withheldLookupMisses": true
+    }
+  ],
+  "frontmatter": [
+    {
+      "body": "\nBody line.\n",
+      "case": "valid-minimal",
+      "content": "---\nname: probe\ndescription: A probe skill\n---\n\nBody line.\n",
+      "frontmatter": {
+        "description": "A probe skill",
+        "name": "probe"
+      }
+    },
+    {
+      "body": "\nInstructions here.\n",
+      "case": "all-fields-nested-metadata",
+      "content": "---\nname: full-probe\ndescription: A probe with every field\nlicense: MIT\ncompatibility: Requires nothing\nmetadata:\n  display-name: Full Probe\n  default-prompt: run it\nallowed-tools: bash read_file\nuser-invocable: false\n---\n\nInstructions here.\n",
+      "frontmatter": {
+        "allowed-tools": "bash read_file",
+        "compatibility": "Requires nothing",
+        "description": "A probe with every field",
+        "license": "MIT",
+        "metadata": {
+          "default-prompt": "run it",
+          "display-name": "Full Probe"
+        },
+        "name": "full-probe",
+        "user-invocable": false
+      }
+    },
+    {
+      "case": "missing-frontmatter",
+      "content": "Just markdown content without frontmatter\n",
+      "error": "boundary"
+    },
+    {
+      "case": "unclosed-frontmatter",
+      "content": "---\nname: incomplete\ndescription: no closing fence\n",
+      "error": "boundary"
+    },
+    {
+      "case": "invalid-yaml",
+      "content": "---\nname: [broken\ndescription: oops\n---\n\nBody.\n",
+      "error": "yaml"
+    },
+    {
+      "case": "sequence-document",
+      "content": "---\n- item-one\n- item-two\n---\n\nBody.\n",
+      "error": "mapping"
+    },
+    {
+      "case": "scalar-document",
+      "content": "---\njust a scalar\n---\n\nBody.\n",
+      "error": "mapping"
+    },
+    {
+      "body": "\nBody content.\n",
+      "case": "empty-frontmatter",
+      "content": "---\n---\n\nBody content.\n",
+      "frontmatter": {}
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "comment-only-frontmatter",
+      "content": "---\n# nothing but a comment\n---\n\nBody.\n",
+      "frontmatter": {}
+    },
+    {
+      "body": "",
+      "case": "no-body",
+      "content": "---\nname: minimal\ndescription: no body\n---\n",
+      "frontmatter": {
+        "description": "no body",
+        "name": "minimal"
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "leading-bom",
+      "content": "﻿---\nname: bom-probe\ndescription: BOM stripped\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "BOM stripped",
+        "name": "bom-probe"
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "boundary-four-hyphens",
+      "content": "----\nname: probe\ndescription: wide fence\n----\n\nBody.\n",
+      "frontmatter": {
+        "description": "wide fence",
+        "name": "probe"
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "boundary-trailing-whitespace",
+      "content": "---  \nname: probe\ndescription: padded fence\n---\t\n\nBody.\n",
+      "frontmatter": {
+        "description": "padded fence",
+        "name": "probe"
+      }
+    },
+    {
+      "case": "text-before-boundary",
+      "content": "prelude\n---\nname: probe\ndescription: late fence\n---\n\nBody.\n",
+      "error": "boundary"
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "block-sequence-allowed-tools",
+      "content": "---\nname: probe\ndescription: list form\nallowed-tools:\n  - bash\n  - read_file\n---\n\nBody.\n",
+      "frontmatter": {
+        "allowed-tools": [
+          "bash",
+          "read_file"
+        ],
+        "description": "list form",
+        "name": "probe"
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "folded-scalar-description",
+      "content": "---\nname: probe\ndescription: >\n  folded across\n  two lines\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "folded across two lines\n",
+        "name": "probe"
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "literal-scalar-description",
+      "content": "---\nname: probe\ndescription: |\n  literal line one\n  literal line two\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "literal line one\nliteral line two\n",
+        "name": "probe"
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "user-invocable-no",
+      "content": "---\nname: probe\ndescription: d\nuser-invocable: no\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "d",
+        "name": "probe",
+        "user-invocable": false
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "user-invocable-cap-no",
+      "content": "---\nname: probe\ndescription: d\nuser-invocable: No\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "d",
+        "name": "probe",
+        "user-invocable": false
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "user-invocable-off",
+      "content": "---\nname: probe\ndescription: d\nuser-invocable: OFF\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "d",
+        "name": "probe",
+        "user-invocable": false
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "user-invocable-on",
+      "content": "---\nname: probe\ndescription: d\nuser-invocable: on\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "d",
+        "name": "probe",
+        "user-invocable": true
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "user-invocable-y",
+      "content": "---\nname: probe\ndescription: d\nuser-invocable: y\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "d",
+        "name": "probe",
+        "user-invocable": "y"
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "user-invocable-yes",
+      "content": "---\nname: probe\ndescription: d\nuser-invocable: yes\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "d",
+        "name": "probe",
+        "user-invocable": true
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "user-invocable-quoted-no",
+      "content": "---\nname: probe\ndescription: d\nuser-invocable: \"no\"\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "d",
+        "name": "probe",
+        "user-invocable": "no"
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "duplicate-key-last-wins",
+      "content": "---\nname: first\nname: second\ndescription: d\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "d",
+        "name": "second"
+      }
+    },
+    {
+      "body": "\nBody before.\n---\nBody after a fence.\n",
+      "case": "body-keeps-later-fences",
+      "content": "---\nname: probe\ndescription: d\n---\n\nBody before.\n---\nBody after a fence.\n",
+      "frontmatter": {
+        "description": "d",
+        "name": "probe"
+      }
+    },
+    {
+      "body": "\n  line two\n---\n\nBody.\n",
+      "case": "fence-inside-literal-scalar",
+      "content": "---\nname: probe\ndescription: |\n  line one\n---\n  line two\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "line one\n",
+        "name": "probe"
+      }
+    },
+    {
+      "case": "tab-indented-yaml",
+      "content": "---\nname: probe\ndescription:\n\tvalue\n---\n\nBody.\n",
+      "error": "yaml"
+    },
+    {
+      "body": "\nBody.\r\n",
+      "case": "crlf-line-endings",
+      "content": "---\r\nname: probe\r\ndescription: carriage returns\r\n---\r\n\r\nBody.\r\n",
+      "frontmatter": {
+        "description": "carriage returns",
+        "name": "probe"
+      }
+    },
+    {
+      "body": "\nBody.\n",
+      "case": "numeric-scalars-kept",
+      "content": "---\nname: probe\ndescription: d\nmetadata:\n  version: 1.0\n  count: 42\n---\n\nBody.\n",
+      "frontmatter": {
+        "description": "d",
+        "metadata": {
+          "count": 42,
+          "version": 1.0
+        },
+        "name": "probe"
+      }
+    }
+  ],
+  "manifest": [
+    {
+      "alias": "latest",
+      "case": "alias-for-string-version",
+      "defaultVersionApplied": "latest",
+      "version": "latest"
+    },
+    {
+      "alias": null,
+      "case": "alias-for-integer-version",
+      "version": 3
+    },
+    {
+      "case": "upsert-replaces-by-name",
+      "skills": [
+        {
+          "description": "",
+          "name": "a",
+          "skill_id": "x",
+          "version": 2
+        },
+        {
+          "description": "",
+          "name": "b",
+          "skill_id": "y",
+          "version": "latest"
+        }
+      ]
+    },
+    {
+      "case": "remove-by-name",
+      "removedExisting": true,
+      "removedMissing": false,
+      "skills": [
+        {
+          "description": "",
+          "name": "b",
+          "skill_id": "y",
+          "version": "latest"
+        }
+      ]
+    },
+    {
+      "case": "save-toml-shape",
+      "skills": [
+        {
+          "description": "pinned",
+          "name": "grill-me",
+          "skill_id": "uuid-1",
+          "version": 3
+        },
+        {
+          "description": "",
+          "name": "fresh",
+          "skill_id": "uuid-2",
+          "version": "latest"
+        }
+      ],
+      "toml": "skills = [\n    { name = \"grill-me\", skill_id = \"uuid-1\", version = 3, description = \"pinned\" },\n    { name = \"fresh\", skill_id = \"uuid-2\", version = \"latest\", description = \"\" },\n]\n"
+    },
+    {
+      "case": "save-load-roundtrip",
+      "lossless": true,
+      "skills": [
+        {
+          "description": "pinned",
+          "name": "grill-me",
+          "skill_id": "uuid-1",
+          "version": 3
+        },
+        {
+          "description": "",
+          "name": "fresh",
+          "skill_id": "uuid-2",
+          "version": "latest"
+        }
+      ]
+    },
+    {
+      "case": "save-creates-parents",
+      "created": true
+    },
+    {
+      "case": "load-missing-returns-empty",
+      "skills": []
+    },
+    {
+      "case": "load-malformed-returns-empty",
+      "skills": []
+    },
+    {
+      "case": "load-invalid-entry-returns-empty",
+      "skills": [],
+      "toml": "[[skills]]\nname = \"only-a-name\"\n"
+    },
+    {
+      "case": "load-ignores-unknown-keys",
+      "skills": [
+        {
+          "description": "",
+          "name": "a",
+          "skill_id": "x",
+          "version": 2
+        }
+      ],
+      "toml": "[[skills]]\nname = \"a\"\nskill_id = \"x\"\nversion = 2\nsurplus = \"ignored\"\n"
+    },
+    {
+      "case": "global-manifest-under-vibe-home",
+      "relPath": ".vibe/skills.toml"
+    },
+    {
+      "case": "project-paths-dedup-and-drop-global",
+      "paths": [
+        {
+          "relPath": ".vibe/skills.toml",
+          "root": "projectA"
+        },
+        {
+          "relPath": ".vibe/skills.toml",
+          "root": "projectB"
+        }
+      ],
+      "roots": [
+        "home",
+        "projectA",
+        "projectB",
+        "projectA"
+      ]
+    }
+  ],
+  "metadata": [
+    {
+      "accepted": true,
+      "case": "minimal",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "A probe",
+        "license": null,
+        "metadata": {},
+        "name": "probe",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "A probe",
+        "name": "probe"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "all-fields",
+      "fields": {
+        "allowed_tools": [
+          "bash",
+          "read_file"
+        ],
+        "compatibility": "none needed",
+        "description": "Everything set",
+        "license": "MIT",
+        "metadata": {
+          "display-name": "Full Probe"
+        },
+        "name": "full-probe",
+        "user_invocable": false
+      },
+      "frontmatter": {
+        "allowed-tools": [
+          "bash",
+          "read_file"
+        ],
+        "compatibility": "none needed",
+        "description": "Everything set",
+        "license": "MIT",
+        "metadata": {
+          "display-name": "Full Probe"
+        },
+        "name": "full-probe",
+        "user-invocable": false
+      }
+    },
+    {
+      "accepted": true,
+      "case": "allowed-tools-string",
+      "fields": {
+        "allowed_tools": [
+          "bash",
+          "read_file",
+          "grep"
+        ],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "allowed-tools": "bash read_file grep",
+        "description": "d",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "allowed-tools-list",
+      "fields": {
+        "allowed_tools": [
+          "bash",
+          "read_file"
+        ],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "allowed-tools": [
+          "bash",
+          "read_file"
+        ],
+        "description": "d",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "allowed-tools-null",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "allowed-tools": null,
+        "description": "d",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "allowed-tools-empty-string",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "allowed-tools": "",
+        "description": "d",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "allowed-tools-underscore-spelling",
+      "fields": {
+        "allowed_tools": [
+          "bash"
+        ],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "allowed_tools": "bash",
+        "description": "d",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "allowed-tools-both-spellings",
+      "fields": {
+        "allowed_tools": [
+          "bash"
+        ],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "allowed-tools": "bash",
+        "allowed_tools": "grep",
+        "description": "d",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "user-invocable-hyphen",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": false
+      },
+      "frontmatter": {
+        "description": "d",
+        "name": "p",
+        "user-invocable": false
+      }
+    },
+    {
+      "accepted": true,
+      "case": "user-invocable-underscore",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": false
+      },
+      "frontmatter": {
+        "description": "d",
+        "name": "p",
+        "user_invocable": false
+      }
+    },
+    {
+      "accepted": true,
+      "case": "user-invocable-both-spellings",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": false
+      },
+      "frontmatter": {
+        "description": "d",
+        "name": "p",
+        "user-invocable": false,
+        "user_invocable": true
+      }
+    },
+    {
+      "accepted": true,
+      "case": "user-invocable-string-false",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": false
+      },
+      "frontmatter": {
+        "description": "d",
+        "name": "p",
+        "user-invocable": "false"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "user-invocable-string-no",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": false
+      },
+      "frontmatter": {
+        "description": "d",
+        "name": "p",
+        "user-invocable": "no"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "user-invocable-string-junk",
+      "frontmatter": {
+        "description": "d",
+        "name": "p",
+        "user-invocable": "maybe"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "metadata-non-string-values",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {
+          "count": "42",
+          "empty": "None",
+          "flag": "True",
+          "version": "1.0"
+        },
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "metadata": {
+          "count": 42,
+          "empty": null,
+          "flag": true,
+          "version": 1.0
+        },
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "metadata-null",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "metadata": null,
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "metadata-int-keys",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {
+          "1": "one"
+        },
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "metadata": {
+          "1": "one"
+        },
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "extra-key-ignored",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "name": "p",
+        "unknown-key": "ignored"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "name-64-chars",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "description-1024-chars",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "compatibility-500-chars",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "compatibility": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "description": "d",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "license-null",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "license": null,
+        "name": "p"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "name-uppercase",
+      "frontmatter": {
+        "description": "d",
+        "name": "Probe-Skill"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "name-underscore",
+      "frontmatter": {
+        "description": "d",
+        "name": "probe_skill"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "name-consecutive-hyphens",
+      "frontmatter": {
+        "description": "d",
+        "name": "probe--skill"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "name-leading-hyphen",
+      "frontmatter": {
+        "description": "d",
+        "name": "-probe"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "name-trailing-hyphen",
+      "frontmatter": {
+        "description": "d",
+        "name": "probe-"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "name-65-chars",
+      "frontmatter": {
+        "description": "d",
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "name-empty",
+      "frontmatter": {
+        "description": "d",
+        "name": ""
+      }
+    },
+    {
+      "accepted": false,
+      "case": "name-missing",
+      "frontmatter": {
+        "description": "d"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "name-integer",
+      "frontmatter": {
+        "description": "d",
+        "name": 5
+      }
+    },
+    {
+      "accepted": false,
+      "case": "description-missing",
+      "frontmatter": {
+        "name": "p"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "description-empty",
+      "frontmatter": {
+        "description": "",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "description-1025-chars",
+      "frontmatter": {
+        "description": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "compatibility-501-chars",
+      "frontmatter": {
+        "compatibility": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "description": "d",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "license-integer",
+      "frontmatter": {
+        "description": "d",
+        "license": 7,
+        "name": "p"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "metadata-list",
+      "frontmatter": {
+        "description": "d",
+        "metadata": [
+          "not",
+          "a",
+          "mapping"
+        ],
+        "name": "p"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "allowed-tools-integer",
+      "frontmatter": {
+        "allowed-tools": 3,
+        "description": "d",
+        "name": "p"
+      }
+    }
+  ],
+  "note": "Captured from the pinned reference by scripts/parity/skills.py. Scenario-supplied values, field names, verdicts, counts and digests are observations; no reference-authored prose is recorded. Builtin bodies and descriptions appear as length plus SHA-256 only, and the registry store's fallback description is masked as {fallbackDescription}. Normalizations: published skill lists are sorted by name because the reference walks directories in filesystem order; the winner of a duplicate name within a single root is filesystem-order dependent, so its path is recorded null; symlinked roots are mapped to the label of the directory they resolve to.",
+  "projection": [
+    {
+      "case": "local-defaults",
+      "skill": {
+        "description": "A probe",
+        "name": "probe",
+        "prompt": "Body."
+      },
+      "summary": {
+        "description": "A probe",
+        "name": "probe",
+        "prompt": "Body.",
+        "source": "local",
+        "userInvocable": true
+      }
+    },
+    {
+      "case": "local-not-invocable",
+      "skill": {
+        "description": "Model only",
+        "name": "hidden",
+        "prompt": "Body.",
+        "user_invocable": false
+      },
+      "summary": {
+        "description": "Model only",
+        "name": "hidden",
+        "prompt": "Body.",
+        "source": "local",
+        "userInvocable": false
+      }
+    },
+    {
+      "case": "builtin-shape",
+      "skill": {
+        "description": "Builtin shape",
+        "name": "inline",
+        "prompt": "Inline prompt.",
+        "source": "builtin",
+        "user_invocable": false
+      },
+      "summary": {
+        "description": "Builtin shape",
+        "name": "inline",
+        "prompt": "Inline prompt.",
+        "source": "builtin",
+        "userInvocable": false
+      }
+    },
+    {
+      "case": "registry-source",
+      "skill": {
+        "description": "From the registry",
+        "name": "remote",
+        "prompt": "Body.",
+        "source": "registry"
+      },
+      "summary": {
+        "description": "From the registry",
+        "name": "remote",
+        "prompt": "Body.",
+        "source": "registry",
+        "userInvocable": true
+      }
+    },
+    {
+      "case": "unicode-fields",
+      "skill": {
+        "description": "Précis à jour",
+        "name": "accents",
+        "prompt": "Corps du texte."
+      },
+      "summary": {
+        "description": "Précis à jour",
+        "name": "accents",
+        "prompt": "Corps du texte.",
+        "source": "local",
+        "userInvocable": true
+      }
+    },
+    {
+      "case": "empty-prompt",
+      "skill": {
+        "description": "No body",
+        "name": "empty",
+        "prompt": ""
+      },
+      "summary": {
+        "description": "No body",
+        "name": "empty",
+        "prompt": "",
+        "source": "local",
+        "userInvocable": true
+      }
+    },
+    {
+      "case": "rich-model-fields-do-not-reach-the-summary",
+      "skill": {
+        "allowed_tools": [
+          "bash"
+        ],
+        "compatibility": "anything",
+        "description": "Carries every model field",
+        "license": "MIT",
+        "metadata": {
+          "display-name": "Rich"
+        },
+        "name": "rich",
+        "prompt": "Body."
+      },
+      "summary": {
+        "description": "Carries every model field",
+        "name": "rich",
+        "prompt": "Body.",
+        "source": "local",
+        "userInvocable": true
+      }
+    },
+    {
+      "case": "multiline-prompt",
+      "skill": {
+        "description": "d",
+        "name": "long",
+        "prompt": "line one\nline two\n"
+      },
+      "summary": {
+        "description": "d",
+        "name": "long",
+        "prompt": "line one\nline two\n",
+        "source": "local",
+        "userInvocable": true
+      }
+    }
+  ],
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+  },
+  "schemaVersion": 1,
+  "store": {
+    "cases": [
+      {
+        "case": "unsafe-id-empty",
+        "error": "unsafeId",
+        "id": "",
+        "op": "skillDir",
+        "version": 1
+      },
+      {
+        "case": "unsafe-id-dot",
+        "error": "unsafeId",
+        "id": ".",
+        "op": "skillDir",
+        "version": 1
+      },
+      {
+        "case": "unsafe-id-dotdot",
+        "error": "unsafeId",
+        "id": "..",
+        "op": "skillDir",
+        "version": 1
+      },
+      {
+        "case": "unsafe-id-traversal",
+        "error": "unsafeId",
+        "id": "../escape",
+        "op": "skillDir",
+        "version": 1
+      },
+      {
+        "case": "unsafe-id-separator",
+        "error": "unsafeId",
+        "id": "a/b",
+        "op": "skillDir",
+        "version": 1
+      },
+      {
+        "case": "unsafe-id-inner-traversal",
+        "error": "unsafeId",
+        "id": "foo/../bar",
+        "op": "skillDir",
+        "version": 1
+      },
+      {
+        "case": "safe-id",
+        "id": "ok",
+        "op": "skillDir",
+        "relPath": "ok/3",
+        "version": 3
+      },
+      {
+        "case": "materialize-basic",
+        "item": {
+          "body": "# Hi",
+          "description": "does X",
+          "skillId": "abc",
+          "version": 1
+        },
+        "leftoverEntries": [],
+        "name": "my-skill",
+        "op": "materialize",
+        "outcome": "stored",
+        "tree": [
+          {
+            "content": "---\nname: my-skill\ndescription: does X\nmetadata:\n  source: ai-registry\n  skill_id: abc\n  version: '1'\n---\n\n# Hi\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          }
+        ]
+      },
+      {
+        "case": "materialize-fallback-description",
+        "item": {
+          "body": "# Hi",
+          "skillId": "nod",
+          "version": 1
+        },
+        "leftoverEntries": [],
+        "name": "nameless",
+        "op": "materialize",
+        "outcome": "stored",
+        "tree": [
+          {
+            "content": "---\nname: nameless\ndescription: {fallbackDescription}\nmetadata:\n  source: ai-registry\n  skill_id: nod\n  version: '1'\n---\n\n# Hi\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          }
+        ]
+      },
+      {
+        "case": "materialize-empty-body",
+        "item": {
+          "body": "   ",
+          "skillId": "emp",
+          "version": 1
+        },
+        "leftoverEntries": [],
+        "name": "empty",
+        "op": "materialize",
+        "outcome": "skipped",
+        "tree": null
+      },
+      {
+        "case": "empty-body-drops-existing-cache",
+        "item": {
+          "body": "  ",
+          "skillId": "emp",
+          "version": 1
+        },
+        "leftoverEntries": [],
+        "name": "empty",
+        "op": "materialize",
+        "outcome": "skipped",
+        "prior": [
+          {
+            "item": {
+              "body": "# was here",
+              "skillId": "emp",
+              "version": 1
+            },
+            "name": "empty"
+          }
+        ],
+        "tree": null
+      },
+      {
+        "case": "strips-embedded-frontmatter",
+        "item": {
+          "body": "---\nname: ignored\ndescription: ignored\n---\n\n# Real",
+          "description": "kept",
+          "skillId": "fm",
+          "version": 1
+        },
+        "leftoverEntries": [],
+        "name": "skill-one",
+        "op": "materialize",
+        "outcome": "stored",
+        "tree": [
+          {
+            "content": "---\nname: skill-one\ndescription: kept\nmetadata:\n  source: ai-registry\n  skill_id: fm\n  version: '1'\n---\n\n# Real\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          }
+        ]
+      },
+      {
+        "case": "assets-and-exec-bit",
+        "item": {
+          "assets": [
+            {
+              "path": "ref/notes.md",
+              "text": "n"
+            },
+            {
+              "base64": "IyEvYmluL3NoCg==",
+              "executable": true,
+              "path": "bin/run"
+            }
+          ],
+          "body": "# Hi",
+          "description": "with assets",
+          "skillId": "tool",
+          "version": 1
+        },
+        "leftoverEntries": [],
+        "name": "tooling",
+        "op": "materialize",
+        "outcome": "stored",
+        "tree": [
+          {
+            "content": "---\nname: tooling\ndescription: with assets\nmetadata:\n  source: ai-registry\n  skill_id: tool\n  version: '1'\n---\n\n# Hi\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          },
+          {
+            "content": "#!/bin/sh\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": true
+            },
+            "path": "bin/run"
+          },
+          {
+            "content": "n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "ref/notes.md"
+          }
+        ]
+      },
+      {
+        "case": "unsafe-assets-skipped",
+        "item": {
+          "assets": [
+            {
+              "path": "../escape.txt",
+              "text": "no"
+            },
+            {
+              "path": "/absolute.txt",
+              "text": "no"
+            },
+            {
+              "path": ".",
+              "text": "no"
+            },
+            {
+              "path": "sub/../SKILL.md",
+              "text": "PWNED"
+            },
+            {
+              "path": "SKILLS.MD",
+              "text": "PWNED"
+            },
+            {
+              "path": "nested/SKILL.md",
+              "text": "allowed deeper"
+            },
+            {
+              "base64": "!!not-base64!!",
+              "path": "undecodable.bin"
+            },
+            {
+              "path": "kept.md",
+              "text": "kept"
+            }
+          ],
+          "body": "# real",
+          "description": "d",
+          "skillId": "safe",
+          "version": 1
+        },
+        "leftoverEntries": [],
+        "name": "safe",
+        "op": "materialize",
+        "outcome": "stored",
+        "tree": [
+          {
+            "content": "---\nname: safe\ndescription: d\nmetadata:\n  source: ai-registry\n  skill_id: safe\n  version: '1'\n---\n\n# real\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          },
+          {
+            "content": "kept",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "kept.md"
+          },
+          {
+            "content": "allowed deeper",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "nested/SKILL.md"
+          }
+        ]
+      },
+      {
+        "case": "rematerialize-drops-stale-assets",
+        "item": {
+          "assets": [
+            {
+              "path": "keep.md",
+              "text": "k"
+            }
+          ],
+          "body": "# v1 again",
+          "description": "d",
+          "skillId": "re",
+          "version": 1
+        },
+        "leftoverEntries": [],
+        "name": "re",
+        "op": "materialize",
+        "outcome": "stored",
+        "prior": [
+          {
+            "item": {
+              "assets": [
+                {
+                  "path": "keep.md",
+                  "text": "k"
+                },
+                {
+                  "path": "old.md",
+                  "text": "o"
+                }
+              ],
+              "body": "# v1",
+              "description": "d",
+              "skillId": "re",
+              "version": 1
+            },
+            "name": "re"
+          }
+        ],
+        "tree": [
+          {
+            "content": "---\nname: re\ndescription: d\nmetadata:\n  source: ai-registry\n  skill_id: re\n  version: '1'\n---\n\n# v1 again\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          },
+          {
+            "content": "k",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "keep.md"
+          }
+        ]
+      },
+      {
+        "case": "failed-write-preserves-previous",
+        "failWrite": true,
+        "item": {
+          "body": "# new",
+          "description": "d",
+          "skillId": "pre",
+          "version": 1
+        },
+        "leftoverEntries": [],
+        "name": "pre",
+        "op": "materialize",
+        "outcome": "raised",
+        "prior": [
+          {
+            "item": {
+              "body": "# good",
+              "description": "d",
+              "skillId": "pre",
+              "version": 1
+            },
+            "name": "pre"
+          }
+        ],
+        "tree": [
+          {
+            "content": "---\nname: pre\ndescription: d\nmetadata:\n  source: ai-registry\n  skill_id: pre\n  version: '1'\n---\n\n# good\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          }
+        ]
+      },
+      {
+        "case": "latest-materialized",
+        "id": "v",
+        "latest": 3,
+        "op": "latestMaterialized",
+        "prior": [
+          {
+            "item": {
+              "body": "# one",
+              "skillId": "v",
+              "version": 1
+            },
+            "name": "v"
+          },
+          {
+            "item": {
+              "body": "# three",
+              "skillId": "v",
+              "version": 3
+            },
+            "name": "v"
+          }
+        ]
+      },
+      {
+        "case": "latest-materialized-missing",
+        "id": "none",
+        "latest": null,
+        "op": "latestMaterialized"
+      },
+      {
+        "case": "export-local",
+        "id": "exp",
+        "op": "exportLocal",
+        "prior": [
+          {
+            "item": {
+              "assets": [
+                {
+                  "path": "notes.md",
+                  "text": "n"
+                }
+              ],
+              "body": "# Exported",
+              "description": "shipped out",
+              "metadataName": "exported",
+              "skillId": "exp",
+              "version": 2
+            },
+            "name": "exported"
+          }
+        ],
+        "tree": [
+          {
+            "content": "---\nname: exported\ndescription: shipped out\n---\n\n# Exported\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          },
+          {
+            "content": "n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "notes.md"
+          }
+        ],
+        "version": 2
+      },
+      {
+        "active": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "case": "prune-keeps-active",
+        "op": "prune",
+        "prior": [
+          {
+            "item": {
+              "body": "# a1",
+              "skillId": "a",
+              "version": 1
+            },
+            "name": "a"
+          },
+          {
+            "item": {
+              "body": "# a2",
+              "skillId": "a",
+              "version": 2
+            },
+            "name": "a"
+          },
+          {
+            "item": {
+              "body": "# b1",
+              "skillId": "b",
+              "version": 1
+            },
+            "name": "b"
+          }
+        ],
+        "surviving": [
+          "a/2/SKILL.md"
+        ]
+      }
+    ],
+    "fallbackDescription": {
+      "digest": "c0c0500ca576afd46f21fb0aff5cb6a6c2c2966d9e7950cffcbf952eae7a4cbd",
+      "length": 48
+    }
+  }
+}
