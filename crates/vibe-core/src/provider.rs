@@ -808,7 +808,7 @@ fn reasoning_message(message: &ModelMessage) -> Result<Value, ProviderError> {
 fn chat_message(message: &ModelMessage) -> Result<Value, ProviderError> {
     match message {
         ModelMessage::System { content } => Ok(json!({"role": "system", "content": content})),
-        ModelMessage::User { content } => Ok(json!({"role": "user", "content": content})),
+        ModelMessage::User { content, .. } => Ok(json!({"role": "user", "content": content})),
         ModelMessage::Assistant {
             content,
             reasoning,
@@ -889,7 +889,7 @@ fn build_responses_request(model: &str, input: &ProviderInput) -> Result<Value, 
             ModelMessage::System { content } => {
                 messages.push(json!({"role": "system", "content": content}));
             }
-            ModelMessage::User { content } => {
+            ModelMessage::User { content, .. } => {
                 messages.push(json!({"role": "user", "content": content}));
             }
             ModelMessage::Assistant {
@@ -1006,7 +1006,7 @@ fn build_anthropic_request(
     for message in &input.messages {
         match message {
             ModelMessage::System { content } => system.push(content.clone()),
-            ModelMessage::User { content } => messages.push(json!({
+            ModelMessage::User { content, .. } => messages.push(json!({
                 "role": "user",
                 "content": [{"type": "text", "text": content}],
             })),
@@ -1699,9 +1699,7 @@ mod tests {
                 ModelMessage::System {
                     content: "system".to_owned(),
                 },
-                ModelMessage::User {
-                    content: "hello".to_owned(),
-                },
+                ModelMessage::user("hello".to_owned()),
             ],
             stream: true,
             images: Vec::new(),

@@ -2932,7 +2932,7 @@ impl ProviderSessionCompactor {
             prompt.push_str(extra_instructions.trim());
         }
         let mut input_messages = messages.to_vec();
-        input_messages.push(ModelMessage::User { content: prompt });
+        input_messages.push(ModelMessage::user(prompt));
         let response = self
             .provider
             .complete(&ProviderInput {
@@ -2974,9 +2974,9 @@ impl ProviderSessionCompactor {
             .cloned()
             .into_iter()
             .collect::<Vec<_>>();
-        compacted.push(ModelMessage::User {
-            content: format!("[Conversation summary]\n{summary}"),
-        });
+        compacted.push(ModelMessage::user(format!(
+            "[Conversation summary]\n{summary}"
+        )));
         Ok(CompactionResult {
             new_session_id,
             summary,
@@ -3359,16 +3359,14 @@ impl LiveTurnDriver {
             input.tools = session_tools.definitions()?;
             let baseline = session_stats(&metadata);
             if let Some(context) = pending_context.take() {
-                input.messages.extend(
-                    context
-                        .into_iter()
-                        .map(|content| ModelMessage::User { content }),
-                );
+                input
+                    .messages
+                    .extend(context.into_iter().map(ModelMessage::user));
             }
             input.messages.extend(
                 resource_contexts(reservation)
                     .into_iter()
-                    .map(|content| ModelMessage::User { content }),
+                    .map(ModelMessage::user),
             );
             ConversationEngine::new(Arc::clone(&self.provider))
                 .with_tools(session_tools.clone())
@@ -3389,16 +3387,14 @@ impl LiveTurnDriver {
         } else {
             input.tools = session_tools.definitions()?;
             if let Some(context) = pending_context.take() {
-                input.messages.extend(
-                    context
-                        .into_iter()
-                        .map(|content| ModelMessage::User { content }),
-                );
+                input
+                    .messages
+                    .extend(context.into_iter().map(ModelMessage::user));
             }
             input.messages.extend(
                 resource_contexts(reservation)
                     .into_iter()
-                    .map(|content| ModelMessage::User { content }),
+                    .map(ModelMessage::user),
             );
             ConversationEngine::new(Arc::clone(&self.provider))
                 .with_tools(session_tools)
@@ -3990,9 +3986,7 @@ impl TurnDriver for EchoTurnDriver {
                 events,
                 snapshot: reducer.state().clone(),
                 messages: vec![
-                    ModelMessage::User {
-                        content: reservation.prompt.clone(),
-                    },
+                    ModelMessage::user(reservation.prompt.clone()),
                     ModelMessage::Assistant {
                         content: self.response.clone(),
                         reasoning: None,
@@ -4340,9 +4334,7 @@ impl SamplingHandler for ProviderSamplingHandler {
                         SamplingRole::System => ModelMessage::System {
                             content: message.content,
                         },
-                        SamplingRole::User => ModelMessage::User {
-                            content: message.content,
-                        },
+                        SamplingRole::User => ModelMessage::user(message.content),
                         SamplingRole::Assistant => ModelMessage::Assistant {
                             content: message.content,
                             reasoning: None,
@@ -5209,9 +5201,7 @@ command = "/must-not-run"
                 ModelMessage::System {
                     content: "be brief".to_owned(),
                 },
-                ModelMessage::User {
-                    content: "ping".to_owned(),
-                },
+                ModelMessage::user("ping".to_owned()),
                 ModelMessage::Assistant {
                     content: "pong".to_owned(),
                     reasoning: None,
@@ -6005,9 +5995,7 @@ command = "/must-not-run"
         store
             .append_message(
                 &mut metadata,
-                &ModelMessage::User {
-                    content: "prior question".to_owned(),
-                },
+                &ModelMessage::user("prior question".to_owned()),
                 3,
             )
             .expect("prior message persists");
@@ -6070,7 +6058,7 @@ command = "/must-not-run"
         ));
         assert!(seen.iter().any(|message| matches!(
             message,
-            ModelMessage::User { content } if content == "prior question"
+            ModelMessage::User { content, .. } if content == "prior question"
         )));
         drop(seen);
         let persisted = store.load("session-resume").expect("extended transcript");
@@ -6132,7 +6120,7 @@ command = "/must-not-run"
         assert!(compacted.messages.iter().any(|message| {
             matches!(
                 message,
-                ModelMessage::User { content }
+                ModelMessage::User { content, .. }
                     if content.contains("[Conversation summary]")
                         && content.contains("resumed answer")
             )
@@ -6144,7 +6132,7 @@ command = "/must-not-run"
         assert!(seen.lock().expect("provider input").iter().any(|message| {
             matches!(
                 message,
-                ModelMessage::User { content } if content.contains("Keep exact file paths")
+                ModelMessage::User { content, .. } if content.contains("Keep exact file paths")
             )
         }));
     }

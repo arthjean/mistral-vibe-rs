@@ -6209,9 +6209,7 @@ mod tests {
             store
                 .append_message(
                     &mut metadata,
-                    &ModelMessage::User {
-                        content: content.to_owned(),
-                    },
+                    &ModelMessage::user(content.to_owned()),
                     timestamp,
                 )
                 .expect("user message");
@@ -6258,9 +6256,7 @@ mod tests {
         store
             .append_message(
                 &mut metadata,
-                &ModelMessage::User {
-                    content: "prior live turn".to_owned(),
-                },
+                &ModelMessage::user("prior live turn".to_owned()),
                 5,
             )
             .expect("persist first live user message");
@@ -6315,9 +6311,7 @@ mod tests {
         store
             .append_message(
                 &mut metadata,
-                &ModelMessage::User {
-                    content: "restore live target".to_owned(),
-                },
+                &ModelMessage::user("restore live target".to_owned()),
                 7,
             )
             .expect("persist checkpoint user message");
@@ -6474,9 +6468,7 @@ mod tests {
             store
                 .append_message(
                     &mut metadata,
-                    &ModelMessage::User {
-                        content: content.to_owned(),
-                    },
+                    &ModelMessage::user(content.to_owned()),
                     timestamp,
                 )
                 .expect("user message");
@@ -6616,9 +6608,7 @@ mod tests {
         store
             .append_message(
                 &mut metadata,
-                &ModelMessage::User {
-                    content: "restore target".to_owned(),
-                },
+                &ModelMessage::user("restore target".to_owned()),
                 2,
             )
             .expect("user message");
@@ -8663,12 +8653,7 @@ tool_timeout_sec = 2
                     content: "private system".to_owned(),
                 },
             ),
-            (
-                12,
-                ModelMessage::User {
-                    content: "older question".to_owned(),
-                },
-            ),
+            (12, ModelMessage::user("older question".to_owned())),
             (
                 13,
                 ModelMessage::Assistant {
@@ -8679,12 +8664,7 @@ tool_timeout_sec = 2
                     tool_calls: Vec::new(),
                 },
             ),
-            (
-                14,
-                ModelMessage::User {
-                    content: "latest question".to_owned(),
-                },
-            ),
+            (14, ModelMessage::user("latest question".to_owned())),
             (
                 15,
                 ModelMessage::Assistant {

@@ -1732,9 +1732,7 @@ mod tests {
     use super::*;
 
     fn user(content: &str) -> ModelMessage {
-        ModelMessage::User {
-            content: content.to_owned(),
-        }
+        ModelMessage::user(content.to_owned())
     }
 
     #[test]

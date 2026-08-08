@@ -442,6 +442,16 @@ pub enum ModelMessage {
     },
     User {
         content: String,
+        /// Whether the harness wrote this turn rather than the operator.
+        ///
+        /// The reference carries the same flag on every message and compaction
+        /// reads it twice: an injected turn is not preserved through a
+        /// compaction, and the envelope compaction writes is itself injected,
+        /// which is what lets a second compaction tell its own envelope from a
+        /// real turn. It defaults on read, so a transcript persisted before the
+        /// flag existed loads as operator-authored, which is what it was.
+        #[serde(default)]
+        injected: bool,
     },
     Assistant {
         content: String,
@@ -459,6 +469,52 @@ pub enum ModelMessage {
         content: String,
         is_error: bool,
     },
+}
+
+impl ModelMessage {
+    /// A user turn the operator wrote.
+    #[must_use]
+    pub fn user(content: impl Into<String>) -> Self {
+        Self::User {
+            content: content.into(),
+            injected: false,
+        }
+    }
+
+    /// A user turn the harness wrote: a policy injection, or the envelope a
+    /// compaction leaves behind.
+    #[must_use]
+    pub fn injected_user(content: impl Into<String>) -> Self {
+        Self::User {
+            content: content.into(),
+            injected: true,
+        }
+    }
+
+    /// The text this message carries, which every variant has.
+    #[must_use]
+    pub fn content(&self) -> &str {
+        match self {
+            Self::System { content }
+            | Self::User { content, .. }
+            | Self::Assistant { content, .. }
+            | Self::Tool { content, .. } => content,
+        }
+    }
+
+    /// Whether this is a user turn, which is where a round begins.
+    #[must_use]
+    pub fn is_user(&self) -> bool {
+        matches!(self, Self::User { .. })
+    }
+
+    /// Whether the harness wrote this message. Only a user turn can be
+    /// injected; every other role is authored by the model or the tool that
+    /// answered.
+    #[must_use]
+    pub fn is_injected(&self) -> bool {
+        matches!(self, Self::User { injected: true, .. })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

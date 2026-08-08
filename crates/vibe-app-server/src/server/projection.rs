@@ -60,7 +60,7 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
                 session.persisted.as_ref()?.messages.iter().rev().find_map(
                     |message| match message {
                         vibe_core::events::ModelMessage::System { .. } => None,
-                        vibe_core::events::ModelMessage::User { content }
+                        vibe_core::events::ModelMessage::User { content, .. }
                         | vibe_core::events::ModelMessage::Assistant { content, .. }
                         | vibe_core::events::ModelMessage::Tool { content, .. } => {
                             Some(content.clone())
@@ -135,7 +135,7 @@ pub(super) fn persisted_projection(
     for (index, message) in hydrated.messages.iter().enumerate() {
         match message {
             ModelMessage::System { .. } => {}
-            ModelMessage::User { content } => history.push(PublicHistoryEntry::Message {
+            ModelMessage::User { content, .. } => history.push(PublicHistoryEntry::Message {
                 metadata: metadata(index, "user"),
                 role: PublicMessageRole::User,
                 content: vec![PublicContentBlock::Text {

@@ -1307,7 +1307,7 @@ impl Release3Service {
             .messages
             .get(keep_messages)
             .and_then(|message| match message {
-                ModelMessage::User { content } => Some(content.clone()),
+                ModelMessage::User { content, .. } => Some(content.clone()),
                 _ => None,
             })
             .unwrap_or_default();
@@ -2961,9 +2961,7 @@ mod tests {
             .create_runtime_session(session_id, &working_directory, 1)
             .expect("session");
         for (offset, message) in [
-            ModelMessage::User {
-                content: "first question".to_owned(),
-            },
+            ModelMessage::user("first question".to_owned()),
             ModelMessage::Assistant {
                 content: "first answer".to_owned(),
                 reasoning: None,
@@ -2971,9 +2969,7 @@ mod tests {
                 reasoning_state: Vec::new(),
                 tool_calls: Vec::new(),
             },
-            ModelMessage::User {
-                content: "edit this question".to_owned(),
-            },
+            ModelMessage::user("edit this question".to_owned()),
             ModelMessage::Assistant {
                 content: "second answer".to_owned(),
                 reasoning: None,
@@ -3134,13 +3130,7 @@ tool_timeout_sec = 2
             .expect("create");
         service
             .store
-            .append_message(
-                &mut metadata,
-                &ModelMessage::User {
-                    content: "hello".to_owned(),
-                },
-                2,
-            )
+            .append_message(&mut metadata, &ModelMessage::user("hello".to_owned()), 2)
             .expect("append");
         let fork = service
             .dispatch(

@@ -351,7 +351,7 @@ fn session_preview(store: &SessionStore, session_id: &str) -> String {
                 .messages
                 .into_iter()
                 .find_map(|message| match message {
-                    ModelMessage::User { content } if !content.is_empty() => {
+                    ModelMessage::User { content, .. } if !content.is_empty() => {
                         Some(content.chars().take(160).collect())
                     }
                     _ => None,
@@ -522,9 +522,7 @@ mod tests {
         store
             .append_message(
                 &mut metadata,
-                &ModelMessage::User {
-                    content: "first request".to_owned(),
-                },
+                &ModelMessage::user("first request".to_owned()),
                 3,
             )
             .expect("user message");

@@ -524,9 +524,7 @@ fn seed_session(vibe_home: &Path, workspace: &Path, id: &str, marker: &str, time
     store
         .append_message(
             &mut metadata,
-            &ModelMessage::User {
-                content: marker.to_owned(),
-            },
+            &ModelMessage::user(marker.to_owned()),
             timestamp + 1,
         )
         .expect("saved user message");

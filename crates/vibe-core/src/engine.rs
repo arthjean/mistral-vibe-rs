@@ -683,7 +683,7 @@ where
         recorder.emit(EngineEvent::UserMessage {
             content: prompt.clone(),
         })?;
-        messages.push(ModelMessage::User { content: prompt });
+        messages.push(ModelMessage::user(prompt));
         recorder.emit(EngineEvent::Title {
             title: title_from_messages(&messages),
         })?;
@@ -740,7 +740,7 @@ where
                             content: content.clone(),
                             as_message: false,
                         })?;
-                        messages.push(ModelMessage::User { content });
+                        messages.push(ModelMessage::injected_user(content));
                     }
                 }
                 MiddlewareAction::Continue => {}
@@ -891,7 +891,7 @@ where
                     recorder.emit(EngineEvent::UserSteer {
                         content: content.clone(),
                     })?;
-                    messages.push(ModelMessage::User { content });
+                    messages.push(ModelMessage::user(content));
                 }
                 TurnControl::InjectContext {
                     content,
@@ -901,7 +901,15 @@ where
                         content: content.clone(),
                         as_message,
                     })?;
-                    messages.push(ModelMessage::User { content });
+                    // The reference appends a real user turn when the caller
+                    // asks for one and marks the message injected otherwise
+                    // (`vibe/core/agent_loop/_loop.py:1104`), which is what
+                    // decides whether a compaction preserves it.
+                    messages.push(if as_message {
+                        ModelMessage::user(content)
+                    } else {
+                        ModelMessage::injected_user(content)
+                    });
                 }
                 TurnControl::ResolveCallback {
                     callback_id,
@@ -934,9 +942,7 @@ where
                     // clearing drops what was said, and the continuation is the
                     // only instruction the next request carries.
                     messages.retain(|message| matches!(message, ModelMessage::System { .. }));
-                    messages.push(ModelMessage::User {
-                        content: continuation,
-                    });
+                    messages.push(ModelMessage::user(continuation));
                     recorder.emit(EngineEvent::SessionHandoff {
                         from_session_id,
                         to_session_id,
@@ -1357,7 +1363,7 @@ fn title_from_messages(messages: &[ModelMessage]) -> String {
         .iter()
         .rev()
         .find_map(|message| match message {
-            ModelMessage::User { content } => Some(content),
+            ModelMessage::User { content, .. } => Some(content),
             _ => None,
         })
         .map(|content| {
@@ -1935,9 +1941,7 @@ mod tests {
                 ModelMessage::System {
                     content: "system".to_owned(),
                 },
-                ModelMessage::User {
-                    content: "Plan approved. Switch to code mode.".to_owned(),
-                },
+                ModelMessage::user("Plan approved. Switch to code mode.".to_owned()),
                 ModelMessage::Assistant {
                     content: "implementing".to_owned(),
                     reasoning: None,
@@ -2304,12 +2308,8 @@ mod tests {
         let system = ModelMessage::System {
             content: "system".to_owned(),
         };
-        let first = ModelMessage::User {
-            content: "first".to_owned(),
-        };
-        let second = ModelMessage::User {
-            content: "second".to_owned(),
-        };
+        let first = ModelMessage::user("first".to_owned());
+        let second = ModelMessage::user("second".to_owned());
 
         sink.persist(&[system.clone(), first.clone()], &snapshot)
             .await
@@ -2324,7 +2324,7 @@ mod tests {
                 .messages
                 .iter()
                 .filter_map(|message| match message {
-                    ModelMessage::User { content } => Some(content.as_str()),
+                    ModelMessage::User { content, .. } => Some(content.as_str()),
                     _ => None,
                 })
                 .collect::<Vec<_>>(),
@@ -2339,7 +2339,7 @@ mod tests {
         assert_eq!(stored.messages.len(), 1);
         assert!(matches!(
             stored.messages.first(),
-            Some(ModelMessage::User { content }) if content == "first"
+            Some(ModelMessage::User { content, .. }) if content == "first"
         ));
     }
 
@@ -2484,7 +2484,7 @@ mod tests {
         assert!(
             requested[0].iter().any(|message| matches!(
                 message,
-                ModelMessage::User { content } if content == "half the window"
+                ModelMessage::User { content, .. } if content == "half the window"
             )),
             "the request that follows the injection carries it: {requested:?}"
         );
@@ -2612,11 +2612,6 @@ mod tests {
         let message: ModelMessage =
             serde_json::from_value(json!({"role": "user", "content": "hello"}))
                 .expect("a stored user message still deserializes");
-        assert_eq!(
-            message,
-            ModelMessage::User {
-                content: "hello".to_owned()
-            }
-        );
+        assert_eq!(message, ModelMessage::user("hello".to_owned()));
     }
 }

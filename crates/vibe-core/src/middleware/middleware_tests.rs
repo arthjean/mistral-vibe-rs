@@ -94,9 +94,7 @@ fn the_vocabulary_declares_exactly_the_reference_variants() {
     };
     let carried = stats(2, 10, 5, 15);
     let context = ConversationContext {
-        messages: &[ModelMessage::User {
-            content: "hello".to_owned(),
-        }],
+        messages: &[ModelMessage::user("hello".to_owned())],
         stats: &carried,
         price_micros: 7,
         compaction: &compaction,
