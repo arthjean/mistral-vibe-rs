@@ -6,6 +6,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
+pub mod library;
+
+#[cfg(test)]
+mod library_tests;
+
 use crate::images::{ImageFormat, MAX_IMAGE_BYTES, MAX_IMAGES_PER_MESSAGE};
 
 const MAX_TEXT_RESOURCE_BYTES: u64 = 2 * 1024 * 1024;

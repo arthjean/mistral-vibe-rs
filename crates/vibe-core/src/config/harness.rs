@@ -16,6 +16,10 @@ use std::path::{Component, Path, PathBuf};
 
 use super::{CONFIG_FILE, ConfigPaths, ConfigTarget, PROJECT_DIRECTORY};
 
+/// The directory under a project root, and under the vibe home, that holds
+/// prompt overrides.
+const PROMPTS_DIRECTORY: &str = "prompts";
+
 /// A configuration file family the process is allowed to read and write.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConfigSource {
@@ -116,6 +120,30 @@ impl HarnessFiles {
     #[must_use]
     pub fn user_config_file(&self) -> PathBuf {
         self.paths.user_config()
+    }
+
+    /// The prompt directories a prompt identifier resolves against, project
+    /// ones first.
+    ///
+    /// A project root contributes `{root}/.vibe/prompts` and the user source
+    /// contributes `{vibe_home}/prompts`, each only once it exists on disk, so
+    /// the list a resolution error prints names directories that are really
+    /// searched. Reference `project_prompts_dirs` and `user_prompts_dirs`.
+    #[must_use]
+    pub fn prompts_dirs(&self) -> Vec<PathBuf> {
+        let mut directories: Vec<PathBuf> = self
+            .project_roots()
+            .into_iter()
+            .map(|root| root.join(PROJECT_DIRECTORY).join(PROMPTS_DIRECTORY))
+            .filter(|directory| directory.is_dir())
+            .collect();
+        if self.sources.contains(&ConfigSource::User) {
+            let user = self.paths.vibe_home.join(PROMPTS_DIRECTORY);
+            if user.is_dir() {
+                directories.push(user);
+            }
+        }
+        directories
     }
 
     /// Whether a write may reach the user file. Reference `persist_allowed`.
