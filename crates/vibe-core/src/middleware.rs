@@ -253,6 +253,28 @@ impl ConversationMiddleware for TokenLimitMiddleware {
     }
 }
 
+/// Compacts the transcript once it reaches the configured threshold.
+///
+/// The policy is stateless: it reads the same context size the engine wrote
+/// from the last completion's usage, so the answer is a function of the ledger
+/// rather than of anything the policy latched. A threshold of zero disables it,
+/// which is the only way the reference turns automatic compaction off; the
+/// reference tests `threshold > 0` on a signed integer, and a negative value
+/// reaches this port as zero because the configuration reader cannot represent
+/// one.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AutoCompactMiddleware;
+
+impl ConversationMiddleware for AutoCompactMiddleware {
+    fn before_turn(&self, context: &ConversationContext<'_>) -> MiddlewareResult {
+        let threshold = context.compaction.auto_compact_threshold;
+        if threshold > 0 && context.stats.context_tokens >= threshold {
+            return MiddlewareResult::compact();
+        }
+        MiddlewareResult::proceed()
+    }
+}
+
 /// The registered policies, in the order the engine polls them.
 #[derive(Clone, Default)]
 pub struct MiddlewarePipeline {

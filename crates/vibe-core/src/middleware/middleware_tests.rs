@@ -330,3 +330,72 @@ fn an_absent_price_limit_registers_no_policy() {
         "no registered price policy means no price stop at any cost"
     );
 }
+
+/// US-149: `AutoCompactMiddleware` compares the threshold the configuration
+/// declared against the context size the last completion wrote.
+#[test]
+fn auto_compaction_fires_at_or_above_a_positive_threshold() {
+    let settings = |auto_compact_threshold| CompactionSettings {
+        auto_compact_threshold,
+        ..CompactionSettings::default()
+    };
+    let policy = AutoCompactMiddleware;
+
+    let at = settings(120_000);
+    assert_eq!(
+        policy
+            .before_turn(&context(&stats(1, 0, 0, 120_000), 0, &at))
+            .action,
+        MiddlewareAction::Compact,
+        "a context at the threshold compacts"
+    );
+    assert_eq!(
+        policy
+            .before_turn(&context(&stats(1, 0, 0, 130_000), 0, &at))
+            .action,
+        MiddlewareAction::Compact,
+        "a context above the threshold compacts"
+    );
+    assert_eq!(
+        policy
+            .before_turn(&context(&stats(1, 0, 0, 119_999), 0, &at))
+            .action,
+        MiddlewareAction::Continue,
+        "a context below the threshold proceeds"
+    );
+
+    // `auto_compact_threshold = 0` is how the reference disables automatic
+    // compaction, whatever the context size.
+    let disabled = settings(0);
+    assert_eq!(
+        policy
+            .before_turn(&context(&stats(1, 0, 0, u64::MAX), 0, &disabled))
+            .action,
+        MiddlewareAction::Continue,
+        "a threshold of zero disables the policy"
+    );
+}
+
+/// US-149: the limits are registered first, so a cycle that reaches a limit and
+/// the threshold at once stops rather than compacting.
+#[test]
+fn a_limit_and_the_threshold_in_one_cycle_resolve_to_stop() {
+    let mut pipeline = MiddlewarePipeline::from_limits(&EngineLimits {
+        max_steps: 1,
+        ..EngineLimits::default()
+    });
+    pipeline.add(Arc::new(AutoCompactMiddleware));
+    let compaction = CompactionSettings {
+        auto_compact_threshold: 1,
+        ..CompactionSettings::default()
+    };
+
+    let both = pipeline.before_turn(&context(&stats(1, 0, 0, 500_000), 0, &compaction));
+    assert_eq!(both.action, MiddlewareAction::Stop);
+    assert_eq!(both.stop_reason, Some(TurnStopReason::MaxSteps));
+
+    // Under the limit, the same cycle compacts, which is what proves the stop
+    // above came from precedence rather than from the policy never firing.
+    let only_threshold = pipeline.before_turn(&context(&stats(0, 0, 0, 500_000), 0, &compaction));
+    assert_eq!(only_threshold.action, MiddlewareAction::Compact);
+}
