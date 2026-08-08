@@ -35,6 +35,7 @@ pub mod schema;
 pub mod scratchpad;
 pub mod session_id;
 pub mod shell;
+mod skills;
 pub mod storage;
 pub mod telemetry;
 pub mod text;
