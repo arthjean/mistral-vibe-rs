@@ -2539,6 +2539,23 @@ impl ServerConnection {
         }
     }
 
+    /// Reports the skill files discovery could not load.
+    ///
+    /// Reference `project_diagnostics` reads `skill_manager.config_issues` into
+    /// the `diagnostics/list` response, so a typo in frontmatter is a message
+    /// naming the file rather than a skill that silently disappeared.
+    fn record_skill_diagnostics(&self) {
+        let issues = self.server.release3.skill_issues();
+        if issues.is_empty() {
+            return;
+        }
+        if let Ok(mut resources) = self.server.resources.lock() {
+            for (file, message) in issues {
+                resources.record_diagnostic_once(&file, &format!("Failed to load: {message}"));
+            }
+        }
+    }
+
     fn session_start(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<SessionStartParams>(&request.params) {
             Ok(params) => params,
@@ -2762,6 +2779,7 @@ impl ServerConnection {
             return error_batch(request.id, ProtocolErrorCode::InternalError, &error);
         }
         self.record_tool_surface_diagnostics(&intent, &tools);
+        self.record_skill_diagnostics();
         if persisted.is_none() && self.server.release3.persists_runtime_sessions() {
             match self.server.release3.create_runtime_session(
                 &session_id,
@@ -5151,6 +5169,69 @@ mod tests {
         assert_eq!(
             result["state"]["session"]["tokenUsage"],
             json!({"inputTokens": 900, "outputTokens": 300, "totalTokens": 1_200})
+        );
+    }
+
+    /// US-168: a `SKILL.md` that will not parse is a message on the surface an
+    /// operator reads, not a skill that silently failed to appear. The session
+    /// start is what projects it, and a second session adds nothing.
+    #[test]
+    fn an_unloadable_skill_is_reported_on_diagnostics_list() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let workspace = temporary.path().join("workspace");
+        let broken = workspace.join(".vibe/skills/broken");
+        std::fs::create_dir_all(&broken).expect("skill directory");
+        std::fs::write(broken.join("SKILL.md"), "no frontmatter here\n").expect("skill fixture");
+        let release3 = Release3Service::new(
+            crate::release3::Release3Paths {
+                vibe_home: temporary.path().join("home"),
+                working_directory: workspace.clone(),
+                session_root: temporary.path().join("sessions"),
+            },
+            true,
+        )
+        .expect("service");
+        let server = AppServer::with_release3_service(release3);
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+
+        for (id, session) in [(2, "session-1"), (3, "session-2")] {
+            connection.dispatch(&request(
+                id,
+                "session/start",
+                json!({"sessionId": session, "workingDirectory": workspace}),
+            ));
+        }
+        let listed = connection.dispatch(&request(
+            4,
+            "diagnostics/list",
+            json!({"sessionId": "session-1"}),
+        ));
+        let Envelope::Success(SuccessResponse { result, .. }) =
+            decode_frame(&listed.outbound[0]).expect("diagnostics answer")
+        else {
+            unreachable!("diagnostics/list answers");
+        };
+
+        let issues = result["issues"].as_array().expect("an issues array");
+        let skill_issues = issues
+            .iter()
+            .filter(|issue| {
+                issue["file"]
+                    .as_str()
+                    .is_some_and(|file| file.ends_with("broken/SKILL.md"))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            skill_issues.len(),
+            1,
+            "one issue names the file, once across both sessions: {issues:?}"
+        );
+        assert!(
+            skill_issues[0]["message"]
+                .as_str()
+                .is_some_and(|message| message.starts_with("Failed to load:")),
+            "{skill_issues:?}"
         );
     }
 

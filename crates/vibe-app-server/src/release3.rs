@@ -1847,6 +1847,20 @@ impl Release3Service {
                 .unwrap_or_default(),
         }
     }
+
+    /// The skill files discovery could not load, as `(file, message)` pairs.
+    ///
+    /// Reference `project_diagnostics` reads `skill_manager.config_issues` into
+    /// the `diagnostics/list` response; this is the port's side of that read.
+    #[must_use]
+    pub fn skill_issues(&self) -> Vec<(String, String)> {
+        self.catalog()
+            .issues
+            .into_iter()
+            .filter(|issue| issue.mechanism == "skills")
+            .map(|issue| (issue.path.to_string_lossy().into_owned(), issue.message))
+            .collect()
+    }
 }
 
 fn fork_keep_messages(params: &BTreeMap<String, Value>) -> Result<Option<usize>, Release3Error> {
@@ -3476,6 +3490,36 @@ tool_timeout_sec = 2
             published("enabled_skills = [\"beta\"]\ndisabled_skills = [\"beta\"]\n"),
             vec!["beta"],
             "the allowlist decides alone and the denylist is not consulted"
+        );
+    }
+
+    /// US-168: a `SKILL.md` that will not parse is published as an issue naming
+    /// the file, which is what `diagnostics/list` reads.
+    #[test]
+    fn an_unloadable_skill_is_published_as_an_issue() {
+        let temporary = tempdir().expect("tempdir");
+        let workspace = temporary.path().join("workspace");
+        let broken = workspace.join(".vibe/skills/broken");
+        std::fs::create_dir_all(&broken).expect("skill directory");
+        std::fs::write(broken.join("SKILL.md"), "no frontmatter here\n").expect("skill fixture");
+        let service = Release3Service::new(
+            Release3Paths {
+                vibe_home: temporary.path().join("home"),
+                working_directory: workspace,
+                session_root: temporary.path().join("sessions"),
+            },
+            true,
+        )
+        .expect("service");
+
+        let issues = service.skill_issues();
+
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        assert!(issues[0].0.ends_with("broken/SKILL.md"), "{issues:?}");
+        assert!(!issues[0].1.is_empty(), "the issue carries a reason");
+        assert!(
+            listed_skills(&service).is_empty(),
+            "the unloadable skill is absent from the catalog"
         );
     }
 

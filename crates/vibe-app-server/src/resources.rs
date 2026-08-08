@@ -429,6 +429,19 @@ impl ResourceService {
         );
     }
 
+    /// Records a diagnostic unless the same file and message are already
+    /// published, so a second session reporting the same unloadable skill adds
+    /// nothing. The reference builds one `SkillManager` per agent loop and
+    /// projects its issues once; this is what keeps a server hosting several
+    /// sessions from reporting one broken file per session.
+    pub fn record_diagnostic_once(&mut self, file: &str, message: &str) {
+        let entry = (bounded(file), redact(message));
+        if self.diagnostics.contains(&entry) {
+            return;
+        }
+        push_bounded(&mut self.diagnostics, MAX_RESOURCE_RECORDS, entry);
+    }
+
     pub fn record_log(&mut self, timestamp: u64, level: &str, message: &str) {
         push_bounded(
             &mut self.logs,
