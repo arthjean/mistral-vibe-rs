@@ -31,6 +31,7 @@ use vibe_core::prompt::{
     InstructionLoader, PromptComposition, PromptResolver, SkillSummary, SubagentSummary,
     UserResource, prepare_user_resources,
 };
+use vibe_core::skills::skill_summary;
 use vibe_core::storage::{HydratedSession, SessionStore, StorageError};
 use vibe_core::tools::config::ToolConfigResolver;
 
@@ -119,26 +120,6 @@ pub(crate) fn agent_summary(profile: &AgentProfile) -> Value {
         "description": profile.description,
         "safety": AgentSafety::parse(&profile.safety),
         "agentType": profile.kind,
-    })
-}
-
-/// One skill as `SkillSummary` declares it.
-///
-/// The body a skill expands to travels as `prompt`, which is the name the wire
-/// gives it. `source` collapses to the two origins this port discovers: a
-/// shipped skill and one found on disk.
-fn skill_summary(skill: &SkillDefinition) -> Value {
-    json!({
-        "name": skill.name,
-        "description": skill.description,
-        "prompt": skill.body,
-        "userInvocable": skill.user_invocable,
-        "source": match skill.source {
-            ExtensionSource::Builtin => "builtin",
-            ExtensionSource::Configured | ExtensionSource::Project | ExtensionSource::User => {
-                "local"
-            }
-        },
     })
 }
 
@@ -1725,7 +1706,7 @@ impl Release3Service {
                 .map(|skill| SkillSummary {
                     name: skill.name.clone(),
                     description: skill.description.clone(),
-                    path: Some(skill.path.clone()),
+                    path: skill.path.clone(),
                 })
                 .collect(),
             subagents: catalog

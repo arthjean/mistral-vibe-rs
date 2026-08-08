@@ -604,7 +604,7 @@ fn run_skill(
 /// A skill declared without a file on disk has no base directory, and the
 /// reference then omits the two lines that would otherwise name an empty path.
 fn skill_directory(skill: &SkillDefinition) -> Option<PathBuf> {
-    let base = skill.path.parent()?;
+    let base = skill.path.as_deref()?.parent()?;
     base.is_dir().then(|| base.to_path_buf())
 }
 
@@ -1494,10 +1494,15 @@ mod tests {
         let skill = SkillDefinition {
             name: "inline".to_owned(),
             description: "declared, not filed".to_owned(),
+            license: None,
+            compatibility: None,
+            metadata: BTreeMap::new(),
+            allowed_tools: Vec::new(),
             user_invocable: false,
             body: "Do the thing.".to_owned(),
-            source: crate::extensions::ExtensionSource::Project,
-            path: PathBuf::new(),
+            source: crate::skills::SkillSource::Builtin,
+            scope: crate::skills::SkillScope::Builtin,
+            path: None,
         };
 
         let rendered = render_skill(&skill, None);

@@ -13,23 +13,26 @@
 //! The oracle precedes the implementation, so the ledger below is the measured
 //! defect inventory rather than a residue: a family the port cannot answer yet
 //! is one `family/*` entry naming the story that implements it, and the stale
-//! check retires each entry the moment its family conforms. `discovery` is the
-//! one family the port already answers through a public entry point, so it is
-//! compared for real, with the production wiring reproduced from
-//! `tools/builtins.rs` and `release3.rs`: one project root at `.vibe`, one
-//! user root at the invented `.vibe/extensions`, no configured roots and no
-//! builtin seeding.
+//! check retires each entry the moment its family conforms. `frontmatter`,
+//! `metadata` and `projection` are compared for real since EP-047 landed the
+//! parser, the schema and the whole model. `discovery` is compared for real
+//! against the production wiring reproduced from `tools/builtins.rs` and
+//! `release3.rs`: one project root at `.vibe`, one user root at the invented
+//! `.vibe/extensions`, no configured roots and no builtin seeding.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use serde::Deserialize;
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
-use crate::extensions::{DiscoveryRoots, discover_extensions};
+use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::skills::parser::{SkillParseErrorKind, parse_skill_markdown};
+use crate::skills::schema::SkillMetadata;
+use crate::skills::{SkillScope, SkillSource, skill_summary};
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/skills/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/skills.py";
@@ -51,16 +54,6 @@ const MINIMUM_SCENARIOS: usize = 120;
 /// skills-parity PRD, each naming the story that retires it.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
-        "frontmatter/*",
-        "PENDING US-162: the port has no frontmatter parser to compare; extensions.rs reads \
-         lines and splits each on the first colon, publishing no mapping-level answer",
-    ),
-    (
-        "metadata/*",
-        "PENDING US-163: the port validates six of the twelve fields inside parse_skill and \
-         publishes no schema verdict to compare",
-    ),
-    (
         "discovery/*",
         "PENDING US-165, US-166 and US-169: the port walks one project root and an invented \
          user root, reads no skill_paths, and seeds no builtin, so every scenario diverges \
@@ -75,11 +68,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "command/*",
         "PENDING US-172: slash-command parsing lives in the CLI adapter, so vibe-core has no \
          parse_skill_command to answer",
-    ),
-    (
-        "projection/*",
-        "PENDING US-164: SkillDefinition carries neither the full model nor the three source \
-         literals, so there is no summary projection to compare",
     ),
     (
         "store/*",
@@ -154,7 +142,6 @@ struct Digested {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct FrontmatterCase {
     case: String,
-    #[expect(dead_code, reason = "US-162's parser reads the document back")]
     content: String,
     /// `boundary`, `yaml` or `mapping` when the reference rejected the
     /// document; absent when it parsed.
@@ -163,7 +150,6 @@ struct FrontmatterCase {
     #[serde(default)]
     frontmatter: Option<Value>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-162's parser compares the body verbatim")]
     body: Option<String>,
 }
 
@@ -171,11 +157,9 @@ struct FrontmatterCase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MetadataCase {
     case: String,
-    #[expect(dead_code, reason = "US-163's schema validates the document back")]
     frontmatter: Value,
     accepted: bool,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-163's schema compares the normalized fields")]
     fields: Option<Value>,
 }
 
@@ -222,9 +206,7 @@ struct SymlinkSpec {
 struct PublishedSkill {
     name: String,
     source: String,
-    /// Always `global` at this pin, even for project skills; the port models
-    /// no scope until US-164 carries the whole `SkillInfo`.
-    #[expect(dead_code, reason = "compared once US-164 carries the scope field")]
+    /// Always `global` at this pin, even for project skills.
     scope: String,
     root: Option<String>,
     rel_path: Option<String>,
@@ -297,7 +279,6 @@ struct CommandResult {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ProjectionCase {
     case: String,
-    #[expect(dead_code, reason = "US-164's projection replays over this model")]
     skill: Value,
     summary: Value,
 }
@@ -534,12 +515,30 @@ fn settle(report: &Report, family: &str) -> usize {
 // --------------------------------------------------------------------------
 
 /// What one side published for one skill, on the fields both sides model:
-/// name, root label, root-relative path, user invocability and description.
+/// name, source, scope, root label, root-relative path, user invocability and
+/// description.
 type CatalogAnswer = (
-    Vec<(String, Option<String>, Option<String>, bool, Option<String>)>,
+    Vec<(
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        bool,
+        Option<String>,
+    )>,
     Vec<(String, String)>,
     usize,
 );
+
+/// The wire spelling of a serialized vocabulary word, for comparing the
+/// port's enums against the strings the corpus records.
+fn vocabulary<T: Serialize>(value: T) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .unwrap_or_default()
+}
 
 fn expected_catalog(scenario: &DiscoveryScenario) -> CatalogAnswer {
     let published = scenario
@@ -548,6 +547,8 @@ fn expected_catalog(scenario: &DiscoveryScenario) -> CatalogAnswer {
         .map(|skill| {
             (
                 skill.name.clone(),
+                skill.source.clone(),
+                skill.scope.clone(),
                 skill.root.clone(),
                 skill.rel_path.clone(),
                 skill.user_invocable,
@@ -579,9 +580,15 @@ fn label_path(path: &Path, roots: &BTreeMap<String, PathBuf>) -> Option<(String,
 /// the scenario, which only symlink creation can cause.
 fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
     let scratch = tempfile::tempdir().expect("a scratch directory is available");
+    // The scratch root is canonicalized so the resolved paths `parse_skill`
+    // now records still strip against the scenario roots.
+    let scratch_root = scratch
+        .path()
+        .canonicalize()
+        .expect("the scratch directory resolves");
     let mut roots: BTreeMap<String, PathBuf> = BTreeMap::new();
     for label in ["home", "project", "configured", "configured2"] {
-        let root = scratch.path().join(label);
+        let root = scratch_root.join(label);
         fs::create_dir_all(&root).expect("the scenario root is writable");
         roots.insert(label.to_owned(), root);
     }
@@ -594,7 +601,7 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
         }
     }
     for symlink in &scenario.symlinks {
-        let link = scratch.path().join(&symlink.link);
+        let link = scratch_root.join(&symlink.link);
         #[cfg(unix)]
         std::os::unix::fs::symlink(&roots[&symlink.target], &link)
             .expect("the scenario symlink is creatable");
@@ -630,7 +637,10 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
         .skills
         .values()
         .map(|skill| {
-            let location = label_path(&skill.path, &roots);
+            let location = skill
+                .path
+                .as_ref()
+                .and_then(|path| label_path(path, &roots));
             // The corpus records the winner of a duplicate name within one
             // root without its path, because the reference's walk order there
             // is filesystem-dependent; the port's answer is masked the same
@@ -647,6 +657,8 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
             };
             (
                 skill.name.clone(),
+                vocabulary(skill.source),
+                vocabulary(skill.scope),
                 root,
                 relative,
                 skill.user_invocable,
@@ -666,6 +678,92 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
 }
 
 // --------------------------------------------------------------------------
+// The parser, schema and projection adapters
+// --------------------------------------------------------------------------
+
+/// The corpus spelling of a parse rejection class.
+const fn error_label(kind: SkillParseErrorKind) -> &'static str {
+    match kind {
+        SkillParseErrorKind::Boundary => "boundary",
+        SkillParseErrorKind::Yaml => "yaml",
+        SkillParseErrorKind::Mapping => "mapping",
+    }
+}
+
+/// The validated fields in the shape the corpus records them.
+fn metadata_fields(metadata: &SkillMetadata) -> Value {
+    json!({
+        "allowed_tools": metadata.allowed_tools,
+        "compatibility": metadata.compatibility,
+        "description": metadata.description,
+        "license": metadata.license,
+        "metadata": metadata.metadata,
+        "name": metadata.name,
+        "user_invocable": metadata.user_invocable,
+    })
+}
+
+/// A [`SkillDefinition`] materialized from a projection case's model record,
+/// which spells only the fields it sets and leans on the model defaults for
+/// the rest.
+fn projection_definition(skill: &Value) -> SkillDefinition {
+    let text = |field: &str| {
+        skill
+            .get(field)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let optional = |field: &str| {
+        skill
+            .get(field)
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+    };
+    SkillDefinition {
+        name: text("name"),
+        description: text("description"),
+        license: optional("license"),
+        compatibility: optional("compatibility"),
+        metadata: skill
+            .get("metadata")
+            .and_then(Value::as_object)
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|(key, value)| {
+                        value.as_str().map(|value| (key.clone(), value.to_owned()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        allowed_tools: skill
+            .get("allowed_tools")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(ToOwned::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default(),
+        user_invocable: skill
+            .get("user_invocable")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        body: text("prompt"),
+        source: match skill.get("source").and_then(Value::as_str) {
+            Some("builtin") => SkillSource::Builtin,
+            Some("registry") => SkillSource::Registry,
+            _ => SkillSource::Local,
+        },
+        scope: SkillScope::Global,
+        path: None,
+    }
+}
+
+// --------------------------------------------------------------------------
 // The replay
 // --------------------------------------------------------------------------
 
@@ -676,23 +774,36 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
 
     let mut report = Report::default();
     for case in &corpus.frontmatter {
-        let expected = match (&case.error, &case.frontmatter) {
-            (Some(kind), _) => format!("{kind} error"),
-            (None, Some(mapping)) => format!("parses to {mapping}"),
-            (None, None) => panic!("`{}` records neither an error nor a parse", case.case),
+        let expected = (
+            case.error.clone(),
+            case.frontmatter.clone(),
+            case.body.clone(),
+        );
+        let observed = match parse_skill_markdown(&case.content) {
+            Ok((frontmatter, body)) => (None, Some(Value::Object(frontmatter)), Some(body)),
+            Err(error) => (Some(error_label(error.kind).to_owned()), None, None),
         };
-        report.pending("frontmatter", &case.case, expected, "US-162");
+        report.check("frontmatter", &case.case, "parse", &expected, &observed);
     }
     scenarios += settle(&report, "frontmatter");
 
     let mut report = Report::default();
     for case in &corpus.metadata {
-        let verdict = if case.accepted {
-            "accepted"
-        } else {
-            "rejected"
+        let mapping = case
+            .frontmatter
+            .as_object()
+            .unwrap_or_else(|| panic!("`{}` holds a frontmatter mapping", case.case));
+        let observed = match SkillMetadata::validate(mapping) {
+            Ok(metadata) => (true, Some(metadata_fields(&metadata))),
+            Err(_) => (false, None),
         };
-        report.pending("metadata", &case.case, verdict.to_owned(), "US-163");
+        report.check(
+            "metadata",
+            &case.case,
+            "verdict",
+            &(case.accepted, case.fields.clone()),
+            &observed,
+        );
     }
     scenarios += settle(&report, "metadata");
 
@@ -734,11 +845,12 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
 
     let mut report = Report::default();
     for case in &corpus.projection {
-        report.pending(
+        report.check(
             "projection",
             &case.case,
-            format!("projects to {}", case.summary),
-            "US-164",
+            "summary",
+            &case.summary,
+            &skill_summary(&projection_definition(&case.skill)),
         );
     }
     scenarios += settle(&report, "projection");

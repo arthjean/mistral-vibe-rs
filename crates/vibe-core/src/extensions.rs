@@ -19,6 +19,9 @@ use toml::Table;
 use crate::atomic_file::write_atomically;
 use crate::engine::CancellationToken;
 use crate::policy::{PermissionMode, PermissionRule, PermissionScope};
+use crate::skills::parser::parse_skill_markdown;
+use crate::skills::schema::SkillMetadata;
+use crate::skills::{SkillScope, SkillSource};
 use crate::storage::{SessionStore, StorageError};
 use crate::text::{bounded_utf8, matches_wildcard, truncate_utf8};
 
@@ -310,10 +313,19 @@ fn auto_approves_edits(overrides: &Table) -> bool {
 pub struct SkillDefinition {
     pub name: String,
     pub description: String,
+    pub license: Option<String>,
+    pub compatibility: Option<String>,
+    pub metadata: BTreeMap<String, String>,
+    pub allowed_tools: Vec<String>,
     pub user_invocable: bool,
     pub body: String,
-    pub source: ExtensionSource,
-    pub path: PathBuf,
+    pub source: SkillSource,
+    pub scope: SkillScope,
+    /// The resolved absolute path of the `SKILL.md` on disk, absent for a
+    /// skill that ships without one; serialization omits it rather than
+    /// spelling an empty path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -419,12 +431,7 @@ pub fn discover_extensions(
 
     for (source, root) in roots.ordered() {
         discover_agents(&mut catalog, source, &root.join("agents"));
-        discover_skills(
-            &mut catalog,
-            source,
-            &root.join("skills"),
-            &builtin_skill_names,
-        );
+        discover_skills(&mut catalog, &root.join("skills"), &builtin_skill_names);
         discover_text_extensions(
             &mut catalog.prompts,
             &mut catalog.issues,
@@ -481,7 +488,6 @@ fn discover_agents(catalog: &mut ExtensionCatalog, source: ExtensionSource, dire
 
 fn discover_skills(
     catalog: &mut ExtensionCatalog,
-    source: ExtensionSource,
     directory: &Path,
     builtin_names: &BTreeSet<String>,
 ) {
@@ -503,7 +509,7 @@ fn discover_skills(
         if !path.is_file() {
             continue;
         }
-        match parse_skill(&path, source) {
+        match parse_skill(&path) {
             Ok(skill) => {
                 if !builtin_names.contains(&skill.name) && !catalog.skills.contains_key(&skill.name)
                 {
@@ -650,51 +656,28 @@ fn migrate_agent_table(table: &mut Table) {
     }
 }
 
-fn parse_skill(path: &Path, source: ExtensionSource) -> Result<SkillDefinition, ExtensionError> {
+fn parse_skill(path: &Path) -> Result<SkillDefinition, ExtensionError> {
     let contents = read_bounded_text(path)?;
-    let content = contents.trim_start_matches('\u{feff}');
-    let mut lines = content.lines();
-    if lines.next().map(str::trim) != Some("---") {
-        return Err(ExtensionError::InvalidSkill(
-            "frontmatter must start with `---`".to_owned(),
-        ));
-    }
-    let mut metadata = BTreeMap::new();
-    let mut ended = false;
-    for line in &mut lines {
-        if line.trim() == "---" {
-            ended = true;
-            break;
-        }
-        let (key, value) = line.split_once(':').ok_or_else(|| {
-            ExtensionError::InvalidSkill(format!("invalid frontmatter line `{line}`"))
-        })?;
-        metadata.insert(
-            key.trim().to_owned(),
-            value.trim().trim_matches(['"', '\'']).to_owned(),
-        );
-    }
-    if !ended {
-        return Err(ExtensionError::InvalidSkill(
-            "frontmatter has no closing `---`".to_owned(),
-        ));
-    }
-    let name = metadata
-        .remove("name")
-        .filter(|name| valid_extension_name(name))
-        .ok_or_else(|| ExtensionError::InvalidSkill("valid `name` is required".to_owned()))?;
-    let description = metadata.remove("description").unwrap_or_default();
-    let user_invocable = metadata
-        .remove("user_invocable")
-        .map(|value| value != "false")
-        .unwrap_or(true);
+    let (frontmatter, body) = parse_skill_markdown(&contents)
+        .map_err(|error| ExtensionError::InvalidSkill(error.to_string()))?;
+    let metadata = SkillMetadata::validate(&frontmatter)
+        .map_err(|error| ExtensionError::InvalidSkill(error.to_string()))?;
+    // A frontmatter name that differs from the directory name is a log-only
+    // warning upstream, never a rejection or a diagnostic: the frontmatter
+    // name wins and nothing else is observable.
+    let resolved = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     Ok(SkillDefinition {
-        name,
-        description,
-        user_invocable,
-        body: lines.collect::<Vec<_>>().join("\n").trim().to_owned(),
-        source,
-        path: path.to_path_buf(),
+        name: metadata.name,
+        description: metadata.description,
+        license: metadata.license,
+        compatibility: metadata.compatibility,
+        metadata: metadata.metadata,
+        allowed_tools: metadata.allowed_tools,
+        user_invocable: metadata.user_invocable,
+        body: body.trim().to_owned(),
+        source: SkillSource::Local,
+        scope: SkillScope::Global,
+        path: Some(resolved),
     })
 }
 
@@ -815,7 +798,8 @@ impl SkillInjector {
             content: skill.body.clone(),
             base_directory: skill
                 .path
-                .parent()
+                .as_deref()
+                .and_then(Path::parent)
                 .map(Path::to_path_buf)
                 .unwrap_or_default(),
         }))
@@ -1595,14 +1579,6 @@ fn title_from_name(name: &str) -> String {
         }
     }
     title
-}
-
-fn valid_extension_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.len() <= 128
-        && name
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
 }
 
 const fn source_priority(source: ExtensionSource) -> u8 {

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Read skill frontmatter as YAML. The line-by-line reader that split on the
+  first colon is replaced by a real YAML parse behind the reference's own
+  boundary rules, so a nested `metadata:` block, a folded description, a
+  block sequence and a fence of more than three hyphens all load exactly as
+  they load upstream, and `user-invocable: no` finally means no. Validation
+  now enforces the reference's schema too: names are lowercase hyphenated
+  words of at most 64 characters, a description of 1 to 1024 characters is
+  mandatory, both hyphenated aliases are accepted, and `allowed-tools`
+  coerces from a space-delimited string. A skill accepted here is a skill
+  accepted upstream, and vice versa, measured over the captured corpus.
+
+- Carry the whole skill model. A skill's `license`, `compatibility`,
+  `metadata` mapping and `allowed-tools` list now survive loading instead of
+  being dropped, the recorded path is the resolved absolute one, and the
+  catalog's `source` vocabulary covers all three published values so a
+  `skills/list` client can group by origin the way the protocol documents.
+
 - Warn the agent before the window closes. With `context_warnings` enabled, a
   session that has consumed half of `auto_compact_threshold` now tells the model
   so, once, naming the share used, the current token count and the window. The
