@@ -65,7 +65,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_OUTPUT = Path(".parity/compaction-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/compaction/corpus.json")
 DEFAULT_CACHE = Path(".parity")
@@ -877,6 +877,11 @@ async def capture_manager() -> list[dict[str, Any]]:
             {
                 "case": case["case"],
                 "strict": case["strict"],
+                # The inputs a replay needs to drive the same scenario: both are
+                # values this script supplied, so they commit as they stand.
+                "conversation": case["messages"],
+                "answers": case["answers"],
+                "extraInstructions": case.get("extraInstructions", ""),
                 "calls": calls,
                 "failures": telemetry.failures,
                 "contextTokens": stats.context_tokens,
@@ -922,6 +927,8 @@ _SUMMARY_BLOCK_OPEN = "<compaction_summary>"
 #: every byte the envelope's readers depend on and nothing either side authored.
 _PREAMBLE_MARK = "{preamble}"
 _SUMMARY_LEAD_MARK = "{summaryLead}"
+#: What stands where the placeholder summary was, for the same reason.
+PLACEHOLDER_MARK = "{placeholderSummary}"
 
 
 def _anchors(text: str) -> tuple[int, int, int] | None:
@@ -1005,24 +1012,40 @@ def project(capture: dict[str, Any], manager: list[dict[str, Any]]) -> dict[str,
         }
         for case in capture["messageSelections"]
     ]
+    # The manager's own transcript carries the envelope, so it is masked the way
+    # a render is: the structure commits verbatim and the reference's prose does
+    # not. The placeholder summary is the third run of reference-authored prose
+    # in this surface, recorded once by digest and masked wherever it appears.
     managers = []
+    placeholder: dict[str, Any] | None = None
     for record in manager:
         projected = dict(record)
-        # The manager's own messages carry the envelope; nothing replays this
-        # section yet, so it stays a whole-content digest until EP-044 gives it
-        # a consumer and decides the shape it needs.
-        projected["messagesAfter"] = [
-            {**item, "content": digest(item["content"])} if item["injected"] else item
-            for item in record["messagesAfter"]
-        ]
-        # A scenario supplies every summary the manager returns, except the
-        # placeholder the reference substitutes when summarization failed.
+        placeholder_text = ""
         if record["failures"] and record.get("outcome") == "returned":
-            projected["summary"] = digest(record["summary"])
+            placeholder_text = record["summary"]
+            candidate = digest(placeholder_text)
+            if placeholder is None:
+                placeholder = candidate
+            elif placeholder != candidate:
+                raise OracleError(
+                    f"the placeholder summary is not constant: {record['case']}"
+                )
+            projected["summary"] = PLACEHOLDER_MARK
+
+        def mask(content: str, _placeholder: str = placeholder_text) -> str:
+            masked = mask_envelope(content)
+            return masked.replace(_placeholder, PLACEHOLDER_MARK) if _placeholder else masked
+
+        projected["messagesAfter"] = [
+            {**item, "content": mask(item["content"])} for item in record["messagesAfter"]
+        ]
         managers.append(projected)
+    if placeholder is None:
+        raise OracleError("no scenario exercised the placeholder summary")
     return {
         **capture,
         "envelopeProse": prose,
+        "placeholderSummary": placeholder,
         "envelopeRenders": renders,
         "messageSelections": selections,
         "managerScenarios": managers,
@@ -1041,7 +1064,8 @@ def build_corpus(
             "model response. Values, tag names and counts are committed as they stand because the "
             "scenarios supplied them; the rendered envelope is split, its structure committed "
             "verbatim and the two prose runs it carries committed as a SHA-256 digest and a "
-            "length, because those are the reference's own sentences. Regenerate with "
+            "length, because those are the reference's own sentences, as is the placeholder "
+            "summary a failed summarization falls back to. Regenerate with "
             "scripts/parity/compaction.py --corpus when the pinned reference moves."
         ),
         **project(capture, manager),

@@ -32,13 +32,18 @@ use super::context::{
     COMPACT_USER_MESSAGE_MAX_TOKENS, collect_prior_user_messages, drop_oldest_round,
     extract_summary, parse_previous_user_messages, render_compaction_context,
 };
+use super::manager::{
+    CompactionPlan, CompactionPromptResolution, CompactionPrompts, PLACEHOLDER_SUMMARY, compact,
+};
+use super::manager_tests::{ScriptedAnswer, ScriptedProvider};
 use super::tokens::{approx_token_count, truncate_middle_to_tokens};
+use crate::provider::{ToolChoice, Usage};
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/compaction/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/compaction.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 2;
+const CORPUS_SCHEMA_VERSION: u32 = 3;
 /// The scenario floor this epic commits to, so a regeneration that captured
 /// almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 60;
@@ -61,6 +66,15 @@ const DIVERGENCES: &[(&str, &str)] = &[
     (
         "envelopeProse/summaryLead",
         "LICENSING: original prose introducing the summary block",
+    ),
+    (
+        "placeholderSummary/placeholder",
+        "LICENSING: original wording for the summary a failed summarization falls back to",
+    ),
+    (
+        "managerCallType/callType",
+        "The reference labels the compaction request with a telemetry call type this port does \
+         not model; it marks the same request through the provider metadata instead",
     ),
 ];
 
@@ -86,10 +100,69 @@ struct Corpus {
     envelope_renders: Vec<EnvelopeRender>,
     envelope_parses: Vec<EnvelopeParse>,
     message_selections: Vec<MessageSelection>,
-    /// The manager's decision tree, captured here and replayed by the
-    /// summarizer that EP-044 builds. Named so the corpus can deny unknown
-    /// fields while the section waits for its consumer.
-    manager_scenarios: Vec<Value>,
+    /// The placeholder summary the reference substitutes when both calls
+    /// failed, recorded by digest for the same reason the envelope's prose is.
+    placeholder_summary: Digested,
+    /// The manager's decision tree: what each scripted model answer makes the
+    /// summarizer do, and what the conversation looks like afterward.
+    manager_scenarios: Vec<ManagerScenario>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ManagerScenario {
+    case: String,
+    strict: bool,
+    /// The transcript the scenario compacts.
+    conversation: Vec<MessageEntry>,
+    /// The scripted model answers, one per call the manager makes.
+    answers: Vec<ScriptedStep>,
+    extra_instructions: String,
+    calls: Vec<ManagerCall>,
+    /// The reasons the failure telemetry record carried, in order.
+    failures: Vec<String>,
+    /// What the stats hold afterward: zero once the transcript was replaced.
+    context_tokens: u64,
+    messages_after: Vec<ManagerMessage>,
+    /// `returned`, `raised` or `overflowed`.
+    outcome: String,
+    #[serde(default)]
+    reason: Option<String>,
+    #[serde(default)]
+    summary: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ScriptedStep {
+    text: String,
+    tool_calls: usize,
+    overflow: bool,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ManagerCall {
+    /// The telemetry label the reference passes; a recorded divergence.
+    call_type: String,
+    messages: usize,
+    model: String,
+    overflow: bool,
+    system_messages: usize,
+    /// The model's thinking setting as the reference stringifies it.
+    thinking: String,
+    tool_choice: Option<String>,
+    /// The number of tools passed, or `None` where the reference passes no tool
+    /// list at all.
+    tools: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ManagerMessage {
+    role: String,
+    content: String,
+    injected: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -331,6 +404,8 @@ const SUMMARY_BLOCK_OPEN: &str = "<compaction_summary>";
 /// byte the envelope's readers depend on and nothing either side authored.
 const PREAMBLE_MARK: &str = "{preamble}";
 const SUMMARY_LEAD_MARK: &str = "{summaryLead}";
+/// What stands where the placeholder summary was, for the same reason.
+const PLACEHOLDER_MARK: &str = "{placeholderSummary}";
 
 /// Where the envelope's three structural anchors sit, or [`None`] when `text` is
 /// not an envelope. The reserved tags are escaped inside every preserved
@@ -416,8 +491,8 @@ fn role_of(message: &ModelMessage) -> &'static str {
 // The replay
 // --------------------------------------------------------------------------
 
-#[test]
-fn the_committed_corpus_replays_every_family_the_reference_answered() {
+#[tokio::test]
+async fn the_committed_corpus_replays_every_family_the_reference_answered() {
     let corpus = corpus();
     assert_eq!(
         corpus.constants.compact_user_message_max_tokens, COMPACT_USER_MESSAGE_MAX_TOKENS,
@@ -584,17 +659,244 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
     }
     scenarios += settle(&report, "messageSelections");
 
+    scenarios += replay_manager(&corpus).await;
+
     println!(
-        "compaction: {scenarios} scenarios across 7 families conform at {}, plus {} manager \
-         scenarios awaiting the summarizer",
+        "compaction: {scenarios} scenarios across 8 families conform at {}",
         &corpus.reference.commit[..12],
-        corpus.manager_scenarios.len()
     );
     assert!(
         scenarios >= MINIMUM_SCENARIOS,
         "the corpus replays {scenarios} scenarios, below the {MINIMUM_SCENARIOS} this epic \
          commits to; regenerate it with {CAPTURE_SCRIPT}"
     );
+}
+
+/// The eighth family: the manager's decision tree, replayed by driving this
+/// port's summarizer with the same scripted answers the capture drove the
+/// reference's with.
+///
+/// Each scenario is compared on five axes: the sequence of calls, what each one
+/// carried, how the compaction ended, which failure reasons were reported, and
+/// the transcript left behind. Two axes cannot be compared as recorded and are
+/// named in the ledger instead: the reference's telemetry call type, which this
+/// port marks through the provider metadata, and the placeholder summary, which
+/// is reference-authored prose this port writes its own wording for.
+async fn replay_manager(corpus: &Corpus) -> usize {
+    let mut report = Report::default();
+    let mut call_type = Report::default();
+    let mut placeholder = Report::default();
+
+    for scenario in &corpus.manager_scenarios {
+        let messages: Vec<ModelMessage> = scenario
+            .conversation
+            .iter()
+            .map(|entry| build(entry, &BTreeMap::new()))
+            .collect();
+        let provider = ScriptedProvider::new(scenario.answers.iter().map(|step| ScriptedAnswer {
+            text: step.text.clone(),
+            tool_calls: step.tool_calls,
+            overflow: step.overflow,
+            usage: Usage::default(),
+        }));
+        // The reference's own scenario config: no tools, `auto` as the tool
+        // choice, the active model as the compaction model, and its thinking
+        // setting on the primary call.
+        let reference_model = scenario
+            .calls
+            .first()
+            .map(|call| call.model.clone())
+            .unwrap_or_default();
+        let plan = CompactionPlan {
+            prompts: CompactionPromptResolution::Resolved(CompactionPrompts {
+                request: "compaction request".to_owned(),
+                fallback_system: "fallback system".to_owned(),
+                summary_prefix: "Another language model".to_owned(),
+            }),
+            model: Some(reference_model.clone()),
+            thinking: scenario
+                .calls
+                .first()
+                .is_some_and(|call| call.thinking != "off"),
+            tools: Vec::new(),
+            tool_choice: Some(ToolChoice::Auto),
+            strict: scenario.strict,
+            ..CompactionPlan::default()
+        };
+        let outcome = compact(&provider, &plan, &messages, &scenario.extra_instructions).await;
+
+        let calls = provider.calls();
+        report.check(
+            "managerScenarios",
+            &scenario.case,
+            "calls",
+            &scenario.calls.len(),
+            &calls.len(),
+        );
+        for (index, (expected, actual)) in scenario.calls.iter().zip(&calls).enumerate() {
+            let field = format!("call {index}");
+            // `tools` records `None` where the reference passes no list at all,
+            // which this port cannot express: an absent list and an empty one
+            // are the same request here, and the tool choice is what actually
+            // distinguishes the two calls.
+            report.check(
+                "managerScenarios",
+                &scenario.case,
+                &field,
+                &(
+                    expected.messages,
+                    expected.system_messages,
+                    expected.tools.unwrap_or_default(),
+                    expected.tool_choice.clone(),
+                    expected.thinking != "off",
+                    expected.model.clone(),
+                    expected.overflow,
+                ),
+                &(
+                    actual.messages,
+                    actual.system_messages,
+                    actual.tools,
+                    actual.tool_choice.as_ref().map(tool_choice_label),
+                    actual.thinking,
+                    actual.model.clone().unwrap_or_default(),
+                    actual.overflow,
+                ),
+            );
+            if call_type.total == 0 {
+                call_type.check(
+                    "managerCallType",
+                    "callType",
+                    "label",
+                    &expected.call_type,
+                    &"session_compaction".to_owned(),
+                );
+            }
+        }
+
+        let (observed_outcome, observed_reason, observed_failures, replaced) = match &outcome {
+            Ok(compacted) => (
+                "returned",
+                None,
+                compacted
+                    .failure
+                    .map(|reason| reason.label().to_owned())
+                    .into_iter()
+                    .collect::<Vec<_>>(),
+                true,
+            ),
+            Err(failure) => match failure.reason {
+                Some(reason) => (
+                    "raised",
+                    Some(reason.label().to_owned()),
+                    vec![reason.label().to_owned()],
+                    false,
+                ),
+                None => ("overflowed", None, Vec::new(), false),
+            },
+        };
+        report.check(
+            "managerScenarios",
+            &scenario.case,
+            "outcome",
+            &scenario.outcome,
+            &observed_outcome.to_owned(),
+        );
+        report.check(
+            "managerScenarios",
+            &scenario.case,
+            "reason",
+            &scenario.reason,
+            &observed_reason,
+        );
+        report.check(
+            "managerScenarios",
+            &scenario.case,
+            "failures",
+            &scenario.failures,
+            &observed_failures,
+        );
+        // The reference zeroes the context size inside the manager; this port
+        // does it in the turn ledger, which resets exactly when the transcript
+        // was replaced. What is compared is that decision, not where it lives.
+        report.check(
+            "managerScenarios",
+            &scenario.case,
+            "contextTokens",
+            &scenario.context_tokens,
+            &if replaced { 0 } else { scenario.context_tokens },
+        );
+
+        // The summary, and the transcript left behind: the live conversation
+        // when the compaction failed, the replacement when it succeeded.
+        let observed_summary = outcome
+            .as_ref()
+            .ok()
+            .map(|compacted| mask_placeholder(&compacted.summary));
+        report.check(
+            "managerScenarios",
+            &scenario.case,
+            "summary",
+            &scenario.summary,
+            &observed_summary,
+        );
+        let observed_messages: Vec<(String, String, bool)> = outcome
+            .as_ref()
+            .map_or_else(|_| messages.clone(), |compacted| compacted.messages.clone())
+            .iter()
+            .map(|message| {
+                (
+                    role_of(message).to_owned(),
+                    mask_placeholder(&mask_envelope(message.content())),
+                    message.is_injected(),
+                )
+            })
+            .collect();
+        let expected_messages: Vec<(String, String, bool)> = scenario
+            .messages_after
+            .iter()
+            .map(|entry| (entry.role.clone(), entry.content.clone(), entry.injected))
+            .collect();
+        report.check(
+            "managerScenarios",
+            &scenario.case,
+            "messagesAfter",
+            &expected_messages,
+            &observed_messages,
+        );
+
+        if placeholder.total == 0 && scenario.summary.as_deref() == Some(PLACEHOLDER_MARK) {
+            placeholder.check(
+                "placeholderSummary",
+                "placeholder",
+                "digest",
+                &corpus.placeholder_summary,
+                &digest_of(PLACEHOLDER_SUMMARY),
+            );
+        }
+    }
+
+    // Both recorded divergences are settled against the ledger without joining
+    // the conformance count, the way the envelope's prose already is.
+    settle(&call_type, "managerCallType");
+    settle(&placeholder, "placeholderSummary");
+    settle(&report, "managerScenarios")
+}
+
+/// The label the corpus records for a tool choice, which is the string the
+/// reference passes.
+fn tool_choice_label(choice: &ToolChoice) -> String {
+    match choice {
+        ToolChoice::Auto => "auto".to_owned(),
+        ToolChoice::None => "none".to_owned(),
+        ToolChoice::Required => "required".to_owned(),
+        ToolChoice::Tool { name } => name.clone(),
+    }
+}
+
+/// `text` with this port's placeholder summary replaced by the marker the
+/// capture writes in place of the reference's.
+fn mask_placeholder(text: &str) -> String {
+    text.replace(PLACEHOLDER_SUMMARY, PLACEHOLDER_MARK)
 }
 
 /// The corpus is only an oracle for as long as it still describes the pinned

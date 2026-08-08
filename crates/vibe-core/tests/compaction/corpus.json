@@ -191,6 +191,13 @@
   ],
   "managerScenarios": [
     {
+      "answers": [
+        {
+          "overflow": false,
+          "text": "<summary>all good</summary>",
+          "toolCalls": 0
+        }
+      ],
       "calls": [
         {
           "callType": "secondary_call",
@@ -205,6 +212,44 @@
       ],
       "case": "primary-succeeds",
       "contextTokens": 0,
+      "conversation": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "first",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "second",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply two",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "third",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply three",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "extraInstructions": "",
       "failures": [],
       "messagesAfter": [
         {
@@ -213,10 +258,7 @@
           "role": "system"
         },
         {
-          "content": {
-            "digest": "be3592733898fb878d04b09c32efd2739fe77dc741de67e41eb8429308062d76",
-            "length": 521
-          },
+          "content": "{preamble}<previous_user_messages>\n<previous_user_message>\nfirst\n</previous_user_message>\n<previous_user_message>\nsecond\n</previous_user_message>\n<previous_user_message>\nthird\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nall good\n</compaction_summary>",
           "injected": true,
           "role": "user"
         }
@@ -226,6 +268,18 @@
       "summary": "all good"
     },
     {
+      "answers": [
+        {
+          "overflow": false,
+          "text": "",
+          "toolCalls": 1
+        },
+        {
+          "overflow": false,
+          "text": "<summary>fallback</summary>",
+          "toolCalls": 0
+        }
+      ],
       "calls": [
         {
           "callType": "secondary_call",
@@ -250,6 +304,44 @@
       ],
       "case": "primary-answers-with-a-tool-call",
       "contextTokens": 0,
+      "conversation": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "first",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "second",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply two",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "third",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply three",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "extraInstructions": "",
       "failures": [],
       "messagesAfter": [
         {
@@ -258,10 +350,7 @@
           "role": "system"
         },
         {
-          "content": {
-            "digest": "6a34cc61d0aa8de320ad3abe3753e8102bd72ac5a6555d4b01e4e97a19eff2b1",
-            "length": 521
-          },
+          "content": "{preamble}<previous_user_messages>\n<previous_user_message>\nfirst\n</previous_user_message>\n<previous_user_message>\nsecond\n</previous_user_message>\n<previous_user_message>\nthird\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nfallback\n</compaction_summary>",
           "injected": true,
           "role": "user"
         }
@@ -271,6 +360,18 @@
       "summary": "fallback"
     },
     {
+      "answers": [
+        {
+          "overflow": false,
+          "text": "<summary>  </summary>",
+          "toolCalls": 0
+        },
+        {
+          "overflow": false,
+          "text": "<summary>fallback</summary>",
+          "toolCalls": 0
+        }
+      ],
       "calls": [
         {
           "callType": "secondary_call",
@@ -295,6 +396,44 @@
       ],
       "case": "primary-answers-an-empty-summary",
       "contextTokens": 0,
+      "conversation": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "first",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "second",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply two",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "third",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply three",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "extraInstructions": "",
       "failures": [],
       "messagesAfter": [
         {
@@ -303,10 +442,7 @@
           "role": "system"
         },
         {
-          "content": {
-            "digest": "6a34cc61d0aa8de320ad3abe3753e8102bd72ac5a6555d4b01e4e97a19eff2b1",
-            "length": 521
-          },
+          "content": "{preamble}<previous_user_messages>\n<previous_user_message>\nfirst\n</previous_user_message>\n<previous_user_message>\nsecond\n</previous_user_message>\n<previous_user_message>\nthird\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nfallback\n</compaction_summary>",
           "injected": true,
           "role": "user"
         }
@@ -316,6 +452,18 @@
       "summary": "fallback"
     },
     {
+      "answers": [
+        {
+          "overflow": false,
+          "text": "",
+          "toolCalls": 1
+        },
+        {
+          "overflow": false,
+          "text": "nothing usable",
+          "toolCalls": 0
+        }
+      ],
       "calls": [
         {
           "callType": "secondary_call",
@@ -340,6 +488,44 @@
       ],
       "case": "both-calls-fail",
       "contextTokens": 0,
+      "conversation": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "first",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "second",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply two",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "third",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply three",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "extraInstructions": "",
       "failures": [
         "tool_call"
       ],
@@ -350,22 +536,23 @@
           "role": "system"
         },
         {
-          "content": {
-            "digest": "08d8820c33bf701d950de66a1e806caa6ecfdbbbff66091a62e11eb102ae848e",
-            "length": 535
-          },
+          "content": "{preamble}<previous_user_messages>\n<previous_user_message>\nfirst\n</previous_user_message>\n<previous_user_message>\nsecond\n</previous_user_message>\n<previous_user_message>\nthird\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\n{placeholderSummary}\n</compaction_summary>",
           "injected": true,
           "role": "user"
         }
       ],
       "outcome": "returned",
       "strict": false,
-      "summary": {
-        "digest": "caa0c57c97651a6fa0d2bd3cf7dc044101492a95f5bee2098a5f421114738c4b",
-        "length": 22
-      }
+      "summary": "{placeholderSummary}"
     },
     {
+      "answers": [
+        {
+          "overflow": false,
+          "text": "",
+          "toolCalls": 1
+        }
+      ],
       "calls": [
         {
           "callType": "secondary_call",
@@ -380,6 +567,44 @@
       ],
       "case": "strict-mode-refuses-the-fallback",
       "contextTokens": 1234,
+      "conversation": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "first",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "second",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply two",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "third",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply three",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "extraInstructions": "",
       "failures": [
         "tool_call"
       ],
@@ -425,6 +650,13 @@
       "strict": true
     },
     {
+      "answers": [
+        {
+          "overflow": false,
+          "text": "<summary>strict but fine</summary>",
+          "toolCalls": 0
+        }
+      ],
       "calls": [
         {
           "callType": "secondary_call",
@@ -439,6 +671,44 @@
       ],
       "case": "strict-mode-succeeds",
       "contextTokens": 0,
+      "conversation": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "first",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "second",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply two",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "third",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply three",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "extraInstructions": "",
       "failures": [],
       "messagesAfter": [
         {
@@ -447,10 +717,7 @@
           "role": "system"
         },
         {
-          "content": {
-            "digest": "a0f22ee505188d5c3dbba5c194d5d4ed455416db91abef783491a2b483cdf5be",
-            "length": 528
-          },
+          "content": "{preamble}<previous_user_messages>\n<previous_user_message>\nfirst\n</previous_user_message>\n<previous_user_message>\nsecond\n</previous_user_message>\n<previous_user_message>\nthird\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nstrict but fine\n</compaction_summary>",
           "injected": true,
           "role": "user"
         }
@@ -460,6 +727,18 @@
       "summary": "strict but fine"
     },
     {
+      "answers": [
+        {
+          "overflow": true,
+          "text": "",
+          "toolCalls": 0
+        },
+        {
+          "overflow": false,
+          "text": "<summary>after one drop</summary>",
+          "toolCalls": 0
+        }
+      ],
       "calls": [
         {
           "callType": "secondary_call",
@@ -484,6 +763,44 @@
       ],
       "case": "one-overflow-then-success",
       "contextTokens": 0,
+      "conversation": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "first",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "second",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply two",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "third",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply three",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "extraInstructions": "",
       "failures": [],
       "messagesAfter": [
         {
@@ -492,10 +809,7 @@
           "role": "system"
         },
         {
-          "content": {
-            "digest": "f7254c03280c9a66cc8503cecd09c84a9c3a54af8a7ca7283bb8bdfd742ab089",
-            "length": 527
-          },
+          "content": "{preamble}<previous_user_messages>\n<previous_user_message>\nfirst\n</previous_user_message>\n<previous_user_message>\nsecond\n</previous_user_message>\n<previous_user_message>\nthird\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nafter one drop\n</compaction_summary>",
           "injected": true,
           "role": "user"
         }
@@ -505,6 +819,28 @@
       "summary": "after one drop"
     },
     {
+      "answers": [
+        {
+          "overflow": true,
+          "text": "",
+          "toolCalls": 0
+        },
+        {
+          "overflow": true,
+          "text": "",
+          "toolCalls": 0
+        },
+        {
+          "overflow": true,
+          "text": "",
+          "toolCalls": 0
+        },
+        {
+          "overflow": false,
+          "text": "<summary>after three drops</summary>",
+          "toolCalls": 0
+        }
+      ],
       "calls": [
         {
           "callType": "secondary_call",
@@ -549,6 +885,64 @@
       ],
       "case": "three-overflows-then-success",
       "contextTokens": 0,
+      "conversation": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "turn 0",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 0",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 1",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 1",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 2",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 2",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 3",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 3",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 4",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 4",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "extraInstructions": "",
       "failures": [],
       "messagesAfter": [
         {
@@ -557,10 +951,7 @@
           "role": "system"
         },
         {
-          "content": {
-            "digest": "74471e214ef735d0f3fe5816ee69034d78773e0bc2f06981ac32a38fe588d774",
-            "length": 644
-          },
+          "content": "{preamble}<previous_user_messages>\n<previous_user_message>\nturn 0\n</previous_user_message>\n<previous_user_message>\nturn 1\n</previous_user_message>\n<previous_user_message>\nturn 2\n</previous_user_message>\n<previous_user_message>\nturn 3\n</previous_user_message>\n<previous_user_message>\nturn 4\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nafter three drops\n</compaction_summary>",
           "injected": true,
           "role": "user"
         }
@@ -570,6 +961,33 @@
       "summary": "after three drops"
     },
     {
+      "answers": [
+        {
+          "overflow": true,
+          "text": "",
+          "toolCalls": 0
+        },
+        {
+          "overflow": true,
+          "text": "",
+          "toolCalls": 0
+        },
+        {
+          "overflow": true,
+          "text": "",
+          "toolCalls": 0
+        },
+        {
+          "overflow": true,
+          "text": "",
+          "toolCalls": 0
+        },
+        {
+          "overflow": true,
+          "text": "",
+          "toolCalls": 0
+        }
+      ],
       "calls": [
         {
           "callType": "secondary_call",
@@ -614,6 +1032,94 @@
       ],
       "case": "four-overflows-propagate",
       "contextTokens": 1234,
+      "conversation": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "turn 0",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 0",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 1",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 1",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 2",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 2",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 3",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 3",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 4",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 4",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 5",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 5",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 6",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 6",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 7",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 7",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "extraInstructions": "",
       "failures": [],
       "messagesAfter": [
         {
@@ -706,6 +1212,13 @@
       "strict": false
     },
     {
+      "answers": [
+        {
+          "overflow": true,
+          "text": "",
+          "toolCalls": 0
+        }
+      ],
       "calls": [
         {
           "callType": "secondary_call",
@@ -720,6 +1233,24 @@
       ],
       "case": "overflow-with-nothing-to-drop",
       "contextTokens": 1234,
+      "conversation": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "only round",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "extraInstructions": "",
       "failures": [],
       "messagesAfter": [
         {
@@ -742,6 +1273,13 @@
       "strict": false
     },
     {
+      "answers": [
+        {
+          "overflow": false,
+          "text": "<summary>with instructions</summary>",
+          "toolCalls": 0
+        }
+      ],
       "calls": [
         {
           "callType": "secondary_call",
@@ -756,6 +1294,44 @@
       ],
       "case": "extra-instructions",
       "contextTokens": 0,
+      "conversation": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "first",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "second",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply two",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "third",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply three",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "extraInstructions": "keep the file names",
       "failures": [],
       "messagesAfter": [
         {
@@ -764,10 +1340,7 @@
           "role": "system"
         },
         {
-          "content": {
-            "digest": "66ab4e2a2f343cc8f3231928900f15506060b749024c9d8b5e5ccbfbf4c8ad30",
-            "length": 530
-          },
+          "content": "{preamble}<previous_user_messages>\n<previous_user_message>\nfirst\n</previous_user_message>\n<previous_user_message>\nsecond\n</previous_user_message>\n<previous_user_message>\nthird\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nwith instructions\n</compaction_summary>",
           "injected": true,
           "role": "user"
         }
@@ -1240,7 +1813,11 @@
       "summaryPrefix": "[conversation summary]"
     }
   ],
-  "note": "Compaction corpus: what the pinned reference's pure compaction functions answer for each scripted input, plus the decision tree CompactionManager walks for each scripted model response. Values, tag names and counts are committed as they stand because the scenarios supplied them; the rendered envelope is split, its structure committed verbatim and the two prose runs it carries committed as a SHA-256 digest and a length, because those are the reference's own sentences. Regenerate with scripts/parity/compaction.py --corpus when the pinned reference moves.",
+  "note": "Compaction corpus: what the pinned reference's pure compaction functions answer for each scripted input, plus the decision tree CompactionManager walks for each scripted model response. Values, tag names and counts are committed as they stand because the scenarios supplied them; the rendered envelope is split, its structure committed verbatim and the two prose runs it carries committed as a SHA-256 digest and a length, because those are the reference's own sentences, as is the placeholder summary a failed summarization falls back to. Regenerate with scripts/parity/compaction.py --corpus when the pinned reference moves.",
+  "placeholderSummary": {
+    "digest": "caa0c57c97651a6fa0d2bd3cf7dc044101492a95f5bee2098a5f421114738c4b",
+    "length": 22
+  },
   "reference": {
     "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
   },
@@ -1465,7 +2042,7 @@
       "result": null
     }
   ],
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "summaryExtractions": [
     {
       "case": "plain",
