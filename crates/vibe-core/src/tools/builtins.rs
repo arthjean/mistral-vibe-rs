@@ -545,8 +545,28 @@ fn run_skill(
         } else {
             available.join(", ")
         };
+        // The catalog's issue list is answered with rather than discarded: a
+        // skill that is missing because its own file would not parse is
+        // otherwise indistinguishable from one that was never written, and this
+        // error is the only surface a mid-turn tool call reads.
+        let unloadable = catalog
+            .issues
+            .iter()
+            .filter(|issue| issue.mechanism == "skills")
+            .take(MAX_LISTED_SKILLS)
+            .map(|issue| format!("{}: {}", issue.path.display(), issue.message))
+            .collect::<Vec<_>>();
+        let unloadable = if unloadable.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "; {} skill file(s) could not be loaded: {}",
+                unloadable.len(),
+                unloadable.join("; ")
+            )
+        };
         return Err(ToolError::Execution(format!(
-            "skill `{name}` was not found; available skills: {listed}"
+            "skill `{name}` was not found; available skills: {listed}{unloadable}"
         )));
     };
     let directory = skill_directory(skill);
@@ -1482,6 +1502,33 @@ mod tests {
             .expect_err("a withheld skill is not found");
         assert!(!refused.to_string().contains("withheld,"), "{refused}");
         assert!(refused.to_string().contains("probe"), "{refused}");
+    }
+
+    /// US-168: the catalog's issue list reaches the model rather than being
+    /// discarded, so a skill missing because its own file will not parse is
+    /// distinguishable from one that was never written.
+    #[tokio::test]
+    async fn an_unloadable_skill_is_named_when_a_lookup_misses() {
+        let directory = tempdir().expect("tempdir");
+        let broken = directory.path().join(".vibe/skills/broken");
+        std::fs::create_dir_all(&broken).expect("skill directory");
+        std::fs::write(broken.join("SKILL.md"), "no frontmatter here\n").expect("skill file");
+        let registry = registered(directory.path(), None).await;
+
+        let missing = registry
+            .invoke(
+                "skill",
+                ToolInvocation {
+                    call_id: "skill-1".to_owned(),
+                    arguments: json!({"name": "broken"}),
+                },
+            )
+            .await
+            .expect_err("the unloadable skill is not in the catalog");
+
+        let message = missing.to_string();
+        assert!(message.contains("could not be loaded"), "{message}");
+        assert!(message.contains("broken/SKILL.md"), "{message}");
     }
 
     /// US-115: the second request for a skill already in the conversation is
