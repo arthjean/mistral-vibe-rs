@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde_json::{Value, json};
+use vibe_core::workspace::WARNING_TAG;
 
 mod config;
 mod mcp;
@@ -63,6 +64,10 @@ pub(super) enum CommandAction {
     ClipboardImageRequested,
     Exit,
     Runtime(RuntimeCommand),
+    /// A command that resolves to a model turn rather than to local state. The
+    /// caller submits the text the way it submits a typed line, so queueing,
+    /// image preparation and the busy path stay in one place.
+    Prompt(String),
 }
 
 /// A parsed command whose execution needs the session runtime rather than the
@@ -236,6 +241,11 @@ pub(super) async fn dispatch_command(
             show_status(runtime, state);
             CommandAction::Handled
         }
+        CommandId::Whoami => {
+            show_whoami(runtime, state);
+            CommandAction::Handled
+        }
+        CommandId::Retry => CommandAction::Prompt(retry_prompt(&command_arguments)),
         CommandId::ProxySetup => {
             if command_arguments.is_empty() {
                 show_proxy(runtime, state);
@@ -717,6 +727,55 @@ fn show_status(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
     ) {
         state.overlay = Some(status_overlay(&map_value(result)));
     }
+}
+
+/// `/whoami`: what this build can answer about the signed-in account.
+///
+/// The reference reads `identity/read` and `account/read` together and prints
+/// the name, email, workspace, organization and plan. This port declares
+/// `identity/read` and does not route it yet, the divergence `docs/parity.md`
+/// records, so the identity half says so plainly instead of being invented and
+/// the account half answers from `account/read`.
+fn show_whoami(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
+    let Some(result) = call_runtime(runtime, "account/read", json!({}), state) else {
+        return;
+    };
+    let account = result.get("account").cloned().unwrap_or(Value::Null);
+    let status = account
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("unavailable");
+    let mut lines = vec!["Who am I".to_owned(), format!("Account: {status}")];
+    if let Some(plan) = account.get("plan").and_then(Value::as_str) {
+        lines.push(format!("Plan: {plan}"));
+    }
+    lines.push(
+        "Signed-in name, email, workspace and organization are unavailable: this build declares \
+         `identity/read` and does not route it yet."
+            .to_owned(),
+    );
+    push_local_notice(state, &lines.join("\n"), EntryStatus::Completed);
+}
+
+/// The continuation a `/retry` submits, in this port's own words.
+///
+/// The reference wraps the same three directives in the same warning tag
+/// (`vibe/cli/commands.py:18`): resume where the stream broke, do not restate
+/// what was already produced, and answer the pending request from the start when
+/// nothing was. `NOTICE` forbids shipping its sentences, so these are original.
+fn retry_prompt(additional_instructions: &str) -> String {
+    let mut message = "The previous model stream stopped before it finished. Pick the response up \
+                       where it broke off, without restating anything already written. If nothing \
+                       was written yet, answer the pending request from the start."
+        .to_owned();
+    let instructions = additional_instructions.trim();
+    if !instructions.is_empty() {
+        message.push_str(&format!(
+            "\n\nApply these further instructions from the operator while continuing:\n\
+             {instructions}"
+        ));
+    }
+    format!("<{WARNING_TAG}>{message}</{WARNING_TAG}>")
 }
 
 fn show_debug(runtime: &mut InteractiveRuntime, state: &mut TuiState) {

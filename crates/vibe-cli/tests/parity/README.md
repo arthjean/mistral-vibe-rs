@@ -16,11 +16,15 @@ input parity as reproducible observations instead of interpretation.
 The reference checkout is read-only; the harness only drives and observes it.
 
 ```console
-scripts/parity/oracle.py --expect-commit <full-sha>
+scripts/parity/oracle.py
 ```
 
 Generation refuses to write anything when the reference checkout is missing,
-has uncommitted tracked changes, or is not the expected revision. A scenario
+has uncommitted tracked changes, or is not the expected revision. The expected
+revision defaults to `EXPECTED_COMMIT` in `scripts/parity/pin.py`, so a re-pin
+regenerates this corpus with everything else; `--expect-commit <full-sha>`
+overrides it, and `corpus_declares_every_gap_trace_and_expectation` fails when
+the manifest and the pin disagree. A scenario
 whose capability is unavailable on the host (for example macOS clipboard
 images) is never written as an authoritative fixture: it is declared under
 `unavailable` so the runner reports an explicit hole instead of a pass.

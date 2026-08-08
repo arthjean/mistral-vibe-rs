@@ -595,6 +595,25 @@ async fn submit(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, Cli
             )
             .await;
         }
+        // A command that resolves to a model turn takes the same path a typed
+        // line takes, so it queues while busy and prepares images the same way.
+        CommandAction::Prompt(prompt) => {
+            let input = &mut *context.input;
+            submission::execute(
+                prompt,
+                runtime_busy,
+                PromptContext::new(
+                    context.working_directory,
+                    context.runtime,
+                    context.active,
+                    context.state,
+                    context.controls,
+                    context.clipboard_images,
+                ),
+                input,
+            )
+            .await?;
+        }
         CommandAction::Unhandled => {
             let input = &mut *context.input;
             submission::execute(

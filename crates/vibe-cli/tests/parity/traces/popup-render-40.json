@@ -104,12 +104,14 @@
           "/reload",
           "/rename",
           "/resume",
+          "/retry",
           "/rewind",
           "/status",
           "/theme",
           "/thinking",
           "/unleanstall",
-          "/voice"
+          "/voice",
+          "/whoami"
         ],
         "popupVisible": true,
         "prompt": "/",
@@ -202,6 +204,10 @@
               "label": "/resume"
             },
             {
+              "description": "Continue an interrupted model response; optionally pass additional instructions",
+              "label": "/retry"
+            },
+            {
               "description": "Rewind to a previous message (or press Esc twice)",
               "label": "/rewind"
             },
@@ -224,6 +230,10 @@
             {
               "description": "Configure voice settings",
               "label": "/voice"
+            },
+            {
+              "description": "Display the Mistral signed-in user, workspace, and plan",
+              "label": "/whoami"
             }
           ],
           "kind": "slash",
@@ -410,8 +420,8 @@
     }
   ],
   "reference": {
-    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
-    "version": "2.23.2"
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "version": "2.24.0"
   },
   "schemaVersion": 1,
   "setup": {

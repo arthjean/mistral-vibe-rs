@@ -29,12 +29,11 @@ import sys
 import tempfile
 from typing import Any
 
+#: The pin and the checkout path come from the one place this repository writes
+#: them, so a re-pin does not have to find this script.
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+
 SCHEMA_VERSION = 1
-#: Where the read-only reference checkout lives. ``VIBE_REFERENCE`` overrides the
-#: default for machines that hold it elsewhere, and ``--reference`` wins over both.
-DEFAULT_REFERENCE = Path(
-    os.environ.get("VIBE_REFERENCE") or "/home/arthur/dev/mistral-vibe"
-)
 DEFAULT_OUTPUT = Path("crates/vibe-cli/tests/parity")
 
 
@@ -211,7 +210,10 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--expect-commit", default=None)
+    # The pin is the default, so a capture from an off-pin checkout fails here
+    # rather than writing a corpus the Rust replay would then reject. Passing an
+    # explicit value still overrides it, and an empty one disables the check.
+    parser.add_argument("--expect-commit", default=EXPECTED_COMMIT)
     parser.add_argument("--only", default=None, help="record a single scenario id")
     parser.add_argument("--list", action="store_true", help="list scenario ids and exit")
     parser.add_argument("--dump", action="store_true", help="print the trace recorded by --only")

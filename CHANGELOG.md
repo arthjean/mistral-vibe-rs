@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Pick up a model response that stopped in the middle. `/retry` submits a
+  continuation that asks the model to resume where the stream broke off without
+  repeating what it already wrote, and takes optional instructions to steer the
+  rest. `/whoami` reports the account this build can see and says plainly that
+  the signed-in name, workspace and organization are not available yet, rather
+  than showing nothing.
+- Track the reference at its current release. The parity pin moves from 2.23.3
+  to 2.24.0 and every committed corpus was recaptured from it in the same
+  change, including the chat-input traces that had been sitting two releases
+  behind. Recapturing them is now mechanically enforced: a corpus captured from
+  any other revision fails the suite instead of quietly certifying old behavior.
 - Rewind to a point in the conversation rather than to a position in a list.
   `session/rewind` and `session/rewind/read` now take the identity of the
   history entry you picked, so a rewind after a compaction lands where you

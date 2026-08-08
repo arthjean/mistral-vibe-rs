@@ -226,6 +226,13 @@ pub struct ScheduledTurn {
 pub struct TurnRequest {
     pub prompt: String,
     pub input: Vec<PublicContentBlock>,
+    /// Whether the harness is starting this turn rather than the operator,
+    /// which v2.24.0 added to `TurnStartParams`
+    /// (`vibe/app_server/protocol.py:1112`). It is carried on the wire and
+    /// defaults false; no path in this port starts an injected turn yet, and the
+    /// first one is the compaction envelope EP-043 writes.
+    #[serde(default)]
+    pub injected: bool,
     #[serde(default)]
     pub client_user_message_id: Option<String>,
     #[serde(default)]
@@ -245,6 +252,7 @@ impl TurnRequest {
                 text: prompt.clone(),
             }],
             prompt,
+            injected: false,
             client_user_message_id: None,
             auto_title: None,
             user_display_content: None,
@@ -5022,6 +5030,7 @@ command = "/must-not-run"
                     }),
                 },
             ],
+            injected: false,
             client_user_message_id: None,
             auto_title: None,
             user_display_content: None,

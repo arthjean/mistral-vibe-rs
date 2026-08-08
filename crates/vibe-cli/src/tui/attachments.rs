@@ -181,6 +181,7 @@ pub fn prepare_submission(
     let turn = TurnRequest {
         prompt: draft.text().to_owned(),
         input,
+        injected: false,
         client_user_message_id: None,
         auto_title: None,
         user_display_content: None,

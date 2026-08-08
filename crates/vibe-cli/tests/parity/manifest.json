@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "reference": {
-    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
-    "version": "2.23.2"
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "version": "2.24.0"
   },
   "workspaces": {
     "empty": {},

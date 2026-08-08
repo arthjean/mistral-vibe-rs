@@ -47,12 +47,14 @@ fn official_textual_commands_are_all_registered_with_their_aliases() {
         "/reload",
         "/rename",
         "/resume",
+        "/retry",
         "/rewind",
         "/status",
         "/theme",
         "/thinking",
         "/unleanstall",
         "/voice",
+        "/whoami",
     ];
     if cfg!(target_os = "macos") {
         expected.push("/paste-image");

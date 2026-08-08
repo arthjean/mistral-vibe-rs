@@ -582,6 +582,7 @@ pub(crate) fn turn_request(content: Vec<Value>) -> Result<TurnRequest, AcpError>
     Ok(TurnRequest {
         prompt: text.join("\n\n"),
         input: public,
+        injected: false,
         client_user_message_id: None,
         auto_title: None,
         user_display_content: Some(Value::Array(content)),

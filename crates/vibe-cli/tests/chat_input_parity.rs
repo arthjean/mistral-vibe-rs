@@ -194,6 +194,19 @@ fn corpus_declares_every_gap_trace_and_expectation() -> Result<(), String> {
             manifest.reference.commit
         ));
     }
+    // A corpus captured from another revision is not an oracle for this pin, and
+    // nothing else here would notice: `scripts/parity/oracle.py` records whatever
+    // HEAD it finds, so this corpus sat two releases behind the pin until US-142
+    // recaptured it. `AGENTS.md` requires a re-pin to regenerate every committed
+    // corpus in the same change, and this is what makes that mechanical.
+    if manifest.reference.commit != vibe_core::parity::REFERENCE_COMMIT {
+        return Err(format!(
+            "the corpus was captured from `{}` and the pin names `{}`; recapture it with \
+             `scripts/parity/oracle.py`",
+            manifest.reference.commit,
+            vibe_core::parity::REFERENCE_COMMIT
+        ));
+    }
     if manifest.reference.version.is_empty() {
         return Err("reference version is missing from the manifest".to_owned());
     }

@@ -105,13 +105,15 @@
           "/reload",
           "/rename",
           "/resume",
+          "/retry",
           "/review",
           "/rewind",
           "/status",
           "/theme",
           "/thinking",
           "/unleanstall",
-          "/voice"
+          "/voice",
+          "/whoami"
         ],
         "popupVisible": true,
         "prompt": "/",
@@ -208,6 +210,10 @@
               "label": "/resume"
             },
             {
+              "description": "Continue an interrupted model response; optionally pass additional instructions",
+              "label": "/retry"
+            },
+            {
               "description": "Review the working tree",
               "label": "/review"
             },
@@ -234,6 +240,10 @@
             {
               "description": "Configure voice settings",
               "label": "/voice"
+            },
+            {
+              "description": "Display the Mistral signed-in user, workspace, and plan",
+              "label": "/whoami"
             }
           ],
           "kind": "slash",
@@ -277,6 +287,7 @@
           "/reload",
           "/rename",
           "/resume",
+          "/retry",
           "/review",
           "/rewind",
           "/proxy-setup",
@@ -305,6 +316,10 @@
             {
               "description": "Browse, resume, or delete saved sessions",
               "label": "/resume"
+            },
+            {
+              "description": "Continue an interrupted model response; optionally pass additional instructions",
+              "label": "/retry"
             },
             {
               "description": "Review the working tree",
@@ -372,6 +387,7 @@
           "/reload",
           "/rename",
           "/resume",
+          "/retry",
           "/review",
           "/rewind",
           "/data-retention",
@@ -398,6 +414,10 @@
             {
               "description": "Browse, resume, or delete saved sessions",
               "label": "/resume"
+            },
+            {
+              "description": "Continue an interrupted model response; optionally pass additional instructions",
+              "label": "/retry"
             },
             {
               "description": "Review the working tree",
@@ -435,8 +455,8 @@
     }
   ],
   "reference": {
-    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
-    "version": "2.23.2"
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "version": "2.24.0"
   },
   "schemaVersion": 1,
   "setup": {

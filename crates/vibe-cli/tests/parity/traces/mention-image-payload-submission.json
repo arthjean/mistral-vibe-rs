@@ -1,211 +1,212 @@
 {
-  "id": "mention-image-payload-submission",
-  "gap": "GAP-17",
-  "story": "US-013",
-  "title": "A supported image produces the canonical submission payload",
   "capabilities": [
     "core"
   ],
-  "setup": {
-    "workspace": "sample",
-    "viewport": {
-      "width": 80,
-      "height": 24
+  "events": [
+    {
+      "text": "inspect @'__WORKSPACE__/image one.png'",
+      "type": "paste"
     },
-    "safety": "neutral",
-    "agentName": "",
-    "commands": {},
-    "skills": [],
-    "voice": null,
-    "history": null,
-    "initial": {}
-  },
+    {
+      "char": null,
+      "key": "enter",
+      "mods": [],
+      "type": "key"
+    }
+  ],
+  "gap": "GAP-17",
+  "id": "mention-image-payload-submission",
   "initial": {
-    "state": {
-      "text": "",
-      "mode": ">",
-      "cursor": 0,
-      "selection": null,
-      "completion": {
-        "open": false,
-        "kind": null,
-        "selected": 0,
-        "items": []
-      },
-      "history": {
-        "navigating": false,
-        "loadedEntry": false,
-        "cursorMovedSinceLoad": false
-      },
-      "feedbackActive": false,
-      "switching": false
-    },
     "effects": [],
     "render": {
-      "visualLines": [
-        ""
-      ],
-      "wrapWidth": 71,
+      "borderClasses": [],
+      "borderTitle": "",
       "cursorCell": [
         0,
         0
       ],
-      "prompt": ">",
-      "popupVisible": false,
       "popupRows": [],
-      "borderTitle": "",
-      "borderClasses": []
+      "popupVisible": false,
+      "prompt": ">",
+      "visualLines": [
+        ""
+      ],
+      "wrapWidth": 71
+    },
+    "state": {
+      "completion": {
+        "items": [],
+        "kind": null,
+        "open": false,
+        "selected": 0
+      },
+      "cursor": 0,
+      "feedbackActive": false,
+      "history": {
+        "cursorMovedSinceLoad": false,
+        "loadedEntry": false,
+        "navigating": false
+      },
+      "mode": ">",
+      "selection": null,
+      "switching": false,
+      "text": ""
     }
   },
-  "events": [
-    {
-      "type": "paste",
-      "text": "inspect @'__WORKSPACE__/image one.png'"
-    },
-    {
-      "type": "key",
-      "key": "enter",
-      "char": null,
-      "mods": []
-    }
-  ],
   "observations": [
     {
-      "state": {
-        "text": "inspect @'__WORKSPACE__/image one.png'",
-        "mode": ">",
-        "cursor": 50,
-        "selection": null,
-        "completion": {
-          "open": false,
-          "kind": null,
-          "selected": 0,
-          "items": []
-        },
-        "history": {
-          "navigating": false,
-          "loadedEntry": false,
-          "cursorMovedSinceLoad": false
-        },
-        "feedbackActive": false,
-        "switching": false
-      },
       "effects": [
         {
           "type": "historyReset"
         }
       ],
+      "event": {
+        "text": "inspect @'__WORKSPACE__/image one.png'",
+        "type": "paste"
+      },
+      "index": 0,
       "render": {
-        "visualLines": [
-          "inspect @'__WORKSPACE__/image one.png'"
-        ],
-        "wrapWidth": 71,
+        "borderClasses": [],
+        "borderTitle": "",
         "cursorCell": [
           0,
           50
         ],
-        "prompt": ">",
-        "popupVisible": false,
         "popupRows": [],
-        "borderTitle": "",
-        "borderClasses": []
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          "inspect @'__WORKSPACE__/image one.png'"
+        ],
+        "wrapWidth": 71
       },
-      "index": 0,
-      "event": {
-        "type": "paste",
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 50,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
         "text": "inspect @'__WORKSPACE__/image one.png'"
       }
     },
     {
-      "state": {
-        "text": "",
-        "mode": ">",
-        "cursor": 0,
-        "selection": null,
-        "completion": {
-          "open": false,
-          "kind": null,
-          "selected": 0,
-          "items": []
-        },
-        "history": {
-          "navigating": false,
-          "loadedEntry": false,
-          "cursorMovedSinceLoad": false
-        },
-        "feedbackActive": false,
-        "switching": false
-      },
       "effects": [
         {
-          "type": "submitRequested",
-          "text": "inspect @'__WORKSPACE__/image one.png'"
+          "text": "inspect @'__WORKSPACE__/image one.png'",
+          "type": "submitRequested"
         },
         {
           "type": "completionReset"
         },
         {
-          "type": "submit",
-          "text": "inspect @'__WORKSPACE__/image one.png'"
+          "text": "inspect @'__WORKSPACE__/image one.png'",
+          "type": "submit"
         }
       ],
+      "event": {
+        "char": null,
+        "key": "enter",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 1,
       "render": {
-        "visualLines": [
-          ""
-        ],
-        "wrapWidth": 71,
+        "borderClasses": [],
+        "borderTitle": "",
         "cursorCell": [
           0,
           0
         ],
-        "prompt": ">",
-        "popupVisible": false,
         "popupRows": [],
-        "borderTitle": "",
-        "borderClasses": []
+        "popupVisible": false,
+        "prompt": ">",
+        "visualLines": [
+          ""
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 0,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": ">",
+        "selection": null,
+        "switching": false,
+        "text": ""
       },
       "submission": {
-        "prompt": "inspect @'__WORKSPACE__/image one.png'",
+        "autoTitle": null,
+        "clientUserMessageId": null,
+        "injected": false,
         "input": [
           {
-            "type": "text",
-            "text": "inspect @'__WORKSPACE__/image one.png'"
+            "text": "inspect @'__WORKSPACE__/image one.png'",
+            "type": "text"
           },
           {
-            "type": "image",
             "attachment": {
+              "alias": "__WORKSPACE__/image one.png",
+              "mimeType": "image/png",
               "source": {
                 "kind": "file",
                 "path": "__WORKSPACE__/image one.png"
-              },
-              "alias": "__WORKSPACE__/image one.png",
-              "mimeType": "image/png"
-            }
+              }
+            },
+            "type": "image"
           }
         ],
-        "clientUserMessageId": null,
-        "autoTitle": null,
-        "userDisplayContent": null,
         "mentionStats": {
-          "count": 1,
           "contextTypes": {
             "image": 1
           },
+          "count": 1,
           "fileExtensions": {}
-        }
-      },
-      "index": 1,
-      "event": {
-        "type": "key",
-        "key": "enter",
-        "char": null,
-        "mods": []
+        },
+        "prompt": "inspect @'__WORKSPACE__/image one.png'",
+        "userDisplayContent": null
       }
     }
   ],
-  "schemaVersion": 1,
   "reference": {
-    "commit": "99a6efa9ca1fb48671adebe0f6f5d931945bd8c9",
-    "version": "2.23.2"
-  }
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "version": "2.24.0"
+  },
+  "schemaVersion": 1,
+  "setup": {
+    "agentName": "",
+    "commands": {},
+    "history": null,
+    "initial": {},
+    "safety": "neutral",
+    "skills": [],
+    "viewport": {
+      "height": 24,
+      "width": 80
+    },
+    "voice": null,
+    "workspace": "sample"
+  },
+  "story": "US-013",
+  "title": "A supported image produces the canonical submission payload"
 }

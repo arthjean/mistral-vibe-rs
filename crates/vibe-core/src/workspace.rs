@@ -39,7 +39,7 @@ pub use search::GrepOutcome;
 
 pub const DEFAULT_MAX_READ_BYTES: usize = 1_048_576;
 /// The tag a model-facing notice is wrapped in, matching the reference name.
-const WARNING_TAG: &str = "vibe_warning";
+pub const WARNING_TAG: &str = "vibe_warning";
 /// The per-directory instruction file both implementations read.
 const INSTRUCTION_FILE: &str = "AGENTS.md";
 pub const DEFAULT_MAX_LINES: usize = 2_000;
