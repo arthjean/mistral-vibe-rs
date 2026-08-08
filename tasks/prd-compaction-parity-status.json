@@ -18,10 +18,10 @@
     {
       "id": "EP-042",
       "title": "The Pure Calculation and Its Oracle",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 6,
-      "stories_done": 0,
+      "stories_done": 6,
       "stories_in_review": 0
     },
     {
@@ -97,81 +97,81 @@
       "id": "US-142",
       "title": "Re-pin the reference to v2.24.0 and regenerate every corpus",
       "epic": "EP-042",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-143",
       "title": "Reproduce the token approximation and the middle truncation",
       "epic": "EP-042",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-144",
       "title": "Reproduce summary extraction and oldest-round dropping",
       "epic": "EP-042",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-145",
       "title": "Render and parse the compaction envelope",
       "epic": "EP-042",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-144"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-146",
       "title": "Select the user messages that survive under budget",
       "epic": "EP-042",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-143",
         "US-145"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-147",
       "title": "Capture the compaction oracle and replay it",
       "epic": "EP-042",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-142",
         "US-146"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-148",

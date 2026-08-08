@@ -13,6 +13,13 @@
   change, including the chat-input traces that had been sitting two releases
   behind. Recapturing them is now mechanically enforced: a corpus captured from
   any other revision fails the suite instead of quietly certifying old behavior.
+- Preserve your own words through a compaction. The pure half of compaction
+  lands: the token arithmetic, the middle truncation, the summary parser, the
+  oldest-round trimmer and the envelope that carries the last 20 000 tokens of
+  your messages across a compaction and reads them back on the next one. It is
+  measured against the reference by a committed corpus of 74 scenarios, and the
+  envelope reproduces its structure exactly while wording its own prose.
+
 - Rewind to a point in the conversation rather than to a position in a list.
   `session/rewind` and `session/rewind/read` now take the identity of the
   history entry you picked, so a rewind after a compaction lands where you

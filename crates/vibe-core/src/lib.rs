@@ -12,6 +12,7 @@ mod atomic_file;
 pub mod bootstrap;
 pub mod checkpoints;
 mod child;
+pub mod compaction;
 pub mod config;
 pub mod continuity;
 pub mod engine;

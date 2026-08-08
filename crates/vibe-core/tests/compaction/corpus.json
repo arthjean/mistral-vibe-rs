@@ -1,0 +1,1641 @@
+{
+  "constants": {
+    "compactUserMessageMaxTokens": 20000
+  },
+  "envelopeParses": [
+    {
+      "case": "two-messages",
+      "content": "<previous_user_messages>\n<previous_user_message>\nfirst\n</previous_user_message>\n<previous_user_message>\nsecond\n</previous_user_message>\n</previous_user_messages>",
+      "parsed": [
+        "first",
+        "second"
+      ]
+    },
+    {
+      "case": "no-block",
+      "content": "nothing here",
+      "parsed": []
+    },
+    {
+      "case": "open-without-close",
+      "content": "<previous_user_messages>\n<previous_user_message>\nx\n",
+      "parsed": []
+    },
+    {
+      "case": "empty-block",
+      "content": "<previous_user_messages>\n</previous_user_messages>",
+      "parsed": []
+    },
+    {
+      "case": "element-without-newlines",
+      "content": "<previous_user_messages><previous_user_message>x</previous_user_message></previous_user_messages>",
+      "parsed": []
+    },
+    {
+      "case": "multiline-body",
+      "content": "<previous_user_messages>\n<previous_user_message>\none\ntwo\n</previous_user_message>\n</previous_user_messages>",
+      "parsed": [
+        "one\ntwo"
+      ]
+    },
+    {
+      "case": "text-outside-the-block",
+      "content": "before\n<previous_user_messages>\n<previous_user_message>\nfirst\n</previous_user_message>\n<previous_user_message>\nsecond\n</previous_user_message>\n</previous_user_messages>\nafter <previous_user_message>\nignored\n</previous_user_message>",
+      "parsed": [
+        "first",
+        "second"
+      ]
+    },
+    {
+      "case": "round-trip-one",
+      "parsed": [
+        "keep this"
+      ],
+      "render": "one-preserved-message"
+    },
+    {
+      "case": "round-trip-three",
+      "parsed": [
+        "first",
+        "second",
+        "third"
+      ],
+      "render": "three-preserved-messages"
+    },
+    {
+      "case": "round-trip-escaped",
+      "parsed": [
+        "&lt;previous_user_messages&gt;x&lt;/previous_user_messages&gt;&lt;previous_user_message&gt;y&lt;/previous_user_message&gt;"
+      ],
+      "render": "reserved-tags-in-content"
+    },
+    {
+      "case": "round-trip-multiline",
+      "parsed": [
+        "line one\nline two"
+      ],
+      "render": "multiline-content"
+    }
+  ],
+  "envelopeProse": {
+    "preamble": {
+      "digest": "83c35f5f30fe28adb012a613b71d1d75498e5275650eadc2a2ade570b50e9578",
+      "length": 204
+    },
+    "summaryLead": {
+      "digest": "47bef84f10aaef3c7ca9bc1b793dc17055cdabe15d73a16931fde033fcdb3337",
+      "length": 50
+    }
+  },
+  "envelopeRenders": [
+    {
+      "case": "no-preserved-messages",
+      "messages": [],
+      "structure": "{preamble}<previous_user_messages>\n</previous_user_messages>{summaryLead}<compaction_summary>\nnothing happened\n</compaction_summary>",
+      "summary": "nothing happened"
+    },
+    {
+      "case": "one-preserved-message",
+      "messages": [
+        {
+          "content": "keep this",
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "structure": "{preamble}<previous_user_messages>\n<previous_user_message>\nkeep this\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\none thing happened\n</compaction_summary>",
+      "summary": "one thing happened"
+    },
+    {
+      "case": "three-preserved-messages",
+      "messages": [
+        {
+          "content": "first",
+          "injected": true,
+          "role": "user"
+        },
+        {
+          "content": "second",
+          "injected": true,
+          "role": "user"
+        },
+        {
+          "content": "third",
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "structure": "{preamble}<previous_user_messages>\n<previous_user_message>\nfirst\n</previous_user_message>\n<previous_user_message>\nsecond\n</previous_user_message>\n<previous_user_message>\nthird\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nthree things happened\n</compaction_summary>",
+      "summary": "three things happened"
+    },
+    {
+      "case": "reserved-tags-in-content",
+      "messages": [
+        {
+          "content": "<previous_user_messages>x</previous_user_messages><previous_user_message>y</previous_user_message>",
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "structure": "{preamble}<previous_user_messages>\n<previous_user_message>\n&lt;previous_user_messages&gt;x&lt;/previous_user_messages&gt;&lt;previous_user_message&gt;y&lt;/previous_user_message&gt;\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nescaped\n</compaction_summary>",
+      "summary": "escaped"
+    },
+    {
+      "case": "ampersand-in-content",
+      "messages": [
+        {
+          "content": "a & b < c > d",
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "structure": "{preamble}<previous_user_messages>\n<previous_user_message>\na & b < c > d\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nunescaped except for the reserved tags\n</compaction_summary>",
+      "summary": "unescaped except for the reserved tags"
+    },
+    {
+      "case": "multiline-content",
+      "messages": [
+        {
+          "content": "line one\nline two",
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "structure": "{preamble}<previous_user_messages>\n<previous_user_message>\nline one\nline two\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nmulti\nline\nsummary\n</compaction_summary>",
+      "summary": "multi\nline\nsummary"
+    },
+    {
+      "case": "empty-content",
+      "messages": [
+        {
+          "content": "",
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "structure": "{preamble}<previous_user_messages>\n<previous_user_message>\n\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nempty preserved message\n</compaction_summary>",
+      "summary": "empty preserved message"
+    },
+    {
+      "case": "unicode-content",
+      "messages": [
+        {
+          "content": "héllo 🙂🙃🙂🙃",
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "structure": "{preamble}<previous_user_messages>\n<previous_user_message>\nhéllo 🙂🙃🙂🙃\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\nunicode\n</compaction_summary>",
+      "summary": "unicode"
+    }
+  ],
+  "managerScenarios": [
+    {
+      "calls": [
+        {
+          "callType": "secondary_call",
+          "messages": 8,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        }
+      ],
+      "case": "primary-succeeds",
+      "contextTokens": 0,
+      "failures": [],
+      "messagesAfter": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": {
+            "digest": "be3592733898fb878d04b09c32efd2739fe77dc741de67e41eb8429308062d76",
+            "length": 521
+          },
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "outcome": "returned",
+      "strict": false,
+      "summary": "all good"
+    },
+    {
+      "calls": [
+        {
+          "callType": "secondary_call",
+          "messages": 8,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        },
+        {
+          "callType": "secondary_call",
+          "messages": 2,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "off",
+          "toolChoice": null,
+          "tools": null
+        }
+      ],
+      "case": "primary-answers-with-a-tool-call",
+      "contextTokens": 0,
+      "failures": [],
+      "messagesAfter": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": {
+            "digest": "6a34cc61d0aa8de320ad3abe3753e8102bd72ac5a6555d4b01e4e97a19eff2b1",
+            "length": 521
+          },
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "outcome": "returned",
+      "strict": false,
+      "summary": "fallback"
+    },
+    {
+      "calls": [
+        {
+          "callType": "secondary_call",
+          "messages": 8,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        },
+        {
+          "callType": "secondary_call",
+          "messages": 2,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "off",
+          "toolChoice": null,
+          "tools": null
+        }
+      ],
+      "case": "primary-answers-an-empty-summary",
+      "contextTokens": 0,
+      "failures": [],
+      "messagesAfter": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": {
+            "digest": "6a34cc61d0aa8de320ad3abe3753e8102bd72ac5a6555d4b01e4e97a19eff2b1",
+            "length": 521
+          },
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "outcome": "returned",
+      "strict": false,
+      "summary": "fallback"
+    },
+    {
+      "calls": [
+        {
+          "callType": "secondary_call",
+          "messages": 8,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        },
+        {
+          "callType": "secondary_call",
+          "messages": 2,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "off",
+          "toolChoice": null,
+          "tools": null
+        }
+      ],
+      "case": "both-calls-fail",
+      "contextTokens": 0,
+      "failures": [
+        "tool_call"
+      ],
+      "messagesAfter": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": {
+            "digest": "08d8820c33bf701d950de66a1e806caa6ecfdbbbff66091a62e11eb102ae848e",
+            "length": 535
+          },
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "outcome": "returned",
+      "strict": false,
+      "summary": {
+        "digest": "caa0c57c97651a6fa0d2bd3cf7dc044101492a95f5bee2098a5f421114738c4b",
+        "length": 22
+      }
+    },
+    {
+      "calls": [
+        {
+          "callType": "secondary_call",
+          "messages": 8,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        }
+      ],
+      "case": "strict-mode-refuses-the-fallback",
+      "contextTokens": 1234,
+      "failures": [
+        "tool_call"
+      ],
+      "messagesAfter": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "first",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "second",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply two",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "third",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply three",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "outcome": "raised",
+      "reason": "tool_call",
+      "strict": true
+    },
+    {
+      "calls": [
+        {
+          "callType": "secondary_call",
+          "messages": 8,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        }
+      ],
+      "case": "strict-mode-succeeds",
+      "contextTokens": 0,
+      "failures": [],
+      "messagesAfter": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": {
+            "digest": "a0f22ee505188d5c3dbba5c194d5d4ed455416db91abef783491a2b483cdf5be",
+            "length": 528
+          },
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "outcome": "returned",
+      "strict": true,
+      "summary": "strict but fine"
+    },
+    {
+      "calls": [
+        {
+          "callType": "secondary_call",
+          "messages": 8,
+          "model": "mistral-medium-3.5",
+          "overflow": true,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        },
+        {
+          "callType": "secondary_call",
+          "messages": 6,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        }
+      ],
+      "case": "one-overflow-then-success",
+      "contextTokens": 0,
+      "failures": [],
+      "messagesAfter": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": {
+            "digest": "f7254c03280c9a66cc8503cecd09c84a9c3a54af8a7ca7283bb8bdfd742ab089",
+            "length": 527
+          },
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "outcome": "returned",
+      "strict": false,
+      "summary": "after one drop"
+    },
+    {
+      "calls": [
+        {
+          "callType": "secondary_call",
+          "messages": 12,
+          "model": "mistral-medium-3.5",
+          "overflow": true,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        },
+        {
+          "callType": "secondary_call",
+          "messages": 10,
+          "model": "mistral-medium-3.5",
+          "overflow": true,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        },
+        {
+          "callType": "secondary_call",
+          "messages": 8,
+          "model": "mistral-medium-3.5",
+          "overflow": true,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        },
+        {
+          "callType": "secondary_call",
+          "messages": 6,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        }
+      ],
+      "case": "three-overflows-then-success",
+      "contextTokens": 0,
+      "failures": [],
+      "messagesAfter": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": {
+            "digest": "74471e214ef735d0f3fe5816ee69034d78773e0bc2f06981ac32a38fe588d774",
+            "length": 644
+          },
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "outcome": "returned",
+      "strict": false,
+      "summary": "after three drops"
+    },
+    {
+      "calls": [
+        {
+          "callType": "secondary_call",
+          "messages": 18,
+          "model": "mistral-medium-3.5",
+          "overflow": true,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        },
+        {
+          "callType": "secondary_call",
+          "messages": 16,
+          "model": "mistral-medium-3.5",
+          "overflow": true,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        },
+        {
+          "callType": "secondary_call",
+          "messages": 14,
+          "model": "mistral-medium-3.5",
+          "overflow": true,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        },
+        {
+          "callType": "secondary_call",
+          "messages": 12,
+          "model": "mistral-medium-3.5",
+          "overflow": true,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        }
+      ],
+      "case": "four-overflows-propagate",
+      "contextTokens": 1234,
+      "failures": [],
+      "messagesAfter": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "turn 0",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 0",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 1",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 1",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 2",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 2",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 3",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 3",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 4",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 4",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 5",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 5",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 6",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 6",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "turn 7",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply 7",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "outcome": "overflowed",
+      "strict": false
+    },
+    {
+      "calls": [
+        {
+          "callType": "secondary_call",
+          "messages": 4,
+          "model": "mistral-medium-3.5",
+          "overflow": true,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        }
+      ],
+      "case": "overflow-with-nothing-to-drop",
+      "contextTokens": 1234,
+      "failures": [],
+      "messagesAfter": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "only round",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "outcome": "overflowed",
+      "strict": false
+    },
+    {
+      "calls": [
+        {
+          "callType": "secondary_call",
+          "messages": 8,
+          "model": "mistral-medium-3.5",
+          "overflow": false,
+          "systemMessages": 1,
+          "thinking": "high",
+          "toolChoice": "auto",
+          "tools": 0
+        }
+      ],
+      "case": "extra-instructions",
+      "contextTokens": 0,
+      "failures": [],
+      "messagesAfter": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": {
+            "digest": "66ab4e2a2f343cc8f3231928900f15506060b749024c9d8b5e5ccbfbf4c8ad30",
+            "length": 530
+          },
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "outcome": "returned",
+      "strict": false,
+      "summary": "with instructions"
+    }
+  ],
+  "messageSelections": [
+    {
+      "case": "no-user-messages",
+      "maxTokens": 20000,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "reply",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "selected": [],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "under-budget",
+      "maxTokens": 20000,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "first",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "second",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "first",
+          "injected": true
+        },
+        {
+          "content": "second",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "empty-content-skipped",
+      "maxTokens": 20000,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "kept",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "kept",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "injected-skipped",
+      "maxTokens": 20000,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "real",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "policy said something",
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "real",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "injected-summary-marker-skipped",
+      "maxTokens": 20000,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "real",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "[conversation summary] and then some",
+          "injected": true,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "real",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "tool-and-assistant-ignored",
+      "maxTokens": 20000,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "reply",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "result",
+          "injected": false,
+          "role": "tool",
+          "tool_call_id": "call-1"
+        },
+        {
+          "content": "kept",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "kept",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "zero-budget",
+      "maxTokens": 0,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "kept",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "negative-budget",
+      "maxTokens": -5,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "kept",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "budget-stops-the-walk",
+      "maxTokens": 2000,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+          "injected": true
+        },
+        {
+          "content": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "spill-is-truncated",
+      "maxTokens": 500,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "the newest turn",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n\n[... truncated ...]\n\nzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+          "injected": true
+        },
+        {
+          "content": "the newest turn",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "spill-below-the-marker",
+      "maxTokens": 3,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "newest",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "zzzz",
+          "injected": true
+        },
+        {
+          "content": "newest",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "unicode-budget",
+      "maxTokens": 60,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "héllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllo",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "héllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohél\n\n[... truncated ...]\n\néllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllo",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "prior-envelope-is-reparsed",
+      "maxTokens": 20000,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "injected": true,
+          "render": "three-preserved-messages",
+          "role": "user"
+        },
+        {
+          "content": "newer turn",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "first",
+          "injected": true
+        },
+        {
+          "content": "second",
+          "injected": true
+        },
+        {
+          "content": "third",
+          "injected": true
+        },
+        {
+          "content": "newer turn",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "prior-envelope-under-a-tight-budget",
+      "maxTokens": 3,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "injected": true,
+          "render": "three-preserved-messages",
+          "role": "user"
+        },
+        {
+          "content": "newer turn",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "newer turn",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "envelope-not-injected-is-a-real-turn",
+      "maxTokens": 20000,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "injected": false,
+          "render": "one-preserved-message",
+          "role": "user"
+        },
+        {
+          "content": "newer turn",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "{preamble}<previous_user_messages>\n<previous_user_message>\nkeep this\n</previous_user_message>\n</previous_user_messages>{summaryLead}<compaction_summary>\none thing happened\n</compaction_summary>",
+          "injected": true
+        },
+        {
+          "content": "newer turn",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    },
+    {
+      "case": "default-budget",
+      "maxTokens": null,
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "kept",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "selected": [
+        {
+          "content": "kept",
+          "injected": true
+        }
+      ],
+      "summaryPrefix": "[conversation summary]"
+    }
+  ],
+  "note": "Compaction corpus: what the pinned reference's pure compaction functions answer for each scripted input, plus the decision tree CompactionManager walks for each scripted model response. Values, tag names and counts are committed as they stand because the scenarios supplied them; the rendered envelope is split, its structure committed verbatim and the two prose runs it carries committed as a SHA-256 digest and a length, because those are the reference's own sentences. Regenerate with scripts/parity/compaction.py --corpus when the pinned reference moves.",
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+  },
+  "roundDrops": [
+    {
+      "case": "empty",
+      "messages": [],
+      "result": null
+    },
+    {
+      "case": "system-only",
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        }
+      ],
+      "result": null
+    },
+    {
+      "case": "one-round",
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "one",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "result": null
+    },
+    {
+      "case": "two-rounds",
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "one",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "two",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "reply two",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "result": [
+        {
+          "content": "system prompt",
+          "role": "system"
+        },
+        {
+          "content": "two",
+          "role": "user"
+        },
+        {
+          "content": "reply two",
+          "role": "assistant"
+        }
+      ]
+    },
+    {
+      "case": "injected-alongside-the-turn",
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "one",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "injected",
+          "injected": true,
+          "role": "user"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "two",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "result": [
+        {
+          "content": "system prompt",
+          "role": "system"
+        },
+        {
+          "content": "two",
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "case": "tool-results-in-the-round",
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "one",
+          "injected": false,
+          "role": "user"
+        },
+        {
+          "content": "calling",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "result",
+          "injected": false,
+          "role": "tool",
+          "tool_call_id": "call-1"
+        },
+        {
+          "content": "reply one",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "two",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "result": [
+        {
+          "content": "system prompt",
+          "role": "system"
+        },
+        {
+          "content": "two",
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "case": "assistant-first",
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "unprompted",
+          "injected": false,
+          "role": "assistant"
+        },
+        {
+          "content": "result",
+          "injected": false,
+          "role": "tool",
+          "tool_call_id": "call-1"
+        },
+        {
+          "content": "one",
+          "injected": false,
+          "role": "user"
+        }
+      ],
+      "result": [
+        {
+          "content": "system prompt",
+          "role": "system"
+        },
+        {
+          "content": "one",
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "case": "trailing-assistant-only",
+      "messages": [
+        {
+          "content": "system prompt",
+          "injected": false,
+          "role": "system"
+        },
+        {
+          "content": "unprompted",
+          "injected": false,
+          "role": "assistant"
+        }
+      ],
+      "result": null
+    }
+  ],
+  "schemaVersion": 2,
+  "summaryExtractions": [
+    {
+      "case": "plain",
+      "summary": "done",
+      "text": "<summary>done</summary>"
+    },
+    {
+      "case": "surrounded",
+      "summary": "done",
+      "text": "before <summary>done</summary> after"
+    },
+    {
+      "case": "multiline",
+      "summary": "line one\nline two",
+      "text": "<summary>\nline one\nline two\n</summary>"
+    },
+    {
+      "case": "whitespace-only",
+      "summary": null,
+      "text": "<summary>   \n  </summary>"
+    },
+    {
+      "case": "empty-element",
+      "summary": null,
+      "text": "<summary></summary>"
+    },
+    {
+      "case": "absent",
+      "summary": null,
+      "text": "no element at all"
+    },
+    {
+      "case": "unclosed",
+      "summary": null,
+      "text": "<summary>never closed"
+    },
+    {
+      "case": "two-elements",
+      "summary": "first",
+      "text": "<summary>first</summary><summary>second</summary>"
+    },
+    {
+      "case": "unclosed-then-closed",
+      "summary": "first<summary>second",
+      "text": "<summary>first<summary>second</summary>"
+    },
+    {
+      "case": "close-before-open",
+      "summary": "real",
+      "text": "</summary>stray<summary>real</summary>"
+    }
+  ],
+  "tokenCounts": [
+    {
+      "case": "empty",
+      "count": 0,
+      "text": ""
+    },
+    {
+      "case": "one-character",
+      "count": 1,
+      "text": "a"
+    },
+    {
+      "case": "exactly-one-token",
+      "count": 1,
+      "text": "abcd"
+    },
+    {
+      "case": "one-past-a-token",
+      "count": 2,
+      "text": "abcde"
+    },
+    {
+      "case": "eight-characters",
+      "count": 2,
+      "text": "abcdefgh"
+    },
+    {
+      "case": "latin-1-supplement",
+      "count": 2,
+      "text": "héllo"
+    },
+    {
+      "case": "astral-plane",
+      "count": 1,
+      "text": "🙂🙃🙂🙃"
+    },
+    {
+      "case": "combining-marks",
+      "count": 2,
+      "text": "ééé"
+    },
+    {
+      "case": "newlines",
+      "count": 3,
+      "text": "a\nb\nc\nd\ne"
+    },
+    {
+      "case": "long-ascii",
+      "count": 1001,
+      "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+  ],
+  "truncations": [
+    {
+      "case": "negative-budget",
+      "maxTokens": -1,
+      "result": "",
+      "text": "abcdef"
+    },
+    {
+      "case": "zero-budget",
+      "maxTokens": 0,
+      "result": "",
+      "text": "abcdef"
+    },
+    {
+      "case": "already-fits",
+      "maxTokens": 1,
+      "result": "abcd",
+      "text": "abcd"
+    },
+    {
+      "case": "fits-exactly",
+      "maxTokens": 2,
+      "result": "abcdefgh",
+      "text": "abcdefgh"
+    },
+    {
+      "case": "marker-does-not-fit",
+      "maxTokens": 5,
+      "result": "xxxxxxxxxxxxxxxxxxxx",
+      "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "case": "marker-fits-exactly",
+      "maxTokens": 6,
+      "result": "\n\n[... truncated ...]\n\nx",
+      "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "case": "odd-allowance",
+      "maxTokens": 8,
+      "result": "abcd\n\n[... truncated ...]\n\nfghij",
+      "text": "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij"
+    },
+    {
+      "case": "even-allowance",
+      "maxTokens": 9,
+      "result": "abcdef\n\n[... truncated ...]\n\ndefghij",
+      "text": "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij"
+    },
+    {
+      "case": "wide-budget",
+      "maxTokens": 20,
+      "result": "abcdefghijabcdefghijabcdefgh\n\n[... truncated ...]\n\nbcdefghijabcdefghijabcdefghij",
+      "text": "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij"
+    },
+    {
+      "case": "astral-plane-boundary",
+      "maxTokens": 7,
+      "result": "🙂🙃\n\n[... truncated ...]\n\n🙃🙂🙃",
+      "text": "🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃🙂🙃"
+    },
+    {
+      "case": "latin-1-boundary",
+      "maxTokens": 7,
+      "result": "hé\n\n[... truncated ...]\n\nllo",
+      "text": "héllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllohéllo"
+    }
+  ]
+}

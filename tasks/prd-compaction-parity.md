@@ -325,7 +325,7 @@ Move the pin to the reference's current release, then port the seven total funct
 **Reference:** [vibe/core/compaction/context.py:62](/home/arthur/dev/mistral-vibe/vibe/core/compaction/context.py) for `render_compaction_context`, 11 to 27 for the reserved tag constants, 90 for the escaping, 115 for `parse_previous_user_messages` and 129 for the envelope classification
 
 **Acceptance Criteria:**
-- [ ] Given a list of preserved messages and a summary, when the envelope is rendered, then it matches the reference byte for byte, including the continuation preamble, the blank lines, the previous-messages block, one element per preserved message and the summary block
+- [ ] Given a list of preserved messages and a summary, when the envelope is rendered, then everything its readers depend on matches the reference byte for byte: the four reserved tags, the blank lines, the previous-messages block, one element per preserved message and the summary block. The two prose runs it carries, the sentences that open it and the one introducing the summary, are original prose covering the same directives, because `NOTICE` forbids shipping the reference's; the corpus records each run's length and SHA-256 so a change on either side is still detected, and the divergence is named in the oracle's ledger and in `docs/parity.md`
 - [ ] Given a preserved message whose content contains any of the four reserved tags, when the envelope is rendered, then each occurrence is HTML-escaped without escaping quotes, so the block cannot be reopened by its own content
 - [ ] Given an empty list of preserved messages, when the envelope is rendered, then the block is present and empty rather than omitted
 - [ ] Given a rendered envelope, when it is parsed, then the preserved messages come back in order and with their content unchanged
@@ -616,7 +616,7 @@ Deliver the injected context warning, align the session identity a compaction mi
 - **Reliability:** a summarization failure never leaves a partially trimmed conversation; the transcript is replaced atomically on success only, and a failure persists the untouched transcript before propagating.
 - **Compatibility:** 100 % of transcripts written before this work deserialize and project unchanged; 0 stored sessions are renamed.
 - **Security:** no prompt content, transcript content or summary text is written to telemetry; the two telemetry records carry counts, a status and a reason only.
-- **Licensing:** 0 bytes of reference prose in this repository. The three prompts are original, and the corpus stores as a digest anything that would carry reference-authored text.
+- **Licensing:** 0 bytes of reference prose in this repository. The three prompts and the envelope's two prose runs are original, and the corpus stores as a digest anything that would carry reference-authored text.
 
 ## Edge Cases & Error States
 
