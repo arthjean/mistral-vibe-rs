@@ -237,6 +237,7 @@ pub(super) fn persisted_projection(
     ProjectionSnapshot {
         session_id: session_id.clone(),
         turn_id: None,
+        handoff_cause: None,
         watermark: 0,
         lifecycle: LifecycleState::Idle,
         title: hydrated.metadata.title.clone(),

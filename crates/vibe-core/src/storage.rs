@@ -119,6 +119,15 @@ struct HandoffJournal {
     destination_directory: String,
 }
 
+/// What a handoff writes onto the session it publishes, beyond the messages.
+struct HandoffPlan {
+    current_config: BTreeMap<String, Value>,
+    config_overlay: BTreeMap<String, Value>,
+    /// The reference's `keep_parent`: whether the session being replaced is
+    /// recorded as the parent of the one being published.
+    retain_parent: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionStore {
     root: PathBuf,
@@ -544,8 +553,11 @@ impl SessionStore {
             &parent.metadata,
             new_id,
             messages,
-            current_config,
-            config_overlay,
+            HandoffPlan {
+                current_config,
+                config_overlay,
+                retain_parent: true,
+            },
             now_ms,
         )
     }
@@ -572,25 +584,39 @@ impl SessionStore {
             &parent.metadata,
             new_id,
             messages,
-            parent.metadata.config.clone(),
-            BTreeMap::new(),
+            HandoffPlan {
+                current_config: parent.metadata.config.clone(),
+                config_overlay: BTreeMap::new(),
+                retain_parent: true,
+            },
             now_ms,
         )
     }
 
+    /// Publishes `messages` under `new_id`, continuing `parent`.
+    ///
+    /// `retain_parent` is the reference's `keep_parent`: a compaction records
+    /// the session it came from, so the two read as one conversation, and a
+    /// clearing records nothing, because what it continues was discarded
+    /// (`vibe/core/agent_loop/_loop.py:2665`). Everything else the new session
+    /// inherits is the same either way.
     pub fn handoff_messages(
         &self,
         parent: &SessionMetadata,
         new_id: &str,
         messages: &[ModelMessage],
         now_ms: u64,
+        retain_parent: bool,
     ) -> Result<SessionMetadata, StorageError> {
         self.publish_handoff(
             parent,
             new_id,
             messages.to_vec(),
-            parent.config.clone(),
-            BTreeMap::new(),
+            HandoffPlan {
+                current_config: parent.config.clone(),
+                config_overlay: BTreeMap::new(),
+                retain_parent,
+            },
             now_ms,
         )
         .map(|hydrated| hydrated.metadata)
@@ -601,10 +627,14 @@ impl SessionStore {
         parent: &SessionMetadata,
         new_id: &str,
         messages: Vec<ModelMessage>,
-        current_config: BTreeMap<String, Value>,
-        config_overlay: BTreeMap<String, Value>,
+        plan: HandoffPlan,
         now_ms: u64,
     ) -> Result<HydratedSession, StorageError> {
+        let HandoffPlan {
+            current_config,
+            config_overlay,
+            retain_parent,
+        } = plan;
         validate_session_id(new_id)?;
         ensure_private_directory(&self.root)?;
         let _handoff_lock = self.acquire_handoff_lock(true)?;
@@ -630,7 +660,7 @@ impl SessionStore {
                 &staging_directory,
                 new_id,
                 &parent.working_directory,
-                Some(parent.id.clone()),
+                retain_parent.then(|| parent.id.clone()),
                 now_ms,
             )?;
             child.statistics = parent.statistics.clone();
@@ -2105,6 +2135,7 @@ mod tests {
                     user("complete"),
                 ],
                 2,
+                true,
             )
             .expect("handoff");
         let hydrated = store.load("child").expect("published child loads");
@@ -2171,7 +2202,7 @@ mod tests {
         );
 
         let recovered = store
-            .handoff_messages(&parent, "recovered", &[user("replacement")], 2)
+            .handoff_messages(&parent, "recovered", &[user("replacement")], 2, true)
             .expect("same handoff retry rolls forward");
         assert_eq!(recovered.id, "recovered");
         assert_eq!(

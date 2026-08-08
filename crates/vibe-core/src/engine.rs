@@ -311,7 +311,19 @@ impl TranscriptSink for SessionTranscriptSink {
             if snapshot.session_id != metadata.id {
                 let handoff = self
                     .store
-                    .handoff_messages(&metadata, &snapshot.session_id, messages, persisted_at)
+                    // The reference keeps the parent for a compaction and drops
+                    // it for a clearing, which is the only thing its
+                    // `keep_parent` flag decides.
+                    .handoff_messages(
+                        &metadata,
+                        &snapshot.session_id,
+                        messages,
+                        persisted_at,
+                        !matches!(
+                            snapshot.handoff_cause,
+                            Some(SessionHandoffCause::ContextCleared { .. })
+                        ),
+                    )
                     .map_err(|error| error.to_string())?;
                 *metadata = handoff;
                 return Ok(());
@@ -2536,6 +2548,110 @@ mod tests {
             stored.messages.first(),
             Some(ModelMessage::User { content, .. }) if content == "first"
         ));
+    }
+
+    /// US-158: the reference's `keep_parent` distinction, taken from the same
+    /// persistence path both rotations use. A compacted session continues the
+    /// one it summarized; a cleared session continues nothing, because what it
+    /// would point at was discarded.
+    #[tokio::test]
+    async fn a_compaction_keeps_the_parent_a_clearing_does_not() {
+        struct ClearingTools {
+            controls: TurnControlHandle,
+        }
+
+        impl ToolExecutor for ClearingTools {
+            fn execute<'a>(&'a self, _name: &'a str, _arguments: &'a str) -> ToolFuture<'a> {
+                Box::pin(async move {
+                    self.controls
+                        .send(TurnControl::ClearContext {
+                            continuation: "start over".to_owned(),
+                            plan_file_path: None,
+                        })
+                        .map_err(|error| error.to_string())?;
+                    Ok(ToolExecutionOutput::text("cleared"))
+                })
+            }
+        }
+
+        let temporary = tempfile::tempdir().expect("temporary session root");
+        let store = SessionStore::new(temporary.path()).with_pointer_key("parenting");
+
+        // The threshold fires the compaction before the first request, so the
+        // rotation the store sees is the compaction's.
+        let compacted_metadata = store
+            .create("session-compacted", "/workspace", None, 10)
+            .expect("session creates");
+        ConversationEngine::new(ScriptedProvider::new([Ok(completion("done", Vec::new()))]))
+            .with_compactor(FakeCompactor)
+            .with_sink(SessionTranscriptSink::new(
+                store.clone(),
+                compacted_metadata,
+            ))
+            .with_baseline(SessionStats {
+                context_tokens: 1_000,
+                ..SessionStats::default()
+            })
+            .with_compaction_settings(CompactionSettings {
+                auto_compact_threshold: 100,
+                ..CompactionSettings::default()
+            })
+            .run_turn(
+                "session-compacted",
+                provider_input(),
+                "hello",
+                CancellationToken::default(),
+            )
+            .await
+            .expect("compacted turn completes");
+        assert_eq!(
+            store
+                .load("session-2")
+                .expect("the compacted session is durable")
+                .metadata
+                .parent_session_id
+                .as_deref(),
+            Some("session-compacted"),
+        );
+
+        let cleared_metadata = store
+            .create("session-cleared", "/workspace", None, 20)
+            .expect("session creates");
+        let controls = TurnControlHandle::default();
+        ConversationEngine::new(ScriptedProvider::new([
+            Ok(completion(
+                "",
+                vec![ModelToolCall {
+                    id: "call-1".to_owned(),
+                    name: "exit_plan_mode".to_owned(),
+                    arguments: "{}".to_owned(),
+                }],
+            )),
+            Ok(completion("restarted", Vec::new())),
+        ]))
+        .with_tools(ClearingTools {
+            controls: controls.clone(),
+        })
+        .with_compactor(FakeCompactor)
+        .with_sink(SessionTranscriptSink::new(store.clone(), cleared_metadata))
+        .run_turn_controlled(
+            "session-cleared",
+            provider_input(),
+            "write a plan",
+            CancellationToken::default(),
+            controls,
+        )
+        .await
+        .expect("cleared turn completes");
+        assert_eq!(
+            store
+                .load("session-cleared-cleared")
+                .expect("the cleared session is durable")
+                .metadata
+                .parent_session_id,
+            None,
+            "a clearing retains no parent, matching `_reset_session(keep_parent=False)`"
+        );
     }
 
     #[test]

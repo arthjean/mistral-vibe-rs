@@ -576,6 +576,14 @@ pub struct ProjectionSnapshot {
     pub session_id: String,
     #[serde(skip)]
     pub turn_id: Option<String>,
+    /// Why the session last rotated under this turn, when one did.
+    ///
+    /// Not serialized: it describes the write the rotation still owes rather
+    /// than the projected state. A sink reads it for the reference's
+    /// `keep_parent` distinction, which retains the previous identifier as the
+    /// parent of a compacted session and retains nothing for a cleared one.
+    #[serde(skip)]
+    pub handoff_cause: Option<SessionHandoffCause>,
     pub watermark: u64,
     pub lifecycle: LifecycleState,
     pub title: Option<String>,
@@ -594,6 +602,7 @@ impl ProjectionReducer {
             state: ProjectionSnapshot {
                 session_id: session_id.into(),
                 turn_id: None,
+                handoff_cause: None,
                 watermark: 0,
                 lifecycle: LifecycleState::Idle,
                 title: None,
@@ -1213,6 +1222,7 @@ fn reduce_event(
                 });
             }
             state.session_id.clone_from(to_session_id);
+            state.handoff_cause = Some(cause.clone());
             for entry in &mut state.history {
                 entry.metadata_mut().session_id.clone_from(to_session_id);
             }

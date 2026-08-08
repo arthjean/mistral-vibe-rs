@@ -9,6 +9,14 @@
   wall, and the warning arms again after a compaction replaces the context it
   measured. Leaving the key off registers nothing, so nothing is injected.
 
+- Keep a compacted session recognizable. A compaction now mints the identifier
+  the reference does: UUID-shaped, with a fresh head and the previous
+  identifier's trailing segment preserved, so every session a conversation
+  leaves behind reads as the same conversation. A compacted session records the
+  one it summarized as its parent; clearing the context records none, because
+  what it would point at was discarded. Nothing on disk is renamed and every
+  identifier a session ever wore still resolves.
+
 - Summarize a compaction the way the reference does. The summarizer that made
   one blind call and gave up on an empty answer is replaced: the request comes
   from `compaction_prompt_id`, resolved from a `.md` file in your project's

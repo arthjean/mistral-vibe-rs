@@ -993,6 +993,7 @@ impl AppServer {
         let snapshot = session.snapshot.get_or_insert_with(|| ProjectionSnapshot {
             session_id: session.id.clone(),
             turn_id: Some(turn_id.to_owned()),
+            handoff_cause: None,
             watermark: 0,
             lifecycle: LifecycleState::Running,
             title: None,
@@ -1059,6 +1060,7 @@ impl AppServer {
             .unwrap_or_else(|| ProjectionSnapshot {
                 session_id: session.id.clone(),
                 turn_id: Some(turn_id.to_owned()),
+                handoff_cause: None,
                 watermark: 0,
                 lifecycle: LifecycleState::Idle,
                 title: None,
@@ -7187,6 +7189,7 @@ mod tests {
                 ProjectionSnapshot {
                     session_id: "session-1".to_owned(),
                     turn_id: Some("turn-1".to_owned()),
+                    handoff_cause: None,
                     watermark: 12,
                     lifecycle: LifecycleState::Completed,
                     title: Some("Retained title".to_owned()),
@@ -7792,6 +7795,7 @@ mod tests {
                 ProjectionSnapshot {
                     session_id: "session-1".to_owned(),
                     turn_id: Some("turn-1".to_owned()),
+                    handoff_cause: None,
                     watermark: 1,
                     lifecycle: LifecycleState::Completed,
                     title: Some("Cumulative".to_owned()),
@@ -7837,6 +7841,7 @@ mod tests {
                 ProjectionSnapshot {
                     session_id: "session-2".to_owned(),
                     turn_id: Some("turn-2".to_owned()),
+                    handoff_cause: None,
                     watermark: 2,
                     lifecycle: LifecycleState::Completed,
                     title: None,

@@ -42,6 +42,7 @@ use vibe_core::provider::{
     ToolChoice, ToolDefinition, TransportError, Usage,
 };
 use vibe_core::schema::{ObjectSchema, Property};
+use vibe_core::session_id::rotate_session_id;
 use vibe_core::storage::{HydratedSession, SessionStore};
 use vibe_core::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler,
@@ -2940,7 +2941,6 @@ pub struct LiveTurnDriver {
 #[derive(Clone)]
 struct ProviderSessionCompactor {
     provider: Arc<dyn CompletionProvider>,
-    next_session: Arc<AtomicU64>,
     /// The prompts, the model, the tools and the strict flag this session
     /// summarizes under.
     plan: Arc<CompactionPlan>,
@@ -2950,18 +2950,14 @@ impl ProviderSessionCompactor {
     fn new(provider: Arc<dyn CompletionProvider>) -> Self {
         Self {
             provider,
-            next_session: Arc::new(AtomicU64::new(1)),
             plan: Arc::new(CompactionPlan::default()),
         }
     }
 
-    /// The same compactor, summarizing under `plan`. The identifier counter is
-    /// shared with the compactor this was taken from, so a per-turn copy never
-    /// mints an identifier another turn already used.
+    /// The same compactor, summarizing under `plan`.
     fn with_plan(&self, plan: CompactionPlan) -> Self {
         Self {
             provider: Arc::clone(&self.provider),
-            next_session: Arc::clone(&self.next_session),
             plan: Arc::new(plan),
         }
     }
@@ -2980,7 +2976,7 @@ impl ProviderSessionCompactor {
         )
         .await?;
         Ok(CompactionResult {
-            new_session_id: self.mint_session_id(current_session_id, "compact")?,
+            new_session_id: rotate_session_id(current_session_id),
             summary: summarized.summary,
             messages: summarized.messages,
             usage: summarized.usage,
@@ -3008,22 +3004,6 @@ impl ProviderSessionCompactor {
             ..CompactionPlan::default()
         }
     }
-
-    /// The identifier a handoff rotates onto, unique within the process.
-    fn mint_session_id(
-        &self,
-        current_session_id: &str,
-        cause: &str,
-    ) -> Result<String, CompactionFailure> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| CompactionFailure::from("system clock precedes UNIX epoch"))?
-            .as_millis();
-        let sequence = self.next_session.fetch_add(1, Ordering::Relaxed);
-        Ok(format!(
-            "{current_session_id}-{cause}-{timestamp}-{sequence}"
-        ))
-    }
 }
 
 impl Compactor for ProviderSessionCompactor {
@@ -3039,8 +3019,7 @@ impl Compactor for ProviderSessionCompactor {
     }
 
     fn cleared_session_id(&self, current_session_id: &str) -> Result<String, String> {
-        self.mint_session_id(current_session_id, "cleared")
-            .map_err(|failure| failure.message)
+        Ok(rotate_session_id(current_session_id))
     }
 }
 
@@ -3867,6 +3846,9 @@ impl TurnDriver for LiveTurnDriver {
                     &compaction.new_session_id,
                     &compaction.messages,
                     now_millis()?,
+                    // A manual compaction is still a compaction, so the session
+                    // it came from stays its parent.
+                    true,
                 )
                 .map_err(DriverError::Storage)?;
             let compacted = store
@@ -6524,6 +6506,108 @@ command = "/must-not-run"
                 ModelMessage::User { content, .. } if content.contains("Keep exact file paths")
             )
         }));
+    }
+
+    /// US-158: a compaction mints the reference's identity, a UUID shape whose
+    /// trailing segment is the one it replaces, and the sessions it leaves
+    /// behind keep resolving under the identifiers they were written with.
+    #[tokio::test]
+    async fn a_compacted_session_keeps_its_stable_identity_suffix() {
+        struct SummarizingProvider;
+
+        impl CompletionProvider for SummarizingProvider {
+            fn complete<'a>(
+                &'a self,
+                _input: &'a ProviderInput,
+            ) -> vibe_core::engine::ProviderFuture<'a> {
+                Box::pin(async move {
+                    Ok(AssistantMessage {
+                        text: "<summary>the state so far</summary>".to_owned(),
+                        reasoning: None,
+                        reasoning_signature: None,
+                        reasoning_state: Vec::new(),
+                        tool_calls: Vec::new(),
+                        usage: Usage {
+                            input_tokens: 3,
+                            output_tokens: 2,
+                        },
+                        refusal: None,
+                        stop_reason: "stop".to_owned(),
+                        correlation_id: None,
+                    })
+                })
+            }
+        }
+
+        let temporary = tempfile::tempdir().expect("temporary session root");
+        let driver = LiveTurnDriver::from_provider_for_tests(Arc::new(SummarizingProvider), "sys")
+            .with_session_root_for_tests(Some(temporary.path().to_path_buf()));
+        let mut service = HeadlessService::new(driver).expect("service");
+        let original = "11111111-2222-3333-4444-abcdefabcdef";
+        let mut compact_options = options();
+        compact_options.working_directory = temporary.path().to_string_lossy().into_owned();
+        compact_options.session_id = Some(original.to_owned());
+        compact_options.add_directories.clear();
+        compact_options.tool_filters.clear();
+        compact_options.enabled_tools.clear();
+        compact_options.disabled_tools.clear();
+        compact_options.agent = None;
+        let session_id = service.start_session(&compact_options).expect("session");
+        assert_eq!(session_id, original);
+
+        let mut minted: Vec<String> = Vec::new();
+        for _ in 0..2 {
+            let current = minted.last().cloned().unwrap_or_else(|| session_id.clone());
+            service.prompt(&current, "a decision").await.expect("turn");
+            let result = service.compact(&current, "").await.expect("compaction");
+            minted.push(
+                result["state"]["session"]["id"]
+                    .as_str()
+                    .expect("new session id")
+                    .to_owned(),
+            );
+        }
+
+        let store = SessionStore::new(temporary.path());
+        for identifier in &minted {
+            let segments: Vec<usize> = identifier.split('-').map(str::len).collect();
+            assert_eq!(segments, vec![8, 4, 4, 4, 12], "{identifier}");
+            assert!(
+                identifier.ends_with("-abcdefabcdef"),
+                "the stable suffix survives: {identifier}"
+            );
+        }
+        assert_ne!(minted[0], minted[1], "each compaction mints a fresh head");
+        assert_eq!(
+            store
+                .load(&minted[0])
+                .expect("first compacted session")
+                .metadata
+                .parent_session_id
+                .as_deref(),
+            Some(original),
+        );
+        assert_eq!(
+            store
+                .load(&minted[1])
+                .expect("second compacted session")
+                .metadata
+                .parent_session_id
+                .as_deref(),
+            Some(minted[0].as_str()),
+        );
+        // Nothing on disk was renamed: every identifier this session ever wore
+        // still reads, and the client's original handle still resolves.
+        for identifier in std::iter::once(original.to_owned()).chain(minted.iter().cloned()) {
+            assert_eq!(
+                store.load(&identifier).expect("session loads").metadata.id,
+                identifier
+            );
+        }
+        assert_eq!(
+            service.session(original).expect("old alias resolves").id,
+            minted[1]
+        );
     }
 
     #[tokio::test]

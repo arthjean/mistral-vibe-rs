@@ -33,6 +33,7 @@ mod pty;
 mod remote_tools;
 pub mod schema;
 pub mod scratchpad;
+pub mod session_id;
 pub mod shell;
 pub mod storage;
 pub mod telemetry;
