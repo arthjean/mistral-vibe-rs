@@ -3,7 +3,7 @@
     "file": "tasks/prd-compaction-parity.md",
     "title": "Compaction Parity",
     "created_at": "2026-08-08",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -45,10 +45,10 @@
     {
       "id": "EP-045",
       "title": "Periphery, Identity and the Scorecard",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 3,
-      "stories_done": 0,
+      "stories_done": 3,
       "stories_in_review": 0
     }
   ],
@@ -304,35 +304,35 @@
       "id": "US-157",
       "title": "Inject the context warning once per session",
       "epic": "EP-045",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-148"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-158",
       "title": "Mint the compacted session identity the reference way",
       "epic": "EP-045",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-155"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     },
     {
       "id": "US-159",
       "title": "Remeasure the scorecard from the new oracle",
       "epic": "EP-045",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
@@ -341,9 +341,9 @@
         "US-157",
         "US-158"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-08",
+      "completed_at": "2026-08-08",
+      "reviewed_at": "2026-08-08"
     }
   ]
 }
