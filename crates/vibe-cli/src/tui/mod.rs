@@ -1437,11 +1437,19 @@ fn banner_metrics_from_release3(
 ) -> BannerMetrics {
     let mut banner = BannerMetrics::default();
     if let Ok(dispatch) = release3.dispatch("skills/list", &BTreeMap::new()) {
+        // The banner reports the skills the operator added, so the two seeded
+        // builtins are excluded the way the reference's `custom_skills_count`
+        // excludes them.
         banner.skills_count = dispatch
             .result
             .get("skills")
             .and_then(Value::as_array)
-            .map_or(0, Vec::len);
+            .map_or(0, |skills| {
+                skills
+                    .iter()
+                    .filter(|skill| skill.get("source").and_then(Value::as_str) != Some("builtin"))
+                    .count()
+            });
     }
     if let Ok(servers) = release3.mcp_servers_for_session(working_directory, arguments.trust, &[]) {
         banner.mcp_servers_total = servers.len();
@@ -1721,6 +1729,82 @@ mod tests {
         );
         assert!(preferences.vibe_code_enabled);
         assert_eq!(preferences.reasoning_effort, None);
+    }
+
+    /// US-169: the composer's skill map is built from `skills/list` and keeps
+    /// only user-invocable entries, so `/vibe` resolves no skill and stays an
+    /// ordinary prompt while `/skill-creator` is invocable.
+    #[test]
+    fn a_model_only_builtin_is_not_invocable_from_the_composer() {
+        let temporary = tempfile::tempdir().expect("temporary home");
+        let release3 = Release3Service::for_runtime_session_root(
+            temporary.path().join(".vibe/sessions"),
+            temporary.path().join("workspace"),
+        );
+
+        let skills = runtime_skills(&release3);
+
+        assert!(
+            !skills.contains_key("vibe"),
+            "`vibe` is not user invocable, so the composer cannot invoke it"
+        );
+        assert!(
+            skills.contains_key("skill-creator"),
+            "`skill-creator` is user invocable and reachable as a slash word"
+        );
+    }
+
+    /// US-171: the banner counts the skills the operator added, read through
+    /// the same `banner_metrics_from_release3` the startup path calls. The two
+    /// seeded builtins never count, the user's own skills do, and one withheld
+    /// by `disabled_skills` drops out because the count reads the filtered
+    /// catalog rather than the walked one.
+    #[test]
+    fn the_banner_counts_custom_skills_only() {
+        let temporary = tempfile::tempdir().expect("temporary home");
+        let workspace = temporary.path().join("workspace");
+        let vibe_home = temporary.path().join(".vibe");
+        std::fs::create_dir_all(&vibe_home).expect("vibe home");
+        let release3 = Release3Service::for_runtime_session_root(
+            vibe_home.join("sessions"),
+            workspace.clone(),
+        );
+        let arguments = <Arguments as clap::Parser>::try_parse_from(["vibe"])
+            .expect("interactive arguments parse");
+        let counted =
+            || banner_metrics_from_release3(&release3, &arguments, &workspace).skills_count;
+
+        assert_eq!(
+            counted(),
+            0,
+            "only the two builtins are published, and neither is the operator's"
+        );
+
+        for name in ["alpha", "beta", "gamma"] {
+            let directory = vibe_home.join("skills").join(name);
+            std::fs::create_dir_all(&directory).expect("skill directory");
+            std::fs::write(
+                directory.join("SKILL.md"),
+                format!("---\nname: {name}\ndescription: A user skill.\n---\n\nBody.\n"),
+            )
+            .expect("skill file");
+        }
+        assert_eq!(
+            counted(),
+            3,
+            "the three user skills count and the builtins beside them do not"
+        );
+
+        std::fs::write(
+            vibe_home.join("config.toml"),
+            "disabled_skills = [\"beta\"]\n",
+        )
+        .expect("user configuration");
+        assert_eq!(
+            counted(),
+            2,
+            "the withheld skill is never published, so the count reads the filtered catalog"
+        );
     }
 
     #[test]
