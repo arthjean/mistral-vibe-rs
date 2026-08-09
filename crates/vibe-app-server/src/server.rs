@@ -312,11 +312,13 @@ pub enum DeferredWork {
         session_id: String,
         turn_id: String,
         content: String,
+        inject_invoked_skill: bool,
     },
     InjectContext {
         session_id: String,
         content: String,
         as_message: bool,
+        inject_invoked_skill: bool,
     },
     ResolveCallback {
         session_id: String,
@@ -3400,6 +3402,7 @@ impl ServerConnection {
         let session_id = params.session_id.clone();
         let turn_id = params.expected_turn_id.clone();
         let content = content_text(&params.input);
+        let inject_invoked_skill = params.inject_invoked_skill;
         let expected_turn_id = params.expected_turn_id.clone();
         let lookup_turn_id = expected_turn_id.clone();
         self.mutate_active_turn(request.id, &params.session_id, &lookup_turn_id, |session| {
@@ -3414,6 +3417,7 @@ impl ServerConnection {
                     session_id,
                     turn_id: expected_turn_id,
                     content,
+                    inject_invoked_skill,
                 }],
             ))
         })
@@ -3484,6 +3488,7 @@ impl ServerConnection {
                 session_id: params.session_id,
                 content,
                 as_message: params.as_message,
+                inject_invoked_skill: params.inject_invoked_skill,
             }],
             close_after_flush: false,
         }
@@ -4538,11 +4543,10 @@ struct TurnSteerParams {
     expected_turn_id: String,
     input: Vec<PublicContentBlock>,
     /// Accepted for wire compatibility. Steering does not create a history
-    /// entry, so none of these three reach the engine yet.
+    /// entry, so neither of these two reaches the engine yet.
     #[allow(dead_code)]
     #[serde(default)]
     client_user_message_id: Option<String>,
-    #[allow(dead_code)]
     #[serde(default = "default_true")]
     inject_invoked_skill: bool,
     #[allow(dead_code)]
@@ -4557,9 +4561,8 @@ struct ContextInjectParams {
     input: Vec<PublicContentBlock>,
     #[serde(default)]
     as_message: bool,
-    /// Accepted for wire compatibility; injection does not resolve skills or
-    /// mentions yet.
-    #[allow(dead_code)]
+    /// Accepted for wire compatibility; injection does not resolve mentions
+    /// yet.
     #[serde(default)]
     inject_invoked_skill: bool,
     #[serde(default)]
@@ -7105,6 +7108,101 @@ mod tests {
             })
         ));
         assert!(store.load("retained-session").is_ok());
+    }
+
+    /// US-173: the wire's `injectInvokedSkill` reaches the deferred driver
+    /// work on both methods, with the reference defaults: true on `turn/steer`
+    /// and false on `session/context/inject`.
+    #[test]
+    fn the_invoked_skill_flag_reaches_the_deferred_driver_work() {
+        let server = AppServer::default();
+        let mut connection = server.connect(TransportKind::InProcess);
+        initialize(&mut connection);
+        start_session(&mut connection);
+
+        let inject_default = connection.dispatch(&request(
+            3,
+            "session/context/inject",
+            json!({
+                "sessionId": "session-1",
+                "input": [{"type": "text", "text": "/probe"}],
+                "asMessage": true
+            }),
+        ));
+        assert!(matches!(
+            inject_default.deferred.as_slice(),
+            [DeferredWork::InjectContext {
+                inject_invoked_skill: false,
+                as_message: true,
+                ..
+            }]
+        ));
+        let inject_explicit = connection.dispatch(&request(
+            4,
+            "session/context/inject",
+            json!({
+                "sessionId": "session-1",
+                "input": [{"type": "text", "text": "/probe"}],
+                "asMessage": true,
+                "injectInvokedSkill": true
+            }),
+        ));
+        assert!(matches!(
+            inject_explicit.deferred.as_slice(),
+            [DeferredWork::InjectContext {
+                inject_invoked_skill: true,
+                ..
+            }]
+        ));
+
+        let started = connection.dispatch(&request(
+            5,
+            "turn/start",
+            json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        ));
+        let turn_id = match decode_frame(&started.outbound[0]).expect("turn answer") {
+            Envelope::Success(SuccessResponse { result, .. }) => {
+                result["turn"]["id"].as_str().expect("turn id").to_owned()
+            }
+            other => unreachable!("turn/start did not answer: {other:?}"),
+        };
+        let steer_default = connection.dispatch(&request(
+            6,
+            "turn/steer",
+            json!({
+                "sessionId": "session-1",
+                "expectedTurnId": turn_id,
+                "input": [{"type": "text", "text": "/probe"}]
+            }),
+        ));
+        assert!(
+            matches!(
+                steer_default.deferred.as_slice(),
+                [DeferredWork::SteerTurn {
+                    inject_invoked_skill: true,
+                    ..
+                }]
+            ),
+            "the omitted flag applies its declared default: {:?}",
+            steer_default.deferred
+        );
+        let steer_explicit = connection.dispatch(&request(
+            7,
+            "turn/steer",
+            json!({
+                "sessionId": "session-1",
+                "expectedTurnId": turn_id,
+                "input": [{"type": "text", "text": "/probe"}],
+                "injectInvokedSkill": false
+            }),
+        ));
+        assert!(matches!(
+            steer_explicit.deferred.as_slice(),
+            [DeferredWork::SteerTurn {
+                inject_invoked_skill: false,
+                ..
+            }]
+        ));
     }
 
     #[test]

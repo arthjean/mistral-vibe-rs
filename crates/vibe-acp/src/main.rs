@@ -219,8 +219,15 @@ where
         self.resolve()?.interrupt(session_id, turn_id)
     }
 
-    fn steer(&self, session_id: &str, turn_id: &str, content: &str) -> Result<(), DriverError> {
-        self.resolve()?.steer(session_id, turn_id, content)
+    fn steer(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        content: &str,
+        inject_invoked_skill: bool,
+    ) -> Result<(), DriverError> {
+        self.resolve()?
+            .steer(session_id, turn_id, content, inject_invoked_skill)
     }
 
     fn inject_context(
@@ -228,9 +235,10 @@ where
         session_id: &str,
         content: &str,
         as_message: bool,
+        inject_invoked_skill: bool,
     ) -> Result<(), DriverError> {
         self.resolve()?
-            .inject_context(session_id, content, as_message)
+            .inject_context(session_id, content, as_message, inject_invoked_skill)
     }
 
     fn resolve_callback(

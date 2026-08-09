@@ -329,16 +329,18 @@ where
             session_id,
             turn_id,
             content,
+            inject_invoked_skill,
         } => driver
-            .steer(&session_id, &turn_id, &content)
+            .steer(&session_id, &turn_id, &content, inject_invoked_skill)
             .map(|()| Vec::new())
             .map_err(TransportError::Driver),
         DeferredWork::InjectContext {
             session_id,
             content,
             as_message,
+            inject_invoked_skill,
         } => driver
-            .inject_context(&session_id, &content, as_message)
+            .inject_context(&session_id, &content, as_message, inject_invoked_skill)
             .map(|()| Vec::new())
             .map_err(TransportError::Driver),
         DeferredWork::ResolveCallback {

@@ -109,7 +109,13 @@ pub trait TurnDriver: Send + Sync {
         Ok(())
     }
 
-    fn steer(&self, _session_id: &str, _turn_id: &str, _content: &str) -> Result<(), DriverError> {
+    fn steer(
+        &self,
+        _session_id: &str,
+        _turn_id: &str,
+        _content: &str,
+        _inject_invoked_skill: bool,
+    ) -> Result<(), DriverError> {
         Err(DriverError::UnsupportedControl("turn/steer"))
     }
 
@@ -118,6 +124,7 @@ pub trait TurnDriver: Send + Sync {
         _session_id: &str,
         _content: &str,
         _as_message: bool,
+        _inject_invoked_skill: bool,
     ) -> Result<(), DriverError> {
         Err(DriverError::UnsupportedControl("session/context/inject"))
     }
@@ -2912,6 +2919,15 @@ pub struct LiveDriverConfig {
     pub compaction_prompts: CompactionPromptResolution,
 }
 
+/// One `context/inject` entry waiting for the next turn, carrying the wire
+/// flag that decides whether a skill invocation in it appends the synthetic
+/// pair when the entry becomes a message.
+#[derive(Debug, Clone)]
+struct PendingContext {
+    content: String,
+    inject_invoked_skill: bool,
+}
+
 pub struct LiveTurnDriver {
     provider: Arc<dyn CompletionProvider>,
     compactor: ProviderSessionCompactor,
@@ -2920,7 +2936,7 @@ pub struct LiveTurnDriver {
     input_price_per_million_micros: u64,
     output_price_per_million_micros: u64,
     controls: Mutex<HashMap<(String, String), LiveTurnControl>>,
-    pending_context: Mutex<HashMap<String, Vec<String>>>,
+    pending_context: Mutex<HashMap<String, Vec<PendingContext>>>,
     /// The context-warning policy each session latches on.
     ///
     /// The engine is rebuilt for every turn, so a policy that speaks once per
@@ -3383,9 +3399,17 @@ impl LiveTurnDriver {
             input.tools = session_tools.definitions()?;
             let baseline = session_stats(&metadata);
             if let Some(context) = pending_context.take() {
-                input
-                    .messages
-                    .extend(context.into_iter().map(ModelMessage::user));
+                for entry in context {
+                    input
+                        .messages
+                        .push(ModelMessage::user(entry.content.clone()));
+                    if entry.inject_invoked_skill
+                        && let Some(resolver) = reservation.tools.invoked_skills()
+                        && let Some(invoked) = resolver.resolve(&entry.content)
+                    {
+                        vibe_core::skills::append_invoked_skill(&mut input.messages, &invoked);
+                    }
+                }
             }
             input.messages.extend(
                 resource_contexts(reservation)
@@ -3408,6 +3432,9 @@ impl LiveTurnDriver {
             if let Some(warning) = context_warning {
                 engine = engine.with_middleware(warning);
             }
+            if let Some(resolver) = reservation.tools.invoked_skills() {
+                engine = engine.with_invoked_skills(resolver);
+            }
             engine
                 .run_turn_controlled(
                     engine_session_id,
@@ -3421,9 +3448,17 @@ impl LiveTurnDriver {
         } else {
             input.tools = session_tools.definitions()?;
             if let Some(context) = pending_context.take() {
-                input
-                    .messages
-                    .extend(context.into_iter().map(ModelMessage::user));
+                for entry in context {
+                    input
+                        .messages
+                        .push(ModelMessage::user(entry.content.clone()));
+                    if entry.inject_invoked_skill
+                        && let Some(resolver) = reservation.tools.invoked_skills()
+                        && let Some(invoked) = resolver.resolve(&entry.content)
+                    {
+                        vibe_core::skills::append_invoked_skill(&mut input.messages, &invoked);
+                    }
+                }
             }
             input.messages.extend(
                 resource_contexts(reservation)
@@ -3443,6 +3478,9 @@ impl LiveTurnDriver {
                 .with_observer(observer);
             if let Some(warning) = context_warning {
                 engine = engine.with_middleware(warning);
+            }
+            if let Some(resolver) = reservation.tools.invoked_skills() {
+                engine = engine.with_invoked_skills(resolver);
             }
             engine
                 .run_turn_controlled(
@@ -3878,12 +3916,19 @@ impl TurnDriver for LiveTurnDriver {
         Ok(())
     }
 
-    fn steer(&self, session_id: &str, turn_id: &str, content: &str) -> Result<(), DriverError> {
+    fn steer(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        content: &str,
+        inject_invoked_skill: bool,
+    ) -> Result<(), DriverError> {
         self.send_control(
             session_id,
             turn_id,
             TurnControl::Steer {
                 content: content.to_owned(),
+                inject_invoked_skill,
             },
         )
     }
@@ -3892,14 +3937,20 @@ impl TurnDriver for LiveTurnDriver {
         &self,
         session_id: &str,
         content: &str,
-        _as_message: bool,
+        as_message: bool,
+        inject_invoked_skill: bool,
     ) -> Result<(), DriverError> {
         self.pending_context
             .lock()
             .map_err(|_| DriverError::StatePoisoned)?
             .entry(session_id.to_owned())
             .or_default()
-            .push(content.to_owned());
+            .push(PendingContext {
+                content: content.to_owned(),
+                // The reference injects a skill only into a real user turn, so
+                // the flag is honored when the entry is one.
+                inject_invoked_skill: as_message && inject_invoked_skill,
+            });
         Ok(())
     }
 
@@ -4104,7 +4155,13 @@ impl TurnDriver for EchoTurnDriver {
         })
     }
 
-    fn steer(&self, _session_id: &str, _turn_id: &str, _content: &str) -> Result<(), DriverError> {
+    fn steer(
+        &self,
+        _session_id: &str,
+        _turn_id: &str,
+        _content: &str,
+        _inject_invoked_skill: bool,
+    ) -> Result<(), DriverError> {
         Ok(())
     }
 
@@ -4113,6 +4170,7 @@ impl TurnDriver for EchoTurnDriver {
         _session_id: &str,
         _content: &str,
         _as_message: bool,
+        _inject_invoked_skill: bool,
     ) -> Result<(), DriverError> {
         Ok(())
     }
@@ -5754,6 +5812,182 @@ command = "/must-not-run"
             .await
             .expect("deferred MCP resource response");
         assert!(integrations.result["mcp"]["sources"].is_array());
+    }
+
+    /// Answers "done" with no tool calls and records every request's
+    /// transcript, so a test proves what the model was shown.
+    struct TranscriptProbeProvider {
+        transcripts: std::sync::Mutex<Vec<Vec<ModelMessage>>>,
+    }
+
+    impl CompletionProvider for TranscriptProbeProvider {
+        fn complete<'a>(
+            &'a self,
+            input: &'a ProviderInput,
+        ) -> vibe_core::engine::ProviderFuture<'a> {
+            Box::pin(async move {
+                if let Ok(mut transcripts) = self.transcripts.lock() {
+                    transcripts.push(input.messages.clone());
+                }
+                Ok(AssistantMessage {
+                    text: "done".to_owned(),
+                    reasoning: None,
+                    reasoning_signature: None,
+                    reasoning_state: Vec::new(),
+                    tool_calls: Vec::new(),
+                    usage: Usage::default(),
+                    refusal: None,
+                    stop_reason: "stop".to_owned(),
+                    correlation_id: None,
+                })
+            })
+        }
+    }
+
+    /// The one-skill resolver the driver tests install on the registry, the
+    /// way `BuiltinTools::register` installs the real one.
+    struct ProbeSkillResolver;
+
+    impl vibe_core::skills::InvokedSkillResolver for ProbeSkillResolver {
+        fn resolve(&self, prompt: &str) -> Option<vibe_core::skills::InvokedSkill> {
+            let name = prompt
+                .trim()
+                .strip_prefix('/')?
+                .split_whitespace()
+                .next()?
+                .to_ascii_lowercase();
+            (name == "probe").then(|| vibe_core::skills::InvokedSkill {
+                name: "probe".to_owned(),
+                loaded: ToolExecutionOutput {
+                    model_text: format!(
+                        "name: probe\ncontent: {}\nDo the probing.\n</skill_content>\nskill_dir: None",
+                        vibe_core::skills::skill_content_marker("probe")
+                    ),
+                    typed_result: json!({"name": "probe"}),
+                    display: json!({"kind": "skill", "name": "probe"}),
+                    chunks: Vec::new(),
+                },
+                already_loaded: ToolExecutionOutput {
+                    model_text: "name: probe\ncontent: already loaded\nskill_dir: None".to_owned(),
+                    typed_result: json!({"name": "probe"}),
+                    display: json!({"kind": "skill", "name": "probe"}),
+                    chunks: Vec::new(),
+                },
+            })
+        }
+    }
+
+    fn probe_reservation(prompt: &str, tools: ToolRegistry) -> TurnReservation {
+        TurnReservation {
+            session_id: "session-1".to_owned(),
+            turn_id: "turn-1".to_owned(),
+            prompt: prompt.to_owned(),
+            input: vec![PublicContentBlock::Text {
+                text: prompt.to_owned(),
+            }],
+            prepared_images: None,
+            client_user_message_id: None,
+            auto_title: None,
+            user_display_content: None,
+            mention_stats: None,
+            working_directory: "/workspace".to_owned(),
+            compaction: CompactionSettings::default(),
+            intent: SessionIntent::default(),
+            tools,
+        }
+    }
+
+    /// US-172: a turn whose prompt is `/name` shows the model the synthetic
+    /// pair right after the user message, resolved through the registry the
+    /// session registered its tools into.
+    #[tokio::test]
+    async fn a_slash_turn_reaches_the_model_as_the_synthetic_pair() {
+        let provider = Arc::new(TranscriptProbeProvider {
+            transcripts: std::sync::Mutex::new(Vec::new()),
+        });
+        let driver = LiveTurnDriver::from_provider_for_tests(provider.clone(), "system");
+        let tools = ToolRegistry::default();
+        tools.set_invoked_skills(Arc::new(ProbeSkillResolver));
+
+        driver
+            .run(&probe_reservation("/probe do it", tools))
+            .await
+            .expect("turn completes");
+
+        let transcripts = provider.transcripts.lock().expect("transcripts");
+        let seen = transcripts.first().expect("one request");
+        let user = seen
+            .iter()
+            .position(|message| {
+                matches!(message, ModelMessage::User { content, .. } if content == "/probe do it")
+            })
+            .expect("the prompt stays the user's message");
+        assert!(
+            matches!(
+                &seen[user + 1],
+                ModelMessage::Assistant { tool_calls, .. }
+                    if tool_calls.len() == 1 && tool_calls[0].name == "skill"
+            ),
+            "the pair follows the user message: {seen:?}"
+        );
+        assert!(
+            matches!(
+                &seen[user + 2],
+                ModelMessage::Tool { content, is_error: false, .. }
+                    if content.contains(&vibe_core::skills::skill_content_marker("probe"))
+            ),
+            "the call is answered before the model speaks: {seen:?}"
+        );
+    }
+
+    /// US-173: a context injection carrying the flag appends the pair after
+    /// its message at the next turn, and one without the flag stays a plain
+    /// message.
+    #[tokio::test]
+    async fn a_flagged_context_injection_appends_the_pair_before_the_turn() {
+        for (inject, expected_pairs) in [(true, 1_usize), (false, 0_usize)] {
+            let provider = Arc::new(TranscriptProbeProvider {
+                transcripts: std::sync::Mutex::new(Vec::new()),
+            });
+            let driver = LiveTurnDriver::from_provider_for_tests(provider.clone(), "system");
+            let tools = ToolRegistry::default();
+            tools.set_invoked_skills(Arc::new(ProbeSkillResolver));
+            driver
+                .inject_context("session-1", "/probe", true, inject)
+                .expect("injection queues");
+
+            driver
+                .run(&probe_reservation("hello", tools))
+                .await
+                .expect("turn completes");
+
+            let transcripts = provider.transcripts.lock().expect("transcripts");
+            let seen = transcripts.first().expect("one request");
+            let pairs = seen
+                .iter()
+                .filter(|message| matches!(message, ModelMessage::Tool { .. }))
+                .count();
+            assert_eq!(
+                pairs, expected_pairs,
+                "injectInvokedSkill={inject}: {seen:?}"
+            );
+            let injected = seen
+                .iter()
+                .position(|message| {
+                    matches!(message, ModelMessage::User { content, .. } if content == "/probe")
+                })
+                .expect("the injected message is carried either way");
+            if inject {
+                assert!(
+                    matches!(
+                        &seen[injected + 1],
+                        ModelMessage::Assistant { tool_calls, .. }
+                            if tool_calls.len() == 1 && tool_calls[0].name == "skill"
+                    ),
+                    "the pair follows the injected message: {seen:?}"
+                );
+            }
+        }
     }
 
     /// Captures the tools one turn publishes and, when `task` is among them,

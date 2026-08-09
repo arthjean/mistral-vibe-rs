@@ -427,6 +427,9 @@ impl CancellationToken {
 pub enum TurnControl {
     Steer {
         content: String,
+        /// Whether a steer naming a user-invocable skill appends the synthetic
+        /// pair, which is the wire's `injectInvokedSkill` on `turn/steer`.
+        inject_invoked_skill: bool,
     },
     InjectContext {
         content: String,
@@ -993,11 +996,17 @@ where
         let mut cleared = false;
         for control in controls.drain()? {
             match control {
-                TurnControl::Steer { content } => {
+                TurnControl::Steer {
+                    content,
+                    inject_invoked_skill,
+                } => {
                     recorder.emit(EngineEvent::UserSteer {
                         content: content.clone(),
                     })?;
-                    messages.push(ModelMessage::user(content));
+                    messages.push(ModelMessage::user(content.clone()));
+                    if inject_invoked_skill {
+                        self.inject_invoked_skill(recorder, messages, &content)?;
+                    }
                 }
                 TurnControl::InjectContext {
                     content,
@@ -3616,6 +3625,45 @@ mod tests {
                 .any(|event| matches!(event, EngineEvent::ToolCall { .. })),
             "no synthetic call was emitted"
         );
+    }
+
+    /// US-173: the steer control carries the wire's `injectInvokedSkill`, so a
+    /// steer naming a skill appends the pair when the flag is true and stays a
+    /// plain message when it is false.
+    #[tokio::test]
+    async fn a_steer_injects_the_skill_only_when_its_flag_says_so() {
+        for (inject, expected_pairs) in [(true, 1_usize), (false, 0_usize)] {
+            let provider = ScriptedProvider::new([Ok(completion("done", Vec::new()))]);
+            let controls = TurnControlHandle::default();
+            controls
+                .send(TurnControl::Steer {
+                    content: "/probe".to_owned(),
+                    inject_invoked_skill: inject,
+                })
+                .expect("queue steer");
+            let outcome = ConversationEngine::new(provider)
+                .with_invoked_skills(Arc::new(StubSkills))
+                .run_turn_controlled(
+                    "session-1",
+                    provider_input(),
+                    "first ask",
+                    CancellationToken::default(),
+                    controls,
+                )
+                .await
+                .expect("turn completes");
+
+            let pairs = outcome
+                .messages
+                .iter()
+                .filter(|message| matches!(message, ModelMessage::Tool { .. }))
+                .count();
+            assert_eq!(
+                pairs, expected_pairs,
+                "injectInvokedSkill={inject}: {:?}",
+                outcome.messages
+            );
+        }
     }
 
     /// US-172: the pair round-trips through serialization unchanged, so a
