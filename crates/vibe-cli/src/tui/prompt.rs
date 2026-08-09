@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use serde_json::json;
-
 use super::attachments::{PreparedSubmission, PromptDraft, prepare_submission};
 use super::clipboard_images::ClipboardImageManager;
 use super::controls::ControlState;
@@ -81,7 +79,6 @@ pub(super) async fn prepare_prompt_for_runtime(
     let preparation_prompt = prompt.clone();
     let active_model = runtime.model.clone();
     let supports_images = runtime.supports_images();
-    let skill = invoked_skill(runtime, prompt.text()).cloned();
     let preparation = tokio::task::spawn_blocking(move || {
         prepare_submission(
             &preparation_workspace,
@@ -91,7 +88,7 @@ pub(super) async fn prepare_prompt_for_runtime(
         )
     })
     .await;
-    let mut prepared = match preparation {
+    let prepared = match preparation {
         Ok(Ok(prepared)) => prepared,
         Ok(Err(error)) => {
             state.push_diagnostic(error.to_string());
@@ -102,22 +99,9 @@ pub(super) async fn prepare_prompt_for_runtime(
             return Ok(None);
         }
     };
-    if let Some(skill) = skill {
-        prepared
-            .turn
-            .input
-            .push(vibe_app_server::client::PublicContentBlock::Resource {
-                resource: json!({
-                    "resource": {
-                        // The published catalog names a skill, not the file it
-                        // was read from, so the resource is addressed by name.
-                        "uri": format!("skill://{}", skill.name),
-                        "name": skill.name,
-                        "text": skill.body,
-                    }
-                }),
-            });
-    }
+    // A skill invocation travels as the typed text alone: the server resolves
+    // it and appends the synthetic `skill` call pair, so the client no longer
+    // ships the body as a resource block.
     Ok(Some(prepared))
 }
 

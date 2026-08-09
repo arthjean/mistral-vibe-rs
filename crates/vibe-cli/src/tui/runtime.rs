@@ -28,7 +28,6 @@ use super::{
 pub(super) struct RuntimeSkill {
     pub(super) name: String,
     pub(super) description: String,
-    pub(super) body: String,
 }
 
 pub(super) struct InteractiveRuntime {

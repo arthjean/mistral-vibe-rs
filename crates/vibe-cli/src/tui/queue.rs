@@ -146,12 +146,6 @@ async fn inject_queued_prompt(
         state.push_diagnostic("Setup is required before draining queued input");
         return Ok(false);
     };
-    let injected_skill = prepared.turn.input.iter().any(|block| {
-        matches!(
-            block,
-            vibe_app_server::client::PublicContentBlock::Resource { .. }
-        )
-    });
     match runtime
         .service
         .public_call_async(
@@ -160,7 +154,10 @@ async fn inject_queued_prompt(
                 "sessionId": runtime.session_id,
                 "input": prepared.turn.input,
                 "asMessage": true,
-                "injectInvokedSkill": injected_skill,
+                // The reference client always asks the server to resolve a
+                // skill invocation in an injected message; a message naming no
+                // skill injects nothing.
+                "injectInvokedSkill": true,
                 "clientUserMessageId": item.id,
                 "mentionStats": prepared.turn.mention_stats,
             }),

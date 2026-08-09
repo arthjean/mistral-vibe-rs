@@ -1417,13 +1417,6 @@ fn parse_runtime_skills(skills: Option<&Value>) -> BTreeMap<String, RuntimeSkill
                         .and_then(Value::as_str)
                         .unwrap_or_default()
                         .to_owned(),
-                    // `SkillSummary` calls the expansion `prompt`, which is the
-                    // name it crosses the wire under.
-                    body: skill
-                        .get("prompt")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_owned(),
                 },
             ))
         })
