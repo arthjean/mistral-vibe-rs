@@ -36,10 +36,10 @@
     {
       "id": "EP-049",
       "title": "The Builtin Skills",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0,
+      "stories_done": 3,
       "stories_in_review": 0
     },
     {
@@ -190,43 +190,43 @@
       "id": "US-169",
       "title": "Seed the catalog with a builtin skill set and reserve its names",
       "epic": "EP-049",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-164"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-09",
+      "completed_at": "2026-08-09",
+      "reviewed_at": "2026-08-09"
     },
     {
       "id": "US-170",
       "title": "Write both builtin bodies as original prose and ledger the divergence",
       "epic": "EP-049",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-169"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-09",
+      "completed_at": "2026-08-09",
+      "reviewed_at": "2026-08-09"
     },
     {
       "id": "US-171",
       "title": "Count custom skills only",
       "epic": "EP-049",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "size": "XS",
       "blocked_by": [
         "US-169"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-09",
+      "completed_at": "2026-08-09",
+      "reviewed_at": "2026-08-09"
     },
     {
       "id": "US-172",

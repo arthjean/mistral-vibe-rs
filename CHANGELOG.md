@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Ship the two builtin skills. `vibe` and `skill-creator` are seeded into
+  every catalog ahead of the disk walk, exactly as the reference seeds them:
+  `skill-creator` is user-invocable from `/skill-creator` and guides creating,
+  editing and deleting skills; `vibe` is model-only, so the model can load the
+  CLI's own reference while `/vibe` stays an ordinary prompt. Both publish
+  `source: "builtin"` on `skills/list` with no path, their names are reserved
+  so a disk skill cannot shadow them, and the banner keeps counting only the
+  skills you added. Their bodies are this port's own prose: `NOTICE` forbids
+  shipping the reference's, and the parity replay fails if either ever matches
+  the upstream text.
+
 - Read skills from the directories the documentation names. Discovery walked
   one project directory and one path this port invented; it now walks the five
   the reference does, in its order: every directory `skill_paths` names, then
