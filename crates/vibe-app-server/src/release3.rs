@@ -22,7 +22,7 @@ use vibe_core::continuity::SessionContinuity;
 use vibe_core::events::ModelMessage;
 use vibe_core::extensions::{
     AgentKind, AgentProfile, AgentRegistry, DiscoveryRoots, ExtensionCatalog, ExtensionSource,
-    SkillDefinition, discover_extensions,
+    discover_extensions,
 };
 use vibe_core::mcp::McpServerConfig;
 use vibe_core::middleware::CompactionSettings;
@@ -1799,7 +1799,7 @@ impl Release3Service {
         discover_extensions(
             &roots,
             builtin_agents,
-            BTreeMap::<String, SkillDefinition>::new(),
+            vibe_core::skills::builtins::builtin_skills(),
             BTreeMap::new(),
         )
     }
@@ -3444,7 +3444,7 @@ tool_timeout_sec = 2
         .expect("user fixture");
         assert_eq!(
             listed_skills(&service),
-            vec!["from-user"],
+            vec!["from-user", "skill-creator", "vibe"],
             "the key is re-read per build, so the next one publishes what it names"
         );
 
@@ -3455,7 +3455,7 @@ tool_timeout_sec = 2
         .expect("project fixture");
         assert_eq!(
             listed_skills(&service),
-            vec!["from-project"],
+            vec!["from-project", "skill-creator", "vibe"],
             "the selected file moves to the trusted project's, and its entry is read"
         );
     }
@@ -3485,12 +3485,57 @@ tool_timeout_sec = 2
             listed_skills(&service)
         };
 
-        assert_eq!(published("disabled_skills = [\"beta\"]\n"), vec!["alpha"]);
+        assert_eq!(
+            published("disabled_skills = [\"beta\"]\n"),
+            vec!["alpha", "skill-creator", "vibe"],
+            "the denylist withholds its match and leaves the seeded builtins published"
+        );
         assert_eq!(
             published("enabled_skills = [\"beta\"]\ndisabled_skills = [\"beta\"]\n"),
             vec!["beta"],
             "the allowlist decides alone and the denylist is not consulted"
         );
+    }
+
+    /// US-169: with nothing on disk the wire still publishes the two seeded
+    /// builtins, `vibe` model-only and `skill-creator` user-invocable, both
+    /// under `source: "builtin"` and without a path field.
+    #[test]
+    fn the_builtins_are_published_on_the_wire() {
+        let temporary = tempdir().expect("tempdir");
+        let service = Release3Service::new(
+            Release3Paths {
+                vibe_home: temporary.path().join("home"),
+                working_directory: temporary.path().join("workspace"),
+                session_root: temporary.path().join("sessions"),
+            },
+            true,
+        )
+        .expect("service");
+
+        let dispatch = service
+            .dispatch("skills/list", &BTreeMap::new())
+            .expect("skills/list answers");
+        let skills = dispatch.result["skills"]
+            .as_array()
+            .expect("the response carries an array");
+        let entry = |name: &str| {
+            skills
+                .iter()
+                .find(|skill| skill["name"] == name)
+                .expect("both builtins are published")
+        };
+
+        let vibe = entry("vibe");
+        assert_eq!(vibe["userInvocable"], serde_json::json!(false));
+        assert_eq!(vibe["source"], serde_json::json!("builtin"));
+        assert!(
+            vibe.get("path").is_none(),
+            "a builtin has no file on disk, so no path is emitted: {vibe}"
+        );
+        let creator = entry("skill-creator");
+        assert_eq!(creator["userInvocable"], serde_json::json!(true));
+        assert_eq!(creator["source"], serde_json::json!("builtin"));
     }
 
     /// US-168: a `SKILL.md` that will not parse is published as an issue naming
@@ -3517,9 +3562,10 @@ tool_timeout_sec = 2
         assert_eq!(issues.len(), 1, "{issues:?}");
         assert!(issues[0].0.ends_with("broken/SKILL.md"), "{issues:?}");
         assert!(!issues[0].1.is_empty(), "the issue carries a reason");
-        assert!(
-            listed_skills(&service).is_empty(),
-            "the unloadable skill is absent from the catalog"
+        assert_eq!(
+            listed_skills(&service),
+            vec!["skill-creator", "vibe"],
+            "the unloadable skill is absent from the catalog and the builtins remain"
         );
     }
 
