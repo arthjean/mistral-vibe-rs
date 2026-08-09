@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Record a slash-invoked skill in the conversation the way the reference
+  does. Submitting `/name` now appends a synthetic `skill` tool call and its
+  result to the session history, so the transcript shows the load settling,
+  the persisted conversation reads the same whether you or the model loaded
+  the skill, and invoking one a second time answers that it is already loaded
+  instead of paying for the body again. The flag `injectInvokedSkill` on
+  `turn/steer` and `session/context/inject` now decides whether that
+  injection happens, and the terminal client stops shipping the skill body as
+  a `skill://` resource block: the server is the one place that resolves an
+  invocation.
+
 - Ship the two builtin skills. `vibe` and `skill-creator` are seeded into
   every catalog ahead of the disk walk, exactly as the reference seeds them:
   `skill-creator` is user-invocable from `/skill-creator` and guides creating,
