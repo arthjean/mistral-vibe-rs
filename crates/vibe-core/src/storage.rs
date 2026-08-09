@@ -1765,6 +1765,46 @@ mod tests {
         ModelMessage::user(content.to_owned())
     }
 
+    /// US-172: the synthetic pair a slash invocation appends is made of the
+    /// message shapes the store already persists, so it round-trips through a
+    /// session unchanged.
+    #[test]
+    fn the_invoked_skill_pair_round_trips_through_the_store() {
+        let temporary = tempfile::tempdir().expect("temporary session root");
+        let store = SessionStore::new(temporary.path());
+        let mut metadata = store
+            .create("session-skill", "/workspace", None, 10)
+            .expect("session creates");
+        let pair = [
+            user("/probe"),
+            ModelMessage::Assistant {
+                content: String::new(),
+                reasoning: None,
+                reasoning_signature: None,
+                reasoning_state: Vec::new(),
+                tool_calls: vec![crate::events::ModelToolCall {
+                    id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_owned(),
+                    name: "skill".to_owned(),
+                    arguments: "{\"name\":\"probe\"}".to_owned(),
+                }],
+            },
+            ModelMessage::Tool {
+                call_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_owned(),
+                content: format!(
+                    "name: probe\ncontent: {}\nBody\n</skill_content>\nskill_dir: None",
+                    crate::skills::skill_content_marker("probe")
+                ),
+                is_error: false,
+            },
+        ];
+        store
+            .append_messages(&mut metadata, &pair, 11)
+            .expect("the pair persists");
+
+        let hydrated = store.load("session-skill").expect("session loads");
+        assert_eq!(hydrated.messages, pair.to_vec());
+    }
+
     #[test]
     fn sessions_append_atomically_and_resume_with_current_system_context() {
         let temporary = tempfile::tempdir().expect("temporary session root");

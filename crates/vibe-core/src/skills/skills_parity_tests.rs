@@ -96,9 +96,9 @@ const DIVERGENCES: &[(&str, &str)] = &[
          originally in `vibe_core::skills::builtins` for the same routing intent",
     ),
     (
-        "command/*",
-        "PENDING US-172: slash-command parsing lives in the CLI adapter, so vibe-core has no \
-         parse_skill_command to answer",
+        "command/builtin-skill-creator",
+        "ACCEPTED: the case invokes the `skill-creator` builtin, whose body is this port's own \
+         prose (`NOTICE`), so the delivered content digest can never match the reference's",
     ),
     (
         "store/*",
@@ -259,14 +259,12 @@ struct FilteringCase {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CommandFamily {
-    #[expect(dead_code, reason = "US-172's parser replays over these fixtures")]
     skills: Vec<CommandFixture>,
     cases: Vec<CommandCase>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[expect(dead_code, reason = "US-172's parser replays over these fixtures")]
 struct CommandFixture {
     name: String,
     description: String,
@@ -278,7 +276,6 @@ struct CommandFixture {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CommandCase {
     case: String,
-    #[expect(dead_code, reason = "US-172's parser replays the prompt")]
     prompt: String,
     result: Option<CommandResult>,
 }
@@ -287,9 +284,7 @@ struct CommandCase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CommandResult {
     name: String,
-    #[expect(dead_code, reason = "US-172 compares the trailing instructions")]
     extra_instructions: Option<String>,
-    #[expect(dead_code, reason = "US-172 compares the delivered body by digest")]
     content: Digested,
 }
 
@@ -988,12 +983,40 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
     scenarios += settle(&report, "filtering");
 
     let mut report = Report::default();
+    let mut command_catalog = crate::skills::builtins::builtin_skills();
+    command_catalog.extend(corpus.command.skills.iter().map(|fixture| {
+        let mut definition = named_definition(&fixture.name);
+        definition.description.clone_from(&fixture.description);
+        definition.user_invocable = fixture.invocable;
+        definition.body.clone_from(&fixture.body);
+        (fixture.name.clone(), definition)
+    }));
     for case in &corpus.command.cases {
-        let expected = case.result.as_ref().map_or_else(
-            || "no invocation".to_owned(),
-            |result| format!("invokes `{}`", result.name),
+        let parsed = crate::skills::parse_skill_command(&command_catalog, &case.prompt);
+        report.check(
+            "command",
+            &case.case,
+            "invokes",
+            &case.result.is_some(),
+            &parsed.is_some(),
         );
-        report.pending("command", &case.case, expected, "US-172");
+        if let (Some(expected), Some(actual)) = (&case.result, &parsed) {
+            report.check("command", &case.case, "name", &expected.name, &actual.name);
+            report.check(
+                "command",
+                &case.case,
+                "extraInstructions",
+                &expected.extra_instructions,
+                &actual.extra_instructions,
+            );
+            report.check(
+                "command",
+                &case.case,
+                "content",
+                &expected.content,
+                &digest_of(&actual.content),
+            );
+        }
     }
     scenarios += settle(&report, "command");
 

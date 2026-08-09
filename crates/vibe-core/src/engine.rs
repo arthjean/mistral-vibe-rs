@@ -554,6 +554,9 @@ pub struct ConversationEngine<P, T = NoTools, C = RejectCompaction, S = NoopTran
     /// registers automatic compaction and everything that follows it.
     middleware: Vec<Arc<dyn ConversationMiddleware>>,
     compaction: CompactionSettings,
+    /// How a slash-invoked skill resolves, when the session publishes one.
+    /// Absent, a `/name` prompt is an ordinary message.
+    invoked_skills: Option<Arc<dyn crate::skills::InvokedSkillResolver>>,
 }
 
 impl<P> ConversationEngine<P> {
@@ -569,6 +572,7 @@ impl<P> ConversationEngine<P> {
             observer: Arc::new(NoopEventObserver),
             middleware: Vec::new(),
             compaction: CompactionSettings::default(),
+            invoked_skills: None,
         }
     }
 }
@@ -586,6 +590,7 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             observer: self.observer,
             middleware: self.middleware,
             compaction: self.compaction,
+            invoked_skills: self.invoked_skills,
         }
     }
 
@@ -601,6 +606,7 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             observer: self.observer,
             middleware: self.middleware,
             compaction: self.compaction,
+            invoked_skills: self.invoked_skills,
         }
     }
 
@@ -616,6 +622,7 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             observer: self.observer,
             middleware: self.middleware,
             compaction: self.compaction,
+            invoked_skills: self.invoked_skills,
         }
     }
 
@@ -647,6 +654,15 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
     #[must_use]
     pub fn with_observer(mut self, observer: Arc<dyn EventObserver>) -> Self {
         self.observer = observer;
+        self
+    }
+
+    #[must_use]
+    pub fn with_invoked_skills(
+        mut self,
+        resolver: Arc<dyn crate::skills::InvokedSkillResolver>,
+    ) -> Self {
+        self.invoked_skills = Some(resolver);
         self
     }
 }
@@ -713,7 +729,8 @@ where
         recorder.emit(EngineEvent::UserMessage {
             content: prompt.clone(),
         })?;
-        messages.push(ModelMessage::user(prompt));
+        messages.push(ModelMessage::user(prompt.clone()));
+        self.inject_invoked_skill(&mut recorder, &mut messages, &prompt)?;
         recorder.emit(EngineEvent::Title {
             title: title_from_messages(&messages),
         })?;
@@ -928,6 +945,41 @@ where
             MiddlewareAction::Stop => result.stop_reason,
             _ => None,
         }
+    }
+
+    /// Appends the synthetic `skill` call pair when the message is a slash
+    /// invocation, reproducing reference `_inject_invoked_skill`: the model
+    /// reads the same conversation whether the operator or one of its own tool
+    /// calls loaded the skill, and a repeat is acknowledged rather than
+    /// rendered again.
+    fn inject_invoked_skill(
+        &self,
+        recorder: &mut TurnRecorder<'_>,
+        messages: &mut Vec<ModelMessage>,
+        content: &str,
+    ) -> Result<(), EngineError> {
+        let Some(resolver) = &self.invoked_skills else {
+            return Ok(());
+        };
+        let Some(invoked) = resolver.resolve(content) else {
+            return Ok(());
+        };
+        let appended = crate::skills::append_invoked_skill(messages, &invoked);
+        recorder.emit(EngineEvent::ToolCall {
+            call_id: appended.call_id.clone(),
+            name: "skill".to_owned(),
+            arguments: appended.arguments,
+        })?;
+        recorder.emit(EngineEvent::ToolResult {
+            call_id: appended.call_id,
+            content: appended.output.model_text,
+            typed_result: appended.output.typed_result,
+            display: appended.output.display,
+            duration_ms: 0,
+            is_error: false,
+            cancelled: false,
+        })?;
+        Ok(())
     }
 
     /// Drains queued steering, context injection, callback resolutions and
@@ -3307,5 +3359,275 @@ mod tests {
             serde_json::from_value(json!({"role": "user", "content": "hello"}))
                 .expect("a stored user message still deserializes");
         assert_eq!(message, ModelMessage::user("hello".to_owned()));
+    }
+
+    /// The invoked-skill resolver the injection tests drive: `/probe` is the
+    /// one user-invocable skill, resolved the way the builtin resolver does.
+    struct StubSkills;
+
+    impl crate::skills::InvokedSkillResolver for StubSkills {
+        fn resolve(&self, prompt: &str) -> Option<crate::skills::InvokedSkill> {
+            let name = prompt
+                .trim()
+                .strip_prefix('/')?
+                .split_whitespace()
+                .next()?
+                .to_ascii_lowercase();
+            if name != "probe" {
+                return None;
+            }
+            let marker = crate::skills::skill_content_marker("probe");
+            Some(crate::skills::InvokedSkill {
+                name: "probe".to_owned(),
+                loaded: ToolExecutionOutput {
+                    model_text: format!(
+                        "name: probe\ncontent: {marker}\nDo the probing.\n</skill_content>\nskill_dir: None"
+                    ),
+                    typed_result: json!({"name": "probe"}),
+                    display: json!({"kind": "skill", "name": "probe"}),
+                    chunks: Vec::new(),
+                },
+                already_loaded: ToolExecutionOutput {
+                    model_text: "name: probe\ncontent: already loaded; reuse those instructions\nskill_dir: None"
+                        .to_owned(),
+                    typed_result: json!({"name": "probe"}),
+                    display: json!({"kind": "skill", "name": "probe"}),
+                    chunks: Vec::new(),
+                },
+            })
+        }
+    }
+
+    /// US-172: a `/name` prompt appends the synthetic pair the reference
+    /// writes: an assistant message whose only content is one `skill` tool
+    /// call, then the tool message carrying the rendering, both before the
+    /// first model request, which therefore reads them.
+    #[tokio::test]
+    async fn a_slash_invocation_appends_the_synthetic_skill_pair() {
+        let provider = ScriptedProvider::new([Ok(completion("done", Vec::new()))]);
+        let observer = Arc::new(RecordingObserver::default());
+        let outcome = ConversationEngine::new(provider)
+            .with_observer(observer.clone())
+            .with_invoked_skills(Arc::new(StubSkills))
+            .run_turn(
+                "session-1",
+                provider_input(),
+                "/probe extra instructions here",
+                CancellationToken::default(),
+            )
+            .await
+            .expect("turn completes");
+
+        let messages = &outcome.messages;
+        assert_eq!(
+            messages[1],
+            ModelMessage::user("/probe extra instructions here".to_owned()),
+            "the trailing text stays the operator's message"
+        );
+        let ModelMessage::Assistant {
+            content,
+            tool_calls,
+            ..
+        } = &messages[2]
+        else {
+            panic!("the pair opens with an assistant message: {messages:?}");
+        };
+        assert_eq!(content, "", "the assistant message carries no text");
+        assert_eq!(tool_calls.len(), 1, "exactly one call: {tool_calls:?}");
+        assert_eq!(tool_calls[0].name, "skill");
+        assert_eq!(
+            serde_json::from_str::<Value>(&tool_calls[0].arguments).expect("arguments are JSON"),
+            json!({"name": "probe"}),
+        );
+        let id = tool_calls[0].id.as_str();
+        let shape = id.split('-').map(str::len).collect::<Vec<_>>();
+        assert_eq!(shape, [8, 4, 4, 4, 12], "the locally minted id shape: {id}");
+        assert!(
+            id.chars().all(|c| c.is_ascii_hexdigit() || c == '-'),
+            "{id}"
+        );
+        let ModelMessage::Tool {
+            call_id,
+            content,
+            is_error,
+        } = &messages[3]
+        else {
+            panic!("the call is answered by a tool message: {messages:?}");
+        };
+        assert_eq!(call_id, id, "the result answers the minted call");
+        assert!(!is_error);
+        assert!(
+            content.contains(&crate::skills::skill_content_marker("probe")),
+            "the first load renders the body: {content}"
+        );
+        assert!(
+            content.starts_with("name: probe\ncontent:"),
+            "the result is the fields one per line: {content}"
+        );
+
+        let events = observer.events.lock().expect("events");
+        let call_index = events
+            .iter()
+            .position(
+                |event| matches!(event, EngineEvent::ToolCall { name, .. } if name == "skill"),
+            )
+            .expect("the synthetic call is a turn event");
+        assert!(
+            matches!(
+                &events[call_index + 1],
+                EngineEvent::ToolResult {
+                    is_error: false,
+                    ..
+                }
+            ),
+            "the result event follows the call: {events:?}"
+        );
+    }
+
+    /// US-172: the second invocation of a skill already in the stored history
+    /// is acknowledged rather than rendered again, decided by searching the
+    /// stored tool messages of `skill` calls for the content marker.
+    #[tokio::test]
+    async fn a_second_invocation_is_acknowledged_from_the_stored_history() {
+        let marker = crate::skills::skill_content_marker("probe");
+        let mut input = provider_input();
+        input.messages.extend([
+            ModelMessage::Assistant {
+                content: String::new(),
+                reasoning: None,
+                reasoning_signature: None,
+                reasoning_state: Vec::new(),
+                tool_calls: vec![ModelToolCall {
+                    id: "earlier-call".to_owned(),
+                    name: "skill".to_owned(),
+                    arguments: "{\"name\": \"probe\"}".to_owned(),
+                }],
+            },
+            ModelMessage::Tool {
+                call_id: "earlier-call".to_owned(),
+                content: format!("name: probe\ncontent: {marker}\nDo the probing."),
+                is_error: false,
+            },
+        ]);
+        let provider = ScriptedProvider::new([Ok(completion("done", Vec::new()))]);
+        let outcome = ConversationEngine::new(provider)
+            .with_invoked_skills(Arc::new(StubSkills))
+            .run_turn("session-1", input, "/probe", CancellationToken::default())
+            .await
+            .expect("turn completes");
+
+        let repeat = outcome
+            .messages
+            .iter()
+            .filter(|message| matches!(message, ModelMessage::Tool { .. }))
+            .nth(1)
+            .expect("the invocation still appends a tool message");
+        let ModelMessage::Tool { content, .. } = repeat else {
+            unreachable!()
+        };
+        assert!(
+            content.contains("already loaded"),
+            "the repeat is acknowledged: {content}"
+        );
+        assert!(
+            !content.contains(&marker),
+            "the body is not rendered again: {content}"
+        );
+    }
+
+    /// US-172: the marker alone does not mark a skill loaded; it has to sit in
+    /// the answer of a `skill` call, so a file read that happens to contain the
+    /// marker text does not swallow a later invocation.
+    #[tokio::test]
+    async fn a_marker_in_an_unrelated_tool_answer_does_not_count_as_loaded() {
+        let mut input = provider_input();
+        input.messages.extend([
+            ModelMessage::Assistant {
+                content: String::new(),
+                reasoning: None,
+                reasoning_signature: None,
+                reasoning_state: Vec::new(),
+                tool_calls: vec![ModelToolCall {
+                    id: "read-call".to_owned(),
+                    name: "read".to_owned(),
+                    arguments: "{}".to_owned(),
+                }],
+            },
+            ModelMessage::Tool {
+                call_id: "read-call".to_owned(),
+                content: crate::skills::skill_content_marker("probe"),
+                is_error: false,
+            },
+        ]);
+        let provider = ScriptedProvider::new([Ok(completion("done", Vec::new()))]);
+        let outcome = ConversationEngine::new(provider)
+            .with_invoked_skills(Arc::new(StubSkills))
+            .run_turn("session-1", input, "/probe", CancellationToken::default())
+            .await
+            .expect("turn completes");
+
+        let appended = outcome
+            .messages
+            .iter()
+            .filter(|message| matches!(message, ModelMessage::Tool { .. }))
+            .nth(1)
+            .expect("the pair is appended");
+        let ModelMessage::Tool { content, .. } = appended else {
+            unreachable!()
+        };
+        assert!(
+            !content.contains("already loaded"),
+            "the unrelated marker did not count: {content}"
+        );
+    }
+
+    /// US-172: a slash word naming no skill, or a session publishing no
+    /// resolver, leaves the prompt an ordinary message with no pair.
+    #[tokio::test]
+    async fn a_slash_word_naming_no_skill_is_an_ordinary_prompt() {
+        let provider = ScriptedProvider::new([Ok(completion("done", Vec::new()))]);
+        let observer = Arc::new(RecordingObserver::default());
+        let outcome = ConversationEngine::new(provider)
+            .with_observer(observer.clone())
+            .with_invoked_skills(Arc::new(StubSkills))
+            .run_turn(
+                "session-1",
+                provider_input(),
+                "/unknown do things",
+                CancellationToken::default(),
+            )
+            .await
+            .expect("turn completes");
+
+        assert!(
+            !outcome
+                .messages
+                .iter()
+                .any(|message| matches!(message, ModelMessage::Tool { .. })),
+            "no pair was appended: {:?}",
+            outcome.messages
+        );
+        assert!(
+            !observer
+                .events
+                .lock()
+                .expect("events")
+                .iter()
+                .any(|event| matches!(event, EngineEvent::ToolCall { .. })),
+            "no synthetic call was emitted"
+        );
+    }
+
+    /// US-172: the pair round-trips through serialization unchanged, so a
+    /// persisted transcript carrying one reloads as the conversation it was.
+    #[test]
+    fn the_synthetic_pair_round_trips_through_serialization() {
+        use crate::skills::InvokedSkillResolver as _;
+        let mut messages = vec![ModelMessage::user("/probe".to_owned())];
+        let invoked = StubSkills.resolve("/probe").expect("resolves");
+        crate::skills::append_invoked_skill(&mut messages, &invoked);
+        let stored = serde_json::to_value(&messages).expect("serializes");
+        let reloaded: Vec<ModelMessage> = serde_json::from_value(stored).expect("deserializes");
+        assert_eq!(reloaded, messages);
     }
 }

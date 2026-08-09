@@ -218,7 +218,7 @@ impl BuiltinTools {
                     // rather than deferring, so a session that moved `skill` to
                     // `ask` still loads a skill without a prompt.
                     Arc::new(|_invocation| Ok(PermissionContext::settled(PermissionMode::Always))),
-                    self.skill_handler(session_id, skills),
+                    self.skill_handler(session_id, skills.clone()),
                 )),
             )?,
             registry.register(
@@ -275,6 +275,18 @@ impl BuiltinTools {
                 )),
             )?);
         }
+        // The synthetic pair a slash invocation appends resolves against the
+        // same discovery and the same loaded ledger the `skill` tool answers
+        // from, so the two paths cannot disagree about what exists or about
+        // what is already loaded.
+        registry.set_invoked_skills(Arc::new(SkillInvocationResolver {
+            roots: DiscoveryRoots {
+                skills,
+                ..DiscoveryRoots::default()
+            },
+            loaded: self.loaded_skills.clone(),
+            session_id: session_id.to_owned(),
+        }));
         Ok(outcomes)
     }
 
@@ -587,6 +599,17 @@ fn run_skill(
             .or_default()
             .insert(skill.name.clone())
     };
+    Ok(skill_output(skill, directory.as_deref(), already_loaded))
+}
+
+/// The output a skill load answers with, shared by the `skill` tool and the
+/// synthetic pair a slash invocation appends, so both paths deliver the same
+/// bytes for the same skill.
+fn skill_output(
+    skill: &SkillDefinition,
+    directory: Option<&Path>,
+    already_loaded: bool,
+) -> ToolExecutionOutput {
     let content = if already_loaded {
         format!(
             "The skill `{}` was already loaded earlier in this conversation; reuse those \
@@ -594,12 +617,10 @@ fn run_skill(
             skill.name
         )
     } else {
-        render_skill(skill, directory.as_deref())
+        render_skill(skill, directory)
     };
-    let directory_field = directory
-        .as_deref()
-        .map(|path| path.to_string_lossy().replace('\\', "/"));
-    Ok(ToolExecutionOutput {
+    let directory_field = directory.map(|path| path.to_string_lossy().replace('\\', "/"));
+    ToolExecutionOutput {
         model_text: reference_text::joined(&[
             ("name", skill.name.clone()),
             ("content", content.clone()),
@@ -615,7 +636,54 @@ fn run_skill(
             "skill_dir": directory_field,
         }),
         chunks: Vec::new(),
-    })
+    }
+}
+
+/// Resolves a slash invocation against the same catalog and loaded ledger the
+/// `skill` tool answers from.
+///
+/// Reference `parse_skill_command`: the trimmed prompt's first word past the
+/// `/` names the skill case-insensitively, and a name that is unknown or not
+/// user invocable resolves to nothing. A resolved skill is recorded in the
+/// ledger, so a later `skill` tool call is acknowledged instead of rendered
+/// again.
+struct SkillInvocationResolver {
+    roots: DiscoveryRoots,
+    loaded: Arc<Mutex<BTreeMap<String, BTreeSet<String>>>>,
+    session_id: String,
+}
+
+impl crate::skills::InvokedSkillResolver for SkillInvocationResolver {
+    fn resolve(&self, prompt: &str) -> Option<crate::skills::InvokedSkill> {
+        // The engine asks this question of every user message, and discovery
+        // walks five roots parsing every `SKILL.md` it finds. A prompt that
+        // cannot name a skill is answered before that walk is paid for, which
+        // is also how the reference behaves: its catalog is built once with the
+        // session, not once per turn.
+        if !prompt.trim_start().starts_with('/') {
+            return None;
+        }
+        let catalog = discover_extensions(
+            &self.roots,
+            BTreeMap::new(),
+            crate::skills::builtins::builtin_skills(),
+            BTreeMap::new(),
+        );
+        let parsed = crate::skills::parse_skill_command(&catalog.skills, prompt)?;
+        let skill = catalog.skills.get(&parsed.name)?;
+        if let Ok(mut loaded) = self.loaded.lock() {
+            loaded
+                .entry(self.session_id.clone())
+                .or_default()
+                .insert(skill.name.clone());
+        }
+        let directory = skill_directory(skill);
+        Some(crate::skills::InvokedSkill {
+            name: skill.name.clone(),
+            loaded: skill_output(skill, directory.as_deref(), false),
+            already_loaded: skill_output(skill, directory.as_deref(), true),
+        })
+    }
 }
 
 /// The directory a skill's files sit in, or [`None`] when it has none on disk.
@@ -642,7 +710,7 @@ fn render_skill(skill: &SkillDefinition, base: Option<&Path>) -> String {
         .collect::<Vec<_>>()
         .join("\n");
     let mut lines = vec![
-        format!("<skill_content name=\"{}\">", skill.name),
+        crate::skills::skill_content_marker(&skill.name),
         format!("# Skill: {}", skill.name),
         String::new(),
         skill.body.trim().to_owned(),
@@ -1645,6 +1713,100 @@ mod tests {
         assert!(
             loaded.model_text.contains("source of truth"),
             "the seeded body is the one rendered: {loaded:?}"
+        );
+    }
+
+    /// US-172: the invoked-skill resolver installed with the `skill` tool
+    /// answers the reference's `parse_skill_command` vocabulary: the first
+    /// word past the `/` names the skill case-insensitively, trailing text
+    /// stays the operator's message, and a name that is unknown or not user
+    /// invocable resolves to nothing.
+    #[tokio::test]
+    async fn a_slash_invocation_resolves_against_the_published_catalog() {
+        let directory = tempdir().expect("tempdir");
+        let skill_directory = directory.path().join(".vibe/skills/probe");
+        std::fs::create_dir_all(&skill_directory).expect("skill directory");
+        std::fs::write(
+            skill_directory.join("SKILL.md"),
+            "---\nname: probe\ndescription: a probe\n---\nDo the probing.\n",
+        )
+        .expect("skill file");
+        let registry = registered(directory.path(), None).await;
+        let resolver = registry
+            .invoked_skills()
+            .expect("registering the skill tool installs the resolver");
+
+        let invoked = resolver
+            .resolve("/probe extra instructions here")
+            .expect("the first word resolves the skill");
+        assert_eq!(invoked.name, "probe");
+        assert!(
+            invoked.loaded.model_text.contains("Do the probing."),
+            "{invoked:?}"
+        );
+        assert!(
+            invoked
+                .loaded
+                .model_text
+                .contains(&crate::skills::skill_content_marker("probe")),
+            "the rendering opens with the dedup marker: {invoked:?}"
+        );
+        assert!(
+            invoked.already_loaded.model_text.contains("already loaded"),
+            "{invoked:?}"
+        );
+
+        assert!(
+            resolver.resolve("/PROBE").is_some(),
+            "the lookup is case-insensitive"
+        );
+        assert!(
+            resolver.resolve("/unknown").is_none(),
+            "a slash word naming no skill is an ordinary prompt"
+        );
+        assert!(
+            resolver.resolve("/vibe").is_none(),
+            "a skill that is not user invocable cannot be slash-invoked"
+        );
+        assert!(
+            resolver.resolve("probe").is_none(),
+            "a prompt without the slash is never an invocation"
+        );
+    }
+
+    /// US-172: a slash invocation records the load in the same ledger the
+    /// `skill` tool reads, so the model calling `skill` afterward is
+    /// acknowledged instead of paying for the body twice.
+    #[tokio::test]
+    async fn a_slash_invocation_marks_the_skill_loaded_for_the_tool() {
+        let directory = tempdir().expect("tempdir");
+        let skill_directory = directory.path().join(".vibe/skills/probe");
+        std::fs::create_dir_all(&skill_directory).expect("skill directory");
+        std::fs::write(
+            skill_directory.join("SKILL.md"),
+            "---\nname: probe\ndescription: a probe\n---\nDo the probing.\n",
+        )
+        .expect("skill file");
+        let registry = registered(directory.path(), None).await;
+        registry
+            .invoked_skills()
+            .expect("resolver installed")
+            .resolve("/probe")
+            .expect("the skill resolves");
+
+        let loaded = registry
+            .invoke(
+                "skill",
+                ToolInvocation {
+                    call_id: "skill-1".to_owned(),
+                    arguments: json!({"name": "probe"}),
+                },
+            )
+            .await
+            .expect("the tool still answers");
+        assert!(
+            loaded.model_text.contains("already loaded"),
+            "the slash invocation counted as the first load: {loaded:?}"
         );
     }
 

@@ -26,8 +26,10 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use serde_json::{Value, json};
 
+use crate::events::{ModelMessage, ModelToolCall};
 use crate::extensions::SkillDefinition;
 use crate::matching::NameFilter;
+use crate::tools::ToolExecutionOutput;
 
 /// Where a skill came from, in the three-value vocabulary the wire's
 /// `SkillSummary` declares: shipped with the binary, found on disk, or
@@ -182,4 +184,155 @@ pub fn skill_summary(skill: &SkillDefinition) -> Value {
         "userInvocable": skill.user_invocable,
         "source": skill.source,
     })
+}
+
+/// A slash prompt resolved to the skill it invokes.
+///
+/// Reference `ParsedSkillCommand`: the resolved name, the skill's body, and
+/// whatever text followed the first word, which stays part of the operator's
+/// message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedSkillCommand {
+    pub name: String,
+    pub content: String,
+    pub extra_instructions: Option<String>,
+}
+
+/// Resolves a prompt against a published catalog.
+///
+/// Reference `parse_skill_command`: the trimmed prompt must start with `/`,
+/// its first word names the skill lowercased, and a name that is unknown or
+/// not user invocable resolves to nothing, leaving the prompt an ordinary
+/// message. The text past the first word keeps its internal spacing and loses
+/// the leading run, which is what the reference's two-way split does.
+#[must_use]
+pub fn parse_skill_command(
+    skills: &BTreeMap<String, SkillDefinition>,
+    prompt: &str,
+) -> Option<ParsedSkillCommand> {
+    let rest = prompt.trim().strip_prefix('/')?.trim_start();
+    let first = rest.split_whitespace().next()?;
+    let name = first.to_lowercase();
+    let skill = skills.get(&name)?;
+    if !skill.user_invocable {
+        return None;
+    }
+    let extra = rest[first.len()..].trim_start();
+    Some(ParsedSkillCommand {
+        name,
+        content: skill.body.clone(),
+        extra_instructions: (!extra.is_empty()).then(|| extra.to_owned()),
+    })
+}
+
+/// The opening tag a rendered skill body starts with, which is also the
+/// dedup marker: reference `skill_content_marker` searches the stored tool
+/// messages for it to decide whether a skill is already loaded.
+#[must_use]
+pub fn skill_content_marker(name: &str) -> String {
+    format!("<skill_content name=\"{name}\">")
+}
+
+/// What a slash invocation delivers, resolved once and carrying both possible
+/// answers: the rendered body for a first load and the acknowledgment for a
+/// repeat. Which one is appended is decided against the conversation, by
+/// [`append_invoked_skill`], because only the caller holds the history.
+#[derive(Debug, Clone)]
+pub struct InvokedSkill {
+    pub name: String,
+    /// The full rendering, exactly what the `skill` tool answers on a first
+    /// load.
+    pub loaded: ToolExecutionOutput,
+    /// The already-loaded acknowledgment, answered when the marker is found.
+    pub already_loaded: ToolExecutionOutput,
+}
+
+/// Answers whether a prompt is a skill invocation.
+///
+/// Reference `parse_skill_command`: the trimmed prompt must start with `/`,
+/// the first word names the skill case-insensitively, and a name that is
+/// unknown or not user invocable resolves to nothing, leaving the prompt an
+/// ordinary message.
+pub trait InvokedSkillResolver: Send + Sync {
+    fn resolve(&self, prompt: &str) -> Option<InvokedSkill>;
+}
+
+/// Whether the conversation already carries the skill's rendered body.
+///
+/// Reference `_skill_already_loaded` reads role, tool name and marker; the
+/// port's tool message carries no name, so the `skill` calls are joined from
+/// the assistant messages through their call ids before the marker is sought.
+#[must_use]
+pub fn skill_already_loaded(messages: &[ModelMessage], name: &str) -> bool {
+    let marker = skill_content_marker(name);
+    let skill_calls = messages
+        .iter()
+        .filter_map(|message| match message {
+            ModelMessage::Assistant { tool_calls, .. } => Some(tool_calls.iter()),
+            _ => None,
+        })
+        .flatten()
+        .filter(|call| call.name == "skill")
+        .map(|call| call.id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    messages.iter().any(|message| {
+        matches!(
+            message,
+            ModelMessage::Tool {
+                call_id, content, ..
+            } if skill_calls.contains(call_id.as_str()) && content.contains(&marker)
+        )
+    })
+}
+
+/// The synthetic call the pair carries, handed back so the caller can emit the
+/// matching engine events.
+#[derive(Debug, Clone)]
+pub struct AppendedSkillCall {
+    pub call_id: String,
+    /// The encoded arguments, the JSON object `{"name": "<skill>"}`.
+    pub arguments: String,
+    /// The output the tool message carries: the rendering on a first load and
+    /// the acknowledgment on a repeat.
+    pub output: ToolExecutionOutput,
+}
+
+/// Appends the synthetic `skill` call pair the reference's
+/// `_inject_invoked_skill` writes: an assistant message whose only content is
+/// one `skill` tool call, then the tool message carrying the selected result.
+///
+/// The already-loaded decision is made here, against the messages as they
+/// stand, so a second invocation is acknowledged rather than rendered again.
+pub fn append_invoked_skill(
+    messages: &mut Vec<ModelMessage>,
+    invoked: &InvokedSkill,
+) -> AppendedSkillCall {
+    let output = if skill_already_loaded(messages, &invoked.name) {
+        invoked.already_loaded.clone()
+    } else {
+        invoked.loaded.clone()
+    };
+    let call_id = crate::session_id::generate_session_id(None);
+    let arguments = json!({"name": invoked.name}).to_string();
+    messages.push(ModelMessage::Assistant {
+        content: String::new(),
+        reasoning: None,
+        reasoning_signature: None,
+        reasoning_state: Vec::new(),
+        tool_calls: vec![ModelToolCall {
+            id: call_id.clone(),
+            name: "skill".to_owned(),
+            arguments: arguments.clone(),
+        }],
+    });
+    messages.push(ModelMessage::Tool {
+        call_id: call_id.clone(),
+        content: output.model_text.clone(),
+        is_error: false,
+    });
+    AppendedSkillCall {
+        call_id,
+        arguments,
+        output,
+    }
 }

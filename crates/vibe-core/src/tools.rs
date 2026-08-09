@@ -232,6 +232,10 @@ pub struct ToolRegistry {
     tools: Arc<RwLock<BTreeMap<String, RegisteredTool>>>,
     next_discovery_index: Arc<AtomicU64>,
     max_output_bytes: usize,
+    /// How a slash-invoked skill resolves for this session, installed when the
+    /// `skill` tool registers so the synthetic pair and the tool answer from
+    /// one catalog and one loaded ledger.
+    invoked_skills: Arc<RwLock<Option<Arc<dyn crate::skills::InvokedSkillResolver>>>>,
 }
 
 impl fmt::Debug for ToolRegistry {
@@ -268,7 +272,26 @@ impl ToolRegistry {
             tools: Arc::new(RwLock::new(BTreeMap::new())),
             next_discovery_index: Arc::new(AtomicU64::new(1)),
             max_output_bytes,
+            invoked_skills: Arc::new(RwLock::new(None)),
         }
+    }
+
+    /// Installs the session's invoked-skill resolver, replacing any earlier
+    /// one: a re-registration after an agent switch re-reads the discovery it
+    /// was handed then.
+    pub fn set_invoked_skills(&self, resolver: Arc<dyn crate::skills::InvokedSkillResolver>) {
+        if let Ok(mut slot) = self.invoked_skills.write() {
+            *slot = Some(resolver);
+        }
+    }
+
+    /// The invoked-skill resolver, absent until the `skill` tool registers.
+    #[must_use]
+    pub fn invoked_skills(&self) -> Option<Arc<dyn crate::skills::InvokedSkillResolver>> {
+        self.invoked_skills
+            .read()
+            .ok()
+            .and_then(|slot| slot.clone())
     }
 
     pub fn register(
