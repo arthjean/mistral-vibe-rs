@@ -19,9 +19,11 @@
 //! compared for real since EP-048 landed the five roots, the configured paths
 //! and the two filter keys: the wiring reproduced here is
 //! `Release3Service::skill_discovery`, which resolves the roots through
-//! `search_paths` and hands them plus the filters to `discover_extensions`. No
-//! builtin is seeded yet, which is the whole of what those two families still
-//! diverge on.
+//! `search_paths` and hands them plus the filters to `discover_extensions`.
+//! EP-049 seeded the builtin catalog, so both families now conform whole and
+//! the `builtins` block is compared for real: structure and vocabulary must
+//! match, and the two prose digests must never match, which is the `NOTICE`
+//! boundary enforced mechanically.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -30,15 +32,18 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 
 use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::skills::builtins::builtin_skills;
 use crate::skills::parser::{SkillParseErrorKind, parse_skill_markdown};
 use crate::skills::schema::SkillMetadata;
 use crate::skills::{
     SearchInputs, SkillDiscovery, SkillScope, SkillSource, apply_filters, search_paths,
     skill_summary,
 };
+use crate::text::hex_encode;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/skills/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/skills.py";
@@ -60,21 +65,35 @@ const MINIMUM_SCENARIOS: usize = 120;
 /// skills-parity PRD, each naming the story that retires it.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
-        "discovery/*",
-        "PENDING US-169: EP-048 landed the five roots, the configured paths and the filter, so \
-         every scenario now agrees on the roots it walks and on the disk skills it publishes; \
-         the two builtins the reference seeds are still missing from every published set",
-    ),
-    (
         "discovery/legacy-extensions-root-unread",
         "ACCEPTED: US-165 keeps `{vibe_home}/extensions/skills` readable as a deprecated root \
          this port published before the documented ones existed, so a skill sitting there is \
          published here and unread upstream",
     ),
     (
-        "filtering/*",
-        "PENDING US-169: the filter itself conforms, and the cases whose kept set contains a \
-         builtin diverge because no builtin is seeded yet",
+        "builtins/builtinProse-vibe",
+        "ACCEPTED: `NOTICE` forbids shipping the reference's builtin prose, so the `vibe` body \
+         is written originally in `crates/vibe-core/src/skills/assets/vibe.md` against the same \
+         directive coverage; this entry keeps the divergence permanent, and the replay fails \
+         the moment the body conforms to the reference digest, so it can never be closed by \
+         copying",
+    ),
+    (
+        "builtins/builtinProse-vibe-description",
+        "ACCEPTED: the `vibe` description is reference-authored prose, rewritten originally in \
+         `vibe_core::skills::builtins` for the same routing intent",
+    ),
+    (
+        "builtins/builtinProse-skill-creator",
+        "ACCEPTED: `NOTICE` forbids shipping the reference's builtin prose, so the \
+         `skill-creator` body is written originally in \
+         `crates/vibe-core/src/skills/assets/skill_creator.md` against the same directive \
+         coverage; conforming to the reference digest fails the replay",
+    ),
+    (
+        "builtins/builtinProse-skill-creator-description",
+        "ACCEPTED: the `skill-creator` description is reference-authored prose, rewritten \
+         originally in `vibe_core::skills::builtins` for the same routing intent",
     ),
     (
         "command/*",
@@ -102,9 +121,8 @@ struct Corpus {
     reference: Reference,
     #[expect(dead_code, reason = "the note documents the file for its readers")]
     note: String,
-    /// The builtin catalog by digest only, recorded for US-170's ledger check;
-    /// nothing in the port publishes builtins yet.
-    #[expect(dead_code, reason = "compared once US-169 seeds a builtin catalog")]
+    /// The builtin catalog by digest only: the structure is compared for
+    /// equality and the prose digests for permanent inequality.
     builtins: Builtins,
     frontmatter: Vec<FrontmatterCase>,
     metadata: Vec<MetadataCase>,
@@ -124,7 +142,6 @@ struct Reference {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[expect(dead_code, reason = "compared once US-169 seeds a builtin catalog")]
 struct Builtins {
     count: usize,
     skills: Vec<BuiltinSkill>,
@@ -132,7 +149,6 @@ struct Builtins {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[expect(dead_code, reason = "compared once US-169 seeds a builtin catalog")]
 struct BuiltinSkill {
     name: String,
     user_invocable: bool,
@@ -228,7 +244,6 @@ struct FilteringCase {
     enabled_skills: Vec<String>,
     disabled_skills: Vec<String>,
     kept: Vec<String>,
-    #[expect(dead_code, reason = "US-171 compares the custom count")]
     custom_skills_count: usize,
     /// Always true upstream, and structural here: the filter runs inside
     /// `discover_extensions`, which is the same call the `skill` tool makes, so
@@ -654,10 +669,10 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
 
     // The production wiring, verbatim: `Release3Service::skill_discovery`
     // resolves the roots through `search_paths` over the configured entries and
-    // the project directories a trusted workspace contributes, then filters the
-    // catalog with the two keys. The scenario's `home` stands in for the
-    // operator's home and `home/.vibe` for the Vibe home, and no builtin is
-    // seeded because nothing publishes one yet.
+    // the project directories a trusted workspace contributes, then
+    // `discover_extensions` seeds the builtin catalog ahead of the walk and
+    // filters the result with the two keys. The scenario's `home` stands in for
+    // the operator's home and `home/.vibe` for the Vibe home.
     let projects = if scenario.project_trusted {
         vec![roots["project"].clone()]
     } else {
@@ -689,7 +704,7 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
             ..DiscoveryRoots::default()
         },
         BTreeMap::new(),
-        BTreeMap::new(),
+        builtin_skills(),
         BTreeMap::new(),
     );
 
@@ -715,6 +730,14 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
                     (Some(root), Some(relative))
                 })
             };
+            // The corpus masks builtin descriptions to null because they are
+            // reference-authored prose (`NOTICE`); the port's own text is
+            // masked the same way so the comparison stays structural.
+            let description = if skill.source == SkillSource::Builtin {
+                None
+            } else {
+                Some(skill.description.clone())
+            };
             (
                 skill.name.clone(),
                 vocabulary(skill.source),
@@ -722,7 +745,7 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
                 root,
                 relative,
                 skill.user_invocable,
-                Some(skill.description.clone()),
+                description,
             )
         })
         .collect();
@@ -734,12 +757,38 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
         .filter_map(|issue| label_path(&issue.path, &roots))
         .collect();
     issues.sort();
-    Some((observed_paths, published, issues, catalog.skills.len()))
+    Some((
+        observed_paths,
+        published,
+        issues,
+        custom_skills_count(&catalog.skills),
+    ))
 }
 
 // --------------------------------------------------------------------------
 // The parser, schema and projection adapters
 // --------------------------------------------------------------------------
+
+/// How many of a published catalog the operator added: everything the port did
+/// not seed, which is what the reference's `custom_skills_count` answers and
+/// what the banner reports through the wire's `source` field.
+fn custom_skills_count(skills: &BTreeMap<String, SkillDefinition>) -> usize {
+    skills
+        .values()
+        .filter(|skill| skill.source != SkillSource::Builtin)
+        .count()
+}
+
+/// The corpus form of a prose value: character length plus the SHA-256 of the
+/// UTF-8 bytes, matching the capture script's `digested`.
+fn digest_of(value: &str) -> Digested {
+    let mut hasher = Sha256::new();
+    hasher.update(value.as_bytes());
+    Digested {
+        length: value.chars().count(),
+        digest: hex_encode(&hasher.finalize()),
+    }
+}
 
 /// The corpus spelling of a parse rejection class.
 const fn error_label(kind: SkillParseErrorKind) -> &'static str {
@@ -901,14 +950,16 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
 
     let mut report = Report::default();
     for case in &corpus.filtering {
-        // The candidate set is the scenario's own skills plus whatever the port
-        // seeds, which is nothing until US-169; the reference seeds two
-        // builtins and filters them with the same two keys.
-        let mut skills = case
-            .skills
-            .iter()
-            .map(|name| (name.clone(), named_definition(name)))
-            .collect::<BTreeMap<_, _>>();
+        // The candidate set is the seeded builtins plus the scenario's own
+        // skills, which is what `discover_extensions` filters: the reference
+        // applies the same two keys after seeding, so a pattern can select or
+        // withhold a builtin.
+        let mut skills = builtin_skills();
+        skills.extend(
+            case.skills
+                .iter()
+                .map(|name| (name.clone(), named_definition(name))),
+        );
         apply_filters(
             &mut skills,
             &SkillDiscovery {
@@ -925,6 +976,13 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
             "kept",
             &kept,
             &skills.keys().cloned().collect::<Vec<_>>(),
+        );
+        report.check(
+            "filtering",
+            &case.case,
+            "customSkillsCount",
+            &case.custom_skills_count,
+            &custom_skills_count(&skills),
         );
     }
     scenarios += settle(&report, "filtering");
@@ -968,8 +1026,70 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
     }
     scenarios += settle(&report, "manifest");
 
+    // The builtin catalog: everything structural must equal the reference,
+    // and the two prose digests must never equal it, which is `NOTICE`
+    // enforced by the stale-entry check the ledger already runs.
+    let mut report = Report::default();
+    let seeded = builtin_skills();
+    report.check(
+        "builtins",
+        "count",
+        "count",
+        &corpus.builtins.count,
+        &seeded.len(),
+    );
+    for expected in &corpus.builtins.skills {
+        let Some(skill) = seeded.get(&expected.name) else {
+            report.check("builtins", &expected.name, "present", &true, &false);
+            continue;
+        };
+        report.check(
+            "builtins",
+            &expected.name,
+            "userInvocable",
+            &expected.user_invocable,
+            &skill.user_invocable,
+        );
+        report.check(
+            "builtins",
+            &expected.name,
+            "hasPath",
+            &expected.has_path,
+            &skill.path.is_some(),
+        );
+        report.check(
+            "builtins",
+            &expected.name,
+            "source",
+            &expected.source,
+            &vocabulary(skill.source),
+        );
+        report.check(
+            "builtins",
+            &expected.name,
+            "scope",
+            &expected.scope,
+            &vocabulary(skill.scope),
+        );
+        report.check(
+            "builtins",
+            &format!("builtinProse-{}", expected.name),
+            "prompt digest",
+            &expected.prompt,
+            &digest_of(&skill.body),
+        );
+        report.check(
+            "builtins",
+            &format!("builtinProse-{}-description", expected.name),
+            "description digest",
+            &expected.description,
+            &digest_of(&skill.description),
+        );
+    }
+    scenarios += settle(&report, "builtins");
+
     println!(
-        "skills: {scenarios} scenarios across 8 families replayed at {}",
+        "skills: {scenarios} scenarios across 8 families plus the builtin catalog replayed at {}",
         &corpus.reference.commit[..12],
     );
     assert!(
