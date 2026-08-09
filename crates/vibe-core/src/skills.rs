@@ -9,9 +9,12 @@
 //! [`SkillDiscovery`] for both, and each landing shrinks the divergence ledger
 //! the replay enforces.
 
+pub mod builtins;
 pub mod parser;
 pub mod schema;
 
+#[cfg(test)]
+mod builtins_tests;
 #[cfg(test)]
 mod search_tests;
 #[cfg(test)]

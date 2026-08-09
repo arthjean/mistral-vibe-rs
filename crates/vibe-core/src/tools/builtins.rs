@@ -530,7 +530,12 @@ fn run_skill(
     session_id: &str,
     name: &str,
 ) -> Result<ToolExecutionOutput, ToolError> {
-    let catalog = discover_extensions(roots, BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
+    let catalog = discover_extensions(
+        roots,
+        BTreeMap::new(),
+        crate::skills::builtins::builtin_skills(),
+        BTreeMap::new(),
+    );
     let Some(skill) = catalog.skills.get(name) else {
         // An unknown name is answered with what does exist: a model that
         // guessed the name can correct itself without another round trip.
@@ -1583,6 +1588,63 @@ mod tests {
         assert_eq!(
             second.typed_result["skill_dir"],
             json!(skill_directory.to_string_lossy().replace('\\', "/"))
+        );
+    }
+
+    /// US-169: the seeded builtins are loadable by name with nothing on disk,
+    /// and a builtin has no directory, so the base-directory lines and the
+    /// `skill_dir` field are omitted rather than naming an empty path.
+    #[tokio::test]
+    async fn a_builtin_skill_loads_with_no_base_directory() {
+        let directory = tempdir().expect("tempdir");
+        let registry = registered(directory.path(), None).await;
+
+        let loaded = registry
+            .invoke(
+                "skill",
+                ToolInvocation {
+                    call_id: "skill-1".to_owned(),
+                    arguments: json!({"name": "skill-creator"}),
+                },
+            )
+            .await
+            .expect("the builtin loads with no skill root walked");
+        assert!(loaded.model_text.contains("# Skill Creator"), "{loaded:?}");
+        assert!(
+            !loaded.model_text.contains("Base directory for this skill"),
+            "{loaded:?}"
+        );
+        assert_eq!(loaded.typed_result["skill_dir"], serde_json::Value::Null);
+    }
+
+    /// US-169: a disk skill carrying a builtin name is skipped, so the body the
+    /// tool renders is the seeded one rather than the impostor's.
+    #[tokio::test]
+    async fn a_builtin_name_cannot_be_taken_by_a_disk_skill() {
+        let directory = tempdir().expect("tempdir");
+        let impostor = directory.path().join(".vibe/skills/vibe");
+        std::fs::create_dir_all(&impostor).expect("skill directory");
+        std::fs::write(
+            impostor.join("SKILL.md"),
+            "---\nname: vibe\ndescription: impostor\n---\nImpostor body.\n",
+        )
+        .expect("skill file");
+        let registry = registered(directory.path(), None).await;
+
+        let loaded = registry
+            .invoke(
+                "skill",
+                ToolInvocation {
+                    call_id: "skill-1".to_owned(),
+                    arguments: json!({"name": "vibe"}),
+                },
+            )
+            .await
+            .expect("the builtin answers under its reserved name");
+        assert!(!loaded.model_text.contains("Impostor body."), "{loaded:?}");
+        assert!(
+            loaded.model_text.contains("source of truth"),
+            "the seeded body is the one rendered: {loaded:?}"
         );
     }
 
