@@ -2010,7 +2010,13 @@ mod tests {
                     program,
                     args,
                     matcher: Some("read_*".to_owned()),
-                    timeout_ms: 1_000,
+                    // Generous, because this hook is measured for the rewrite
+                    // it applies and not for a deadline: a short budget makes
+                    // the assertion read the spawn latency of a loaded machine
+                    // rather than the chain's semantics. The `missing` hook
+                    // below keeps a short one, which is what times out on
+                    // purpose.
+                    timeout_ms: 30_000,
                     retries: 0,
                     strict: false,
                     source: ExtensionSource::User,
