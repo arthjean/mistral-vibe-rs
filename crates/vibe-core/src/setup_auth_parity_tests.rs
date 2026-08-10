@@ -12,25 +12,36 @@
 //! what `NOTICE` allows. Only the live recapture probe skips, and it names the
 //! pin and the way back when it does.
 //!
-//! The oracle precedes the implementation, so the ledger below is the measured
-//! defect inventory rather than a residue: a family the port cannot answer yet
-//! is one `family/*` entry naming the stories that implement it, and the stale
-//! check retires each entry the moment its family conforms. The `constants`
-//! block is the one place the port already publishes an answer: the two
-//! browser-auth defaults and the default key variable are read out of the
+//! Every family now has a live comparator: the auth state and persistence
+//! replay against `vibe_core::auth`, the sign-in service and gateway against
+//! `auth::sign_in` and `auth::sign_in_http` over the same scripted stubs the
+//! capture used, and the URL verdicts against `validate_url_against_base`.
+//! The error taxonomy is compared for structural equality and its sentences
+//! for permanent inequality: this port's prose failing to differ from a
+//! reference digest is itself a failure. The `constants` block reads the two
+//! browser-auth defaults and the default key variable out of the
 //! configuration registry through `default_document`, which is exactly the
 //! surface `config/fields/read` serves to clients.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Deserialize;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
-use crate::auth::testing::{ScriptedBackend, ScriptedError, scripted};
-use crate::auth::{self, KeyringStore, PersistOutcome, RemoveError};
+use crate::auth::sign_in::{SignInEvent, SignInService};
+use crate::auth::testing::{
+    ScriptedBackend, ScriptedError, ScriptedHttpClient, ScriptedOpener, ScriptedSignInGateway,
+    ScriptedSignInRuntime, scripted,
+};
+use crate::auth::{
+    self, HttpSignInGateway, KeyringStore, PersistOutcome, RemoveError, SignInErrorCode,
+    SignInGateway as _, SignInStatus, validate_url_against_base,
+};
 use crate::config::DotenvValues;
 use crate::config::registry::default_document;
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
@@ -54,35 +65,12 @@ const MINIMUM_URL_CASES: usize = 29;
 /// stale entry, and a case that diverges without an entry fails naming the
 /// family, the case and the observed and expected values.
 ///
-/// A `family/*` entry covers every case of its family and goes stale only when
-/// the whole family conforms: the oracle ships before the implementation, so
-/// these entries are the measured backlog of the setup-parity PRD, each naming
-/// the stories that retire it.
-const DIVERGENCES: &[(&str, &str)] = &[
-    (
-        "signInProtocol/*",
-        "PENDING US-187 and US-189: no sign-in gateway, no polling state machine and no \
-         event vocabulary exist anywhere in crates/",
-    ),
-    (
-        "urlValidation/*",
-        "PENDING US-188: the port issues no sign-in requests, so no origin or path-prefix \
-         validation exists to answer these verdicts",
-    ),
-    (
-        "errorTaxonomy/*",
-        "PENDING US-187: the port has no sign-in error type, so none of the eleven codes can \
-         be produced, and the message digests stay uncompared until this port writes its own \
-         sentences",
-    ),
-    (
-        "constants/*",
-        "PENDING US-187 (endpoint paths, challenge method, HTTP vocabulary and PKCE), US-188 \
-         (default port table) and US-189 (poll cadence and status vocabulary): the sign-in \
-         flow is EP-054 work; the registry-backed defaults and the vibe_core::auth service \
-         names are compared for real and conform",
-    ),
-];
+/// A `family/*` entry covers every case of its family and goes stale only
+/// when the whole family conforms. The ledger is empty since EP-054 landed
+/// the sign-in flow: every family answers, and the only divergences this
+/// subtree keeps are the `NOTICE`-mandated prose inequalities, which are
+/// asserted directly rather than ledgered.
+const DIVERGENCES: &[(&str, &str)] = &[];
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -193,60 +181,43 @@ struct ProtocolCase {
     case: String,
     layer: String,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-187 and US-189 replay the scripted inputs")]
     op: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-187 replays the configured bases")]
     browser_base: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-187 replays the configured bases")]
     api_base: Option<String>,
-    #[expect(dead_code, reason = "US-187 and US-189 replay the scripted inputs")]
     script: Value,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-189 compares the ordered event sequence")]
     events: Option<Vec<Value>>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-189 compares the gateway call order")]
     gateway_calls: Option<Vec<String>>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-189 compares the poll count")]
     poll_count: Option<u32>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-189 compares the sleep clamping")]
     sleeps: Option<Vec<f64>>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-190 compares the opened URLs")]
     browser_opened: Option<Vec<String>>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-187 compares the derived challenge")]
     challenge: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-187 compares the issued requests")]
     requests: Option<Vec<Value>>,
     #[serde(default)]
     api_key: Option<String>,
     #[serde(default)]
     error_code: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-187 compares the parsed creation payload")]
     process_id: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-187 compares the parsed creation payload")]
     sign_in_url: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-187 compares the parsed creation payload")]
     poll_url: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-187 compares the normalized expiry")]
     expires_at: Option<String>,
     #[serde(default)]
     status: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-187 compares the parsed poll payload")]
     exchange_token: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-187 compares the parsed poll payload")]
     message: Option<String>,
 }
 
@@ -254,16 +225,10 @@ struct ProtocolCase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct UrlValidationCase {
     case: String,
-    #[expect(dead_code, reason = "US-188's validator replays the inputs")]
     value: String,
-    #[expect(dead_code, reason = "US-188's validator replays the inputs")]
     base: String,
     verdict: String,
     #[serde(default)]
-    #[expect(
-        dead_code,
-        reason = "US-188 asserts the value passes through unchanged"
-    )]
     returned_unchanged: Option<bool>,
 }
 
@@ -348,19 +313,6 @@ impl Report {
         self.divergences.push(format!(
             "{family}/{case}: {field} diverges: reference {expected:?}, port {actual:?}"
         ));
-    }
-
-    /// Records a case the port cannot answer yet as a divergence, so the
-    /// pending family stays visible in the counts and its `family/*` ledger
-    /// entry goes stale the moment a real comparator lands without one.
-    fn pending(&mut self, family: &str, case: &str, expected: String, story: &str) {
-        self.check(
-            family,
-            case,
-            "answer",
-            &expected,
-            &format!("no port counterpart until {story}"),
-        );
     }
 }
 
@@ -481,65 +433,91 @@ fn run_constants(corpus: &Constants) -> usize {
         &corpus.default_env_key,
         &auth::DEFAULT_MISTRAL_API_ENV_KEY.to_owned(),
     );
-    report.pending(
+    report.check(
         "constants",
         "pollIntervalSeconds",
-        format!("{}", corpus.poll_interval_seconds),
-        "US-189",
+        "poll cadence",
+        &corpus.poll_interval_seconds,
+        &auth::POLL_INTERVAL_SECONDS,
     );
-    report.pending(
+    report.check(
         "constants",
         "maxConsecutivePollFailures",
-        format!("{}", corpus.max_consecutive_poll_failures),
-        "US-189",
+        "failure tolerance",
+        &corpus.max_consecutive_poll_failures,
+        &auth::MAX_CONSECUTIVE_POLL_FAILURES,
     );
-    report.pending(
+    report.check(
         "constants",
         "statuses",
-        format!("{:?}", corpus.statuses),
-        "US-189",
+        "status vocabulary",
+        &corpus.statuses,
+        &SignInStatus::ALL
+            .iter()
+            .map(|status| status.as_str().to_owned())
+            .collect::<Vec<_>>(),
     );
-    report.pending(
+    report.check(
         "constants",
         "httpGoneStatus",
-        format!("{}", corpus.http_gone_status),
-        "US-187",
+        "expiry status",
+        &corpus.http_gone_status,
+        &auth::sign_in_http::HTTP_GONE,
     );
-    report.pending(
+    report.check(
         "constants",
         "defaultPorts",
-        format!("{:?}", corpus.default_ports),
-        "US-188",
+        "default port table",
+        &corpus.default_ports,
+        &auth::sign_in_http::DEFAULT_PORTS
+            .iter()
+            .map(|(scheme, port)| ((*scheme).to_owned(), *port))
+            .collect::<BTreeMap<_, _>>(),
     );
-    report.pending(
+    report.check(
         "constants",
         "codeChallengeMethod",
-        corpus.code_challenge_method.clone(),
-        "US-187",
+        "challenge method",
+        &corpus.code_challenge_method,
+        &auth::CODE_CHALLENGE_METHOD.to_owned(),
     );
-    report.pending(
+    report.check(
         "constants",
         "signInPath",
-        corpus.sign_in_path.clone(),
-        "US-187",
+        "creation path",
+        &corpus.sign_in_path,
+        &auth::sign_in_http::SIGN_IN_PATH.to_owned(),
     );
-    report.pending(
+    report.check(
         "constants",
         "exchangePathTemplate",
-        corpus.exchange_path_template.clone(),
-        "US-187",
+        "exchange path",
+        &corpus.exchange_path_template,
+        &auth::sign_in_http::EXCHANGE_PATH_TEMPLATE.to_owned(),
     );
-    report.pending(
+    report.check(
         "constants",
-        "pkce",
-        format!(
-            "challenge {} for verifier {} (generated length {}, unreserved {})",
-            corpus.pkce.scripted_challenge,
-            corpus.pkce.scripted_verifier,
-            corpus.pkce.generated_length,
-            corpus.pkce.generated_charset_is_unreserved,
-        ),
-        "US-187",
+        "pkce/scriptedChallenge",
+        "challenge derivation",
+        &corpus.pkce.scripted_challenge,
+        &auth::code_challenge(&corpus.pkce.scripted_verifier),
+    );
+    let generated = auth::generate_code_verifier().unwrap_or_default();
+    report.check(
+        "constants",
+        "pkce/generatedLength",
+        "verifier length",
+        &corpus.pkce.generated_length,
+        &generated.len(),
+    );
+    report.check(
+        "constants",
+        "pkce/generatedCharsetIsUnreserved",
+        "verifier charset",
+        &corpus.pkce.generated_charset_is_unreserved,
+        &generated
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_' | '~')),
     );
     settle(&report, "constants")
 }
@@ -1022,30 +1000,221 @@ fn run_persistence(cases: &[PersistenceCase]) -> usize {
     settle(&report, "persistence")
 }
 
-fn run_sign_in_protocol(cases: &[ProtocolCase]) -> usize {
+fn block_on<F: Future>(future: F) -> F::Output {
+    tokio::runtime::Builder::new_current_thread()
+        .build()
+        .expect("a current-thread runtime builds")
+        .block_on(future)
+}
+
+fn corpus_event_line(event: &Value) -> String {
+    let field = |name: &str| {
+        event
+            .get(name)
+            .and_then(Value::as_str)
+            .unwrap_or("<unrecorded>")
+    };
+    match field("event") {
+        "attemptStarted" => format!(
+            "attemptStarted {} {}",
+            field("signInUrl"),
+            field("expiresAt")
+        ),
+        "status" => format!("status {}", field("status")),
+        other => panic!("the corpus records unknown event kind {other}"),
+    }
+}
+
+fn observed_event_line(event: &SignInEvent) -> String {
+    match event {
+        SignInEvent::AttemptStarted {
+            sign_in_url,
+            expires_at,
+        } => format!("attemptStarted {sign_in_url} {}", expires_at.to_iso8601()),
+        SignInEvent::StatusChanged(status) => format!("status {}", status.as_str()),
+    }
+}
+
+fn service_line(
+    events: &[String],
+    calls: &[String],
+    poll_count: usize,
+    sleeps: &[f64],
+    opened: &[String],
+    challenge: Option<&str>,
+    outcome: &str,
+) -> String {
+    format!(
+        "events={events:?} calls={calls:?} pollCount={poll_count} sleeps={sleeps:?} \
+         opened={opened:?} challenge={challenge:?} outcome={outcome}"
+    )
+}
+
+/// Drives the port's `SignInService` over the corpus scenario's scripted
+/// gateway, clock, opener and verifier, mirroring the capture's stubs.
+fn replay_service_case(case: &ProtocolCase, scripted_verifier: &str) -> (String, String) {
+    let script = &case.script;
+    let gateway = ScriptedSignInGateway::new(
+        script
+            .get("createError")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        script
+            .get("expiresIn")
+            .and_then(Value::as_f64)
+            .unwrap_or(600.0),
+        script
+            .get("polls")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default(),
+        script.get("exchange").cloned().unwrap_or(Value::Null),
+    );
+    let opener = ScriptedOpener::from_kind(
+        script
+            .get("opener")
+            .and_then(Value::as_str)
+            .unwrap_or("accept"),
+    );
+    let runtime = ScriptedSignInRuntime::new(opener, scripted_verifier);
+    let mut service = SignInService::new(gateway, runtime);
+    let mut events: Vec<String> = Vec::new();
+    let outcome = block_on(async {
+        let mut on_event = |event: SignInEvent| events.push(observed_event_line(&event));
+        service.authenticate(&mut on_event).await
+    });
+    let (gateway, runtime) = service.into_parts();
+    let outcome_line = match outcome {
+        Ok(api_key) => format!("api key {api_key}"),
+        Err(error) => format!("error {}", error.code.as_str()),
+    };
+    let observed = service_line(
+        &events,
+        &gateway.calls,
+        gateway.calls.iter().filter(|call| *call == "poll").count(),
+        &runtime.sleeps,
+        &runtime.opened,
+        gateway.challenge.as_deref(),
+        &outcome_line,
+    );
+    let expected_events = case
+        .events
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(corpus_event_line)
+        .collect::<Vec<_>>();
+    let expected_outcome = if let Some(code) = &case.error_code {
+        format!("error {code}")
+    } else if let Some(api_key) = &case.api_key {
+        format!("api key {api_key}")
+    } else {
+        "<unrecorded>".to_owned()
+    };
+    let expected = service_line(
+        &expected_events,
+        case.gateway_calls.as_deref().unwrap_or_default(),
+        case.poll_count.unwrap_or_default() as usize,
+        case.sleeps.as_deref().unwrap_or_default(),
+        case.browser_opened.as_deref().unwrap_or_default(),
+        case.challenge.as_deref(),
+        &expected_outcome,
+    );
+    (expected, observed)
+}
+
+/// Drives the port's HTTP gateway over the scenario's scripted responses,
+/// comparing the issued requests and the outcome, both in the corpus's own
+/// serialization.
+fn replay_gateway_case(case: &ProtocolCase) -> (String, String) {
+    let client = ScriptedHttpClient::new(case.script.as_array().cloned().unwrap_or_default());
+    let mut gateway = HttpSignInGateway::new(
+        case.browser_base.as_deref().unwrap_or_default(),
+        case.api_base.as_deref().unwrap_or_default(),
+        client,
+    );
+    let operation = case.op.as_deref().unwrap_or_default();
+    let outcome = block_on(async {
+        match operation {
+            "create" => gateway
+                .create_process("oracle-challenge")
+                .await
+                .map(|process| {
+                    format!(
+                        "process {} signIn {} poll {} expires {}",
+                        process.process_id,
+                        process.sign_in_url,
+                        process.poll_url,
+                        process.expires_at.to_iso8601(),
+                    )
+                }),
+            "poll" => {
+                // The capture feeds an off-base URL only to the revalidation
+                // scenario; the input is not recorded, so it is restated here.
+                let poll_url = if case.case == "gateway-poll-revalidates-before-requesting" {
+                    "https://evil.example/api/oracle/poll"
+                } else {
+                    "https://console.mistral.ai/api/oracle/poll"
+                };
+                gateway.poll(poll_url).await.map(|poll| {
+                    format!(
+                        "status {} token {:?} message {:?}",
+                        poll.status, poll.exchange_token, poll.message,
+                    )
+                })
+            }
+            "exchange" => gateway
+                .exchange("oracle-process", "oracle-token", "oracle-verifier")
+                .await
+                .map(|api_key| format!("api key {api_key}")),
+            other => panic!("signInProtocol/{} records unknown op {other}", case.case),
+        }
+    });
+    let outcome_line = match outcome {
+        Ok(line) => line,
+        Err(error) => format!("error {}", error.code.as_str()),
+    };
+    let requests = Value::Array(gateway.into_client().requests);
+    let observed = format!("requests={requests} outcome={outcome_line}");
+    let expected_outcome = if let Some(code) = &case.error_code {
+        format!("error {code}")
+    } else if let Some(api_key) = &case.api_key {
+        format!("api key {api_key}")
+    } else if let Some(process_id) = &case.process_id {
+        format!(
+            "process {process_id} signIn {} poll {} expires {}",
+            case.sign_in_url.as_deref().unwrap_or("<unrecorded>"),
+            case.poll_url.as_deref().unwrap_or("<unrecorded>"),
+            case.expires_at.as_deref().unwrap_or("<unrecorded>"),
+        )
+    } else if let Some(status) = &case.status {
+        format!(
+            "status {status} token {:?} message {:?}",
+            case.exchange_token, case.message,
+        )
+    } else {
+        "<unrecorded>".to_owned()
+    };
+    let expected_requests = Value::Array(case.requests.clone().unwrap_or_default());
+    let expected = format!("requests={expected_requests} outcome={expected_outcome}");
+    (expected, observed)
+}
+
+fn run_sign_in_protocol(cases: &[ProtocolCase], scripted_verifier: &str) -> usize {
     let mut report = Report::default();
     for case in cases {
-        assert!(
-            matches!(case.layer.as_str(), "service" | "gateway"),
-            "signInProtocol/{} records unknown layer {}",
-            case.case,
-            case.layer
+        let (expected, observed) = match case.layer.as_str() {
+            "service" => replay_service_case(case, scripted_verifier),
+            "gateway" => replay_gateway_case(case),
+            other => panic!("signInProtocol/{} records unknown layer {other}", case.case),
+        };
+        report.check(
+            "signInProtocol",
+            &case.case,
+            "behavior",
+            &expected,
+            &observed,
         );
-        let expected = if let Some(code) = &case.error_code {
-            format!("error {code}")
-        } else if let Some(key) = &case.api_key {
-            format!("api key {key}")
-        } else if let Some(status) = &case.status {
-            format!("poll status {status}")
-        } else {
-            "parsed payload".to_owned()
-        };
-        let story = if case.layer == "service" {
-            "US-189"
-        } else {
-            "US-187"
-        };
-        report.pending("signInProtocol", &case.case, expected, story);
     }
     settle(&report, "signInProtocol")
 }
@@ -1065,12 +1234,18 @@ fn run_url_validation(cases: &[UrlValidationCase]) -> usize {
             case.case,
             case.verdict
         );
-        report.pending(
-            "urlValidation",
-            &case.case,
-            format!("verdict {}", case.verdict),
-            "US-188",
-        );
+        // The port's validator vouches for the URL without rewriting it, so
+        // an accepted verdict always passes the value through unchanged.
+        let observed = match validate_url_against_base(&case.value, &case.base) {
+            Ok(()) => "accepted unchanged",
+            Err(auth::UrlRejection) => "rejected",
+        };
+        let expected = match case.verdict.as_str() {
+            "accepted" if case.returned_unchanged == Some(true) => "accepted unchanged",
+            "accepted" => "accepted rewritten",
+            _ => "rejected",
+        };
+        report.check("urlValidation", &case.case, "verdict", &expected, &observed);
     }
     settle(&report, "urlValidation")
 }
@@ -1090,12 +1265,57 @@ fn run_error_taxonomy(cases: &[ErrorCode]) -> usize {
         );
     }
     let mut report = Report::default();
-    for code in cases {
-        report.pending(
+    report.check(
+        "errorTaxonomy",
+        "codeCount",
+        "declared codes",
+        &cases.len(),
+        &SignInErrorCode::ALL.len(),
+    );
+    for (index, code) in cases.iter().enumerate() {
+        let Some(port_code) = SignInErrorCode::ALL.get(index) else {
+            report.check(
+                "errorTaxonomy",
+                &code.value,
+                "declaration order",
+                &code.value,
+                &"<no port code at this position>".to_owned(),
+            );
+            continue;
+        };
+        report.check(
             "errorTaxonomy",
             &code.value,
-            format!("{} = {}", code.name, code.value),
-            "US-187",
+            "code value and order",
+            &format!("{} = {}", code.name, code.value),
+            &format!(
+                "{} = {}",
+                port_code.as_str().to_ascii_uppercase(),
+                port_code.as_str()
+            ),
+        );
+        // `NOTICE`: this port's sentence must stay permanently unequal to
+        // every reference-authored sentence for the code, compared by length
+        // plus SHA-256 since the reference text is never committed.
+        let sentence = port_code.message();
+        let port_digest = Digested {
+            length: sentence.len(),
+            digest: Sha256::digest(sentence.as_bytes())
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect(),
+        };
+        let collides = code.messages.contains(&port_digest);
+        report.check(
+            "errorTaxonomy",
+            &format!("{}/prose", code.value),
+            "original sentence",
+            &"an original sentence".to_owned(),
+            &if collides {
+                "the reference's own sentence".to_owned()
+            } else {
+                "an original sentence".to_owned()
+            },
         );
     }
     settle(&report, "errorTaxonomy")
@@ -1109,6 +1329,9 @@ fn run_error_taxonomy(cases: &[ErrorCode]) -> usize {
 fn the_committed_corpus_replays_against_this_port() {
     let corpus = corpus();
     println!("setup-auth: divergence ledger");
+    if DIVERGENCES.is_empty() {
+        println!("  (empty: every family conforms)");
+    }
     for (case, reason) in DIVERGENCES {
         println!("  {case}: {reason}");
     }
@@ -1116,7 +1339,10 @@ fn the_committed_corpus_replays_against_this_port() {
     scenarios += run_constants(&corpus.constants);
     scenarios += run_auth_state(&corpus.auth_state);
     scenarios += run_persistence(&corpus.persistence);
-    scenarios += run_sign_in_protocol(&corpus.sign_in_protocol);
+    scenarios += run_sign_in_protocol(
+        &corpus.sign_in_protocol,
+        &corpus.constants.pkce.scripted_verifier,
+    );
     scenarios += run_url_validation(&corpus.url_validation);
     scenarios += run_error_taxonomy(&corpus.error_taxonomy);
     println!(

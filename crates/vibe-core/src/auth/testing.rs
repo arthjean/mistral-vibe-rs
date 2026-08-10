@@ -256,6 +256,18 @@ pub(crate) enum ScriptedOpener {
     Raise,
 }
 
+impl ScriptedOpener {
+    /// The corpus records the kind as the capture script's own string.
+    pub(crate) fn from_kind(kind: &str) -> Self {
+        match kind {
+            "accept" => Self::Accept,
+            "refuse" => Self::Refuse,
+            "raise" => Self::Raise,
+            other => panic!("no scripted opener is named {other}"),
+        }
+    }
+}
+
 /// The counterpart of the capture script's `_FakeClock` plus its opener and
 /// verifier patches: sleeping advances the clock and lands in a journal, and
 /// the verifier is the corpus's scripted one.
