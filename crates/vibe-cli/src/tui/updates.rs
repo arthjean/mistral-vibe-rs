@@ -121,6 +121,9 @@ pub enum UpdatePromptResult {
     Continue,
     /// Automatic installation is a declared non-goal, so the reference
     /// `UPDATE_FAILED` guidance is printed instead of running an installer.
+    /// This is why the reference's fourth value, `UPDATED`, has no counterpart
+    /// here: nothing in this build can report an installed update. The
+    /// divergence is recorded in `docs/parity.md`.
     UpdateUnavailable,
     Quit,
 }
