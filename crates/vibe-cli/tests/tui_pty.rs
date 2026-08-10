@@ -998,3 +998,41 @@ fn check_upgrade_reports_the_reference_failure_without_starting_a_session() {
         "check-upgrade started session discovery"
     );
 }
+
+#[test]
+fn setup_shows_the_trust_dialog_then_the_onboarding_screens_and_a_cancel_exits_cleanly() {
+    let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
+    // An AGENTS.md is what makes the workspace worth a trust decision.
+    std::fs::write(workspace.join("AGENTS.md"), "# workspace instructions\n")
+        .expect("workspace instructions");
+    let mut process = PtyProcess::spawn(&workspace, &home, &["--setup"]);
+    process.wait_for(b"\x1b[?1049h", Duration::from_secs(5));
+    // With trust undecided, the pre-session dialog now precedes the setup
+    // screens instead of being skipped by `--setup`.
+    process.wait_for_visible("Trust", Duration::from_secs(5));
+    process.write(b"\r");
+    // The welcome text types progressively; its prefix appearing proves the
+    // screen sequence mounted in place of the retired chat-transcript setup.
+    process.wait_for_visible("Welcome", Duration::from_secs(5));
+    process.write(b"\x1b");
+    let (status, transcript) = process.wait(Duration::from_secs(3));
+    assert!(
+        status.success(),
+        "cancelled onboarding exited with {status}"
+    );
+    assert!(
+        transcript
+            .windows(b"\x1b[?1049l".len())
+            .any(|window| window == b"\x1b[?1049l"),
+        "onboarding did not restore the terminal"
+    );
+    let text = String::from_utf8_lossy(&transcript);
+    assert!(
+        text.contains("Setup canceled"),
+        "the cancellation message did not print after the terminal restored: {text}"
+    );
+}

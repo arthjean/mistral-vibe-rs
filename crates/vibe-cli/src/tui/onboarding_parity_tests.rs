@@ -10,29 +10,42 @@
 //! text appears in the corpus; the precedent is
 //! `tasks/prd-chat-input-observable-parity.md`.
 //!
-//! The corpus is committed and replayed unconditionally: it carries screen
-//! names, transition edges, class names, effect records and terminating
-//! values, and every reference-authored message only as a length plus a
-//! SHA-256, which is what `NOTICE` allows. Only the live recapture probe
-//! skips, and it names the pin and the way back when it does.
-//!
-//! The oracle precedes the implementation: this build's setup flow is a chat
-//! transcript walked by `SetupFlow` in `crates/vibe-cli/src/tui/setup.rs`,
-//! with no screen graph to compare. The ledger below is therefore the
-//! measured backlog of EP-055, one prefix entry per screen group naming the
-//! story that closes it, and the stale check fails each entry the moment its
-//! group conforms, which is what turns a landed screen into a retired ledger
-//! row rather than a silent skip.
+//! The replay drives this port's [`super::onboarding::model::OnboardingModel`]
+//! through the same scripts: each corpus scenario maps to a drive that feeds
+//! the same key presses, scripted sign-in feeds and persistence outcomes, and
+//! every observation is compared field by field. The reference-authored
+//! messages are committed as a length plus a SHA-256, which is what `NOTICE`
+//! allows, and the replay holds this port's own sentences permanently unequal
+//! to them.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use toml::Table;
+use toml::Value as TomlValue;
 
+use vibe_core::auth::{
+    DEFAULT_BROWSER_AUTH_API_BASE_URL, DEFAULT_BROWSER_AUTH_BASE_URL, PersistOutcome,
+    SignInErrorCode, SignInStatus,
+};
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+
+use super::onboarding::context::{
+    self, OnboardingContext, is_likely_mistral_private_cloud_domain, is_valid_custom_domain,
+    resolve_browser_auth_urls,
+};
+use super::onboarding::exit_plan;
+use super::onboarding::model::{
+    GRADIENT_COLORS, KeyPress, ModelEffect, ModelEvent, OnboardingModel, OnboardingOutcome,
+    OnboardingPorts, SIGN_IN_STEP_NAMES, SIGN_IN_URL_HELP_DELAY_SECONDS,
+    SUCCESS_EXIT_DELAY_SECONDS, THEME_FADE_CLASSES, THEME_VISIBLE_NEIGHBORS,
+};
+use super::themes::sorted_theme_names;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/onboarding/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/onboarding.py";
@@ -48,73 +61,10 @@ const FULL_SCREEN_SET: usize = 7;
 const MANUAL_SCREEN_SET: usize = 3;
 
 /// Cases where this port answers something other than the reference, each
-/// with the reason. A key ending in `*` covers every case it prefixes and
-/// goes stale only when none of them diverges, so landing one EP-055 story
-/// retires exactly its own entries. A case that conforms while listed here
-/// fails the replay as a stale entry, and a case that diverges without an
-/// entry fails naming the family, the case and the observed and expected
-/// values.
-const DIVERGENCES: &[(&str, &str)] = &[
-    (
-        "screenGraph/graph-*",
-        "PENDING US-191: the port's setup is a chat-transcript SetupFlow \
-         (crates/vibe-cli/src/tui/setup.rs), so no screen set is installed and no gating \
-         predicate exists to compare",
-    ),
-    (
-        "screenGraph/cancel-*",
-        "PENDING US-191: cancellation semantics belong to the screen graph the port does not \
-         install yet",
-    ),
-    (
-        "screenGraph/welcome-*",
-        "PENDING US-192: no welcome screen exists, so the typing gate cannot be compared",
-    ),
-    (
-        "screenGraph/theme-*",
-        "PENDING US-192: no theme-selection screen exists, so the live preview and the \
-         wrap-around navigation cannot be compared",
-    ),
-    (
-        "screenGraph/auth-method-*",
-        "PENDING US-193: no authentication-method screen exists in the port",
-    ),
-    (
-        "screenGraph/target-*",
-        "PENDING US-193: no sign-in-target screen exists, so the armed overwrite confirmation \
-         cannot be compared",
-    ),
-    (
-        "screenGraph/custom-domain-*",
-        "PENDING US-193: no custom-domain screen exists, so the validation classes and the \
-         derived URLs cannot be compared",
-    ),
-    (
-        "screenGraph/browser-sign-in-*",
-        "PENDING US-194: no browser sign-in screen exists, so the step progression, retry, \
-         manual fallback and cancellation cannot be compared",
-    ),
-    (
-        "screenGraph/api-key-*",
-        "PENDING US-195: the port collects the key through the chat composer rather than a \
-         masked screen input",
-    ),
-    (
-        "terminating/*",
-        "PENDING US-191: the port has no five-value terminating vocabulary; SetupFlow \
-         completes or aborts inside the TUI process",
-    ),
-    (
-        "domainValidation/*",
-        "PENDING US-193: no custom-domain validator, private-cloud heuristic or URL \
-         derivation exists in the port",
-    ),
-    (
-        "constants/*",
-        "PENDING US-192 (theme fades and gradient table) and US-194 (step names, success \
-         delay and URL-help delay): none of these surfaces exists in the port yet",
-    ),
-];
+/// with the reason. EP-055 landed the screen graph, so the ledger is empty: a
+/// case that diverges fails naming the family, the case and the observed and
+/// expected values, and a new divergence needs a new named entry here.
+const DIVERGENCES: &[(&str, &str)] = &[];
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -159,30 +109,39 @@ struct GraphScenario {
     installed_screens: Vec<String>,
     entry_screen: String,
     transitions: Vec<Transition>,
-    #[expect(dead_code, reason = "EP-055 compares the focus and state markers")]
     focus: BTreeMap<String, Value>,
-    #[expect(dead_code, reason = "EP-055 compares the persisted effects")]
-    effects: Value,
+    effects: Effects,
     result: Option<String>,
-    #[expect(
-        dead_code,
-        reason = "US-192 compares the theme carried out of the flow"
-    )]
     selected_theme: String,
-    #[expect(dead_code, reason = "US-193 compares the applied browser-auth URLs")]
-    provider_browser_auth: Value,
+    provider_browser_auth: ProviderBrowserAuth,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-192 compares the theme list order")]
     themes: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct Transition {
-    #[expect(dead_code, reason = "EP-055 compares the driving event per edge")]
     event: String,
     from: String,
     to: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Effects {
+    /// Absent for a provider that installs no sign-in screens.
+    #[serde(default)]
+    factory_calls: Option<u64>,
+    persist_calls: Vec<Value>,
+    provider_writes: Vec<Value>,
+    service_closes: u64,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProviderBrowserAuth {
+    api_base_url: Option<String>,
+    base_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -192,7 +151,6 @@ struct TerminatingCase {
     value: Option<String>,
     exit_code: Option<i64>,
     theme_persisted: bool,
-    #[expect(dead_code, reason = "US-192 compares the persisted theme write")]
     theme_writes: Vec<Value>,
     messages: Vec<Digested>,
 }
@@ -201,21 +159,18 @@ struct TerminatingCase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct DomainCase {
     case: String,
-    #[expect(dead_code, reason = "US-193's validator replays the input")]
     input: String,
     valid: bool,
     #[serde(default)]
     private_cloud_warning: Option<bool>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-193 compares the derived base URL")]
     derived_base_url: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-193 compares the derived API URL")]
     derived_api_base_url: Option<String>,
 }
 
-/// A reference-authored message by length and SHA-256 only; EP-055 holds this
-/// port's own sentences permanently unequal to it.
+/// A reference-authored message by length and SHA-256 only; this port's own
+/// sentences are held permanently unequal to it.
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Digested {
@@ -288,19 +243,6 @@ impl Report {
             "{family}/{case}: {field} diverges: reference {expected:?}, port {actual:?}"
         ));
     }
-
-    /// Records a case the port cannot answer yet as a divergence, so the
-    /// pending group stays visible in the counts and its ledger entry goes
-    /// stale the moment a real comparator lands without one.
-    fn pending(&mut self, family: &str, case: &str, expected: String, story: &str) {
-        self.check(
-            family,
-            case,
-            "answer",
-            &expected,
-            &format!("no port counterpart until {story}"),
-        );
-    }
 }
 
 /// Fails on any divergence the ledger does not name, and on any ledger entry
@@ -340,32 +282,846 @@ fn settle(report: &Report, family: &str) -> usize {
 }
 
 // --------------------------------------------------------------------------
+// The drive harness
+// --------------------------------------------------------------------------
+
+/// What the scripted sign-in worker does for one attempt, standing in for the
+/// stub service the capture script installs.
+#[derive(Debug, Clone, Copy)]
+enum Feed {
+    /// The attempt starts and stays pending until cancelled.
+    Pending,
+    /// The attempt runs to completion and returns this key.
+    Success(&'static str),
+    /// The attempt fails after the waiting status.
+    Failure,
+}
+
+const ORACLE_SIGN_IN_URL: &str = "https://console.mistral.ai/oracle/sign-in";
+
+/// Records every persistence call the way the capture's recorders do, and
+/// answers with the scripted outcome.
+struct Recorder {
+    factory_calls: u64,
+    service_closes: u64,
+    open_attempt: bool,
+    feeds: VecDeque<Feed>,
+    persist_outcome: PersistOutcome,
+    persist_calls: Vec<Value>,
+    provider_writes: Vec<Value>,
+}
+
+impl Recorder {
+    fn new(feeds: Vec<Feed>, persist_outcome: PersistOutcome) -> Self {
+        Self {
+            factory_calls: 0,
+            service_closes: 0,
+            open_attempt: false,
+            feeds: feeds.into(),
+            persist_outcome,
+            persist_calls: Vec::new(),
+            provider_writes: Vec::new(),
+        }
+    }
+}
+
+impl OnboardingPorts for Recorder {
+    fn persist_api_key(
+        &mut self,
+        env_key: &str,
+        provider: &Table,
+        api_key: &str,
+        custom_domain: bool,
+    ) -> PersistOutcome {
+        self.persist_calls.push(json!({
+            "apiKey": api_key,
+            "customDomain": custom_domain,
+            "envKey": env_key,
+            "provider": provider.get("name").and_then(TomlValue::as_str),
+        }));
+        self.persist_outcome.clone()
+    }
+
+    fn persist_provider(&mut self, provider: &Table) -> bool {
+        let field = |key: &str| provider.get(key).and_then(TomlValue::as_str);
+        self.provider_writes.push(json!({
+            "browserAuthApiBaseUrl": field("browser_auth_api_base_url"),
+            "browserAuthBaseUrl": field("browser_auth_base_url"),
+            "provider": field("name"),
+        }));
+        true
+    }
+}
+
+/// One scripted drive: the model, the recorder, and the observations the
+/// corpus compares.
+struct Drive {
+    model: OnboardingModel,
+    recorder: Recorder,
+    edges: Vec<(String, String, String)>,
+    focus: BTreeMap<String, Value>,
+    exit_screen: Option<&'static str>,
+}
+
+impl Drive {
+    fn new(context: OnboardingContext, feeds: Vec<Feed>, persist_outcome: PersistOutcome) -> Self {
+        let model = OnboardingModel::new(context);
+        let mut drive = Self {
+            model,
+            recorder: Recorder::new(feeds, persist_outcome),
+            edges: Vec::new(),
+            focus: BTreeMap::new(),
+            exit_screen: None,
+        };
+        drive.note_visit();
+        drive
+    }
+
+    fn typing_finished(&mut self) {
+        self.dispatch(ModelEvent::WelcomeTypingFinished);
+    }
+
+    /// A recorded pilot step: the edge the corpus lists for this press.
+    fn press(&mut self, key: KeyPress) {
+        let from = self.model.current_screen().name().to_owned();
+        self.dispatch(ModelEvent::Key(key));
+        let to = if self.model.outcome().is_some() {
+            "<exit>".to_owned()
+        } else {
+            self.model.current_screen().name().to_owned()
+        };
+        self.edges.push((press_label(key), from, to));
+        self.note_visit();
+    }
+
+    /// An unrecorded input: selection moves, typed characters, and presses
+    /// the capture did not record as transitions.
+    fn feed_key(&mut self, key: KeyPress) {
+        self.dispatch(ModelEvent::Key(key));
+        self.note_visit();
+    }
+
+    fn type_text(&mut self, text: &str) {
+        for character in text.chars() {
+            self.feed_key(KeyPress::Char(character));
+        }
+    }
+
+    fn clear_domain(&mut self) {
+        for _ in 0..self.model.domain_value().chars().count() {
+            self.feed_key(KeyPress::Backspace);
+        }
+    }
+
+    /// The capture's explicit wait on a worker that exits the app: the edge
+    /// is recorded from the screen the exit fired on.
+    fn wait(&mut self, label: &str) {
+        let from = self
+            .exit_screen
+            .expect("a wait step follows a worker-driven exit");
+        self.edges.push((
+            format!("wait:{label}"),
+            from.to_owned(),
+            "<exit>".to_owned(),
+        ));
+    }
+
+    fn probe(&mut self, key: &str, value: Value) {
+        self.focus.insert(key.to_owned(), value);
+    }
+
+    fn note_visit(&mut self) {
+        if self.model.outcome().is_some() {
+            return;
+        }
+        let screen = self.model.current_screen().name().to_owned();
+        self.focus.entry(screen).or_insert_with(|| {
+            self.model.focus().map_or(
+                Value::Null,
+                |(id, widget)| json!({"id": id, "widget": widget}),
+            )
+        });
+    }
+
+    fn dispatch(&mut self, event: ModelEvent) {
+        let effects = self.model.handle(event, &mut self.recorder);
+        for effect in effects {
+            self.apply(effect);
+        }
+    }
+
+    fn apply(&mut self, effect: ModelEffect) {
+        match effect {
+            ModelEffect::StartSignIn { attempt } => {
+                self.recorder.factory_calls += 1;
+                let feed = self.recorder.feeds.pop_front().unwrap_or(Feed::Pending);
+                self.dispatch(ModelEvent::SignInStarted {
+                    attempt,
+                    sign_in_url: ORACLE_SIGN_IN_URL.to_owned(),
+                });
+                self.dispatch(ModelEvent::SignInStatus {
+                    attempt,
+                    status: SignInStatus::OpeningBrowser,
+                });
+                self.dispatch(ModelEvent::SignInStatus {
+                    attempt,
+                    status: SignInStatus::WaitingForBrowserSignIn,
+                });
+                match feed {
+                    Feed::Pending => {
+                        self.recorder.open_attempt = true;
+                    }
+                    Feed::Success(api_key) => {
+                        self.dispatch(ModelEvent::SignInStatus {
+                            attempt,
+                            status: SignInStatus::Exchanging,
+                        });
+                        self.dispatch(ModelEvent::SignInStatus {
+                            attempt,
+                            status: SignInStatus::Completed,
+                        });
+                        // The worker closes its service before the outcome is
+                        // handled, as the reference worker's `finally` does.
+                        self.recorder.service_closes += 1;
+                        self.dispatch(ModelEvent::SignInCompleted {
+                            attempt,
+                            api_key: api_key.to_owned(),
+                        });
+                    }
+                    Feed::Failure => {
+                        self.recorder.service_closes += 1;
+                        self.dispatch(ModelEvent::SignInFailed {
+                            attempt,
+                            code: Some(SignInErrorCode::PollFailed),
+                            message: "scripted failure".to_owned(),
+                        });
+                    }
+                }
+            }
+            ModelEffect::CancelSignIn => {
+                if std::mem::take(&mut self.recorder.open_attempt) {
+                    self.recorder.service_closes += 1;
+                }
+            }
+            ModelEffect::ScheduleSuccessExit => {
+                // The capture runs the app with a zero success delay, so the
+                // completion lands within the same pilot step.
+                self.dispatch(ModelEvent::SuccessDelayElapsed);
+            }
+            ModelEffect::ScheduleUrlHelp { .. } | ModelEffect::CopyUrl { .. } => {}
+            ModelEffect::Exit(_) => {
+                self.exit_screen = Some(self.model.current_screen().name());
+            }
+        }
+    }
+}
+
+fn press_label(key: KeyPress) -> String {
+    match key {
+        KeyPress::Enter => "press:enter".to_owned(),
+        KeyPress::Escape => "press:escape".to_owned(),
+        KeyPress::CtrlC => "press:ctrl+c".to_owned(),
+        KeyPress::Up => "press:up".to_owned(),
+        KeyPress::Down => "press:down".to_owned(),
+        KeyPress::Backspace => "press:backspace".to_owned(),
+        KeyPress::Char(character) => format!("press:{character}"),
+    }
+}
+
+// --------------------------------------------------------------------------
+// Scripted providers
+// --------------------------------------------------------------------------
+
+fn provider(base_url: Option<&str>, api_base_url: &str) -> Table {
+    let mut table = Table::new();
+    table.insert("name".to_owned(), TomlValue::String("mistral".to_owned()));
+    table.insert(
+        "backend".to_owned(),
+        TomlValue::String("mistral".to_owned()),
+    );
+    table.insert(
+        "api_key_env_var".to_owned(),
+        TomlValue::String("MISTRAL_API_KEY".to_owned()),
+    );
+    table.insert(
+        "browser_auth_base_url".to_owned(),
+        TomlValue::String(base_url.unwrap_or_default().to_owned()),
+    );
+    table.insert(
+        "browser_auth_api_base_url".to_owned(),
+        TomlValue::String(api_base_url.to_owned()),
+    );
+    table
+}
+
+fn context_for(provider: Table) -> OnboardingContext {
+    OnboardingContext {
+        provider,
+        vibe_base_url: context::DEFAULT_VIBE_BASE_URL.to_owned(),
+        theme: "auto".to_owned(),
+    }
+}
+
+/// The browser-capable provider the capture scripts: the shipped defaults.
+fn browser_context() -> OnboardingContext {
+    context_for(provider(
+        Some(DEFAULT_BROWSER_AUTH_BASE_URL),
+        DEFAULT_BROWSER_AUTH_API_BASE_URL,
+    ))
+}
+
+/// A provider whose base URL is empty cannot browser sign-in, which is how
+/// the capture disables the four gated screens.
+fn manual_context() -> OnboardingContext {
+    context_for(provider(None, DEFAULT_BROWSER_AUTH_API_BASE_URL))
+}
+
+/// A provider already configured against a custom console.
+fn custom_configured_context() -> OnboardingContext {
+    context_for(provider(
+        Some("https://console.internal.example"),
+        "https://console.internal.example/api",
+    ))
+}
+
+// --------------------------------------------------------------------------
 // Family runners
 // --------------------------------------------------------------------------
 
-/// The EP-055 story that closes one screen-graph scenario, keyed by the case
-/// prefix; a scenario the map cannot place fails loudly instead of being
-/// silently ledgered.
-fn closing_story(case: &str) -> &'static str {
-    let table: &[(&str, &str)] = &[
-        ("graph-", "US-191"),
-        ("cancel-", "US-191"),
-        ("welcome-", "US-192"),
-        ("theme-", "US-192"),
-        ("auth-method-", "US-193"),
-        ("target-", "US-193"),
-        ("custom-domain-", "US-193"),
-        ("browser-sign-in-", "US-194"),
-        ("api-key-", "US-195"),
-    ];
-    table
-        .iter()
-        .find(|(prefix, _)| case.starts_with(prefix))
-        .map(|(_, story)| *story)
-        .unwrap_or_else(|| panic!("no EP-055 story is mapped for scenario {case}"))
+fn run_constants(constants: &Constants, report: &mut Report) {
+    report.check(
+        "constants",
+        "signInSteps",
+        "count",
+        &u32::try_from(SIGN_IN_STEP_NAMES.len()).unwrap_or_default(),
+        &constants.sign_in_steps,
+    );
+    report.check(
+        "constants",
+        "signInSteps",
+        "names",
+        &SIGN_IN_STEP_NAMES.map(str::to_owned).to_vec(),
+        &constants.sign_in_step_names,
+    );
+    report.check(
+        "constants",
+        "delays",
+        "successExit",
+        &SUCCESS_EXIT_DELAY_SECONDS,
+        &constants.success_exit_delay_seconds,
+    );
+    report.check(
+        "constants",
+        "delays",
+        "urlHelp",
+        &SIGN_IN_URL_HELP_DELAY_SECONDS,
+        &constants.sign_in_url_help_delay_seconds,
+    );
+    report.check(
+        "constants",
+        "themePresentation",
+        "visibleNeighbors",
+        &u32::try_from(THEME_VISIBLE_NEIGHBORS).unwrap_or_default(),
+        &constants.theme_visible_neighbors,
+    );
+    report.check(
+        "constants",
+        "themePresentation",
+        "fadeClasses",
+        &THEME_FADE_CLASSES.map(str::to_owned).to_vec(),
+        &constants.theme_fade_classes,
+    );
+    report.check(
+        "constants",
+        "themePresentation",
+        "gradientColors",
+        &u32::try_from(GRADIENT_COLORS.len()).unwrap_or_default(),
+        &constants.gradient_color_count,
+    );
 }
 
-fn run_screen_graph(cases: &[GraphScenario]) -> usize {
+fn run_domain_validation(cases: &[DomainCase], report: &mut Report) {
+    assert!(
+        cases.iter().any(|case| case.valid) && cases.iter().any(|case| !case.valid),
+        "the corpus must accept and reject at least one domain; regenerate it with \
+         {CAPTURE_SCRIPT}"
+    );
+    assert!(
+        cases
+            .iter()
+            .any(|case| case.private_cloud_warning == Some(true)),
+        "the corpus exercises no private-cloud warning; regenerate it with {CAPTURE_SCRIPT}"
+    );
+    for case in cases {
+        report.check(
+            "domainValidation",
+            &case.case,
+            "valid",
+            &case.valid,
+            &is_valid_custom_domain(&case.input),
+        );
+        if !case.valid {
+            continue;
+        }
+        let (base, api) = resolve_browser_auth_urls(&case.input);
+        report.check(
+            "domainValidation",
+            &case.case,
+            "derivedBaseUrl",
+            &case.derived_base_url,
+            &Some(base),
+        );
+        report.check(
+            "domainValidation",
+            &case.case,
+            "derivedApiBaseUrl",
+            &case.derived_api_base_url,
+            &Some(api),
+        );
+        report.check(
+            "domainValidation",
+            &case.case,
+            "privateCloudWarning",
+            &case.private_cloud_warning,
+            &Some(is_likely_mistral_private_cloud_domain(&case.input)),
+        );
+    }
+}
+
+/// The outcome a corpus terminating value names.
+fn outcome_from_reference_value(value: Option<&str>) -> OnboardingOutcome {
+    let Some(value) = value else {
+        return OnboardingOutcome::Cancelled;
+    };
+    if value == "completed" {
+        return OnboardingOutcome::Completed;
+    }
+    if let Some(detail) = value.strip_prefix("env_var_error:") {
+        return OnboardingOutcome::EnvVarError {
+            detail: detail.to_owned(),
+        };
+    }
+    if let Some(detail) = value.strip_prefix("save_error:") {
+        return OnboardingOutcome::SaveError {
+            detail: detail.to_owned(),
+        };
+    }
+    if let Some(detail) = value.strip_prefix("provider_config_error:") {
+        return OnboardingOutcome::ProviderConfigError {
+            detail: detail.to_owned(),
+        };
+    }
+    panic!("the corpus records a terminating value outside the reference vocabulary: {value}");
+}
+
+fn run_terminating(cases: &[TerminatingCase], report: &mut Report) {
+    let values = cases
+        .iter()
+        .map(|case| {
+            case.value
+                .clone()
+                .unwrap_or_else(|| "<cancelled>".to_owned())
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        values.len(),
+        5,
+        "the corpus records {} terminating values where the reference returns 5",
+        values.len()
+    );
+    let env_file = Path::new("/oracle/.vibe/.env");
+    for case in cases {
+        let outcome = outcome_from_reference_value(case.value.as_deref());
+        // The vocabulary round-trips: the port's serialization of the parsed
+        // value is the value the corpus recorded.
+        report.check(
+            "terminating",
+            &case.case,
+            "value",
+            &case.value,
+            &outcome.as_reference_value(),
+        );
+        let plan = exit_plan(&outcome, env_file);
+        report.check(
+            "terminating",
+            &case.case,
+            "exitCode",
+            &case.exit_code,
+            &plan.exit_code.map(i64::from),
+        );
+        report.check(
+            "terminating",
+            &case.case,
+            "themePersisted",
+            &case.theme_persisted,
+            &plan.persist_theme,
+        );
+        if case.theme_persisted {
+            assert_eq!(
+                case.theme_writes.len(),
+                1,
+                "terminating/{}: the reference persists the theme exactly once",
+                case.case
+            );
+            let pointer = case.theme_writes[0].get("pointer").and_then(Value::as_str);
+            report.check(
+                "terminating",
+                &case.case,
+                "themeWritePointer",
+                &Some("/theme"),
+                &pointer,
+            );
+        } else {
+            report.check(
+                "terminating",
+                &case.case,
+                "themeWrites",
+                &0usize,
+                &case.theme_writes.len(),
+            );
+        }
+        // `NOTICE` holds this port's sentence permanently unequal to the
+        // reference's: matching length and digest would mean the prose was
+        // copied.
+        let digest = hex::encode(Sha256::digest(plan.message.as_bytes()));
+        for message in &case.messages {
+            report.check(
+                "terminating",
+                &case.case,
+                "messageDigestDiffers",
+                &true,
+                &(digest != message.digest),
+            );
+        }
+        assert!(
+            !case.messages.is_empty() || case.value.is_none() && case.exit_code == Some(0),
+            "terminating/{}: every exit path but silent success prints a message",
+            case.case
+        );
+    }
+}
+
+// --------------------------------------------------------------------------
+// Screen-graph scripts
+// --------------------------------------------------------------------------
+
+/// Walks a drive from the welcome screen to the sign-in target screen.
+fn onto_target(drive: &mut Drive) {
+    drive.typing_finished();
+    drive.press(KeyPress::Enter);
+    drive.press(KeyPress::Enter);
+    drive.press(KeyPress::Enter);
+}
+
+/// Walks a drive onto the custom-domain screen.
+fn onto_custom_domain(drive: &mut Drive) {
+    onto_target(drive);
+    drive.feed_key(KeyPress::Down);
+    drive.press(KeyPress::Enter);
+}
+
+fn drive_scenario(scenario: &GraphScenario) -> Drive {
+    let case = scenario.case.as_str();
+    let mut drive = match case {
+        "graph-browser-provider-installs-seven-screens" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "graph-manual-provider-installs-three-screens" => {
+            let mut drive = Drive::new(manual_context(), Vec::new(), PersistOutcome::Completed);
+            drive.typing_finished();
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "welcome-advance-is-inert-until-typing-finishes" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            drive.feed_key(KeyPress::Enter);
+            let early = drive.model.current_screen().name().to_owned();
+            drive.probe("welcome:screenAfterEarlyEnter", json!(early));
+            drive.typing_finished();
+            drive.press(KeyPress::Enter);
+            let late = drive.model.current_screen().name().to_owned();
+            drive.probe("welcome:screenAfterLateEnter", json!(late));
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "theme-selection-applies-live-and-leads-on" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            drive.typing_finished();
+            drive.press(KeyPress::Enter);
+            drive.feed_key(KeyPress::Down);
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "auth-method-browser-leads-to-target" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            onto_target(&mut drive);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "auth-method-manual-leads-to-api-key" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            drive.typing_finished();
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Enter);
+            drive.feed_key(KeyPress::Down);
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "auth-method-selection-wraps" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            drive.typing_finished();
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Enter);
+            let mut walk = vec![drive.model.method_selection()];
+            for _ in 0..3 {
+                drive.feed_key(KeyPress::Down);
+                walk.push(drive.model.method_selection());
+            }
+            drive.probe("auth_method:selectionWalk", json!(walk));
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "target-default-applies-mistral-and-signs-in" => {
+            let mut drive = Drive::new(
+                browser_context(),
+                vec![Feed::Pending],
+                PersistOutcome::Completed,
+            );
+            onto_target(&mut drive);
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "target-other-leads-to-custom-domain" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            onto_custom_domain(&mut drive);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "target-back-returns-to-method" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            onto_target(&mut drive);
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "target-overwrite-arms-then-proceeds" => {
+            let mut drive = Drive::new(
+                custom_configured_context(),
+                vec![Feed::Pending],
+                PersistOutcome::Completed,
+            );
+            onto_target(&mut drive);
+            drive.feed_key(KeyPress::Enter);
+            let armed = drive.model.override_armed();
+            drive.probe("sign_in_target:armedAfterFirstEnter", json!(armed));
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "target-overwrite-disarms-on-move" => {
+            let mut drive = Drive::new(
+                custom_configured_context(),
+                Vec::new(),
+                PersistOutcome::Completed,
+            );
+            onto_target(&mut drive);
+            drive.feed_key(KeyPress::Enter);
+            let armed = drive.model.override_armed();
+            drive.feed_key(KeyPress::Down);
+            let after_move = drive.model.override_armed();
+            drive.probe("sign_in_target:armedThenMoved", json!([armed, after_move]));
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "custom-domain-validation-classes" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            onto_custom_domain(&mut drive);
+            let mut states = Vec::new();
+            for input in [
+                "console.internal.example",
+                "console.oracle.mistral.ai",
+                "http:/broken",
+            ] {
+                drive.clear_domain();
+                drive.type_text(input);
+                let feedback = drive
+                    .model
+                    .domain_feedback()
+                    .expect("typing reveals the validation feedback");
+                states.push(json!({
+                    "boxClasses": [feedback.box_class()],
+                    "expected": feedback.box_class(),
+                    "feedbackClasses": [feedback.feedback_class()],
+                    "input": input,
+                }));
+            }
+            drive.probe("custom_domain:validationStates", json!(states));
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "custom-domain-submit-derives-urls-and-signs-in" => {
+            let mut drive = Drive::new(
+                browser_context(),
+                vec![Feed::Pending],
+                PersistOutcome::Completed,
+            );
+            onto_custom_domain(&mut drive);
+            drive.type_text("console.internal.example");
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "custom-domain-sign-in-upserts-the-provider" => {
+            let mut drive = Drive::new(
+                browser_context(),
+                vec![Feed::Success("oracle-signed-in-key")],
+                PersistOutcome::Completed,
+            );
+            onto_custom_domain(&mut drive);
+            drive.type_text("console.internal.example");
+            drive.press(KeyPress::Enter);
+            drive.wait("the sign-in worker to exit the app");
+            drive
+        }
+        "custom-domain-invalid-submission-stays" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            onto_custom_domain(&mut drive);
+            drive.type_text("http:/broken");
+            drive.feed_key(KeyPress::Enter);
+            let still = drive.model.current_screen().name().to_owned();
+            drive.probe("custom_domain:stillOnScreen", json!(still));
+            drive.clear_domain();
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "custom-domain-back-returns-to-target" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            onto_custom_domain(&mut drive);
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "browser-sign-in-success-exits-completed" => {
+            let mut drive = Drive::new(
+                browser_context(),
+                vec![Feed::Success("oracle-signed-in-key")],
+                PersistOutcome::Completed,
+            );
+            onto_target(&mut drive);
+            drive.press(KeyPress::Enter);
+            drive.wait("the sign-in worker to exit the app");
+            drive
+        }
+        "browser-sign-in-error-then-retry-succeeds" => {
+            let mut drive = Drive::new(
+                browser_context(),
+                vec![Feed::Failure, Feed::Success("oracle-signed-in-key")],
+                PersistOutcome::Completed,
+            );
+            onto_target(&mut drive);
+            drive.press(KeyPress::Enter);
+            let variant = drive.model.sign_in_view().variant.as_str();
+            drive.probe("browser_sign_in:errorVariant", json!(variant));
+            drive.press(KeyPress::Char('r'));
+            drive.wait("the retried worker to exit the app");
+            drive
+        }
+        "browser-sign-in-retry-refused-while-running" => {
+            let mut drive = Drive::new(
+                browser_context(),
+                vec![Feed::Pending],
+                PersistOutcome::Completed,
+            );
+            onto_target(&mut drive);
+            drive.press(KeyPress::Enter);
+            drive.feed_key(KeyPress::Char('r'));
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "browser-sign-in-manual-fallback" => {
+            let mut drive = Drive::new(
+                browser_context(),
+                vec![Feed::Pending],
+                PersistOutcome::Completed,
+            );
+            onto_target(&mut drive);
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Char('m'));
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "browser-sign-in-persist-failure-exits-immediately" => {
+            let mut drive = Drive::new(
+                browser_context(),
+                vec![Feed::Success("oracle-signed-in-key")],
+                PersistOutcome::SaveError {
+                    detail: "scripted-detail".to_owned(),
+                },
+            );
+            onto_target(&mut drive);
+            drive.press(KeyPress::Enter);
+            drive.wait("the persist failure to exit the app");
+            drive
+        }
+        "browser-sign-in-cancel-closes-the-service" => {
+            let mut drive = Drive::new(
+                browser_context(),
+                vec![Feed::Pending],
+                PersistOutcome::Completed,
+            );
+            onto_target(&mut drive);
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "api-key-submit-terminates-with-the-persist-outcome" => {
+            let mut drive = Drive::new(manual_context(), Vec::new(), PersistOutcome::Completed);
+            drive.typing_finished();
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Enter);
+            drive.probe("api_key:masked", json!(drive.model.key_masked()));
+            drive.type_text("oracle-key");
+            drive.press(KeyPress::Enter);
+            drive
+        }
+        "api-key-empty-submission-stays" => {
+            let mut drive = Drive::new(manual_context(), Vec::new(), PersistOutcome::Completed);
+            drive.typing_finished();
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Enter);
+            drive.feed_key(KeyPress::Enter);
+            let still = drive.model.current_screen().name().to_owned();
+            drive.probe("api_key:stillOnScreen", json!(still));
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "cancel-from-theme-exits-with-nothing" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            drive.typing_finished();
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        other => panic!("no drive is scripted for corpus scenario {other}"),
+    };
+    drive.note_visit();
+    drive
+}
+
+fn run_screen_graph(cases: &[GraphScenario], report: &mut Report) {
     // The gating predicate is asserted on every scenario rather than on one of
     // each kind: a corpus where a single browser-capable run installed six
     // screens would otherwise replay clean everywhere the reference checkout
@@ -392,132 +1148,124 @@ fn run_screen_graph(cases: &[GraphScenario]) -> usize {
             .any(|scenario| scenario.supports_browser_sign_in),
         "the corpus drives no browser-capable provider"
     );
-    let manual = cases
-        .iter()
-        .find(|scenario| !scenario.supports_browser_sign_in)
-        .expect("the corpus drives a provider without browser sign-in");
-    assert!(
-        manual
-            .transitions
-            .iter()
-            .any(|edge| edge.from == "theme_selection" && edge.to == "api_key"),
-        "the corpus records no direct theme-to-key edge for a manual-only provider"
-    );
-    for scenario in cases {
-        assert_eq!(
-            scenario.entry_screen, "welcome",
-            "screenGraph/{}: the reference enters through the welcome screen",
-            scenario.case
-        );
-    }
-
-    let mut report = Report::default();
-    for scenario in cases {
-        let expected = format!(
-            "{} screens, {} transitions, result {}",
-            scenario.installed_screens.len(),
-            scenario.transitions.len(),
-            scenario.result.as_deref().unwrap_or("cancelled"),
-        );
-        report.pending(
-            "screenGraph",
-            &scenario.case,
-            expected,
-            closing_story(&scenario.case),
-        );
-    }
-    settle(&report, "screenGraph")
-}
-
-fn run_terminating(cases: &[TerminatingCase]) -> usize {
-    let values = cases
-        .iter()
-        .map(|case| {
-            case.value
-                .clone()
-                .unwrap_or_else(|| "<cancelled>".to_owned())
-        })
-        .collect::<BTreeSet<_>>();
-    assert_eq!(
-        values.len(),
-        5,
-        "the corpus records {} terminating values where the reference returns 5",
-        values.len()
-    );
-    let mut report = Report::default();
-    for case in cases {
-        assert!(
-            !case.messages.is_empty() || case.value.is_none() && case.exit_code == Some(0),
-            "terminating/{}: every exit path but silent success prints a message",
-            case.case
-        );
-        let expected = format!(
-            "exit {:?}, theme persisted {}",
-            case.exit_code, case.theme_persisted
-        );
-        report.pending("terminating", &case.case, expected, "US-191");
-    }
-    settle(&report, "terminating")
-}
-
-fn run_domain_validation(cases: &[DomainCase]) -> usize {
-    assert!(
-        cases.iter().any(|case| case.valid),
-        "the corpus accepts no domain at all; regenerate it with {CAPTURE_SCRIPT}"
-    );
-    assert!(
-        cases.iter().any(|case| !case.valid),
-        "the corpus rejects no domain at all; regenerate it with {CAPTURE_SCRIPT}"
-    );
     assert!(
         cases
             .iter()
-            .any(|case| case.private_cloud_warning == Some(true)),
-        "the corpus exercises no private-cloud warning; regenerate it with {CAPTURE_SCRIPT}"
+            .any(|scenario| !scenario.supports_browser_sign_in),
+        "the corpus drives no provider without browser sign-in"
     );
-    let mut report = Report::default();
-    for case in cases {
-        let expected = format!(
-            "valid {}, warning {:?}",
-            case.valid, case.private_cloud_warning
-        );
-        report.pending("domainValidation", &case.case, expected, "US-193");
-    }
-    settle(&report, "domainValidation")
-}
 
-fn run_constants(constants: &Constants) -> usize {
-    let mut report = Report::default();
-    report.pending(
-        "constants",
-        "signInSteps",
-        format!(
-            "{} steps {:?}",
-            constants.sign_in_steps, constants.sign_in_step_names
-        ),
-        "US-194",
-    );
-    report.pending(
-        "constants",
-        "delays",
-        format!(
-            "success exit {}s, URL help {}s",
-            constants.success_exit_delay_seconds, constants.sign_in_url_help_delay_seconds
-        ),
-        "US-194",
-    );
-    report.pending(
-        "constants",
-        "themePresentation",
-        format!(
-            "{} neighbors, fades {:?}, {} gradient colors",
-            constants.theme_visible_neighbors,
-            constants.theme_fade_classes,
-            constants.gradient_color_count
-        ),
-        "US-192",
-    );
-    settle(&report, "constants")
+    for scenario in cases {
+        let case = scenario.case.as_str();
+        let drive = drive_scenario(scenario);
+        report.check(
+            "screenGraph",
+            case,
+            "supportsBrowserSignIn",
+            &scenario.supports_browser_sign_in,
+            &drive.model.supports_browser_sign_in(),
+        );
+        report.check(
+            "screenGraph",
+            case,
+            "installedScreens",
+            &scenario.installed_screens,
+            &drive
+                .model
+                .installed_screens()
+                .into_iter()
+                .map(str::to_owned)
+                .collect::<Vec<_>>(),
+        );
+        report.check(
+            "screenGraph",
+            case,
+            "entryScreen",
+            &scenario.entry_screen.as_str(),
+            &"welcome",
+        );
+        let expected_edges = scenario
+            .transitions
+            .iter()
+            .map(|edge| (edge.event.clone(), edge.from.clone(), edge.to.clone()))
+            .collect::<Vec<_>>();
+        report.check(
+            "screenGraph",
+            case,
+            "transitions",
+            &expected_edges,
+            &drive.edges,
+        );
+        report.check("screenGraph", case, "focus", &scenario.focus, &drive.focus);
+        report.check(
+            "screenGraph",
+            case,
+            "result",
+            &scenario.result,
+            &drive
+                .model
+                .outcome()
+                .and_then(OnboardingOutcome::as_reference_value),
+        );
+        report.check(
+            "screenGraph",
+            case,
+            "selectedTheme",
+            &scenario.selected_theme.as_str(),
+            &drive.model.selected_theme(),
+        );
+        let (base, api) = drive.model.provider_browser_auth();
+        report.check(
+            "screenGraph",
+            case,
+            "providerBrowserAuth",
+            &scenario.provider_browser_auth,
+            &ProviderBrowserAuth {
+                api_base_url: api.map(str::to_owned),
+                base_url: base.map(str::to_owned),
+            },
+        );
+        report.check(
+            "screenGraph",
+            case,
+            "factoryCalls",
+            &scenario.effects.factory_calls.unwrap_or(0),
+            &drive.recorder.factory_calls,
+        );
+        report.check(
+            "screenGraph",
+            case,
+            "serviceCloses",
+            &scenario.effects.service_closes,
+            &drive.recorder.service_closes,
+        );
+        report.check(
+            "screenGraph",
+            case,
+            "persistCalls",
+            &scenario.effects.persist_calls,
+            &drive.recorder.persist_calls,
+        );
+        report.check(
+            "screenGraph",
+            case,
+            "providerWrites",
+            &scenario.effects.provider_writes,
+            &drive.recorder.provider_writes,
+        );
+        if let Some(themes) = &scenario.themes {
+            report.check(
+                "screenGraph",
+                case,
+                "themes",
+                themes,
+                &sorted_theme_names()
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>(),
+            );
+        }
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -527,23 +1275,34 @@ fn run_constants(constants: &Constants) -> usize {
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
     let corpus = corpus();
-    println!("onboarding: divergence ledger");
+    println!(
+        "onboarding: divergence ledger ({} entries)",
+        DIVERGENCES.len()
+    );
     for (case, reason) in DIVERGENCES {
         println!("  {case}: {reason}");
     }
     let mut scenarios = 0;
-    scenarios += run_constants(&corpus.constants);
-    scenarios += run_screen_graph(&corpus.screen_graph);
-    scenarios += run_terminating(&corpus.terminating);
-    scenarios += run_domain_validation(&corpus.domain_validation);
+    let mut report = Report::default();
+    run_constants(&corpus.constants, &mut report);
+    scenarios += settle(&report, "constants");
+    let mut report = Report::default();
+    run_screen_graph(&corpus.screen_graph, &mut report);
+    scenarios += settle(&report, "screenGraph");
+    let mut report = Report::default();
+    run_terminating(&corpus.terminating, &mut report);
+    scenarios += settle(&report, "terminating");
+    let mut report = Report::default();
+    run_domain_validation(&corpus.domain_validation, &mut report);
+    scenarios += settle(&report, "domainValidation");
     println!(
-        "onboarding: {scenarios} scenarios across 3 families plus the constants block \
+        "onboarding: {scenarios} comparisons across 3 families plus the constants block \
          replayed at {}",
         &corpus.reference.commit[..12],
     );
     assert!(
         scenarios >= MINIMUM_SCENARIOS,
-        "the corpus replays {scenarios} scenarios, below the {MINIMUM_SCENARIOS} floor; \
+        "the corpus replays {scenarios} comparisons, below the {MINIMUM_SCENARIOS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
     );
 }
