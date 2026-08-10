@@ -368,6 +368,12 @@ pub(in crate::tui) fn apply_render_preferences(
     state.ask_confirmation_on_exit = configured_value(runtime, "ask_confirmation_on_exit")
         .and_then(|value| value.as_bool())
         .unwrap_or(true);
+    // Reference `_is_file_watcher_enabled`: the completion index watches the
+    // workspace only while this key is on, and stops watching when it goes off.
+    state.file_watcher_for_autocomplete =
+        configured_value(runtime, "file_watcher_for_autocomplete")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
     state
         .notifier
         .set_policy(crate::tui::attention::NotificationPolicy::from_config(
@@ -513,5 +519,29 @@ mod tests {
         assert_eq!(top_config_origin(&surface, "missing"), None);
         assert!(written_in_selected_file(&surface, "theme"));
         assert!(!written_in_selected_file(&surface, "missing"));
+    }
+
+    /// US-202: `file_watcher_for_autocomplete` is read from the published
+    /// surface with the rest of the preferences, so a misspelled key would
+    /// resolve to nothing here rather than silently leaving the watcher off.
+    #[test]
+    fn the_file_watcher_preference_is_read_from_the_published_surface() {
+        use crate::tui::runtime::interactive_test_runtime;
+
+        let mut runtime = interactive_test_runtime("file-watcher-preference");
+        assert_eq!(
+            configured_value(&mut runtime, "file_watcher_for_autocomplete"),
+            Some(Value::Bool(false)),
+            "the key resolves to its declared default"
+        );
+
+        let mut state = TuiState::new("file-watcher-preference");
+        state.file_watcher_for_autocomplete = true;
+        apply_render_preferences(&mut runtime, &mut state);
+
+        assert!(
+            !state.file_watcher_for_autocomplete,
+            "the gate follows the configuration rather than whatever the state held"
+        );
     }
 }

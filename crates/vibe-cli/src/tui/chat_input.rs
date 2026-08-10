@@ -184,6 +184,18 @@ impl ChatInputState {
         self.mode
     }
 
+    /// Publishes `file_watcher_for_autocomplete` to the completion index, which
+    /// reads it when it answers the next mention query.
+    pub(crate) fn set_file_watcher_enabled(&self, enabled: bool) {
+        self.completion.set_file_watcher_enabled(enabled);
+    }
+
+    /// Takes the completion index's diagnostic, raised once per session when
+    /// the platform cannot watch the workspace.
+    pub(crate) fn take_completion_notice(&self) -> Option<String> {
+        self.completion.take_index_notice()
+    }
+
     pub(crate) fn poll_completion(&mut self) -> Vec<InputEffect> {
         let resolutions = self.completion.poll();
         let mut effects = Vec::new();

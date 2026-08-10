@@ -178,6 +178,9 @@ pub struct TuiState {
     pub narrator: NarratorManager,
     /// Whether this session already reported that narration cannot be spoken.
     pub speech_notice_shown: bool,
+    /// Reference `_is_file_watcher_enabled`: the gate the completion index
+    /// reads on every query, refreshed with the rest of the preferences.
+    pub file_watcher_for_autocomplete: bool,
     turn_started_ms: Option<u64>,
     scroll_line_limit: usize,
     diagnostics: VecDeque<String>,
@@ -223,6 +226,7 @@ impl TuiState {
             notifier: AttentionNotifier::default(),
             narrator: NarratorManager::default(),
             speech_notice_shown: false,
+            file_watcher_for_autocomplete: false,
             turn_started_ms: None,
             scroll_line_limit: 0,
             diagnostics: VecDeque::new(),
@@ -429,6 +433,7 @@ impl TuiState {
         replacement.notifier = std::mem::take(&mut self.notifier);
         replacement.narrator = std::mem::take(&mut self.narrator);
         replacement.speech_notice_shown = self.speech_notice_shown;
+        replacement.file_watcher_for_autocomplete = self.file_watcher_for_autocomplete;
         replacement.diagnostics = self.diagnostics.clone();
         replacement.local_sequence = self.local_sequence;
         replacement.local_entries = self.local_entries.clone();

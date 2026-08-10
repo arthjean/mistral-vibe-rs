@@ -461,6 +461,13 @@ pub async fn run_interactive(
                 &mut clipboard_images,
             ))
             .await?;
+            // Reference `_is_file_watcher_enabled`: the index consults the
+            // preference on every query, so the refreshed value is published
+            // before the next one is answered.
+            input.set_file_watcher_enabled(state.file_watcher_for_autocomplete);
+            if let Some(notice) = input.take_completion_notice() {
+                state.push_diagnostic(&notice);
+            }
             let effects = input.poll_completion();
             apply_composer_effects(
                 &mut input,

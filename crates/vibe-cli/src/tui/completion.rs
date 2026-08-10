@@ -15,7 +15,7 @@ mod fuzzy;
 mod path;
 
 use fuzzy::fuzzy_match_score;
-use path::{WorkspaceIndex, path_candidates};
+pub(crate) use path::PathIndex;
 
 pub const MAX_VISIBLE_COMPLETIONS: usize = 10;
 
@@ -53,6 +53,9 @@ pub struct CompletionEngine {
     worker: Option<CompletionWorker>,
     user_skills: Vec<CompletionCandidate>,
     command_context: CommandContext,
+    /// One index per process, shared with the worker so a workspace root is
+    /// walked once however a mention query is answered.
+    path_index: PathIndex,
 }
 
 #[derive(Debug, Clone)]
@@ -140,13 +143,13 @@ pub enum CompletionApplyOutcome {
 }
 
 impl CompletionWorker {
-    fn spawn() -> Result<Self, InputError> {
+    fn spawn(index: PathIndex) -> Result<Self, InputError> {
         let state = Arc::new((Mutex::new(CompletionWorkerState::default()), Condvar::new()));
         let thread_state = Arc::clone(&state);
         let (results_tx, results) = mpsc::channel();
         std::thread::Builder::new()
             .name("vibe-path-completion".to_owned())
-            .spawn(move || completion_worker_loop(&thread_state, &results_tx))
+            .spawn(move || completion_worker_loop(&thread_state, &results_tx, &index))
             .map_err(|error| InputError::CompletionWorker(error.to_string()))?;
         Ok(Self { state, results })
     }
@@ -183,8 +186,8 @@ impl Drop for CompletionWorker {
 fn completion_worker_loop(
     shared: &Arc<(Mutex<CompletionWorkerState>, Condvar)>,
     results: &mpsc::Sender<CompletionResolution>,
+    index: &PathIndex,
 ) {
-    let mut index = WorkspaceIndex::default();
     loop {
         let job = {
             let (state, ready) = shared.as_ref();
@@ -358,7 +361,7 @@ impl CompletionEngine {
         let worker = match self.worker.as_ref() {
             Some(worker) => worker,
             None => {
-                self.worker = Some(CompletionWorker::spawn()?);
+                self.worker = Some(CompletionWorker::spawn(self.path_index.clone())?);
                 self.worker.as_ref().ok_or_else(|| {
                     InputError::CompletionWorker("worker is unavailable".to_owned())
                 })?
@@ -392,11 +395,22 @@ impl CompletionEngine {
         workspace: &Path,
         query: &str,
     ) -> Result<Vec<CompletionCandidate>, InputError> {
-        let mut candidates = prompt_candidates_in(workspace, query, &self.command_context)?;
+        let mut candidates =
+            prompt_candidates_in(&self.path_index, workspace, query, &self.command_context)?;
         if query.starts_with('/') {
             candidates.extend(self.user_skills.iter().cloned());
         }
         Ok(candidates)
+    }
+
+    /// Publishes `file_watcher_for_autocomplete` to the shared index.
+    pub fn set_file_watcher_enabled(&self, enabled: bool) {
+        self.path_index.set_watch_enabled(enabled);
+    }
+
+    /// Takes the index's pending diagnostic, raised at most once per session.
+    pub fn take_index_notice(&self) -> Option<String> {
+        self.path_index.take_notice()
     }
 
     pub fn poll(&self) -> Vec<CompletionResolution> {
@@ -711,15 +725,10 @@ pub(crate) fn active_token(editor: &PromptEditor) -> Option<(Range<usize>, Strin
     ))
 }
 
-/// Filesystem-backed candidate lookup used by the completion adapter.
-pub fn prompt_candidates(
-    workspace: &Path,
-    query: &str,
-) -> Result<Vec<CompletionCandidate>, InputError> {
-    prompt_candidates_in(workspace, query, &CommandContext::default())
-}
-
-pub fn prompt_candidates_in(
+/// Filesystem-backed candidate lookup used by the completion adapter, answered
+/// from the caller's index so consecutive queries share one walk.
+pub(crate) fn prompt_candidates_in(
+    index: &PathIndex,
     workspace: &Path,
     query: &str,
     command_context: &CommandContext,
@@ -739,7 +748,7 @@ pub fn prompt_candidates_in(
     let Some(raw_query) = query.strip_prefix('@') else {
         return Ok(Vec::new());
     };
-    path_candidates(workspace, raw_query)
+    index.candidates(workspace, raw_query)
 }
 
 #[cfg(test)]
@@ -967,13 +976,56 @@ mod tests {
             )
             .expect("path candidate fixture");
         }
-        let candidates = prompt_candidates(temporary.path(), "@").expect("path candidates");
-        assert_eq!(candidates.len(), 15);
         let mut engine = CompletionEngine::default();
+        let candidates = engine
+            .prompt_candidates(temporary.path(), "@")
+            .expect("path candidates");
+        assert_eq!(candidates.len(), 15);
         engine.install(0, 0..1, "@", candidates);
         assert_eq!(
             engine.view().expect("path popup").candidates.len(),
             MAX_VISIBLE_COMPLETIONS
+        );
+    }
+
+    /// A mention query is answered either on the completion worker or through
+    /// the synchronous adapter. Both read the same index, so an unchanged root
+    /// is walked once however many queries arrive on either path.
+    #[test]
+    fn both_query_paths_share_one_walk_of_the_workspace() {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        fs::write(temporary.path().join("alpha.txt"), "fixture").expect("path fixture");
+        let mut engine = CompletionEngine {
+            generation: 1,
+            ..CompletionEngine::default()
+        };
+
+        for query in ["@a", "@al"] {
+            let request = CompletionRequest::new(1, 0..query.chars().count(), query.to_owned());
+            engine
+                .dispatch_request(request, temporary.path())
+                .expect("the worker accepts the request");
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut resolved = Vec::new();
+        while std::time::Instant::now() < deadline && resolved.is_empty() {
+            resolved.extend(engine.poll());
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!resolved.is_empty(), "the worker answered a mention query");
+
+        let request = CompletionRequest::new(1, 0..2, "@a".to_owned());
+        let resolution = engine.resolve_request(request, temporary.path());
+        assert!(
+            matches!(resolution, CompletionResolution::Results { ref candidates, .. } if candidates
+                .iter()
+                .any(|candidate| candidate.label == "@alpha.txt")),
+            "the synchronous adapter answers from the same index"
+        );
+        assert_eq!(
+            engine.path_index.rebuilds(),
+            1,
+            "one root, one walk, whichever path answered"
         );
     }
 }

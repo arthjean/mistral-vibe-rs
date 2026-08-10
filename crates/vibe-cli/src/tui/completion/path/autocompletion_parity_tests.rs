@@ -14,13 +14,10 @@
 //! Fuzzy scores are floats upstream and integers here, so the corpus records
 //! them in hundredths, which is the scale [`super::super::fuzzy`] computes in.
 //!
-//! The `changes` family measures what this build's index holds after a
-//! filesystem change sequence, through both code paths that answer a mention
-//! query: the worker's cached [`WorkspaceIndex`], which is built once per root
-//! and never refreshed, and the synchronous adapter, which walks the tree
-//! again per call. Neither applies a change incrementally, because this build
-//! has no incremental store and no watcher, so the family is ledgered below
-//! until EP-059 delivers them.
+//! The `changes` family drives this build's incremental store exactly as the
+//! capture drives the reference's: the index is built over the fixture tree,
+//! each step mutates the tree and hands the store the change list the capture
+//! recorded, and the resulting entry set and counters are compared.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -32,11 +29,11 @@ use serde_json::Value;
 
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
-use super::super::prompt_candidates;
+use super::super::{CompletionEngine, CompletionRequest, CompletionResolution};
 use super::{
-    DEFAULT_IGNORE_PATTERNS, IgnoreRule, IgnoreRules, IndexedPath, MAX_INDEXED_ENTRIES,
-    MAX_PATH_MATCHES, WorkspaceIndex, fuzzy_match_score, index_workspace, path_match_rank,
-    path_search_context,
+    ASCII_CODEPOINT_LIMIT, ChangeKind, DEFAULT_IGNORE_PATTERNS, IgnoreRule, IgnoreRules,
+    IndexedPath, MASS_CHANGE_THRESHOLD, MAX_INDEXED_ENTRIES, MAX_PATH_MATCHES, WorkspaceIndex,
+    build_ascii_mask, fuzzy_match_score, path_match_rank, path_search_context, rank_indexed_paths,
 };
 
 const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/autocompletion/corpus.json";
@@ -67,36 +64,14 @@ const METADATA: [&str; 4] = ["schemaVersion", "reference", "note", "fixtures"];
 /// a stale entry, and a case that diverges without an entry fails naming the
 /// family, the case and the observed and expected values.
 ///
-/// Four entries, three of them dated: the file index has no incremental store,
-/// no mass-change threshold and no ASCII mask at this commit, so EP-059 closes
-/// them and the stale check fails the moment it does. The fourth is the
-/// non-goal `WALK_SKIP_DIR_NAMES`, exported by the reference and imported by
-/// nothing at the pinned commit.
-const DIVERGENCES: &[(&str, &str)] = &[
-    (
-        "constants/massChangeThreshold",
-        "PENDING EP-059 US-203: this build applies no change incrementally, so it declares no \
-         threshold at which a batch becomes a full rebuild",
-    ),
-    (
-        "constants/asciiCodepointLimit",
-        "PENDING EP-059 US-205: this build stores no ASCII mask per entry, so it declares no \
-         codepoint limit for one",
-    ),
-    (
-        "constants/walkSkipDirNames",
-        "ACCEPTED: `WALK_SKIP_DIR_NAMES` is exported by the reference and imported by nothing at \
-         the pinned commit, so this port ships no derived constant with no consumer; \
-         tasks/prd-autocompletion-voice-parity.md records it as a non-goal",
-    ),
-    (
-        "changes/*",
-        "PENDING EP-059 US-202 through US-204: this build has no watcher and no incremental \
-         store, so the cached index answers the pre-change entry set, the synchronous adapter \
-         answers a fresh walk instead of the reference's incrementally maintained set, and \
-         neither counts an incremental update",
-    ),
-];
+/// One entry: the non-goal `WALK_SKIP_DIR_NAMES`, exported by the reference
+/// and imported by nothing at the pinned commit.
+const DIVERGENCES: &[(&str, &str)] = &[(
+    "constants/walkSkipDirNames",
+    "ACCEPTED: `WALK_SKIP_DIR_NAMES` is exported by the reference and imported by nothing at the \
+     pinned commit, so this port ships no derived constant with no consumer; \
+     tasks/prd-autocompletion-voice-parity.md records it as a non-goal",
+)];
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -218,12 +193,8 @@ struct ChangeCase {
 struct ChangeStep {
     step: usize,
     mutations: Vec<Mutation>,
-    /// The `(kind, path)` pairs the reference handed `apply_changes`. This
-    /// build has nothing to feed them to yet; EP-059 gives them a reader.
-    #[expect(
-        dead_code,
-        reason = "the change stream feeds the incremental store EP-059 delivers"
-    )]
+    /// The `(kind, path)` pairs the reference handed `apply_changes`, which is
+    /// what this build's incremental store is handed too.
     changes: Vec<Vec<String>>,
     entries: Vec<Entry>,
     stats: Stats,
@@ -472,12 +443,18 @@ fn fixture<'a>(index: &BTreeMap<&str, &'a Fixture>, id: &str) -> &'a Fixture {
         .unwrap_or_else(|| panic!("the corpus declares the fixture `{id}`"))
 }
 
-/// This build's entry set for a root, in the relative-path order both sides
-/// are normalized to.
-fn walked(root: &Path) -> Vec<Entry> {
-    let mut entries = index_workspace(root);
-    entries.sort_by(|left, right| left.rel.cmp(&right.rel));
-    entries.iter().map(entry_of).collect()
+/// An index built over `root` and nothing else, which is what the capture
+/// drives when it records a walk or a change sequence.
+fn built(root: &Path) -> WorkspaceIndex {
+    let mut index = WorkspaceIndex::default();
+    index.rebuild(root);
+    index
+}
+
+/// One index's entry set, in the relative-path order both sides are
+/// normalized to.
+fn held(index: &WorkspaceIndex) -> Vec<Entry> {
+    index.entries.values().map(entry_of).collect()
 }
 
 fn entry_of(entry: &IndexedPath) -> Entry {
@@ -486,6 +463,33 @@ fn entry_of(entry: &IndexedPath) -> Entry {
         name: entry.name.clone(),
         is_dir: entry.is_directory,
     }
+}
+
+fn stats_of(index: &WorkspaceIndex) -> Stats {
+    let stats = index.stats();
+    Stats {
+        rebuilds: stats.rebuilds,
+        incremental_updates: stats.incremental_updates,
+    }
+}
+
+/// The change list a step hands the store, in this build's vocabulary.
+fn change_list(root: &Path, step: &ChangeStep) -> Vec<(ChangeKind, PathBuf)> {
+    step.changes
+        .iter()
+        .map(|pair| {
+            let [kind, relative] = pair.as_slice() else {
+                panic!("a corpus change is a `(kind, path)` pair: {pair:?}");
+            };
+            let kind = match kind.as_str() {
+                "added" => ChangeKind::Added,
+                "modified" => ChangeKind::Modified,
+                "deleted" => ChangeKind::Deleted,
+                other => panic!("unknown corpus change kind `{other}`"),
+            };
+            (kind, root.join(relative))
+        })
+        .collect()
 }
 
 // --------------------------------------------------------------------------
@@ -514,22 +518,19 @@ fn run_constants(constants: &Constants, report: &mut Report) {
         &constants.score_scale,
         &SCORE_SCALE,
     );
-    // This build applies no change incrementally and stores no ASCII mask, so
-    // it declares neither constant. `None` is the honest reading, and the
-    // ledger entries above go stale the moment EP-059 gives them a value.
     report.check(
         "constants",
         "massChangeThreshold",
         "threshold",
-        &Some(constants.mass_change_threshold),
-        &None,
+        &constants.mass_change_threshold,
+        &(MASS_CHANGE_THRESHOLD as u64),
     );
     report.check(
         "constants",
         "asciiCodepointLimit",
         "limit",
-        &Some(constants.ascii_codepoint_limit),
-        &None,
+        &constants.ascii_codepoint_limit,
+        &ASCII_CODEPOINT_LIMIT,
     );
     let defaults = DEFAULT_IGNORE_PATTERNS
         .iter()
@@ -603,28 +604,20 @@ fn run_walk(corpus: &Corpus, report: &mut Report) {
     let index = fixtures(corpus);
     for case in &corpus.walk {
         let scratch = Scratch::materialize(fixture(&index, &case.fixture));
-        let mut workspace = WorkspaceIndex::default();
-        workspace
-            .candidates(&scratch.root, "")
-            .expect("the fixture root is walkable");
+        let workspace = built(&scratch.root);
         report.check(
             "walk",
             &case.case,
             "entries",
             &case.entries,
-            &walked(&scratch.root),
+            &held(&workspace),
         );
         report.check(
             "walk",
             &case.case,
             "stats",
             &case.stats,
-            // Nothing in this build updates an index incrementally, so the
-            // second counter is zero on every path that answers a query.
-            &Stats {
-                rebuilds: workspace.rebuilds() as u64,
-                incremental_updates: 0,
-            },
+            &stats_of(&workspace),
         );
     }
 }
@@ -634,66 +627,49 @@ fn run_changes(corpus: &Corpus, report: &mut Report) {
     for case in &corpus.changes {
         let declared = fixture(&index, &case.fixture);
         let scratch = Scratch::materialize(declared);
-        // The worker holds one index per root for the life of the process, so
-        // this is the entry set an interactive session answers from.
-        let mut cached = WorkspaceIndex::default();
-        cached
-            .candidates(&scratch.root, "")
-            .expect("the fixture root is walkable");
+        let mut store = built(&scratch.root);
         for step in &case.steps {
             for mutation in &step.mutations {
                 scratch.mutate(mutation, &declared.file_body);
             }
-            cached
-                .candidates(&scratch.root, "")
-                .expect("the mutated root is walkable");
+            store.apply_changes(&change_list(&scratch.root, step));
             let case_id = format!("{}#{}", case.case, step.step);
-            let held = cached.entries.iter().map(entry_of).collect::<Vec<_>>();
-            report.check("changes", &case_id, "cachedEntries", &step.entries, &held);
-            report.check(
-                "changes",
-                &case_id,
-                "freshEntries",
-                &step.entries,
-                &walked(&scratch.root),
-            );
-            report.check(
-                "changes",
-                &case_id,
-                "stats",
-                &step.stats,
-                &Stats {
-                    rebuilds: cached.rebuilds() as u64,
-                    incremental_updates: 0,
-                },
-            );
+            report.check("changes", &case_id, "entries", &step.entries, &held(&store));
+            report.check("changes", &case_id, "stats", &step.stats, &stats_of(&store));
         }
     }
 }
 
 fn run_ranking(corpus: &Corpus, report: &mut Report) {
     let index = fixtures(corpus);
-    let mut current: Option<(String, Scratch, Vec<IndexedPath>)> = None;
+    // One engine for the whole family: the adapter that answers every `@`
+    // query in the running client, holding the one index it answers from.
+    let engine = CompletionEngine::default();
+    let mut current: Option<(String, Scratch, WorkspaceIndex)> = None;
     for case in &corpus.ranking {
         let reuse = current
             .as_ref()
             .is_some_and(|(id, _, _)| id == &case.fixture);
         if !reuse {
             let scratch = Scratch::materialize(fixture(&index, &case.fixture));
-            let mut entries = index_workspace(&scratch.root);
-            entries.sort_by(|left, right| left.rel.cmp(&right.rel));
+            let entries = built(&scratch.root);
             current = Some((case.fixture.clone(), scratch, entries));
         }
         let Some((_, scratch, entries)) = current.as_ref() else {
             continue;
         };
-        // The real entry point: the adapter that answers every `@` query,
-        // including the mention prefix the editor carries.
-        let candidates = prompt_candidates(&scratch.root, &format!("@{}", case.query))
-            .expect("the fixture root answers a mention query");
+        let query = format!("@{}", case.query);
+        let resolution = engine.resolve_request(
+            CompletionRequest::new(0, 0..query.chars().count(), query),
+            &scratch.root,
+        );
+        let CompletionResolution::Results { candidates, .. } = resolution else {
+            panic!("the fixture root answers a mention query: {}", case.case);
+        };
         let context = path_search_context(&case.query);
         let by_label = entries
-            .iter()
+            .entries
+            .values()
             .map(|entry| {
                 let suffix = if entry.is_directory { "/" } else { "" };
                 (format!("@{}{suffix}", entry.rel), entry)
@@ -847,6 +823,68 @@ fn the_committed_corpus_replays_against_this_port() {
         scenarios >= MINIMUM_SCENARIOS,
         "the corpus replays {scenarios} comparisons, below the {MINIMUM_SCENARIOS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
+    );
+}
+
+/// The ASCII mask is a prefilter, so it may only remove entries the matcher
+/// would have rejected anyway. Every fixture tree and every recorded query is
+/// answered twice, once with the filter and once without, and the two candidate
+/// lists must be identical: an asymmetry between how an entry's mask and a
+/// query's mask fold case would show up here as a dropped candidate.
+#[test]
+fn the_ascii_mask_filter_never_removes_a_candidate() {
+    let corpus = corpus();
+    let index = fixtures(&corpus);
+    let mut compared = 0;
+    let mut current: Option<(String, Scratch, WorkspaceIndex)> = None;
+    for case in &corpus.ranking {
+        let reuse = current
+            .as_ref()
+            .is_some_and(|(id, _, _)| id == &case.fixture);
+        if !reuse {
+            let scratch = Scratch::materialize(fixture(&index, &case.fixture));
+            let entries = built(&scratch.root);
+            current = Some((case.fixture.clone(), scratch, entries));
+        }
+        let Some((_, _, entries)) = current.as_ref() else {
+            continue;
+        };
+        let filtered = rank_indexed_paths(entries.entries.values(), &case.query, true);
+        let unfiltered = rank_indexed_paths(entries.entries.values(), &case.query, false);
+        assert_eq!(
+            filtered, unfiltered,
+            "the mask filter changed the candidates for `{}`",
+            case.case
+        );
+        compared += 1;
+    }
+    println!("autocompletion: asciiMask {compared}/{compared} queries unchanged by the filter");
+    assert!(
+        compared > 0,
+        "the corpus carries ranking queries to compare"
+    );
+}
+
+/// The mask is one bit per ASCII codepoint of the lowercased relative path,
+/// and a wider codepoint contributes none, which is why a query carrying one
+/// disables the filter instead of narrowing it.
+#[test]
+fn the_entry_mask_records_one_bit_per_ascii_codepoint() {
+    assert_eq!(build_ascii_mask(""), 0);
+    assert_eq!(build_ascii_mask("a"), 1_u128 << u32::from('a'));
+    assert_eq!(build_ascii_mask("aa"), 1_u128 << u32::from('a'));
+    assert_eq!(
+        build_ascii_mask("ab"),
+        (1_u128 << u32::from('a')) | (1_u128 << u32::from('b'))
+    );
+    assert_eq!(
+        build_ascii_mask("café"),
+        build_ascii_mask("caf"),
+        "a codepoint at or above the limit contributes no bit"
+    );
+    assert!(
+        u32::from('\u{7f}') < ASCII_CODEPOINT_LIMIT,
+        "the mask covers the whole ASCII range"
     );
 }
 

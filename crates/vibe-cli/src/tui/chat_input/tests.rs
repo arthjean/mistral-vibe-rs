@@ -830,3 +830,36 @@ fn safety_switching_and_recording_are_observable_render_states() {
     assert_eq!(render.prompt, None);
     assert_eq!(render.wrap_width, 0);
 }
+
+/// US-202: the preference the render loop publishes reaches the completion
+/// index, so a file written during a session is offered by the next `@` query
+/// without the composer being rebuilt.
+#[test]
+fn the_published_file_watcher_preference_reaches_the_completion_index() {
+    let workspace = tempfile::tempdir().expect("temporary workspace");
+    std::fs::write(workspace.path().join("alpha.txt"), "fixture").expect("path fixture");
+    let input = ChatInputState::new();
+    input.set_file_watcher_enabled(true);
+    let request = CompletionRequest::new(0, 0..1, "@".to_owned());
+    let _ = input.completion.resolve_request(request, workspace.path());
+
+    std::fs::write(workspace.path().join("beta.txt"), "fixture").expect("written during a session");
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let mut offered = false;
+    while std::time::Instant::now() < deadline && !offered {
+        let request = CompletionRequest::new(0, 0..5, "@beta".to_owned());
+        offered = matches!(
+            input.completion.resolve_request(request, workspace.path()),
+            CompletionResolution::Results { ref candidates, .. }
+                if candidates.iter().any(|candidate| candidate.label == "@beta.txt")
+        );
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+
+    assert!(offered, "the watched workspace offers the new file");
+    assert!(
+        input.take_completion_notice().is_none(),
+        "a watched workspace reports no diagnostic"
+    );
+}

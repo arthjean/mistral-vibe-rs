@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Give `file_watcher_for_autocomplete` its first reader. With the key on, the
+  workspace is watched and a file created, modified or deleted during a session
+  is offered by the next `@` query instead of staying invisible until the
+  process restarts. A batch of changes updates the index in place, and only a
+  batch larger than 200 falls back to a full rescan. A host that cannot watch
+  the filesystem is told once and completion keeps answering from the last
+  built index. The index is also now built once per workspace root for the life
+  of the process rather than once per keystroke on the synchronous path.
+
 - Rank an `@.` mention query the way the reference does. The query's stem was
   read as `.` rather than as the empty stem the reference's path handling
   answers, so every candidate whose own stem does not start with a dot lost the
