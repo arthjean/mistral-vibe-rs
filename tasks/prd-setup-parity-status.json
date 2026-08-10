@@ -54,10 +54,10 @@
     {
       "id": "EP-057",
       "title": "The Divergence Ledger and the Scorecard",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 2,
-      "stories_done": 0,
+      "stories_done": 2,
       "stories_in_review": 0
     }
   ],
@@ -282,25 +282,25 @@
       "id": "US-198",
       "title": "Record the licensing and form divergences",
       "epic": "EP-057",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": ["US-194", "US-197"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
     },
     {
       "id": "US-199",
       "title": "Remeasure and restate the scorecard",
       "epic": "EP-057",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": ["US-198"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
     }
   ]
 }
