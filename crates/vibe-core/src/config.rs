@@ -275,6 +275,19 @@ impl ConfigSnapshot {
         self.string_array("disabled_skills")
     }
 
+    /// Whether the registry-skills experiment is enabled.
+    ///
+    /// Reference `experimental_enable_registry_skills` has exactly one
+    /// occurrence upstream, its own declaration; here the key gates the ported
+    /// registry subtree, which stays dormant behind it.
+    #[must_use]
+    pub fn registry_skills_enabled(&self) -> bool {
+        self.effective
+            .get("experimental_enable_registry_skills")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
     /// The string entries of a top-level array key, skipping anything that is
     /// not a string so one mistyped entry cannot take the session down.
     fn string_array(&self, key: &str) -> Vec<String> {
