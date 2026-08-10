@@ -20,6 +20,7 @@ mod hydration;
 pub mod input;
 pub mod interaction;
 pub mod narrator;
+pub mod onboarding;
 #[cfg(test)]
 mod onboarding_parity_tests;
 mod path_mentions;
@@ -94,8 +95,8 @@ use self::runtime::{
     teleport_available,
 };
 use self::setup::{
-    EnvironmentThemeDetector, NotificationPreference, PersistedCredentialStore, ResolvedTheme,
-    SetupCompletion, SetupFlow, TerminalThemeDetector, Theme, resolve_theme,
+    EnvironmentThemeDetector, PersistedCredentialStore, ResolvedTheme, TerminalThemeDetector,
+    Theme, resolve_theme,
 };
 use self::shell::{finish_shell, interrupt_shell};
 use self::state::{EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiState};
@@ -121,6 +122,10 @@ pub struct InteractiveExit {
     pub initialization_error: Option<CliError>,
     /// Reference `SessionExitSummary`, printed after the terminal is restored.
     pub summary: Option<exit::SessionExitSummary>,
+    /// A process exit code the flow decided before any session started, which
+    /// is how a cancelled onboarding exits 0 and an unusable key variable
+    /// exits 1, as the reference's `run_onboarding` callers do.
+    pub exit_code: Option<u8>,
 }
 
 const MAX_FATAL_INPUT_DRAIN: usize = 256;
@@ -190,6 +195,7 @@ pub async fn run_interactive(
             session_started: false,
             initialization_error: None,
             summary: None,
+            exit_code: None,
         });
     }
     if !startup::resolve_location_safety(trust.dangerous_warning.as_deref())? {
@@ -197,6 +203,7 @@ pub async fn run_interactive(
             session_started: false,
             initialization_error: None,
             summary: None,
+            exit_code: None,
         });
     }
     match startup::resolve_bare_resume(&arguments, &startup_host)? {
@@ -211,28 +218,58 @@ pub async fn run_interactive(
                 session_started: false,
                 initialization_error: None,
                 summary: None,
+                exit_code: None,
             });
         }
     }
     let vibe_home = startup::vibe_home_directory(&arguments, &working_directory);
-    // The shipped Mistral provider is the only Mistral-backend entry the flow
-    // selects, and it is the one the default key variable belongs to.
-    let credential_store = PersistedCredentialStore::new(
-        vibe_core::config::global_env_file(&vibe_home),
-        arguments.provider_style == "mistral",
-    );
-    let initial_credential = if arguments.setup {
-        None
-    } else {
-        // The process environment first, then `{vibe_home}/.env`, then the
-        // keyring under the shared service names: a key the operator keeps in
-        // the dotenv file is as usable here as an exported one, and a keyring
-        // that cannot be reached reads as absent, as the reference reads it.
+    let credential_store =
+        PersistedCredentialStore::new(vibe_core::config::global_env_file(&vibe_home));
+    // The process environment first, then `{vibe_home}/.env`, then the
+    // keyring under the shared service names: a key the operator keeps in
+    // the dotenv file is as usable here as an exported one, and a keyring
+    // that cannot be reached reads as absent, as the reference reads it.
+    let resolve_credential = |store: &PersistedCredentialStore| {
         vibe_core::config::DotenvValues::global(&vibe_home)
             .variable(&arguments.credential_environment)
             .filter(|credential| !credential.is_empty())
-            .or_else(|| credential_store.resolve(&arguments.credential_environment))
+            .or_else(|| store.resolve(&arguments.credential_environment))
     };
+    let mut initial_credential = resolve_credential(&credential_store);
+    // Reference `run_cli` and `load_config_orchestrator_or_exit`: `--setup`
+    // always runs the onboarding screens and exits afterward, and an
+    // interactive launch with no resolvable credential runs them and then
+    // continues into the session it can now start.
+    if arguments.setup || initial_credential.is_none() {
+        match onboarding::run_onboarding(
+            &arguments,
+            &working_directory,
+            &vibe_home,
+            &credential_store,
+        )
+        .await?
+        {
+            onboarding::OnboardingConclusion::Exit(code) => {
+                return Ok(InteractiveExit {
+                    session_started: false,
+                    initialization_error: None,
+                    summary: None,
+                    exit_code: Some(code),
+                });
+            }
+            onboarding::OnboardingConclusion::Continue if arguments.setup => {
+                return Ok(InteractiveExit {
+                    session_started: false,
+                    initialization_error: None,
+                    summary: None,
+                    exit_code: None,
+                });
+            }
+            onboarding::OnboardingConclusion::Continue => {
+                initial_credential = resolve_credential(&credential_store);
+            }
+        }
+    }
     let release3 = startup_host
         .into_release3(arguments.trust)
         .map_err(startup::StartupError::from)?;
@@ -247,6 +284,7 @@ pub async fn run_interactive(
             session_started: false,
             initialization_error: None,
             summary: None,
+            exit_code: None,
         });
     }
     let update_checks_enabled = startup::update_checks_enabled(&release3);
@@ -274,7 +312,11 @@ pub async fn run_interactive(
     if runtime.is_none() {
         push_local_notice(
             &mut state,
-            "Setup is required before starting a session. Restart with --setup to store an API key in the native keyring.",
+            &format!(
+                "No API key resolved for {}. Set it in your environment or in the global .env \
+                 under the vibe home, then restart.",
+                arguments.credential_environment
+            ),
             EntryStatus::Completed,
         );
     }
@@ -322,11 +364,6 @@ pub async fn run_interactive(
                 .map(|skill| (skill.name.as_str(), skill.description.as_str())),
         );
     }
-    let mut setup_flow = arguments.setup.then(|| new_setup_flow(&arguments));
-    let mut secret_input = false;
-    if let Some(setup) = &setup_flow {
-        push_local_notice(&mut state, &setup.prompt(), EntryStatus::Completed);
-    }
     let no_color = std::env::var_os("NO_COLOR").is_some();
     let detected_theme = EnvironmentThemeDetector.detect();
     let mut theme = resolve_theme(
@@ -368,15 +405,12 @@ pub async fn run_interactive(
             shortcuts::KeyContext {
                 arguments: &arguments,
                 working_directory: &working_directory,
-                credential_store: &credential_store,
                 runtime: &mut runtime,
                 active: &mut active,
                 state: &mut state,
                 controls: &mut controls,
                 prompt_history: &mut prompt_history,
                 input: &mut input,
-                setup_flow: &mut setup_flow,
-                secret_input: &mut secret_input,
                 theme: &mut theme,
                 terminal_guard: &mut terminal_guard,
                 terminal: &mut terminal,
@@ -491,7 +525,7 @@ pub async fn run_interactive(
                         UiContext {
                             cwd: &working_directory,
                             agent_name: &border_title,
-                            secret_input,
+                            secret_input: false,
                             safety: input.safety(),
                             switching: input.switching(),
                             feedback_active: input.feedback_active(),
@@ -760,6 +794,7 @@ pub async fn run_interactive(
         session_started,
         initialization_error,
         summary,
+        exit_code: None,
     })
 }
 
@@ -1174,73 +1209,6 @@ fn is_exit_command(command: &str) -> bool {
     command.trim() == "/exit"
 }
 
-fn new_setup_flow(arguments: &Arguments) -> SetupFlow {
-    SetupFlow::new(
-        arguments.provider_style.clone(),
-        arguments.credential_environment.clone(),
-        arguments.trust,
-        arguments.model.clone(),
-    )
-}
-
-fn persist_setup(
-    arguments: &Arguments,
-    working_directory: &Path,
-    completion: &SetupCompletion,
-) -> Result<(), CliError> {
-    let release3 = release3_service(arguments, working_directory)?;
-    let notifications = match completion.preferences.notifications {
-        NotificationPreference::Off => "off",
-        NotificationPreference::WhenUnfocused => "unfocused",
-        NotificationPreference::Always => "always",
-    };
-    let mut mutations = vec![
-        json!({"path": ["provider"], "value": completion.resources.provider}),
-        json!({"path": ["active_model"], "value": completion.resources.model}),
-        json!({"path": ["thinking"], "value": completion.resources.thinking}),
-        json!({"path": ["theme"], "value": completion.preferences.theme}),
-        json!({"path": ["notifications"], "value": notifications}),
-        json!({
-            "path": ["enable_update_checks"],
-            "value": completion.preferences.update_checks,
-        }),
-    ];
-    match &completion.resources.proxy {
-        Some(proxy) => mutations.push(json!({"path": ["proxy"], "value": proxy})),
-        None => mutations.push(json!({"path": ["proxy"], "remove": true})),
-    }
-    match &completion.resources.certificate_path {
-        Some(path) => mutations.push(json!({
-            "path": ["tls_ca_path"],
-            "value": path.to_string_lossy(),
-        })),
-        None => mutations.push(json!({"path": ["tls_ca_path"], "remove": true})),
-    }
-    let params = BTreeMap::from([(
-        "writes".to_owned(),
-        json!([{
-            "target": "user",
-            "mutations": mutations,
-        }]),
-    )]);
-    release3
-        .dispatch("config/batchWrite", &params)
-        .map_err(|error| CliError::Terminal(error.to_string()))?;
-    // Reference `run_onboarding` persists the provider the flow authenticated
-    // against; an entry the flow left identical is not written at all. The
-    // credential persisted earlier in the flow is durable either way, so a
-    // failure here reports the provider error without rolling it back.
-    if let Some(provider) = release3
-        .effective_provider(&completion.resources.provider)
-        .map_err(|error| CliError::Terminal(error.to_string()))?
-    {
-        release3
-            .persist_provider(&provider)
-            .map_err(|error| CliError::Terminal(error.to_string()))?;
-    }
-    Ok(())
-}
-
 /// Releasing the pointer over the transcript either activates the link under a
 /// plain click or settles a drag selection, auto-copying it when the reference
 /// preference is on. Every external effect is scoped: a failure is reported and
@@ -1524,16 +1492,6 @@ struct StartupPreferences {
     mode: String,
     reasoning_effort: Option<String>,
     vibe_code_enabled: bool,
-}
-
-fn release3_service(
-    arguments: &Arguments,
-    working_directory: &Path,
-) -> Result<Release3Service, CliError> {
-    startup::startup_host(arguments, working_directory)
-        .into_release3(arguments.trust)
-        .map_err(startup::StartupError::from)
-        .map_err(CliError::from)
 }
 
 fn startup_preferences(

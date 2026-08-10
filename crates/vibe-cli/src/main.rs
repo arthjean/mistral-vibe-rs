@@ -74,7 +74,10 @@ async fn main() -> ExitCode {
                     if let Some(error) = initialization_error {
                         eprintln!("Startup closed after initialization failure: {error}");
                     }
-                    ExitCode::SUCCESS
+                    match exit.exit_code {
+                        Some(code) => ExitCode::from(code),
+                        None => ExitCode::SUCCESS,
+                    }
                 }
                 Err(error) => {
                     eprintln!("{error}");

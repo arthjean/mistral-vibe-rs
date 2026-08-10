@@ -27,7 +27,7 @@ use super::input::{ExternalEditorPort, PromptEditor, SystemExternalEditor};
 use super::path_normalization::PathNormalizationManager;
 use super::prompt::PromptContext;
 use super::remote_project_workflow::{handle_project_action, handle_teleport_push_response};
-use super::setup::{CredentialStore, ResolvedTheme, SetupFlow, SetupProgress};
+use super::setup::ResolvedTheme;
 use super::shell::interrupt_shell;
 use super::state::{EntryStatus, TuiState};
 use super::submission::restore_draft;
@@ -39,7 +39,7 @@ use super::workflow::{
 use super::{
     ActiveTurn, Arguments, CliError, InteractiveRuntime, callback, copy_transcript_selection,
     emit_attention, exit, feedback, interaction, is_exit_command, page_older_debug_logs,
-    page_older_history, persist_setup, push_local_notice, render, request_active_turn_interrupt,
+    page_older_history, push_local_notice, render, request_active_turn_interrupt,
     settle_transcript_pointer, stop_narration, submission, suspend_session, teleport_available,
     unix_millis,
 };
@@ -48,15 +48,12 @@ use super::{
 pub(super) struct KeyContext<'a> {
     pub arguments: &'a Arguments,
     pub working_directory: &'a Path,
-    pub credential_store: &'a dyn CredentialStore,
     pub runtime: &'a mut Option<InteractiveRuntime>,
     pub active: &'a mut Option<ActiveTurn>,
     pub state: &'a mut TuiState,
     pub controls: &'a mut ControlState,
     pub prompt_history: &'a mut PromptHistory,
     pub input: &'a mut ChatInputState,
-    pub setup_flow: &'a mut Option<SetupFlow>,
-    pub secret_input: &'a mut bool,
     pub theme: &'a mut ResolvedTheme,
     pub terminal_guard: &'a mut TerminalGuard<CrosstermOps<std::io::Stdout>>,
     pub terminal: &'a mut Terminal<CrosstermBackend<std::io::Stdout>>,
@@ -150,7 +147,7 @@ async fn handle_mouse(kind: MouseEventKind, column: u16, row: u16, context: &mut
             let editor_cell = render::editor_mouse_cell(
                 context.input.editor(),
                 screen,
-                *context.secret_input,
+                false,
                 context.input.mode(),
                 column,
                 row,
@@ -193,7 +190,6 @@ pub(super) async fn handle_key(
     key: KeyEvent,
     context: &mut KeyContext<'_>,
 ) -> Result<bool, CliError> {
-    context.input.set_secret_input(*context.secret_input);
     context
         .input
         .set_teleport_available(teleport_available(context.runtime.as_ref()));
@@ -405,12 +401,6 @@ async fn interrupt_or_quit(key: KeyEvent, context: &mut KeyContext<'_>) -> Resul
 }
 
 fn open_external_editor(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<(), CliError> {
-    if *context.secret_input {
-        context
-            .state
-            .push_diagnostic("External editing is disabled while entering a secret");
-        return Ok(());
-    }
     let effects = context.compose_key(key);
     let Some(text) = effects.into_iter().find_map(|effect| match effect {
         InputEffect::OpenExternalEditor { text } => Some(text),
@@ -479,13 +469,8 @@ async fn navigate(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, C
         KeyCode::PageDown => {
             context.state.scroll_down(10);
         }
-        KeyCode::Tab if !*context.secret_input => {
-            context.compose_key(key);
-        }
         KeyCode::Tab => {
-            context
-                .state
-                .push_diagnostic("Completion is disabled while entering a secret");
+            context.compose_key(key);
         }
         KeyCode::Backspace
         | KeyCode::Delete
@@ -543,7 +528,7 @@ async fn escape(key: KeyEvent, context: &mut KeyContext<'_>) {
     }
 }
 
-/// `Enter`: resume a paused queue, advance setup, or route one submitted line.
+/// `Enter`: resume a paused queue or route one submitted line.
 async fn submit(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, CliError> {
     if resume_paused_queue(context.input.editor(), context.state) {
         return Ok(false);
@@ -551,9 +536,6 @@ async fn submit(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, Cli
     let Some(submitted) = take_submission(key, context) else {
         return Ok(false);
     };
-    if context.setup_flow.is_some() {
-        return advance_setup(&submitted, context);
-    }
     let runtime_busy = context.active.is_some()
         || context.shell_running()
         || context.state.prompt_queue.is_paused();
@@ -635,14 +617,8 @@ async fn submit(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, Cli
     Ok(false)
 }
 
-/// Takes the submitted line out of the composer. Setup answers and secrets never
-/// reach the prompt history.
+/// Takes the submitted line out of the composer.
 fn take_submission(key: KeyEvent, context: &mut KeyContext<'_>) -> Option<String> {
-    if context.setup_flow.is_some() || *context.secret_input {
-        let submitted = context.input.take_unrecorded();
-        context.refresh_composer();
-        return submitted;
-    }
     let effects = context.compose_key(key);
     for entry in effects.iter().filter_map(|effect| match effect {
         InputEffect::RecordHistory { entry } => Some(entry),
@@ -656,45 +632,6 @@ fn take_submission(key: KeyEvent, context: &mut KeyContext<'_>) -> Option<String
     });
     debug_assert!(submitted.is_none() || context.input.editor().text().is_empty());
     submitted
-}
-
-/// Feeds one answer to the setup flow. A setup flow only exists because
-/// `--setup` requested one, so completing it ends the session instead of
-/// rebuilding a runtime the operator never started.
-fn advance_setup(submitted: &str, context: &mut KeyContext<'_>) -> Result<bool, CliError> {
-    let Some(setup) = context.setup_flow.as_mut() else {
-        return Ok(false);
-    };
-    match setup
-        .submit(submitted, context.credential_store)
-        .map_err(|error| CliError::Terminal(error.to_string()))
-    {
-        Ok(SetupProgress::Continue {
-            prompt,
-            secret_input,
-        }) => {
-            *context.secret_input = secret_input;
-            context.input.set_secret_input(secret_input);
-            push_local_notice(context.state, &prompt, EntryStatus::Completed);
-        }
-        Ok(SetupProgress::Complete(completion)) => {
-            *context.secret_input = false;
-            context.input.set_secret_input(false);
-            persist_setup(context.arguments, context.working_directory, &completion)?;
-            push_local_notice(
-                context.state,
-                "Setup complete. Credentials and preferences were saved.",
-                EntryStatus::Completed,
-            );
-            return Ok(true);
-        }
-        Err(error) => {
-            let prompt = setup.prompt();
-            context.state.push_diagnostic(error.to_string());
-            push_local_notice(context.state, &prompt, EntryStatus::Completed);
-        }
-    }
-    Ok(false)
 }
 
 pub(super) fn copy_prompt_selection(editor: &PromptEditor, state: &mut TuiState) -> bool {

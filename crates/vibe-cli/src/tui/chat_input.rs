@@ -258,12 +258,6 @@ impl ChatInputState {
         self.replace_text(normalized);
     }
 
-    pub(crate) fn take_unrecorded(&mut self) -> Option<String> {
-        self.completion.cancel();
-        self.mode = InputMode::Prompt;
-        self.editor.take_unrecorded()
-    }
-
     pub fn replace_text(&mut self, text: impl Into<String>) {
         self.editor.set_text(text);
         self.mode = mode_from_text(self.editor.text(), self.teleport_available());
