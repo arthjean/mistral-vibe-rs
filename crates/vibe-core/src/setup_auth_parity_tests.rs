@@ -29,6 +29,9 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::auth::testing::{ScriptedBackend, ScriptedError, scripted};
+use crate::auth::{self, KeyringStore, PersistOutcome, RemoveError};
+use crate::config::DotenvValues;
 use crate::config::registry::default_document;
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
@@ -57,18 +60,6 @@ const MINIMUM_URL_CASES: usize = 29;
 /// the stories that retire it.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
-        "authState/*",
-        "PENDING US-183: the port decides credential presence inline and binary in \
-         crates/vibe-cli/src/tui/mod.rs and publishes no six-state provenance assessment to \
-         compare",
-    ),
-    (
-        "persistence/*",
-        "PENDING US-184 and US-185: the port stores under the service name `mistral-vibe-rs`, \
-         has no legacy read or migration, collapses every keyring failure into one error \
-         instead of falling back to the global dotenv, and ships no removal path",
-    ),
-    (
         "signInProtocol/*",
         "PENDING US-187 and US-189: no sign-in gateway, no polling state machine and no \
          event vocabulary exist anywhere in crates/",
@@ -86,11 +77,10 @@ const DIVERGENCES: &[(&str, &str)] = &[
     ),
     (
         "constants/*",
-        "PENDING US-184 (keyring service names live in the CLI adapter as `mistral-vibe-rs`), \
-         US-187 (endpoint paths, challenge method, HTTP vocabulary and PKCE), US-188 (default \
-         port table) and US-189 (poll cadence and status vocabulary): vibe-core publishes no \
-         auth module to answer them; the three registry-backed defaults below are compared \
-         for real and conform",
+        "PENDING US-187 (endpoint paths, challenge method, HTTP vocabulary and PKCE), US-188 \
+         (default port table) and US-189 (poll cadence and status vocabulary): the sign-in \
+         flow is EP-054 work; the registry-backed defaults and the vibe_core::auth service \
+         names are compared for real and conform",
     ),
 ];
 
@@ -151,15 +141,10 @@ struct Pkce {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct AuthStateCase {
     case: String,
-    #[expect(dead_code, reason = "US-183's assessment replays the scenario inputs")]
     env_key_kind: String,
-    #[expect(dead_code, reason = "US-183's assessment replays the scenario inputs")]
     had_value_before_dotenv_load: bool,
-    #[expect(dead_code, reason = "US-183's assessment replays the scenario inputs")]
     process_env: Option<String>,
-    #[expect(dead_code, reason = "US-183's assessment replays the scenario inputs")]
     keyring: Option<String>,
-    #[expect(dead_code, reason = "US-183's assessment replays the scenario inputs")]
     dotenv: String,
     /// The six-state verdict, absent when the reference raised instead.
     #[serde(default)]
@@ -169,7 +154,6 @@ struct AuthStateCase {
     #[serde(default)]
     sign_out_available: Option<bool>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-183 compares the reported key variable")]
     reported_env_key: Option<String>,
     #[serde(default)]
     raised: Option<String>,
@@ -180,30 +164,22 @@ struct AuthStateCase {
 struct PersistenceCase {
     case: String,
     op: String,
-    #[expect(dead_code, reason = "US-184 and US-185 replay the scenario inputs")]
     env_key: String,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-185 compares the telemetry flag")]
     custom_domain: Option<bool>,
     #[serde(default)]
     outcome: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-185 compares the save-error shape")]
     outcome_detail_present: Option<bool>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-185 compares the process environment effect")]
     process_env_value: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-185 compares the dotenv effect")]
     dotenv_value: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-184 compares the stored services")]
     keyring_stored: Option<BTreeMap<String, String>>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-184 compares the ordered primitive calls")]
     keyring_calls: Option<Vec<String>>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-185 compares the telemetry events")]
     telemetry: Option<Vec<Value>>,
     #[serde(default)]
     raised: Option<String>,
@@ -481,17 +457,29 @@ fn run_constants(corpus: &Constants) -> usize {
         &corpus.default_env_key,
         &string_field("api_key_env_var"),
     );
-    report.pending(
+    report.check(
         "constants",
         "keyringService",
-        corpus.keyring_service.clone(),
-        "US-184",
+        "service name",
+        &corpus.keyring_service,
+        &auth::KEYRING_SERVICE.to_owned(),
     );
-    report.pending(
+    report.check(
         "constants",
         "legacyKeyringServices",
-        format!("{:?}", corpus.legacy_keyring_services),
-        "US-184",
+        "reference legacy read set",
+        &corpus.legacy_keyring_services,
+        &auth::LEGACY_KEYRING_SERVICES
+            .iter()
+            .map(|service| (*service).to_owned())
+            .collect::<Vec<_>>(),
+    );
+    report.check(
+        "constants",
+        "defaultEnvKeyConstant",
+        "auth module default",
+        &corpus.default_env_key,
+        &auth::DEFAULT_MISTRAL_API_ENV_KEY.to_owned(),
     );
     report.pending(
         "constants",
@@ -556,6 +544,81 @@ fn run_constants(corpus: &Constants) -> usize {
     settle(&report, "constants")
 }
 
+/// The custom key variable the capture uses for the unsupported-provider rows.
+const CUSTOM_ENV_KEY: &str = "ORACLE_CUSTOM_KEY";
+
+fn case_env_key(kind: &str, case: &str) -> &'static str {
+    match kind {
+        "default" => auth::DEFAULT_MISTRAL_API_ENV_KEY,
+        "custom" => CUSTOM_ENV_KEY,
+        "empty" => "",
+        other => panic!("authState/{case} records unknown envKeyKind {other}"),
+    }
+}
+
+/// Builds the scenario's dotenv path inside `root`, mirroring the capture's
+/// `absent`, `value`, `empty`, `directory` and `unreadable` states.
+fn stage_dotenv(root: &Path, state: &str, env_key: &str, case: &str) -> PathBuf {
+    let env_path = root.join("global.env");
+    match state {
+        "absent" => {}
+        "value" => fs::write(&env_path, format!("{env_key}=oracle-dotenv-value\n"))
+            .expect("the dotenv fixture writes"),
+        "empty" => {
+            fs::write(&env_path, format!("{env_key}=\n")).expect("the dotenv fixture writes");
+        }
+        "directory" => fs::create_dir(&env_path).expect("the dotenv directory fixture creates"),
+        "unreadable" => {
+            fs::write(&env_path, format!("{env_key}=oracle-dotenv-value\n"))
+                .expect("the dotenv fixture writes");
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(&env_path, fs::Permissions::from_mode(0o000))
+                    .expect("the dotenv fixture chmods");
+            }
+        }
+        other => panic!("authState/{case} records unknown dotenv state {other}"),
+    }
+    env_path
+}
+
+fn observed_auth_state(case: &AuthStateCase) -> String {
+    let env_key = case_env_key(&case.env_key_kind, &case.case);
+    let temporary = tempfile::tempdir().expect("a scenario scratch directory");
+    let env_path = stage_dotenv(temporary.path(), &case.dotenv, env_key, &case.case);
+    let mut environ = BTreeMap::new();
+    if let Some(value) = &case.process_env {
+        environ.insert(env_key.to_owned(), value.clone());
+    }
+    let seeded: Vec<(&str, &str)> = case
+        .keyring
+        .as_deref()
+        .map(|value| vec![(auth::KEYRING_SERVICE, value)])
+        .unwrap_or_default();
+    let store = KeyringStore::new(Box::new(scripted(&seeded, None, None, &[])));
+    let outcome = auth::assess_auth_state(
+        env_key,
+        &env_path,
+        &environ,
+        case.had_value_before_dotenv_load,
+        &store,
+    );
+    match outcome {
+        Ok(state) => format!(
+            "{} canUse={} signOut={} envKey={}",
+            state.kind.as_str(),
+            state.can_use_active_provider,
+            state.sign_out_available,
+            state.env_key.as_deref().unwrap_or("<none>"),
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            "raised PermissionError".to_owned()
+        }
+        Err(error) => format!("raised {:?}", error.kind()),
+    }
+}
+
 fn run_auth_state(cases: &[AuthStateCase]) -> usize {
     let kinds = cases
         .iter()
@@ -576,11 +639,19 @@ fn run_auth_state(cases: &[AuthStateCase]) -> usize {
     }
     let mut report = Report::default();
     for case in cases {
+        if cfg!(not(unix)) && case.dotenv == "unreadable" {
+            println!(
+                "setup-auth: authState/{} skipped: an unreadable file needs unix permissions",
+                case.case
+            );
+            continue;
+        }
         let expected = match (&case.kind, &case.raised) {
             (Some(kind), _) => format!(
-                "{kind} canUse={} signOut={}",
+                "{kind} canUse={} signOut={} envKey={}",
                 case.can_use_active_provider.unwrap_or_default(),
                 case.sign_out_available.unwrap_or_default(),
+                case.reported_env_key.as_deref().unwrap_or("<none>"),
             ),
             (None, Some(raised)) => format!("raised {raised}"),
             (None, None) => panic!(
@@ -588,29 +659,365 @@ fn run_auth_state(cases: &[AuthStateCase]) -> usize {
                 case.case
             ),
         };
-        report.pending("authState", &case.case, expected, "US-183");
+        let observed = observed_auth_state(case);
+        report.check("authState", &case.case, "assessment", &expected, &observed);
     }
     settle(&report, "authState")
+}
+
+/// Drops the calls that reach the prior-build service `mistral-vibe-rs`: the
+/// reference does not know that name, so the corpus cannot record them, and
+/// consulting it is this port's own deliberate compatibility read (US-184).
+fn without_prior_build_calls(calls: Vec<String>) -> Vec<String> {
+    calls
+        .into_iter()
+        .filter(|call| call.split(':').nth(1) != Some(auth::PRIOR_BUILD_KEYRING_SERVICE))
+        .collect()
+}
+
+/// Makes the dotenv at `path` readable but not replaceable.
+fn lock_dotenv(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let parent = path.parent().expect("the dotenv sits in a directory");
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o500))
+            .expect("the dotenv parent chmods");
+    }
+    #[cfg(not(unix))]
+    {
+        let mut permissions = fs::metadata(path)
+            .expect("the seeded dotenv exists")
+            .permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(path, permissions).expect("the dotenv chmods");
+    }
+}
+
+/// Undoes [`lock_dotenv`], so the scratch directory can still be cleaned up.
+fn unlock_dotenv(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let parent = path.parent().expect("the dotenv sits in a directory");
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700))
+            .expect("the dotenv parent chmods back");
+    }
+    #[cfg(not(unix))]
+    {
+        let mut permissions = fs::metadata(path)
+            .expect("the seeded dotenv exists")
+            .permissions();
+        permissions.set_readonly(false);
+        fs::set_permissions(path, permissions).expect("the dotenv chmods back");
+    }
+}
+
+fn read_dotenv_value(path: &Path, env_key: &str) -> Option<String> {
+    if env_key.is_empty() {
+        return None;
+    }
+    DotenvValues::load(path)
+        .file_variable(env_key)
+        .map(str::to_owned)
+}
+
+fn corpus_telemetry_flags(case: &PersistenceCase) -> Vec<bool> {
+    case.telemetry
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|event| {
+            event
+                .get("customDomain")
+                .and_then(Value::as_bool)
+                .unwrap_or_default()
+        })
+        .collect()
+}
+
+fn persist_line(
+    outcome: &str,
+    detail_present: bool,
+    process_env: Option<&str>,
+    dotenv: Option<&str>,
+    stored: &BTreeMap<String, String>,
+    calls: &[String],
+    telemetry: &[bool],
+) -> String {
+    format!(
+        "outcome={outcome} detailPresent={detail_present} processEnv={process_env:?} \
+         dotenv={dotenv:?} stored={stored:?} calls={calls:?} telemetry={telemetry:?}"
+    )
+}
+
+fn replay_persist_case(case: &PersistenceCase) -> (String, String) {
+    let (set_error, seed_stale, break_parent, break_unset) = match case.case.as_str() {
+        "persist-keyring-success-removes-stale-dotenv" => (None, true, false, false),
+        "persist-keyring-success-custom-domain-telemetry" => (None, false, false, false),
+        "persist-keyring-failure-falls-back-to-dotenv" => {
+            (Some(ScriptedError::Backend), false, false, false)
+        }
+        "persist-no-backend-falls-back-to-dotenv" => {
+            (Some(ScriptedError::NoBackend), false, false, false)
+        }
+        "persist-empty-env-var" => (None, false, false, false),
+        "persist-keyring-and-dotenv-both-fail" => {
+            (Some(ScriptedError::Backend), false, true, false)
+        }
+        "persist-stale-dotenv-removal-failure-still-completes" => (None, true, false, true),
+        other => panic!("persistence/{other} has no scripted replay; add it beside the capture"),
+    };
+    let temporary = tempfile::tempdir().expect("a scenario scratch directory");
+    let env_file = if break_parent {
+        // The env-file parent is a *file*, so the fallback mkdir fails.
+        let blocked = temporary.path().join("not-a-directory");
+        fs::write(&blocked, "occupied").expect("the blocking file writes");
+        blocked.join("nested").join(".env")
+    } else {
+        temporary.path().join(".env")
+    };
+    if seed_stale {
+        fs::write(&env_file, format!("{}=stale-dotenv-copy\n", case.env_key))
+            .expect("the stale dotenv seeds");
+    }
+    // The capture injects the removal failure by raising `OSError` out of
+    // `unset_key`, so the replay has to reach the same failure without
+    // depending on how this port happens to rewrite the file: a location whose
+    // contents can be read but not replaced. On unix that is a parent the
+    // staging file cannot be created in, and elsewhere a destination the move
+    // is refused over.
+    if break_unset {
+        lock_dotenv(&env_file);
+    }
+    let backend = scripted(&[], set_error, None, &[]);
+    let store = KeyringStore::new(Box::new(backend.clone()));
+    let mut process_env: BTreeMap<String, String> = BTreeMap::new();
+    let report = auth::persist_api_key(
+        &case.env_key,
+        true,
+        "oracle-api-key",
+        case.custom_domain.unwrap_or_default(),
+        &mut process_env,
+        &env_file,
+        &store,
+    );
+    if break_unset {
+        unlock_dotenv(&env_file);
+    }
+    let full = report.outcome.as_reference_string();
+    let detail_present = full
+        .split_once(':')
+        .is_some_and(|(_, detail)| !detail.is_empty());
+    let observed_outcome = if matches!(report.outcome, PersistOutcome::SaveError { .. }) {
+        // The save_error detail is an OS-authored sentence and is not
+        // deterministic across machines, so only its kind commits.
+        "save_error".to_owned()
+    } else {
+        full.clone()
+    };
+    let observed = persist_line(
+        &observed_outcome,
+        detail_present,
+        process_env.get(&case.env_key).map(String::as_str),
+        read_dotenv_value(&env_file, &case.env_key).as_deref(),
+        &backend.stored(),
+        &without_prior_build_calls(backend.calls()),
+        &report
+            .telemetry
+            .iter()
+            .map(|event| event.custom_domain)
+            .collect::<Vec<_>>(),
+    );
+    let expected = persist_line(
+        case.outcome.as_deref().unwrap_or("<unrecorded>"),
+        case.outcome_detail_present.unwrap_or_default(),
+        case.process_env_value.as_deref(),
+        case.dotenv_value.as_deref(),
+        case.keyring_stored.as_ref().unwrap_or(&BTreeMap::new()),
+        case.keyring_calls.as_deref().unwrap_or_default(),
+        &corpus_telemetry_flags(case),
+    );
+    (expected, observed)
+}
+
+fn remove_line(
+    raised: Option<&str>,
+    process_env: Option<&str>,
+    dotenv: Option<&str>,
+    stored: &BTreeMap<String, String>,
+    calls: &[String],
+) -> String {
+    format!(
+        "raised={raised:?} processEnv={process_env:?} dotenv={dotenv:?} stored={stored:?} \
+         calls={calls:?}"
+    )
+}
+
+fn replay_remove_case(case: &PersistenceCase) -> (String, String) {
+    let backend = match case.case.as_str() {
+        "remove-clears-both-services-dotenv-and-environ" => scripted(
+            &[
+                (auth::KEYRING_SERVICE, "current-value"),
+                ("vibe", "legacy-value"),
+            ],
+            None,
+            None,
+            &[],
+        ),
+        "remove-with-nothing-stored-is-a-no-op" => scripted(&[], None, None, &[]),
+        "remove-with-no-backend-still-clears-the-rest" => scripted(
+            &[],
+            None,
+            None,
+            &[
+                (auth::KEYRING_SERVICE, ScriptedError::NoBackend),
+                ("vibe", ScriptedError::NoBackend),
+            ],
+        ),
+        "remove-with-a-real-backend-error-clears-then-raises" => scripted(
+            &[("vibe", "legacy-value")],
+            None,
+            None,
+            &[(auth::KEYRING_SERVICE, ScriptedError::Backend)],
+        ),
+        "remove-empty-env-var-is-refused" => scripted(&[], None, None, &[]),
+        other => panic!("persistence/{other} has no scripted replay; add it beside the capture"),
+    };
+    let temporary = tempfile::tempdir().expect("a scenario scratch directory");
+    let env_file = temporary.path().join(".env");
+    let mut process_env: BTreeMap<String, String> = BTreeMap::new();
+    if !case.env_key.is_empty() {
+        process_env.insert(case.env_key.clone(), "process-copy".to_owned());
+        fs::write(&env_file, format!("{}=dotenv-copy\n", case.env_key))
+            .expect("the dotenv copy seeds");
+    }
+    let store = KeyringStore::new(Box::new(backend.clone()));
+    let raised = match auth::remove_api_key(&case.env_key, &mut process_env, &env_file, &store) {
+        Ok(()) => None,
+        Err(RemoveError::EmptyEnvKey) => Some("ValueError"),
+        Err(RemoveError::Keyring(_)) => Some("KeyringError"),
+        Err(RemoveError::EnvFile(_)) => Some("OSError"),
+    };
+    let observed = remove_line(
+        raised,
+        process_env.get(&case.env_key).map(String::as_str),
+        read_dotenv_value(&env_file, &case.env_key).as_deref(),
+        &backend.stored(),
+        &without_prior_build_calls(backend.calls()),
+    );
+    let expected = remove_line(
+        case.raised.as_deref(),
+        case.process_env_value.as_deref(),
+        case.dotenv_value.as_deref(),
+        case.keyring_stored.as_ref().unwrap_or(&BTreeMap::new()),
+        case.keyring_calls.as_deref().unwrap_or_default(),
+    );
+    (expected, observed)
+}
+
+fn read_line(value: Option<&str>, stored: &BTreeMap<String, String>, calls: &[String]) -> String {
+    format!("value={value:?} stored={stored:?} calls={calls:?}")
+}
+
+fn replay_keyring_read_case(case: &PersistenceCase) -> (String, String) {
+    let (backend, disabled, read_twice): (std::sync::Arc<ScriptedBackend>, bool, bool) =
+        match case.case.as_str() {
+            "read-resolves-from-the-current-service-first" => (
+                scripted(
+                    &[
+                        (auth::KEYRING_SERVICE, "current-value"),
+                        ("vibe", "legacy-value"),
+                    ],
+                    None,
+                    None,
+                    &[],
+                ),
+                false,
+                false,
+            ),
+            "read-falls-back-to-legacy-and-migrates" => (
+                scripted(&[("vibe", "legacy-value")], None, None, &[]),
+                false,
+                false,
+            ),
+            "read-migration-write-failure-still-returns-the-key" => (
+                scripted(
+                    &[("vibe", "legacy-value")],
+                    Some(ScriptedError::Backend),
+                    None,
+                    &[],
+                ),
+                false,
+                false,
+            ),
+            "read-migration-delete-failure-still-returns-the-key" => (
+                scripted(
+                    &[("vibe", "legacy-value")],
+                    None,
+                    None,
+                    &[("vibe", ScriptedError::Backend)],
+                ),
+                false,
+                false,
+            ),
+            "read-nothing-stored-anywhere" => (scripted(&[], None, None, &[]), false, false),
+            "read-backend-error-reads-as-absent" => (
+                scripted(&[], None, Some(ScriptedError::Backend), &[]),
+                false,
+                false,
+            ),
+            "read-empty-env-key-consults-nothing" => (
+                scripted(&[(auth::KEYRING_SERVICE, "current-value")], None, None, &[]),
+                false,
+                false,
+            ),
+            "read-disabled-consults-nothing" => (
+                scripted(&[(auth::KEYRING_SERVICE, "current-value")], None, None, &[]),
+                true,
+                false,
+            ),
+            "read-second-lookup-is-served-from-the-cache" => (
+                scripted(&[(auth::KEYRING_SERVICE, "current-value")], None, None, &[]),
+                false,
+                true,
+            ),
+            other => {
+                panic!("persistence/{other} has no scripted replay; add it beside the capture")
+            }
+        };
+    let store = if disabled {
+        KeyringStore::disabled(Box::new(backend.clone()))
+    } else {
+        KeyringStore::new(Box::new(backend.clone()))
+    };
+    let mut value = store.get_api_key(&case.env_key);
+    if read_twice {
+        value = store.get_api_key(&case.env_key);
+    }
+    let observed = read_line(
+        value.as_deref(),
+        &backend.stored(),
+        &without_prior_build_calls(backend.calls()),
+    );
+    let expected = read_line(
+        case.value.as_deref(),
+        case.keyring_stored.as_ref().unwrap_or(&BTreeMap::new()),
+        case.keyring_calls.as_deref().unwrap_or_default(),
+    );
+    (expected, observed)
 }
 
 fn run_persistence(cases: &[PersistenceCase]) -> usize {
     let mut report = Report::default();
     for case in cases {
-        let expected = match case.op.as_str() {
-            "persist" => format!(
-                "outcome {}",
-                case.outcome.as_deref().unwrap_or("<unrecorded>")
-            ),
-            "remove" => format!("raised {}", case.raised.as_deref().unwrap_or("nothing")),
-            "keyringRead" => format!("value {}", case.value.as_deref().unwrap_or("none")),
+        let (expected, observed) = match case.op.as_str() {
+            "persist" => replay_persist_case(case),
+            "remove" => replay_remove_case(case),
+            "keyringRead" => replay_keyring_read_case(case),
             other => panic!("persistence/{} records unknown op {other}", case.case),
         };
-        let story = if case.op == "keyringRead" {
-            "US-184"
-        } else {
-            "US-185"
-        };
-        report.pending("persistence", &case.case, expected, story);
+        report.check("persistence", &case.case, "effects", &expected, &observed);
     }
     settle(&report, "persistence")
 }
