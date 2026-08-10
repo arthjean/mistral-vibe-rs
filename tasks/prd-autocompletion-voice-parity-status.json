@@ -18,10 +18,10 @@
     {
       "id": "EP-059",
       "title": "The File Index Watcher and the Incremental Store",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0,
+      "stories_done": 4,
       "stories_in_review": 0
     },
     {
@@ -92,57 +92,57 @@
       "id": "US-202",
       "title": "Watch the workspace under the configured key",
       "epic": "EP-059",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-201"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-11",
+      "completed_at": "2026-08-11",
+      "reviewed_at": "2026-08-11"
     },
     {
       "id": "US-203",
       "title": "Apply changes incrementally",
       "epic": "EP-059",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-202"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-11",
+      "completed_at": "2026-08-11",
+      "reviewed_at": "2026-08-11"
     },
     {
       "id": "US-204",
       "title": "Track index statistics and stop rebuilding per query",
       "epic": "EP-059",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-203"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-11",
+      "completed_at": "2026-08-11",
+      "reviewed_at": "2026-08-11"
     },
     {
       "id": "US-205",
       "title": "Prefilter fuzzy candidates by ASCII mask",
       "epic": "EP-059",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "size": "S",
       "blocked_by": [
         "US-203"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-11",
+      "completed_at": "2026-08-11",
+      "reviewed_at": "2026-08-11"
     },
     {
       "id": "US-206",
