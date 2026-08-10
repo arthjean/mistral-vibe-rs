@@ -10,10 +10,9 @@
 //! reference-authored sentence, which is what `NOTICE` allows. Only the live
 //! recapture probe skips, and it names the pin and the way back when it does.
 //!
-//! The oracle precedes the implementation, so the ledger below is the measured
-//! defect inventory rather than a residue: a family the port cannot answer yet
-//! is one `family/*` entry naming the story that implements it, and the stale
-//! check retires each entry the moment its family conforms. `frontmatter`,
+//! The oracle preceded the implementation, and the ledger below has burned
+//! down to its terminal state: every entry is a decided divergence, and the
+//! stale check retires one the moment its case conforms. `frontmatter`,
 //! `metadata` and `projection` are compared for real since EP-047 landed the
 //! parser, the schema and the whole model. `discovery` and `filtering` are
 //! compared for real since EP-048 landed the five roots, the configured paths
@@ -23,9 +22,13 @@
 //! EP-049 seeded the builtin catalog, so both families now conform whole and
 //! the `builtins` block is compared for real: structure and vocabulary must
 //! match, and the two prose digests must never match, which is the `NOTICE`
-//! boundary enforced mechanically.
+//! boundary enforced mechanically. EP-051 ported the registry store and the
+//! manifests, so `store` and `manifest` are compared for real too, over a
+//! scratch store root per case; the store's fallback description is this
+//! port's own prose, masked in the trees the way the capture masks the
+//! reference's and held permanently unequal by digest.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -38,6 +41,8 @@ use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 use crate::skills::builtins::builtin_skills;
 use crate::skills::parser::{SkillParseErrorKind, parse_skill_markdown};
+use crate::skills::registry::manifest::{ManifestEntry, ManifestVersion, SkillManifest};
+use crate::skills::registry::models::RegistrySkillItem;
 use crate::skills::schema::SkillMetadata;
 use crate::skills::{
     SearchInputs, SkillDiscovery, SkillScope, SkillSource, apply_filters, search_paths,
@@ -59,10 +64,10 @@ const MINIMUM_SCENARIOS: usize = 120;
 /// stale entry, and a case that diverges without an entry fails naming the
 /// family, the case and the observed and expected values.
 ///
-/// A `family/*` entry covers every case of its family, and goes stale only
-/// when the whole family conforms: the oracle shipped before the
-/// implementation, so these entries are the measured backlog of the
-/// skills-parity PRD, each naming the story that retires it.
+/// A `family/*` entry covers every case of its family and goes stale only
+/// when the whole family conforms; none remains, because every entry left is
+/// a decided divergence: the deprecated legacy root and the prose digests
+/// `NOTICE` holds permanently unequal.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
         "discovery/legacy-extensions-root-unread",
@@ -101,12 +106,12 @@ const DIVERGENCES: &[(&str, &str)] = &[
          prose (`NOTICE`), so the delivered content digest can never match the reference's",
     ),
     (
-        "store/*",
-        "PENDING US-176: the registry version store is not ported",
-    ),
-    (
-        "manifest/*",
-        "PENDING US-177: the registry manifests are not ported",
+        "store/fallbackDescription",
+        "ACCEPTED: the store's fallback description is reference-authored prose, so \
+         `vibe_core::skills::registry::store::fallback_description` is this port's own sentence \
+         for the same purpose; the recorded trees mask it as `{fallbackDescription}` on both \
+         sides, and this entry holds the two digests permanently unequal, failing the replay \
+         the moment the sentence conforms",
     ),
 ];
 
@@ -301,103 +306,79 @@ struct ProjectionCase {
 struct StoreFamily {
     /// The store's fallback description, reference-authored prose recorded by
     /// digest and masked as `{fallbackDescription}` in the recorded trees.
-    #[expect(
-        dead_code,
-        reason = "US-176 writes its own fallback and ledgers the digest"
-    )]
     fallback_description: Digested,
     cases: Vec<StoreCase>,
 }
 
 /// One store scenario. The record is heterogeneous by `op`, so every
-/// field beyond the two discriminants is optional; US-176 reads them back.
+/// field beyond the two discriminants is optional.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct StoreCase {
     case: String,
     op: String,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 replays the scenario inputs")]
     id: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 replays the scenario inputs")]
     version: Option<i64>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 replays the scenario inputs")]
     item: Option<Value>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 replays the scenario inputs")]
     name: Option<String>,
+    /// Materializations replayed before the operation, as `{item, name}`
+    /// records.
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 replays the scenario inputs")]
-    prior: Option<Value>,
+    prior: Option<Vec<Value>>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 replays the scenario inputs")]
     fail_write: Option<bool>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 replays the scenario inputs")]
-    active: Option<Value>,
+    active: Option<Vec<(String, i64)>>,
     #[serde(default)]
     error: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 compares the resolved path")]
     rel_path: Option<String>,
     #[serde(default)]
     outcome: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 compares the written tree")]
     tree: Option<Value>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 asserts no staging residue survives")]
     leftover_entries: Option<Vec<String>>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 compares the alias resolution")]
     latest: Option<i64>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-176 compares what pruning left behind")]
     surviving: Option<Vec<String>>,
 }
 
-/// One manifest scenario, heterogeneous the same way; US-177 reads it back.
+/// One manifest scenario, heterogeneous the same way and dispatched on its
+/// case name, because each one drives a different manifest operation.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ManifestCase {
     case: String,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 replays the scenario inputs")]
     version: Option<Value>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 compares the alias projection")]
     alias: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 compares the declared default")]
     default_version_applied: Option<Value>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 compares the entry lists")]
     skills: Option<Value>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 compares the removal verdicts")]
     removed_existing: Option<bool>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 compares the removal verdicts")]
     removed_missing: Option<bool>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 compares the saved document")]
     toml: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 asserts the round trip is lossless")]
     lossless: Option<bool>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 asserts the parent directory is created")]
     created: Option<bool>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 compares the global manifest location")]
     rel_path: Option<String>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 replays the project-root inputs")]
+    #[expect(dead_code, reason = "the input labels are fixed by the scenario")]
     roots: Option<Vec<String>>,
     #[serde(default)]
-    #[expect(dead_code, reason = "US-177 compares the collected project paths")]
     paths: Option<Value>,
 }
 
@@ -465,19 +446,6 @@ impl Report {
         self.divergences.push(format!(
             "{family}/{case}: {field} diverges: reference {expected:?}, port {actual:?}"
         ));
-    }
-
-    /// Records a case the port cannot answer yet as a divergence, so the
-    /// pending family stays visible in the counts and its `family/*` ledger
-    /// entry goes stale the moment a real comparator lands without one.
-    fn pending(&mut self, family: &str, case: &str, expected: String, story: &str) {
-        self.check(
-            family,
-            case,
-            "answer",
-            &expected,
-            &format!("no port counterpart until {story}"),
-        );
     }
 }
 
@@ -885,6 +853,547 @@ fn projection_definition(skill: &Value) -> SkillDefinition {
 }
 
 // --------------------------------------------------------------------------
+// The store and manifest adapters
+// --------------------------------------------------------------------------
+
+/// A [`RegistrySkillItem`] materialized from a store case's compact item
+/// record, exactly as the capture script's `_item` builds one for the
+/// reference: the payload defaults stand in for every field the record does
+/// not spell.
+fn store_item(spec: &Value) -> RegistrySkillItem {
+    let text = |key: &str, default: &str| {
+        spec.get(key)
+            .and_then(Value::as_str)
+            .unwrap_or(default)
+            .to_owned()
+    };
+    let mut assets = serde_json::Map::new();
+    for asset in spec
+        .get("assets")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let path = asset
+            .get("path")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let mut content = serde_json::Map::new();
+        if let Some(body) = asset.get("text").and_then(Value::as_str) {
+            content.insert("textContent".to_owned(), json!(body));
+        } else if let Some(raw) = asset.get("base64").and_then(Value::as_str) {
+            content.insert("rawContent".to_owned(), json!(raw));
+        }
+        content.insert(
+            "isExecutable".to_owned(),
+            json!(
+                asset
+                    .get("executable")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+            ),
+        );
+        assets.insert(path.to_owned(), Value::Object(content));
+    }
+    let mut payload = json!({
+        "skillId": text("skillId", "id-1"),
+        "version": spec.get("version").and_then(Value::as_i64).unwrap_or(1),
+        "skill": {
+            "skillName": text("skillName", ""),
+            "skillDescription": text("description", ""),
+            "skillBody": text("body", "Registry body."),
+            "skillAssets": assets,
+        },
+    });
+    if let Some(name) = spec.get("metadataName").and_then(Value::as_str) {
+        payload["metadata"] = json!({"name": name});
+    }
+    serde_json::from_value(payload).expect("the store item record parses")
+}
+
+/// The recorded form of one directory tree: every file with its relative
+/// path, its content and its execute bits, sorted the way the capture sorts
+/// them. `mask` replaces this port's fallback description the way the capture
+/// replaces the reference's, so the comparison stays about structure.
+fn tree_of(root: &Path, mask: Option<(&str, &str)>) -> Value {
+    let mut files = Vec::new();
+    collect_files(root, root, &mut files);
+    files.sort_by(|a, b| a.0.split('/').cmp(b.0.split('/')));
+    Value::Array(
+        files
+            .into_iter()
+            .map(|(path, content, exec)| {
+                let content = match mask {
+                    Some((needle, marker)) => content.replace(needle, marker),
+                    None => content,
+                };
+                json!({
+                    "path": path,
+                    "content": content,
+                    "exec": {"user": exec.0, "group": exec.1, "other": exec.2},
+                })
+            })
+            .collect(),
+    )
+}
+
+fn collect_files(
+    root: &Path,
+    directory: &Path,
+    files: &mut Vec<(String, String, (bool, bool, bool))>,
+) {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_files(root, &path, files);
+            continue;
+        }
+        let relative = path
+            .strip_prefix(root)
+            .expect("collected files sit under their root")
+            .to_string_lossy()
+            .replace('\\', "/");
+        let content = fs::read_to_string(&path).expect("the collected file is readable text");
+        files.push((relative, content, exec_bits(&path)));
+    }
+}
+
+/// The three execute bits the capture records. Windows has no execute bit, so
+/// the recorded expectation is reproduced there rather than measured, keeping
+/// the comparison about the fields the platform can answer.
+#[cfg(unix)]
+fn exec_bits(path: &Path) -> (bool, bool, bool) {
+    use std::os::unix::fs::PermissionsExt as _;
+    let mode = fs::metadata(path)
+        .expect("the collected file has metadata")
+        .permissions()
+        .mode();
+    (mode & 0o100 != 0, mode & 0o010 != 0, mode & 0o001 != 0)
+}
+
+#[cfg(not(unix))]
+fn exec_bits(_path: &Path) -> (bool, bool, bool) {
+    (false, false, false)
+}
+
+/// Strips the `exec` fields from a recorded answer on platforms that cannot
+/// measure them, so the comparison stays about the fields the platform can
+/// answer.
+fn comparable_tree_fields(answer: &Value) -> Value {
+    if cfg!(unix) {
+        return answer.clone();
+    }
+    let mut answer = answer.clone();
+    strip_exec(&mut answer);
+    answer
+}
+
+fn strip_exec(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            fields.remove("exec");
+            for nested in fields.values_mut() {
+                strip_exec(nested);
+            }
+        }
+        Value::Array(items) => {
+            for nested in items {
+                strip_exec(nested);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The port's answer for one store case, in the shape the corpus records it.
+fn store_answer(case: &StoreCase, fallback: &mut Option<String>) -> Value {
+    use crate::skills::registry::store;
+
+    let scratch = tempfile::tempdir().expect("a scratch store is available");
+    let root = scratch
+        .path()
+        .canonicalize()
+        .expect("the scratch store resolves")
+        .join("store");
+    fs::create_dir_all(&root).expect("the store root is writable");
+    for prior in case.prior.iter().flatten() {
+        let item = store_item(prior.get("item").expect("a prior record carries an item"));
+        let name = prior
+            .get("name")
+            .and_then(Value::as_str)
+            .expect("a prior record carries a name");
+        store::materialize(&root, &item, name).expect("the prior materialization succeeds");
+    }
+
+    match case.op.as_str() {
+        "skillDir" => {
+            let id = case.id.as_deref().unwrap_or_default();
+            let version = case.version.unwrap_or_default();
+            match store::skill_dir(&root, id, version) {
+                Err(store::StoreError::UnsafeId(_)) => json!({"error": "unsafeId"}),
+                Err(error) => json!({"error": error.to_string()}),
+                Ok(path) => {
+                    let resolved = root.canonicalize().unwrap_or_else(|_| root.clone());
+                    json!({
+                        "relPath": path
+                            .strip_prefix(&resolved)
+                            .expect("a safe id resolves under the store root")
+                            .to_string_lossy()
+                            .replace('\\', "/"),
+                    })
+                }
+            }
+        }
+        "materialize" => {
+            let item = store_item(
+                case.item
+                    .as_ref()
+                    .expect("a materialize case carries an item"),
+            );
+            let name = case.name.as_deref().unwrap_or_default();
+            let result = if case.fail_write == Some(true) {
+                store::materialize_with(&root, &item, name, &|_, _| {
+                    Err(std::io::Error::other("scripted write failure"))
+                })
+            } else {
+                store::materialize(&root, &item, name)
+            };
+            let outcome = match &result {
+                Err(_) => "raised",
+                Ok(Some(_)) => "stored",
+                Ok(None) => "skipped",
+            };
+            let version_dir = store::skill_dir(&root, &item.skill_id, item.version)
+                .expect("the recorded ids are safe");
+            let mask = (case.case == "materialize-fallback-description").then(|| {
+                let sentence = store::fallback_description(name);
+                *fallback = Some(sentence.clone());
+                sentence
+            });
+            let tree = if version_dir.is_dir() {
+                tree_of(
+                    &version_dir,
+                    mask.as_deref()
+                        .map(|needle| (needle, "{fallbackDescription}")),
+                )
+            } else {
+                Value::Null
+            };
+            let parent = version_dir
+                .parent()
+                .expect("a version directory has a parent");
+            let mut leftovers: Vec<String> = if parent.is_dir() {
+                fs::read_dir(parent)
+                    .expect("the id directory is readable")
+                    .flatten()
+                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    .filter(|entry| {
+                        Some(entry.as_str())
+                            != version_dir.file_name().and_then(|name| name.to_str())
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            leftovers.sort();
+            json!({"outcome": outcome, "tree": tree, "leftoverEntries": leftovers})
+        }
+        "latestMaterialized" => {
+            let id = case.id.as_deref().unwrap_or_default();
+            json!({
+                "latest": store::latest_materialized(&root, id).expect("the recorded ids are safe"),
+            })
+        }
+        "exportLocal" => {
+            let target = scratch.path().join("exported");
+            store::export_local(
+                &root,
+                case.id.as_deref().unwrap_or_default(),
+                case.version.unwrap_or_default(),
+                &target,
+            )
+            .expect("the recorded export succeeds");
+            json!({"tree": tree_of(&target, None)})
+        }
+        "prune" => {
+            let active: BTreeSet<(String, i64)> = case
+                .active
+                .clone()
+                .unwrap_or_default()
+                .into_iter()
+                .collect();
+            store::prune(&root, &active).expect("the recorded prune succeeds");
+            let mut surviving = Vec::new();
+            collect_files(&root, &root, &mut surviving);
+            let mut surviving: Vec<String> =
+                surviving.into_iter().map(|(path, _, _)| path).collect();
+            surviving.sort_by(|a, b| a.split('/').cmp(b.split('/')));
+            json!({"surviving": surviving})
+        }
+        other => json!({"error": format!("the port has no comparator for op {other:?}")}),
+    }
+}
+
+/// What the corpus recorded for one store case, in the same shape.
+fn store_expected(case: &StoreCase) -> Value {
+    match case.op.as_str() {
+        "skillDir" => match &case.error {
+            Some(error) => json!({"error": error}),
+            None => json!({"relPath": case.rel_path}),
+        },
+        "materialize" => json!({
+            "outcome": case.outcome,
+            "tree": case.tree.clone().unwrap_or(Value::Null),
+            "leftoverEntries": case.leftover_entries.clone().unwrap_or_default(),
+        }),
+        "latestMaterialized" => json!({"latest": case.latest}),
+        "exportLocal" => json!({"tree": case.tree.clone().unwrap_or(Value::Null)}),
+        "prune" => json!({"surviving": case.surviving.clone().unwrap_or_default()}),
+        other => json!({"error": format!("the corpus has no comparator for op {other:?}")}),
+    }
+}
+
+/// The recorded form of a manifest's entries, matching the capture's
+/// `model_dump` of each one.
+fn manifest_entries(manifest: &SkillManifest) -> Value {
+    Value::Array(
+        manifest
+            .skills
+            .iter()
+            .map(|entry| {
+                json!({
+                    "name": entry.name,
+                    "skill_id": entry.skill_id,
+                    "version": match &entry.version {
+                        ManifestVersion::Frozen(version) => json!(version),
+                        ManifestVersion::Alias(alias) => json!(alias),
+                    },
+                    "description": entry.description,
+                })
+            })
+            .collect(),
+    )
+}
+
+fn manifest_entry(name: &str, skill_id: &str, version: ManifestVersion) -> ManifestEntry {
+    ManifestEntry {
+        name: name.to_owned(),
+        skill_id: skill_id.to_owned(),
+        version,
+        description: String::new(),
+    }
+}
+
+/// The `(expected, observed)` answers for one manifest case. The cases are
+/// bespoke operations, so each one is replayed by name; a case this port does
+/// not know fails visibly rather than being skipped.
+fn manifest_answer(case: &ManifestCase) -> (Value, Value) {
+    use crate::skills::registry::manifest;
+
+    let scratch = tempfile::tempdir().expect("a scratch manifest directory is available");
+    let workdir = scratch
+        .path()
+        .canonicalize()
+        .expect("the scratch manifest directory resolves");
+    match case.case.as_str() {
+        "alias-for-string-version" => {
+            let entry = manifest_entry("a", "x", ManifestVersion::Alias("latest".to_owned()));
+            let applied = match ManifestVersion::default() {
+                ManifestVersion::Frozen(version) => json!(version),
+                ManifestVersion::Alias(alias) => json!(alias),
+            };
+            (
+                json!({
+                    "version": case.version,
+                    "alias": case.alias,
+                    "defaultVersionApplied": case.default_version_applied,
+                }),
+                json!({
+                    "version": "latest",
+                    "alias": entry.alias(),
+                    "defaultVersionApplied": applied,
+                }),
+            )
+        }
+        "alias-for-integer-version" => {
+            let entry = manifest_entry("a", "x", ManifestVersion::Frozen(3));
+            (
+                json!({"version": case.version, "alias": case.alias}),
+                json!({"version": 3, "alias": entry.alias()}),
+            )
+        }
+        "upsert-replaces-by-name" => {
+            let mut manifest = SkillManifest::default();
+            manifest.upsert(manifest_entry("a", "x", ManifestVersion::Frozen(1)));
+            manifest.upsert(manifest_entry("a", "x", ManifestVersion::Frozen(2)));
+            manifest.upsert(manifest_entry(
+                "b",
+                "y",
+                ManifestVersion::Alias("latest".to_owned()),
+            ));
+            (
+                json!({"skills": case.skills}),
+                json!({"skills": manifest_entries(&manifest)}),
+            )
+        }
+        "remove-by-name" => {
+            let mut manifest = SkillManifest::default();
+            manifest.upsert(manifest_entry("a", "x", ManifestVersion::Frozen(2)));
+            manifest.upsert(manifest_entry(
+                "b",
+                "y",
+                ManifestVersion::Alias("latest".to_owned()),
+            ));
+            let removed_existing = manifest.remove("a");
+            let removed_missing = manifest.remove("missing");
+            (
+                json!({
+                    "removedExisting": case.removed_existing,
+                    "removedMissing": case.removed_missing,
+                    "skills": case.skills,
+                }),
+                json!({
+                    "removedExisting": removed_existing,
+                    "removedMissing": removed_missing,
+                    "skills": manifest_entries(&manifest),
+                }),
+            )
+        }
+        "save-toml-shape" | "save-load-roundtrip" => {
+            let mut pinned = manifest_entry("grill-me", "uuid-1", ManifestVersion::Frozen(3));
+            pinned.description = "pinned".to_owned();
+            let fresh = manifest_entry(
+                "fresh",
+                "uuid-2",
+                ManifestVersion::Alias("latest".to_owned()),
+            );
+            let to_save = SkillManifest {
+                skills: vec![pinned, fresh],
+            };
+            let saved = workdir.join("skills.toml");
+            manifest::save(&saved, &to_save).expect("the manifest saves");
+            if case.case == "save-toml-shape" {
+                (
+                    json!({"skills": case.skills, "toml": case.toml}),
+                    json!({
+                        "skills": manifest_entries(&to_save),
+                        "toml": fs::read_to_string(&saved).expect("the saved manifest reads"),
+                    }),
+                )
+            } else {
+                let loaded = manifest::load(&saved);
+                (
+                    json!({"lossless": case.lossless, "skills": case.skills}),
+                    json!({
+                        "lossless": loaded.manifest == to_save,
+                        "skills": manifest_entries(&loaded.manifest),
+                    }),
+                )
+            }
+        }
+        "save-creates-parents" => {
+            let nested = workdir.join("nested").join("deeper").join("skills.toml");
+            manifest::save(&nested, &SkillManifest::default()).expect("the manifest saves");
+            (
+                json!({"created": case.created}),
+                json!({"created": nested.is_file()}),
+            )
+        }
+        "load-missing-returns-empty" => (
+            json!({"skills": case.skills}),
+            json!({"skills": manifest_entries(&manifest::load(&workdir.join("absent.toml")).manifest)}),
+        ),
+        "load-malformed-returns-empty" => {
+            let malformed = workdir.join("bad.toml");
+            fs::write(&malformed, "this is = = not valid toml [[[").expect("the fixture writes");
+            (
+                json!({"skills": case.skills}),
+                json!({"skills": manifest_entries(&manifest::load(&malformed).manifest)}),
+            )
+        }
+        "load-invalid-entry-returns-empty" | "load-ignores-unknown-keys" => {
+            let document = workdir.join("document.toml");
+            fs::write(
+                &document,
+                case.toml.as_deref().expect("the case records its document"),
+            )
+            .expect("the fixture writes");
+            let loaded = manifest::load(&document);
+            if case.case == "load-invalid-entry-returns-empty" {
+                assert!(
+                    loaded.warning.is_some(),
+                    "a well-formed document of the wrong shape carries a warning"
+                );
+            }
+            (
+                json!({"skills": case.skills}),
+                json!({"skills": manifest_entries(&loaded.manifest)}),
+            )
+        }
+        "global-manifest-under-vibe-home" => {
+            let home = workdir.join("home");
+            fs::create_dir_all(&home).expect("the scenario home is writable");
+            let global = manifest::global_manifest_path(&home.join(".vibe"));
+            (
+                json!({"relPath": case.rel_path}),
+                json!({
+                    "relPath": global
+                        .strip_prefix(&home)
+                        .expect("the global manifest sits under the home")
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                }),
+            )
+        }
+        "project-paths-dedup-and-drop-global" => {
+            let home = workdir.join("home");
+            fs::create_dir_all(&home).expect("the scenario home is writable");
+            let home = home.canonicalize().expect("the scenario home resolves");
+            let project_a = workdir.join("proj-a");
+            let project_b = workdir.join("proj-b");
+            let roots = vec![
+                home.clone(),
+                project_a.clone(),
+                project_b.clone(),
+                project_a.clone(),
+            ];
+            let labeled = [
+                (home.clone(), "home"),
+                (project_a, "projectA"),
+                (project_b, "projectB"),
+            ];
+            let observed: Vec<Value> =
+                manifest::project_manifest_paths(&home.join(".vibe"), &roots)
+                    .into_iter()
+                    .map(|path| {
+                        let (relative, label) = labeled
+                            .iter()
+                            .find_map(|(root, label)| {
+                                let resolved = root.canonicalize().unwrap_or_else(|_| root.clone());
+                                path.strip_prefix(&resolved)
+                                    .ok()
+                                    .map(|relative| (relative.to_path_buf(), label))
+                            })
+                            .expect("a collected path sits under a scenario root");
+                        json!({
+                            "root": label,
+                            "relPath": relative.to_string_lossy().replace('\\', "/"),
+                        })
+                    })
+                    .collect();
+            (json!({"paths": case.paths}), json!({"paths": observed}))
+        }
+        other => (
+            json!({"case": other}),
+            json!({"error": "the port has no comparator for this case"}),
+        ),
+    }
+}
+
+// --------------------------------------------------------------------------
 // The replay
 // --------------------------------------------------------------------------
 
@@ -1033,19 +1542,34 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
     scenarios += settle(&report, "projection");
 
     let mut report = Report::default();
+    let mut fallback = None;
     for case in &corpus.store.cases {
-        let expected = match (&case.error, &case.outcome) {
-            (Some(kind), _) => format!("{} raises {kind}", case.op),
-            (None, Some(outcome)) => format!("{} ends {outcome}", case.op),
-            (None, None) => format!("{} answers", case.op),
-        };
-        report.pending("store", &case.case, expected, "US-176");
+        let observed = store_answer(case, &mut fallback);
+        report.check(
+            "store",
+            &case.case,
+            "answer",
+            &comparable_tree_fields(&store_expected(case)),
+            &comparable_tree_fields(&observed),
+        );
     }
+    // The fallback description is this port's own prose: the digests must
+    // never match, which the `store/fallbackDescription` ledger entry holds in
+    // place the way the builtin prose entries do.
+    let fallback = fallback.expect("the fallback-description case ran");
+    report.check(
+        "store",
+        "fallbackDescription",
+        "digest",
+        &corpus.store.fallback_description,
+        &digest_of(&fallback),
+    );
     scenarios += settle(&report, "store");
 
     let mut report = Report::default();
     for case in &corpus.manifest {
-        report.pending("manifest", &case.case, "answers".to_owned(), "US-177");
+        let (expected, observed) = manifest_answer(case);
+        report.check("manifest", &case.case, "answer", &expected, &observed);
     }
     scenarios += settle(&report, "manifest");
 
