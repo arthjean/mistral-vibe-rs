@@ -94,48 +94,88 @@ fn sibling_temporary_path(path: &Path) -> PathBuf {
 pub trait CredentialStore: Send + Sync {
     fn set(&self, account: &str, secret: &str) -> Result<(), CredentialError>;
     fn get(&self, account: &str) -> Result<Option<String>, CredentialError>;
-    fn delete(&self, account: &str) -> Result<(), CredentialError>;
 }
 
-pub struct NativeCredentialStore {
-    service: String,
-    serialization: Mutex<()>,
+/// The production store: `vibe_core::auth` persistence over the OS keyring
+/// under the shared service names, with the global dotenv fallback that keeps
+/// the key when the keyring cannot take it.
+///
+/// The reference exports the persisted key into `os.environ`; this port keeps
+/// that overlay here, so the completion check sees the key whichever storage
+/// path accepted it.
+pub struct PersistedCredentialStore {
+    store: vibe_core::auth::KeyringStore,
+    env_file: PathBuf,
+    backend_is_mistral: bool,
+    process_env: Mutex<std::collections::BTreeMap<String, String>>,
 }
 
-impl NativeCredentialStore {
+impl PersistedCredentialStore {
     #[must_use]
-    pub fn new(service: impl Into<String>) -> Self {
+    pub fn new(env_file: PathBuf, backend_is_mistral: bool) -> Self {
+        Self::with_store(
+            env_file,
+            backend_is_mistral,
+            vibe_core::auth::KeyringStore::native(),
+        )
+    }
+
+    /// The same bridge over a caller-supplied keyring store, which is how the
+    /// tests keep the OS keyring out of the loop.
+    #[must_use]
+    pub fn with_store(
+        env_file: PathBuf,
+        backend_is_mistral: bool,
+        store: vibe_core::auth::KeyringStore,
+    ) -> Self {
         Self {
-            service: service.into(),
-            serialization: Mutex::new(()),
+            store,
+            env_file,
+            backend_is_mistral,
+            process_env: Mutex::new(std::collections::BTreeMap::new()),
         }
     }
 
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    fn entry(&self, account: &str) -> Result<keyring::Entry, CredentialError> {
-        keyring::Entry::new(&self.service, account).map_err(|_| CredentialError::Unavailable)
+    /// The stored credential for `account`, the overlay of keys persisted this
+    /// run winning over the keyring.
+    #[must_use]
+    pub fn resolve(&self, account: &str) -> Option<String> {
+        if let Ok(overlay) = self.process_env.lock()
+            && let Some(secret) = overlay.get(account)
+        {
+            return Some(secret.clone());
+        }
+        self.store.get_api_key(account)
     }
 }
 
-impl CredentialStore for NativeCredentialStore {
+impl CredentialStore for PersistedCredentialStore {
     fn set(&self, account: &str, secret: &str) -> Result<(), CredentialError> {
         if account.trim().is_empty() || secret.is_empty() {
             return Err(CredentialError::InvalidInput);
         }
-        let _guard = self
-            .serialization
+        let mut overlay = self
+            .process_env
             .lock()
             .map_err(|_| CredentialError::Unavailable)?;
-        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        {
-            self.entry(account)?
-                .set_password(secret)
-                .map_err(|_| CredentialError::Unavailable)
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-        {
-            let _ = (account, secret);
-            Err(CredentialError::UnsupportedPlatform)
+        let report = vibe_core::auth::persist_api_key(
+            account,
+            self.backend_is_mistral,
+            secret,
+            false,
+            &mut overlay,
+            &self.env_file,
+            &self.store,
+        );
+        // The reference sends an onboarding telemetry event here; the
+        // telemetry envelope is a recorded divergence, so the event stays
+        // local and unsent, on the same terms as `telemetry/record`.
+        match report.outcome {
+            vibe_core::auth::PersistOutcome::Completed => Ok(()),
+            vibe_core::auth::PersistOutcome::EnvVarError { .. } => {
+                Err(CredentialError::InvalidInput)
+            }
+            vibe_core::auth::PersistOutcome::SaveError { .. } => Err(CredentialError::Unavailable),
         }
     }
 
@@ -143,42 +183,7 @@ impl CredentialStore for NativeCredentialStore {
         if account.trim().is_empty() {
             return Err(CredentialError::InvalidInput);
         }
-        let _guard = self
-            .serialization
-            .lock()
-            .map_err(|_| CredentialError::Unavailable)?;
-        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        {
-            match self.entry(account)?.get_password() {
-                Ok(secret) => Ok(Some(secret)),
-                Err(keyring::Error::NoEntry) => Ok(None),
-                Err(_) => Err(CredentialError::Unavailable),
-            }
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-        {
-            let _ = account;
-            Err(CredentialError::UnsupportedPlatform)
-        }
-    }
-
-    fn delete(&self, account: &str) -> Result<(), CredentialError> {
-        let _guard = self
-            .serialization
-            .lock()
-            .map_err(|_| CredentialError::Unavailable)?;
-        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        {
-            match self.entry(account)?.delete_credential() {
-                Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-                Err(_) => Err(CredentialError::Unavailable),
-            }
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-        {
-            let _ = account;
-            Err(CredentialError::UnsupportedPlatform)
-        }
+        Ok(self.resolve(account))
     }
 }
 
@@ -186,10 +191,11 @@ impl CredentialStore for NativeCredentialStore {
 pub enum CredentialError {
     #[error("credential input is invalid")]
     InvalidInput,
-    #[error("native credential storage is unavailable; use an environment credential for this run")]
+    #[error(
+        "the API key could not be saved: the OS keyring refused it and the fallback file under \
+         the vibe home could not be written"
+    )]
     Unavailable,
-    #[error("native credential storage is unsupported on this platform")]
-    UnsupportedPlatform,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -750,14 +756,6 @@ mod tests {
                 .get(account)
                 .cloned())
         }
-
-        fn delete(&self, account: &str) -> Result<(), CredentialError> {
-            self.values
-                .lock()
-                .expect("credential state")
-                .remove(account);
-            Ok(())
-        }
     }
 
     #[test]
@@ -786,9 +784,34 @@ mod tests {
             .expect_err("keyring unavailable");
         assert_eq!(
             error.to_string(),
-            "native credential storage is unavailable; use an environment credential for this run"
+            "the API key could not be saved: the OS keyring refused it and the fallback file \
+             under the vibe home could not be written"
         );
         assert!(!error.to_string().contains("secret"));
+    }
+
+    #[test]
+    fn a_persisted_store_with_no_keyring_falls_back_to_the_dotenv_file() {
+        let temporary = tempfile::tempdir().expect("temporary vibe home");
+        let env_file = temporary.path().join(".env");
+        // A disabled store answers as if no OS keyring existed, so the save
+        // must degrade to the dotenv fallback rather than fail.
+        let store = PersistedCredentialStore::with_store(
+            env_file.clone(),
+            true,
+            vibe_core::auth::KeyringStore::disabled(Box::new(
+                vibe_core::auth::NativeKeyringBackend::new(),
+            )),
+        );
+        store
+            .set("MISTRAL_API_KEY", "typed-key")
+            .expect("the fallback save completes");
+        assert_eq!(
+            store.resolve("MISTRAL_API_KEY").as_deref(),
+            Some("typed-key")
+        );
+        let contents = fs::read_to_string(&env_file).expect("the fallback file exists");
+        assert!(contents.contains("typed-key"));
     }
 
     #[test]

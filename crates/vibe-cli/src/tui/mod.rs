@@ -94,8 +94,8 @@ use self::runtime::{
     teleport_available,
 };
 use self::setup::{
-    CredentialStore, EnvironmentThemeDetector, NativeCredentialStore, NotificationPreference,
-    ResolvedTheme, SetupCompletion, SetupFlow, TerminalThemeDetector, Theme, resolve_theme,
+    EnvironmentThemeDetector, NotificationPreference, PersistedCredentialStore, ResolvedTheme,
+    SetupCompletion, SetupFlow, TerminalThemeDetector, Theme, resolve_theme,
 };
 use self::shell::{finish_shell, interrupt_shell};
 use self::state::{EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiState};
@@ -214,25 +214,24 @@ pub async fn run_interactive(
             });
         }
     }
-    let credential_store = NativeCredentialStore::new("mistral-vibe-rs");
-    let (initial_credential, keyring_error) = if arguments.setup {
-        (None, None)
+    let vibe_home = startup::vibe_home_directory(&arguments, &working_directory);
+    // The shipped Mistral provider is the only Mistral-backend entry the flow
+    // selects, and it is the one the default key variable belongs to.
+    let credential_store = PersistedCredentialStore::new(
+        vibe_core::config::global_env_file(&vibe_home),
+        arguments.provider_style == "mistral",
+    );
+    let initial_credential = if arguments.setup {
+        None
     } else {
         // The process environment first, then `{vibe_home}/.env`, then the
-        // keyring: a key the operator keeps in the dotenv file is as usable
-        // here as an exported one.
-        let environment_credential = vibe_core::config::DotenvValues::global(
-            &startup::vibe_home_directory(&arguments, &working_directory),
-        )
-        .variable(&arguments.credential_environment)
-        .filter(|credential| !credential.is_empty());
-        match environment_credential {
-            Some(credential) => (Some(credential), None),
-            None => match credential_store.get(&arguments.credential_environment) {
-                Ok(credential) => (credential, None),
-                Err(error) => (None, Some(error.to_string())),
-            },
-        }
+        // keyring under the shared service names: a key the operator keeps in
+        // the dotenv file is as usable here as an exported one, and a keyring
+        // that cannot be reached reads as absent, as the reference reads it.
+        vibe_core::config::DotenvValues::global(&vibe_home)
+            .variable(&arguments.credential_environment)
+            .filter(|credential| !credential.is_empty())
+            .or_else(|| credential_store.resolve(&arguments.credential_environment))
     };
     let release3 = startup_host
         .into_release3(arguments.trust)
@@ -272,11 +271,6 @@ pub async fn run_interactive(
             state
         }
     };
-    if let Some(error) = keyring_error {
-        state.push_diagnostic(format!(
-            "Native credential lookup failed: {error}. Restart with --setup after repairing keyring access"
-        ));
-    }
     if runtime.is_none() {
         push_local_notice(
             &mut state,
@@ -1232,6 +1226,18 @@ fn persist_setup(
     release3
         .dispatch("config/batchWrite", &params)
         .map_err(|error| CliError::Terminal(error.to_string()))?;
+    // Reference `run_onboarding` persists the provider the flow authenticated
+    // against; an entry the flow left identical is not written at all. The
+    // credential persisted earlier in the flow is durable either way, so a
+    // failure here reports the provider error without rolling it back.
+    if let Some(provider) = release3
+        .effective_provider(&completion.resources.provider)
+        .map_err(|error| CliError::Terminal(error.to_string()))?
+    {
+        release3
+            .persist_provider(&provider)
+            .map_err(|error| CliError::Terminal(error.to_string()))?;
+    }
     Ok(())
 }
 

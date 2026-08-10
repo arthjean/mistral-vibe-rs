@@ -18,7 +18,6 @@ cpal.workspace = true
 crossterm.workspace = true
 futures-util.workspace = true
 hex.workspace = true
-keyring.workspace = true
 ratatui.workspace = true
 secrecy.workspace = true
 serde.workspace = true
