@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Rank an `@.` mention query the way the reference does. The query's stem was
+  read as `.` rather than as the empty stem the reference's path handling
+  answers, so every candidate whose own stem does not start with a dot lost the
+  stem-prefix rank component and sorted below one that did. The new
+  autocompletion oracle measured the divergence.
+
 - Reword four onboarding screen lines that read identically to the upstream
   ones: the welcome hint, the theme heading, the custom-domain heading and the
   browser step's completion detail. Each says the same thing in this port's own

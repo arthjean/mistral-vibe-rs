@@ -211,7 +211,15 @@ fn path_match_rank(
     }
 }
 
+/// Splits a path component into its stem and its extension, the way the
+/// reference's `Path(value).stem` and `.suffix` do.
+///
+/// `pathlib` reads the component's name first, and the name of `.` is empty,
+/// so a query of `@.` has an empty stem upstream rather than a stem of `.`.
+/// Ranking then reports `stem_prefix` for every candidate, since every stem
+/// starts with the empty string. The autocompletion corpus measures that case.
 fn stem_and_extension(name: &str) -> (String, String) {
+    let name = if name == "." { "" } else { name };
     let Some(dot) = name.rfind('.') else {
         return (name.to_owned(), String::new());
     };
