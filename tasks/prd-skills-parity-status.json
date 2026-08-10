@@ -3,7 +3,7 @@
     "file": "tasks/prd-skills-parity.md",
     "title": "Skills Parity",
     "created_at": "2026-08-08",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -54,10 +54,10 @@
     {
       "id": "EP-051",
       "title": "The Remote Registry and the Scorecard",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "stories_total": 5,
-      "stories_done": 0,
+      "stories_done": 5,
       "stories_in_review": 0
     }
   ],
@@ -274,63 +274,63 @@
       "id": "US-175",
       "title": "Port the registry payload models and the name sanitizer",
       "epic": "EP-051",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "size": "M",
       "blocked_by": [
         "US-161"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
     },
     {
       "id": "US-176",
       "title": "Port the version store with its atomic write and its asset safety",
       "epic": "EP-051",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "size": "L",
       "blocked_by": [
         "US-175"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
     },
     {
       "id": "US-177",
       "title": "Port the two manifest scopes and the alias pin",
       "epic": "EP-051",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "size": "M",
       "blocked_by": [
         "US-175"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
     },
     {
       "id": "US-178",
       "title": "Port the paginated catalog client and its error taxonomy",
       "epic": "EP-051",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "size": "L",
       "blocked_by": [
         "US-175"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
     },
     {
       "id": "US-179",
       "title": "Gate the subtree on its experiment key and remeasure the scorecard",
       "epic": "EP-051",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
@@ -341,9 +341,9 @@
         "US-177",
         "US-178"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
     }
   ]
 }

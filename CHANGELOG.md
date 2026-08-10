@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Port the remote skill registry, dormant. The catalog client with its 50-page
+  cap and error taxonomy, the atomically staged version store with its
+  traversal and entrypoint guards and owner-only execute bits, and the two
+  manifest scopes with the `latest` alias pin are all implemented and measured
+  against the reference, and none of them is reachable from a session: the
+  reference itself never calls this subtree at the pinned commit, so no
+  install command or wire method is invented for it.
+  `experimental_enable_registry_skills` is now read from the merged
+  configuration and gates the subtree whole; disabled, which is the default,
+  runs no registry code, creates no cache directory and constructs no
+  transport, and enabled changes nothing until upstream publishes a load
+  lifecycle to reproduce.
+
 - Record a slash-invoked skill in the conversation the way the reference
   does. Submitting `/name` now appends a synthetic `skill` tool call and its
   result to the session history, so the transcript shows the load settling,
