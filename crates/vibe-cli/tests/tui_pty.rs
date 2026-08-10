@@ -252,9 +252,18 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
         .expect("edited exit command writes");
     master.flush().expect("edited prompt flushes");
     let deadline = Instant::now() + Duration::from_secs(5);
+    // The shell output streams into the transcript before the shell is
+    // reaped, so a submission racing the final poll is rejected as busy and
+    // restored into the composer as a draft; a later Enter resubmits it.
+    let mut resubmit_at = Instant::now() + Duration::from_millis(500);
     let status = loop {
         if let Some(status) = child.try_wait().expect("TUI status is readable") {
             break status;
+        }
+        if Instant::now() >= resubmit_at {
+            master.write_all(b"\r").expect("exit resubmission writes");
+            master.flush().expect("exit resubmission flushes");
+            resubmit_at = Instant::now() + Duration::from_millis(500);
         }
         let timed_out = Instant::now() >= deadline;
         if timed_out {
