@@ -1,0 +1,1911 @@
+{
+  "constants": {
+    "gradientColorCount": 10,
+    "signInStepNames": [
+      "OPEN",
+      "CONFIRM",
+      "FINISH"
+    ],
+    "signInSteps": 3,
+    "signInUrlHelpDelaySeconds": 4.0,
+    "successExitDelaySeconds": 2.0,
+    "themeFadeClasses": [
+      "fade-1",
+      "fade-2",
+      "fade-3"
+    ],
+    "themeVisibleNeighbors": 3
+  },
+  "domainValidation": [
+    {
+      "case": "console.mistral.ai",
+      "derivedApiBaseUrl": "https://console.mistral.ai/api",
+      "derivedBaseUrl": "https://console.mistral.ai",
+      "input": "console.mistral.ai",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "https://console.mistral.ai",
+      "derivedApiBaseUrl": "https://console.mistral.ai/api",
+      "derivedBaseUrl": "https://console.mistral.ai",
+      "input": "https://console.mistral.ai",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "https://console.mistral.ai/",
+      "derivedApiBaseUrl": "https://console.mistral.ai/api",
+      "derivedBaseUrl": "https://console.mistral.ai",
+      "input": "https://console.mistral.ai/",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "console.internal.example",
+      "derivedApiBaseUrl": "https://console.internal.example/api",
+      "derivedBaseUrl": "https://console.internal.example",
+      "input": "console.internal.example",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "https://console.internal.example",
+      "derivedApiBaseUrl": "https://console.internal.example/api",
+      "derivedBaseUrl": "https://console.internal.example",
+      "input": "https://console.internal.example",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "http://localhost:8080",
+      "derivedApiBaseUrl": "http://localhost:8080/api",
+      "derivedBaseUrl": "http://localhost:8080",
+      "input": "http://localhost:8080",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "localhost:8080",
+      "derivedApiBaseUrl": "https://localhost:8080/api",
+      "derivedBaseUrl": "https://localhost:8080",
+      "input": "localhost:8080",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "console.oracle.mistral.ai",
+      "derivedApiBaseUrl": "https://console.oracle.mistral.ai/api",
+      "derivedBaseUrl": "https://console.oracle.mistral.ai",
+      "input": "console.oracle.mistral.ai",
+      "privateCloudWarning": true,
+      "valid": true
+    },
+    {
+      "case": "https://console.oracle.mistral.ai",
+      "derivedApiBaseUrl": "https://console.oracle.mistral.ai/api",
+      "derivedBaseUrl": "https://console.oracle.mistral.ai",
+      "input": "https://console.oracle.mistral.ai",
+      "privateCloudWarning": true,
+      "valid": true
+    },
+    {
+      "case": "console.mistral.ai.evil.example",
+      "derivedApiBaseUrl": "https://console.mistral.ai.evil.example/api",
+      "derivedBaseUrl": "https://console.mistral.ai.evil.example",
+      "input": "console.mistral.ai.evil.example",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "foo.mistral.ai",
+      "derivedApiBaseUrl": "https://foo.mistral.ai/api",
+      "derivedBaseUrl": "https://foo.mistral.ai",
+      "input": "foo.mistral.ai",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "console.example.com",
+      "derivedApiBaseUrl": "https://console.example.com/api",
+      "derivedBaseUrl": "https://console.example.com",
+      "input": "console.example.com",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "example.com/console",
+      "derivedApiBaseUrl": "https://example.com/console/api",
+      "derivedBaseUrl": "https://example.com/console",
+      "input": "example.com/console",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "example.com:8443",
+      "derivedApiBaseUrl": "https://example.com:8443/api",
+      "derivedBaseUrl": "https://example.com:8443",
+      "input": "example.com:8443",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "192.168.1.10",
+      "derivedApiBaseUrl": "https://192.168.1.10/api",
+      "derivedBaseUrl": "https://192.168.1.10",
+      "input": "192.168.1.10",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "192.168.1.10:8080",
+      "derivedApiBaseUrl": "https://192.168.1.10:8080/api",
+      "derivedBaseUrl": "https://192.168.1.10:8080",
+      "input": "192.168.1.10:8080",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "https://user:pass@example.com",
+      "derivedApiBaseUrl": "https://user:pass@example.com/api",
+      "derivedBaseUrl": "https://user:pass@example.com",
+      "input": "https://user:pass@example.com",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "blank-0",
+      "input": "",
+      "valid": false
+    },
+    {
+      "case": "blank-3",
+      "input": "   ",
+      "valid": false
+    },
+    {
+      "case": "http:/broken",
+      "input": "http:/broken",
+      "valid": false
+    },
+    {
+      "case": "not a domain",
+      "input": "not a domain",
+      "valid": false
+    },
+    {
+      "case": "ftp://example.com",
+      "input": "ftp://example.com",
+      "valid": false
+    },
+    {
+      "case": "https://",
+      "input": "https://",
+      "valid": false
+    },
+    {
+      "case": "https://.",
+      "derivedApiBaseUrl": "https://./api",
+      "derivedBaseUrl": "https://.",
+      "input": "https://.",
+      "privateCloudWarning": false,
+      "valid": true
+    },
+    {
+      "case": "console..mistral.ai",
+      "derivedApiBaseUrl": "https://console..mistral.ai/api",
+      "derivedBaseUrl": "https://console..mistral.ai",
+      "input": "console..mistral.ai",
+      "privateCloudWarning": true,
+      "valid": true
+    },
+    {
+      "case": "münchen.example",
+      "derivedApiBaseUrl": "https://münchen.example/api",
+      "derivedBaseUrl": "https://münchen.example",
+      "input": "münchen.example",
+      "privateCloudWarning": false,
+      "valid": true
+    }
+  ],
+  "note": "Onboarding corpus: the reference's screen graph, transitions, focus targets, validation classes, persisted effects and terminating values, observed by driving the real OnboardingApp through Textual's headless pilot with the sign-in service, the credential persistence and the config orchestrator replaced by recorders. No rendered cell, SVG or styled text appears here, and every reference-authored message is committed as a SHA-256 digest and a length. Regenerate with scripts/parity/onboarding.py --corpus when the pinned reference moves.",
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+  },
+  "schemaVersion": 1,
+  "screenGraph": [
+    {
+      "case": "graph-browser-provider-installs-seven-screens",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:escape",
+          "from": "welcome",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "graph-manual-provider-installs-three-screens",
+      "effects": {
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "api_key": {
+          "id": "key",
+          "widget": "Input"
+        },
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": null
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": false,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "api_key"
+        },
+        {
+          "event": "press:escape",
+          "from": "api_key",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "welcome-advance-is-inert-until-typing-finishes",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "theme_selection": null,
+        "welcome": null,
+        "welcome:screenAfterEarlyEnter": "welcome",
+        "welcome:screenAfterLateEnter": "theme_selection"
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:escape",
+          "from": "theme_selection",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "theme-selection-applies-live-and-leads-on",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "ansi-light",
+      "supportsBrowserSignIn": true,
+      "themes": [
+        "auto",
+        "ansi-light",
+        "atom-one-light",
+        "catppuccin-latte",
+        "rose-pine-dawn",
+        "solarized-light",
+        "textual-light",
+        "ansi-dark",
+        "atom-one-dark",
+        "catppuccin-frappe",
+        "catppuccin-macchiato",
+        "catppuccin-mocha",
+        "dracula",
+        "flexoki",
+        "gruvbox",
+        "monokai",
+        "nord",
+        "rose-pine",
+        "rose-pine-moon",
+        "solarized-dark",
+        "textual-dark",
+        "tokyo-night"
+      ],
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:escape",
+          "from": "auth_method",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "auth-method-browser-leads-to-target",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:escape",
+          "from": "sign_in_target",
+          "to": "auth_method"
+        }
+      ]
+    },
+    {
+      "case": "auth-method-manual-leads-to-api-key",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "api_key": {
+          "id": "key",
+          "widget": "Input"
+        },
+        "auth_method": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "api_key"
+        },
+        {
+          "event": "press:escape",
+          "from": "api_key",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "auth-method-selection-wraps",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "auth_method:selectionWalk": [
+          0,
+          1,
+          0,
+          1
+        ],
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:escape",
+          "from": "auth_method",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "target-default-applies-mistral-and-signs-in",
+      "effects": {
+        "factoryCalls": 1,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 1
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "browser_sign_in": null,
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "browser_sign_in"
+        },
+        {
+          "event": "press:escape",
+          "from": "browser_sign_in",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "target-other-leads-to-custom-domain",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "custom_domain": {
+          "id": "domain",
+          "widget": "Input"
+        },
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "custom_domain"
+        },
+        {
+          "event": "press:escape",
+          "from": "custom_domain",
+          "to": "sign_in_target"
+        }
+      ]
+    },
+    {
+      "case": "target-back-returns-to-method",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:escape",
+          "from": "sign_in_target",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:escape",
+          "from": "auth_method",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "target-overwrite-arms-then-proceeds",
+      "effects": {
+        "factoryCalls": 1,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 1
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "browser_sign_in": null,
+        "sign_in_target": null,
+        "sign_in_target:armedAfterFirstEnter": true,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "browser_sign_in"
+        },
+        {
+          "event": "press:escape",
+          "from": "browser_sign_in",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "target-overwrite-disarms-on-move",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "sign_in_target": null,
+        "sign_in_target:armedThenMoved": [
+          true,
+          false
+        ],
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.internal.example/api",
+        "baseUrl": "https://console.internal.example"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:escape",
+          "from": "sign_in_target",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:escape",
+          "from": "auth_method",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "custom-domain-validation-classes",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "custom_domain": {
+          "id": "domain",
+          "widget": "Input"
+        },
+        "custom_domain:validationStates": [
+          {
+            "boxClasses": [
+              "valid"
+            ],
+            "expected": "valid",
+            "feedbackClasses": [
+              "success"
+            ],
+            "input": "console.internal.example"
+          },
+          {
+            "boxClasses": [
+              "warning"
+            ],
+            "expected": "warning",
+            "feedbackClasses": [
+              "warning"
+            ],
+            "input": "console.oracle.mistral.ai"
+          },
+          {
+            "boxClasses": [
+              "invalid"
+            ],
+            "expected": "invalid",
+            "feedbackClasses": [
+              "error"
+            ],
+            "input": "http:/broken"
+          }
+        ],
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "custom_domain"
+        },
+        {
+          "event": "press:escape",
+          "from": "custom_domain",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:escape",
+          "from": "sign_in_target",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:escape",
+          "from": "auth_method",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "custom-domain-submit-derives-urls-and-signs-in",
+      "effects": {
+        "factoryCalls": 1,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 1
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "browser_sign_in": null,
+        "custom_domain": {
+          "id": "domain",
+          "widget": "Input"
+        },
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.internal.example/api",
+        "baseUrl": "https://console.internal.example"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "custom_domain"
+        },
+        {
+          "event": "press:enter",
+          "from": "custom_domain",
+          "to": "browser_sign_in"
+        },
+        {
+          "event": "press:escape",
+          "from": "browser_sign_in",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "custom-domain-sign-in-upserts-the-provider",
+      "effects": {
+        "factoryCalls": 1,
+        "persistCalls": [
+          {
+            "apiKey": "oracle-signed-in-key",
+            "customDomain": true,
+            "envKey": "MISTRAL_API_KEY",
+            "provider": "mistral"
+          }
+        ],
+        "providerWrites": [
+          {
+            "browserAuthApiBaseUrl": "https://console.internal.example/api",
+            "browserAuthBaseUrl": "https://console.internal.example",
+            "provider": "mistral"
+          }
+        ],
+        "serviceCloses": 1
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "custom_domain": {
+          "id": "domain",
+          "widget": "Input"
+        },
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.internal.example/api",
+        "baseUrl": "https://console.internal.example"
+      },
+      "result": "completed",
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "custom_domain"
+        },
+        {
+          "event": "press:enter",
+          "from": "custom_domain",
+          "to": "<exit>"
+        },
+        {
+          "event": "wait:the sign-in worker to exit the app",
+          "from": "browser_sign_in",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "custom-domain-invalid-submission-stays",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "custom_domain": {
+          "id": "domain",
+          "widget": "Input"
+        },
+        "custom_domain:stillOnScreen": "custom_domain",
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "custom_domain"
+        },
+        {
+          "event": "press:escape",
+          "from": "custom_domain",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:escape",
+          "from": "sign_in_target",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:escape",
+          "from": "auth_method",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "custom-domain-back-returns-to-target",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "custom_domain": {
+          "id": "domain",
+          "widget": "Input"
+        },
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "custom_domain"
+        },
+        {
+          "event": "press:escape",
+          "from": "custom_domain",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:escape",
+          "from": "sign_in_target",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:escape",
+          "from": "auth_method",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "browser-sign-in-success-exits-completed",
+      "effects": {
+        "factoryCalls": 1,
+        "persistCalls": [
+          {
+            "apiKey": "oracle-signed-in-key",
+            "customDomain": false,
+            "envKey": "MISTRAL_API_KEY",
+            "provider": "mistral"
+          }
+        ],
+        "providerWrites": [],
+        "serviceCloses": 1
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": "completed",
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "<exit>"
+        },
+        {
+          "event": "wait:the sign-in worker to exit the app",
+          "from": "browser_sign_in",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "browser-sign-in-error-then-retry-succeeds",
+      "effects": {
+        "factoryCalls": 2,
+        "persistCalls": [
+          {
+            "apiKey": "oracle-signed-in-key",
+            "customDomain": false,
+            "envKey": "MISTRAL_API_KEY",
+            "provider": "mistral"
+          }
+        ],
+        "providerWrites": [],
+        "serviceCloses": 2
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "browser_sign_in": null,
+        "browser_sign_in:errorVariant": "error",
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": "completed",
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "browser_sign_in"
+        },
+        {
+          "event": "press:r",
+          "from": "browser_sign_in",
+          "to": "<exit>"
+        },
+        {
+          "event": "wait:the retried worker to exit the app",
+          "from": "browser_sign_in",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "browser-sign-in-retry-refused-while-running",
+      "effects": {
+        "factoryCalls": 1,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 1
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "browser_sign_in": null,
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "browser_sign_in"
+        },
+        {
+          "event": "press:escape",
+          "from": "browser_sign_in",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "browser-sign-in-manual-fallback",
+      "effects": {
+        "factoryCalls": 1,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 1
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "api_key": {
+          "id": "key",
+          "widget": "Input"
+        },
+        "auth_method": null,
+        "browser_sign_in": null,
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "browser_sign_in"
+        },
+        {
+          "event": "press:m",
+          "from": "browser_sign_in",
+          "to": "api_key"
+        },
+        {
+          "event": "press:escape",
+          "from": "api_key",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "browser-sign-in-persist-failure-exits-immediately",
+      "effects": {
+        "factoryCalls": 1,
+        "persistCalls": [
+          {
+            "apiKey": "oracle-signed-in-key",
+            "customDomain": false,
+            "envKey": "MISTRAL_API_KEY",
+            "provider": "mistral"
+          }
+        ],
+        "providerWrites": [],
+        "serviceCloses": 1
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": "save_error:scripted-detail",
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "<exit>"
+        },
+        {
+          "event": "wait:the persist failure to exit the app",
+          "from": "browser_sign_in",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "browser-sign-in-cancel-closes-the-service",
+      "effects": {
+        "factoryCalls": 1,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 1
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "auth_method": null,
+        "browser_sign_in": null,
+        "sign_in_target": null,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "auth_method"
+        },
+        {
+          "event": "press:enter",
+          "from": "auth_method",
+          "to": "sign_in_target"
+        },
+        {
+          "event": "press:enter",
+          "from": "sign_in_target",
+          "to": "browser_sign_in"
+        },
+        {
+          "event": "press:escape",
+          "from": "browser_sign_in",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "api-key-submit-terminates-with-the-persist-outcome",
+      "effects": {
+        "persistCalls": [
+          {
+            "apiKey": "oracle-key",
+            "customDomain": false,
+            "envKey": "MISTRAL_API_KEY",
+            "provider": "mistral"
+          }
+        ],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "api_key": {
+          "id": "key",
+          "widget": "Input"
+        },
+        "api_key:masked": true,
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": null
+      },
+      "result": "completed",
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": false,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "api_key"
+        },
+        {
+          "event": "press:enter",
+          "from": "api_key",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "api-key-empty-submission-stays",
+      "effects": {
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "api_key": {
+          "id": "key",
+          "widget": "Input"
+        },
+        "api_key:stillOnScreen": "api_key",
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": null
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": false,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:enter",
+          "from": "theme_selection",
+          "to": "api_key"
+        },
+        {
+          "event": "press:escape",
+          "from": "api_key",
+          "to": "<exit>"
+        }
+      ]
+    },
+    {
+      "case": "cancel-from-theme-exits-with-nothing",
+      "effects": {
+        "factoryCalls": 0,
+        "persistCalls": [],
+        "providerWrites": [],
+        "serviceCloses": 0
+      },
+      "entryScreen": "welcome",
+      "focus": {
+        "theme_selection": null,
+        "welcome": null
+      },
+      "installedScreens": [
+        "api_key",
+        "auth_method",
+        "browser_sign_in",
+        "custom_domain",
+        "sign_in_target",
+        "theme_selection",
+        "welcome"
+      ],
+      "providerBrowserAuth": {
+        "apiBaseUrl": "https://console.mistral.ai/api",
+        "baseUrl": "https://console.mistral.ai"
+      },
+      "result": null,
+      "selectedTheme": "auto",
+      "supportsBrowserSignIn": true,
+      "transitions": [
+        {
+          "event": "press:enter",
+          "from": "welcome",
+          "to": "theme_selection"
+        },
+        {
+          "event": "press:escape",
+          "from": "theme_selection",
+          "to": "<exit>"
+        }
+      ]
+    }
+  ],
+  "terminating": [
+    {
+      "case": "cancelled",
+      "exitCode": 0,
+      "messages": [
+        {
+          "digest": "bf9d67d0c656029a10b09b369f40aad1a3a25a066c5957e1b3b6e8d30e71124b",
+          "length": 47
+        }
+      ],
+      "themePersisted": false,
+      "themeWrites": [],
+      "value": null
+    },
+    {
+      "case": "completed",
+      "exitCode": null,
+      "messages": [
+        {
+          "digest": "df91c2810961d31a1b97e770723a3b145d0b358a3349693625d4eabc8c5b9b19",
+          "length": 67
+        }
+      ],
+      "themePersisted": true,
+      "themeWrites": [
+        {
+          "pointer": "/theme",
+          "reason": "onboarding",
+          "value": "oracle-theme"
+        }
+      ],
+      "value": "completed"
+    },
+    {
+      "case": "env-var-error",
+      "exitCode": 1,
+      "messages": [
+        {
+          "digest": "c391b8ced60e6881af74b34d5c580aee5d897cb2b621cdf6f5d967ea7b0d30e7",
+          "length": 264
+        }
+      ],
+      "themePersisted": false,
+      "themeWrites": [],
+      "value": "env_var_error:ORACLE_BAD_KEY"
+    },
+    {
+      "case": "save-error",
+      "exitCode": null,
+      "messages": [
+        {
+          "digest": "c9554f71bba71fe3117e227aa3920f53dac59cfc9c798750e2aedeb1ed831987",
+          "length": 182
+        }
+      ],
+      "themePersisted": true,
+      "themeWrites": [
+        {
+          "pointer": "/theme",
+          "reason": "onboarding",
+          "value": "oracle-theme"
+        }
+      ],
+      "value": "save_error:scripted-detail"
+    },
+    {
+      "case": "provider-config-error",
+      "exitCode": null,
+      "messages": [
+        {
+          "digest": "b03da86e9deb69e9a6820100b10bd8c4f4e9979e5b63b328d0d9a2075b7efe69",
+          "length": 291
+        }
+      ],
+      "themePersisted": true,
+      "themeWrites": [
+        {
+          "pointer": "/theme",
+          "reason": "onboarding",
+          "value": "oracle-theme"
+        }
+      ],
+      "value": "provider_config_error:scripted-detail"
+    }
+  ]
+}

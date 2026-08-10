@@ -20,6 +20,8 @@ mod hydration;
 pub mod input;
 pub mod interaction;
 pub mod narrator;
+#[cfg(test)]
+mod onboarding_parity_tests;
 mod path_mentions;
 mod path_normalization;
 mod path_resources;
