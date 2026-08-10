@@ -34,6 +34,8 @@ mod remote_tools;
 pub mod schema;
 pub mod scratchpad;
 pub mod session_id;
+#[cfg(test)]
+mod setup_auth_parity_tests;
 pub mod shell;
 pub mod skills;
 pub mod storage;

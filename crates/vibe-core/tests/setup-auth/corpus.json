@@ -1,0 +1,2586 @@
+{
+  "authState": [
+    {
+      "canUseActiveProvider": false,
+      "case": "default-before-no-process-no-keyring-no-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "signed_out",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-no-process-no-keyring-no-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "vibe_home_env_file",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": true
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-no-process-no-keyring-yes-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "oracle-keyring-value",
+      "kind": "os_keyring",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": true
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-no-process-no-keyring-yes-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "oracle-keyring-value",
+      "kind": "vibe_home_env_file",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": true
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-no-process-yes-keyring-no-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "process_env",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-no-process-yes-keyring-no-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "vibe_home_env_file",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": true
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-no-process-yes-keyring-yes-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "oracle-keyring-value",
+      "kind": "os_keyring",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": true
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-no-process-yes-keyring-yes-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "oracle-keyring-value",
+      "kind": "vibe_home_env_file",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": true
+    },
+    {
+      "canUseActiveProvider": false,
+      "case": "default-before-yes-process-no-keyring-no-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": null,
+      "kind": "signed_out",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-yes-process-no-keyring-no-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": null,
+      "kind": "process_env",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-yes-process-no-keyring-yes-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": "oracle-keyring-value",
+      "kind": "process_env",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-yes-process-no-keyring-yes-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": "oracle-keyring-value",
+      "kind": "process_env",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-yes-process-yes-keyring-no-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": null,
+      "kind": "process_env",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-yes-process-yes-keyring-no-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": null,
+      "kind": "process_env",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-yes-process-yes-keyring-yes-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": "oracle-keyring-value",
+      "kind": "process_env",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "default-before-yes-process-yes-keyring-yes-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": "oracle-keyring-value",
+      "kind": "process_env",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": false,
+      "case": "custom-before-no-process-no-keyring-no-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "signed_out",
+      "processEnv": null,
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-no-process-no-keyring-no-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "unsupported_provider",
+      "processEnv": null,
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-no-process-no-keyring-yes-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "oracle-keyring-value",
+      "kind": "unsupported_provider",
+      "processEnv": null,
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-no-process-no-keyring-yes-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "oracle-keyring-value",
+      "kind": "unsupported_provider",
+      "processEnv": null,
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-no-process-yes-keyring-no-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "unsupported_provider",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-no-process-yes-keyring-no-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "unsupported_provider",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-no-process-yes-keyring-yes-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "oracle-keyring-value",
+      "kind": "unsupported_provider",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-no-process-yes-keyring-yes-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "oracle-keyring-value",
+      "kind": "unsupported_provider",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": false,
+      "case": "custom-before-yes-process-no-keyring-no-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": null,
+      "kind": "signed_out",
+      "processEnv": null,
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-yes-process-no-keyring-no-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": null,
+      "kind": "unsupported_provider",
+      "processEnv": null,
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-yes-process-no-keyring-yes-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": "oracle-keyring-value",
+      "kind": "unsupported_provider",
+      "processEnv": null,
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-yes-process-no-keyring-yes-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": "oracle-keyring-value",
+      "kind": "unsupported_provider",
+      "processEnv": null,
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-yes-process-yes-keyring-no-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": null,
+      "kind": "unsupported_provider",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-yes-process-yes-keyring-no-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": null,
+      "kind": "unsupported_provider",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-yes-process-yes-keyring-yes-dotenv-no",
+      "dotenv": "absent",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": "oracle-keyring-value",
+      "kind": "unsupported_provider",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "custom-before-yes-process-yes-keyring-yes-dotenv-yes",
+      "dotenv": "value",
+      "envKeyKind": "custom",
+      "hadValueBeforeDotenvLoad": true,
+      "keyring": "oracle-keyring-value",
+      "kind": "unsupported_provider",
+      "processEnv": "oracle-process-value",
+      "reportedEnvKey": "ORACLE_CUSTOM_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "empty-env-key",
+      "dotenv": "absent",
+      "envKeyKind": "empty",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "auth_not_required",
+      "processEnv": null,
+      "reportedEnvKey": null,
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": false,
+      "case": "empty-string-in-process-env",
+      "dotenv": "absent",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "signed_out",
+      "processEnv": "",
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": false,
+      "case": "empty-string-in-keyring",
+      "dotenv": "absent",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "",
+      "kind": "signed_out",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": false,
+      "case": "empty-value-in-dotenv",
+      "dotenv": "empty",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "signed_out",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": false,
+      "case": "every-source-empty-string",
+      "dotenv": "empty",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "",
+      "kind": "signed_out",
+      "processEnv": "",
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": false,
+      "case": "dotenv-path-is-a-directory",
+      "dotenv": "directory",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "kind": "signed_out",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": false
+    },
+    {
+      "canUseActiveProvider": true,
+      "case": "dotenv-directory-with-keyring-value",
+      "dotenv": "directory",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "oracle-keyring-value",
+      "kind": "os_keyring",
+      "processEnv": null,
+      "reportedEnvKey": "MISTRAL_API_KEY",
+      "signOutAvailable": true
+    },
+    {
+      "case": "dotenv-unreadable",
+      "dotenv": "unreadable",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": null,
+      "processEnv": null,
+      "raised": "PermissionError"
+    },
+    {
+      "case": "dotenv-unreadable-with-keyring-value",
+      "dotenv": "unreadable",
+      "envKeyKind": "default",
+      "hadValueBeforeDotenvLoad": false,
+      "keyring": "oracle-keyring-value",
+      "processEnv": null,
+      "raised": "PermissionError"
+    }
+  ],
+  "constants": {
+    "browserAuthApiBaseUrl": "https://console.mistral.ai/api",
+    "browserAuthBaseUrl": "https://console.mistral.ai",
+    "codeChallengeMethod": "S256",
+    "defaultEnvKey": "MISTRAL_API_KEY",
+    "defaultPorts": {
+      "http": 80,
+      "https": 443
+    },
+    "exchangePathTemplate": "/vibe/sign-in/{process_id}/exchange",
+    "httpGoneStatus": 410,
+    "keyringService": "ai.mistral.vibe",
+    "legacyKeyringServices": [
+      "vibe"
+    ],
+    "maxConsecutivePollFailures": 3,
+    "pkce": {
+      "generatedCharsetIsUnreserved": true,
+      "generatedLength": 86,
+      "scriptedChallenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "scriptedVerifier": "oracle-verifier-0123456789abcdefghijklmnopqrstuvwxyz-ABCDEFGH_~.-tail"
+    },
+    "pollIntervalSeconds": 3.0,
+    "signInPath": "/vibe/sign-in",
+    "statuses": [
+      "opening_browser",
+      "waiting_for_browser_sign_in",
+      "exchanging",
+      "completed"
+    ]
+  },
+  "errorTaxonomy": [
+    {
+      "messages": [
+        {
+          "digest": "f6e722cd04eb0ffa3a2c3be7b9486306f5acdba222ea5c55f2156d38d7b6f540",
+          "length": 32
+        }
+      ],
+      "name": "START_FAILED",
+      "value": "start_failed"
+    },
+    {
+      "messages": [
+        {
+          "digest": "4356bea6c7acaf98758c2ee576f2365dc0dee361db8f3606ff22a5366902f227",
+          "length": 46
+        }
+      ],
+      "name": "POLL_FAILED",
+      "value": "poll_failed"
+    },
+    {
+      "messages": [
+        {
+          "digest": "9555769f4f665fe90b03b5d82fcf74c314d3c053def72d1e7d3650cf26ec03b1",
+          "length": 42
+        }
+      ],
+      "name": "UNKNOWN_STATE",
+      "value": "unknown_state"
+    },
+    {
+      "messages": [
+        {
+          "digest": "fbb56805d28e1142bd6a3db24f45082c765580142a877c3670861396becaa44a",
+          "length": 50
+        }
+      ],
+      "name": "EXCHANGE_FAILED",
+      "value": "exchange_failed"
+    },
+    {
+      "messages": [
+        {
+          "digest": "b6d6a96a71cc4bc1719a85b9bf8f5f10abd559c95aa2f6a737ea2e380ed3ddb9",
+          "length": 51
+        }
+      ],
+      "name": "MISSING_API_KEY",
+      "value": "missing_api_key"
+    },
+    {
+      "messages": [
+        {
+          "digest": "eb77efe5cf70f3542d551a775b855226756a8f0b358398fe387acbf1f32b1603",
+          "length": 42
+        }
+      ],
+      "name": "MISSING_EXCHANGE_TOKEN",
+      "value": "missing_exchange_token"
+    },
+    {
+      "messages": [
+        {
+          "digest": "274639141b3a743e2c0a3ac71c6cac402f1e752cf7e0ab0ada303919104965b2",
+          "length": 24
+        }
+      ],
+      "name": "EXPIRED",
+      "value": "expired"
+    },
+    {
+      "messages": [
+        {
+          "digest": "dd23b50df84be199d4ec11ad86cdb777a3d95215babf8ebab6114c8cd2646427",
+          "length": 27
+        }
+      ],
+      "name": "DENIED",
+      "value": "denied"
+    },
+    {
+      "messages": [
+        {
+          "digest": "7b6f3d46ca34c21cef7402a9d4dc155563be6e509291cbb2defc2a1470b99e3d",
+          "length": 23
+        }
+      ],
+      "name": "PROVIDER_ERROR",
+      "value": "provider_error"
+    },
+    {
+      "messages": [
+        {
+          "digest": "61b928d049e4f00b6c14a899dfaa84c9b9fa75f986d30f9b445b225667190fe1",
+          "length": 26
+        }
+      ],
+      "name": "TIMED_OUT",
+      "value": "timed_out"
+    },
+    {
+      "messages": [
+        {
+          "digest": "d5308f70138abb1973c9176f909d0e0bd4bd46c866eae8d35f986fd482af44d9",
+          "length": 35
+        }
+      ],
+      "name": "OPEN_BROWSER_FAILED",
+      "value": "open_browser_failed"
+    }
+  ],
+  "note": "Setup-auth corpus: what the pinned reference's auth-state assessment, credential persistence, keyring migration, sign-in service and HTTP gateway answer for each scripted input. Values, vocabulary, call orders and verdicts are committed as they stand because the scenarios supplied them; every reference-authored error sentence is committed as a SHA-256 digest and a length. Regenerate with scripts/parity/setup_auth.py --corpus when the pinned reference moves.",
+  "persistence": [
+    {
+      "case": "persist-keyring-success-removes-stale-dotenv",
+      "customDomain": false,
+      "dotenvValue": null,
+      "envKey": "MISTRAL_API_KEY",
+      "keyringCalls": [
+        "set:ai.mistral.vibe",
+        "delete:vibe"
+      ],
+      "keyringStored": {
+        "ai.mistral.vibe": "oracle-api-key"
+      },
+      "op": "persist",
+      "outcome": "completed",
+      "outcomeDetailPresent": false,
+      "processEnvValue": "oracle-api-key",
+      "telemetry": [
+        {
+          "customDomain": false,
+          "event": "apiKeyAdded"
+        }
+      ]
+    },
+    {
+      "case": "persist-keyring-success-custom-domain-telemetry",
+      "customDomain": true,
+      "dotenvValue": null,
+      "envKey": "MISTRAL_API_KEY",
+      "keyringCalls": [
+        "set:ai.mistral.vibe",
+        "delete:vibe"
+      ],
+      "keyringStored": {
+        "ai.mistral.vibe": "oracle-api-key"
+      },
+      "op": "persist",
+      "outcome": "completed",
+      "outcomeDetailPresent": false,
+      "processEnvValue": "oracle-api-key",
+      "telemetry": [
+        {
+          "customDomain": true,
+          "event": "apiKeyAdded"
+        }
+      ]
+    },
+    {
+      "case": "persist-keyring-failure-falls-back-to-dotenv",
+      "customDomain": false,
+      "dotenvValue": "oracle-api-key",
+      "envKey": "MISTRAL_API_KEY",
+      "keyringCalls": [
+        "set:ai.mistral.vibe"
+      ],
+      "keyringStored": {},
+      "op": "persist",
+      "outcome": "completed",
+      "outcomeDetailPresent": false,
+      "processEnvValue": "oracle-api-key",
+      "telemetry": [
+        {
+          "customDomain": false,
+          "event": "apiKeyAdded"
+        }
+      ]
+    },
+    {
+      "case": "persist-no-backend-falls-back-to-dotenv",
+      "customDomain": false,
+      "dotenvValue": "oracle-api-key",
+      "envKey": "MISTRAL_API_KEY",
+      "keyringCalls": [
+        "set:ai.mistral.vibe"
+      ],
+      "keyringStored": {},
+      "op": "persist",
+      "outcome": "completed",
+      "outcomeDetailPresent": false,
+      "processEnvValue": "oracle-api-key",
+      "telemetry": [
+        {
+          "customDomain": false,
+          "event": "apiKeyAdded"
+        }
+      ]
+    },
+    {
+      "case": "persist-empty-env-var",
+      "customDomain": false,
+      "dotenvValue": null,
+      "envKey": "",
+      "keyringCalls": [],
+      "keyringStored": {},
+      "op": "persist",
+      "outcome": "env_var_error:<empty>",
+      "outcomeDetailPresent": true,
+      "processEnvValue": null,
+      "telemetry": []
+    },
+    {
+      "case": "persist-keyring-and-dotenv-both-fail",
+      "customDomain": false,
+      "dotenvValue": null,
+      "envKey": "MISTRAL_API_KEY",
+      "keyringCalls": [
+        "set:ai.mistral.vibe"
+      ],
+      "keyringStored": {},
+      "op": "persist",
+      "outcome": "save_error",
+      "outcomeDetailPresent": true,
+      "processEnvValue": "oracle-api-key",
+      "telemetry": []
+    },
+    {
+      "case": "persist-stale-dotenv-removal-failure-still-completes",
+      "customDomain": false,
+      "dotenvValue": "stale-dotenv-copy",
+      "envKey": "MISTRAL_API_KEY",
+      "keyringCalls": [
+        "set:ai.mistral.vibe",
+        "delete:vibe"
+      ],
+      "keyringStored": {
+        "ai.mistral.vibe": "oracle-api-key"
+      },
+      "op": "persist",
+      "outcome": "completed",
+      "outcomeDetailPresent": false,
+      "processEnvValue": "oracle-api-key",
+      "telemetry": [
+        {
+          "customDomain": false,
+          "event": "apiKeyAdded"
+        }
+      ]
+    },
+    {
+      "case": "remove-clears-both-services-dotenv-and-environ",
+      "dotenvValue": null,
+      "envKey": "MISTRAL_API_KEY",
+      "keyringCalls": [
+        "delete:ai.mistral.vibe",
+        "delete:vibe"
+      ],
+      "keyringStored": {},
+      "op": "remove",
+      "processEnvValue": null,
+      "raised": null
+    },
+    {
+      "case": "remove-with-nothing-stored-is-a-no-op",
+      "dotenvValue": null,
+      "envKey": "MISTRAL_API_KEY",
+      "keyringCalls": [
+        "delete:ai.mistral.vibe",
+        "delete:vibe"
+      ],
+      "keyringStored": {},
+      "op": "remove",
+      "processEnvValue": null,
+      "raised": null
+    },
+    {
+      "case": "remove-with-no-backend-still-clears-the-rest",
+      "dotenvValue": null,
+      "envKey": "MISTRAL_API_KEY",
+      "keyringCalls": [
+        "delete:ai.mistral.vibe",
+        "delete:vibe"
+      ],
+      "keyringStored": {},
+      "op": "remove",
+      "processEnvValue": null,
+      "raised": null
+    },
+    {
+      "case": "remove-with-a-real-backend-error-clears-then-raises",
+      "dotenvValue": null,
+      "envKey": "MISTRAL_API_KEY",
+      "keyringCalls": [
+        "delete:ai.mistral.vibe",
+        "delete:vibe"
+      ],
+      "keyringStored": {},
+      "op": "remove",
+      "processEnvValue": null,
+      "raised": "KeyringError"
+    },
+    {
+      "case": "remove-empty-env-var-is-refused",
+      "dotenvValue": null,
+      "envKey": "",
+      "keyringCalls": [],
+      "keyringStored": {},
+      "op": "remove",
+      "processEnvValue": null,
+      "raised": "ValueError"
+    },
+    {
+      "case": "read-resolves-from-the-current-service-first",
+      "envKey": "ORACLE_READ_KEY",
+      "keyringCalls": [
+        "get:ai.mistral.vibe"
+      ],
+      "keyringStored": {
+        "ai.mistral.vibe": "current-value",
+        "vibe": "legacy-value"
+      },
+      "op": "keyringRead",
+      "value": "current-value"
+    },
+    {
+      "case": "read-falls-back-to-legacy-and-migrates",
+      "envKey": "ORACLE_READ_KEY",
+      "keyringCalls": [
+        "get:ai.mistral.vibe",
+        "get:vibe",
+        "set:ai.mistral.vibe",
+        "delete:vibe"
+      ],
+      "keyringStored": {
+        "ai.mistral.vibe": "legacy-value"
+      },
+      "op": "keyringRead",
+      "value": "legacy-value"
+    },
+    {
+      "case": "read-migration-write-failure-still-returns-the-key",
+      "envKey": "ORACLE_READ_KEY",
+      "keyringCalls": [
+        "get:ai.mistral.vibe",
+        "get:vibe",
+        "set:ai.mistral.vibe"
+      ],
+      "keyringStored": {
+        "vibe": "legacy-value"
+      },
+      "op": "keyringRead",
+      "value": "legacy-value"
+    },
+    {
+      "case": "read-migration-delete-failure-still-returns-the-key",
+      "envKey": "ORACLE_READ_KEY",
+      "keyringCalls": [
+        "get:ai.mistral.vibe",
+        "get:vibe",
+        "set:ai.mistral.vibe",
+        "delete:vibe"
+      ],
+      "keyringStored": {
+        "ai.mistral.vibe": "legacy-value",
+        "vibe": "legacy-value"
+      },
+      "op": "keyringRead",
+      "value": "legacy-value"
+    },
+    {
+      "case": "read-nothing-stored-anywhere",
+      "envKey": "ORACLE_READ_KEY",
+      "keyringCalls": [
+        "get:ai.mistral.vibe",
+        "get:vibe"
+      ],
+      "keyringStored": {},
+      "op": "keyringRead",
+      "value": null
+    },
+    {
+      "case": "read-backend-error-reads-as-absent",
+      "envKey": "ORACLE_READ_KEY",
+      "keyringCalls": [
+        "get:ai.mistral.vibe"
+      ],
+      "keyringStored": {},
+      "op": "keyringRead",
+      "value": null
+    },
+    {
+      "case": "read-empty-env-key-consults-nothing",
+      "envKey": "",
+      "keyringCalls": [],
+      "keyringStored": {
+        "ai.mistral.vibe": "current-value"
+      },
+      "op": "keyringRead",
+      "value": null
+    },
+    {
+      "case": "read-disabled-consults-nothing",
+      "envKey": "ORACLE_READ_KEY",
+      "keyringCalls": [],
+      "keyringStored": {
+        "ai.mistral.vibe": "current-value"
+      },
+      "op": "keyringRead",
+      "value": null
+    },
+    {
+      "case": "read-second-lookup-is-served-from-the-cache",
+      "envKey": "ORACLE_READ_KEY",
+      "keyringCalls": [
+        "get:ai.mistral.vibe"
+      ],
+      "keyringStored": {
+        "ai.mistral.vibe": "current-value"
+      },
+      "op": "keyringRead",
+      "value": "current-value"
+    }
+  ],
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+  },
+  "schemaVersion": 1,
+  "signInProtocol": [
+    {
+      "apiKey": "oracle-exchanged-api-key",
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-immediate-success",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        },
+        {
+          "event": "status",
+          "status": "exchanging"
+        },
+        {
+          "event": "status",
+          "status": "completed"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll",
+        "exchange:oracle-process:oracle-token"
+      ],
+      "layer": "service",
+      "pollCount": 1,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "exchangeToken": "oracle-token",
+            "status": "completed"
+          }
+        ]
+      },
+      "sleeps": []
+    },
+    {
+      "apiKey": "oracle-exchanged-api-key",
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-two-pending-polls-then-success",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        },
+        {
+          "event": "status",
+          "status": "exchanging"
+        },
+        {
+          "event": "status",
+          "status": "completed"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll",
+        "poll",
+        "poll",
+        "exchange:oracle-process:oracle-token"
+      ],
+      "layer": "service",
+      "pollCount": 3,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "status": "pending"
+          },
+          {
+            "status": "pending"
+          },
+          {
+            "exchangeToken": "oracle-token",
+            "status": "completed"
+          }
+        ]
+      },
+      "sleeps": [
+        3.0,
+        3.0
+      ]
+    },
+    {
+      "apiKey": "oracle-exchanged-api-key",
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-two-poll-failures-then-success",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        },
+        {
+          "event": "status",
+          "status": "exchanging"
+        },
+        {
+          "event": "status",
+          "status": "completed"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll",
+        "poll",
+        "poll",
+        "exchange:oracle-process:oracle-token"
+      ],
+      "layer": "service",
+      "pollCount": 3,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "raise": "poll_failed"
+          },
+          {
+            "raise": "poll_failed"
+          },
+          {
+            "exchangeToken": "oracle-token",
+            "status": "completed"
+          }
+        ]
+      },
+      "sleeps": [
+        3.0,
+        3.0
+      ]
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-three-consecutive-poll-failures-stop",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "poll_failed",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll",
+        "poll",
+        "poll"
+      ],
+      "layer": "service",
+      "pollCount": 3,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "raise": "poll_failed"
+          },
+          {
+            "raise": "poll_failed"
+          },
+          {
+            "raise": "poll_failed"
+          }
+        ]
+      },
+      "sleeps": [
+        3.0,
+        3.0
+      ]
+    },
+    {
+      "apiKey": "oracle-exchanged-api-key",
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-failure-streak-resets-on-success",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        },
+        {
+          "event": "status",
+          "status": "exchanging"
+        },
+        {
+          "event": "status",
+          "status": "completed"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll",
+        "poll",
+        "poll",
+        "poll",
+        "poll",
+        "poll",
+        "exchange:oracle-process:oracle-token"
+      ],
+      "layer": "service",
+      "pollCount": 6,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "raise": "poll_failed"
+          },
+          {
+            "raise": "poll_failed"
+          },
+          {
+            "status": "pending"
+          },
+          {
+            "raise": "poll_failed"
+          },
+          {
+            "raise": "poll_failed"
+          },
+          {
+            "exchangeToken": "oracle-token",
+            "status": "completed"
+          }
+        ]
+      },
+      "sleeps": [
+        3.0,
+        3.0,
+        3.0,
+        3.0,
+        3.0
+      ]
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-denied",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "denied",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll"
+      ],
+      "layer": "service",
+      "pollCount": 1,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "status": "denied"
+          }
+        ]
+      },
+      "sleeps": []
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-expired-status",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "expired",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll"
+      ],
+      "layer": "service",
+      "pollCount": 1,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "status": "expired"
+          }
+        ]
+      },
+      "sleeps": []
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-provider-error-with-default-message",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "provider_error",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll"
+      ],
+      "layer": "service",
+      "pollCount": 1,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "status": "error"
+          }
+        ]
+      },
+      "sleeps": []
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-provider-error-with-server-message",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "provider_error",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll"
+      ],
+      "layer": "service",
+      "pollCount": 1,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "message": "scripted server detail",
+            "status": "error"
+          }
+        ]
+      },
+      "sleeps": []
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-unknown-status",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "unknown_state",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll"
+      ],
+      "layer": "service",
+      "pollCount": 1,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "status": "half-done"
+          }
+        ]
+      },
+      "sleeps": []
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-completed-without-exchange-token",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "missing_exchange_token",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll"
+      ],
+      "layer": "service",
+      "pollCount": 1,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "status": "completed"
+          }
+        ]
+      },
+      "sleeps": []
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-expiry-clamps-the-sleep",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "timed_out",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:00:04+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll",
+        "poll"
+      ],
+      "layer": "service",
+      "pollCount": 2,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 4.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "status": "pending"
+          },
+          {
+            "status": "pending"
+          },
+          {
+            "status": "pending"
+          }
+        ]
+      },
+      "sleeps": [
+        3.0,
+        1.0
+      ]
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-already-expired-at-start",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "timed_out",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2025-12-31T23:59:59+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        }
+      ],
+      "gatewayCalls": [
+        "create"
+      ],
+      "layer": "service",
+      "pollCount": 0,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": -1.0,
+        "opener": "accept",
+        "polls": []
+      },
+      "sleeps": []
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-timeout-after-pending-polls",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "timed_out",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:00:07+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll",
+        "poll",
+        "poll"
+      ],
+      "layer": "service",
+      "pollCount": 3,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 7.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "status": "pending"
+          },
+          {
+            "status": "pending"
+          },
+          {
+            "status": "pending"
+          }
+        ]
+      },
+      "sleeps": [
+        3.0,
+        3.0,
+        1.0
+      ]
+    },
+    {
+      "browserOpened": [],
+      "case": "service-start-failure-opens-no-browser",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "start_failed",
+      "events": [],
+      "gatewayCalls": [
+        "create"
+      ],
+      "layer": "service",
+      "pollCount": 0,
+      "script": {
+        "createError": "start_failed",
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": []
+      },
+      "sleeps": []
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-open-browser-raises",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "open_browser_failed",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        }
+      ],
+      "gatewayCalls": [
+        "create"
+      ],
+      "layer": "service",
+      "pollCount": 0,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "raise",
+        "polls": [
+          {
+            "exchangeToken": "oracle-token",
+            "status": "completed"
+          }
+        ]
+      },
+      "sleeps": []
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-open-browser-returns-false",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "open_browser_failed",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        }
+      ],
+      "gatewayCalls": [
+        "create"
+      ],
+      "layer": "service",
+      "pollCount": 0,
+      "script": {
+        "createError": null,
+        "exchange": "oracle-exchanged-api-key",
+        "expiresIn": 600.0,
+        "opener": "refuse",
+        "polls": [
+          {
+            "exchangeToken": "oracle-token",
+            "status": "completed"
+          }
+        ]
+      },
+      "sleeps": []
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-exchange-failure",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "exchange_failed",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        },
+        {
+          "event": "status",
+          "status": "exchanging"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll",
+        "exchange:oracle-process:oracle-token"
+      ],
+      "layer": "service",
+      "pollCount": 1,
+      "script": {
+        "createError": null,
+        "exchange": {
+          "raise": "exchange_failed"
+        },
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "exchangeToken": "oracle-token",
+            "status": "completed"
+          }
+        ]
+      },
+      "sleeps": []
+    },
+    {
+      "browserOpened": [
+        "https://console.mistral.ai/oracle/sign-in"
+      ],
+      "case": "service-exchange-missing-api-key",
+      "challenge": "oP_nGx59bVS_sN54O89Sg398PNRps1ypeH9iaGwoTaU",
+      "errorCode": "missing_api_key",
+      "events": [
+        {
+          "event": "attemptStarted",
+          "expiresAt": "2026-01-01T00:10:00+00:00",
+          "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+        },
+        {
+          "event": "status",
+          "status": "opening_browser"
+        },
+        {
+          "event": "status",
+          "status": "waiting_for_browser_sign_in"
+        },
+        {
+          "event": "status",
+          "status": "exchanging"
+        }
+      ],
+      "gatewayCalls": [
+        "create",
+        "poll",
+        "exchange:oracle-process:oracle-token"
+      ],
+      "layer": "service",
+      "pollCount": 1,
+      "script": {
+        "createError": null,
+        "exchange": {
+          "raise": "missing_api_key"
+        },
+        "expiresIn": 600.0,
+        "opener": "accept",
+        "polls": [
+          {
+            "exchangeToken": "oracle-token",
+            "status": "completed"
+          }
+        ]
+      },
+      "sleeps": []
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-create-posts-the-pkce-payload",
+      "expiresAt": "2026-01-01T00:10:00+00:00",
+      "layer": "gateway",
+      "op": "create",
+      "pollUrl": "https://console.mistral.ai/api/oracle/poll",
+      "processId": "oracle-process",
+      "requests": [
+        {
+          "json": {
+            "code_challenge": "oracle-challenge",
+            "code_challenge_method": "S256"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "expires_at": "2026-01-01T00:10:00Z",
+            "poll_url": "https://console.mistral.ai/api/oracle/poll",
+            "process_id": "oracle-process",
+            "sign_in_url": "https://console.mistral.ai/oracle/sign-in"
+          }
+        }
+      ],
+      "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-create-normalizes-the-zulu-expiry",
+      "expiresAt": "2026-01-01T00:30:00+00:00",
+      "layer": "gateway",
+      "op": "create",
+      "pollUrl": "https://console.mistral.ai/api/oracle/poll",
+      "processId": "oracle-process",
+      "requests": [
+        {
+          "json": {
+            "code_challenge": "oracle-challenge",
+            "code_challenge_method": "S256"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "expires_at": "2026-01-01T01:30:00+01:00",
+            "poll_url": "https://console.mistral.ai/api/oracle/poll",
+            "process_id": "oracle-process",
+            "sign_in_url": "https://console.mistral.ai/oracle/sign-in"
+          }
+        }
+      ],
+      "signInUrl": "https://console.mistral.ai/oracle/sign-in"
+    },
+    {
+      "apiBase": "https://console.internal.example/api",
+      "browserBase": "https://console.internal.example",
+      "case": "gateway-create-follows-a-custom-api-base",
+      "expiresAt": "2026-01-01T00:10:00+00:00",
+      "layer": "gateway",
+      "op": "create",
+      "pollUrl": "https://console.internal.example/api/oracle/poll",
+      "processId": "oracle-process",
+      "requests": [
+        {
+          "json": {
+            "code_challenge": "oracle-challenge",
+            "code_challenge_method": "S256"
+          },
+          "method": "POST",
+          "url": "https://console.internal.example/api/vibe/sign-in"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "expires_at": "2026-01-01T00:10:00Z",
+            "poll_url": "https://console.internal.example/api/oracle/poll",
+            "process_id": "oracle-process",
+            "sign_in_url": "https://console.internal.example/oracle/sign-in"
+          }
+        }
+      ],
+      "signInUrl": "https://console.internal.example/oracle/sign-in"
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-create-transport-error",
+      "errorCode": "start_failed",
+      "layer": "gateway",
+      "op": "create",
+      "requests": [
+        {
+          "json": {
+            "code_challenge": "oracle-challenge",
+            "code_challenge_method": "S256"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in"
+        }
+      ],
+      "script": [
+        {
+          "transportError": true
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-create-non-success-status",
+      "errorCode": "start_failed",
+      "layer": "gateway",
+      "op": "create",
+      "requests": [
+        {
+          "json": {
+            "code_challenge": "oracle-challenge",
+            "code_challenge_method": "S256"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in"
+        }
+      ],
+      "script": [
+        {
+          "body": {},
+          "status": 500
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-create-unparseable-body",
+      "errorCode": "start_failed",
+      "layer": "gateway",
+      "op": "create",
+      "requests": [
+        {
+          "json": {
+            "code_challenge": "oracle-challenge",
+            "code_challenge_method": "S256"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in"
+        }
+      ],
+      "script": [
+        {
+          "rawBody": "not json"
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-create-missing-field",
+      "errorCode": "start_failed",
+      "layer": "gateway",
+      "op": "create",
+      "requests": [
+        {
+          "json": {
+            "code_challenge": "oracle-challenge",
+            "code_challenge_method": "S256"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "process_id": "oracle-process"
+          }
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-create-rejects-off-origin-sign-in-url",
+      "errorCode": "start_failed",
+      "layer": "gateway",
+      "op": "create",
+      "requests": [
+        {
+          "json": {
+            "code_challenge": "oracle-challenge",
+            "code_challenge_method": "S256"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "expires_at": "2026-01-01T00:10:00Z",
+            "poll_url": "https://console.mistral.ai/api/oracle/poll",
+            "process_id": "oracle-process",
+            "sign_in_url": "https://evil.example/oracle/sign-in"
+          }
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-create-rejects-off-origin-poll-url",
+      "errorCode": "start_failed",
+      "layer": "gateway",
+      "op": "create",
+      "requests": [
+        {
+          "json": {
+            "code_challenge": "oracle-challenge",
+            "code_challenge_method": "S256"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "expires_at": "2026-01-01T00:10:00Z",
+            "poll_url": "https://evil.example/api/oracle/poll",
+            "process_id": "oracle-process",
+            "sign_in_url": "https://console.mistral.ai/oracle/sign-in"
+          }
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-poll-reads-a-pending-status",
+      "exchangeToken": null,
+      "layer": "gateway",
+      "message": null,
+      "op": "poll",
+      "requests": [
+        {
+          "json": null,
+          "method": "GET",
+          "url": "https://console.mistral.ai/api/oracle/poll"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "status": "pending"
+          }
+        }
+      ],
+      "status": "pending"
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-poll-reads-a-completed-status",
+      "exchangeToken": "oracle-token",
+      "layer": "gateway",
+      "message": null,
+      "op": "poll",
+      "requests": [
+        {
+          "json": null,
+          "method": "GET",
+          "url": "https://console.mistral.ai/api/oracle/poll"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "exchange_token": "oracle-token",
+            "status": "completed"
+          }
+        }
+      ],
+      "status": "completed"
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-poll-maps-410-to-expired",
+      "exchangeToken": null,
+      "layer": "gateway",
+      "message": null,
+      "op": "poll",
+      "requests": [
+        {
+          "json": null,
+          "method": "GET",
+          "url": "https://console.mistral.ai/api/oracle/poll"
+        }
+      ],
+      "script": [
+        {
+          "body": {},
+          "status": 410
+        }
+      ],
+      "status": "expired"
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-poll-transport-error",
+      "errorCode": "poll_failed",
+      "layer": "gateway",
+      "op": "poll",
+      "requests": [
+        {
+          "json": null,
+          "method": "GET",
+          "url": "https://console.mistral.ai/api/oracle/poll"
+        }
+      ],
+      "script": [
+        {
+          "transportError": true
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-poll-non-success-status",
+      "errorCode": "poll_failed",
+      "layer": "gateway",
+      "op": "poll",
+      "requests": [
+        {
+          "json": null,
+          "method": "GET",
+          "url": "https://console.mistral.ai/api/oracle/poll"
+        }
+      ],
+      "script": [
+        {
+          "body": {},
+          "status": 503
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-poll-unparseable-body",
+      "errorCode": "poll_failed",
+      "layer": "gateway",
+      "op": "poll",
+      "requests": [
+        {
+          "json": null,
+          "method": "GET",
+          "url": "https://console.mistral.ai/api/oracle/poll"
+        }
+      ],
+      "script": [
+        {
+          "rawBody": "<html>"
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-poll-unknown-status",
+      "errorCode": "unknown_state",
+      "layer": "gateway",
+      "op": "poll",
+      "requests": [
+        {
+          "json": null,
+          "method": "GET",
+          "url": "https://console.mistral.ai/api/oracle/poll"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "status": "half-done"
+          }
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-poll-revalidates-before-requesting",
+      "errorCode": "poll_failed",
+      "layer": "gateway",
+      "op": "poll",
+      "requests": [],
+      "script": []
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "apiKey": "oracle-key",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-exchange-posts-the-token-and-verifier",
+      "layer": "gateway",
+      "op": "exchange",
+      "requests": [
+        {
+          "json": {
+            "code_verifier": "oracle-verifier",
+            "exchange_token": "oracle-token"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in/oracle-process/exchange"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "api_key": "oracle-key"
+          }
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-exchange-success-without-a-key",
+      "errorCode": "missing_api_key",
+      "layer": "gateway",
+      "op": "exchange",
+      "requests": [
+        {
+          "json": {
+            "code_verifier": "oracle-verifier",
+            "exchange_token": "oracle-token"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in/oracle-process/exchange"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "detail": "scripted-detail"
+          }
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-exchange-transport-error",
+      "errorCode": "exchange_failed",
+      "layer": "gateway",
+      "op": "exchange",
+      "requests": [
+        {
+          "json": {
+            "code_verifier": "oracle-verifier",
+            "exchange_token": "oracle-token"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in/oracle-process/exchange"
+        }
+      ],
+      "script": [
+        {
+          "transportError": true
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-exchange-non-success-status",
+      "errorCode": "exchange_failed",
+      "layer": "gateway",
+      "op": "exchange",
+      "requests": [
+        {
+          "json": {
+            "code_verifier": "oracle-verifier",
+            "exchange_token": "oracle-token"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in/oracle-process/exchange"
+        }
+      ],
+      "script": [
+        {
+          "body": {
+            "detail": "scripted-denial"
+          },
+          "status": 403
+        }
+      ]
+    },
+    {
+      "apiBase": "https://console.mistral.ai/api",
+      "browserBase": "https://console.mistral.ai",
+      "case": "gateway-exchange-unparseable-body",
+      "errorCode": "exchange_failed",
+      "layer": "gateway",
+      "op": "exchange",
+      "requests": [
+        {
+          "json": {
+            "code_verifier": "oracle-verifier",
+            "exchange_token": "oracle-token"
+          },
+          "method": "POST",
+          "url": "https://console.mistral.ai/api/vibe/sign-in/oracle-process/exchange"
+        }
+      ],
+      "script": [
+        {
+          "rawBody": ""
+        }
+      ]
+    }
+  ],
+  "urlValidation": [
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "exact-base",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/api",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "path-under-base",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/api/poll/1",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "deeper-path-under-base",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/api/a/b/c",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "different-host",
+      "value": "https://evil.example/api/x",
+      "verdict": "rejected"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "different-subdomain",
+      "value": "https://api.mistral.ai/api/x",
+      "verdict": "rejected"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "different-scheme",
+      "value": "http://console.mistral.ai/api/x",
+      "verdict": "rejected"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "explicit-default-https-port-on-value",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai:443/api/x",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai:443/api",
+      "case": "explicit-default-https-port-on-base",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/api/x",
+      "verdict": "accepted"
+    },
+    {
+      "base": "http://gateway.local/api",
+      "case": "explicit-default-http-ports-both-sides",
+      "returnedUnchanged": true,
+      "value": "http://gateway.local:80/api/x",
+      "verdict": "accepted"
+    },
+    {
+      "base": "http://localhost:8080/api",
+      "case": "custom-port-matching",
+      "returnedUnchanged": true,
+      "value": "http://localhost:8080/api/x",
+      "verdict": "accepted"
+    },
+    {
+      "base": "http://localhost:8080/api",
+      "case": "custom-port-mismatch",
+      "value": "http://localhost:9090/api/x",
+      "verdict": "rejected"
+    },
+    {
+      "base": "https://console.mistral.ai:8443/api",
+      "case": "default-port-against-custom-port",
+      "value": "https://console.mistral.ai/api/x",
+      "verdict": "rejected"
+    },
+    {
+      "base": "https://console.mistral.ai",
+      "case": "bare-origin-base-accepts-any-path",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/anywhere",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai",
+      "case": "bare-origin-base-accepts-root",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "textual-prefix-not-a-segment-boundary",
+      "value": "https://console.mistral.ai/apix/poll",
+      "verdict": "rejected"
+    },
+    {
+      "base": "https://console.mistral.ai/api/",
+      "case": "base-with-trailing-slash-path",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/api/poll",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "dot-segments-escaping-the-base",
+      "value": "https://console.mistral.ai/api/../admin",
+      "verdict": "rejected"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "dot-segments-staying-inside",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/api/v1/../v2",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "percent-encoded-dot-segments-escaping",
+      "value": "https://console.mistral.ai/api/%2e%2e/admin",
+      "verdict": "rejected"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "percent-encoded-dot-segments-inside",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/api/%2e%2e/api/poll",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "double-encoded-dot-segments",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/api/%252e%252e/admin",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "current-directory-dot-segment",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/api/./poll",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "query-string-is-ignored",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/api/poll?token=x",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "fragment-is-ignored",
+      "returnedUnchanged": true,
+      "value": "https://console.mistral.ai/api/poll#frag",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "userinfo-does-not-change-the-origin",
+      "returnedUnchanged": true,
+      "value": "https://user:pass@console.mistral.ai/api/poll",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "uppercase-scheme",
+      "returnedUnchanged": true,
+      "value": "HTTPS://console.mistral.ai/api/poll",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "uppercase-host",
+      "returnedUnchanged": true,
+      "value": "https://CONSOLE.MISTRAL.AI/api/poll",
+      "verdict": "accepted"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "invalid-port-on-the-value",
+      "value": "https://console.mistral.ai:port/api/poll",
+      "verdict": "rejected"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "relative-url",
+      "value": "/api/poll",
+      "verdict": "rejected"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "schemeless-url",
+      "value": "console.mistral.ai/api/poll",
+      "verdict": "rejected"
+    },
+    {
+      "base": "https://console.mistral.ai/api",
+      "case": "non-http-scheme",
+      "value": "file://console.mistral.ai/api/poll",
+      "verdict": "rejected"
+    },
+    {
+      "base": "http://127.0.0.1:8080/api",
+      "case": "ip-host-matching",
+      "returnedUnchanged": true,
+      "value": "http://127.0.0.1:8080/api/poll",
+      "verdict": "accepted"
+    },
+    {
+      "base": "http://127.0.0.1:8080/api",
+      "case": "ip-host-mismatch",
+      "value": "http://127.0.0.2:8080/api/poll",
+      "verdict": "rejected"
+    }
+  ]
+}
