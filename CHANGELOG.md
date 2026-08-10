@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Reword four onboarding screen lines that read identically to the upstream
+  ones: the welcome hint, the theme heading, the custom-domain heading and the
+  browser step's completion detail. Each says the same thing in this port's own
+  words, which `NOTICE` requires, and a new guard digests every sentence the
+  onboarding screens and the ACP authentication methods carry and fails if one
+  ever matches the reference's.
 - Publish the reference's ACP authentication surface. `vibe-acp` now
   advertises `browser-auth` when the active provider supports browser
   sign-in, adds `browser-auth-delegated` when the client declares that

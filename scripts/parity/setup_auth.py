@@ -13,13 +13,14 @@ fake clock observe the whole state machine. ``HttpBrowserSignInGateway``
 accepts its HTTP client, so a recording stub captures every request it would
 have issued and feeds it scripted ``httpx.Response`` objects.
 
-Five families come out, and are what the Rust replay compares:
+Six families come out, and are what the Rust replay compares:
 
 ``authState``       the six provenance states over the five-source matrix
 ``persistence``     save, fallback, removal and the keyring read-and-migrate
 ``signInProtocol``  the service state machine and the gateway wire behavior
 ``urlValidation``   the origin and path-prefix verdict per server URL
 ``errorTaxonomy``   the eleven error codes and their message digests
+``acpAuthProse``    the editor-protocol method labels, as length and digest
 
 Two artifacts come out of a run::
 
@@ -28,8 +29,9 @@ Two artifacts come out of a run::
 
 The committed corpus carries scenario-supplied values, vocabulary, counts,
 call orders and verdicts. Anything reference-authored, which is the error
-message sentences, is committed as a length plus a SHA-256: a digest still
-fails the replay on any change while no reference sentence ships.
+message sentences and the ACP method labels, is committed as a length plus a
+SHA-256: a digest still fails the replay on any change while no reference
+sentence ships.
 
 The capture asserts its own isolation: a socket guard fails the run if any
 code path attempts a connection or a DNS resolution, so a scenario that
@@ -48,9 +50,11 @@ the checkout is never moved.
 from __future__ import annotations
 
 import argparse
+import ast
 import asyncio
 import contextlib
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -69,7 +73,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path(".parity/setup-auth-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/setup-auth/corpus.json")
 DEFAULT_CACHE = Path(".parity")
@@ -1538,6 +1542,76 @@ def capture_error_taxonomy(
     return records
 
 
+def _module_source(module: str) -> str:
+    """The pinned tree's source for `module`, located through the import path."""
+    specification = importlib.util.find_spec(module)
+    if specification is None or specification.origin is None:
+        raise OracleError(f"the pinned tree does not publish {module}")
+    return Path(specification.origin).read_text(encoding="utf-8")
+
+
+def _keyword_string(call: ast.Call, name: str) -> str | None:
+    for keyword in call.keywords:
+        if (
+            keyword.arg == name
+            and isinstance(keyword.value, ast.Constant)
+            and isinstance(keyword.value.value, str)
+        ):
+            return keyword.value.value
+    return None
+
+
+def _calls_named(source: str, name: str) -> list[ast.Call]:
+    return [
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == name
+    ]
+
+
+def capture_acp_auth_prose() -> list[dict[str, Any]]:
+    """The labels the reference's editor-protocol auth methods carry.
+
+    The browser method is built in ``vibe/acp/auth.py`` and the terminal one in
+    ``vibe/acp/agent.py``; both name and describe themselves in authored prose
+    `NOTICE` forbids shipping, so only each run's length and SHA-256 is
+    recorded and the ACP replay holds this port's own labels unequal to them.
+    """
+    browser = _calls_named(_module_source("vibe.acp.auth"), "AuthMethodAgent")
+    terminal = _calls_named(_module_source("vibe.acp.agent"), "TerminalAuthMethod")
+    if not browser or not terminal:
+        raise OracleError("the pinned reference declares no ACP authentication method")
+    runs: dict[str, str | None] = {
+        "browserMethod/name": _keyword_string(browser[0], "name"),
+        "browserMethod/description": _keyword_string(browser[0], "description"),
+        "terminalMethod/name": _keyword_string(terminal[0], "name"),
+        "terminalMethod/description": _keyword_string(terminal[0], "description"),
+        "terminalMethod/label": next(
+            (
+                value.value
+                for node in ast.walk(terminal[0])
+                if isinstance(node, ast.Dict)
+                for key, value in zip(node.keys, node.values, strict=True)
+                if isinstance(key, ast.Constant)
+                and key.value == "label"
+                and isinstance(value, ast.Constant)
+                and isinstance(value.value, str)
+            ),
+            None,
+        ),
+    }
+    missing = sorted(surface for surface, run in runs.items() if run is None)
+    if missing:
+        raise OracleError(f"no reference label found for {missing}")
+    return [
+        {"surface": surface, "run": digest(run)}
+        for surface, run in sorted(runs.items())
+        if run is not None
+    ]
+
+
 def capture_constants() -> dict[str, Any]:
     from vibe.core.config._defaults import (
         DEFAULT_MISTRAL_API_ENV_KEY,
@@ -1617,7 +1691,7 @@ def build_corpus(reference: dict[str, str], families: dict[str, Any]) -> dict[st
             "persistence, keyring migration, sign-in service and HTTP gateway answer for each "
             "scripted input. Values, vocabulary, call orders and verdicts are committed as they "
             "stand because the scenarios supplied them; every reference-authored error sentence "
-            "is committed as a SHA-256 digest and a length. Regenerate with "
+            "and ACP method label is committed as a SHA-256 digest and a length. Regenerate with "
             "scripts/parity/setup_auth.py --corpus when the pinned reference moves."
         ),
         **families,
@@ -1646,6 +1720,7 @@ def main() -> int:
             for code, sentences in source.items():
                 harvested.setdefault(code, []).extend(sentences)
         taxonomy = capture_error_taxonomy(harvested)
+        acp_auth_prose = capture_acp_auth_prose()
         constants = capture_constants()
     except OracleError as error:
         print(f"setup-auth capture failed: {error}", file=sys.stderr)
@@ -1673,6 +1748,7 @@ def main() -> int:
         "signInProtocol": service_records + gateway_records,
         "urlValidation": url_validation,
         "errorTaxonomy": taxonomy,
+        "acpAuthProse": acp_auth_prose,
     }
     corpus = build_corpus(reference, families)
 
@@ -1707,6 +1783,7 @@ def main() -> int:
         "signInProtocol": len(service_records) + len(gateway_records),
         "urlValidation": len(url_validation),
         "errorTaxonomy": len(taxonomy),
+        "acpAuthProse": len(acp_auth_prose),
     }
     total = sum(counted.values())
     print(

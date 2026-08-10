@@ -1,4 +1,41 @@
 {
+  "acpAuthProse": [
+    {
+      "run": {
+        "digest": "c34ee5e81b75d1b8c430e1ba3eba1a15c799a541bc1dc98234463b10e81d9c02",
+        "length": 62
+      },
+      "surface": "browserMethod/description"
+    },
+    {
+      "run": {
+        "digest": "c8ba6d8de5fd9b503014f01a69a4f8ea9a6fc7fbac45907407918700a5c3257b",
+        "length": 33
+      },
+      "surface": "browserMethod/name"
+    },
+    {
+      "run": {
+        "digest": "425335a924a3ea7a3c84ac43e316105df1eb80873b78b6842193d32045023ebc",
+        "length": 41
+      },
+      "surface": "terminalMethod/description"
+    },
+    {
+      "run": {
+        "digest": "4ab4e54febdce455d0daf1d24d7f95ba00df91578bbe3b2ace6dfc72e508d926",
+        "length": 18
+      },
+      "surface": "terminalMethod/label"
+    },
+    {
+      "run": {
+        "digest": "c7d4ae1f0c2c2c29a452d627083374d23b9e67ae9430b940bd181ec22efcab80",
+        "length": 21
+      },
+      "surface": "terminalMethod/name"
+    }
+  ],
   "authState": [
     {
       "canUseActiveProvider": false,
@@ -630,7 +667,7 @@
       "value": "open_browser_failed"
     }
   ],
-  "note": "Setup-auth corpus: what the pinned reference's auth-state assessment, credential persistence, keyring migration, sign-in service and HTTP gateway answer for each scripted input. Values, vocabulary, call orders and verdicts are committed as they stand because the scenarios supplied them; every reference-authored error sentence is committed as a SHA-256 digest and a length. Regenerate with scripts/parity/setup_auth.py --corpus when the pinned reference moves.",
+  "note": "Setup-auth corpus: what the pinned reference's auth-state assessment, credential persistence, keyring migration, sign-in service and HTTP gateway answer for each scripted input. Values, vocabulary, call orders and verdicts are committed as they stand because the scenarios supplied them; every reference-authored error sentence and ACP method label is committed as a SHA-256 digest and a length. Regenerate with scripts/parity/setup_auth.py --corpus when the pinned reference moves.",
   "persistence": [
     {
       "case": "persist-keyring-success-removes-stale-dotenv",
@@ -946,7 +983,7 @@
   "reference": {
     "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
   },
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "signInProtocol": [
     {
       "apiKey": "oracle-exchanged-api-key",

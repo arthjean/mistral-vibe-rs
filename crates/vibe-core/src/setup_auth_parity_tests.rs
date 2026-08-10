@@ -18,7 +18,9 @@
 //! capture used, and the URL verdicts against `validate_url_against_base`.
 //! The error taxonomy is compared for structural equality and its sentences
 //! for permanent inequality: this port's prose failing to differ from a
-//! reference digest is itself a failure. The `constants` block reads the two
+//! reference digest is itself a failure. `acpAuthProse` records the same way
+//! for the editor-protocol method labels, whose inequality `vibe-acp` asserts
+//! against this file, since that crate publishes them. The `constants` block reads the two
 //! browser-auth defaults and the default key variable out of the
 //! configuration registry through `default_document`, which is exactly the
 //! surface `config/fields/read` serves to clients.
@@ -50,7 +52,7 @@ const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/setup-auth/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/setup_auth.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 1;
+const CORPUS_SCHEMA_VERSION: u32 = 2;
 /// The scenario floor this replay commits to, so a regeneration that captured
 /// almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 140;
@@ -89,6 +91,7 @@ struct Corpus {
     sign_in_protocol: Vec<ProtocolCase>,
     url_validation: Vec<UrlValidationCase>,
     error_taxonomy: Vec<ErrorCode>,
+    acp_auth_prose: Vec<AcpProseRun>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -248,6 +251,28 @@ struct Digested {
     length: usize,
     digest: String,
 }
+
+/// One label a reference ACP authentication method carries. The inequality
+/// assertion lives in `vibe-acp`, which is the crate that publishes the
+/// methods; this crate owns the corpus and therefore checks that the family
+/// is present and well formed.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AcpProseRun {
+    surface: String,
+    run: Digested,
+}
+
+/// The surfaces `vibe-acp` holds unequal to the reference, named here so a
+/// capture that stopped recording one fails this replay rather than quietly
+/// weakening the guard in the other crate.
+const ACP_PROSE_SURFACES: [&str; 5] = [
+    "browserMethod/description",
+    "browserMethod/name",
+    "terminalMethod/description",
+    "terminalMethod/label",
+    "terminalMethod/name",
+];
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1321,6 +1346,35 @@ fn run_error_taxonomy(cases: &[ErrorCode]) -> usize {
     settle(&report, "errorTaxonomy")
 }
 
+fn run_acp_auth_prose(cases: &[AcpProseRun]) -> usize {
+    let mut report = Report::default();
+    report.check(
+        "acpAuthProse",
+        "surfaces",
+        "recorded labels",
+        &ACP_PROSE_SURFACES
+            .iter()
+            .map(|surface| (*surface).to_owned())
+            .collect::<Vec<_>>(),
+        &cases
+            .iter()
+            .map(|case| case.surface.clone())
+            .collect::<Vec<_>>(),
+    );
+    for case in cases {
+        report.check(
+            "acpAuthProse",
+            &case.surface,
+            "digest shape",
+            &true,
+            &(case.run.length > 0
+                && case.run.digest.len() == 64
+                && case.run.digest.chars().all(|c| c.is_ascii_hexdigit())),
+        );
+    }
+    settle(&report, "acpAuthProse")
+}
+
 // --------------------------------------------------------------------------
 // The replay
 // --------------------------------------------------------------------------
@@ -1345,8 +1399,9 @@ fn the_committed_corpus_replays_against_this_port() {
     );
     scenarios += run_url_validation(&corpus.url_validation);
     scenarios += run_error_taxonomy(&corpus.error_taxonomy);
+    scenarios += run_acp_auth_prose(&corpus.acp_auth_prose);
     println!(
-        "setup-auth: {scenarios} scenarios across 5 families plus the constants block \
+        "setup-auth: {scenarios} scenarios across 6 families plus the constants block \
          replayed at {}",
         &corpus.reference.commit[..12],
     );

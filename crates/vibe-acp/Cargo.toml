@@ -23,6 +23,8 @@ vibe-core = { path = "../vibe-core" }
 vibe-protocol = { path = "../vibe-protocol" }
 
 [dev-dependencies]
+hex.workspace = true
+sha2.workspace = true
 tempfile.workspace = true
 
 [lints]

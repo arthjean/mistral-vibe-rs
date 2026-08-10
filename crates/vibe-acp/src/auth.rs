@@ -30,6 +30,9 @@ use vibe_core::auth::{HttpSignInGateway, supports_browser_sign_in};
 
 use crate::protocol::AcpError;
 
+#[cfg(test)]
+mod prose_tests;
+
 /// The reference's sign-in target vocabulary.
 const SIGN_IN_TARGET_MISTRAL: &str = "mistral";
 const SIGN_IN_TARGET_CUSTOM: &str = "custom";
