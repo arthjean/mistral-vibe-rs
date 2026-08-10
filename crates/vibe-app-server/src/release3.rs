@@ -448,6 +448,11 @@ impl Release3Service {
     /// is `missing_key`, and one whose key resolves is `ready`. The fourth,
     /// `unauthorized`, is a console verdict on the key; this port has no client
     /// for that endpoint, so it never claims it.
+    ///
+    /// The key resolves the way the reference's `resolve_api_key` resolves it:
+    /// the environment the dotenv load leaves behind first, then the OS
+    /// keyring under the shared service names, so a key stored only in the
+    /// keyring reads as `ready` here as it does upstream.
     pub fn account_view(&self) -> Value {
         let upgrade = json!({
             "kind": AccountActionKind::UpgradeToPro,
@@ -481,12 +486,13 @@ impl Release3Service {
             .unwrap_or(MISTRAL_KEY);
         // The credential is resolved the way every other reader resolves one:
         // the process environment with the vibe home's dotenv filling in what it
-        // does not set. `vibe_environment` cannot serve this, because it keeps
-        // only the `VIBE_*` keys the configuration layer is built from.
-        let configured = DotenvValues::global(&self.paths.vibe_home)
-            .environment()
-            .get(variable)
-            .is_some_and(|key| !key.trim().is_empty());
+        // does not set, then the OS keyring. `vibe_environment` cannot serve
+        // this, because it keeps only the `VIBE_*` keys the configuration layer
+        // is built from.
+        let environ = DotenvValues::global(&self.paths.vibe_home).environment();
+        let store = vibe_core::auth::KeyringStore::native();
+        let configured = vibe_core::auth::resolve_api_key(variable, &environ, &store)
+            .is_some_and(|key| !key.is_empty());
         json!({
             "status": if configured { AccountStatus::Ready } else { AccountStatus::MissingKey },
             "plan": null,
@@ -556,6 +562,22 @@ impl Release3Service {
             .ok()
             .and_then(|snapshot| snapshot.effective.get("enable_telemetry")?.as_bool())
             .unwrap_or(true)
+    }
+
+    /// The provider entry `name` resolves to in the effective configuration,
+    /// which is what the setup flow starts from before persisting it back.
+    pub fn effective_provider(&self, name: &str) -> Result<Option<toml::Table>, Release3Error> {
+        self.config.effective_provider(name).map_err(config_error)
+    }
+
+    /// Upserts one provider entry keyed by name, answering whether a write
+    /// happened: a provider identical to what the configuration already
+    /// resolves is not written at all.
+    pub fn persist_provider(&self, provider: &toml::Table) -> Result<bool, Release3Error> {
+        self.config
+            .persist_provider(provider)
+            .map(|written| written.is_some())
+            .map_err(config_error)
     }
 
     pub(crate) fn message_count(&self, session_id: &str) -> Result<Option<usize>, Release3Error> {

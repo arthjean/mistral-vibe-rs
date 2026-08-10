@@ -5502,8 +5502,14 @@ mod tests {
             "{status} is outside the account vocabulary"
         );
         // The default configuration serves a Mistral model, so the answer turns
-        // on whether a key resolves rather than being fixed.
-        let expected = if std::env::var("MISTRAL_API_KEY").is_ok_and(|key| !key.trim().is_empty()) {
+        // on whether a key resolves rather than being fixed. The classification
+        // reads the environment and then the OS keyring, as the reference's
+        // `resolve_api_key` does, so the expectation mirrors both sources.
+        let ambient = std::env::var("MISTRAL_API_KEY")
+            .ok()
+            .filter(|key| !key.is_empty())
+            .or_else(|| vibe_core::auth::KeyringStore::native().get_api_key("MISTRAL_API_KEY"));
+        let expected = if ambient.is_some_and(|key| !key.is_empty()) {
             "ready"
         } else {
             "missing_key"
