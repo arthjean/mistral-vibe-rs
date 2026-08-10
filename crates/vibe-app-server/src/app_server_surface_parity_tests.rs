@@ -50,7 +50,13 @@ const CORPUS_RELATIVE: &str = "tests/app-server-surface/corpus.json";
 /// capture script.
 const CORPUS_SCHEMA_VERSION: u32 = 1;
 /// The session the probe opens; every session-scoped method is asked about it.
-const PROBE_SESSION: &str = "session-1";
+///
+/// The store resolves a selector by id prefix too, and a real session id is
+/// `session-<epoch-ms>-<n>`, so a probe id like `session-1` starts matching the
+/// operator's own sessions the moment one exists and flips `history/list` from
+/// unreachable to answering. This spelling can never prefix a timestamp-shaped
+/// id, which keeps the probe blind to the operator's store.
+const PROBE_SESSION: &str = "session-parity-probe";
 
 /// Reference methods this build does not route yet, each with the story that
 /// adds it. A method routed while listed here fails the replay as a stale entry.
@@ -167,7 +173,10 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
             }),
         ),
         ("runtime/read", session.clone()),
-        ("session/list", json!({})),
+        // The page is filtered to a directory no saved session names, so the
+        // response shape is validated on a deterministically empty page rather
+        // than on whatever the operator's own store holds today.
+        ("session/list", json!({"cwd": "/probe-empty-workspace"})),
         ("session/read", session.clone()),
         ("session/ready/read", session.clone()),
         ("skills/list", session.clone()),
