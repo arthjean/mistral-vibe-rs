@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Speak the browser sign-in protocol. `vibe_core::auth` now carries the PKCE
+  `S256` flow the reference speaks: a sign-in process is created against the
+  configured console API, polled every 3 seconds while tolerating two
+  consecutive transient failures and never sleeping past the server's expiry,
+  and exchanged for the API key, with the reference's four statuses and eleven
+  error codes reproduced exactly. Every server-supplied URL is validated
+  against the configured console origin and path prefix before any request is
+  issued to it or any browser opened at it, on every use; the 33 captured
+  reference verdicts replay identically. The two configuration keys
+  `browser_auth_base_url` and `browser_auth_api_base_url` are now consumed by
+  a real code path, resolved from the provider entry under the reference's
+  availability gate and its mistral-only defaults, so a custom console domain
+  steers every sign-in request while a third-party provider gets no browser
+  sign-in even when it carries both keys. The system browser is launched detached with its output discarded,
+  a host where no launcher spawns reports the failure and keeps the sign-in
+  URL retrievable for manual use, and no log, error or debug output ever
+  carries a credential, an exchange token, a code verifier or a full
+  server-supplied URL.
+
 - Store the API key under the keyring service both implementations read.
   Credentials now live under `ai.mistral.vibe` with the reference's read
   fallback to the legacy `vibe` service, plus a read of `mistral-vibe-rs`, the

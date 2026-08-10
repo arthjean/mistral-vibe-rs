@@ -27,10 +27,10 @@
     {
       "id": "EP-054",
       "title": "The Browser Sign-In Flow",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0,
+      "stories_done": 4,
       "stories_in_review": 0
     },
     {
@@ -150,49 +150,49 @@
       "id": "US-187",
       "title": "Speak the sign-in protocol",
       "epic": "EP-054",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-181"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
     },
     {
       "id": "US-188",
       "title": "Validate every server-supplied URL before using it",
       "epic": "EP-054",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": ["US-187"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
     },
     {
       "id": "US-189",
       "title": "Drive the sign-in state machine",
       "epic": "EP-054",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": ["US-187"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
     },
     {
       "id": "US-190",
       "title": "Open the browser, and survive not being able to",
       "epic": "EP-054",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": ["US-188", "US-189"],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
     },
     {
       "id": "US-191",
