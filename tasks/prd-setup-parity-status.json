@@ -1,0 +1,306 @@
+{
+  "prd": {
+    "file": "tasks/prd-setup-parity.md",
+    "title": "Setup, Onboarding and Authentication Parity",
+    "created_at": "2026-08-10",
+    "status": "IN_PROGRESS"
+  },
+  "epics": [
+    {
+      "id": "EP-052",
+      "title": "The Setup Oracle and Its Corpus",
+      "status": "DONE",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 3,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-053",
+      "title": "The Auth State and the Credential",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 4,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-054",
+      "title": "The Browser Sign-In Flow",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 4,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-055",
+      "title": "The Onboarding Screens",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 5,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-056",
+      "title": "The ACP Authentication Surface and Sign-Out",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 2,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-057",
+      "title": "The Divergence Ledger and the Scorecard",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 2,
+      "stories_done": 0,
+      "stories_in_review": 0
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-180",
+      "title": "Capture the authentication surface",
+      "epic": "EP-052",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [],
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
+    },
+    {
+      "id": "US-181",
+      "title": "Replay the authentication surface in Rust",
+      "epic": "EP-052",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": ["US-180"],
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
+    },
+    {
+      "id": "US-182",
+      "title": "Capture and replay the onboarding screen graph",
+      "epic": "EP-052",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": ["US-180"],
+      "started_at": "2026-08-10",
+      "completed_at": "2026-08-10",
+      "reviewed_at": "2026-08-10"
+    },
+    {
+      "id": "US-183",
+      "title": "Classify credential provenance",
+      "epic": "EP-053",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": ["US-181"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-184",
+      "title": "Rename the keyring service and migrate on read",
+      "epic": "EP-053",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": ["US-181"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-185",
+      "title": "Persist and remove the credential with the reference's outcomes",
+      "epic": "EP-053",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": ["US-183", "US-184"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-186",
+      "title": "Persist the provider entry the reference persists",
+      "epic": "EP-053",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": ["US-185"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-187",
+      "title": "Speak the sign-in protocol",
+      "epic": "EP-054",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": ["US-181"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-188",
+      "title": "Validate every server-supplied URL before using it",
+      "epic": "EP-054",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": ["US-187"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-189",
+      "title": "Drive the sign-in state machine",
+      "epic": "EP-054",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": ["US-187"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-190",
+      "title": "Open the browser, and survive not being able to",
+      "epic": "EP-054",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": ["US-188", "US-189"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-191",
+      "title": "Install the screen graph and its outcomes",
+      "epic": "EP-055",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": ["US-182", "US-185"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-192",
+      "title": "The welcome and theme screens",
+      "epic": "EP-055",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "L",
+      "blocked_by": ["US-191"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-193",
+      "title": "The authentication method, sign-in target and custom domain screens",
+      "epic": "EP-055",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": ["US-191"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-194",
+      "title": "The browser sign-in screen",
+      "epic": "EP-055",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": ["US-190", "US-193"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-195",
+      "title": "The API key screen",
+      "epic": "EP-055",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": ["US-185", "US-191"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-196",
+      "title": "Declare and serve the authentication methods",
+      "epic": "EP-056",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "L",
+      "blocked_by": ["US-183", "US-189"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-197",
+      "title": "Serve auth status and sign-out",
+      "epic": "EP-056",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": ["US-183", "US-185", "US-196"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-198",
+      "title": "Record the licensing and form divergences",
+      "epic": "EP-057",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": ["US-194", "US-197"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-199",
+      "title": "Remeasure and restate the scorecard",
+      "epic": "EP-057",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "S",
+      "blocked_by": ["US-198"],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    }
+  ]
+}
