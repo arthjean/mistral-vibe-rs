@@ -16,6 +16,8 @@
 pub mod env_file;
 pub mod keyring;
 pub mod persistence;
+pub mod sign_in;
+pub mod sign_in_http;
 pub mod state;
 
 #[cfg(test)]
@@ -24,6 +26,10 @@ mod env_file_tests;
 mod keyring_tests;
 #[cfg(test)]
 mod persistence_tests;
+#[cfg(test)]
+mod sign_in_http_tests;
+#[cfg(test)]
+mod sign_in_tests;
 #[cfg(test)]
 mod state_tests;
 #[cfg(test)]
@@ -36,6 +42,17 @@ pub use keyring::{
 };
 pub use persistence::{
     ApiKeyAddedEvent, PersistOutcome, PersistReport, RemoveError, persist_api_key, remove_api_key,
+};
+pub use sign_in::{
+    CODE_CHALLENGE_METHOD, MAX_CONSECUTIVE_POLL_FAILURES, POLL_INTERVAL_SECONDS, SignInAttempt,
+    SignInError, SignInErrorCode, SignInEvent, SignInGateway, SignInPoll, SignInProcess,
+    SignInRuntime, SignInService, SignInStatus, SystemSignInRuntime, UtcTimestamp, code_challenge,
+    generate_code_verifier, open_system_browser,
+};
+pub use sign_in_http::{
+    DEFAULT_BROWSER_AUTH_API_BASE_URL, DEFAULT_BROWSER_AUTH_BASE_URL, HttpSignInGateway,
+    ReqwestSignInClient, SignInHttpClient, SignInHttpResponse, SignInTransportError, UrlRejection,
+    browser_sign_in_bases, validate_url_against_base,
 };
 pub use state::{
     AuthState, AuthStateKind, DEFAULT_MISTRAL_API_ENV_KEY, assess_auth_state, resolve_api_key,
