@@ -9,6 +9,7 @@
 )]
 
 mod atomic_file;
+pub mod auth;
 pub mod bootstrap;
 pub mod checkpoints;
 mod child;
