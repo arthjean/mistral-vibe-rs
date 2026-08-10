@@ -17,6 +17,13 @@ use std::path::Path;
 
 const DOTENV_FILE: &str = ".env";
 
+/// The path of the global dotenv, `{vibe_home}/.env`, shared by the readers
+/// here and by the credential fallback writer in `crate::auth`.
+#[must_use]
+pub fn global_env_file(vibe_home: &Path) -> std::path::PathBuf {
+    vibe_home.join(DOTENV_FILE)
+}
+
 /// The variables a dotenv file declares, and how they combine with the process
 /// environment.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -29,7 +36,7 @@ impl DotenvValues {
     /// no values rather than an error: startup proceeds either way.
     #[must_use]
     pub fn global(vibe_home: &Path) -> Self {
-        Self::load(&vibe_home.join(DOTENV_FILE))
+        Self::load(&global_env_file(vibe_home))
     }
 
     /// Reads one dotenv file.
@@ -77,6 +84,14 @@ impl DotenvValues {
     #[must_use]
     pub fn variable(&self, name: &str) -> Option<String> {
         resolve(std::env::var(name).ok(), self.values.get(name))
+    }
+
+    /// The value the file alone declares for `name`, without consulting the
+    /// process. What the auth-state assessment reads, because it classifies
+    /// the file as a source distinct from the environment.
+    #[must_use]
+    pub fn file_variable(&self, name: &str) -> Option<&str> {
+        self.values.get(name).map(String::as_str)
     }
 
     /// The process environment with the file's variables filled in where the

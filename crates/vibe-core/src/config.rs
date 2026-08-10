@@ -29,7 +29,7 @@ mod proxy;
 pub mod registry;
 mod view;
 
-pub use dotenv::DotenvValues;
+pub use dotenv::{DotenvValues, global_env_file};
 pub use events::{ConfigChangeBus, ConfigChangeEvent, ConfigSubscription};
 pub use harness::{ConfigSource, HarnessFiles};
 pub use introspect::{ConfigFieldView, ConfigFields, ConfigLayerValue};
