@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Publish the reference's ACP authentication surface. `vibe-acp` now
+  advertises `browser-auth` when the active provider supports browser
+  sign-in, adds `browser-auth-delegated` when the client declares that
+  capability, adds a `vibe-setup` terminal method under `terminal-auth` that
+  runs the `vibe` binary's setup flow, and
+  advertises nothing to a JetBrains client whose provider is already usable;
+  the invented `environment` method is gone. `authenticate` drives the full
+  browser flow or the delegated start/complete lifecycle, honoring
+  `signInTarget` with a validated custom domain, and the new `auth/status`
+  and `auth/signOut` extension methods report credential provenance and
+  offer the product's only sign-out, refused exactly where the reference
+  refuses it.
 - Replace the chat-transcript setup with the reference's onboarding screens.
   `vibe --setup` and an interactive launch with no resolvable credential now
   walk the reference's screen graph: a welcome screen whose advance action
