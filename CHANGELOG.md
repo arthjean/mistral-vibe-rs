@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Store the API key under the keyring service both implementations read.
+  Credentials now live under `ai.mistral.vibe` with the reference's read
+  fallback to the legacy `vibe` service, plus a read of `mistral-vibe-rs`, the
+  service every earlier build of this port wrote under; a key found under a
+  non-current name is rewritten under the current one and the old entry
+  removed, so an upgrade never asks for the key again and a key saved here is
+  visible to the reference on the same machine.
+
+- Stop losing the API key when the keyring is unavailable. A keyring that
+  refuses the write, including a headless host with no Secret Service, now
+  degrades to writing `$VIBE_HOME/.env` with owner-only permissions instead of
+  failing setup, and a later successful keyring save removes the stale
+  plaintext copy. That file is edited the way the reference edits it, staged
+  beside itself and moved into place: an interrupted write leaves the other
+  variables it holds whole, and a symlinked `.env` is replaced rather than
+  written through, so the key never lands at the link's target. Credential
+  provenance is classified into the reference's six
+  auth states with its five-level precedence, replacing the binary
+  found-or-not decision at startup, and `account/read` now resolves the key
+  through the keyring as the reference does, so a key stored only there reads
+  as `ready` instead of `missing_key`.
+
+- Persist the provider entry the setup flow authenticated against, upserted
+  into `providers` keyed by name with only non-default fields, writing nothing
+  when the entry is unchanged and preserving fields this port does not model.
+
 - Port the remote skill registry, dormant. The catalog client with its 50-page
   cap and error taxonomy, the atomically staged version store with its
   traversal and entrypoint guards and owner-only execute bits, and the two
