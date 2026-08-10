@@ -1796,12 +1796,24 @@ impl Release3Service {
             .unwrap_or_default();
         let mut roots = self.discovery_roots.clone();
         roots.skills = self.skill_discovery(&self.paths.working_directory, self.project_trusted);
-        discover_extensions(
-            &roots,
-            builtin_agents,
-            vibe_core::skills::builtins::builtin_skills(),
-            BTreeMap::new(),
-        )
+        let mut seeded = vibe_core::skills::builtins::builtin_skills();
+        // `experimental_enable_registry_skills` gates the ported registry
+        // subtree: disabled returns before any registry code runs, so no cache
+        // directory is created and no transport is constructed, and enabled
+        // reaches the subtree through its one door, which publishes nothing
+        // until the reference publishes a load lifecycle to reproduce
+        // (skills-parity PRD, open question 3). Either way the catalog is
+        // unchanged, which is the reference's own behavior for a key nothing
+        // upstream reads.
+        if self
+            .config
+            .load()
+            .ok()
+            .is_some_and(|snapshot| snapshot.registry_skills_enabled())
+        {
+            seeded.extend(vibe_core::skills::registry::published_skills());
+        }
+        discover_extensions(&roots, builtin_agents, seeded, BTreeMap::new())
     }
 
     /// Where a session looks for skills and what it publishes once it has
@@ -3495,6 +3507,44 @@ tool_timeout_sec = 2
             vec!["beta"],
             "the allowlist decides alone and the denylist is not consulted"
         );
+    }
+
+    /// US-179: `experimental_enable_registry_skills` is read from the merged
+    /// document and gates a subtree that is dormant upstream. False, the
+    /// default, runs no registry code and creates no cache directory; true
+    /// with no registry configured changes nothing either, because the
+    /// reference publishes no load lifecycle at the pin, and it surfaces no
+    /// error.
+    #[test]
+    fn the_registry_experiment_key_gates_a_dormant_subtree() {
+        let temporary = tempdir().expect("tempdir");
+        let vibe_home = temporary.path().join("home");
+        std::fs::create_dir_all(&vibe_home).expect("vibe home");
+        let service = Release3Service::new(
+            Release3Paths {
+                vibe_home: vibe_home.clone(),
+                working_directory: temporary.path().join("workspace"),
+                session_root: temporary.path().join("sessions"),
+            },
+            true,
+        )
+        .expect("service");
+        let cache = vibe_home.join("skills-registry-cache");
+
+        let disabled = listed_skills(&service);
+        assert!(!cache.exists(), "the default runs no registry code");
+
+        std::fs::write(
+            vibe_home.join("config.toml"),
+            "experimental_enable_registry_skills = true\n",
+        )
+        .expect("user fixture");
+        assert_eq!(
+            listed_skills(&service),
+            disabled,
+            "enabled with no registry configured leaves the catalog unchanged"
+        );
+        assert!(!cache.exists(), "enabled still creates no cache directory");
     }
 
     /// US-169: with nothing on disk the wire still publishes the two seeded
