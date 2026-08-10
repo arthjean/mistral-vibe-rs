@@ -16,6 +16,7 @@
 pub mod env_file;
 pub mod keyring;
 pub mod persistence;
+pub mod provider;
 pub mod sign_in;
 pub mod sign_in_http;
 pub mod state;
@@ -42,6 +43,11 @@ pub use keyring::{
 };
 pub use persistence::{
     ApiKeyAddedEvent, PersistOutcome, PersistReport, RemoveError, persist_api_key, remove_api_key,
+};
+pub use provider::{
+    configured_custom_domain, default_mistral_provider, is_likely_mistral_private_cloud_domain,
+    is_valid_custom_domain, resolve_active_provider, resolve_api_key_provider,
+    resolve_browser_auth_urls, supports_browser_sign_in,
 };
 pub use sign_in::{
     CODE_CHALLENGE_METHOD, MAX_CONSECUTIVE_POLL_FAILURES, POLL_INTERVAL_SECONDS, SignInAttempt,
