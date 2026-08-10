@@ -25,7 +25,10 @@ pub fn resolve_workspace_trust(
             .as_deref()
             .unwrap_or_else(|| Path::new(".")),
     );
-    if arguments.setup || arguments.check_upgrade || arguments.trust {
+    // `--setup` no longer suppresses the dialog: the reference decides trust
+    // through the pre-session dialog, and the onboarding flow never asks, so
+    // an undecided workspace is prompted even when setup was requested.
+    if arguments.check_upgrade || arguments.trust {
         return Ok(TrustResolution {
             trusted: arguments.trust,
             cancelled: false,
@@ -105,7 +108,41 @@ pub fn dangerous_directory_warning(path: &Path) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser;
+
     use super::*;
+
+    #[test]
+    fn setup_mode_no_longer_suppresses_trust_resolution() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let workspace = tempfile::tempdir().expect("temporary workspace");
+        let canonical = fs::canonicalize(workspace.path()).expect("canonical workspace");
+        let vibe_home = home.path().join(".vibe");
+        fs::create_dir_all(&vibe_home).expect("vibe home");
+        fs::write(
+            vibe_home.join("trusted_folders.toml"),
+            format!("trusted = [{:?}]\nuntrusted = []\n", canonical.display()),
+        )
+        .expect("trust settings");
+        let session_root = vibe_home.join("sessions");
+        let mut arguments = crate::Arguments::try_parse_from([
+            "vibe",
+            "--setup",
+            "--workdir",
+            &workspace.path().display().to_string(),
+            "--session-root",
+            &session_root.display().to_string(),
+        ])
+        .expect("arguments parse");
+        let host = super::super::startup_host(&arguments, workspace.path());
+        let resolution =
+            resolve_workspace_trust(&mut arguments, &host).expect("trust resolution runs");
+        // Before EP-055 the `--setup` flag returned early with `trusted:
+        // false`; the decided workspace must now resolve without a dialog.
+        assert!(resolution.trusted);
+        assert!(!resolution.cancelled);
+        assert!(arguments.trust);
+    }
 
     #[test]
     fn dangerous_home_directory_has_a_text_warning() {
