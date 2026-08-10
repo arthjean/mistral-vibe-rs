@@ -208,11 +208,11 @@
       "valid": true
     }
   ],
-  "note": "Onboarding corpus: the reference's screen graph, transitions, focus targets, validation classes, persisted effects and terminating values, observed by driving the real OnboardingApp through Textual's headless pilot with the sign-in service, the credential persistence and the config orchestrator replaced by recorders. No rendered cell, SVG or styled text appears here, and every reference-authored message is committed as a SHA-256 digest and a length. Regenerate with scripts/parity/onboarding.py --corpus when the pinned reference moves.",
+  "note": "Onboarding corpus: the reference's screen graph, transitions, focus targets, validation classes, persisted effects and terminating values, observed by driving the real OnboardingApp through Textual's headless pilot with the sign-in service, the credential persistence and the config orchestrator replaced by recorders. No rendered cell, SVG or styled text appears here, and every reference-authored message and screen sentence is committed as a SHA-256 digest and a length. Regenerate with scripts/parity/onboarding.py --corpus when the pinned reference moves.",
   "reference": {
     "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
   },
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "screenGraph": [
     {
       "case": "graph-browser-provider-installs-seven-screens",
@@ -1819,6 +1819,357 @@
           "event": "press:escape",
           "from": "theme_selection",
           "to": "<exit>"
+        }
+      ]
+    }
+  ],
+  "screenProse": [
+    {
+      "module": "__init__.py",
+      "runs": [
+        {
+          "digest": "371f7f6994b566a10dc6cd48edefb59606c5784e1d86fdcd2b752cdecf68625c",
+          "length": 55
+        },
+        {
+          "digest": "75b830ff069617bb7750abedc8e2ba31781f0110d533177445886ce20f08cd55",
+          "length": 48
+        },
+        {
+          "digest": "843390ebcae3d0d88c6579f9a64b4e0b4b48a76ad92990e57478d2e458e0a9d3",
+          "length": 50
+        },
+        {
+          "digest": "bf9d67d0c656029a10b09b369f40aad1a3a25a066c5957e1b3b6e8d30e71124b",
+          "length": 47
+        },
+        {
+          "digest": "d7bab8940d18b1a0de197a3e7f3e29af15851d3f20be5fbb127bd5ced023e817",
+          "length": 86
+        },
+        {
+          "digest": "df91c2810961d31a1b97e770723a3b145d0b358a3349693625d4eabc8c5b9b19",
+          "length": 67
+        },
+        {
+          "digest": "dfeda616c9e4bb7f9d66a360743c885d290808b29604a411e0f78ea29d75e2ae",
+          "length": 135
+        },
+        {
+          "digest": "f5d87e8d9593ab2d32ab674fd06dedf897dfe90e4e6e72e65f00029a96885366",
+          "length": 115
+        },
+        {
+          "digest": "ff953a711acf0c0f9c9347741b0dff75725c7343e01eecaa0bab7a7402f90840",
+          "length": 226
+        }
+      ]
+    },
+    {
+      "module": "context.py",
+      "runs": [
+        {
+          "digest": "5a526aebef0dc2bd8c972c9ada7afef5f7bc841ac3850c2de34270efa3932618",
+          "length": 52
+        },
+        {
+          "digest": "75c8a006ba8aa68b1ff42666f8442667c4ca4c530f1a18d5d3ff3bcbb9f8a625",
+          "length": 12
+        },
+        {
+          "digest": "fe6bda7211ecdcdb407d448f0de4be79cf07c56024a8808c431dbefcaf26b985",
+          "length": 16
+        }
+      ]
+    },
+    {
+      "module": "screens/api_key.py",
+      "runs": [
+        {
+          "digest": "15e2b9ce10aed6a159af76c7f3358396ccb3072f95bc2eb677bd70d97896859c",
+          "length": 12
+        },
+        {
+          "digest": "363d40781f9035330aaf34ebc3ebd3ad433042ec32a540e09ccac8c942054b23",
+          "length": 34
+        },
+        {
+          "digest": "3a47d635185147eb13e4b1dcf3b649e7affd6ed79c8bf635c20a90ba17d979c7",
+          "length": 20
+        },
+        {
+          "digest": "8358f1f0a95beda918848d2d18effd58f6480ae594c340d8cc6078edce7e5189",
+          "length": 13
+        },
+        {
+          "digest": "8d60c8b8d294053cc89950029e10ae33e1fad2e9a40569c9c22c8201e6212cb5",
+          "length": 8
+        },
+        {
+          "digest": "9716dbad8517aed6c44cf9d687b7f3cc0a11fe33cacc3525bf1155f16eedf983",
+          "length": 9
+        },
+        {
+          "digest": "fef670e7f9c6f62ce4fbb6ba646b672a3ddcdd3b44ba95a9a8c105e6fd6962f4",
+          "length": 36
+        }
+      ]
+    },
+    {
+      "module": "screens/auth_method.py",
+      "runs": [
+        {
+          "digest": "3bf94790e46bb38076338b67545078cfbf33bf11d97e86a691ff07ade764fe76",
+          "length": 23
+        },
+        {
+          "digest": "4e2accc22ecb1a7bed382cbfc76a152404fa8cf1dfca34825350779889435fea",
+          "length": 46
+        },
+        {
+          "digest": "76839686f57c944a01515a016c0649f017a8c1317834580fb5f60b785e43f369",
+          "length": 60
+        },
+        {
+          "digest": "d0490d0465c688f0d168947e99812774e7852be31538e1cdbc9e567931d3f266",
+          "length": 14
+        },
+        {
+          "digest": "d196531c59413e4602ea6659e2e35afcaaaa77403300356ff24ce0eee27d2b4b",
+          "length": 14
+        },
+        {
+          "digest": "d53539c10f8f6ab45880c836f5b9147bc0a9ec5606d8e86bb6927dea4f03f138",
+          "length": 26
+        },
+        {
+          "digest": "ee8f0c1e32aa6a0886c12144d644f3d9379a1c41a733ae985cab1e16c64d4f1e",
+          "length": 10
+        }
+      ]
+    },
+    {
+      "module": "screens/browser_sign_in.py",
+      "runs": [
+        {
+          "digest": "005aa66c513c652a235575d70ed9cb75b9993110ff10a80abc6678821e856f9e",
+          "length": 54
+        },
+        {
+          "digest": "0b287a462500fdcc47c9bc5a787b2d5619d20aecf95fe5e02af28d47ec13e77a",
+          "length": 29
+        },
+        {
+          "digest": "19e5fe04c9a2626e61a3c9686b0eb11b979d5b57f84176800e812706eef52997",
+          "length": 23
+        },
+        {
+          "digest": "1cd1599273fe3a7ec7c78008ebefe162d26b56d4b3afae8b55b4dcb6e4bced4c",
+          "length": 13
+        },
+        {
+          "digest": "1f75973c8fc1b444536166f7bd24521530f944a344140e70f59a69d86b58b05f",
+          "length": 14
+        },
+        {
+          "digest": "366aa67d99e3c2e7c8465782f23f2b7157fb6202797ade7a191af04188a6295d",
+          "length": 38
+        },
+        {
+          "digest": "59f210aac847d8ac2aa4765e8cd819fca0c41e5d344f0f05350eeda8d7c273a9",
+          "length": 47
+        },
+        {
+          "digest": "62db4bcce921799cbe48f45d91ff2145f93383fe94f5f771b0dad764162d7e65",
+          "length": 72
+        },
+        {
+          "digest": "6a46b7fdfbabf5dd5b85ba4c365b1e89a31d57536633ca59fa33ecc96f1a7992",
+          "length": 16
+        },
+        {
+          "digest": "6cf15ee6f6a7e1d9b1104706a8c6652416a4db82c4cb5dd21dc72215aac95f75",
+          "length": 23
+        },
+        {
+          "digest": "760f049d1c59895ec128a40eda6166fc604ba6f6c878bbbd1dd9c156e4c45d98",
+          "length": 29
+        },
+        {
+          "digest": "77ff53612d635fe8d925457b609107bbef3f0133c5ead616dfd5ef22f2ee818a",
+          "length": 30
+        },
+        {
+          "digest": "85b17ab4cecb1bafbc63880be1512bcdb362d24ad63cd237f35e7fbe61316013",
+          "length": 62
+        },
+        {
+          "digest": "9325d4c617d055e7f4c4e60f03da1e0a09ee795319915f9c03695fbd2b86353e",
+          "length": 39
+        },
+        {
+          "digest": "ac4a8c8cb2c85e401d1eee9105b3b1ad8ef92fe11b2fdf8c01c98c4440a999a3",
+          "length": 18
+        },
+        {
+          "digest": "b26d1037f1c2da31a0296d915982f12049f91bfedb998b105ce967b73a796699",
+          "length": 8
+        },
+        {
+          "digest": "b84a7dc03e31fe5f4cbcd8ad64cad9c8d1636b524333a11afdcb710e25953f2d",
+          "length": 12
+        },
+        {
+          "digest": "bb2bceab29cf046083b1a7b8f08685fed4988e1c6e43696b2bf711ecb97a2078",
+          "length": 18
+        },
+        {
+          "digest": "c3d8a48a13ed4615ec6dfbe7f5af8aa76c3c5c78a35ea9b8b3d477caa4920eb0",
+          "length": 18
+        },
+        {
+          "digest": "c820bdd951122cf2001a19f684b4a68c6078a2f7d0f6247298838e760be3d345",
+          "length": 15
+        },
+        {
+          "digest": "cdb53650a3c2a698ca48d56e3a1102c77cb5d71b32cb75a61b8a42c67c38e360",
+          "length": 80
+        },
+        {
+          "digest": "d196531c59413e4602ea6659e2e35afcaaaa77403300356ff24ce0eee27d2b4b",
+          "length": 14
+        },
+        {
+          "digest": "d56900643f91d6ac41ba0e16cf00efccda8c30c36b52148f7a8af90f8f332b12",
+          "length": 29
+        },
+        {
+          "digest": "d92b457e5dd2876a6c3100bc2fe1708e38e523c2b21ffbb3052f25012a10fcdd",
+          "length": 16
+        },
+        {
+          "digest": "de5481bb1e65801de651050971ce574540b7e79ed4429b6c49f661468bd9cfe0",
+          "length": 71
+        },
+        {
+          "digest": "e039aaa460c50b9c8b52178882d220f1e7204fba1d6a9bdc03371f1d2ded85f3",
+          "length": 14
+        }
+      ]
+    },
+    {
+      "module": "screens/custom_domain.py",
+      "runs": [
+        {
+          "digest": "0dfaf1db129d394f6c1fc45950b569a5a4e14e9bf92caa822405dc3479d287f5",
+          "length": 42
+        },
+        {
+          "digest": "19517c28713e910e50013f66c4ea0101b4212845c131a8d29ff5d7ddcc525736",
+          "length": 25
+        },
+        {
+          "digest": "26b4bff5036b2d43cc6c8aa151805b08e312889380142101e3bed1fc53f856f6",
+          "length": 53
+        },
+        {
+          "digest": "41dddeb56973ffe53072c7053f95a0477641e995e0faa2e9be58b19f157adb5f",
+          "length": 38
+        },
+        {
+          "digest": "69cb0fe0591cda38551dbbc79790d0ee48292a530312750128655b7a752cb4e0",
+          "length": 46
+        },
+        {
+          "digest": "bb8acfcbd71aa119aedb67cb5b37c39a78c5a6190882fd2fbde773ce95fcf452",
+          "length": 19
+        },
+        {
+          "digest": "d7d4c1e416bc676929d69b864fa2217888960abc2bef557b8833a64297219545",
+          "length": 13
+        }
+      ]
+    },
+    {
+      "module": "screens/sign_in_target.py",
+      "runs": [
+        {
+          "digest": "152d6845bb7eace73de6234e142c493d3c75ec6d1c827bce8fcff45fddb88e8d",
+          "length": 45
+        },
+        {
+          "digest": "1861c5587a968c2c601b2ce27ceb78de0d2df74df1364f33682f1caebdafe711",
+          "length": 29
+        },
+        {
+          "digest": "2bfd4c19771aea1e0ab71aef9a746ae32074a3112dcb9e1503ba0321e0884ba4",
+          "length": 21
+        },
+        {
+          "digest": "3426f438dcb9266a573202393b5a4a5139dab9f19e2f6f588ea33ae002f8e9ec",
+          "length": 9
+        },
+        {
+          "digest": "5aebff3b29ec6de9031e6326e5ffbd5425ac0f915afb970828bf68708ed06a38",
+          "length": 62
+        },
+        {
+          "digest": "7faba7d459b1b56ea08c1d15f673488c0e1cc34de4e05513b72f41114ff9671d",
+          "length": 19
+        },
+        {
+          "digest": "d196531c59413e4602ea6659e2e35afcaaaa77403300356ff24ce0eee27d2b4b",
+          "length": 14
+        },
+        {
+          "digest": "ee8f0c1e32aa6a0886c12144d644f3d9379a1c41a733ae985cab1e16c64d4f1e",
+          "length": 10
+        },
+        {
+          "digest": "f1fff94a8e8008bf2d528d652b9a5f36c5afefb02e2704e2b82181c15cab6d74",
+          "length": 10
+        }
+      ]
+    },
+    {
+      "module": "screens/theme_selection.py",
+      "runs": [
+        {
+          "digest": "27956a2bbb9334f8aaf45c7effa634d89aeaac60a52a47eb57065c1b7e5da90a",
+          "length": 10
+        },
+        {
+          "digest": "45a42f9b0f7c8778eae247308ae9c850e91133835aa65342cb561e99895c98cf",
+          "length": 296
+        },
+        {
+          "digest": "b9dba13ff75e98f6f94281c5a2aef23986f11984b7cf62937ae2a635340347a5",
+          "length": 9
+        },
+        {
+          "digest": "f6869ce7a84ed54505c86b0aee0233a3c38091b1263e3ce8b68e3be345354eb8",
+          "length": 27
+        }
+      ]
+    },
+    {
+      "module": "screens/welcome.py",
+      "runs": [
+        {
+          "digest": "15e2b9ce10aed6a159af76c7f3358396ccb3072f95bc2eb677bd70d97896859c",
+          "length": 12
+        },
+        {
+          "digest": "98d5df725d394dbf7933cdb94abbcd0a0667866d9914ad32c4c5e7eb5ba9bf21",
+          "length": 13
+        },
+        {
+          "digest": "a2a5c9a7815dc66a101e54877e425585e70e74e8e05374b9fa2a6ff7803cdc89",
+          "length": 25
+        },
+        {
+          "digest": "d2201aada27b1525ef087adf599f118178be87e8c6b36cbadc816d8029fb7f5a",
+          "length": 11
         }
       ]
     }

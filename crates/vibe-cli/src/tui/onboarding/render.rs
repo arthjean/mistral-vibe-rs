@@ -142,7 +142,7 @@ fn draw_welcome(frame: &mut Frame<'_>, area: Rect, animation: &Animation, typing
         lines.push(Line::raw(""));
         lines.push(
             Line::styled(
-                "Press Enter \u{21b5}",
+                "Press Enter to start \u{21b5}",
                 Style::default().add_modifier(Modifier::DIM),
             )
             .alignment(Alignment::Center),
@@ -155,7 +155,7 @@ fn draw_theme_selection(frame: &mut Frame<'_>, area: Rect, model: &OnboardingMod
     let neighbors = THEME_VISIBLE_NEIGHBORS as isize;
     let mut lines = vec![
         Line::styled(
-            "Select your preferred theme",
+            "Pick the colors you want to work in",
             Style::default().add_modifier(Modifier::BOLD),
         )
         .alignment(Alignment::Center),
@@ -374,7 +374,7 @@ fn draw_custom_domain(frame: &mut Frame<'_>, area: Rect, model: &OnboardingModel
     };
     let lines = vec![
         Line::styled(
-            "Use a custom domain",
+            "Sign in on your own domain",
             Style::default().add_modifier(Modifier::BOLD),
         )
         .alignment(Alignment::Center),
@@ -424,7 +424,7 @@ fn draw_browser_sign_in(
         (
             "Open the browser",
             "The browser opens on its own",
-            "Browser opened",
+            "The browser is open",
         ),
         (
             "Confirm the sign-in",

@@ -10,11 +10,12 @@ effects persisted and the terminating value. The sign-in service, the
 credential persistence and the config orchestrator are injected or patched to
 recorders, so a run touches no network, no keyring and no real ``VIBE_HOME``.
 
-Three families come out, and are what the Rust replay compares:
+Four families come out, and are what the Rust replay compares:
 
 ``screenGraph``       pilot-driven scenarios over the installed screens
 ``terminating``       the five terminating values and the exit path each takes
 ``domainValidation``  the custom-domain validator, heuristic and derivations
+``screenProse``       every authored run the screens carry, as length and digest
 
 Two artifacts come out of a run::
 
@@ -23,8 +24,9 @@ Two artifacts come out of a run::
 
 The committed corpus carries screen names, transition edges, focus targets,
 class names, effect records and terminating values. Anything
-reference-authored, which is the exit-path messages and the armed-overwrite
-warning, is committed as a length plus a SHA-256 and never as text.
+reference-authored, which is the exit-path messages, the armed-overwrite
+warning and every sentence the screens draw, is committed as a length plus a
+SHA-256 and never as text.
 
 Usage::
 
@@ -39,9 +41,11 @@ the checkout is never moved.
 from __future__ import annotations
 
 import argparse
+import ast
 import asyncio
 import contextlib
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -59,7 +63,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path(".parity/onboarding-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-cli/tests/onboarding/corpus.json")
 DEFAULT_CACHE = Path(".parity")
@@ -1195,6 +1199,95 @@ def capture_domain_validation() -> list[dict[str, Any]]:
 
 
 # --------------------------------------------------------------------------
+# screenProse
+# --------------------------------------------------------------------------
+
+#: Call keywords whose string values are identifiers rather than prose:
+#: widget ids, CSS classes and binding keys.
+_IDENTIFIER_KEYWORDS = frozenset({"id", "classes", "name", "key", "action"})
+
+#: A run shorter than this, or without a space, is a token rather than a
+#: sentence; the guard the digests feed is about authored prose.
+_MINIMUM_PROSE_LENGTH = 8
+
+
+def _is_prose(value: str) -> bool:
+    """Whether a string literal reads as an authored run rather than a token."""
+    if len(value) < _MINIMUM_PROSE_LENGTH or " " not in value:
+        return False
+    # A CSS selector list or a class chain is lowercase, hyphenated and
+    # punctuation-free; an authored run carries a capital or a mark.
+    return any(character.isupper() or character in ",.!?'" for character in value)
+
+
+def prose_runs(source: str) -> list[str]:
+    """Every authored run a module's string literals carry.
+
+    Docstrings and the identifier keywords above are excluded, so what remains
+    is the text the reference draws. Over-collection is safe: the digests are
+    only ever asserted *unequal* to this port's own sentences, so a run that is
+    not really user-facing costs nothing while a missing run would weaken the
+    guard.
+    """
+    tree = ast.parse(source)
+    excluded: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            for keyword in node.keywords:
+                if keyword.arg in _IDENTIFIER_KEYWORDS and isinstance(
+                    keyword.value, ast.Constant
+                ):
+                    excluded.add(id(keyword.value))
+        if isinstance(
+            node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
+        ):
+            if ast.get_docstring(node, clean=False) is not None and node.body:
+                first = node.body[0]
+                if isinstance(first, ast.Expr):
+                    excluded.add(id(first.value))
+    runs = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in excluded
+        and _is_prose(node.value)
+    }
+    return sorted(runs)
+
+
+def capture_screen_prose() -> list[dict[str, Any]]:
+    """The onboarding subtree's authored runs, by module, as length and digest.
+
+    `NOTICE` forbids shipping the reference's sentences, so this port writes
+    its own against the same directive coverage and the replay holds every one
+    of them permanently unequal to these digests.
+    """
+    specification = importlib.util.find_spec("vibe.setup.onboarding")
+    if specification is None or specification.origin is None:
+        raise OracleError("the pinned tree does not publish vibe.setup.onboarding")
+    package = Path(specification.origin).parent
+    records = []
+    for module in sorted(package.rglob("*.py")):
+        if "__pycache__" in module.parts:
+            continue
+        runs = prose_runs(module.read_text(encoding="utf-8"))
+        if not runs:
+            continue
+        records.append(
+            {
+                "module": module.relative_to(package).as_posix(),
+                "runs": sorted(
+                    (digest(run) for run in runs), key=lambda entry: entry["digest"]
+                ),
+            }
+        )
+    if not records:
+        raise OracleError("no authored run was found in the onboarding screens")
+    return records
+
+
+# --------------------------------------------------------------------------
 # constants
 # --------------------------------------------------------------------------
 
@@ -1266,6 +1359,7 @@ def main() -> int:
             screen_graph = asyncio.run(capture_screen_graph())
             terminating = capture_terminating()
             domain_validation = capture_domain_validation()
+            screen_prose = capture_screen_prose()
             constants = capture_constants()
     except OracleError as error:
         print(f"onboarding capture failed: {error}", file=sys.stderr)
@@ -1287,13 +1381,15 @@ def main() -> int:
             "the real OnboardingApp through Textual's headless pilot with the sign-in service, "
             "the credential persistence and the config orchestrator replaced by recorders. No "
             "rendered cell, SVG or styled text appears here, and every reference-authored "
-            "message is committed as a SHA-256 digest and a length. Regenerate with "
-            "scripts/parity/onboarding.py --corpus when the pinned reference moves."
+            "message and screen sentence is committed as a SHA-256 digest and a length. "
+            "Regenerate with scripts/parity/onboarding.py --corpus when the pinned reference "
+            "moves."
         ),
         "constants": constants,
         "screenGraph": screen_graph,
         "terminating": terminating,
         "domainValidation": domain_validation,
+        "screenProse": screen_prose,
     }
 
     full = {
@@ -1325,6 +1421,7 @@ def main() -> int:
         "screenGraph": len(screen_graph),
         "terminating": len(terminating),
         "domainValidation": len(domain_validation),
+        "screenProse": sum(len(record["runs"]) for record in screen_prose),
     }
     total = sum(counted.values())
     print(

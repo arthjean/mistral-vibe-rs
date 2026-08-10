@@ -14,9 +14,9 @@
 //! through the same scripts: each corpus scenario maps to a drive that feeds
 //! the same key presses, scripted sign-in feeds and persistence outcomes, and
 //! every observation is compared field by field. The reference-authored
-//! messages are committed as a length plus a SHA-256, which is what `NOTICE`
-//! allows, and the replay holds this port's own sentences permanently unequal
-//! to them.
+//! messages and every sentence its screens draw are committed as a length
+//! plus a SHA-256, which is what `NOTICE` allows, and the replay holds this
+//! port's own sentences permanently unequal to them.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
@@ -51,7 +51,7 @@ const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/onboarding/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/onboarding.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 1;
+const CORPUS_SCHEMA_VERSION: u32 = 2;
 /// The scenario floor this replay commits to, so a regeneration that captured
 /// almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 50;
@@ -81,6 +81,17 @@ struct Corpus {
     screen_graph: Vec<GraphScenario>,
     terminating: Vec<TerminatingCase>,
     domain_validation: Vec<DomainCase>,
+    screen_prose: Vec<ProseModule>,
+}
+
+/// One reference screen module's authored runs, each by length and SHA-256
+/// only. `NOTICE` forbids shipping the sentences themselves, so the replay
+/// asserts permanent inequality rather than equality.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProseModule {
+    module: String,
+    runs: Vec<Digested>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -684,6 +695,222 @@ fn run_domain_validation(cases: &[DomainCase], report: &mut Report) {
             "privateCloudWarning",
             &case.private_cloud_warning,
             &Some(is_likely_mistral_private_cloud_domain(&case.input)),
+        );
+    }
+}
+
+// --------------------------------------------------------------------------
+// screenProse
+// --------------------------------------------------------------------------
+
+/// The modules that draw or speak the onboarding flow. Their string literals
+/// are this port's whole authored surface for these screens, and every one of
+/// them is held unequal to the reference's.
+const PROSE_SOURCES: [&str; 4] = [
+    "crates/vibe-cli/src/tui/onboarding.rs",
+    "crates/vibe-cli/src/tui/onboarding/context.rs",
+    "crates/vibe-cli/src/tui/onboarding/model.rs",
+    "crates/vibe-cli/src/tui/onboarding/render.rs",
+];
+
+/// Runs this port reproduces verbatim on purpose, each with why. `NOTICE`
+/// forbids shipping authored prose; a product or organization name is an
+/// identifier an operator matches on, exactly as the compaction envelope
+/// reproduces its `vibe_warning` tag while writing its own sentences. Each
+/// entry is stale-checked: a listed run that no longer collides fails the
+/// replay, so the list can never grow a permanent exemption for real prose.
+const REPRODUCED_NAMES: &[(&str, &str)] = &[
+    (
+        "Welcome to ",
+        "the greeting fragment that introduces the product name, carrying no directive",
+    ),
+    ("Mistral Vibe", "the product's name"),
+    (
+        "Mistral AI",
+        "the organization's name, the hosted console's label",
+    ),
+];
+
+/// The floor this port's own prose has to clear, so a refactor that moved the
+/// sentences elsewhere fails instead of reporting a clean but empty guard.
+const MINIMUM_PORT_PROSE_RUNS: usize = 25;
+/// The floor the captured reference side has to clear, for the same reason.
+const MINIMUM_REFERENCE_PROSE_RUNS: usize = 50;
+
+/// Whether a literal reads as an authored run rather than an identifier,
+/// matching `_is_prose` in the capture script so both sides collect the same
+/// kind of string.
+fn is_prose(value: &str) -> bool {
+    value.len() >= 8
+        && value.contains(' ')
+        && value.chars().any(|character| {
+            character.is_uppercase() || matches!(character, ',' | '.' | '!' | '?' | '\'')
+        })
+}
+
+/// Every string literal a Rust source carries, with comments skipped and the
+/// escapes this repository actually writes decoded, so a recorded digest is
+/// compared against the text the screen really draws.
+fn string_literals(source: &str) -> Vec<String> {
+    let mut literals = Vec::new();
+    let mut characters = source.chars().peekable();
+    while let Some(character) = characters.next() {
+        match character {
+            '/' if characters.peek() == Some(&'/') => {
+                for next in characters.by_ref() {
+                    if next == '\n' {
+                        break;
+                    }
+                }
+            }
+            '/' if characters.peek() == Some(&'*') => {
+                let mut previous = '\0';
+                for next in characters.by_ref() {
+                    if previous == '*' && next == '/' {
+                        break;
+                    }
+                    previous = next;
+                }
+            }
+            // A character literal never carries prose, and its quote must not
+            // be read as the start of a string.
+            '\'' => {
+                if characters.peek() == Some(&'\\') {
+                    characters.next();
+                    characters.next();
+                }
+                characters.next();
+                characters.next();
+            }
+            '"' => {
+                let mut value = String::new();
+                while let Some(next) = characters.next() {
+                    match next {
+                        '"' => break,
+                        '\\' => match characters.next() {
+                            Some('n') => value.push('\n'),
+                            Some('t') => value.push('\t'),
+                            Some('r') => value.push('\r'),
+                            Some('0') => value.push('\0'),
+                            Some('u') => {
+                                // `\u{...}`: the braces delimit the code point.
+                                let mut code = String::new();
+                                if characters.peek() == Some(&'{') {
+                                    characters.next();
+                                    for digit in characters.by_ref() {
+                                        if digit == '}' {
+                                            break;
+                                        }
+                                        code.push(digit);
+                                    }
+                                }
+                                if let Some(decoded) =
+                                    u32::from_str_radix(&code, 16).ok().and_then(char::from_u32)
+                                {
+                                    value.push(decoded);
+                                }
+                            }
+                            // A trailing backslash continues the literal on the
+                            // next line, and the compiler drops the newline
+                            // with the indentation that follows it.
+                            Some('\n') => {
+                                while characters
+                                    .peek()
+                                    .is_some_and(|following| following.is_whitespace())
+                                {
+                                    characters.next();
+                                }
+                            }
+                            Some(escaped) => value.push(escaped),
+                            None => break,
+                        },
+                        _ => value.push(next),
+                    }
+                }
+                literals.push(value);
+            }
+            _ => {}
+        }
+    }
+    literals
+}
+
+/// This port's own onboarding sentences, gathered from the modules that draw
+/// them.
+fn port_prose_runs() -> BTreeMap<String, Vec<String>> {
+    let root = repo_root();
+    PROSE_SOURCES
+        .iter()
+        .map(|relative| {
+            let path = root.join(relative);
+            let source = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("{} is readable: {error}", path.display()));
+            let runs = string_literals(&source)
+                .into_iter()
+                .filter(|literal| is_prose(literal))
+                .collect::<Vec<_>>();
+            ((*relative).to_owned(), runs)
+        })
+        .collect()
+}
+
+/// `NOTICE` forbids shipping the reference's screen text, so every sentence
+/// this port draws is compared against every recorded reference run and must
+/// differ from all of them. Equality would mean the prose was copied.
+fn run_screen_prose(modules: &[ProseModule], report: &mut Report) {
+    let recorded = modules
+        .iter()
+        .flat_map(|module| module.runs.iter())
+        .collect::<Vec<_>>();
+    assert!(
+        recorded.len() >= MINIMUM_REFERENCE_PROSE_RUNS,
+        "the corpus records {} reference runs, below the {MINIMUM_REFERENCE_PROSE_RUNS} floor; \
+         regenerate it with {CAPTURE_SCRIPT}",
+        recorded.len()
+    );
+    assert!(
+        modules
+            .iter()
+            .any(|module| module.module.starts_with("screens/")),
+        "the corpus records no screen module; regenerate it with {CAPTURE_SCRIPT}"
+    );
+    let port = port_prose_runs();
+    let total = port.values().map(Vec::len).sum::<usize>();
+    assert!(
+        total >= MINIMUM_PORT_PROSE_RUNS,
+        "this port's onboarding modules carry {total} authored runs, below the \
+         {MINIMUM_PORT_PROSE_RUNS} floor; the guard would pass without measuring anything"
+    );
+    let digest_of = |run: &str| Digested {
+        length: run.len(),
+        digest: hex::encode(Sha256::digest(run.as_bytes())),
+    };
+    for (module, runs) in &port {
+        for run in runs {
+            if REPRODUCED_NAMES.iter().any(|(name, _)| name == run) {
+                continue;
+            }
+            report.check(
+                "screenProse",
+                module,
+                "original sentence",
+                &true,
+                &!recorded.contains(&&digest_of(run)),
+            );
+        }
+    }
+    // A reproduced name that stopped matching the reference is no longer a
+    // reproduction, so its exemption is stale and has to go.
+    let all_port_runs = port.values().flatten().collect::<Vec<_>>();
+    for (name, reason) in REPRODUCED_NAMES {
+        assert!(
+            all_port_runs.iter().any(|run| run.as_str() == *name),
+            "no onboarding module carries the reproduced name {name:?} ({reason}) any more"
+        );
+        assert!(
+            recorded.contains(&&digest_of(name)),
+            "{name:?} is exempted as a reproduced name ({reason}) but the reference no longer \
+             carries it, so the exemption is stale"
         );
     }
 }
@@ -1295,8 +1522,11 @@ fn the_committed_corpus_replays_against_this_port() {
     let mut report = Report::default();
     run_domain_validation(&corpus.domain_validation, &mut report);
     scenarios += settle(&report, "domainValidation");
+    let mut report = Report::default();
+    run_screen_prose(&corpus.screen_prose, &mut report);
+    scenarios += settle(&report, "screenProse");
     println!(
-        "onboarding: {scenarios} comparisons across 3 families plus the constants block \
+        "onboarding: {scenarios} comparisons across 4 families plus the constants block \
          replayed at {}",
         &corpus.reference.commit[..12],
     );
