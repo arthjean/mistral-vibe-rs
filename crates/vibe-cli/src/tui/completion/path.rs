@@ -533,6 +533,9 @@ fn mention_candidate(path: String, is_directory: bool) -> CompletionCandidate {
 }
 
 #[cfg(test)]
+mod autocompletion_parity_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
