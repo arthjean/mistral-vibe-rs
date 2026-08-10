@@ -3,6 +3,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 mod agent;
+mod auth;
 mod client_tools;
 mod commands;
 mod history;
@@ -17,6 +18,10 @@ mod tests;
 pub const ADAPTER_NAME: &str = "vibe-acp";
 
 pub use agent::AcpAgent;
+pub use auth::{
+    AcpAuthEnvironment, AuthAttemptFuture, AuthKeyFuture, ProductionAuthEnvironment,
+    default_vibe_home,
+};
 pub use client_tools::{AcpClientFuture, AcpClientPort, DEFAULT_CLIENT_TOOL_TIMEOUT};
 pub use protocol::{
     ACP_PROTOCOL_VERSION, AcpAgentCapabilities, AcpClientCapabilities, AcpClientInfo, AcpError,

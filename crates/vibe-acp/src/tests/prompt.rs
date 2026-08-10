@@ -18,16 +18,11 @@ use crate::updates::MAX_ACP_UPDATE_QUEUE;
 
 #[tokio::test]
 async fn lifecycle_rich_content_and_updates_stay_on_public_app_server_contracts() {
-    let agent = AcpAgent::new(EchoTurnDriver::new("answer")).expect("agent starts");
+    let agent = super::auth::agent_with(Arc::new(super::auth::ScriptedAuthEnvironment::default()));
     let initialized = agent.initialize().expect("ACP initializes");
     assert_eq!(initialized.protocol_version, 1);
     assert!(initialized.agent_capabilities.load_session);
-    assert_eq!(initialized.auth_methods[0]["id"], "environment");
-    assert_eq!(
-        initialized.auth_methods[0]["vars"][0]["name"],
-        "MISTRAL_API_KEY"
-    );
-    agent.authenticate("environment").expect("auth");
+    assert_eq!(initialized.auth_methods[0]["id"], "browser-auth");
     let session = start_session(&agent, "/workspace");
     let (sender, mut receiver) = tokio::sync::mpsc::channel(MAX_ACP_UPDATE_QUEUE);
     let response = agent

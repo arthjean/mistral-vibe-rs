@@ -12,8 +12,9 @@ use tokio::io::{AsyncBufRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 use vibe_acp::{
-    AcpAgent, AcpClientFuture, AcpClientPort, AcpError, AcpForkSession, AcpInitializeRequest,
-    AcpListSessions, AcpLoadSession, AcpNewSession, AcpSessionUpdate,
+    AcpAgent, AcpAuthEnvironment, AcpClientFuture, AcpClientPort, AcpError, AcpForkSession,
+    AcpInitializeRequest, AcpListSessions, AcpLoadSession, AcpNewSession, AcpSessionUpdate,
+    ProductionAuthEnvironment, default_vibe_home,
 };
 use vibe_app_server::client::{
     CompactionDriverFuture, DriverError, DriverFuture, EventObserver, LiveDriverConfig,
@@ -309,8 +310,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             7_500_000,
         )?,
     };
-    let driver = DeferredTurnDriver::new(move || {
-        LiveTurnDriver::from_environment(config.clone(), &DotenvValues::global(&vibe_home))
+    let driver = DeferredTurnDriver::new({
+        let vibe_home = vibe_home.clone();
+        move || LiveTurnDriver::from_environment(config.clone(), &DotenvValues::global(&vibe_home))
     });
     run_stdio(
         BufReader::new(tokio::io::stdin()),
@@ -318,6 +320,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         driver,
         Some(session_root),
         credential_environment,
+        Arc::new(ProductionAuthEnvironment::new(vibe_home)),
         true,
     )
     .await
@@ -329,6 +332,7 @@ async fn run_stdio<R, W, D>(
     driver: D,
     session_root: Option<PathBuf>,
     credential_environment: String,
+    auth_environment: Arc<dyn AcpAuthEnvironment>,
     production_cloud: bool,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
@@ -346,7 +350,9 @@ where
     if production_cloud {
         agent = agent.with_production_cloud();
     }
-    agent = agent.with_credential_environment(credential_environment);
+    agent = agent
+        .with_credential_environment(credential_environment)
+        .with_auth_environment(auth_environment);
     let agent =
         Arc::new(agent.with_client_port(client.clone(), vibe_acp::DEFAULT_CLIENT_TOOL_TIMEOUT));
     let mut requests = JoinSet::new();
@@ -438,21 +444,6 @@ where
     Ok(())
 }
 
-fn default_vibe_home() -> PathBuf {
-    std::env::var_os("VIBE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .map(|home| home.join(".vibe"))
-        })
-        .unwrap_or_else(|| {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(".vibe")
-        })
-}
-
 async fn writer_loop<W>(
     mut writer: W,
     mut receiver: mpsc::Receiver<WriterMessage>,
@@ -521,10 +512,13 @@ where
             .and_then(|params| agent.initialize_with(params))
             .and_then(|value| serde_json::to_value(value).map_err(AcpError::Json)),
         "authenticate" => {
-            let method_id = required_string(&request.params, "methodId")?;
-            agent.authenticate(method_id)?;
-            Ok(json!({}))
+            let method_id = required_string(&request.params, "methodId")?.to_owned();
+            agent.authenticate(&method_id, &request.params).await
         }
+        // Extension methods reach the wire under a leading underscore, which
+        // the reference's router strips before dispatching them.
+        "_auth/status" => agent.auth_status(),
+        "_auth/signOut" => agent.auth_sign_out(),
         "session/new" => {
             let params =
                 serde_json::from_value::<AcpNewSession>(request.params).map_err(AcpError::Json)?;

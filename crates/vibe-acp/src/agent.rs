@@ -19,6 +19,10 @@ use vibe_protocol::{
 };
 
 use crate::agent::state::AgentState;
+use crate::auth::{
+    AcpAuthEnvironment, AuthController, ProductionAuthEnvironment, default_vibe_home,
+    terminal_method,
+};
 use crate::client_tools::{
     AcpClientPort, AcpClientToolFactory, DEFAULT_CLIENT_TOOL_TIMEOUT, declared_client_tools,
     require_client_method,
@@ -54,6 +58,7 @@ where
     client: Option<Arc<dyn AcpClientPort>>,
     client_tool_timeout: Duration,
     session_root: Option<PathBuf>,
+    auth: AuthController,
     credential_environment: String,
     production_cloud: bool,
     release4: Mutex<Option<Release4Service>>,
@@ -70,6 +75,9 @@ where
             client: None,
             client_tool_timeout: DEFAULT_CLIENT_TOOL_TIMEOUT,
             session_root: None,
+            auth: AuthController::new(Arc::new(
+                ProductionAuthEnvironment::new(default_vibe_home()),
+            )),
             credential_environment: "MISTRAL_API_KEY".to_owned(),
             production_cloud: false,
             release4: Mutex::new(None),
@@ -89,6 +97,16 @@ where
         self
     }
 
+    /// Replaces the ambient authentication environment, which is how the
+    /// binary supplies the production home and the tests script the world.
+    #[must_use]
+    pub fn with_auth_environment(mut self, environment: Arc<dyn AcpAuthEnvironment>) -> Self {
+        self.auth = AuthController::new(environment);
+        self
+    }
+
+    /// Names the dotenv variable the lazy cloud services read their
+    /// credential from.
     #[must_use]
     pub fn with_credential_environment(
         mut self,
@@ -131,6 +149,7 @@ where
         if request.protocol_version != ACP_PROTOCOL_VERSION {
             return Err(AcpError::UnsupportedProtocol(request.protocol_version));
         }
+        let auth_methods = self.advertised_auth_methods(&request)?;
         self.lock_state()?
             .initialize(request.client_capabilities, request.client_info)?;
         Ok(AcpInitializeResponse {
@@ -148,18 +167,7 @@ where
                     "close": {},
                 }),
             },
-            auth_methods: vec![json!({
-                "type": "env_var",
-                "id": "environment",
-                "name": "Mistral API key",
-                "description": "Provide the configured provider credential through the environment.",
-                "vars": [{
-                    "name": self.credential_environment,
-                    "label": "API key",
-                    "secret": true,
-                    "optional": false,
-                }],
-            })],
+            auth_methods,
             agent_info: AcpImplementation {
                 name: "@mistralai/mistral-vibe".to_owned(),
                 title: "Mistral Vibe".to_owned(),
@@ -168,15 +176,60 @@ where
         })
     }
 
-    /// Credentials live in the environment, so authentication only validates
-    /// that the client picked the advertised method.
-    pub fn authenticate(&self, method_id: &str) -> Result<(), AcpError> {
-        self.require_initialized()?;
-        if method_id == "environment" {
-            Ok(())
-        } else {
-            Err(AcpError::UnsupportedAuthentication(method_id.to_owned()))
+    /// The method set the reference advertises: the browser methods under the
+    /// provider predicate, the delegated variant and the terminal method under
+    /// their client-capability gates, and nothing at all for a JetBrains
+    /// client whose active provider is already usable.
+    fn advertised_auth_methods(
+        &self,
+        request: &AcpInitializeRequest,
+    ) -> Result<Vec<Value>, AcpError> {
+        let capability = |name: &str| {
+            request
+                .client_capabilities
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.get(name))
+                == Some(&Value::Bool(true))
+        };
+        let mut auth_methods = self
+            .auth
+            .browser_methods(capability("browser-auth-delegated"));
+        if capability("terminal-auth") {
+            auth_methods.push(terminal_method());
         }
+        let jetbrains = request
+            .client_info
+            .as_ref()
+            .is_some_and(|info| info.name.starts_with("JetBrains."));
+        if jetbrains && self.auth.status()?.can_use_active_provider {
+            auth_methods.clear();
+        }
+        Ok(auth_methods)
+    }
+
+    /// Routes an `authenticate` call to the controller. Reference
+    /// `Agent.authenticate`: the two browser methods are served here, a
+    /// terminal method is executed by the client, and any other id is refused.
+    pub async fn authenticate(
+        &self,
+        method_id: &str,
+        arguments: &Value,
+    ) -> Result<Value, AcpError> {
+        self.require_initialized()?;
+        self.auth.authenticate(method_id, arguments).await
+    }
+
+    /// The `auth/status` extension payload.
+    pub fn auth_status(&self) -> Result<Value, AcpError> {
+        self.auth.status_payload()
+    }
+
+    /// The `auth/signOut` extension method: the product's only credential
+    /// removal path.
+    pub fn auth_sign_out(&self) -> Result<Value, AcpError> {
+        self.auth.sign_out()?;
+        Ok(json!({}))
     }
 
     pub fn new_session(&self, request: AcpNewSession) -> Result<AcpSession, AcpError> {

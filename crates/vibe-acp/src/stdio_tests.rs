@@ -5,10 +5,98 @@ use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf, duplex, split};
 use tokio::task::JoinHandle;
+use vibe_acp::{AuthAttemptFuture, AuthKeyFuture};
 use vibe_app_server::client::{EchoTurnDriver, TurnReservation};
+use vibe_core::auth::{
+    AuthState, AuthStateKind, PersistOutcome, RemoveError, SignInError, SignInErrorCode,
+    default_mistral_provider,
+};
 use vibe_core::compaction::manager::CompactionPromptResolution;
 
 use super::*;
+
+/// A deterministic authentication world for the wire tests: the shipped
+/// provider, a scripted assessment, and no reachable sign-in transport.
+struct StaticAuthEnvironment {
+    state: Mutex<AuthState>,
+}
+
+impl StaticAuthEnvironment {
+    fn new(state: AuthState) -> Self {
+        Self {
+            state: Mutex::new(state),
+        }
+    }
+
+    fn signed_out() -> Self {
+        Self::new(AuthState {
+            kind: AuthStateKind::SignedOut,
+            can_use_active_provider: false,
+            sign_out_available: false,
+            env_key: Some("MISTRAL_API_KEY".to_owned()),
+        })
+    }
+
+    fn dotenv_backed() -> Self {
+        Self::new(AuthState {
+            kind: AuthStateKind::VibeHomeEnvFile,
+            can_use_active_provider: true,
+            sign_out_available: true,
+            env_key: Some("MISTRAL_API_KEY".to_owned()),
+        })
+    }
+}
+
+#[allow(clippy::unwrap_in_result)]
+impl AcpAuthEnvironment for StaticAuthEnvironment {
+    fn load_provider(&self) -> toml::Table {
+        default_mistral_provider()
+    }
+
+    fn assess(&self, _env_key: &str) -> std::io::Result<AuthState> {
+        Ok(self.state.lock().expect("static auth state").clone())
+    }
+
+    fn persist_api_key(
+        &self,
+        _env_key: &str,
+        _backend_is_mistral: bool,
+        _api_key: &str,
+        _custom_domain: bool,
+    ) -> PersistOutcome {
+        PersistOutcome::Completed
+    }
+
+    fn remove_api_key(&self, _env_key: &str) -> Result<(), RemoveError> {
+        *self.state.lock().expect("static auth state") = AuthState {
+            kind: AuthStateKind::SignedOut,
+            can_use_active_provider: false,
+            sign_out_available: false,
+            env_key: Some("MISTRAL_API_KEY".to_owned()),
+        };
+        Ok(())
+    }
+
+    fn persist_provider(&self, _provider: &toml::Table) -> bool {
+        true
+    }
+
+    fn browser_authenticate<'a>(&'a self, _provider: &'a toml::Table) -> AuthKeyFuture<'a> {
+        Box::pin(async { Err(SignInError::new(SignInErrorCode::StartFailed)) })
+    }
+
+    fn start_attempt<'a>(&'a self, _provider: &'a toml::Table) -> AuthAttemptFuture<'a> {
+        Box::pin(async { Err(SignInError::new(SignInErrorCode::StartFailed)) })
+    }
+
+    fn complete_attempt<'a>(
+        &'a self,
+        _provider: &'a toml::Table,
+        _attempt: &'a vibe_core::auth::SignInAttempt,
+    ) -> AuthKeyFuture<'a> {
+        Box::pin(async { Err(SignInError::new(SignInErrorCode::StartFailed)) })
+    }
+}
 
 struct TestPeer {
     reader: BufReader<ReadHalf<DuplexStream>>,
@@ -71,6 +159,21 @@ fn spawn_stdio_with_root<D>(driver: D, session_root: Option<PathBuf>) -> TestPee
 where
     D: TurnDriver + 'static,
 {
+    spawn_stdio_with_auth(
+        driver,
+        session_root,
+        Arc::new(StaticAuthEnvironment::signed_out()),
+    )
+}
+
+fn spawn_stdio_with_auth<D>(
+    driver: D,
+    session_root: Option<PathBuf>,
+    auth_environment: Arc<dyn AcpAuthEnvironment>,
+) -> TestPeer
+where
+    D: TurnDriver + 'static,
+{
     let (server_io, client_io) = duplex(256 * 1024);
     let (server_reader, server_writer) = split(server_io);
     let (client_reader, client_writer) = split(client_io);
@@ -81,6 +184,7 @@ where
             driver,
             session_root,
             "MISTRAL_API_KEY".to_owned(),
+            auth_environment,
             false,
         )
         .await
@@ -250,10 +354,9 @@ async fn initialize_and_session_lifecycle_do_not_require_provider_credentials() 
     let mut peer = spawn_stdio(driver);
 
     let initialized = initialize(&mut peer, 1).await;
-    assert_eq!(initialized["result"]["authMethods"][0]["id"], "environment");
     assert_eq!(
-        initialized["result"]["authMethods"][0]["vars"][0]["name"],
-        "MISTRAL_API_KEY"
+        initialized["result"]["authMethods"][0]["id"],
+        "browser-auth"
     );
     let session_id = new_session(&mut peer, 2, "/workspace").await;
     let closed = close_session(&mut peer, 3, &session_id).await;
@@ -582,4 +685,111 @@ async fn two_stdio_session_lifecycles_remain_isolated() {
     let closed = close_session(&mut peer, 9, &second).await;
     assert_eq!(closed["result"], json!({}));
     peer.shutdown(10).await;
+}
+
+#[tokio::test]
+async fn the_advertised_auth_methods_follow_the_client_capability_gates() {
+    let mut peer = spawn_stdio(EchoTurnDriver::new("ok"));
+    peer.send(request(
+        1,
+        "initialize",
+        json!({
+            "protocolVersion": vibe_acp::ACP_PROTOCOL_VERSION,
+            "clientCapabilities": {
+                "_meta": {"browser-auth-delegated": true, "terminal-auth": true},
+            },
+        }),
+    ))
+    .await;
+    let (_, response) = peer.response(1).await;
+    let methods = response["result"]["authMethods"]
+        .as_array()
+        .expect("auth methods")
+        .iter()
+        .map(|method| method["id"].as_str().expect("method id").to_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        methods,
+        ["browser-auth", "browser-auth-delegated", "vibe-setup"]
+    );
+    let terminal = &response["result"]["authMethods"][2];
+    assert_eq!(terminal["args"], json!(["--setup"]));
+    let command = terminal["_meta"]["terminal-auth"]["command"]
+        .as_str()
+        .expect("terminal command");
+    assert_eq!(
+        std::path::Path::new(command).file_stem(),
+        Some(std::ffi::OsStr::new("vibe")),
+        "{command}"
+    );
+
+    // The reference refuses every id `authenticate` does not serve itself,
+    // including the terminal id and this port's former `environment` method.
+    peer.send(request(
+        2,
+        "authenticate",
+        json!({"methodId": "environment"}),
+    ))
+    .await;
+    let (_, refused) = peer.response(2).await;
+    assert_eq!(refused["error"]["code"], -32602);
+    peer.shutdown(3).await;
+}
+
+#[tokio::test]
+async fn jetbrains_clients_with_a_usable_provider_get_no_auth_methods() {
+    let mut peer = spawn_stdio_with_auth(
+        EchoTurnDriver::new("ok"),
+        None,
+        Arc::new(StaticAuthEnvironment::dotenv_backed()),
+    );
+    peer.send(request(
+        1,
+        "initialize",
+        json!({
+            "protocolVersion": vibe_acp::ACP_PROTOCOL_VERSION,
+            "clientInfo": {"name": "JetBrains.IntelliJ", "version": "2026.2"},
+        }),
+    ))
+    .await;
+    let (_, response) = peer.response(1).await;
+    assert_eq!(response["result"]["authMethods"], json!([]));
+    peer.shutdown(2).await;
+}
+
+#[tokio::test]
+async fn the_auth_extension_methods_serve_status_and_sign_out() {
+    let mut peer = spawn_stdio_with_auth(
+        EchoTurnDriver::new("ok"),
+        None,
+        Arc::new(StaticAuthEnvironment::dotenv_backed()),
+    );
+    initialize(&mut peer, 1).await;
+    peer.send(request(2, "_auth/status", json!({}))).await;
+    let (_, status) = peer.response(2).await;
+    assert_eq!(
+        status["result"],
+        json!({
+            "authenticated": true,
+            "authState": "vibe_home_env_file",
+            "signOutAvailable": true,
+            "customDomain": null,
+        })
+    );
+
+    peer.send(request(3, "_auth/signOut", json!({}))).await;
+    let (_, signed_out) = peer.response(3).await;
+    assert_eq!(signed_out["result"], json!({}));
+
+    peer.send(request(4, "_auth/status", json!({}))).await;
+    let (_, status) = peer.response(4).await;
+    assert_eq!(status["result"]["authState"], "signed_out");
+    assert_eq!(status["result"]["signOutAvailable"], false);
+
+    // Sign-out is now unavailable, so a second call is refused with the
+    // invalid-request error and clears nothing.
+    peer.send(request(5, "_auth/signOut", json!({}))).await;
+    let (_, refused) = peer.response(5).await;
+    assert_eq!(refused["error"]["code"], -32602);
+    peer.shutdown(6).await;
 }

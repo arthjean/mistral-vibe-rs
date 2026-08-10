@@ -217,6 +217,8 @@ pub enum AcpError {
     UnsupportedProtocol(u16),
     #[error("ACP authentication method `{0}` is not supported")]
     UnsupportedAuthentication(String),
+    #[error("ACP authentication failed: {0}")]
+    AuthFailure(String),
     #[error("ACP session `{0}` was not found")]
     SessionNotFound(String),
     #[error("ACP session `{0}` already exists")]
@@ -268,6 +270,7 @@ impl AcpError {
             | Self::ClientTool(_)
             | Self::Driver(_)
             | Self::Configuration(_)
+            | Self::AuthFailure(_)
             | Self::StatePoisoned
             | Self::Client(_) => -32603,
         }

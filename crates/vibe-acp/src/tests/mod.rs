@@ -1,5 +1,6 @@
 //! Shared fixtures for the adapter test modules.
 
+mod auth;
 mod client_tools;
 mod commands;
 mod lifecycle;

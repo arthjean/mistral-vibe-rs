@@ -17,6 +17,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+toml.workspace = true
 vibe-app-server = { path = "../vibe-app-server" }
 vibe-core = { path = "../vibe-core" }
 vibe-protocol = { path = "../vibe-protocol" }
