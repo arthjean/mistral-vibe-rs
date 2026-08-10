@@ -5,6 +5,7 @@
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.1 | 2026-08-10 | Arthur Jean | EP-055 review: US-195's persistence-failure criterion asked for an on-screen retry the reference does not offer. `ApiKeyScreen._save_and_finish` exits the app with the persistence result unconditionally ([screens/api_key.py:125](/home/arthur/dev/mistral-vibe/vibe/setup/onboarding/screens/api_key.py)), and `run_onboarding` answers `save_error` with a warning that leaves the key set for the session. The criterion is restated against that behavior rather than inventing a surface no reference behavior measures |
 | 1.0 | 2026-08-10 | Arthur Jean | Initial PRD from the measured audit of `vibe/setup/` against the Python reference at commit `b78b451`: of the 3 554 lines the subtree holds, the 2 898 in `auth/` and `onboarding/` have no counterpart here. There is no browser sign-in although the two configuration keys that address it already ship declared, no credential provenance and therefore no sign-out, a keyring service name that no other build of this product can read, a setup flow rendered as chat transcript prompts that asks three questions the reference never asks and persists none of the trust decision it collects, one ACP authentication method where the reference declares up to three, and no oracle measuring any of it |
 
 ## Problem Statement
@@ -421,7 +422,7 @@ Replace the chat-transcript setup with the reference's screen graph, gated by th
 - [ ] Given the key input, when characters are typed, then they are masked and never written to the transcript, the log or the observation trace
 - [ ] Given an empty submission, when it is attempted, then it is rejected and the flow stays on the screen
 - [ ] Given a submission, when it succeeds, then the flow terminates with the persistence outcome for that key
-- [ ] Given a persistence failure, when it occurs, then the outcome is surfaced and the operator can retry without restarting the flow
+- [ ] Given a persistence failure, when it occurs, then the outcome is surfaced and the key stays usable for the session, the reference's key screen exiting with the persistence result rather than offering an on-screen retry
 - [ ] Given the default provider, when the screen renders, then it shows where to obtain a key, derived from the configured base URL rather than hard-coded
 - [ ] Given a provider whose key variable is empty, when the screen resolves its provider, then it falls back to the shipped default entry rather than failing
 

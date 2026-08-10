@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Replace the chat-transcript setup with the reference's onboarding screens.
+  `vibe --setup` and an interactive launch with no resolvable credential now
+  walk the reference's screen graph: a welcome screen whose advance action
+  arms only after the text finishes typing, a wrapping theme picker with a
+  live preview, and, for a provider that supports browser sign-in, the
+  authentication method, sign-in target, custom domain and browser sign-in
+  screens, with the API key screen as the manual path. A custom console
+  domain typed once is validated live, warned about when it looks like a
+  Mistral private-cloud host, derived into the browser and API base URLs the
+  sign-in uses, and persisted to the provider entry. The flow terminates with
+  the reference's five values and their exit paths: a cancellation leaves
+  nothing behind and exits cleanly, an unusable key variable exits with a
+  failure, and every other path persists the chosen theme once after the
+  screens close. The previous setup's network, model and workspace-trust
+  questions are gone; proxy and certificate settings stay reachable from
+  `/proxy-setup`, the model from `/model`, and workspace trust is decided by
+  the pre-session dialog, which `--setup` no longer suppresses.
+
 - Speak the browser sign-in protocol. `vibe_core::auth` now carries the PKCE
   `S256` flow the reference speaks: a sign-in process is created against the
   configured console API, polled every 3 seconds while tolerating two
