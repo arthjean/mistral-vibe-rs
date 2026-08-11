@@ -16,9 +16,9 @@ use url::Url;
 
 use crate::tui::chat_input::InputEvent;
 
-const DEFAULT_MODEL: &str = "voxtral-mini-transcribe-realtime-2602";
-const DEFAULT_SAMPLE_RATE: u32 = 16_000;
-const TARGET_STREAMING_DELAY_MS: u32 = 500;
+pub(super) const DEFAULT_MODEL: &str = "voxtral-mini-transcribe-realtime-2602";
+pub(super) const DEFAULT_SAMPLE_RATE: u32 = 16_000;
+pub(super) const TARGET_STREAMING_DELAY_MS: u32 = 500;
 pub(super) const START_TIMEOUT: Duration = Duration::from_secs(10);
 pub(super) const DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const USER_AGENT_VALUE: &str = concat!("mistral-vibe-rs/", env!("CARGO_PKG_VERSION"));

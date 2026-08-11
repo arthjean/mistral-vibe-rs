@@ -236,3 +236,7 @@ impl Drop for VoiceManager {
 #[cfg(test)]
 #[path = "voice/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "voice/voice_parity_tests.rs"]
+mod voice_parity_tests;
