@@ -41,6 +41,10 @@ command-group.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+# The telemetry parity replay compares the entrypoint and terminal vocabularies
+# against the enums that publish them. Same layer, and `vibe-protocol` depends on
+# no workspace crate, so the graph stays acyclic.
+vibe-protocol = { path = "../vibe-protocol" }
 
 [lints]
 workspace = true

@@ -626,6 +626,9 @@ const fn lifecycle_label(state: LifecycleState) -> &'static str {
 }
 
 #[cfg(test)]
+mod telemetry_parity_tests;
+
+#[cfg(test)]
 mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
