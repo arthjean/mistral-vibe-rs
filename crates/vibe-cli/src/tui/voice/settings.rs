@@ -61,18 +61,68 @@ impl TranscriptionSettings {
     /// The credential a session presents, read under the variable the provider
     /// entry names.
     pub(super) fn credential(&self, fallback: &str, vibe_home: &Path) -> Result<String, String> {
-        resolve_credential(&self.api_key_env_var, fallback, |name| {
-            // The store is opened only where a variable is actually named, so a
-            // provider that names none never reaches the keyring.
-            DotenvValues::global(vibe_home)
-                .variable(name)
-                .filter(|credential| !credential.is_empty())
-                .or_else(|| {
-                    PersistedCredentialStore::new(vibe_core::config::global_env_file(vibe_home))
-                        .resolve(name)
-                })
+        credential_for(&self.api_key_env_var, fallback, vibe_home)
+    }
+}
+
+/// The speech surface of the published configuration view.
+///
+/// The reference resolves the same four values before it posts anything: the
+/// model name, the voice and the output format come from the active `tts_models`
+/// entry, and the endpoint and the credential variable from its provider
+/// (`vibe/cli/tts/mistral_tts_client.py:23-27`). A document that resolves to no
+/// speech model is what leaves the reference with a null client
+/// (`vibe/cli/narrator_manager/narrator_manager.py:146-165`), so the reason is
+/// carried to the caller and the narrator never enters its speaking state.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct SpeechSettings {
+    pub(super) model: String,
+    pub(super) voice: String,
+    pub(super) response_format: String,
+    pub(super) api_base: String,
+    pub(super) api_key_env_var: String,
+}
+
+impl SpeechSettings {
+    /// Reads the `speech` object of a `ConfigView`.
+    pub(super) fn from_config_view(view: &Value) -> Result<Self, String> {
+        let model = string_at(view, "/speech/model/name");
+        if model.is_empty() {
+            return Err(
+                "Narration has no speech model configured; declare a [[tts_models]] entry and \
+                 name its alias in `active_tts_model`"
+                    .to_owned(),
+            );
+        }
+        Ok(Self {
+            model,
+            voice: string_at(view, "/speech/model/voice"),
+            response_format: string_at(view, "/speech/model/responseFormat"),
+            api_base: string_at(view, "/speech/provider/apiBase"),
+            api_key_env_var: string_at(view, "/speech/provider/apiKeyEnvVar"),
         })
     }
+
+    /// The credential a speech request presents, resolved exactly as a
+    /// transcription session's is.
+    pub(super) fn credential(&self, fallback: &str, vibe_home: &Path) -> Result<String, String> {
+        credential_for(&self.api_key_env_var, fallback, vibe_home)
+    }
+}
+
+/// The environment-then-store lookup both audio directions share.
+fn credential_for(env_var: &str, fallback: &str, vibe_home: &Path) -> Result<String, String> {
+    resolve_credential(env_var, fallback, |name| {
+        // The store is opened only where a variable is actually named, so a
+        // provider that names none never reaches the keyring.
+        DotenvValues::global(vibe_home)
+            .variable(name)
+            .filter(|credential| !credential.is_empty())
+            .or_else(|| {
+                PersistedCredentialStore::new(vibe_core::config::global_env_file(vibe_home))
+                    .resolve(name)
+            })
+    })
 }
 
 /// Reference `resolve_api_key` (`vibe/utils/api_keys.py:8-11`): an empty

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Speak the turn summary the narrator produces. With `narrator_enabled` on, a
+  completed turn is posted to the `[[tts_models]]` entry `active_tts_model`
+  names, at its provider's `api_base`, carrying that entry's model, voice and
+  response format, and the audio the response answers with is decoded and
+  played through the default output device. Cancelling a turn or starting the
+  next one stops playback before the narrator returns to idle, a summary whose
+  turn was superseded plays nothing, and a second playback is refused rather
+  than layered over the running one. A configuration that resolves to no
+  speech model, a payload that is not a supported container and a host with no
+  output device each leave the turn successful and tell the operator once per
+  session instead of once per turn.
+
 - Address the transcription session the configuration names. The endpoint, the
   model, the sample rate, the encoding and the target streaming delay now come
   from `active_transcribe_model`, its `[[transcribe_models]]` entry and that

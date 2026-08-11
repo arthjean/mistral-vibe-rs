@@ -386,7 +386,16 @@ pub(in crate::tui) fn apply_render_preferences(
     let narrator_enabled = configured_value(runtime, "narrator_enabled")
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
-    if let Some(effect) = state.narrator.sync(narrator_enabled, narrator_enabled) {
+    // Reference `NarratorManager.sync`: the speech client is rebuilt from the
+    // configuration as it stands, so an edited active model, provider or
+    // credential variable reaches the next turn. `tts_client is not None` is
+    // what gates the speaking state, so a configuration that resolves to no
+    // client keeps the turn silent instead of failing it.
+    if let Some(view) = super::published_config_view(runtime) {
+        runtime.speech.resync(&view);
+    }
+    let speech_available = narrator_enabled && runtime.speech.available();
+    if let Some(effect) = state.narrator.sync(narrator_enabled, speech_available) {
         crate::tui::apply_narrator_effect(effect, runtime, state);
     }
 }
@@ -542,6 +551,35 @@ mod tests {
         assert!(
             !state.file_watcher_for_autocomplete,
             "the gate follows the configuration rather than whatever the state held"
+        );
+    }
+
+    /// US-213: the preferences pass is where the reference rebuilds its speech
+    /// client and where `tts_client is not None` becomes the gate on the
+    /// speaking state, so both are read from the published configuration rather
+    /// than kept from process start.
+    #[test]
+    fn the_narrator_gate_follows_the_preference_and_the_resolved_speech_client() {
+        use crate::tui::runtime::interactive_test_runtime;
+
+        let mut runtime = interactive_test_runtime("narrator-gate");
+        let mut state = TuiState::new("narrator-gate");
+        apply_render_preferences(&mut runtime, &mut state);
+
+        assert!(
+            runtime.speech.available(),
+            "the shipped configuration declares a speech model, so a client is built"
+        );
+        assert!(
+            !state.narrator.enabled(),
+            "`narrator_enabled` is off by default and the gate follows it"
+        );
+        state.narrator.on_turn_start("write the parser");
+        state.narrator.on_assistant_text("done");
+        assert_eq!(
+            state.narrator.on_turn_end(),
+            None,
+            "a disabled narrator issues no speech request at all"
         );
     }
 }

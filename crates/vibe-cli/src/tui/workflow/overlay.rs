@@ -187,6 +187,11 @@ pub(super) async fn select_overlay_item(
                 .unwrap_or(false);
             if persist_user_setting(runtime, &[&item.id], json!(!current), false, state) {
                 sync_voice_preference(runtime, composer);
+                // Reference `_handle_voice_settings_closed`: the narrator is
+                // synced where the voice settings are saved, so toggling
+                // `narrator_enabled` here rebuilds the speech client and moves
+                // the gate on the next turn rather than at the next start.
+                super::config::apply_render_preferences(runtime, state);
                 show_voice(runtime, state);
             }
         }

@@ -606,7 +606,7 @@ fn sync_voice_preference(runtime: &mut InteractiveRuntime, composer: &mut ChatIn
 
 /// The `ConfigView` this session publishes, which is what the audio surface is
 /// resolved from.
-fn published_config_view(runtime: &mut InteractiveRuntime) -> Option<Value> {
+pub(super) fn published_config_view(runtime: &mut InteractiveRuntime) -> Option<Value> {
     runtime
         .service
         .public_call("config/read", json!({"sessionId": runtime.session_id}))

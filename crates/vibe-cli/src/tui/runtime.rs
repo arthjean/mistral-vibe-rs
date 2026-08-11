@@ -19,7 +19,7 @@ use super::cloud_workflow::CloudWorkflowState;
 use super::interaction::{self, Overlay};
 use super::shell::ActiveShell;
 use super::state::TuiState;
-use super::voice::VoiceManager;
+use super::voice::{SpeechManager, VoiceManager};
 use super::{
     CliTelemetryObserver, apply_public_notifications, remote_project_workflow, switching, workflow,
 };
@@ -64,6 +64,9 @@ pub(super) struct InteractiveRuntime {
     pub(super) pending_switch: Option<switching::SwitchRequest>,
     pub(super) telemetry: Option<Arc<CliTelemetryObserver>>,
     pub(super) voice: VoiceManager,
+    /// The read-aloud transport, resolved from the same published view the
+    /// transcription session is.
+    pub(super) speech: SpeechManager,
 }
 
 #[derive(Debug, Clone)]
@@ -334,6 +337,20 @@ pub(in crate::tui) fn interactive_test_runtime_with_server(
             "test-credential",
             std::path::Path::new("/nonexistent-vibe-home"),
             false,
+        ),
+        speech: SpeechManager::production(
+            &json!({
+                "speech": {
+                    "model": {
+                        "name": "test-speech-model",
+                        "voice": "test-voice",
+                        "responseFormat": "wav",
+                    },
+                    "provider": {"apiBase": "https://provider.invalid", "apiKeyEnvVar": ""},
+                },
+            }),
+            "test-credential",
+            std::path::Path::new("/nonexistent-vibe-home"),
         ),
     }
 }

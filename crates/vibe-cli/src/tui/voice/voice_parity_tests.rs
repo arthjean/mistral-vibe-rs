@@ -34,8 +34,10 @@ use vibe_core::config::registry::default_document;
 use vibe_core::config::{ConfigPaths, ConfigSnapshot, LayeredConfig};
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
+use super::player::{PLAYBACK_BLOCK_SIZE, PLAYBACK_SAMPLE_FORMAT, PLAYBACK_SAMPLE_WIDTH};
 use super::realtime::{DRAIN_TIMEOUT, VoiceConfig, session_update};
-use super::settings::TranscriptionSettings;
+use super::settings::{SpeechSettings, TranscriptionSettings};
+use super::speech::SpeechRequest;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/voice/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/voice.py";
@@ -85,19 +87,14 @@ const DIVERGENCES: &[(&str, &str)] = &[
     ),
     (
         "constants/speechOutputFormats/*",
-        "PENDING US-211 and US-214: this build has no speech transport and no audio model \
-         choice, so it publishes no output-format vocabulary",
+        "PENDING US-214: the speech transport posts whatever format the active entry declares, \
+         and the audio model choice that publishes the vocabulary itself is not built yet",
     ),
     (
         "constants/recordingModes/*",
         "ACCEPTED: the reference selects between a buffered and a streaming recorder, and this \
          port streams unconditionally, so it names no recording mode; \
          tasks/prd-autocompletion-voice-parity.md records the streaming-only surface",
-    ),
-    (
-        "constants/playback/*",
-        "PENDING US-212: this build has no audio player, so it names no block size, sample \
-         format or sample width",
     ),
     (
         "transcriptionResolution/cause/*",
@@ -122,9 +119,11 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "ACCEPTED: as above, on the read-aloud surface",
     ),
     (
-        "wireFrames/speech.*",
-        "PENDING US-211 and US-213: this build has no speech transport, so it posts no request \
-         at all",
+        "wireFrames/speech.body.metadata/*",
+        "ACCEPTED: the reference's audio clients attach the request metadata their telemetry \
+         client builds, on both directions; this port attaches none, which is the same choice its \
+         realtime request already makes and which `docs/parity.md` records for the telemetry \
+         envelope as a whole",
     ),
 ];
 
@@ -559,6 +558,52 @@ fn port_transcription_frame(view: &Value) -> Option<PortTranscriptionFrame> {
     })
 }
 
+/// The request a spoken summary would post, built the way the transport builds
+/// one: from the speech surface of the view the document publishes.
+struct PortSpeechFrame {
+    method: &'static str,
+    endpoint: String,
+    server_url: String,
+    model: String,
+    voice: String,
+    response_format: String,
+    credential_env_var: String,
+    body: Value,
+}
+
+fn port_speech_frame(view: &Value, input: &str) -> Option<PortSpeechFrame> {
+    let settings = SpeechSettings::from_config_view(view).ok()?;
+    let request = SpeechRequest::resolve(&settings, input).ok()?;
+    Some(PortSpeechFrame {
+        method: "POST",
+        endpoint: request.endpoint.to_string(),
+        server_url: settings.api_base.clone(),
+        model: settings.model.clone(),
+        voice: settings.voice.clone(),
+        response_format: settings.response_format.clone(),
+        credential_env_var: settings.api_key_env_var.clone(),
+        body: request.body,
+    })
+}
+
+/// One value of a captured body, as a string so a scalar of either side is
+/// compared by what it says rather than by which JSON type carried it.
+fn body_scalar(value: Option<&toml::Value>) -> String {
+    match value {
+        Some(toml::Value::String(text)) => text.clone(),
+        Some(other) => other.to_string(),
+        None => String::new(),
+    }
+}
+
+fn port_body_scalar(body: &Value, key: &str) -> String {
+    match body.get(key) {
+        Some(Value::String(text)) => text.clone(),
+        Some(other) => other.to_string(),
+        None => String::new(),
+    }
+}
+
 // --------------------------------------------------------------------------
 // The families
 // --------------------------------------------------------------------------
@@ -794,22 +839,22 @@ fn run_constants(constants: &Constants, report: &mut Report) {
         "constants",
         "playback",
         "blockSize",
-        &Some(i64::from(constants.playback.block_size)),
-        &None,
+        &i64::from(constants.playback.block_size),
+        &i64::from(PLAYBACK_BLOCK_SIZE),
     );
     report.check(
         "constants",
         "playback",
         "dtype",
-        &Some(constants.playback.dtype.clone()),
-        &None,
+        &constants.playback.dtype,
+        &PLAYBACK_SAMPLE_FORMAT.to_owned(),
     );
     report.check(
         "constants",
         "playback",
         "sampleWidth",
-        &Some(i64::from(constants.playback.sample_width)),
-        &None,
+        &i64::from(constants.playback.sample_width),
+        &i64::from(PLAYBACK_SAMPLE_WIDTH),
     );
 }
 
@@ -1084,61 +1129,79 @@ fn run_wire_frames(corpus: &Corpus, report: &mut Report) {
         let Some(frame) = case.speech.as_ref() else {
             continue;
         };
+        // The reference's request is posted for a text the capture authored, so
+        // this port builds its own request for the same text and the two bodies
+        // are compared field for field.
+        let input = body_scalar(frame.body.get("input"));
+        let port = port_speech_frame(&view, &input)
+            .unwrap_or_else(|| panic!("`{}` resolves a speech request", case.case));
         report.check(
             "wireFrames",
             "speech.method",
             &case.case,
-            &Some(frame.method.clone()),
-            &None,
+            &frame.method,
+            &port.method.to_owned(),
         );
         report.check(
             "wireFrames",
             "speech.endpointUrl",
             &case.case,
-            &Some(frame.endpoint_url.clone()),
-            &None,
+            &frame.endpoint_url,
+            &port.endpoint,
+        );
+        report.check(
+            "wireFrames",
+            "speech.serverUrl",
+            &case.case,
+            &frame.server_url,
+            &port.server_url,
         );
         report.check(
             "wireFrames",
             "speech.model",
             &case.case,
-            &Some(frame.model.clone()),
-            &None,
+            &frame.model,
+            &port.model,
         );
         report.check(
             "wireFrames",
             "speech.voice",
             &case.case,
-            &Some(frame.voice.clone()),
-            &None,
+            &frame.voice,
+            &port.voice,
         );
         report.check(
             "wireFrames",
             "speech.responseFormat",
             &case.case,
-            &Some(frame.response_format.clone()),
-            &None,
+            &frame.response_format,
+            &port.response_format,
         );
         report.check(
             "wireFrames",
             "speech.credentialEnvVar",
             &case.case,
-            &Some(frame.credential.env_var.clone()),
-            &None,
+            &frame.credential.env_var,
+            &port.credential_env_var,
         );
-        // The body the reference posts is what US-211 has to reproduce, so the
-        // corpus is asserted to carry it rather than only its scalars.
-        assert!(
-            frame.body.contains_key("model")
-                && frame.body.contains_key("input")
-                && frame.body.contains_key("voice_id")
-                && frame.body.contains_key("response_format"),
-            "the speech body carries the four values a request is built from: {:?}",
-            frame.body.keys().collect::<Vec<_>>()
-        );
-        assert!(
-            !frame.server_url.is_empty(),
-            "the speech frame names the server it would post to"
+        // The body itself, which is what a summary is actually spoken through.
+        for key in ["model", "input", "voice_id", "response_format", "stream"] {
+            report.check(
+                "wireFrames",
+                &format!("speech.body.{key}"),
+                &case.case,
+                &body_scalar(frame.body.get(key)),
+                &port_body_scalar(&port.body, key),
+            );
+        }
+        // The reference's client attaches its telemetry metadata to the same
+        // body; this port sends none, which the ledger records.
+        report.check(
+            "wireFrames",
+            "speech.body.metadata",
+            &case.case,
+            &frame.body.contains_key("metadata"),
+            &port.body.get("metadata").is_some(),
         );
     }
 }

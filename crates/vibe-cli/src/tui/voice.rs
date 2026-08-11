@@ -10,12 +10,15 @@ use tokio::task::JoinHandle;
 
 use super::chat_input::{InputEffect, InputEvent};
 
+mod player;
 mod realtime;
 mod recorder;
 mod session;
 mod settings;
+mod speech;
 mod state;
 
+pub(crate) use speech::{SpeechEvent, SpeechManager};
 pub use state::VoicePhase;
 pub(crate) use state::{VoiceCommand, VoiceState, VoiceUpdate, VoiceUpdateOutcome};
 

@@ -105,7 +105,7 @@ use self::turn::{
     ActiveTurn, CancellationPhase, drain_updates, finish_active, request_active_turn_interrupt,
     settle_unstarted_reservation, start_active_turn,
 };
-use self::voice::VoiceManager;
+use self::voice::{SpeechEvent, SpeechManager, VoiceManager};
 use crate::{
     Arguments, CliError, CliTelemetryObserver, bootstrap, telemetry_event_observer,
     validate_arguments,
@@ -437,6 +437,11 @@ pub async fn run_interactive(
                         &mut state,
                     );
                 }
+                // The narrator's own transport answers here, so a spoken summary
+                // reaches the same state machine the effects came from.
+                while let Some(event) = runtime.speech.try_next_event() {
+                    apply_speech_event(event, &mut state);
+                }
             }
             for diagnostic in prompt_history.drain_ready().await {
                 state.push_diagnostic(diagnostic);
@@ -760,6 +765,7 @@ pub async fn run_interactive(
         interrupt_shell(runtime, &mut state).await;
         finish_shell(Some(runtime), &mut state).await;
         runtime.voice.shutdown().await;
+        runtime.speech.shutdown().await;
     }
     let cleanup_result = clipboard_images
         .shutdown()
@@ -859,16 +865,17 @@ fn apply_path_normalization_event(
 }
 
 /// Executes one narrator effect. Summaries come from the existing narration
-/// resource; playback has no transport in this port, so a spoken summary settles
-/// with one bounded, non-secret notice instead of a silent success.
+/// resource, and a spoken summary is posted to the configured speech model and
+/// played through the default output device by [`SpeechManager`], which answers
+/// asynchronously with the two events the same state machine settles on.
 pub(in crate::tui) fn apply_narrator_effect(
     effect: narrator::NarratorEffect,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
     match effect {
-        // Nothing is playing, so cancellation has no external effect to stop.
-        narrator::NarratorEffect::Stop => {}
+        // Reference `cancel`: playback stops before the machine returns to idle.
+        narrator::NarratorEffect::Stop => runtime.speech.stop(),
         narrator::NarratorEffect::Summarize {
             generation,
             user_message,
@@ -892,30 +899,43 @@ pub(in crate::tui) fn apply_narrator_effect(
                         .and_then(Value::as_str)
                         .map(ToOwned::to_owned)
                 });
-            if let Some(narrator::NarratorEffect::Speak { generation, .. }) =
+            if let Some(narrator::NarratorEffect::Speak { generation, text }) =
                 state.narrator.apply_summary(generation, summary)
             {
-                state.narrator.settle(generation);
-                report_speech_unavailable(state);
+                runtime.speech.speak(generation, text);
             }
         }
-        narrator::NarratorEffect::Speak { generation, .. } => {
-            state.narrator.settle(generation);
-            report_speech_unavailable(state);
+        narrator::NarratorEffect::Speak { generation, text } => {
+            runtime.speech.speak(generation, text);
         }
     }
 }
 
-/// The narrator preference is honored, but this port has no speech transport.
-/// The operator is told once per session, never once per turn.
-fn report_speech_unavailable(state: &mut TuiState) {
+/// Applies one answer from the speech transport. The generation each answer
+/// carries is what the state machine discards a superseded turn by, so a result
+/// that outlived its turn settles nothing and plays nothing.
+fn apply_speech_event(event: SpeechEvent, state: &mut TuiState) {
+    match event {
+        SpeechEvent::PlaybackStarted { generation } => state.narrator.playback_started(generation),
+        SpeechEvent::Finished { generation, error } => {
+            state.narrator.settle(generation);
+            if let Some(failure) = error {
+                report_speech_failure(state, failure);
+            }
+        }
+    }
+}
+
+/// Reports a speech failure once per session. An unconfigured model, an absent
+/// output device and an endpoint that refuses the request are all the same fact
+/// on every following turn, so the operator is told once rather than once per
+/// turn, and the turn itself stays successful.
+fn report_speech_failure(state: &mut TuiState, failure: String) {
     if state.speech_notice_shown {
         return;
     }
     state.speech_notice_shown = true;
-    state.push_diagnostic(
-        "Narrator playback is unavailable in this build; turn summaries are not spoken",
-    );
+    state.push_diagnostic(failure);
 }
 
 /// Reference `_check_and_show_whats_new`: release notes appear once per version,
@@ -1327,12 +1347,17 @@ fn start_runtime(
         .get("voiceModeEnabled")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let vibe_home = startup::vibe_home_directory(arguments, working_directory);
     let voice = VoiceManager::production(
         &published_config,
         &voice_credential,
-        &startup::vibe_home_directory(arguments, working_directory),
+        &vibe_home,
         voice_enabled,
     );
+    // Reference `_make_tts_client`: the read-aloud client comes from the same
+    // view, and a configuration it cannot be built from leaves the narrator
+    // silent rather than failing the session.
+    let speech = SpeechManager::production(&published_config, &voice_credential, &vibe_home);
     let session = service.session(&session_id)?;
     let agent_name = session
         .intent
@@ -1373,6 +1398,7 @@ fn start_runtime(
         pending_switch: None,
         telemetry,
         voice,
+        speech,
     })
 }
 
