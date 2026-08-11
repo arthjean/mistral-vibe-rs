@@ -20,6 +20,15 @@
   on `diagnostics/logs/read` rather than shipped, and `enable_telemetry` decides
   whether they are kept at all.
 
+- Watch the workspace while `file_watcher_for_autocomplete` is on. A file
+  created, modified or deleted during a session is reflected in the next `@`
+  completion instead of at the next process start: changes are applied
+  incrementally, a batch carrying more than 200 of them falls back to a full
+  rebuild, a deleted directory drops every entry under it and a created one adds
+  every non-ignored descendant. The index is built once per workspace root and
+  reused across every query rather than rebuilt per query, and the preference is
+  read on every query, so turning it off stops the watcher.
+
 - Speak the turn summary the narrator produces. With `narrator_enabled` on, a
   completed turn is posted to the `[[tts_models]]` entry `active_tts_model`
   names, at its provider's `api_base`, carrying that entry's model, voice and
