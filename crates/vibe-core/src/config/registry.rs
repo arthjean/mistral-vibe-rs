@@ -353,6 +353,9 @@ const TTS_PROVIDER_ITEMS: &str = r#"{
     }
 }"#;
 
+/// `response_format` carries the closed vocabulary the reference declares as
+/// its `SpeechOutputFormat` literal, so a settings surface offers exactly the
+/// containers the speech endpoint answers with rather than a free string.
 const TTS_MODEL_ITEMS: &str = r#"{
     "type": "array",
     "items": {
@@ -363,7 +366,10 @@ const TTS_MODEL_ITEMS: &str = r#"{
             "provider": {"type": "string", "minLength": 1},
             "alias": {"type": "string", "minLength": 1},
             "voice": {"type": "string"},
-            "response_format": {"type": "string"}
+            "response_format": {
+                "type": "string",
+                "enum": ["pcm", "wav", "mp3", "flac", "opus"]
+            }
         }
     }
 }"#;
