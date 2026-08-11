@@ -36,10 +36,10 @@
     {
       "id": "EP-061",
       "title": "The Transcription Configuration",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0,
+      "stories_done": 3,
       "stories_in_review": 0
     },
     {
@@ -174,43 +174,43 @@
       "id": "US-208",
       "title": "Resolve the transcription session from configuration",
       "epic": "EP-061",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-207"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-11",
+      "completed_at": "2026-08-11",
+      "reviewed_at": "2026-08-11"
     },
     {
       "id": "US-209",
       "title": "Present the credential the provider names",
       "epic": "EP-061",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-208"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-11",
+      "completed_at": "2026-08-11",
+      "reviewed_at": "2026-08-11"
     },
     {
       "id": "US-210",
       "title": "Validate audio model entries the way the reference does",
       "epic": "EP-061",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-207"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-11",
+      "completed_at": "2026-08-11",
+      "reviewed_at": "2026-08-11"
     },
     {
       "id": "US-211",

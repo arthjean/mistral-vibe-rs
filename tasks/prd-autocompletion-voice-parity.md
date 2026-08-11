@@ -392,7 +392,9 @@ Make the six audio keys take effect on the transport that already exists.
 - [ ] Given a credential is resolved, when any diagnostic or log line is written, then the secret value never appears in it.
 
 #### US-210: Validate audio model entries the way the reference does
-**Description:** As an operator writing a configuration file, I want an entry without an alias to be accepted and a duplicate alias to be rejected, so that a document the reference accepts is accepted here.
+**Description:** As an operator writing a configuration file, I want each model list to give my document the verdict the reference gives it, so that a document the reference accepts is accepted here and one it refuses is refused here.
+
+**Correction (review of 2026-08-11):** the first and third criteria below were written from `_default_alias_to_name` alone and predicted the wrong verdict for the two audio lists. `_default_alias_to_name` is a `model_validator(mode="before")`, so it runs during validation, after the layered merge has already keyed the list; the merge key function is `lambda item: item[merge_key]` (`vibe/core/config/builder.py:158`), and `_apply_model_before_validators` (`:139-149`) runs the before-validators for the `models` field only. An audio entry with no `alias` therefore dies on the merge key before the defaulting rule is ever reached, and two entries sharing an alias are collapsed into one by the union merge before `_unique_by` ever sees a repeat. Both criteria are restated below from the pinned reference's own verdicts, recorded as the `transcribe-entry-without-alias`, `speech-entry-without-alias`, `transcribe-duplicate-alias` and `speech-duplicate-alias` cases of `crates/vibe-cli/tests/voice/corpus.json`.
 
 **Priority:** P1
 **Size:** M (3 pts)
@@ -401,11 +403,12 @@ Make the six audio keys take effect on the transport that already exists.
 **Reference:** [vibe/core/config/models.py:408-412](/home/arthur/dev/mistral-vibe/vibe/core/config/models.py) for `_default_alias_to_name` and its three bindings at (428), (574) and (595), [vibe_schema.py:192-202](/home/arthur/dev/mistral-vibe/vibe/core/config/vibe_schema.py) for `_unique_by` and its two audio applications at (275) and (286), and [lazy_audio_managers.py:157-162](/home/arthur/dev/mistral-vibe/vibe/cli/lazy_audio_managers.py) with [narrator_manager.py:131-135](/home/arthur/dev/mistral-vibe/vibe/cli/narrator_manager/narrator_manager.py) for the re-read on toggle
 
 **Acceptance Criteria:**
-- [ ] Given a `[[transcribe_models]]` or `[[tts_models]]` entry with a `name` and no `alias`, when the configuration loads, then the alias defaults to the name and the entry is accepted.
-- [ ] Given the same defaulting rule, when it is applied, then it covers the three model classes the reference binds it to, `ModelConfig`, `TranscribeModelConfig` and `TTSModelConfig`, which is what also covers `compaction_model`.
-- [ ] Given two entries in the same list declaring the same alias, when the configuration loads, then the load reports a validation warning naming the duplicated alias and the document is not silently accepted with one entry shadowed.
+- [ ] Given a `[[models]]` entry or a `[compaction_model]` table with a `name` and no `alias`, when the configuration loads, then the alias defaults to the name and the entry is accepted, because those are the two the reference reaches its before-validators for.
+- [ ] Given a `[[transcribe_models]]` or `[[tts_models]]` entry with a `name` and no `alias`, when the configuration loads, then the load is refused for a missing merge key, matching the reference's `MergeKeyError` on the same document.
+- [ ] Given the defaulting rule that does apply, when it is applied, then it covers the model classes the reference binds it to and reaches, `ModelConfig` for both `models` and `compaction_model`, and it stays unreachable on `TranscribeModelConfig` and `TTSModelConfig` for the same reason it is on the reference.
+- [ ] Given two entries in the same list declaring the same alias, when the configuration loads, then the later entry wins whole rather than field by field, the document is accepted and no validation warning is recorded, matching the reference's union merge collapsing them before `_unique_by` runs.
 - [ ] Given `voice_mode_enabled` or `narrator_enabled` changes while a session is running, when the next turn starts, then the audio configuration is re-read rather than kept from process start.
-- [ ] Given the configuration corpus, when `config::surface_parity_tests` runs, then the new alias scenarios replay against the reference verdicts with no divergence.
+- [ ] Given the configuration corpus, when `config::surface_parity_tests` runs, then the new `models` and `compaction_model` alias scenarios replay against the reference verdicts with no divergence, and when `voice::voice_parity_tests` runs, the four audio alias documents do the same.
 
 ---
 
