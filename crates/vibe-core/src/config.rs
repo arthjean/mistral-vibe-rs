@@ -2068,6 +2068,7 @@ fn finalize_effective(
     resolve_session_log_dir(effective, vibe_home, user_home_directory())?;
     require_configured_model(effective)?;
     complete_model_entries(effective);
+    complete_compaction_model(effective);
     propagate_auto_compact_threshold(effective);
     let warnings = apply_active_model_fallback(effective, model_order)
         .into_iter()
@@ -2175,6 +2176,49 @@ fn complete_model_entries(effective: &mut Table) {
                 model.entry(key.clone()).or_insert_with(|| value.clone());
             }
         }
+    }
+}
+
+/// Fills the compaction model the same way, and borrows its alias from its name
+/// where it declares none.
+///
+/// Reference `_default_alias_to_name`, bound to `ModelConfig`, which is what
+/// `compaction_model` is typed as: a `[compaction_model]` table carrying a name
+/// and a provider is published with an alias, the `ModelConfig` field defaults
+/// and the global compaction threshold, exactly as an entry of `models` is.
+fn complete_compaction_model(effective: &mut Table) {
+    // Unreachable in a passing suite: `registry_tests` parses the literal.
+    let Some(defaults) = serde_json::from_str::<JsonValue>(registry::MODEL_DEFAULTS)
+        .ok()
+        .and_then(|value| Value::try_from(value).ok())
+        .and_then(|value| value.as_table().cloned())
+    else {
+        return;
+    };
+    let global = effective
+        .get("auto_compact_threshold")
+        .and_then(Value::as_integer);
+    let Some(compaction) = effective
+        .get_mut("compaction_model")
+        .and_then(Value::as_table_mut)
+    else {
+        return;
+    };
+    if !compaction.contains_key("alias")
+        && let Some(name) = compaction.get("name").and_then(Value::as_str)
+    {
+        let name = name.to_owned();
+        compaction.insert("alias".to_owned(), Value::String(name));
+    }
+    for (key, value) in &defaults {
+        compaction
+            .entry(key.clone())
+            .or_insert_with(|| value.clone());
+    }
+    if let Some(global) = global {
+        compaction
+            .entry("auto_compact_threshold".to_owned())
+            .or_insert(Value::Integer(global));
     }
 }
 

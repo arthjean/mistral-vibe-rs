@@ -1309,6 +1309,7 @@
   "modelScenarios": [
     {
       "activeModel": "",
+      "compactionModel": null,
       "layers": [],
       "models": {
         "devstral-small": {
@@ -1353,6 +1354,7 @@
     },
     {
       "activeModel": "",
+      "compactionModel": null,
       "layers": [
         {
           "name": "user",
@@ -1402,6 +1404,7 @@
     },
     {
       "activeModel": "",
+      "compactionModel": null,
       "layers": [
         {
           "name": "user",
@@ -1451,6 +1454,7 @@
     },
     {
       "activeModel": "",
+      "compactionModel": null,
       "layers": [
         {
           "name": "user",
@@ -1512,6 +1516,7 @@
     },
     {
       "activeModel": "",
+      "compactionModel": null,
       "layers": [
         {
           "name": "user",
@@ -1573,6 +1578,7 @@
     },
     {
       "activeModel": "mistral-medium-3.5",
+      "compactionModel": null,
       "layers": [
         {
           "name": "user",
@@ -1622,6 +1628,7 @@
     },
     {
       "activeModel": "scratch",
+      "compactionModel": null,
       "layers": [
         {
           "name": "user",
@@ -1683,6 +1690,7 @@
     },
     {
       "activeModel": "",
+      "compactionModel": null,
       "layers": [
         {
           "name": "user",
@@ -1732,6 +1740,190 @@
         }
       },
       "name": "models-two-layers-deep-merge-one-entry",
+      "validationWarnings": 0
+    },
+    {
+      "activeModel": "scratch",
+      "compactionModel": null,
+      "layers": [
+        {
+          "name": "user",
+          "toml": "active_model = \"scratch\"\n\n[[models]]\nname = \"scratch\"\nprovider = \"mistral\"\n"
+        }
+      ],
+      "models": {
+        "devstral-small": {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        },
+        "scratch": {
+          "alias": "scratch",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "scratch",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        }
+      },
+      "name": "models-entry-without-an-alias-borrows-its-name",
+      "validationWarnings": 0
+    },
+    {
+      "activeModel": "",
+      "compactionModel": {
+        "alias": "devstral-small-latest",
+        "auto_compact_threshold": 200000,
+        "cached_input_price": null,
+        "input_price": 0.0,
+        "name": "devstral-small-latest",
+        "output_price": 0.0,
+        "provider": "mistral",
+        "supports_images": false,
+        "temperature": 0.2,
+        "thinking": "off"
+      },
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[compaction_model]\nname = \"devstral-small-latest\"\nprovider = \"mistral\"\n"
+        }
+      ],
+      "models": {
+        "devstral-small": {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        }
+      },
+      "name": "models-compaction-model-without-an-alias-borrows-its-name",
+      "validationWarnings": 0
+    },
+    {
+      "activeModel": "",
+      "compactionModel": {
+        "alias": "compactor",
+        "auto_compact_threshold": 200000,
+        "cached_input_price": null,
+        "input_price": 0.0,
+        "name": "devstral-small-latest",
+        "output_price": 0.0,
+        "provider": "mistral",
+        "supports_images": false,
+        "temperature": 0.7,
+        "thinking": "off"
+      },
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[compaction_model]\nname = \"devstral-small-latest\"\nprovider = \"mistral\"\nalias = \"compactor\"\ntemperature = 0.7\n"
+        }
+      ],
+      "models": {
+        "devstral-small": {
+          "alias": "devstral-small",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.01,
+          "input_price": 0.1,
+          "name": "devstral-small-latest",
+          "output_price": 0.3,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "input_price": 0.0,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off"
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "input_price": 1.5,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high"
+        }
+      },
+      "name": "models-compaction-model-keeps-the-alias-it-declares",
       "validationWarnings": 0
     }
   ],
@@ -2464,7 +2656,7 @@
       "name": "four-layer-every-strategy"
     }
   ],
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "strategies": {
     "declared": [
       "concat",

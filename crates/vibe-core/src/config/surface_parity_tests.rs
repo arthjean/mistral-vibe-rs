@@ -40,7 +40,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/config_surface.py";
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 3;
+const CORPUS_SCHEMA_VERSION: u32 = 4;
 /// The scenario floor this epic commits to.
 const MINIMUM_SCENARIOS: usize = 24;
 /// What the capture writes where the vibe home is machine-dependent.
@@ -124,6 +124,10 @@ struct ModelScenario {
     layers: Vec<ScenarioLayer>,
     active_model: String,
     models: Map<String, JsonValue>,
+    /// The validated `compaction_model`, or `null` where the document declares
+    /// none. It is a `ModelConfig` like every entry of `models`, so it carries
+    /// the same alias rule and the same per-entry defaults.
+    compaction_model: Option<JsonValue>,
     validation_warnings: usize,
 }
 
@@ -539,6 +543,33 @@ fn every_model_scenario_validates_to_the_document_the_reference_validates() {
                 "{}: the validated models diverge at {pointer}: reference {want}, port {got}",
                 scenario.name
             );
+        }
+        let compaction = snapshot.effective.get("compaction_model");
+        match scenario.compaction_model.as_ref() {
+            None | Some(JsonValue::Null) => assert!(
+                compaction.is_none(),
+                "{}: the port composed a compaction model the reference validated to none",
+                scenario.name
+            ),
+            Some(expected) => {
+                let compaction = compaction.unwrap_or_else(|| {
+                    panic!(
+                        "{}: the merged document carries no compaction model",
+                        scenario.name
+                    )
+                });
+                let compaction =
+                    serde_json::to_value(compaction).expect("the compaction model serializes");
+                if let Some((pointer, want, got)) =
+                    difference("/compaction_model", expected, &compaction)
+                {
+                    panic!(
+                        "{}: the validated compaction model diverges at {pointer}: reference \
+                         {want}, port {got}",
+                        scenario.name
+                    );
+                }
+            }
         }
     }
     assert!(

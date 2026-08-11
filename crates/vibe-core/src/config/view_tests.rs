@@ -189,6 +189,60 @@ fn a_mistyped_active_audio_alias_falls_back_to_the_first_declared_entry() {
     assert_eq!(view["speech"]["model"]["name"], "voxtral-mini-tts-latest");
 }
 
+/// The two verdicts the reference gives an audio list, measured through
+/// `crates/vibe-cli/tests/voice/corpus.json`: an entry that declares no alias
+/// has no merge key and takes the document down with it, and two entries
+/// declaring the same alias are one entry, the later winning whole and no
+/// warning being recorded.
+#[test]
+fn an_audio_entry_without_an_alias_is_refused_and_a_repeated_alias_is_one_entry() {
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let home = temporary.path().join("home/.vibe");
+    fs::create_dir_all(&home).expect("home directory");
+    fs::write(
+        home.join(CONFIG_FILE),
+        "[[transcribe_models]]\nname = \"unaliased\"\nprovider = \"mistral\"\n",
+    )
+    .expect("user fixture");
+    let error = LayeredConfig::new(
+        ConfigPaths {
+            vibe_home: home,
+            working_directory: temporary.path().join("project"),
+        },
+        default_document(),
+    )
+    .load()
+    .expect_err("an entry with no merge key is refused");
+    assert!(
+        matches!(
+            error,
+            ConfigError::MergeKeyMissing { ref field, ref merge_key }
+                if field == "transcribe_models" && merge_key == "alias"
+        ),
+        "{error}"
+    );
+
+    let (_temporary, snapshot) = loaded(
+        "active_transcribe_model = \"twice\"\n\n\
+         [[transcribe_models]]\nname = \"first\"\nprovider = \"mistral\"\nalias = \"twice\"\n\
+         sample_rate = 32000\n\n\
+         [[transcribe_models]]\nname = \"second\"\nprovider = \"mistral\"\nalias = \"twice\"\n\
+         language = \"es\"\n",
+    );
+    let view = snapshot.config_view();
+    assert_eq!(
+        view["transcribeModels"],
+        serde_json::json!(["voxtral-realtime", "twice"]),
+        "the repeated alias is one entry beside the shipped one"
+    );
+    assert_eq!(view["transcription"]["model"]["name"], "second");
+    assert_eq!(view["transcription"]["model"]["language"], "es");
+    // The later entry wins whole rather than field by field, so the sample rate
+    // the earlier one declared is gone rather than merged.
+    assert_eq!(view["transcription"]["model"]["sampleRate"], 16_000);
+    assert!(snapshot.validation_warnings.is_empty());
+}
+
 #[test]
 fn the_toggles_come_from_the_effective_table() {
     let (_temporary, snapshot) = loaded(

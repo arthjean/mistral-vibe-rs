@@ -40,7 +40,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/config-surface/corpus.json")
 #: The strategies the reference vocabulary declares but no field adopts, so the
 #: Rust port implements neither. The census asserts this stays true.
@@ -1018,6 +1018,37 @@ MODEL_SCENARIOS: list[dict[str, Any]] = [
             ("project", '[[models]]\nalias = "local"\ntemperature = 0.8\n'),
         ],
     },
+    # The alias rule the reference binds to every model class. An entry that
+    # declares none borrows its name, which is what keys it and what the active
+    # alias then has to name.
+    {
+        "name": "models-entry-without-an-alias-borrows-its-name",
+        "layers": [
+            (
+                "user",
+                'active_model = "scratch"\n\n[[models]]\nname = "scratch"\nprovider = "mistral"\n',
+            )
+        ],
+    },
+    {
+        "name": "models-compaction-model-without-an-alias-borrows-its-name",
+        "layers": [
+            (
+                "user",
+                '[compaction_model]\nname = "devstral-small-latest"\nprovider = "mistral"\n',
+            )
+        ],
+    },
+    {
+        "name": "models-compaction-model-keeps-the-alias-it-declares",
+        "layers": [
+            (
+                "user",
+                '[compaction_model]\nname = "devstral-small-latest"\nprovider = "mistral"\n'
+                'alias = "compactor"\ntemperature = 0.7\n',
+            )
+        ],
+    },
 ]
 
 
@@ -1043,6 +1074,14 @@ async def validated_models(
             alias: model.model_dump(mode="json")
             for alias, model in config.models.items()
         },
+        # The compaction model is a `ModelConfig` too, so it carries the same
+        # alias rule and the same per-entry defaults; `null` where the document
+        # declares none.
+        "compactionModel": (
+            None
+            if config.compaction_model is None
+            else config.compaction_model.model_dump(mode="json")
+        ),
         # Only the count: the warning text is reference-authored prose and
         # ``NOTICE`` forbids committing it.
         "validationWarnings": len(config.validation_warnings),

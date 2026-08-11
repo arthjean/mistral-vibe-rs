@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Give `[compaction_model]` the alias rule and the field defaults every
+  `[[models]]` entry already had. A table declaring a name and a provider is
+  published with an alias borrowed from its name, the `ModelConfig` defaults and
+  the global compaction threshold, as the reference's `_default_alias_to_name`
+  binding gives it.
+
 - Publish an audio entry with the per-entry defaults the reference fills in. A
   `[[transcribe_models]]`, `[[tts_models]]`, `[[transcribe_providers]]` or
   `[[tts_providers]]` entry that declares only what identifies it is now
