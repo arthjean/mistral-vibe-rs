@@ -3,7 +3,7 @@
     "file": "tasks/prd-autocompletion-voice-parity.md",
     "title": "Autocompletion Indexer and Voice Configuration Parity",
     "created_at": "2026-08-10",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -54,10 +54,10 @@
     {
       "id": "EP-063",
       "title": "The Audio Surface, the Divergences and the Scorecard",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0,
+      "stories_done": 4,
       "stories_in_review": 0
     }
   ],
@@ -258,58 +258,58 @@
       "id": "US-214",
       "title": "Offer the audio model choice",
       "epic": "EP-063",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-210"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-11",
+      "completed_at": "2026-08-11",
+      "reviewed_at": "2026-08-11"
     },
     {
       "id": "US-215",
       "title": "Emit the four audio telemetry events",
       "epic": "EP-063",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-209"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-11",
+      "completed_at": "2026-08-11",
+      "reviewed_at": "2026-08-11"
     },
     {
       "id": "US-216",
       "title": "Record the accepted divergences",
       "epic": "EP-063",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-205",
         "US-213"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-11",
+      "completed_at": "2026-08-11",
+      "reviewed_at": "2026-08-11"
     },
     {
       "id": "US-217",
       "title": "Remeasure and restate the scorecard",
       "epic": "EP-063",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-216"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-11",
+      "completed_at": "2026-08-11",
+      "reviewed_at": "2026-08-11"
     }
   ]
 }
