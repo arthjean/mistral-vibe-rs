@@ -1,0 +1,2250 @@
+{
+  "constants": {
+    "playback": {
+      "blockSize": 4096,
+      "dtype": "int16",
+      "sampleWidth": 2
+    },
+    "speech": {
+      "activeAlias": "voxtral-tts",
+      "apiBase": "https://api.mistral.ai",
+      "apiKeyEnvVar": "MISTRAL_API_KEY",
+      "modelFieldDefaults": {
+        "response_format": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "modelName": "voxtral-mini-tts-latest",
+      "providerFieldDefaults": {
+        "api_base": "https://api.mistral.ai",
+        "api_key_env_var": "",
+        "client": "mistral"
+      },
+      "providerName": "mistral"
+    },
+    "transcribe": {
+      "activeAlias": "voxtral-realtime",
+      "apiBase": "wss://api.mistral.ai",
+      "apiKeyEnvVar": "MISTRAL_API_KEY",
+      "modelFieldDefaults": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "sample_rate": 16000,
+        "target_streaming_delay_ms": 500
+      },
+      "modelName": "voxtral-mini-transcribe-realtime-2602",
+      "providerFieldDefaults": {
+        "api_base": "wss://api.mistral.ai",
+        "api_key_env_var": "",
+        "client": "mistral"
+      },
+      "providerName": "mistral"
+    },
+    "transcriptionDrainTimeoutSeconds": 10.0,
+    "vocabularies": {
+      "audioClient": [
+        "mistral"
+      ],
+      "recordingMode": [
+        "buffer",
+        "stream"
+      ],
+      "speechOutputFormat": [
+        "pcm",
+        "wav",
+        "mp3",
+        "flac",
+        "opus"
+      ],
+      "transcriptionEncoding": [
+        "pcm_s16le"
+      ]
+    }
+  },
+  "documents": [
+    {
+      "id": "defaults",
+      "toml": ""
+    },
+    {
+      "id": "transcribe-model-name",
+      "toml": "\n[[transcribe_models]]\nalias = \"voxtral-realtime\"\nname = \"fixture-transcribe-model\"\nprovider = \"mistral\"\n"
+    },
+    {
+      "id": "transcribe-sample-rate",
+      "toml": "\n[[transcribe_models]]\nalias = \"voxtral-realtime\"\nname = \"fixture-rate-model\"\nprovider = \"mistral\"\nsample_rate = 48000\n"
+    },
+    {
+      "id": "transcribe-language",
+      "toml": "\n[[transcribe_models]]\nalias = \"voxtral-realtime\"\nname = \"fixture-language-model\"\nprovider = \"mistral\"\nlanguage = \"fr\"\n"
+    },
+    {
+      "id": "transcribe-streaming-delay",
+      "toml": "\n[[transcribe_models]]\nalias = \"voxtral-realtime\"\nname = \"fixture-delay-model\"\nprovider = \"mistral\"\ntarget_streaming_delay_ms = 1200\n"
+    },
+    {
+      "id": "transcribe-second-model-active",
+      "toml": "\nactive_transcribe_model = \"fixture-alias\"\n\n[[transcribe_models]]\nname = \"fixture-second-model\"\nprovider = \"mistral\"\nalias = \"fixture-alias\"\nsample_rate = 24000\nencoding = \"pcm_s16le\"\nlanguage = \"de\"\ntarget_streaming_delay_ms = 250\n"
+    },
+    {
+      "id": "transcribe-second-model-inactive",
+      "toml": "\n[[transcribe_models]]\nname = \"fixture-unused-model\"\nprovider = \"mistral\"\nalias = \"fixture-unused\"\nsample_rate = 22050\n"
+    },
+    {
+      "id": "transcribe-entry-without-optional-fields",
+      "toml": "\nactive_transcribe_model = \"fixture-bare\"\n\n[[transcribe_models]]\nname = \"fixture-bare-model\"\nprovider = \"mistral\"\nalias = \"fixture-bare\"\n"
+    },
+    {
+      "id": "transcribe-partial-entry-for-shipped-alias",
+      "toml": "\n[[transcribe_models]]\nalias = \"voxtral-realtime\"\nsample_rate = 48000\n"
+    },
+    {
+      "id": "transcribe-active-alias-undeclared",
+      "toml": "active_transcribe_model = \"fixture-absent\"\n"
+    },
+    {
+      "id": "transcribe-provider-undeclared",
+      "toml": "\nactive_transcribe_model = \"fixture-orphan\"\n\n[[transcribe_models]]\nname = \"fixture-orphan-model\"\nprovider = \"fixture-absent-provider\"\nalias = \"fixture-orphan\"\n"
+    },
+    {
+      "id": "transcribe-gateway-provider",
+      "toml": "\nactive_transcribe_model = \"fixture-gateway\"\n\n[[transcribe_providers]]\nname = \"fixture-gateway-provider\"\napi_base = \"wss://gateway.fixture.invalid:8443\"\napi_key_env_var = \"FIXTURE_GATEWAY_TOKEN\"\n\n[[transcribe_models]]\nname = \"fixture-gateway-model\"\nprovider = \"fixture-gateway-provider\"\nalias = \"fixture-gateway\"\nsample_rate = 8000\ntarget_streaming_delay_ms = 750\n"
+    },
+    {
+      "id": "transcribe-http-provider",
+      "toml": "\nactive_transcribe_model = \"fixture-local\"\n\n[[transcribe_providers]]\nname = \"fixture-local-provider\"\napi_base = \"http://localhost:8080\"\napi_key_env_var = \"FIXTURE_LOCAL_TOKEN\"\n\n[[transcribe_models]]\nname = \"fixture-local-model\"\nprovider = \"fixture-local-provider\"\nalias = \"fixture-local\"\n"
+    },
+    {
+      "id": "transcribe-provider-path-suffix",
+      "toml": "\nactive_transcribe_model = \"fixture-suffixed\"\n\n[[transcribe_providers]]\nname = \"fixture-suffixed-provider\"\napi_base = \"https://gateway.fixture.invalid/audio/\"\napi_key_env_var = \"FIXTURE_GATEWAY_TOKEN\"\n\n[[transcribe_models]]\nname = \"fixture-suffixed-model\"\nprovider = \"fixture-suffixed-provider\"\nalias = \"fixture-suffixed\"\n"
+    },
+    {
+      "id": "transcribe-provider-without-credential",
+      "toml": "\nactive_transcribe_model = \"fixture-anonymous\"\n\n[[transcribe_providers]]\nname = \"fixture-anonymous-provider\"\napi_base = \"wss://anonymous.fixture.invalid\"\napi_key_env_var = \"\"\n\n[[transcribe_models]]\nname = \"fixture-anonymous-model\"\nprovider = \"fixture-anonymous-provider\"\nalias = \"fixture-anonymous\"\n"
+    },
+    {
+      "id": "transcribe-entry-without-alias",
+      "toml": "\n[[transcribe_models]]\nname = \"fixture-unaliased-model\"\nprovider = \"mistral\"\n"
+    },
+    {
+      "id": "transcribe-duplicate-alias",
+      "toml": "\nactive_transcribe_model = \"fixture-twice\"\n\n[[transcribe_models]]\nname = \"fixture-first\"\nprovider = \"mistral\"\nalias = \"fixture-twice\"\nsample_rate = 32000\n\n[[transcribe_models]]\nname = \"fixture-second\"\nprovider = \"mistral\"\nalias = \"fixture-twice\"\nlanguage = \"es\"\n"
+    },
+    {
+      "id": "transcribe-unsupported-encoding",
+      "toml": "\n[[transcribe_models]]\nalias = \"voxtral-realtime\"\nname = \"fixture-encoded-model\"\nprovider = \"mistral\"\nencoding = \"fixture-encoding\"\n"
+    },
+    {
+      "id": "speech-defaults-with-narrator",
+      "toml": "narrator_enabled = true\n"
+    },
+    {
+      "id": "speech-model-name",
+      "toml": "\n[[tts_models]]\nalias = \"voxtral-tts\"\nname = \"fixture-speech-model\"\nprovider = \"mistral\"\n"
+    },
+    {
+      "id": "speech-voice",
+      "toml": "\n[[tts_models]]\nalias = \"voxtral-tts\"\nname = \"fixture-voiced-model\"\nprovider = \"mistral\"\nvoice = \"fixture-voice\"\n"
+    },
+    {
+      "id": "speech-response-format",
+      "toml": "\n[[tts_models]]\nalias = \"voxtral-tts\"\nname = \"fixture-format-model\"\nprovider = \"mistral\"\nresponse_format = \"mp3\"\n"
+    },
+    {
+      "id": "speech-second-model-active",
+      "toml": "\nactive_tts_model = \"fixture-speech-alias\"\n\n[[tts_models]]\nname = \"fixture-second-speech-model\"\nprovider = \"mistral\"\nalias = \"fixture-speech-alias\"\nvoice = \"fixture-second-voice\"\nresponse_format = \"flac\"\n"
+    },
+    {
+      "id": "speech-entry-without-optional-fields",
+      "toml": "\nactive_tts_model = \"fixture-bare-speech\"\n\n[[tts_models]]\nname = \"fixture-bare-speech-model\"\nprovider = \"mistral\"\nalias = \"fixture-bare-speech\"\n"
+    },
+    {
+      "id": "speech-active-alias-undeclared",
+      "toml": "active_tts_model = \"fixture-absent-speech\"\n"
+    },
+    {
+      "id": "speech-provider-undeclared",
+      "toml": "\nactive_tts_model = \"fixture-orphan-speech\"\n\n[[tts_models]]\nname = \"fixture-orphan-speech-model\"\nprovider = \"fixture-absent-speech-provider\"\nalias = \"fixture-orphan-speech\"\n"
+    },
+    {
+      "id": "speech-gateway-provider",
+      "toml": "\nactive_tts_model = \"fixture-speech-gateway\"\n\n[[tts_providers]]\nname = \"fixture-speech-gateway-provider\"\napi_base = \"https://speech.fixture.invalid:9443\"\napi_key_env_var = \"FIXTURE_SPEECH_TOKEN\"\n\n[[tts_models]]\nname = \"fixture-speech-gateway-model\"\nprovider = \"fixture-speech-gateway-provider\"\nalias = \"fixture-speech-gateway\"\nvoice = \"fixture-gateway-voice\"\nresponse_format = \"pcm\"\n"
+    },
+    {
+      "id": "speech-provider-without-credential",
+      "toml": "\nactive_tts_model = \"fixture-anonymous-speech\"\n\n[[tts_providers]]\nname = \"fixture-anonymous-speech-provider\"\napi_base = \"https://anonymous.fixture.invalid\"\napi_key_env_var = \"\"\n\n[[tts_models]]\nname = \"fixture-anonymous-speech-model\"\nprovider = \"fixture-anonymous-speech-provider\"\nalias = \"fixture-anonymous-speech\"\n"
+    },
+    {
+      "id": "speech-entry-without-alias",
+      "toml": "\n[[tts_models]]\nname = \"fixture-unaliased-speech-model\"\nprovider = \"mistral\"\n"
+    },
+    {
+      "id": "speech-duplicate-alias",
+      "toml": "\nactive_tts_model = \"fixture-speech-twice\"\n\n[[tts_models]]\nname = \"fixture-speech-first\"\nprovider = \"mistral\"\nalias = \"fixture-speech-twice\"\nvoice = \"fixture-first-voice\"\n\n[[tts_models]]\nname = \"fixture-speech-second\"\nprovider = \"mistral\"\nalias = \"fixture-speech-twice\"\nresponse_format = \"opus\"\n"
+    },
+    {
+      "id": "speech-unsupported-response-format",
+      "toml": "\n[[tts_models]]\nalias = \"voxtral-tts\"\nname = \"fixture-unsupported-model\"\nprovider = \"mistral\"\nresponse_format = \"fixture-format\"\n"
+    },
+    {
+      "id": "both-surfaces-on-one-gateway",
+      "toml": "\nvoice_mode_enabled = true\nnarrator_enabled = true\nactive_transcribe_model = \"fixture-both-in\"\nactive_tts_model = \"fixture-both-out\"\n\n[[transcribe_providers]]\nname = \"fixture-both-provider\"\napi_base = \"wss://both.fixture.invalid\"\napi_key_env_var = \"FIXTURE_BOTH_TOKEN\"\n\n[[tts_providers]]\nname = \"fixture-both-provider\"\napi_base = \"https://both.fixture.invalid\"\napi_key_env_var = \"FIXTURE_BOTH_TOKEN\"\n\n[[transcribe_models]]\nname = \"fixture-both-in-model\"\nprovider = \"fixture-both-provider\"\nalias = \"fixture-both-in\"\nsample_rate = 44100\nlanguage = \"it\"\ntarget_streaming_delay_ms = 300\n\n[[tts_models]]\nname = \"fixture-both-out-model\"\nprovider = \"fixture-both-provider\"\nalias = \"fixture-both-out\"\nvoice = \"fixture-both-voice\"\nresponse_format = \"mp3\"\n"
+    }
+  ],
+  "note": "Voice corpus: what the pinned reference resolves an audio session from, per configuration document. Every document, alias, model name, provider name, host and variable is authored by scripts/parity/voice.py; the reference contributes resolved values, defaults and exception class names, and no reference-authored text, no reference source and no machine path is recorded. A failure is recorded as a stage and an exception class rather than a message, so the replay compares causes. The two wire frames are intercepted at the last call before the network, the websocket opener and the HTTP sender, so nothing is ever sent. No credential is recorded: every variable a document names carries a sentinel during the capture and is recorded as a variable name and an origin. Regenerate with scripts/parity/voice.py --corpus when the pinned reference moves.",
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+  },
+  "schemaVersion": 1,
+  "speechResolution": [
+    {
+      "case": "defaults",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-model-name",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-sample-rate",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-language",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-streaming-delay",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-second-model-active",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-second-model-inactive",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-entry-without-optional-fields",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-partial-entry-for-shipped-alias",
+      "configView": "unbuilt",
+      "error": {
+        "stage": "build",
+        "type": "ValidationError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-active-alias-undeclared",
+      "configView": "ValueError",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-provider-undeclared",
+      "configView": "ValueError",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-gateway-provider",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-http-provider",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-provider-path-suffix",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-provider-without-credential",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-entry-without-alias",
+      "configView": "unbuilt",
+      "error": {
+        "stage": "build",
+        "type": "MergeKeyError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-duplicate-alias",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-unsupported-encoding",
+      "configView": "unbuilt",
+      "error": {
+        "stage": "build",
+        "type": "ValidationError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-defaults-with-narrator",
+      "configView": "resolved",
+      "model": {
+        "name": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-model-name",
+      "configView": "resolved",
+      "model": {
+        "name": "fixture-speech-model",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-voice",
+      "configView": "resolved",
+      "model": {
+        "name": "fixture-voiced-model",
+        "responseFormat": "wav",
+        "voice": "fixture-voice"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-response-format",
+      "configView": "resolved",
+      "model": {
+        "name": "fixture-format-model",
+        "responseFormat": "mp3",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-second-model-active",
+      "configView": "resolved",
+      "model": {
+        "name": "fixture-second-speech-model",
+        "responseFormat": "flac",
+        "voice": "fixture-second-voice"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-entry-without-optional-fields",
+      "configView": "resolved",
+      "model": {
+        "name": "fixture-bare-speech-model",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-active-alias-undeclared",
+      "configView": "ValueError",
+      "error": {
+        "stage": "model",
+        "type": "ValueError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-provider-undeclared",
+      "configView": "ValueError",
+      "error": {
+        "stage": "provider",
+        "type": "ValueError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-gateway-provider",
+      "configView": "resolved",
+      "model": {
+        "name": "fixture-speech-gateway-model",
+        "responseFormat": "pcm",
+        "voice": "fixture-gateway-voice"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://speech.fixture.invalid:9443",
+        "apiKeyEnvVar": "FIXTURE_SPEECH_TOKEN",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-provider-without-credential",
+      "configView": "resolved",
+      "model": {
+        "name": "fixture-anonymous-speech-model",
+        "responseFormat": "wav",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://anonymous.fixture.invalid",
+        "apiKeyEnvVar": "",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-entry-without-alias",
+      "configView": "unbuilt",
+      "error": {
+        "stage": "build",
+        "type": "MergeKeyError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-duplicate-alias",
+      "configView": "resolved",
+      "model": {
+        "name": "fixture-speech-second",
+        "responseFormat": "opus",
+        "voice": "gb_jane_neutral"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-unsupported-response-format",
+      "configView": "unbuilt",
+      "error": {
+        "stage": "build",
+        "type": "ValidationError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "both-surfaces-on-one-gateway",
+      "configView": "resolved",
+      "model": {
+        "name": "fixture-both-out-model",
+        "responseFormat": "mp3",
+        "voice": "fixture-both-voice"
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://both.fixture.invalid",
+        "apiKeyEnvVar": "FIXTURE_BOTH_TOKEN",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    }
+  ],
+  "transcriptionResolution": [
+    {
+      "case": "defaults",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-model-name",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "fixture-transcribe-model",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-sample-rate",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "fixture-rate-model",
+        "sampleRate": 48000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-language",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "fr",
+        "name": "fixture-language-model",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-streaming-delay",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "fixture-delay-model",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 1200
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-second-model-active",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "de",
+        "name": "fixture-second-model",
+        "sampleRate": 24000,
+        "targetStreamingDelayMs": 250
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-second-model-inactive",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-entry-without-optional-fields",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "fixture-bare-model",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-partial-entry-for-shipped-alias",
+      "configView": "unbuilt",
+      "error": {
+        "stage": "build",
+        "type": "ValidationError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-active-alias-undeclared",
+      "configView": "ValueError",
+      "error": {
+        "stage": "model",
+        "type": "ValueError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-provider-undeclared",
+      "configView": "ValueError",
+      "error": {
+        "stage": "provider",
+        "type": "ValueError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-gateway-provider",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "fixture-gateway-model",
+        "sampleRate": 8000,
+        "targetStreamingDelayMs": 750
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://gateway.fixture.invalid:8443",
+        "apiKeyEnvVar": "FIXTURE_GATEWAY_TOKEN",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-http-provider",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "fixture-local-model",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "http://localhost:8080",
+        "apiKeyEnvVar": "FIXTURE_LOCAL_TOKEN",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-provider-path-suffix",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "fixture-suffixed-model",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "https://gateway.fixture.invalid/audio/",
+        "apiKeyEnvVar": "FIXTURE_GATEWAY_TOKEN",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-provider-without-credential",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "fixture-anonymous-model",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://anonymous.fixture.invalid",
+        "apiKeyEnvVar": "",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-entry-without-alias",
+      "configView": "unbuilt",
+      "error": {
+        "stage": "build",
+        "type": "MergeKeyError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-duplicate-alias",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "es",
+        "name": "fixture-second",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "transcribe-unsupported-encoding",
+      "configView": "unbuilt",
+      "error": {
+        "stage": "build",
+        "type": "ValidationError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-defaults-with-narrator",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-model-name",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-voice",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-response-format",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-second-model-active",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-entry-without-optional-fields",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-active-alias-undeclared",
+      "configView": "ValueError",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-provider-undeclared",
+      "configView": "ValueError",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-gateway-provider",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-provider-without-credential",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-entry-without-alias",
+      "configView": "unbuilt",
+      "error": {
+        "stage": "build",
+        "type": "MergeKeyError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-duplicate-alias",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "en",
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "sampleRate": 16000,
+        "targetStreamingDelayMs": 500
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://api.mistral.ai",
+        "apiKeyEnvVar": "MISTRAL_API_KEY",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    },
+    {
+      "case": "speech-unsupported-response-format",
+      "configView": "unbuilt",
+      "error": {
+        "stage": "build",
+        "type": "ValidationError"
+      },
+      "outcome": "error",
+      "validationWarnings": 0
+    },
+    {
+      "case": "both-surfaces-on-one-gateway",
+      "configView": "resolved",
+      "model": {
+        "encoding": "pcm_s16le",
+        "language": "it",
+        "name": "fixture-both-in-model",
+        "sampleRate": 44100,
+        "targetStreamingDelayMs": 300
+      },
+      "outcome": "resolved",
+      "provider": {
+        "apiBase": "wss://both.fixture.invalid",
+        "apiKeyEnvVar": "FIXTURE_BOTH_TOKEN",
+        "client": "mistral"
+      },
+      "validationWarnings": 0
+    }
+  ],
+  "wireFrames": [
+    {
+      "case": "defaults",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "transcribe-model-name",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=fixture-transcribe-model",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-transcribe-model",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "transcribe-sample-rate",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 48000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=fixture-rate-model",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-rate-model",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "transcribe-language",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=fixture-language-model",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-language-model",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "transcribe-streaming-delay",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=fixture-delay-model",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-delay-model",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 1200
+      }
+    },
+    {
+      "case": "transcribe-second-model-active",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 24000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=fixture-second-model",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-second-model",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 250
+      }
+    },
+    {
+      "case": "transcribe-second-model-inactive",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "transcribe-entry-without-optional-fields",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=fixture-bare-model",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-bare-model",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "transcribe-active-alias-undeclared",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      }
+    },
+    {
+      "case": "transcribe-provider-undeclared",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      }
+    },
+    {
+      "case": "transcribe-gateway-provider",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 8000
+        },
+        "credential": {
+          "envVar": "FIXTURE_GATEWAY_TOKEN",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://gateway.fixture.invalid:8443/v1/audio/transcriptions/realtime?model=fixture-gateway-model",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-gateway-model",
+        "serverUrl": "wss://gateway.fixture.invalid:8443",
+        "targetStreamingDelayMs": 750
+      }
+    },
+    {
+      "case": "transcribe-http-provider",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "FIXTURE_LOCAL_TOKEN",
+          "source": "environment"
+        },
+        "endpointUrl": "ws://localhost:8080/v1/audio/transcriptions/realtime?model=fixture-local-model",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-local-model",
+        "serverUrl": "http://localhost:8080",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "transcribe-provider-path-suffix",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "FIXTURE_GATEWAY_TOKEN",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://gateway.fixture.invalid/audio/v1/audio/transcriptions/realtime?model=fixture-suffixed-model",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-suffixed-model",
+        "serverUrl": "https://gateway.fixture.invalid/audio/",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "transcribe-provider-without-credential",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "",
+          "source": "unset"
+        },
+        "endpointUrl": "wss://anonymous.fixture.invalid/v1/audio/transcriptions/realtime?model=fixture-anonymous-model",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-anonymous-model",
+        "serverUrl": "wss://anonymous.fixture.invalid",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "transcribe-duplicate-alias",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=fixture-second",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-second",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "speech-defaults-with-narrator",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "voxtral-mini-tts-latest",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "voxtral-mini-tts-latest",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "speech-model-name",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "fixture-speech-model",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "fixture-speech-model",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "speech-voice",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "fixture-voiced-model",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "fixture-voice"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "fixture-voiced-model",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "fixture-voice"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "speech-response-format",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "fixture-format-model",
+          "response_format": "mp3",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "fixture-format-model",
+        "responseFormat": "mp3",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "speech-second-model-active",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "fixture-second-speech-model",
+          "response_format": "flac",
+          "stream": false,
+          "voice_id": "fixture-second-voice"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "fixture-second-speech-model",
+        "responseFormat": "flac",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "fixture-second-voice"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "speech-entry-without-optional-fields",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "fixture-bare-speech-model",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "fixture-bare-speech-model",
+        "responseFormat": "wav",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "speech-active-alias-undeclared",
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "speech-provider-undeclared",
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "speech-gateway-provider",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "fixture-speech-gateway-model",
+          "response_format": "pcm",
+          "stream": false,
+          "voice_id": "fixture-gateway-voice"
+        },
+        "credential": {
+          "envVar": "FIXTURE_SPEECH_TOKEN",
+          "source": "environment"
+        },
+        "endpointUrl": "https://speech.fixture.invalid:9443/v1/audio/speech",
+        "method": "POST",
+        "model": "fixture-speech-gateway-model",
+        "responseFormat": "pcm",
+        "serverUrl": "https://speech.fixture.invalid:9443",
+        "voice": "fixture-gateway-voice"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "speech-provider-without-credential",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "fixture-anonymous-speech-model",
+          "response_format": "wav",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "",
+          "source": "unset"
+        },
+        "endpointUrl": "https://anonymous.fixture.invalid/v1/audio/speech",
+        "method": "POST",
+        "model": "fixture-anonymous-speech-model",
+        "responseFormat": "wav",
+        "serverUrl": "https://anonymous.fixture.invalid",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "speech-duplicate-alias",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "fixture-speech-second",
+          "response_format": "opus",
+          "stream": false,
+          "voice_id": "gb_jane_neutral"
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "https://api.mistral.ai/v1/audio/speech",
+        "method": "POST",
+        "model": "fixture-speech-second",
+        "responseFormat": "opus",
+        "serverUrl": "https://api.mistral.ai",
+        "voice": "gb_jane_neutral"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 16000
+        },
+        "credential": {
+          "envVar": "MISTRAL_API_KEY",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "voxtral-mini-transcribe-realtime-2602",
+        "serverUrl": "wss://api.mistral.ai",
+        "targetStreamingDelayMs": 500
+      }
+    },
+    {
+      "case": "both-surfaces-on-one-gateway",
+      "speech": {
+        "body": {
+          "input": "fixture summary",
+          "metadata": {},
+          "model": "fixture-both-out-model",
+          "response_format": "mp3",
+          "stream": false,
+          "voice_id": "fixture-both-voice"
+        },
+        "credential": {
+          "envVar": "FIXTURE_BOTH_TOKEN",
+          "source": "environment"
+        },
+        "endpointUrl": "https://both.fixture.invalid/v1/audio/speech",
+        "method": "POST",
+        "model": "fixture-both-out-model",
+        "responseFormat": "mp3",
+        "serverUrl": "https://both.fixture.invalid",
+        "voice": "fixture-both-voice"
+      },
+      "transcription": {
+        "audioFormat": {
+          "encoding": "pcm_s16le",
+          "sampleRate": 44100
+        },
+        "credential": {
+          "envVar": "FIXTURE_BOTH_TOKEN",
+          "source": "environment"
+        },
+        "endpointUrl": "wss://both.fixture.invalid/v1/audio/transcriptions/realtime?model=fixture-both-in-model",
+        "headerNames": [
+          "Authorization",
+          "user-agent",
+          "x-metadata"
+        ],
+        "model": "fixture-both-in-model",
+        "serverUrl": "wss://both.fixture.invalid",
+        "targetStreamingDelayMs": 300
+      }
+    }
+  ]
+}
