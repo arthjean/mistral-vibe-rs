@@ -140,6 +140,55 @@ fn the_audio_surfaces_publish_their_active_model_and_its_provider() {
     );
 }
 
+/// Reference `TranscribeModelConfig`, `TTSModelConfig` and the two provider
+/// models: an entry declaring only what identifies it is published with the
+/// per-entry defaults, which is what a session then addresses.
+#[test]
+fn an_audio_entry_declaring_no_optional_field_is_published_with_the_defaults() {
+    let (_temporary, snapshot) = loaded(
+        "active_transcribe_model = \"bare\"\nactive_tts_model = \"bare-speech\"\n\n\
+         [[transcribe_providers]]\nname = \"gateway\"\n\n\
+         [[transcribe_models]]\nname = \"bare-model\"\nprovider = \"gateway\"\nalias = \"bare\"\n\n\
+         [[tts_providers]]\nname = \"gateway\"\n\n\
+         [[tts_models]]\nname = \"bare-speech-model\"\nprovider = \"gateway\"\nalias = \"bare-speech\"\n",
+    );
+    let view = snapshot.config_view();
+    assert_eq!(view["transcription"]["model"]["name"], "bare-model");
+    assert_eq!(view["transcription"]["model"]["sampleRate"], 16_000);
+    assert_eq!(view["transcription"]["model"]["encoding"], "pcm_s16le");
+    assert_eq!(view["transcription"]["model"]["language"], "en");
+    assert_eq!(
+        view["transcription"]["model"]["targetStreamingDelayMs"],
+        500
+    );
+    assert_eq!(
+        view["transcription"]["provider"]["apiBase"],
+        "wss://api.mistral.ai"
+    );
+    assert_eq!(view["transcription"]["provider"]["apiKeyEnvVar"], "");
+    assert_eq!(view["speech"]["model"]["voice"], "gb_jane_neutral");
+    assert_eq!(view["speech"]["model"]["responseFormat"], "wav");
+    assert_eq!(
+        view["speech"]["provider"]["apiBase"],
+        "https://api.mistral.ai"
+    );
+}
+
+/// An `active_transcribe_model` naming nothing declared falls back to the first
+/// declared entry rather than publishing an empty surface, which is what keeps a
+/// session addressable on a mistyped alias.
+#[test]
+fn a_mistyped_active_audio_alias_falls_back_to_the_first_declared_entry() {
+    let (_temporary, snapshot) =
+        loaded("active_transcribe_model = \"absent\"\nactive_tts_model = \"absent-speech\"\n");
+    let view = snapshot.config_view();
+    assert_eq!(
+        view["transcription"]["model"]["name"],
+        "voxtral-mini-transcribe-realtime-2602"
+    );
+    assert_eq!(view["speech"]["model"]["name"], "voxtral-mini-tts-latest");
+}
+
 #[test]
 fn the_toggles_come_from_the_effective_table() {
     let (_temporary, snapshot) = loaded(

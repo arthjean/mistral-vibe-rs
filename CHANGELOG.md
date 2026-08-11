@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Publish an audio entry with the per-entry defaults the reference fills in. A
+  `[[transcribe_models]]`, `[[tts_models]]`, `[[transcribe_providers]]` or
+  `[[tts_providers]]` entry that declares only what identifies it is now
+  published with the sample rate, encoding, language, streaming delay, voice,
+  response format and endpoint the reference defaults them to, instead of with
+  a zero or an empty string a client cannot use.
+
 - Give `file_watcher_for_autocomplete` its first reader. With the key on, the
   workspace is watched and a file created, modified or deleted during a session
   is offered by the next `@` query instead of staying invisible until the

@@ -85,8 +85,9 @@ const DIVERGENCES: &[(&str, &str)] = &[
     (
         "constants/providerApiKeyEnvVarDefault/*",
         "ACCEPTED: the reference defaults a provider entry's `api_key_env_var` to the empty string \
-         and fills it per shipped provider, while this port materializes whole provider entries \
-         in its default document and has no per-field defaulting rule to compare",
+         and fills it per shipped provider, so the field default and the shipped value differ; \
+         this port materializes whole provider entries in its default document, and the defaults \
+         view it answers with here is the shipped variable rather than the field default",
     ),
     (
         "constants/speechOutputFormats/*",
@@ -116,28 +117,11 @@ const DIVERGENCES: &[(&str, &str)] = &[
          this port publishes a view for every document",
     ),
     (
-        "transcriptionResolution/model.sampleRate/*",
-        "PENDING US-210: this port reads a model entry straight out of the effective table and \
-         has no per-entry field defaults, so an entry declaring none carries zero",
-    ),
-    (
-        "transcriptionResolution/model.language/*",
-        "PENDING US-210: same missing per-entry field defaults, on the language field",
-    ),
-    (
-        "transcriptionResolution/model.targetStreamingDelayMs/*",
-        "PENDING US-210: same missing per-entry field defaults, on the streaming delay",
-    ),
-    (
         "speechResolution/cause/*",
         "PENDING US-210: as above, on the read-aloud surface",
     ),
     (
         "speechResolution/configView/*",
-        "PENDING US-210: as above, on the read-aloud surface",
-    ),
-    (
-        "speechResolution/model.voice/*",
         "PENDING US-210: as above, on the read-aloud surface",
     ),
     (

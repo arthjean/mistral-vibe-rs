@@ -19,6 +19,19 @@ use crate::middleware::{CompactionSettings, DEFAULT_COMPACTION_PROMPT_ID};
 /// The audio client the wire declares. Only one is served today, and an entry
 /// naming anything else is published under it rather than failing the view.
 const AUDIO_CLIENT: &str = "mistral";
+/// The per-entry defaults an audio entry that declares none is published with,
+/// as the reference's `TranscribeModelConfig`, `TTSModelConfig`,
+/// `TranscribeProviderConfig` and `TTSProviderConfig` fill them before a view is
+/// projected. The two surfaces default their endpoint differently: transcription
+/// opens a websocket and speech posts.
+const TRANSCRIBE_SAMPLE_RATE: i64 = 16_000;
+const TRANSCRIBE_ENCODING: &str = "pcm_s16le";
+const TRANSCRIBE_LANGUAGE: &str = "en";
+const TRANSCRIBE_STREAMING_DELAY_MS: i64 = 500;
+const TRANSCRIBE_API_BASE: &str = "wss://api.mistral.ai";
+const SPEECH_VOICE: &str = "gb_jane_neutral";
+const SPEECH_RESPONSE_FORMAT: &str = "wav";
+const SPEECH_API_BASE: &str = "https://api.mistral.ai";
 /// The thinking levels a model entry may declare. An entry outside the set is
 /// published as `off`, which is what a client renders for a model that does not
 /// think.
@@ -200,10 +213,14 @@ impl ConfigSnapshot {
         let entry = entry.unwrap_or_default();
         json!({
             "name": table_str(&entry, "name", ""),
-            "sampleRate": table_int(&entry, "sample_rate"),
-            "encoding": table_str(&entry, "encoding", "pcm_s16le"),
-            "language": table_str(&entry, "language", ""),
-            "targetStreamingDelayMs": table_int(&entry, "target_streaming_delay_ms"),
+            "sampleRate": table_int(&entry, "sample_rate", TRANSCRIBE_SAMPLE_RATE),
+            "encoding": table_str(&entry, "encoding", TRANSCRIBE_ENCODING),
+            "language": table_str(&entry, "language", TRANSCRIBE_LANGUAGE),
+            "targetStreamingDelayMs": table_int(
+                &entry,
+                "target_streaming_delay_ms",
+                TRANSCRIBE_STREAMING_DELAY_MS,
+            ),
         })
     }
 
@@ -212,13 +229,22 @@ impl ConfigSnapshot {
         let entry = entry.unwrap_or_default();
         json!({
             "name": table_str(&entry, "name", ""),
-            "voice": table_str(&entry, "voice", ""),
-            "responseFormat": table_str(&entry, "response_format", "wav"),
+            "voice": table_str(&entry, "voice", SPEECH_VOICE),
+            "responseFormat": table_str(&entry, "response_format", SPEECH_RESPONSE_FORMAT),
         })
     }
 
     /// The provider serving `model`, published under the audio provider shape.
+    ///
+    /// A provider entry that declares no endpoint is published with the default
+    /// of the surface it serves, which is what the reference's provider models
+    /// fill before the projection reads them.
     fn audio_provider_view(&self, key: &str, model: Option<Table>) -> JsonValue {
+        let api_base = if key == "tts_providers" {
+            SPEECH_API_BASE
+        } else {
+            TRANSCRIBE_API_BASE
+        };
         let wanted = model
             .as_ref()
             .and_then(|entry| entry.get("provider"))
@@ -232,7 +258,7 @@ impl ConfigSnapshot {
             .cloned()
             .unwrap_or_default();
         json!({
-            "apiBase": table_str(&provider, "api_base", ""),
+            "apiBase": table_str(&provider, "api_base", api_base),
             "apiKeyEnvVar": table_str(&provider, "api_key_env_var", ""),
             "client": AUDIO_CLIENT,
         })
@@ -304,6 +330,9 @@ fn table_str(entry: &Table, key: &str, fallback: &str) -> String {
         .to_owned()
 }
 
-fn table_int(entry: &Table, key: &str) -> i64 {
-    entry.get(key).and_then(Value::as_integer).unwrap_or(0)
+fn table_int(entry: &Table, key: &str, fallback: i64) -> i64 {
+    entry
+        .get(key)
+        .and_then(Value::as_integer)
+        .unwrap_or(fallback)
 }
