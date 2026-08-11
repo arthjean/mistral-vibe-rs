@@ -91,7 +91,7 @@ pub(super) async fn handle_effects(
     }
     if let FeedbackAction::Rating(rating) = action
         && let Some(telemetry) = runtime.telemetry.as_ref()
-        && let Err(error) = telemetry.enqueue_feedback(rating, &runtime.model)
+        && let Err(error) = telemetry.enqueue_feedback(rating, &runtime.model, &runtime.session_id)
     {
         state.push_diagnostic(format!("Feedback telemetry could not be queued: {error}"));
     }

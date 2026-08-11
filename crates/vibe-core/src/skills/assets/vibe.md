@@ -111,7 +111,8 @@ with `--output text|json|streaming`. Session control: `--resume [id]`,
 Trust and permissions: `--trust`, `--auto-approve`/`--yolo`,
 `--enabled-tools`, `--disabled-tools`. Budgets: `--max-turns`, `--max-tokens`,
 `--max-price`. Others: `--agent <name>`, `--setup`, `--check-upgrade`,
-`--telemetry`, `-v/--version`.
+`-v/--version`. Telemetry is decided by `enable_telemetry` in the
+configuration, which defaults to on, and by no flag.
 
 ## Hooks
 

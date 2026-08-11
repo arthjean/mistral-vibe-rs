@@ -16,5 +16,4 @@ _arguments \
   '--auto-approve[approve tool requests]' \
   '--setup[run setup]' \
   '--check-upgrade[check for an update]' \
-  '--telemetry[enable privacy-safe telemetry]' \
   '--help[print help]'

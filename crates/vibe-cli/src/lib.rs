@@ -14,25 +14,26 @@ pub mod distribution;
 pub mod mcp_command;
 pub mod tui;
 
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use clap::{ArgAction, Parser, ValueEnum};
-use secrecy::SecretString;
 use serde::Serialize;
 use thiserror::Error;
-use url::Url;
 use vibe_app_server::client::{
     ClientError, HeadlessService, LiveTurnDriver, ProgrammaticTeleportEvent, ProgrammaticTurn,
     ProgrammaticUpdate, PublicTurnStopReason, TurnDriver, programmatic_update_channel,
 };
 use vibe_app_server::release3::Release3Service;
 use vibe_app_server::server::AppServer;
+use vibe_core::auth::KeyringStore;
 use vibe_core::mcp::SamplingHandler;
 use vibe_core::telemetry::{
-    ReqwestTelemetryTransport, TelemetryAttributes, TelemetryClient, TelemetryConfig,
-    TelemetryEnvelope, TelemetryEvent, TelemetryEventObserver, TelemetryField, TelemetryMetadata,
+    LaunchContext, ReqwestTelemetryTransport, TelemetryAttributes, TelemetryClient,
+    TelemetryConfig, TelemetryConfigGetter, TelemetryContext, TelemetryEvent,
+    TelemetryEventObserver, TelemetryField, detect_terminal_emulator,
 };
 use vibe_core::{engine::EventObserver, events::EventEnvelope};
 
@@ -88,8 +89,6 @@ pub struct Arguments {
     pub setup: bool,
     #[arg(long, action = ArgAction::SetTrue)]
     pub check_upgrade: bool,
-    #[arg(long, action = ArgAction::SetTrue)]
-    pub telemetry: bool,
     #[arg(long)]
     pub worktree: Option<String>,
     #[arg(long, hide = true)]
@@ -145,17 +144,22 @@ pub async fn run(
             Release3Service::default().compaction_prompts(),
         )?;
         let credential = bootstrap::credential(&arguments)?;
-        let telemetry = telemetry_event_observer(&arguments, &credential, "cli")?;
+        let release3 = Release3Service::default();
+        // The programmatic entry point starts here, so this is where an older
+        // configuration file is brought forward.
+        release3
+            .migrate_configuration()
+            .map_err(|error| CliError::Configuration(error.to_string()))?;
+        let telemetry = telemetry_observer(&arguments, &release3)?;
         let mut driver = LiveTurnDriver::from_credential(config, credential)?;
-        if let Some(observer) = telemetry.as_ref() {
-            driver = driver.with_event_observer(observer.clone());
-        }
-        let server =
-            production_server(&arguments, Some(driver.sampling_handler(&arguments.model)))?;
+        driver = driver.with_event_observer(telemetry.clone());
+        let server = production_server(
+            &arguments,
+            release3,
+            Some(driver.sampling_handler(&arguments.model)),
+        )?;
         let result = execute_with_server(arguments, driver, server, stdout, stderr).await;
-        if let Some(observer) = telemetry {
-            observer.flush().await;
-        }
+        telemetry.flush().await;
         result
     }
 }
@@ -336,15 +340,10 @@ where
 
 fn production_server(
     arguments: &Arguments,
+    release3: Release3Service,
     sampling: Option<Arc<dyn SamplingHandler>>,
 ) -> Result<AppServer, CliError> {
     let credential = bootstrap::credential(arguments)?;
-    let release3 = Release3Service::default();
-    // The programmatic entry point starts here, so this is where an older
-    // configuration file is brought forward.
-    release3
-        .migrate_configuration()
-        .map_err(|error| CliError::Configuration(error.to_string()))?;
     let server = bootstrap::resource_server(arguments, release3, credential.clone(), sampling)?;
     if !arguments.teleport {
         return Ok(server);
@@ -537,7 +536,6 @@ pub(crate) fn arguments_for_test() -> Arguments {
         auto_approve: false,
         setup: false,
         check_upgrade: false,
-        telemetry: false,
         worktree: None,
         teleport: false,
         provider_style: "mistral".to_owned(),
@@ -553,56 +551,42 @@ pub(crate) fn arguments_for_test() -> Arguments {
 
 pub(crate) struct CliTelemetryObserver {
     events: TelemetryEventObserver<ReqwestTelemetryTransport>,
-    feedback: Arc<TelemetryClient<ReqwestTelemetryTransport>>,
-    metadata: TelemetryMetadata,
-    pending_feedback: Mutex<Vec<tokio::task::JoinHandle<()>>>,
 }
 
 impl CliTelemetryObserver {
-    fn new(
-        event_config: TelemetryConfig,
-        feedback_config: TelemetryConfig,
-        transport: ReqwestTelemetryTransport,
-        metadata: TelemetryMetadata,
-    ) -> Self {
-        let feedback = Arc::new(TelemetryClient::new(feedback_config, transport.clone()));
-        Self {
-            events: TelemetryEventObserver::new(
-                TelemetryClient::new(event_config, transport),
-                metadata.clone(),
-            ),
-            feedback,
-            metadata,
-            pending_feedback: Mutex::new(Vec::new()),
-        }
-    }
-
-    /// Queues best-effort telemetry after validating the complete envelope.
-    /// Delivery errors follow the same intentionally silent policy as engine
-    /// telemetry and all queued work is joined by [`Self::flush`].
-    pub(crate) fn enqueue_feedback(&self, rating: u8, model: &str) -> Result<(), String> {
-        let envelope = feedback_envelope(rating, model, self.metadata.clone())?;
-        let client = Arc::clone(&self.feedback);
-        let task = tokio::spawn(async move {
-            let _ = client.record(&envelope).await;
-        });
-        if let Ok(mut pending) = self.pending_feedback.lock() {
-            pending.retain(|task| !task.is_finished());
-            pending.push(task);
-        }
-        Ok(())
+    /// Queues best-effort telemetry for the rating prompt. Delivery errors
+    /// follow the same intentionally silent policy as engine telemetry, the
+    /// gate is re-read on the send, and all queued work is joined by
+    /// [`Self::flush`].
+    ///
+    /// The session travels with it: the reference sends this event through the
+    /// agent loop's own client, whose census reports the session every event is
+    /// recorded on.
+    pub(crate) fn enqueue_feedback(
+        &self,
+        rating: u8,
+        model: &str,
+        session_id: &str,
+    ) -> Result<(), String> {
+        let mut attributes = TelemetryAttributes::default();
+        attributes
+            .count(TelemetryField::Rating, u64::from(rating))
+            .label(TelemetryField::Version, env!("CARGO_PKG_VERSION"))
+            .map_err(|error| error.to_string())?
+            .label(TelemetryField::Model, model)
+            .map_err(|error| error.to_string())?;
+        self.events
+            .record(
+                TelemetryEvent::FeedbackSubmitted,
+                attributes,
+                Some(session_id),
+                None,
+            )
+            .map_err(|error| error.to_string())
     }
 
     pub(crate) async fn flush(&self) {
         self.events.flush().await;
-        let pending = self
-            .pending_feedback
-            .lock()
-            .map(|mut pending| std::mem::take(&mut *pending))
-            .unwrap_or_default();
-        for task in pending {
-            let _ = task.await;
-        }
     }
 }
 
@@ -612,56 +596,63 @@ impl EventObserver for CliTelemetryObserver {
     }
 }
 
-fn feedback_envelope(
-    rating: u8,
-    model: &str,
-    metadata: TelemetryMetadata,
-) -> Result<TelemetryEnvelope, String> {
-    let mut attributes = TelemetryAttributes::default();
-    attributes
-        .count(TelemetryField::Rating, u64::from(rating))
-        .label(TelemetryField::Version, env!("CARGO_PKG_VERSION"))
-        .map_err(|error| error.to_string())?
-        .label(TelemetryField::Model, model)
-        .map_err(|error| error.to_string())?;
-    TelemetryEnvelope::new(
-        TelemetryEvent::FeedbackSubmitted,
-        metadata,
-        attributes,
-        None,
-    )
-    .map_err(|error| error.to_string())
+/// What this binary reports about itself on every event. Reference
+/// `_build_cli_launch_context`.
+fn cli_telemetry_context() -> TelemetryContext {
+    TelemetryContext {
+        launch: Some(LaunchContext {
+            agent_entrypoint: "cli".to_owned(),
+            agent_version: env!("CARGO_PKG_VERSION").to_owned(),
+            client_name: "vibe_cli".to_owned(),
+            client_version: env!("CARGO_PKG_VERSION").to_owned(),
+            terminal_emulator: Some(detect_terminal_emulator().to_owned()),
+        }),
+        ..TelemetryContext::default()
+    }
 }
 
-pub(crate) fn telemetry_event_observer(
+/// How the variable a Mistral provider names becomes a credential.
+///
+/// Reference `resolve_api_key`, reached from `get_mistral_provider_and_api_key`:
+/// the process environment the dotenv load leaves behind first, then the OS
+/// keyring under the shared service names. Reading the environment alone would
+/// silence telemetry on every install whose key lives only in the keyring,
+/// which is where onboarding puts it when the store accepts the write.
+fn telemetry_credentials(
+    environment: BTreeMap<String, String>,
+    store: KeyringStore,
+) -> impl Fn(&str) -> Option<String> + Send + Sync {
+    move |name| vibe_core::auth::resolve_api_key(name, &environment, &store)
+}
+
+/// The observer every engine event reaches.
+///
+/// Nothing here decides whether telemetry is on: [`TelemetryConfig::resolve`]
+/// re-reads `enable_telemetry` and the Mistral provider from the merged
+/// configuration on every send, which is what makes a document edited
+/// mid-session decide the next event and an unreadable one silence telemetry
+/// rather than fail the run.
+pub(crate) fn telemetry_observer(
     arguments: &Arguments,
-    credential: &str,
-    entrypoint: &str,
-) -> Result<Option<Arc<CliTelemetryObserver>>, CliError> {
-    if !arguments.telemetry || arguments.provider_style != "mistral" || credential.is_empty() {
-        return Ok(None);
-    }
-    let api_base =
-        Url::parse(&arguments.api_base).map_err(|error| CliError::Telemetry(error.to_string()))?;
-    let credential = SecretString::from(credential.to_owned());
-    let event_config = TelemetryConfig::new(true, &api_base, Some(credential.clone()))
-        .map_err(|error| CliError::Telemetry(error.to_string()))?;
-    let feedback_config = TelemetryConfig::new(true, &api_base, Some(credential))
-        .map_err(|error| CliError::Telemetry(error.to_string()))?;
+    release3: &Release3Service,
+) -> Result<Arc<CliTelemetryObserver>, CliError> {
+    let configuration = release3.layered_config();
+    let credentials = telemetry_credentials(
+        bootstrap::dotenv_values(arguments).environment(),
+        KeyringStore::native(),
+    );
+    let config: TelemetryConfigGetter = Arc::new(move || match configuration.load() {
+        Ok(snapshot) => TelemetryConfig::resolve(&snapshot.effective, &credentials),
+        Err(_) => TelemetryConfig::disabled(),
+    });
     let transport = ReqwestTelemetryTransport::try_new()
         .map_err(|error| CliError::Telemetry(error.to_string()))?;
-    let metadata = TelemetryMetadata::new(
-        env!("CARGO_PKG_VERSION"),
-        format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
-        entrypoint,
-    )
-    .map_err(|error| CliError::Telemetry(error.to_string()))?;
-    Ok(Some(Arc::new(CliTelemetryObserver::new(
-        event_config,
-        feedback_config,
-        transport,
-        metadata,
-    ))))
+    Ok(Arc::new(CliTelemetryObserver {
+        events: TelemetryEventObserver::new(
+            TelemetryClient::new(config, transport),
+            cli_telemetry_context(),
+        ),
+    }))
 }
 
 impl CliError {
@@ -725,7 +716,6 @@ mod tests {
             auto_approve: true,
             setup: false,
             check_upgrade: true,
-            telemetry: false,
             worktree: None,
             teleport: false,
             provider_style: "mistral".to_owned(),
@@ -771,41 +761,74 @@ mod tests {
         ));
     }
 
+    /// The reference publishes no telemetry flag: the configuration key is the
+    /// only control, so passing one is an unknown argument and no help output
+    /// mentions it.
     #[test]
-    fn telemetry_is_explicitly_opt_in() {
-        let disabled = arguments(OutputMode::Text);
-        assert!(
-            telemetry_event_observer(&disabled, "credential", "cli")
-                .expect("disabled telemetry")
-                .is_none()
+    fn the_binary_publishes_no_telemetry_flag() {
+        use clap::CommandFactory;
+
+        assert!(Arguments::try_parse_from(["vibe", "--telemetry"]).is_err());
+        let help = Arguments::command().render_long_help().to_string();
+        assert!(!help.contains("--telemetry"), "{help}");
+    }
+
+    /// Reference `resolve_api_key`: the credential a delivery authenticates
+    /// with is read from the environment first and the OS keyring second, so a
+    /// key onboarding stored in the keyring alone still activates telemetry.
+    #[test]
+    fn the_telemetry_credential_reaches_the_keyring() {
+        use vibe_core::auth::{KEYRING_SERVICE, KeyringBackend, KeyringFailure};
+
+        struct StoredKey;
+
+        impl KeyringBackend for StoredKey {
+            fn get(&self, service: &str, account: &str) -> Result<Option<String>, KeyringFailure> {
+                Ok((service == KEYRING_SERVICE && account == "MISTRAL_API_KEY")
+                    .then(|| "keyring-credential".to_owned()))
+            }
+
+            fn set(&self, _: &str, _: &str, _: &str) -> Result<(), KeyringFailure> {
+                Err(KeyringFailure::NoBackend)
+            }
+
+            fn delete(&self, _: &str, _: &str) -> Result<(), KeyringFailure> {
+                Err(KeyringFailure::NoEntry)
+            }
+        }
+
+        let stored = || KeyringStore::new(Box::new(StoredKey));
+        let credentials = telemetry_credentials(BTreeMap::new(), stored());
+        assert_eq!(
+            credentials("MISTRAL_API_KEY").as_deref(),
+            Some("keyring-credential"),
+            "a key held only by the credential store still resolves"
         );
-        let mut enabled = disabled;
-        enabled.telemetry = true;
-        assert!(
-            telemetry_event_observer(&enabled, "credential", "cli")
-                .expect("enabled telemetry")
-                .is_some()
+        assert_eq!(credentials("ABSENT_KEY"), None);
+
+        let exported = telemetry_credentials(
+            BTreeMap::from([("MISTRAL_API_KEY".to_owned(), "exported".to_owned())]),
+            stored(),
+        );
+        assert_eq!(
+            exported("MISTRAL_API_KEY").as_deref(),
+            Some("exported"),
+            "the environment still wins over the store"
         );
     }
 
+    /// The launch context is the reference's: the `cli` entrypoint, this
+    /// build's version on both sides, and a terminal named from the published
+    /// vocabulary.
     #[test]
-    fn feedback_telemetry_keeps_the_numeric_rating_version_and_model() {
-        let metadata =
-            TelemetryMetadata::new("2.23.1", "linux-x86_64", "tui").expect("safe metadata");
-        let envelope =
-            feedback_envelope(3, "mistral-medium-3.5", metadata).expect("feedback envelope");
-        let value = serde_json::to_value(envelope).expect("telemetry JSON");
-
-        assert_eq!(value["event"], "vibe.user_rating_feedback");
-        assert_eq!(value["properties"]["attributes"]["rating"], 3);
-        assert_eq!(
-            value["properties"]["attributes"]["version"],
-            env!("CARGO_PKG_VERSION")
-        );
-        assert_eq!(
-            value["properties"]["attributes"]["model"],
-            "mistral-medium-3.5"
-        );
+    fn the_launch_context_reports_the_cli_entrypoint() {
+        let context = cli_telemetry_context();
+        let launch = context.launch.expect("the CLI declares a launch context");
+        assert_eq!(launch.agent_entrypoint, "cli");
+        assert_eq!(launch.client_name, "vibe_cli");
+        assert_eq!(launch.agent_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(launch.client_version, env!("CARGO_PKG_VERSION"));
+        assert!(launch.terminal_emulator.is_some());
     }
 
     #[tokio::test]

@@ -107,8 +107,7 @@ use self::turn::{
 };
 use self::voice::{SpeechEvent, SpeechManager, VoiceManager};
 use crate::{
-    Arguments, CliError, CliTelemetryObserver, bootstrap, telemetry_event_observer,
-    validate_arguments,
+    Arguments, CliError, CliTelemetryObserver, bootstrap, telemetry_observer, validate_arguments,
 };
 
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
@@ -1328,7 +1327,7 @@ fn start_runtime(
     let banner = banner_metrics_from_release3(&release3, arguments, working_directory);
     let skills = runtime_skills(&release3);
     let preferences = startup_preferences(arguments, &release3)?;
-    let telemetry = telemetry_event_observer(arguments, &credential, "tui")?;
+    let telemetry = telemetry_observer(arguments, &release3)?;
     let mut driver = LiveTurnDriver::from_credential(
         bootstrap::live_driver_config(
             arguments,
@@ -1337,9 +1336,7 @@ fn start_runtime(
         )?,
         credential.clone(),
     )?;
-    if let Some(observer) = telemetry.as_ref() {
-        driver = driver.with_event_observer(observer.clone());
-    }
+    driver = driver.with_event_observer(telemetry.clone());
     let configuration = release3.clone();
     let server = bootstrap::resource_server(
         arguments,
@@ -1419,7 +1416,7 @@ fn start_runtime(
         shell: None,
         cloud: CloudWorkflowState::default(),
         pending_switch: None,
-        telemetry,
+        telemetry: Some(telemetry),
         voice,
         speech,
     })

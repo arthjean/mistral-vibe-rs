@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Ship telemetry under the upstream envelope, and let the configuration decide
+  it. An event now travels as `{"event", "properties"}` plus a correlation
+  identifier when there is one, with the properties being the 15-field identity,
+  session and launch census merged with the event's own payload, so a datalake
+  consumer written against the reference reads what this binary sends without a
+  translation layer. The endpoint, the credential and the user agent are all
+  resolved from the active Mistral provider in the merged configuration, the
+  credential being read under the variable that provider declares from the
+  environment first and the OS credential store second: a third-party provider
+  never supplies the key, a provider whose key variable resolves to nothing
+  sends nothing, and a delivery that fails, times out or is rejected is
+  swallowed without touching the turn.
+
+- Decide telemetry with `enable_telemetry`, in both directions. The key is read
+  from the merged configuration on every send, so setting it to `false` stops
+  every event from the CLI, the TUI and the app server, editing it mid-session
+  decides the next one, and a configuration that cannot be read at all silences
+  telemetry rather than failing the run. It defaults to on, matching the
+  documented default. **Breaking:** the `--telemetry` flag no longer exists;
+  passing it is an unknown argument.
+
 - Pick the transcription and speech model from the voice settings. `/voice` now
   offers `active_transcribe_model` and `active_tts_model` beside the two
   toggles, each as a choice list built from the aliases the configuration

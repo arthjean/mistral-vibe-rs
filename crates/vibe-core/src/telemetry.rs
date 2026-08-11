@@ -1,19 +1,46 @@
+//! The datalake client, its envelope and the metadata census every event
+//! carries.
+//!
+//! Reference `vibe/core/telemetry/`: `send.py` owns the endpoint, the credential
+//! rule and the fire-and-forget delivery, `types.py` the two metadata models and
+//! `build_metadata.py` the four builders. The envelope is open. One event is
+//! `{"event", "properties", "correlation_id"?}` and `properties` is the base
+//! metadata census merged with the event's own payload, the payload's keys
+//! winning, which is what lets a client-authored event travel at all.
+//!
+//! Two rules survive that openness. The label validators still refuse a path, a
+//! secret-shaped token and a control character in every value this port authors
+//! itself, through [`TelemetryAttributes`]; they are never applied to properties
+//! a client explicitly recorded, which travel unmodified. And the credential is
+//! resolved from a Mistral provider only, so no third-party key ever reaches a
+//! Mistral-controlled endpoint.
+
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
+use regex::Regex;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use thiserror::Error;
+use toml::Table;
 use url::Url;
 
 use crate::engine::EventObserver;
 use crate::events::{EngineEvent, EventEnvelope, LifecycleState};
 
-pub const TELEMETRY_SCHEMA_VERSION: u32 = 1;
+/// The server a delivery falls back to when a provider's `api_base` carries no
+/// version segment to derive one from. Reference
+/// `_DEFAULT_TELEMETRY_BASE_URL`.
+pub const TELEMETRY_DEFAULT_BASE_URL: &str = "https://api.mistral.ai";
+/// Reference `_DATALAKE_EVENTS_PATH`.
 pub const TELEMETRY_PATH: &str = "/v1/datalake/events";
+/// The variable the shipped Mistral provider reads its key from, which is the
+/// one a document that names none inherits from the defaults.
+pub const TELEMETRY_DEFAULT_API_KEY_VARIABLE: &str = "MISTRAL_API_KEY";
 /// Wall-clock ceiling on one delivery, matching the reference's 5.0 second
 /// `httpx.Timeout`. Named rather than inlined so the parity replay reads the
 /// value the transport actually uses.
@@ -21,29 +48,541 @@ pub const TELEMETRY_TIMEOUT_SECONDS: u64 = 5;
 /// Idle connections kept per host, matching the reference's
 /// `max_keepalive_connections`.
 pub const TELEMETRY_MAX_KEEPALIVE_CONNECTIONS: usize = 5;
-/// The user agent a delivery identifies itself with.
-pub const TELEMETRY_USER_AGENT: &str = concat!("mistral-vibe-rs/", env!("CARGO_PKG_VERSION"));
+/// Deliveries in flight at once, matching the reference's `max_connections`.
+/// `reqwest` caps idle connections rather than total ones, so the transport
+/// holds this one itself.
+pub const TELEMETRY_MAX_CONNECTIONS: usize = 10;
 /// The scheme the credential is presented under.
 pub const TELEMETRY_AUTHORIZATION_SCHEME: &str = "Bearer";
+/// The source every request-scoped census reports. Reference
+/// `TelemetryRequestMetadata.call_source`.
+pub const TELEMETRY_CALL_SOURCE: &str = "vibe_code";
+/// The only attachment kind the reference counts. Reference `AttachmentKind`.
+pub const TELEMETRY_ATTACHMENT_IMAGE: &str = "image";
+/// The backend value that makes a provider Mistral's. A provider entry that
+/// declares none is not Mistral's, which is what keeps a third-party key away
+/// from the datalake.
+const MISTRAL_BACKEND: &str = "mistral";
+/// Reference `get_user_agent`: every request identifies as the Vibe client, and
+/// a Mistral backend prefixes the SDK marker. Reproduced verbatim so a datalake
+/// consumer written against the reference reads this port's deliveries without
+/// a translation layer.
+const USER_AGENT_PRODUCT: &str = "Mistral-Vibe";
+const USER_AGENT_MISTRAL_PREFIX: &str = "mistral-client-python/";
+/// The version the user agent and the `version` census field report.
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const MAX_SAFE_LABEL_BYTES: usize = 128;
 
-/// The headers one delivery carries, built from the credential it authenticates
-/// with.
-///
-/// Split out of the transport so the header set is observable without issuing a
-/// request, which is what the parity replay compares.
-pub fn telemetry_headers(credential: &SecretString) -> Result<HeaderMap, TelemetryError> {
-    let authorization = HeaderValue::from_str(&format!(
-        "{TELEMETRY_AUTHORIZATION_SCHEME} {}",
-        credential.expose_secret()
-    ))
-    .map_err(|_| TelemetryError::InvalidCredential)?;
-    let mut headers = HeaderMap::new();
-    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-    headers.insert(AUTHORIZATION, authorization);
-    headers.insert(USER_AGENT, HeaderValue::from_static(TELEMETRY_USER_AGENT));
-    Ok(headers)
+/// Reference `get_user_agent`.
+#[must_use]
+pub fn telemetry_user_agent(backend: Option<&str>) -> String {
+    let agent = format!("{USER_AGENT_PRODUCT}/{VERSION}");
+    if backend == Some(MISTRAL_BACKEND) {
+        return format!("{USER_AGENT_MISTRAL_PREFIX}{agent}");
+    }
+    agent
 }
+
+/// Reference `get_server_url_from_api_base`: the origin an `api_base` carries
+/// ahead of its version segment. `None` when it carries no version segment,
+/// which is what sends the endpoint to [`TELEMETRY_DEFAULT_BASE_URL`].
+static SERVER_URL: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"^(https?://.+)(/v\d+.*)").ok());
+
+fn server_url_from_api_base(api_base: &str) -> Option<String> {
+    let captures = SERVER_URL.as_ref()?.captures(api_base)?;
+    Some(captures.get(1)?.as_str().to_owned())
+}
+
+/// Reference `TelemetryClient._get_telemetry_url`: the server derived from the
+/// provider's `api_base`, or the default one, joined with the datalake path.
+///
+/// The credential travels as a bearer token, so a base that is not HTTPS, or
+/// that carries a credential of its own, resolves to nothing rather than being
+/// sent to. The reference's regex admits `http://`; this port refuses it, which
+/// is recorded in the accepted-divergence table of `docs/parity.md`.
+#[must_use]
+pub fn telemetry_endpoint(api_base: &str) -> Option<Url> {
+    let base =
+        server_url_from_api_base(api_base).unwrap_or_else(|| TELEMETRY_DEFAULT_BASE_URL.to_owned());
+    let endpoint = Url::parse(base.trim_end_matches('/'))
+        .ok()?
+        .join(TELEMETRY_PATH)
+        .ok()?;
+    if endpoint.scheme() != "https"
+        || endpoint.host_str().is_none()
+        || endpoint.username() != ""
+        || endpoint.password().is_some()
+    {
+        return None;
+    }
+    Some(endpoint)
+}
+
+// --------------------------------------------------------------------------
+// The provider a delivery authenticates as
+// --------------------------------------------------------------------------
+
+/// Reference `VibeConfigSchema.get_mistral_provider`: the active model's
+/// provider when its backend is Mistral, and otherwise the first Mistral
+/// provider configured.
+#[must_use]
+pub fn mistral_provider(effective: &Table) -> Option<Table> {
+    let providers = provider_entries(effective);
+    if let Some(active) = active_provider(effective, &providers)
+        && is_mistral(&active)
+    {
+        return Some(active);
+    }
+    providers.into_iter().find(is_mistral)
+}
+
+fn provider_entries(effective: &Table) -> Vec<Table> {
+    effective
+        .get("providers")
+        .and_then(toml::Value::as_array)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(toml::Value::as_table)
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The provider entry serving the active model, in either persisted model
+/// shape: an array of entries carrying their own alias, or a table keyed by it.
+fn active_provider(effective: &Table, providers: &[Table]) -> Option<Table> {
+    let alias = effective.get("active_model")?.as_str()?;
+    let model = match effective.get("models") {
+        Some(toml::Value::Table(models)) => models.get(alias)?.as_table()?.clone(),
+        Some(toml::Value::Array(models)) => models
+            .iter()
+            .filter_map(toml::Value::as_table)
+            .find(|entry| {
+                ["alias", "name"]
+                    .into_iter()
+                    .any(|key| entry.get(key).and_then(toml::Value::as_str) == Some(alias))
+            })?
+            .clone(),
+        _ => return None,
+    };
+    let provider = model.get("provider")?.as_str()?;
+    providers
+        .iter()
+        .find(|entry| entry.get("name").and_then(toml::Value::as_str) == Some(provider))
+        .cloned()
+}
+
+fn is_mistral(provider: &Table) -> bool {
+    provider.get("backend").and_then(toml::Value::as_str) == Some(MISTRAL_BACKEND)
+}
+
+/// Where one delivery goes and how it identifies itself, resolved from the
+/// merged configuration the way the reference resolves it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TelemetryTarget {
+    pub endpoint: Url,
+    pub user_agent: String,
+    /// The variable the credential is read from. The value is never held here:
+    /// what names a credential and what carries one stay apart.
+    pub credential_variable: String,
+}
+
+impl TelemetryTarget {
+    /// Reference `get_mistral_provider_and_api_key` up to the key lookup: the
+    /// provider decides the endpoint, the user agent and the variable, and the
+    /// caller decides how a variable becomes a credential.
+    #[must_use]
+    pub fn resolve(effective: &Table) -> Option<Self> {
+        let provider = mistral_provider(effective)?;
+        let endpoint = telemetry_endpoint(
+            provider
+                .get("api_base")
+                .and_then(toml::Value::as_str)
+                .unwrap_or_default(),
+        )?;
+        let variable = provider
+            .get("api_key_env_var")
+            .and_then(toml::Value::as_str)
+            .unwrap_or_default();
+        if variable.is_empty() {
+            // Reference `resolve_api_key` answers nothing for an empty
+            // variable, so a provider that names none resolves no credential.
+            return None;
+        }
+        Some(Self {
+            endpoint,
+            user_agent: telemetry_user_agent(provider.get("backend").and_then(toml::Value::as_str)),
+            credential_variable: variable.to_owned(),
+        })
+    }
+}
+
+/// Whether telemetry is on for this process, and what it would deliver to.
+///
+/// Resolved on every send rather than once at startup, which is what makes a
+/// document edited mid-session decide the next event.
+pub struct TelemetryConfig {
+    enabled: bool,
+    target: Option<TelemetryTarget>,
+    credential: Option<SecretString>,
+}
+
+impl TelemetryConfig {
+    /// Reference `TelemetryClient._is_enabled` and
+    /// `get_mistral_provider_and_api_key`: `enable_telemetry` defaults to true,
+    /// and a delivery still needs a Mistral provider whose variable resolves.
+    #[must_use]
+    pub fn resolve(effective: &Table, credentials: &dyn Fn(&str) -> Option<String>) -> Self {
+        let enabled = effective
+            .get("enable_telemetry")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(true);
+        let target = TelemetryTarget::resolve(effective);
+        let credential = target
+            .as_ref()
+            .and_then(|target| credentials(&target.credential_variable))
+            .filter(|value| !value.is_empty())
+            .map(SecretString::from);
+        Self {
+            enabled,
+            target,
+            credential,
+        }
+    }
+
+    /// What an unreadable configuration resolves to. Reference `_is_enabled`
+    /// swallows the failure and answers `False`, so a document that cannot be
+    /// read silences telemetry instead of failing the run.
+    #[must_use]
+    pub const fn disabled() -> Self {
+        Self {
+            enabled: false,
+            target: None,
+            credential: None,
+        }
+    }
+
+    /// Reference `TelemetryClient.is_active`.
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        self.enabled && self.credential.is_some() && self.target.is_some()
+    }
+
+    #[must_use]
+    pub fn target(&self) -> Option<&TelemetryTarget> {
+        self.target.as_ref()
+    }
+}
+
+// --------------------------------------------------------------------------
+// The metadata census
+// --------------------------------------------------------------------------
+
+/// What the process was launched as, supplied by the adapter that launched it.
+/// Reference `LaunchContext`.
+///
+/// Serializing one is the reference's `telemetry_fields`: the terminal is
+/// carried as null rather than dropped, and the census that consumes these
+/// fields is what drops it. `None` means the adapter reports no terminal at
+/// all; a terminal that cannot be identified reports `unknown` instead.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LaunchContext {
+    pub agent_entrypoint: String,
+    pub agent_version: String,
+    pub client_name: String,
+    pub client_version: String,
+    #[serde(default)]
+    pub terminal_emulator: Option<String>,
+}
+
+/// Reference `TelemetryBaseMetadata`, in its declaration order. Every field is
+/// optional and every absent one is dropped rather than sent as null, which is
+/// the reference's `exclude_none`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TelemetryBaseMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_entrypoint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_emulator: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_session_id: Option<String>,
+    /// Filled by the experiments manager upstream. Rank 16 of `docs/parity.md`
+    /// is unshipped here, so the field is carried and left absent rather than
+    /// fabricated; the accepted-divergence table records it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experiments: Option<BTreeMap<String, String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_plan: Option<String>,
+}
+
+impl TelemetryBaseMetadata {
+    /// The census as the properties an envelope carries.
+    #[must_use]
+    pub fn properties(&self) -> Map<String, Value> {
+        properties_of(self)
+    }
+}
+
+/// Reference `TelemetryCallType`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TelemetryCallType {
+    MainCall,
+    SecondaryCall,
+}
+
+/// Reference `TelemetryRequestMetadata`: the base census plus the three fields
+/// a request-scoped event adds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TelemetryRequestMetadata {
+    #[serde(flatten)]
+    pub base: TelemetryBaseMetadata,
+    pub call_type: TelemetryCallType,
+    pub call_source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
+}
+
+impl TelemetryRequestMetadata {
+    #[must_use]
+    pub fn properties(&self) -> Map<String, Value> {
+        properties_of(self)
+    }
+}
+
+/// A serializable census as the object it serializes to. Neither census can
+/// fail to serialize: every field is a string, a boolean or a map of strings.
+fn properties_of<T: Serialize>(census: &T) -> Map<String, Value> {
+    serde_json::to_value(census)
+        .ok()
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default()
+}
+
+/// What every event of this process reports before its own payload. Reference
+/// `TelemetryClient.__init__`'s six getters, held as values because this port
+/// reads the session from the event it is projecting rather than from a
+/// getter.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TelemetryContext {
+    pub launch: Option<LaunchContext>,
+    pub parent_session_id: Option<String>,
+    pub experiments: BTreeMap<String, String>,
+    pub user_plan: Option<String>,
+}
+
+impl TelemetryContext {
+    /// Reference `build_base_metadata`.
+    #[must_use]
+    pub fn base_metadata(&self, session_id: Option<&str>) -> TelemetryBaseMetadata {
+        let launch = self.launch.as_ref();
+        TelemetryBaseMetadata {
+            agent_entrypoint: launch.map(|launch| launch.agent_entrypoint.clone()),
+            agent_version: launch.map(|launch| launch.agent_version.clone()),
+            client_name: launch.map(|launch| launch.client_name.clone()),
+            client_version: launch.map(|launch| launch.client_version.clone()),
+            os: Some(platform_id()),
+            os_version: platform_version(),
+            version: Some(VERSION.to_owned()),
+            terminal_emulator: launch.and_then(|launch| launch.terminal_emulator.clone()),
+            session_id: session_id.map(ToOwned::to_owned),
+            parent_session_id: self.parent_session_id.clone(),
+            // Reference `experiments or None`: an empty map is absent rather
+            // than an empty object.
+            experiments: (!self.experiments.is_empty()).then(|| self.experiments.clone()),
+            user_plan: self.user_plan.clone(),
+        }
+    }
+
+    /// Reference `build_request_metadata`.
+    #[must_use]
+    pub fn request_metadata(
+        &self,
+        session_id: Option<&str>,
+        call_type: TelemetryCallType,
+        message_id: Option<String>,
+    ) -> TelemetryRequestMetadata {
+        TelemetryRequestMetadata {
+            base: TelemetryBaseMetadata {
+                // The reference's request model carries no experiments: the
+                // field is declared on the base and left unset by the builder.
+                experiments: None,
+                ..self.base_metadata(session_id)
+            },
+            call_type,
+            call_source: TELEMETRY_CALL_SOURCE.to_owned(),
+            message_id,
+        }
+    }
+}
+
+/// Reference `build_attachment_counts`: images are reported only when the
+/// provider serving the request accepts them, and a message carrying none
+/// reports no key rather than a zero.
+#[must_use]
+pub fn attachment_counts(images: usize, supports_images: bool) -> BTreeMap<String, u64> {
+    let mut counts = BTreeMap::new();
+    if supports_images && images > 0 {
+        counts.insert(TELEMETRY_ATTACHMENT_IMAGE.to_owned(), images as u64);
+    }
+    counts
+}
+
+/// Reference `get_platform_id`: the canonical lowercase platform identifier.
+/// Rust names macOS `macos` where the reference names it `darwin`, and agrees
+/// everywhere else.
+#[must_use]
+pub fn platform_id() -> String {
+    match std::env::consts::OS {
+        "macos" => "darwin".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
+/// Reference `get_platform_version`: the distribution version on Linux, the
+/// product version on macOS and the system version on Windows.
+///
+/// Resolved once per process: the macOS and Windows branches read a system
+/// tool, which a per-event census must not do.
+#[must_use]
+pub fn platform_version() -> Option<String> {
+    static VERSION: OnceLock<Option<String>> = OnceLock::new();
+    VERSION.get_or_init(resolve_platform_version).clone()
+}
+
+#[cfg(target_os = "linux")]
+fn resolve_platform_version() -> Option<String> {
+    let release = std::fs::read_to_string("/etc/os-release").ok()?;
+    let field = |key: &str| {
+        release.lines().find_map(|line| {
+            line.strip_prefix(key)
+                .map(|value| value.trim_matches('"').to_owned())
+        })
+    };
+    field("VERSION_ID=")
+        .or_else(|| field("VERSION="))
+        .filter(|value| !value.is_empty())
+}
+
+#[cfg(target_os = "macos")]
+fn resolve_platform_version() -> Option<String> {
+    command_output("sw_vers", &["-productVersion"])
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_platform_version() -> Option<String> {
+    // `cmd /C ver` prints `Microsoft Windows [Version 10.0.19045.1234]`, and
+    // the reference reports the bracketed number alone.
+    let printed = command_output("cmd", &["/C", "ver"])?;
+    let version = printed.split_once('[')?.1.rsplit_once(']')?.0;
+    version
+        .rsplit_once(' ')
+        .map(|(_, value)| value.to_owned())
+        .filter(|value| !value.is_empty())
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+fn resolve_platform_version() -> Option<String> {
+    None
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn command_output(program: &str, arguments: &[&str]) -> Option<String> {
+    let output = std::process::Command::new(program)
+        .args(arguments)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let printed = String::from_utf8(output.stdout).ok()?;
+    let printed = printed.trim().to_owned();
+    (!printed.is_empty()).then_some(printed)
+}
+
+/// Reference `detect_terminal`: the terminal the process is attached to, named
+/// from the vocabulary `vibe_protocol::TerminalEmulator` publishes, and
+/// `unknown` when nothing identifies one.
+#[must_use]
+pub fn detect_terminal_emulator() -> &'static str {
+    terminal_emulator_from(&|name| std::env::var(name).ok())
+}
+
+/// The environment markers, in the order the reference consults them:
+/// `TERM_PROGRAM` first, with the Cursor and Insiders splits under `vscode`,
+/// then the per-terminal variables, then JetBrains.
+fn terminal_emulator_from(lookup: &dyn Fn(&str) -> Option<String>) -> &'static str {
+    let value = |name: &str| lookup(name).unwrap_or_default().to_ascii_lowercase();
+    let program = value("TERM_PROGRAM");
+    if program == "vscode" {
+        if [
+            "VSCODE_GIT_ASKPASS_NODE",
+            "VSCODE_GIT_ASKPASS_MAIN",
+            "VSCODE_IPC_HOOK_CLI",
+            "VSCODE_NLS_CONFIG",
+        ]
+        .into_iter()
+        .any(|name| value(name).contains("cursor"))
+        {
+            return "cursor";
+        }
+        if value("TERM_PROGRAM_VERSION").ends_with("-insider") {
+            return "vscode_insiders";
+        }
+        return "vscode";
+    }
+    for (marker, terminal) in [
+        ("apple_terminal", "apple_terminal"),
+        ("iterm.app", "iterm2"),
+        ("wezterm", "wezterm"),
+        ("ghostty", "ghostty"),
+        ("alacritty", "alacritty"),
+        ("kitty", "kitty"),
+        ("hyper", "hyper"),
+    ] {
+        if program == marker {
+            return terminal;
+        }
+    }
+    for (variable, terminal) in [
+        ("WEZTERM_PANE", "wezterm"),
+        ("GHOSTTY_RESOURCES_DIR", "ghostty"),
+        ("KITTY_WINDOW_ID", "kitty"),
+        ("ALACRITTY_SOCKET", "alacritty"),
+        ("ALACRITTY_LOG", "alacritty"),
+        ("WT_SESSION", "windows_terminal"),
+        ("WT_PROFILE_ID", "windows_terminal"),
+    ] {
+        if !value(variable).is_empty() {
+            return terminal;
+        }
+    }
+    if value("TERMINAL_EMULATOR").contains("jetbrains") {
+        return "jetbrains";
+    }
+    "unknown"
+}
+
+// --------------------------------------------------------------------------
+// The events this port authors
+// --------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -147,17 +686,15 @@ impl TelemetryField {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum TelemetryValue {
-    Label(String),
-    Count(u64),
-    Flag(bool),
-}
-
+/// The payload of one event this port authors itself.
+///
+/// Every label passes [`validate_safe_label`], which is the invariant that
+/// survived the move to the reference's open envelope: a path, a secret-shaped
+/// token or a control character has no representation here. Properties a client
+/// recorded through `telemetry/record` never travel through this type.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct TelemetryAttributes(BTreeMap<String, TelemetryValue>);
+pub struct TelemetryAttributes(Map<String, Value>);
 
 impl TelemetryAttributes {
     pub fn label(
@@ -167,20 +704,18 @@ impl TelemetryAttributes {
     ) -> Result<&mut Self, TelemetryError> {
         let value = value.into();
         validate_safe_label(&value)?;
-        self.0
-            .insert(field.key().to_owned(), TelemetryValue::Label(value));
+        self.0.insert(field.key().to_owned(), Value::String(value));
         Ok(self)
     }
 
     pub fn count(&mut self, field: TelemetryField, value: u64) -> &mut Self {
         self.0
-            .insert(field.key().to_owned(), TelemetryValue::Count(value));
+            .insert(field.key().to_owned(), Value::Number(value.into()));
         self
     }
 
     pub fn flag(&mut self, field: TelemetryField, value: bool) -> &mut Self {
-        self.0
-            .insert(field.key().to_owned(), TelemetryValue::Flag(value));
+        self.0.insert(field.key().to_owned(), Value::Bool(value));
         self
     }
 
@@ -188,133 +723,72 @@ impl TelemetryAttributes {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TelemetryMetadata {
-    pub product: String,
-    pub version: String,
-    pub platform: String,
-    pub entrypoint: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub client_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub client_version: Option<String>,
-}
-
-impl TelemetryMetadata {
-    pub fn new(
-        version: impl Into<String>,
-        platform: impl Into<String>,
-        entrypoint: impl Into<String>,
-    ) -> Result<Self, TelemetryError> {
-        let version = version.into();
-        let platform = platform.into();
-        let entrypoint = entrypoint.into();
-        validate_safe_label(&version)?;
-        validate_safe_label(&platform)?;
-        validate_safe_label(&entrypoint)?;
-        Ok(Self {
-            product: "mistral-vibe-rs".to_owned(),
-            version,
-            platform,
-            entrypoint,
-            client_name: None,
-            client_version: None,
-        })
-    }
-
-    pub fn with_client(
-        mut self,
-        name: impl Into<String>,
-        version: impl Into<String>,
-    ) -> Result<Self, TelemetryError> {
-        let name = name.into();
-        let version = version.into();
-        validate_safe_label(&name)?;
-        validate_safe_label(&version)?;
-        self.client_name = Some(name);
-        self.client_version = Some(version);
-        Ok(self)
+    #[must_use]
+    pub fn into_properties(self) -> Map<String, Value> {
+        self.0
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TelemetryProperties {
-    pub metadata: TelemetryMetadata,
-    #[serde(default, skip_serializing_if = "TelemetryAttributes::is_empty")]
-    pub attributes: TelemetryAttributes,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+/// One event on the wire. Reference `send_telemetry_event`'s payload:
+/// `{"event", "properties"}` plus `"correlation_id"` only when one is present.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TelemetryEnvelope {
-    pub schema_version: u32,
     pub event: String,
-    pub properties: TelemetryProperties,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    pub properties: Map<String, Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub correlation_id: Option<String>,
 }
 
 impl TelemetryEnvelope {
-    pub fn new(
-        event: TelemetryEvent,
-        metadata: TelemetryMetadata,
-        attributes: TelemetryAttributes,
-        correlation_id: Option<String>,
-    ) -> Result<Self, TelemetryError> {
-        if let Some(correlation_id) = correlation_id.as_deref() {
-            validate_safe_identifier(correlation_id)?;
-        }
-        Ok(Self {
-            schema_version: TELEMETRY_SCHEMA_VERSION,
-            event: event.event_name().to_owned(),
-            properties: TelemetryProperties {
-                metadata,
-                attributes,
-            },
-            correlation_id,
-        })
-    }
-}
-
-pub struct TelemetryConfig {
-    enabled: bool,
-    endpoint: Url,
-    credential: Option<SecretString>,
-}
-
-impl TelemetryConfig {
-    pub fn new(
-        enabled: bool,
-        api_base: &Url,
-        mistral_credential: Option<SecretString>,
-    ) -> Result<Self, TelemetryError> {
-        if api_base.scheme() != "https"
-            || api_base.cannot_be_a_base()
-            || api_base.host_str().is_none()
-            || api_base.username() != ""
-            || api_base.password().is_some()
-        {
-            return Err(TelemetryError::UntrustedEndpoint);
-        }
-        let mut endpoint = api_base.clone();
-        endpoint.set_path(TELEMETRY_PATH);
-        endpoint.set_query(None);
-        endpoint.set_fragment(None);
-        Ok(Self {
-            enabled,
-            endpoint,
-            credential: mistral_credential,
-        })
-    }
-
+    /// The properties are carried unmodified, which is what lets a
+    /// client-recorded event travel. An empty correlation id is dropped, as the
+    /// reference's falsy check drops it.
     #[must_use]
-    pub fn is_active(&self) -> bool {
-        self.enabled && self.credential.is_some()
+    pub fn new(
+        event: impl Into<String>,
+        properties: Map<String, Value>,
+        correlation_id: Option<String>,
+    ) -> Self {
+        Self {
+            event: event.into(),
+            properties,
+            correlation_id: correlation_id.filter(|id| !id.is_empty()),
+        }
     }
+}
+
+/// Reference `build_client_event_metadata() | properties`: the census first, the
+/// event's own payload second, so a caller's key wins over the census.
+#[must_use]
+pub fn merge_properties(
+    census: Map<String, Value>,
+    payload: Map<String, Value>,
+) -> Map<String, Value> {
+    let mut properties = census;
+    properties.extend(payload);
+    properties
+}
+
+/// The headers one delivery carries.
+///
+/// Split out of the transport so the header set is observable without issuing a
+/// request, which is what the parity replay compares.
+pub fn telemetry_headers(
+    user_agent: &str,
+    credential: &SecretString,
+) -> Result<HeaderMap, TelemetryError> {
+    let authorization = HeaderValue::from_str(&format!(
+        "{TELEMETRY_AUTHORIZATION_SCHEME} {}",
+        credential.expose_secret()
+    ))
+    .map_err(|_| TelemetryError::InvalidCredential)?;
+    let user_agent = HeaderValue::from_str(user_agent).map_err(|_| TelemetryError::InvalidAgent)?;
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(AUTHORIZATION, authorization);
+    headers.insert(USER_AGENT, user_agent);
+    Ok(headers)
 }
 
 pub type TelemetryFuture<'a> =
@@ -324,6 +798,7 @@ pub trait TelemetryTransport: Send + Sync {
     fn send<'a>(
         &'a self,
         endpoint: &'a Url,
+        user_agent: &'a str,
         credential: &'a SecretString,
         envelope: &'a TelemetryEnvelope,
     ) -> TelemetryFuture<'a>;
@@ -332,6 +807,10 @@ pub trait TelemetryTransport: Send + Sync {
 #[derive(Clone)]
 pub struct ReqwestTelemetryTransport {
     client: reqwest::Client,
+    /// The total-connection cap the reference sets on its client and `reqwest`
+    /// does not expose, held here so a burst of events cannot open more
+    /// sockets than the reference would.
+    connections: Arc<tokio::sync::Semaphore>,
 }
 
 impl ReqwestTelemetryTransport {
@@ -341,7 +820,10 @@ impl ReqwestTelemetryTransport {
             .pool_max_idle_per_host(TELEMETRY_MAX_KEEPALIVE_CONNECTIONS)
             .build()
             .map_err(|_| TelemetryError::TransportSetup)?;
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            connections: Arc::new(tokio::sync::Semaphore::new(TELEMETRY_MAX_CONNECTIONS)),
+        })
     }
 }
 
@@ -349,14 +831,20 @@ impl TelemetryTransport for ReqwestTelemetryTransport {
     fn send<'a>(
         &'a self,
         endpoint: &'a Url,
+        user_agent: &'a str,
         credential: &'a SecretString,
         envelope: &'a TelemetryEnvelope,
     ) -> TelemetryFuture<'a> {
         Box::pin(async move {
+            let _permit = self
+                .connections
+                .acquire()
+                .await
+                .map_err(|_| TelemetryError::TransportSetup)?;
             let response = self
                 .client
                 .post(endpoint.clone())
-                .headers(telemetry_headers(credential)?)
+                .headers(telemetry_headers(user_agent, credential)?)
                 .json(envelope)
                 .send()
                 .await
@@ -369,36 +857,49 @@ impl TelemetryTransport for ReqwestTelemetryTransport {
     }
 }
 
+/// How the client reaches the configuration on every send. Reference
+/// `TelemetryClient._config_getter`.
+pub type TelemetryConfigGetter = Arc<dyn Fn() -> TelemetryConfig + Send + Sync>;
+
 pub struct TelemetryClient<T> {
-    config: TelemetryConfig,
+    config: TelemetryConfigGetter,
     transport: T,
 }
 
 impl<T: TelemetryTransport> TelemetryClient<T> {
     #[must_use]
-    pub fn new(config: TelemetryConfig, transport: T) -> Self {
+    pub fn new(config: TelemetryConfigGetter, transport: T) -> Self {
         Self { config, transport }
+    }
+
+    /// A client that never delivers, for a caller that has no configuration to
+    /// read.
+    #[must_use]
+    pub fn disabled(transport: T) -> Self {
+        Self::new(Arc::new(TelemetryConfig::disabled), transport)
     }
 
     pub async fn record(
         &self,
         envelope: &TelemetryEnvelope,
     ) -> Result<TelemetryOutcome, TelemetryError> {
-        if !self.config.enabled {
+        let config = (self.config)();
+        if !config.enabled {
             return Ok(TelemetryOutcome::Disabled);
         }
-        let Some(credential) = self.config.credential.as_ref() else {
+        let (Some(target), Some(credential)) = (config.target.as_ref(), config.credential.as_ref())
+        else {
             return Ok(TelemetryOutcome::NoEligibleCredential);
         };
         self.transport
-            .send(&self.config.endpoint, credential, envelope)
+            .send(&target.endpoint, &target.user_agent, credential, envelope)
             .await?;
         Ok(TelemetryOutcome::Sent)
     }
 
     #[must_use]
     pub fn is_active(&self) -> bool {
-        self.config.is_active()
+        (self.config)().is_active()
     }
 }
 
@@ -413,11 +914,14 @@ pub struct TelemetryProjection {
     pub event: TelemetryEvent,
     pub attributes: TelemetryAttributes,
     pub correlation_id: Option<String>,
+    /// Set on a request-scoped event, which reports the request census rather
+    /// than the base one. Reference `build_request_metadata`'s call sites.
+    pub call_type: Option<TelemetryCallType>,
 }
 
 pub struct TelemetryEventObserver<T> {
     client: Arc<TelemetryClient<T>>,
-    metadata: TelemetryMetadata,
+    context: TelemetryContext,
     pending: Mutex<Vec<tokio::task::JoinHandle<()>>>,
 }
 
@@ -426,12 +930,71 @@ where
     T: TelemetryTransport + 'static,
 {
     #[must_use]
-    pub fn new(client: TelemetryClient<T>, metadata: TelemetryMetadata) -> Self {
+    pub fn new(client: TelemetryClient<T>, context: TelemetryContext) -> Self {
         Self {
             client: Arc::new(client),
-            metadata,
+            context,
             pending: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Queues one event this port authors outside the engine stream, which is
+    /// how a client surface such as the rating prompt reports.
+    pub fn record(
+        &self,
+        event: TelemetryEvent,
+        attributes: TelemetryAttributes,
+        session_id: Option<&str>,
+        correlation_id: Option<String>,
+    ) -> Result<(), TelemetryError> {
+        self.queue(
+            TelemetryProjection {
+                event,
+                attributes,
+                correlation_id,
+                call_type: None,
+            },
+            session_id,
+        )
+    }
+
+    /// Builds the envelope and hands the delivery to a task, so neither the
+    /// configuration read nor the request touches the caller's path.
+    fn queue(
+        &self,
+        projection: TelemetryProjection,
+        session_id: Option<&str>,
+    ) -> Result<(), TelemetryError> {
+        if let Some(correlation_id) = projection.correlation_id.as_deref() {
+            validate_safe_identifier(correlation_id)?;
+        }
+        let census = match projection.call_type {
+            Some(call_type) => self
+                .context
+                .request_metadata(session_id, call_type, None)
+                .properties(),
+            None => self.context.base_metadata(session_id).properties(),
+        };
+        let envelope = TelemetryEnvelope::new(
+            projection.event.event_name(),
+            merge_properties(census, projection.attributes.into_properties()),
+            projection.correlation_id,
+        );
+        // Telemetry never decides whether a caller runs: an observer reached
+        // from outside a runtime drops the delivery rather than failing the
+        // path that produced the event.
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return Ok(());
+        };
+        let client = Arc::clone(&self.client);
+        let task = runtime.spawn(async move {
+            let _ = client.record(&envelope).await;
+        });
+        if let Ok(mut pending) = self.pending.lock() {
+            pending.retain(|task| !task.is_finished());
+            pending.push(task);
+        }
+        Ok(())
     }
 
     pub async fn flush(&self) {
@@ -451,27 +1014,11 @@ where
     T: TelemetryTransport + 'static,
 {
     fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
-        if !self.client.is_active() {
-            return Ok(());
-        }
         let projections =
             TelemetryProjection::from_engine_event(event).map_err(|error| error.to_string())?;
         for projection in projections {
-            let envelope = TelemetryEnvelope::new(
-                projection.event,
-                self.metadata.clone(),
-                projection.attributes,
-                projection.correlation_id,
-            )
-            .map_err(|error| error.to_string())?;
-            let client = Arc::clone(&self.client);
-            let task = tokio::spawn(async move {
-                let _ = client.record(&envelope).await;
-            });
-            if let Ok(mut pending) = self.pending.lock() {
-                pending.retain(|task| !task.is_finished());
-                pending.push(task);
-            }
+            self.queue(projection, Some(&event.session_id))
+                .map_err(|error| error.to_string())?;
         }
         Ok(())
     }
@@ -505,7 +1052,7 @@ impl TelemetryProjection {
                             "success"
                         },
                     )?;
-                Some(TelemetryEvent::ToolCallFinished)
+                Some((TelemetryEvent::ToolCallFinished, None))
             }
             EngineEvent::CompactionOutcome {
                 status,
@@ -529,25 +1076,32 @@ impl TelemetryProjection {
                             event: TelemetryEvent::AutoCompactTriggered,
                             attributes,
                             correlation_id: event.turn_id.clone(),
+                            call_type: None,
                         },
                         Self {
                             event: TelemetryEvent::CompactionFailed,
                             attributes: failure,
                             correlation_id: event.turn_id.clone(),
+                            call_type: None,
                         },
                     ]);
                 }
-                Some(TelemetryEvent::AutoCompactTriggered)
+                Some((TelemetryEvent::AutoCompactTriggered, None))
             }
             // The variant this port emitted before the boundary pair existed.
             // Nothing emits it any more; a transcript that carries one still
             // reports the compaction it recorded, without a status it never
             // held.
-            EngineEvent::Compaction { .. } => Some(TelemetryEvent::AutoCompactTriggered),
+            EngineEvent::Compaction { .. } => Some((TelemetryEvent::AutoCompactTriggered, None)),
             EngineEvent::Lifecycle { state, .. } => match state {
                 LifecycleState::Running => {
                     attributes.label(TelemetryField::Status, lifecycle_label(*state))?;
-                    Some(TelemetryEvent::RequestSent)
+                    // The turn's own model call, which the reference labels
+                    // `main_call` in the request census.
+                    Some((
+                        TelemetryEvent::RequestSent,
+                        Some(TelemetryCallType::MainCall),
+                    ))
                 }
                 LifecycleState::Idle
                 | LifecycleState::WaitingCallback
@@ -558,10 +1112,11 @@ impl TelemetryProjection {
             _ => None,
         };
         Ok(projected
-            .map(|projected| Self {
+            .map(|(projected, call_type)| Self {
                 event: projected,
                 attributes,
                 correlation_id: event.turn_id.clone(),
+                call_type,
             })
             .into_iter()
             .collect())
@@ -574,10 +1129,10 @@ pub enum TelemetryError {
     UnsafeLabel,
     #[error("telemetry correlation identifier is invalid")]
     InvalidIdentifier,
-    #[error("telemetry endpoint is not the Mistral HTTPS event endpoint")]
-    UntrustedEndpoint,
     #[error("telemetry credential cannot be represented as an authorization header")]
     InvalidCredential,
+    #[error("telemetry user agent cannot be represented as a header")]
+    InvalidAgent,
     #[error("telemetry transport could not be initialized")]
     TransportSetup,
     #[error("telemetry delivery failed")]
@@ -629,342 +1184,4 @@ const fn lifecycle_label(state: LifecycleState) -> &'static str {
 mod telemetry_parity_tests;
 
 #[cfg(test)]
-mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    use serde_json::json;
-
-    use super::*;
-    use crate::compaction::{CompactionFailureReason, CompactionStatus};
-
-    struct CountingTransport {
-        calls: AtomicUsize,
-    }
-
-    impl TelemetryTransport for CountingTransport {
-        fn send<'a>(
-            &'a self,
-            _endpoint: &'a Url,
-            _credential: &'a SecretString,
-            _envelope: &'a TelemetryEnvelope,
-        ) -> TelemetryFuture<'a> {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            Box::pin(async { Ok(()) })
-        }
-    }
-
-    struct SharedCountingTransport {
-        calls: Arc<AtomicUsize>,
-    }
-
-    impl TelemetryTransport for SharedCountingTransport {
-        fn send<'a>(
-            &'a self,
-            _endpoint: &'a Url,
-            _credential: &'a SecretString,
-            _envelope: &'a TelemetryEnvelope,
-        ) -> TelemetryFuture<'a> {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            Box::pin(async { Ok(()) })
-        }
-    }
-
-    fn metadata() -> TelemetryMetadata {
-        TelemetryMetadata::new("2.23.1", "linux-x86_64", "cli").expect("safe metadata")
-    }
-
-    fn endpoint() -> Url {
-        Url::parse("https://api.mistral.ai/v1/chat/completions").expect("valid URL")
-    }
-
-    fn envelope() -> TelemetryEnvelope {
-        let mut attributes = TelemetryAttributes::default();
-        attributes
-            .label(TelemetryField::ToolName, "read_file")
-            .expect("safe tool name")
-            .count(TelemetryField::DurationMs, 7);
-        TelemetryEnvelope::new(
-            TelemetryEvent::ToolCallFinished,
-            metadata(),
-            attributes,
-            Some("turn-1".to_owned()),
-        )
-        .expect("safe envelope")
-    }
-
-    #[tokio::test]
-    async fn disabled_and_ineligible_telemetry_create_no_send() {
-        for (enabled, credential, expected) in [
-            (
-                false,
-                Some(SecretString::from("secret")),
-                TelemetryOutcome::Disabled,
-            ),
-            (true, None, TelemetryOutcome::NoEligibleCredential),
-        ] {
-            let transport = CountingTransport {
-                calls: AtomicUsize::new(0),
-            };
-            let client = TelemetryClient::new(
-                TelemetryConfig::new(enabled, &endpoint(), credential).expect("config"),
-                transport,
-            );
-            assert_eq!(client.record(&envelope()).await.expect("outcome"), expected);
-            assert_eq!(client.transport.calls.load(Ordering::SeqCst), 0);
-        }
-    }
-
-    #[tokio::test]
-    async fn eligible_events_use_the_versioned_safe_envelope() {
-        let transport = CountingTransport {
-            calls: AtomicUsize::new(0),
-        };
-        let client = TelemetryClient::new(
-            TelemetryConfig::new(
-                true,
-                &endpoint(),
-                Some(SecretString::from("eligible-credential")),
-            )
-            .expect("config"),
-            transport,
-        );
-        assert_eq!(
-            client.record(&envelope()).await.expect("sent"),
-            TelemetryOutcome::Sent
-        );
-        assert_eq!(client.transport.calls.load(Ordering::SeqCst), 1);
-        assert_eq!(
-            serde_json::to_value(envelope()).expect("JSON"),
-            json!({
-                "schemaVersion": 1,
-                "event": "vibe.tool_call_finished",
-                "properties": {
-                    "metadata": {
-                        "product": "mistral-vibe-rs",
-                        "version": "2.23.1",
-                        "platform": "linux-x86_64",
-                        "entrypoint": "cli"
-                    },
-                    "attributes": {
-                        "duration_ms": 7,
-                        "tool_name": "read_file"
-                    }
-                },
-                "correlationId": "turn-1"
-            })
-        );
-    }
-
-    #[test]
-    fn unsafe_content_has_no_telemetry_representation() {
-        for sensitive in [
-            "/home/arthur/private.rs",
-            "sk-secret",
-            "https://user:password@proxy.invalid",
-            "exception message",
-            "tool\noutput",
-        ] {
-            let mut attributes = TelemetryAttributes::default();
-            assert_eq!(
-                attributes.label(TelemetryField::Model, sensitive),
-                Err(TelemetryError::UnsafeLabel)
-            );
-        }
-        let encoded = serde_json::to_string(&envelope()).expect("JSON");
-        for forbidden in ["prompt", "file_content", "proxy", "exception", "output"] {
-            assert!(!encoded.contains(forbidden), "{encoded}");
-        }
-    }
-
-    #[test]
-    fn endpoint_and_correlation_boundaries_fail_closed() {
-        let foreign = Url::parse("http://telemetry.invalid").expect("URL");
-        assert!(matches!(
-            TelemetryConfig::new(true, &foreign, Some(SecretString::from("secret"))),
-            Err(TelemetryError::UntrustedEndpoint)
-        ));
-        assert_eq!(
-            TelemetryEnvelope::new(
-                TelemetryEvent::Ready,
-                metadata(),
-                TelemetryAttributes::default(),
-                Some("../session".to_owned())
-            ),
-            Err(TelemetryError::InvalidIdentifier)
-        );
-        let credential_in_url = Url::parse("https://user:password@api.mistral.ai").expect("URL");
-        assert!(matches!(
-            TelemetryConfig::new(true, &credential_in_url, Some(SecretString::from("secret"))),
-            Err(TelemetryError::UntrustedEndpoint)
-        ));
-    }
-
-    #[test]
-    fn engine_projection_never_copies_event_content() {
-        let event = EventEnvelope {
-            session_id: "session".to_owned(),
-            turn_id: Some("turn-1".to_owned()),
-            emitted_at: 1,
-            event_id: 1,
-            event: EngineEvent::ToolResult {
-                call_id: "call".to_owned(),
-                content: "sk-secret /home/arthur/private".to_owned(),
-                typed_result: json!({"secret": "token"}),
-                display: json!({"output": "private"}),
-                duration_ms: 9,
-                is_error: true,
-                cancelled: false,
-            },
-        };
-        let projection = TelemetryProjection::from_engine_event(&event)
-            .expect("projection")
-            .pop()
-            .expect("telemetry event");
-        let envelope = TelemetryEnvelope::new(
-            projection.event,
-            metadata(),
-            projection.attributes,
-            projection.correlation_id,
-        )
-        .expect("envelope");
-        let encoded = serde_json::to_string(&envelope).expect("JSON");
-        assert!(!encoded.contains("sk-secret"));
-        assert!(!encoded.contains("/home/arthur"));
-        assert!(!encoded.contains("private"));
-    }
-
-    #[test]
-    fn turn_completion_is_not_misreported_as_session_close() {
-        let event = EventEnvelope {
-            session_id: "session".to_owned(),
-            turn_id: Some("turn-1".to_owned()),
-            emitted_at: 1,
-            event_id: 1,
-            event: EngineEvent::Lifecycle {
-                state: LifecycleState::Completed,
-                message: None,
-            },
-        };
-        assert!(
-            TelemetryProjection::from_engine_event(&event)
-                .expect("projection")
-                .is_empty()
-        );
-    }
-
-    #[tokio::test]
-    async fn engine_observer_delivers_supported_events_and_flushes() {
-        let calls = Arc::new(AtomicUsize::new(0));
-        let client = TelemetryClient::new(
-            TelemetryConfig::new(
-                true,
-                &endpoint(),
-                Some(SecretString::from("eligible-credential")),
-            )
-            .expect("config"),
-            SharedCountingTransport {
-                calls: Arc::clone(&calls),
-            },
-        );
-        let observer = TelemetryEventObserver::new(client, metadata());
-        observer
-            .observe(&EventEnvelope {
-                session_id: "session".to_owned(),
-                turn_id: Some("turn-1".to_owned()),
-                emitted_at: 1,
-                event_id: 1,
-                event: EngineEvent::Lifecycle {
-                    state: LifecycleState::Running,
-                    message: None,
-                },
-            })
-            .expect("observe");
-        observer.flush().await;
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
-    }
-
-    fn compaction_outcome(
-        status: CompactionStatus,
-        reason: Option<CompactionFailureReason>,
-    ) -> EventEnvelope {
-        EventEnvelope {
-            session_id: "session".to_owned(),
-            turn_id: Some("turn-1".to_owned()),
-            emitted_at: 1,
-            event_id: 1,
-            event: EngineEvent::CompactionOutcome {
-                compaction_id: "compaction-1".to_owned(),
-                status,
-                context_tokens_before: 150_000,
-                threshold: 120_000,
-                reason,
-            },
-        }
-    }
-
-    /// US-151: the auto-compaction record carries the tokens before, the
-    /// threshold and the status, which is the reference's payload.
-    #[test]
-    fn a_compaction_outcome_reports_the_reference_payload() {
-        for (status, label) in [
-            (CompactionStatus::Success, "success"),
-            (CompactionStatus::Failure, "failure"),
-            (CompactionStatus::Cancelled, "cancelled"),
-        ] {
-            let projections =
-                TelemetryProjection::from_engine_event(&compaction_outcome(status, None))
-                    .expect("projection");
-            let [record] = projections.as_slice() else {
-                panic!("an unclassified outcome reports one record");
-            };
-            assert_eq!(record.event, TelemetryEvent::AutoCompactTriggered);
-            let encoded = serde_json::to_value(&record.attributes).expect("attributes");
-            assert_eq!(encoded["nb_context_tokens_before"], 150_000);
-            assert_eq!(encoded["auto_compact_threshold"], 120_000);
-            assert_eq!(encoded["status"], label);
-        }
-    }
-
-    /// US-151: a classified failure reports the failure record too, carrying
-    /// the reason and nothing else.
-    #[test]
-    fn a_classified_failure_reports_both_records() {
-        let projections = TelemetryProjection::from_engine_event(&compaction_outcome(
-            CompactionStatus::Failure,
-            Some(CompactionFailureReason::ToolCall),
-        ))
-        .expect("projection");
-        let [triggered, failed] = projections.as_slice() else {
-            panic!("a classified failure reports two records");
-        };
-        assert_eq!(triggered.event, TelemetryEvent::AutoCompactTriggered);
-        assert_eq!(failed.event, TelemetryEvent::CompactionFailed);
-        assert_eq!(
-            serde_json::to_value(&failed.attributes).expect("attributes"),
-            json!({"reason": "tool_call"}),
-            "the failure record carries the reason and no transcript"
-        );
-    }
-
-    /// US-151: telemetry disabled writes nothing, whatever the compaction did.
-    #[tokio::test]
-    async fn a_disabled_client_writes_no_compaction_record() {
-        let calls = Arc::new(AtomicUsize::new(0));
-        let client = TelemetryClient::new(
-            TelemetryConfig::new(false, &endpoint(), Some(SecretString::from("key")))
-                .expect("config"),
-            SharedCountingTransport {
-                calls: Arc::clone(&calls),
-            },
-        );
-        let observer = TelemetryEventObserver::new(client, metadata());
-        observer
-            .observe(&compaction_outcome(
-                CompactionStatus::Failure,
-                Some(CompactionFailureReason::EmptySummary),
-            ))
-            .expect("observe");
-        observer.flush().await;
-        assert_eq!(calls.load(Ordering::SeqCst), 0);
-    }
-}
+mod telemetry_tests;

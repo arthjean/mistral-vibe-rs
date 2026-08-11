@@ -26,9 +26,10 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 use crate::compaction::{CompactionFailureReason, CompactionStatus};
 use crate::config::registry::{FIELDS, default_document};
@@ -37,9 +38,13 @@ use crate::events::{EngineEvent, EventEnvelope, LifecycleState};
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
 use super::{
-    TELEMETRY_AUTHORIZATION_SCHEME, TELEMETRY_MAX_KEEPALIVE_CONNECTIONS, TELEMETRY_PATH,
-    TELEMETRY_TIMEOUT_SECONDS, TELEMETRY_USER_AGENT, TelemetryAttributes, TelemetryEnvelope,
-    TelemetryEvent, TelemetryMetadata, TelemetryProjection, telemetry_headers,
+    LaunchContext, TELEMETRY_ATTACHMENT_IMAGE, TELEMETRY_AUTHORIZATION_SCHEME,
+    TELEMETRY_CALL_SOURCE, TELEMETRY_DEFAULT_API_KEY_VARIABLE, TELEMETRY_DEFAULT_BASE_URL,
+    TELEMETRY_MAX_CONNECTIONS, TELEMETRY_MAX_KEEPALIVE_CONNECTIONS, TELEMETRY_PATH,
+    TELEMETRY_TIMEOUT_SECONDS, TelemetryCallType, TelemetryClient, TelemetryConfig,
+    TelemetryContext, TelemetryEnvelope, TelemetryEvent, TelemetryFuture, TelemetryProjection,
+    TelemetryTransport, attachment_counts, merge_properties, platform_id, platform_version,
+    telemetry_headers, telemetry_user_agent,
 };
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/telemetry/corpus.json";
@@ -87,50 +92,7 @@ const METADATA: [&str; 4] = ["schemaVersion", "reference", "note", "documents"];
 /// The staleness check is what forces a row out once its behavior conforms, so
 /// the ledger cannot outlive the gap it records.
 const DIVERGENCES: &[(&str, &str)] = &[
-    // -- EP-002: the reference envelope and its gate ------------------------
-    (
-        "constants/defaultBaseUrl/*",
-        "OPEN (US-005): the reference falls back to a default telemetry base when a provider's \
-         `api_base` carries no version segment; `TelemetryConfig::new` takes the base it is given \
-         and names no default",
-    ),
-    (
-        "constants/defaultApiKeyVariable/*",
-        "OPEN (US-005): the reference resolves the credential from the Mistral provider's \
-         `api_key_env_var`, defaulting to one variable; this port is handed a credential by \
-         `crates/vibe-cli/src/lib.rs` and names no variable",
-    ),
-    (
-        "constants/maxConnections/*",
-        "OPEN (US-005): the reference caps total connections as well as idle ones; \
-         `ReqwestTelemetryTransport` sets `pool_max_idle_per_host` only",
-    ),
-    (
-        "constants/userAgent*",
-        "OPEN (US-005): the reference identifies as the Python client and prefixes the Mistral \
-         SDK marker on a Mistral backend; `TELEMETRY_USER_AGENT` names this port and does not vary \
-         by backend",
-    ),
-    (
-        "constants/baseMetadataFields/*",
-        "OPEN (US-006): `TelemetryMetadata` carries 4 fields plus 2 optional client fields where \
-         the reference carries 12",
-    ),
-    (
-        "constants/requestMetadataFields/*",
-        "OPEN (US-006): this port has no request-scoped metadata, so `call_type`, `call_source` \
-         and `message_id` have no counterpart",
-    ),
-    (
-        "constants/callTypes/*",
-        "OPEN (US-006): the call-type vocabulary arrives with the request metadata",
-    ),
-    ("constants/callSourceDefault/*", "OPEN (US-006): as above"),
-    (
-        "constants/attachmentKinds/*",
-        "OPEN (US-006): `build_attachment_counts` has no counterpart, so the attachment vocabulary \
-         is unpublished",
-    ),
+    // -- EP-002: closed. What the epic left standing ------------------------
     (
         "constants/teleport*",
         "OPEN (US-011): the teleport payload vocabularies arrive with the teleport events",
@@ -144,56 +106,9 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "OPEN (US-011): as above",
     ),
     (
-        "envelope/credentialResolved/*",
-        "OPEN (US-005): the reference resolves a Mistral provider and its key from the merged \
-         configuration; this port is handed a credential by its CLI and resolves nothing from a \
-         document",
-    ),
-    ("envelope/active/*", "OPEN (US-005): as above"),
-    ("envelope/sent/*", "OPEN (US-005): as above"),
-    ("envelope/url/*", "OPEN (US-005): as above"),
-    ("envelope/credentialVariable/*", "OPEN (US-005): as above"),
-    ("envelope/userAgent/*", "OPEN (US-005): as above"),
-    ("envelope/contentType/*", "OPEN (US-005): as above"),
-    ("envelope/headerNames/*", "OPEN (US-005): as above"),
-    ("envelope/flushed/*", "OPEN (US-005): as above"),
-    ("envelope/correlationId/*", "OPEN (US-005): as above"),
-    (
-        "envelope/bodyKeys/*",
-        "OPEN (US-005): `TelemetryEnvelope` publishes `schemaVersion` and `correlationId` around a \
-         closed `properties`, where the reference publishes `event`, `properties` and an optional \
-         `correlation_id`",
-    ),
-    (
-        "envelope/propertyKeys/*",
-        "OPEN (US-005, US-006): this port nests a closed metadata and attribute pair under \
-         `properties`; the reference merges the base metadata census with the event's own keys",
-    ),
-    (
-        "envelope/propertyTypes/*",
-        "OPEN (US-005, US-006): as above",
-    ),
-    (
-        "baseMetadata/baseKeys/*",
-        "OPEN (US-006): `TelemetryMetadata` carries `product`, `version`, `platform` and \
-         `entrypoint` where the reference carries the 12-field census",
-    ),
-    (
-        "baseMetadata/requestKeys/*",
-        "OPEN (US-006): no request-scoped metadata exists here",
-    ),
-    (
-        "baseMetadata/launchFields/*",
-        "OPEN (US-006): `LaunchContext` has no counterpart",
-    ),
-    (
         "baseMetadata/sentryTags/*",
         "ACCEPTED: the reference ships Sentry dormant, both DSNs null at the pin, so no crash \
          reporter exists here to tag; US-020 records the dormancy",
-    ),
-    (
-        "attachmentCounts/counts/*",
-        "OPEN (US-006): `build_attachment_counts` has no counterpart",
     ),
     // -- EP-003: the event vocabulary and its payloads ----------------------
     (
@@ -418,10 +333,6 @@ struct EnvelopeCase {
     correlation_id: Option<String>,
     property_keys: Vec<String>,
     property_types: BTreeMap<String, String>,
-    #[expect(
-        dead_code,
-        reason = "values are compared through the key set and the types until US-006 produces them"
-    )]
     properties: Value,
 }
 
@@ -430,13 +341,8 @@ struct EnvelopeCase {
 struct MetadataCase {
     case: String,
     base_keys: Vec<String>,
-    #[expect(
-        dead_code,
-        reason = "US-006 compares the values; the census compares the keys"
-    )]
     base: Value,
     request_keys: Vec<String>,
-    #[expect(dead_code, reason = "as above")]
     request: Value,
     #[expect(
         dead_code,
@@ -451,10 +357,6 @@ struct MetadataCase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct AttachmentCase {
     case: String,
-    #[expect(
-        dead_code,
-        reason = "the gate is what produces the counts, compared through them"
-    )]
     supports_images: bool,
     counts: BTreeMap<String, u64>,
 }
@@ -926,17 +828,169 @@ fn published_events() -> Vec<TelemetryEvent> {
     ALL_EVENTS.to_vec()
 }
 
-fn port_metadata() -> TelemetryMetadata {
-    TelemetryMetadata::new("2.23.1", "linux-x86_64", "cli").expect("safe metadata")
+/// The launch context the capture drove the reference's builders with, so both
+/// sides answer for the same inputs.
+fn oracle_launch(terminal: Option<&str>) -> LaunchContext {
+    LaunchContext {
+        agent_entrypoint: "cli".to_owned(),
+        agent_version: "oracle-agent-version".to_owned(),
+        client_name: "oracle-client".to_owned(),
+        client_version: "oracle-client-version".to_owned(),
+        terminal_emulator: terminal.map(ToOwned::to_owned),
+    }
 }
 
-/// The body one event of this build puts on the wire, serialized the way the
-/// transport serializes it.
-fn port_envelope_body(event: TelemetryEvent) -> Value {
-    let envelope =
-        TelemetryEnvelope::new(event, port_metadata(), TelemetryAttributes::default(), None)
-            .expect("the envelope is safe");
-    serde_json::to_value(&envelope).expect("the envelope serializes")
+/// The context every envelope case is sent under, which is the one the capture
+/// built its client with.
+fn oracle_context() -> TelemetryContext {
+    TelemetryContext {
+        launch: Some(oracle_launch(Some("ghostty"))),
+        parent_session_id: Some("oracle-parent-session".to_owned()),
+        experiments: BTreeMap::new(),
+        user_plan: Some("oracle-plan".to_owned()),
+    }
+}
+
+/// The sentinels the capture set before driving the reference, named here by
+/// the same variables. A value never leaves this function, and
+/// `ORACLE_ABSENT_KEY` is deliberately absent so the no-credential branch is
+/// reached through a variable the corpus names.
+fn oracle_credentials(variable: &str) -> Option<String> {
+    match variable {
+        "MISTRAL_API_KEY"
+        | "ORACLE_MISTRAL_KEY"
+        | "ORACLE_PROXY_KEY"
+        | "ORACLE_THIRD_PARTY_KEY" => Some(format!("{variable}-sentinel")),
+        _ => None,
+    }
+}
+
+/// Records the request one send would have issued, one call before the
+/// connection, which is where the capture intercepted the reference.
+#[derive(Default)]
+struct RecordingTransport {
+    sent: std::sync::Mutex<Vec<(String, String, TelemetryEnvelope)>>,
+}
+
+impl TelemetryTransport for RecordingTransport {
+    fn send<'a>(
+        &'a self,
+        endpoint: &'a url::Url,
+        user_agent: &'a str,
+        _credential: &'a secrecy::SecretString,
+        envelope: &'a TelemetryEnvelope,
+    ) -> TelemetryFuture<'a> {
+        if let Ok(mut sent) = self.sent.lock() {
+            sent.push((
+                endpoint.to_string(),
+                user_agent.to_owned(),
+                envelope.clone(),
+            ));
+        }
+        Box::pin(async { Ok(()) })
+    }
+}
+
+/// What this build answers for one envelope case, driven through the client the
+/// CLI observer sends with.
+struct Sent {
+    enabled: bool,
+    credential_resolved: bool,
+    active: bool,
+    request: Option<(String, String, TelemetryEnvelope)>,
+}
+
+impl Sent {
+    fn drive(
+        document: &toml::Table,
+        payload: Map<String, Value>,
+        correlation: Option<&str>,
+    ) -> Self {
+        let owned = document.clone();
+        let config = TelemetryConfig::resolve(&owned, &oracle_credentials);
+        let enabled = owned
+            .get("enable_telemetry")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(true);
+        let credential_resolved = config
+            .target()
+            .and_then(|target| oracle_credentials(&target.credential_variable))
+            .is_some();
+        let active = config.is_active();
+        let client = TelemetryClient::new(
+            Arc::new(move || TelemetryConfig::resolve(&owned, &oracle_credentials)),
+            RecordingTransport::default(),
+        );
+        let envelope = TelemetryEnvelope::new(
+            TelemetryEvent::Ready.event_name(),
+            merge_properties(
+                oracle_context()
+                    .base_metadata(Some("oracle-session"))
+                    .properties(),
+                payload,
+            ),
+            correlation.map(ToOwned::to_owned),
+        );
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("a current-thread runtime for the replay");
+        // The record future resolving is what the reference's `aclose` waits
+        // for: a pending delivery is joined rather than dropped.
+        runtime
+            .block_on(client.record(&envelope))
+            .expect("the record resolves");
+        let request = client
+            .transport
+            .sent
+            .lock()
+            .ok()
+            .and_then(|sent| sent.first().cloned());
+        Self {
+            enabled,
+            credential_resolved,
+            active,
+            request,
+        }
+    }
+}
+
+/// The corpus masks three host-dependent values, so a comparison substitutes
+/// what this host answers before comparing.
+fn unmask(value: &Value) -> Value {
+    let Some(text) = value.as_str() else {
+        return value.clone();
+    };
+    match text {
+        "{platformId}" => Value::String(platform_id()),
+        "{platformVersion}" => platform_version().map_or(Value::Null, Value::String),
+        _ => Value::String(text.replace("{version}", env!("CARGO_PKG_VERSION"))),
+    }
+}
+
+fn unmask_map(value: &Value) -> Map<String, Value> {
+    value
+        .as_object()
+        .map(|entries| {
+            entries
+                .iter()
+                .map(|(key, value)| (key.clone(), unmask(value)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The wire type of one property, named as `type_name` in the capture names it.
+fn type_name(value: &Value) -> String {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "bool",
+        Value::Number(number) if number.is_f64() => "float",
+        Value::Number(_) => "int",
+        Value::String(_) => "string",
+        Value::Object(_) => "object",
+        Value::Array(_) => "array",
+    }
+    .to_owned()
 }
 
 fn sorted_keys(value: &Value) -> Vec<String> {
@@ -1020,19 +1074,19 @@ fn run_constants(constants: &Constants, report: &mut Report) {
         &constants.endpoint.events_path,
         &TELEMETRY_PATH.to_owned(),
     );
-    report.check_absent(
+    report.check(
         "constants",
         "defaultBaseUrl",
         case,
         &constants.endpoint.default_base_url,
-        None,
+        &TELEMETRY_DEFAULT_BASE_URL.to_owned(),
     );
-    report.check_absent(
+    report.check(
         "constants",
         "defaultApiKeyVariable",
         case,
         &constants.endpoint.default_api_key_variable,
-        None,
+        &TELEMETRY_DEFAULT_API_KEY_VARIABLE.to_owned(),
     );
 
     report.check(
@@ -1053,16 +1107,19 @@ fn run_constants(constants: &Constants, report: &mut Report) {
         &constants.transport.max_keepalive_connections,
         &(TELEMETRY_MAX_KEEPALIVE_CONNECTIONS as u64),
     );
-    report.check_absent(
+    report.check(
         "constants",
         "maxConnections",
         case,
         &constants.transport.max_connections,
-        None,
+        &(TELEMETRY_MAX_CONNECTIONS as u64),
     );
 
-    let headers = telemetry_headers(&secrecy::SecretString::from("oracle-credential"))
-        .expect("the header set builds");
+    let headers = telemetry_headers(
+        &telemetry_user_agent(Some("mistral")),
+        &secrecy::SecretString::from("oracle-credential"),
+    )
+    .expect("the header set builds");
     let mut names = headers
         .keys()
         .map(|name| name.as_str().to_owned())
@@ -1094,16 +1151,24 @@ fn run_constants(constants: &Constants, report: &mut Report) {
         &constants.transport.authorization_scheme,
         &TELEMETRY_AUTHORIZATION_SCHEME.to_owned(),
     );
-    for (field, declared) in [
-        ("userAgentMistral", &constants.transport.user_agent_mistral),
-        ("userAgentGeneric", &constants.transport.user_agent_generic),
+    for (field, declared, backend) in [
+        (
+            "userAgentMistral",
+            &constants.transport.user_agent_mistral,
+            Some("mistral"),
+        ),
+        (
+            "userAgentGeneric",
+            &constants.transport.user_agent_generic,
+            Some("generic"),
+        ),
     ] {
         report.check(
             "constants",
             field,
             case,
-            declared,
-            &TELEMETRY_USER_AGENT.to_owned(),
+            &declared.replace("{version}", env!("CARGO_PKG_VERSION")),
+            &telemetry_user_agent(backend),
         );
     }
 
@@ -1196,41 +1261,75 @@ fn run_vocabularies(vocabularies: &Vocabularies, report: &mut Report) {
     published.sort_unstable();
     report.check("constants", "otelRedactionModes", case, &modes, &published);
 
-    report.check_absent(
+    let mut call_types = vocabularies.call_types.clone();
+    call_types.sort_unstable();
+    report.check(
         "constants",
         "callTypes",
         case,
-        &vocabularies.call_types,
-        None,
+        &call_types,
+        &serde_variants::<TelemetryCallType>(&[
+            TelemetryCallType::MainCall,
+            TelemetryCallType::SecondaryCall,
+        ]),
     );
-    report.check_absent(
+    report.check(
         "constants",
         "callSourceDefault",
         case,
         &vocabularies.call_source_default,
-        None,
+        &TELEMETRY_CALL_SOURCE.to_owned(),
     );
-    report.check_absent(
+    report.check(
         "constants",
         "attachmentKinds",
         case,
         &vocabularies.attachment_kinds,
-        None,
+        &attachment_counts(1, true)
+            .into_keys()
+            .collect::<Vec<String>>(),
     );
-    let metadata = serde_json::to_value(port_metadata()).expect("metadata serializes");
+
+    // The census fields are read off a fully populated one, which is the only
+    // way an optional field is observable at all.
+    let populated = TelemetryContext {
+        launch: Some(oracle_launch(Some("ghostty"))),
+        parent_session_id: Some("oracle-parent-session".to_owned()),
+        experiments: BTreeMap::from([("ab".to_owned(), "on".to_owned())]),
+        user_plan: Some("oracle-plan".to_owned()),
+    };
+    let base = Value::Object(populated.base_metadata(Some("oracle-session")).properties());
+    let mut declared = vocabularies.base_metadata_fields.clone();
+    declared.sort_unstable();
     report.check(
         "constants",
         "baseMetadataFields",
         case,
-        &vocabularies.base_metadata_fields,
-        &sorted_keys(&metadata),
+        &declared,
+        &sorted_keys(&base),
     );
-    report.check_absent(
+    let request = Value::Object(
+        populated
+            .request_metadata(
+                Some("oracle-session"),
+                TelemetryCallType::MainCall,
+                Some("oracle-message".to_owned()),
+            )
+            .properties(),
+    );
+    let mut declared = vocabularies.request_metadata_fields.clone();
+    declared.sort_unstable();
+    let mut added = sorted_keys(&request)
+        .into_iter()
+        .filter(|key| !sorted_keys(&base).contains(key))
+        .collect::<Vec<_>>();
+    added.sort_unstable();
+    report.check(
         "constants",
         "requestMetadataFields",
         case,
-        &vocabularies.request_metadata_fields,
-        None,
+        &declared,
+        &added,
     );
     report.check_absent(
         "constants",
@@ -1278,6 +1377,36 @@ fn serde_variants<T: serde::Serialize>(variants: &[T]) -> Vec<String> {
     names
 }
 
+/// The payload and the correlation identifier the capture sent one case with.
+/// The two named cases are the caller-override and the empty-identifier
+/// probes; every other case sends the startup duration the reference sends.
+fn envelope_inputs(case: &str) -> (Map<String, Value>, Option<&'static str>) {
+    match case {
+        "caller-properties-win-over-metadata" => (
+            [
+                ("version".to_owned(), json!("authored-by-the-caller")),
+                ("extra".to_owned(), json!(1)),
+            ]
+            .into_iter()
+            .collect(),
+            None,
+        ),
+        "empty-correlation-id" => (
+            [("init_duration_ms".to_owned(), json!(1234))]
+                .into_iter()
+                .collect(),
+            Some(""),
+        ),
+        _ => (
+            [("init_duration_ms".to_owned(), json!(1234))]
+                .into_iter()
+                .collect(),
+            case.ends_with("-correlation-yes")
+                .then_some("oracle-correlation"),
+        ),
+    }
+}
+
 fn run_envelope(corpus: &Corpus, report: &mut Report) {
     let documents = corpus
         .documents
@@ -1288,119 +1417,348 @@ fn run_envelope(corpus: &Corpus, report: &mut Report) {
         let document = documents
             .get(entry.configuration.as_str())
             .unwrap_or_else(|| panic!("`{}` names a declared document", entry.case));
-        let loaded = Loaded::from_document(document);
         let case = entry.case.as_str();
+        // The capture validated the document on its own, so the provider table
+        // both sides resolve over is the document's own rather than one the
+        // shipped defaults filled in.
+        let table = document
+            .parse::<toml::Table>()
+            .unwrap_or_else(|error| panic!("`{case}` parses: {error}"));
+        let (payload, correlation) = envelope_inputs(case);
+        let sent = Sent::drive(&table, payload, correlation);
+
+        // The gate, read twice: through the store a running binary loads, and
+        // through the resolution the client performs on every send.
         report.check(
             "envelope",
             "enabled",
             case,
             &entry.enabled,
-            &loaded.enable_telemetry().unwrap_or_default(),
+            &Loaded::from_document(document)
+                .enable_telemetry()
+                .unwrap_or_default(),
         );
-        report.check_absent(
+        report.check(
+            "envelope",
+            "enabledResolved",
+            case,
+            &entry.enabled,
+            &sent.enabled,
+        );
+        report.check(
             "envelope",
             "credentialResolved",
             case,
             &entry.credential_resolved,
-            None,
+            &sent.credential_resolved,
         );
-        report.check_absent("envelope", "active", case, &entry.active, None);
-        report.check_absent("envelope", "sent", case, &entry.sent, None);
-        report.check_absent("envelope", "flushed", case, &entry.flushed, None);
-        report.check_absent("envelope", "url", case, &entry.url, None);
-        report.check_absent(
+        report.check("envelope", "active", case, &entry.active, &sent.active);
+        report.check(
+            "envelope",
+            "sent",
+            case,
+            &entry.sent,
+            &sent.request.is_some(),
+        );
+        // The reference's `aclose` gathers the pending task before closing the
+        // client; this replay awaits the delivery future for the same reason.
+        report.check("envelope", "flushed", case, &entry.flushed, &true);
+        report.check(
+            "envelope",
+            "url",
+            case,
+            &entry.url,
+            &sent.request.as_ref().map(|(url, _, _)| url.clone()),
+        );
+        report.check(
             "envelope",
             "credentialVariable",
             case,
             &entry.credential_variable,
-            None,
+            &sent.request.as_ref().and_then(|_| {
+                TelemetryConfig::resolve(&table, &oracle_credentials)
+                    .target()
+                    .map(|target| target.credential_variable.clone())
+            }),
         );
-        report.check_absent("envelope", "userAgent", case, &entry.user_agent, None);
-        report.check_absent("envelope", "contentType", case, &entry.content_type, None);
-        report.check_absent("envelope", "headerNames", case, &entry.header_names, None);
-        report.check_absent(
+        report.check(
+            "envelope",
+            "userAgent",
+            case,
+            &entry
+                .user_agent
+                .as_ref()
+                .map(|agent| agent.replace("{version}", env!("CARGO_PKG_VERSION"))),
+            &sent.request.as_ref().map(|(_, agent, _)| agent.clone()),
+        );
+
+        let headers = sent.request.as_ref().map(|(_, agent, _)| {
+            telemetry_headers(agent, &secrecy::SecretString::from("oracle-credential"))
+                .expect("the header set builds")
+        });
+        report.check(
+            "envelope",
+            "contentType",
+            case,
+            &entry.content_type,
+            &headers.as_ref().and_then(|headers| {
+                headers
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|value| value.to_str().ok())
+                    .map(ToOwned::to_owned)
+            }),
+        );
+        let mut declared = entry
+            .header_names
+            .iter()
+            .map(|name| name.to_ascii_lowercase())
+            .collect::<Vec<_>>();
+        declared.sort_unstable();
+        let mut names = headers
+            .as_ref()
+            .map(|headers| {
+                headers
+                    .keys()
+                    .map(|name| name.as_str().to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        names.sort_unstable();
+        report.check("envelope", "headerNames", case, &declared, &names);
+
+        let body = sent.request.as_ref().map(|(_, _, envelope)| {
+            serde_json::to_value(envelope).expect("the envelope serializes")
+        });
+        report.check(
             "envelope",
             "correlationId",
             case,
             &entry.correlation_id,
-            None,
+            &sent
+                .request
+                .as_ref()
+                .and_then(|(_, _, envelope)| envelope.correlation_id.clone()),
         );
-
-        // The body this build would put on the wire for the event the capture
-        // sent, which is the shape US-005 replaces.
-        if let Some(event) = entry.event.as_deref() {
-            let body = port_envelope_body(TelemetryEvent::Ready);
-            report.check(
-                "envelope",
-                "bodyKeys",
-                case,
-                &entry.body_keys,
-                &sorted_keys(&body),
-            );
-            report.check(
-                "envelope",
-                "event",
-                case,
-                &event.to_owned(),
-                &body["event"].as_str().unwrap_or_default().to_owned(),
-            );
-            report.check(
-                "envelope",
-                "propertyKeys",
-                case,
-                &entry.property_keys,
-                &sorted_keys(&body["properties"]),
-            );
-            let types = entry.property_types.keys().cloned().collect::<Vec<_>>();
-            report.check(
-                "envelope",
-                "propertyTypes",
-                case,
-                &types,
-                &sorted_keys(&body["properties"]),
-            );
-        }
+        report.check(
+            "envelope",
+            "bodyKeys",
+            case,
+            &entry.body_keys,
+            &body.as_ref().map(sorted_keys).unwrap_or_default(),
+        );
+        report.check(
+            "envelope",
+            "event",
+            case,
+            &entry.event,
+            &sent
+                .request
+                .as_ref()
+                .map(|(_, _, envelope)| envelope.event.clone()),
+        );
+        let properties = sent
+            .request
+            .as_ref()
+            .map(|(_, _, envelope)| Value::Object(envelope.properties.clone()))
+            .unwrap_or(Value::Object(Map::new()));
+        report.check(
+            "envelope",
+            "propertyKeys",
+            case,
+            &entry.property_keys,
+            &sorted_keys(&properties),
+        );
+        report.check(
+            "envelope",
+            "propertyTypes",
+            case,
+            &entry.property_types,
+            &properties
+                .as_object()
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .map(|(key, value)| (key.clone(), type_name(value)))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        );
+        report.check(
+            "envelope",
+            "properties",
+            case,
+            &unmask_map(&entry.properties),
+            &properties.as_object().cloned().unwrap_or_default(),
+        );
     }
 }
 
+/// The inputs the capture built one metadata case from, named by the case.
+/// A case this table does not know fails the replay rather than being measured
+/// against inputs it was not captured with.
+fn metadata_inputs(scenario: &str) -> Option<(TelemetryContext, Option<&'static str>)> {
+    let session = Some("oracle-session");
+    let parent = Some("oracle-parent-session".to_owned());
+    let plan = Some("oracle-plan".to_owned());
+    let experiments = |pairs: &[(&str, &str)]| {
+        pairs
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+            .collect::<BTreeMap<_, _>>()
+    };
+    Some(match scenario {
+        "full-launch-context" => (
+            TelemetryContext {
+                launch: Some(oracle_launch(Some("ghostty"))),
+                parent_session_id: parent,
+                experiments: experiments(&[("ab", "on")]),
+                user_plan: plan,
+            },
+            session,
+        ),
+        "no-launch-context" => (
+            TelemetryContext {
+                launch: None,
+                parent_session_id: parent,
+                experiments: BTreeMap::new(),
+                user_plan: plan,
+            },
+            session,
+        ),
+        "no-session" => (
+            TelemetryContext {
+                launch: Some(oracle_launch(Some("ghostty"))),
+                ..TelemetryContext::default()
+            },
+            None,
+        ),
+        "empty-experiments" => (
+            TelemetryContext {
+                launch: Some(oracle_launch(Some("ghostty"))),
+                ..TelemetryContext::default()
+            },
+            session,
+        ),
+        "no-terminal-emulator" => (
+            TelemetryContext {
+                launch: Some(oracle_launch(None)),
+                parent_session_id: parent,
+                ..TelemetryContext::default()
+            },
+            session,
+        ),
+        "no-user-plan" => (
+            TelemetryContext {
+                launch: Some(oracle_launch(Some("ghostty"))),
+                parent_session_id: parent,
+                experiments: experiments(&[("ab", "off")]),
+                user_plan: None,
+            },
+            session,
+        ),
+        _ => return None,
+    })
+}
+
 fn run_base_metadata(corpus: &Corpus, report: &mut Report) {
-    let metadata = serde_json::to_value(port_metadata()).expect("metadata serializes");
-    let published = sorted_keys(&metadata);
     for entry in &corpus.base_metadata {
         let case = entry.case.as_str();
+        let (scenario, call_type) = case
+            .strip_suffix("-main_call")
+            .map(|scenario| (scenario, TelemetryCallType::MainCall))
+            .or_else(|| {
+                case.strip_suffix("-secondary_call")
+                    .map(|scenario| (scenario, TelemetryCallType::SecondaryCall))
+            })
+            .unwrap_or_else(|| panic!("`{case}` names a call type"));
+        let (context, session) = metadata_inputs(scenario)
+            .unwrap_or_else(|| panic!("`{scenario}` is a captured metadata scenario"));
+
+        let base = Value::Object(context.base_metadata(session).properties());
         report.check(
             "baseMetadata",
             "baseKeys",
             case,
             &entry.base_keys,
-            &published,
+            &sorted_keys(&base),
         );
-        report.check_absent(
+        report.check(
+            "baseMetadata",
+            "base",
+            case,
+            &unmask_map(&entry.base),
+            &base.as_object().cloned().unwrap_or_default(),
+        );
+
+        let message =
+            matches!(call_type, TelemetryCallType::MainCall).then(|| "oracle-message".to_owned());
+        let request = Value::Object(
+            context
+                .request_metadata(session, call_type, message)
+                .properties(),
+        );
+        report.check(
             "baseMetadata",
             "requestKeys",
             case,
             &entry.request_keys,
-            None,
+            &sorted_keys(&request),
         );
-        report.check_absent(
+        report.check(
+            "baseMetadata",
+            "request",
+            case,
+            &unmask_map(&entry.request),
+            &request.as_object().cloned().unwrap_or_default(),
+        );
+        report.check(
             "baseMetadata",
             "launchFields",
             case,
             &entry.launch_fields,
-            None,
+            &context
+                .launch
+                .as_ref()
+                .map(|launch| serde_json::to_value(launch).expect("the launch context serializes")),
         );
         report.check_absent("baseMetadata", "sentryTags", case, &entry.sentry_tags, None);
     }
 }
 
+/// The images and the image support one attachment case was captured with.
+fn attachment_inputs(case: &str) -> Option<usize> {
+    match case {
+        "no-message" | "no-images" => Some(0),
+        "images-with-support" | "images-without-support" => Some(2),
+        _ => None,
+    }
+}
+
 fn run_attachment_counts(corpus: &Corpus, report: &mut Report) {
     for entry in &corpus.attachment_counts {
-        report.check_absent(
+        let images = attachment_inputs(&entry.case)
+            .unwrap_or_else(|| panic!("`{}` is a captured attachment scenario", entry.case));
+        report.check(
             "attachmentCounts",
             "counts",
             &entry.case,
             &entry.counts,
-            None,
+            &attachment_counts(images, entry.supports_images),
+        );
+        report.check(
+            "attachmentCounts",
+            "kind",
+            &entry.case,
+            &entry
+                .counts
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+                .first()
+                .cloned(),
+            &attachment_counts(images, entry.supports_images)
+                .contains_key(TELEMETRY_ATTACHMENT_IMAGE)
+                .then(|| TELEMETRY_ATTACHMENT_IMAGE.to_owned()),
         );
     }
 }
