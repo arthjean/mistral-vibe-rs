@@ -3,7 +3,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
-use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderValue, USER_AGENT};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -14,7 +14,36 @@ use crate::events::{EngineEvent, EventEnvelope, LifecycleState};
 
 pub const TELEMETRY_SCHEMA_VERSION: u32 = 1;
 pub const TELEMETRY_PATH: &str = "/v1/datalake/events";
+/// Wall-clock ceiling on one delivery, matching the reference's 5.0 second
+/// `httpx.Timeout`. Named rather than inlined so the parity replay reads the
+/// value the transport actually uses.
+pub const TELEMETRY_TIMEOUT_SECONDS: u64 = 5;
+/// Idle connections kept per host, matching the reference's
+/// `max_keepalive_connections`.
+pub const TELEMETRY_MAX_KEEPALIVE_CONNECTIONS: usize = 5;
+/// The user agent a delivery identifies itself with.
+pub const TELEMETRY_USER_AGENT: &str = concat!("mistral-vibe-rs/", env!("CARGO_PKG_VERSION"));
+/// The scheme the credential is presented under.
+pub const TELEMETRY_AUTHORIZATION_SCHEME: &str = "Bearer";
 const MAX_SAFE_LABEL_BYTES: usize = 128;
+
+/// The headers one delivery carries, built from the credential it authenticates
+/// with.
+///
+/// Split out of the transport so the header set is observable without issuing a
+/// request, which is what the parity replay compares.
+pub fn telemetry_headers(credential: &SecretString) -> Result<HeaderMap, TelemetryError> {
+    let authorization = HeaderValue::from_str(&format!(
+        "{TELEMETRY_AUTHORIZATION_SCHEME} {}",
+        credential.expose_secret()
+    ))
+    .map_err(|_| TelemetryError::InvalidCredential)?;
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(AUTHORIZATION, authorization);
+    headers.insert(USER_AGENT, HeaderValue::from_static(TELEMETRY_USER_AGENT));
+    Ok(headers)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -308,8 +337,8 @@ pub struct ReqwestTelemetryTransport {
 impl ReqwestTelemetryTransport {
     pub fn try_new() -> Result<Self, TelemetryError> {
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .pool_max_idle_per_host(5)
+            .timeout(std::time::Duration::from_secs(TELEMETRY_TIMEOUT_SECONDS))
+            .pool_max_idle_per_host(TELEMETRY_MAX_KEEPALIVE_CONNECTIONS)
             .build()
             .map_err(|_| TelemetryError::TransportSetup)?;
         Ok(Self { client })
@@ -324,18 +353,10 @@ impl TelemetryTransport for ReqwestTelemetryTransport {
         envelope: &'a TelemetryEnvelope,
     ) -> TelemetryFuture<'a> {
         Box::pin(async move {
-            let authorization =
-                HeaderValue::from_str(&format!("Bearer {}", credential.expose_secret()))
-                    .map_err(|_| TelemetryError::InvalidCredential)?;
             let response = self
                 .client
                 .post(endpoint.clone())
-                .header(AUTHORIZATION, authorization)
-                .header(CONTENT_TYPE, "application/json")
-                .header(
-                    USER_AGENT,
-                    concat!("mistral-vibe-rs/", env!("CARGO_PKG_VERSION")),
-                )
+                .headers(telemetry_headers(credential)?)
                 .json(envelope)
                 .send()
                 .await
