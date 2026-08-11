@@ -554,13 +554,17 @@ impl Release3Service {
     ///
     /// `telemetry/record` is the only caller: the reference hands the event to
     /// the agent loop's telemetry client, which drops it when the same key is
-    /// off. A configuration that will not load is read as enabled, matching the
-    /// shipped default.
+    /// off. An absent key is the shipped default of true; a configuration that
+    /// will not load at all reads as false, which is what the reference's
+    /// `_is_enabled` answers when its getter raises.
     pub fn telemetry_enabled(&self) -> bool {
-        self.config
-            .load()
-            .ok()
-            .and_then(|snapshot| snapshot.effective.get("enable_telemetry")?.as_bool())
+        let Ok(snapshot) = self.config.load() else {
+            return false;
+        };
+        snapshot
+            .effective
+            .get("enable_telemetry")
+            .and_then(TomlValue::as_bool)
             .unwrap_or(true)
     }
 
