@@ -44,6 +44,7 @@ impl VoiceSessionFactory for ScriptedFactory {
         &self,
         generation: u64,
         updates: mpsc::Sender<InputEvent>,
+        signals: mpsc::Sender<VoiceSignal>,
         mut control: watch::Receiver<VoiceControl>,
     ) -> JoinHandle<()> {
         self.launches.fetch_add(1, Ordering::Relaxed);
@@ -53,6 +54,14 @@ impl VoiceSessionFactory for ScriptedFactory {
         let active = self.active.clone();
         let cancel_gate = self.cancel_gate.clone();
         tokio::spawn(async move {
+            // The endpoint names the session before the recording runs, which
+            // is what a production session reports here too.
+            let _ = signals
+                .send(VoiceSignal::SessionCreated {
+                    generation,
+                    recording_id: format!("recording-{generation}"),
+                })
+                .await;
             let _ = updates
                 .send(InputEvent::VoiceStartResolved {
                     generation,

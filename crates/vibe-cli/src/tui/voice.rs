@@ -17,17 +17,35 @@ mod session;
 mod settings;
 mod speech;
 mod state;
+mod telemetry;
 
 pub(crate) use speech::{SpeechEvent, SpeechManager};
 pub use state::VoicePhase;
 pub(crate) use state::{VoiceCommand, VoiceState, VoiceUpdate, VoiceUpdateOutcome};
+pub(crate) use telemetry::AudioEvent;
 
 use realtime::VoiceConfig;
 use session::ProductionVoiceSessionFactory;
 use settings::TranscriptionSettings;
+use telemetry::TranscriptionTracking;
 
 const UPDATE_QUEUE_CAPACITY: usize = 128;
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// What a running session tells its manager that the event stream the composer
+/// reads does not carry.
+///
+/// The composer's `InputEvent` vocabulary is an observable protocol of its own,
+/// so the recording identity travels beside it rather than inside it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum VoiceSignal {
+    /// The endpoint accepted the session and named it, which is where the
+    /// reference sets the recording id and emits its start event.
+    SessionCreated {
+        generation: u64,
+        recording_id: String,
+    },
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum VoiceControl {
@@ -47,6 +65,7 @@ pub(super) trait VoiceSessionFactory: Send + Sync {
         &self,
         generation: u64,
         updates: mpsc::Sender<InputEvent>,
+        signals: mpsc::Sender<VoiceSignal>,
         control: watch::Receiver<VoiceControl>,
     ) -> JoinHandle<()>;
 }
@@ -66,9 +85,21 @@ pub(super) struct VoiceManager {
     vibe_home: PathBuf,
     updates_tx: mpsc::Sender<InputEvent>,
     updates_rx: mpsc::Receiver<InputEvent>,
+    signals_tx: mpsc::Sender<VoiceSignal>,
+    signals_rx: mpsc::Receiver<VoiceSignal>,
     active: Option<ActiveVoice>,
     retiring: Vec<JoinHandle<()>>,
     pending_start: Option<u64>,
+    /// Reference `VoiceManager._tracking`: what the four audio events are built
+    /// from, reset where a recording starts.
+    tracking: TranscriptionTracking,
+    /// When the microphone actually opened, which is what the reference reads
+    /// off `AudioRecording.duration` when the recorder stops. This port never
+    /// holds the captured buffer, so the recording is measured from the moment
+    /// the session reported it running to the moment it stopped.
+    recording_started: Option<std::time::Instant>,
+    /// The events produced but not yet handed to `telemetry/record`.
+    telemetry: Vec<AudioEvent>,
 }
 
 impl VoiceManager {
@@ -111,7 +142,7 @@ impl VoiceManager {
     }
 
     #[cfg(test)]
-    fn new(factory: Arc<dyn VoiceSessionFactory>, enabled: bool) -> Self {
+    pub(in crate::tui) fn new(factory: Arc<dyn VoiceSessionFactory>, enabled: bool) -> Self {
         Self::with_factory(Ok(factory), enabled, String::new(), PathBuf::new())
     }
 
@@ -122,6 +153,7 @@ impl VoiceManager {
         vibe_home: PathBuf,
     ) -> Self {
         let (updates_tx, updates_rx) = mpsc::channel(UPDATE_QUEUE_CAPACITY);
+        let (signals_tx, signals_rx) = mpsc::channel(UPDATE_QUEUE_CAPACITY);
         Self {
             enabled,
             factory,
@@ -129,9 +161,14 @@ impl VoiceManager {
             vibe_home,
             updates_tx,
             updates_rx,
+            signals_tx,
+            signals_rx,
             active: None,
             retiring: Vec::new(),
             pending_start: None,
+            tracking: TranscriptionTracking::default(),
+            recording_started: None,
+            telemetry: Vec::new(),
         }
     }
 
@@ -160,7 +197,11 @@ impl VoiceManager {
     }
 
     pub(super) fn try_next_event(&mut self) -> Option<InputEvent> {
+        self.drain_signals();
         let event = self.updates_rx.try_recv().ok();
+        if let Some(event) = event.as_ref() {
+            self.observe(event);
+        }
         if event
             .as_ref()
             .and_then(terminal_generation)
@@ -174,6 +215,71 @@ impl VoiceManager {
         }
         self.reap_finished();
         event
+    }
+
+    /// Queues an event a session would have sent, so a test drives the same
+    /// reader the event loop drives rather than the observer behind it.
+    #[cfg(test)]
+    pub(in crate::tui) fn inject_for_test(&mut self, event: InputEvent) {
+        let _ = self.updates_tx.try_send(event);
+    }
+
+    /// The audio events produced since the last drain, in the order they fired.
+    ///
+    /// The caller records them through `telemetry/record`, which is where
+    /// `enable_telemetry` decides whether anything is kept.
+    pub(crate) fn take_telemetry(&mut self) -> Vec<AudioEvent> {
+        self.drain_signals();
+        std::mem::take(&mut self.telemetry)
+    }
+
+    fn drain_signals(&mut self) {
+        while let Ok(signal) = self.signals_rx.try_recv() {
+            let VoiceSignal::SessionCreated {
+                generation,
+                recording_id,
+            } = signal;
+            // A signal from a session already retired belongs to a recording
+            // whose tracking has been reset, so it is dropped rather than
+            // renaming the running one.
+            if self
+                .active
+                .as_ref()
+                .is_some_and(|active| active.generation == generation)
+            {
+                self.tracking.set_recording_id(recording_id);
+                self.telemetry.push(self.tracking.start_event());
+            }
+        }
+    }
+
+    /// What the reference reads off its own transcribe stream: text lengths
+    /// accumulate, a clean stop takes the recording's duration, and the
+    /// terminal answer emits `done` or `error`.
+    ///
+    /// A start that failed emits nothing, matching the reference, whose
+    /// `RecordingStartError` is raised to the caller rather than reported: only
+    /// a transcription that ran and then failed reaches the error event.
+    fn observe(&mut self, event: &InputEvent) {
+        match event {
+            InputEvent::VoiceStartResolved { error: None, .. } => {
+                self.recording_started = Some(std::time::Instant::now());
+            }
+            InputEvent::VoiceTranscriptDelta { text, .. } => self.tracking.record_text(text),
+            // Reference `stop_recording`: the recorder's own duration is taken
+            // where it stops cleanly, and a transcription that fails while the
+            // microphone is still open reports no recording duration at all.
+            InputEvent::VoiceStopResolved { error: None, .. } => {
+                if let Some(started) = self.recording_started.take() {
+                    self.tracking.set_recording_duration(started.elapsed());
+                }
+            }
+            InputEvent::VoiceStopResolved {
+                error: Some(error), ..
+            } => self.telemetry.push(self.tracking.error_event(error)),
+            InputEvent::VoiceDone { .. } => self.telemetry.push(self.tracking.done_event()),
+            _ => {}
+        }
     }
 
     pub(super) async fn shutdown(&mut self) {
@@ -222,7 +328,16 @@ impl VoiceManager {
             return;
         };
         let (control, receiver) = watch::channel(VoiceControl::Running);
-        let task = factory.spawn(generation, self.updates_tx.clone(), receiver);
+        let task = factory.spawn(
+            generation,
+            self.updates_tx.clone(),
+            self.signals_tx.clone(),
+            receiver,
+        );
+        // Reference `start_recording`: the tracking record is reset where the
+        // recording begins, so every event a session emits belongs to it.
+        self.tracking.reset();
+        self.recording_started = None;
         self.active = Some(ActiveVoice {
             generation,
             control,
@@ -241,6 +356,11 @@ impl VoiceManager {
         if let Some(active) = self.active.take() {
             let _ = active.control.send(VoiceControl::Cancel);
             self.retiring.push(active.task);
+            // Reference `cancel_recording`, which returns before its emitter
+            // when nothing is running: the event fires exactly where a session
+            // was cancelled.
+            self.recording_started = None;
+            self.telemetry.push(self.tracking.cancel_event());
         }
     }
 
@@ -303,3 +423,7 @@ mod tests;
 #[cfg(test)]
 #[path = "voice/voice_parity_tests.rs"]
 mod voice_parity_tests;
+
+#[cfg(test)]
+#[path = "voice/audio_telemetry_tests.rs"]
+mod audio_telemetry_tests;

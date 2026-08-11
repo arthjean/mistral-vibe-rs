@@ -73,6 +73,17 @@ type RealtimeSocket = WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::n
 
 pub(super) struct PreparedTranscription {
     websocket: RealtimeSocket,
+    /// The identifier the endpoint answered `session.created` with, which is
+    /// what the reference carries as `TranscribeSessionCreated.request_id` and
+    /// reports as the recording id
+    /// (`vibe/cli/transcribe/mistral_transcribe_client.py:75`).
+    recording_id: String,
+}
+
+impl PreparedTranscription {
+    pub(super) fn recording_id(&self) -> &str {
+        &self.recording_id
+    }
 }
 
 pub(super) async fn prepare_transcription(
@@ -94,7 +105,7 @@ pub(super) async fn prepare_transcription(
         .await
         .map_err(|_| "Transcription connection timed out".to_owned())?
         .map_err(|error| format!("Transcription connection failed: {error}"))?;
-    wait_for_session(&mut websocket).await?;
+    let recording_id = wait_for_session(&mut websocket).await?;
     websocket
         .send(Message::Text(
             session_update(
@@ -106,7 +117,10 @@ pub(super) async fn prepare_transcription(
         ))
         .await
         .map_err(|error| format!("Transcription session setup failed: {error}"))?;
-    Ok(PreparedTranscription { websocket })
+    Ok(PreparedTranscription {
+        websocket,
+        recording_id,
+    })
 }
 
 impl PreparedTranscription {
@@ -185,7 +199,13 @@ impl PreparedTranscription {
     }
 }
 
-async fn wait_for_session(websocket: &mut RealtimeSocket) -> Result<(), String> {
+/// Waits for `session.created` and answers with the identifier it carries.
+///
+/// A frame that names no identifier is still a created session: the reference
+/// reads `event.session.request_id` off a model that always declares it, and an
+/// endpoint that omits it leaves the recording id empty rather than failing the
+/// session over a telemetry field.
+async fn wait_for_session(websocket: &mut RealtimeSocket) -> Result<String, String> {
     tokio::time::timeout(START_TIMEOUT, async {
         loop {
             let message = websocket
@@ -195,7 +215,7 @@ async fn wait_for_session(websocket: &mut RealtimeSocket) -> Result<(), String> 
                 .map_err(|error| format!("Transcription setup failed: {error}"))?;
             let value = message_json(&message)?;
             match value.get("type").and_then(Value::as_str) {
-                Some("session.created") => return Ok(()),
+                Some("session.created") => return Ok(session_request_id(&value)),
                 Some("error") => return Err(realtime_error(&value)),
                 _ => {}
             }
@@ -203,6 +223,14 @@ async fn wait_for_session(websocket: &mut RealtimeSocket) -> Result<(), String> 
     })
     .await
     .map_err(|_| "Transcription session setup timed out".to_owned())?
+}
+
+pub(super) fn session_request_id(value: &Value) -> String {
+    value
+        .pointer("/session/request_id")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
 }
 
 pub(super) fn session_update(

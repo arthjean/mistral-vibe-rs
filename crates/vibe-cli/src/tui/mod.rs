@@ -437,6 +437,7 @@ pub async fn run_interactive(
                         &mut state,
                     );
                 }
+                record_audio_telemetry(runtime);
                 // The narrator's own transport answers here, so a spoken summary
                 // reaches the same state machine the effects came from.
                 while let Some(event) = runtime.speech.try_next_event() {
@@ -1031,6 +1032,28 @@ fn update_theme(
         let no_color = !theme.colors_enabled;
         *theme = resolve_theme(preference, EnvironmentThemeDetector.detect(), no_color);
         push_local_notice(state, "Theme preference saved", EntryStatus::Completed);
+    }
+}
+
+/// Records the audio lifecycle events the voice manager produced.
+///
+/// The reference hands each one to the agent loop's telemetry client
+/// (`vibe/cli/voice_manager/voice_manager.py:202-251`); this port hands it to
+/// `telemetry/record`, which honors `enable_telemetry` and keeps what it keeps
+/// on `diagnostics/logs/read`. A recording failure is never surfaced to the
+/// operator: telemetry is best effort on both sides, and a diagnostic here
+/// would put an audio event in the transcript.
+pub(in crate::tui) fn record_audio_telemetry(runtime: &mut InteractiveRuntime) {
+    for event in runtime.voice.take_telemetry() {
+        let _ = runtime.service.public_call(
+            "telemetry/record",
+            json!({
+                "sessionId": runtime.session_id,
+                "name": event.name,
+                "properties": event.properties,
+                "correlateLastRequest": false,
+            }),
+        );
     }
 }
 

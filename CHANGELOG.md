@@ -13,6 +13,13 @@
   now publishes its output container as a closed vocabulary rather than as a
   free string.
 
+- Record the audio lifecycle locally. A transcription session that opens, a
+  recording that is cancelled, a transcription that completes and one that fails
+  each record an event carrying the recording id the endpoint named, the
+  accumulated transcript length and the durations involved. The events are kept
+  on `diagnostics/logs/read` rather than shipped, and `enable_telemetry` decides
+  whether they are kept at all.
+
 - Speak the turn summary the narrator produces. With `narrator_enabled` on, a
   completed turn is posted to the `[[tts_models]]` entry `active_tts_model`
   names, at its provider's `api_base`, carrying that entry's model, voice and

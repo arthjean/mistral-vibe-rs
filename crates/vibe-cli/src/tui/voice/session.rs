@@ -11,7 +11,7 @@ use crate::tui::chat_input::InputEvent;
 
 use super::realtime::{DRAIN_TIMEOUT, START_TIMEOUT, VoiceConfig, prepare_transcription};
 use super::recorder::{AudioFailureSignal, CpalAudioRecorder};
-use super::{VoiceControl, VoiceSessionFactory};
+use super::{VoiceControl, VoiceSessionFactory, VoiceSignal};
 
 const AUDIO_QUEUE_CAPACITY: usize = 32;
 const MAX_RECORDING_DURATION: Duration = Duration::from_secs(300);
@@ -35,12 +35,13 @@ impl VoiceSessionFactory for ProductionVoiceSessionFactory {
         &self,
         generation: u64,
         updates: mpsc::Sender<InputEvent>,
+        signals: mpsc::Sender<VoiceSignal>,
         control: watch::Receiver<VoiceControl>,
     ) -> JoinHandle<()> {
         let credential = self.credential.clone();
         let config = self.config.clone();
         tokio::spawn(async move {
-            run_voice_session(generation, updates, control, credential, config).await;
+            run_voice_session(generation, updates, signals, control, credential, config).await;
         })
     }
 }
@@ -48,6 +49,7 @@ impl VoiceSessionFactory for ProductionVoiceSessionFactory {
 async fn run_voice_session(
     generation: u64,
     updates: mpsc::Sender<InputEvent>,
+    signals: mpsc::Sender<VoiceSignal>,
     mut control: watch::Receiver<VoiceControl>,
     credential: SecretString,
     config: VoiceConfig,
@@ -128,6 +130,14 @@ async fn run_voice_session(
         dispose_audio_resource(recorder).await;
         return;
     }
+    // The endpoint named the session while it was being opened, which is the
+    // point the reference's `TranscribeSessionCreated` reaches its manager.
+    let _ = signals
+        .send(VoiceSignal::SessionCreated {
+            generation,
+            recording_id: prepared_transcription.recording_id().to_owned(),
+        })
+        .await;
 
     let transcribe_updates = updates.clone();
     let (consumer_ready, consumer_started) = tokio::sync::oneshot::channel();
