@@ -594,7 +594,25 @@ fn sync_voice_preference(runtime: &mut InteractiveRuntime, composer: &mut ChatIn
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
     runtime.voice.set_enabled(enabled);
+    // Reference `LazyVoiceManager`: the audio surface is resolved from the
+    // configuration as it stands, so an edited active model, provider or
+    // credential variable takes effect on the next recording rather than at the
+    // next process start.
+    if let Some(view) = published_config_view(runtime) {
+        runtime.voice.resync(&view);
+    }
     composer.set_voice_enabled(enabled);
+}
+
+/// The `ConfigView` this session publishes, which is what the audio surface is
+/// resolved from.
+fn published_config_view(runtime: &mut InteractiveRuntime) -> Option<Value> {
+    runtime
+        .service
+        .public_call("config/read", json!({"sessionId": runtime.session_id}))
+        .ok()?
+        .get("config")
+        .cloned()
 }
 
 fn reset_selected_config(runtime: &mut Option<InteractiveRuntime>, state: &mut TuiState) {

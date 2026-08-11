@@ -11,7 +11,25 @@ use tokio_tungstenite::tungstenite::Message;
 use super::realtime::{message_json, prepare_transcription, session_update};
 use super::recorder::{AudioFailureSignal, enqueue_audio};
 use super::session::send_transcription_result;
+use super::settings::resolve_credential;
 use super::*;
+
+/// The transcription surface a test session resolves from, as the published
+/// view carries it.
+fn transcription_settings(api_base: &str) -> TranscriptionSettings {
+    TranscriptionSettings {
+        model: "fixture-transcribe-model".to_owned(),
+        sample_rate: 16_000,
+        encoding: "pcm_s16le".to_owned(),
+        target_streaming_delay_ms: 500,
+        api_base: api_base.to_owned(),
+        api_key_env_var: String::new(),
+    }
+}
+
+fn test_voice_config(api_base: &str) -> VoiceConfig {
+    VoiceConfig::resolve(&transcription_settings(api_base)).expect("test voice config")
+}
 
 struct ScriptedFactory {
     launches: Arc<AtomicUsize>,
@@ -244,8 +262,7 @@ async fn transcription_preparation_waits_for_the_remote_session() {
             "session.update"
         );
     });
-    let config =
-        VoiceConfig::from_api_base(&format!("http://{address}")).expect("test voice config");
+    let config = test_voice_config(&format!("http://{address}"));
     let preparation = tokio::spawn(async move {
         prepare_transcription(&SecretString::from("test-key".to_owned()), &config).await
     });
@@ -292,8 +309,7 @@ async fn saturated_audio_queue_ends_transcription_with_a_recoverable_error() {
             .expect("session created");
         let _ = socket.next().await.expect("session update");
     });
-    let config =
-        VoiceConfig::from_api_base(&format!("http://{address}")).expect("test voice config");
+    let config = test_voice_config(&format!("http://{address}"));
     let transcription = prepare_transcription(&SecretString::from("test-key".to_owned()), &config)
         .await
         .expect("transcription preparation");
@@ -376,8 +392,7 @@ async fn realtime_client_streams_pcm_and_maps_delta_and_done_events() {
             .await
             .expect("done");
     });
-    let config =
-        VoiceConfig::from_api_base(&format!("http://{address}")).expect("test voice config");
+    let config = test_voice_config(&format!("http://{address}"));
     assert_eq!(config.requested_sample_rate, 16_000);
     let config = config.with_sample_rate(48_000);
     let (audio_tx, audio_rx) = mpsc::channel(2);
@@ -410,17 +425,147 @@ async fn realtime_client_streams_pcm_and_maps_delta_and_done_events() {
     server.await.expect("test server");
 }
 
+/// The published view a document declaring one transcription surface produces.
+fn transcription_view(model: Value, provider: Value) -> Value {
+    json!({"transcription": {"model": model, "provider": provider}})
+}
+
 #[test]
-fn voice_url_and_session_update_match_the_mistral_contract() {
-    let config = VoiceConfig::from_api_base("https://api.mistral.ai/v1/chat/completions")
-        .expect("voice configuration");
+fn the_endpoint_and_the_session_frame_come_from_the_configured_entry() {
+    let settings = TranscriptionSettings::from_config_view(&transcription_view(
+        json!({
+            "name": "fixture-gateway-model",
+            "sampleRate": 8_000,
+            "encoding": "pcm_s16le",
+            "language": "en",
+            "targetStreamingDelayMs": 750,
+        }),
+        json!({"apiBase": "wss://gateway.fixture.invalid:8443", "apiKeyEnvVar": ""}),
+    ))
+    .expect("the configured surface resolves");
+    let config = VoiceConfig::resolve(&settings).expect("voice configuration");
     assert_eq!(
         config.endpoint.as_str(),
-        "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602"
+        "wss://gateway.fixture.invalid:8443/v1/audio/transcriptions/realtime\
+         ?model=fixture-gateway-model"
     );
-    let update: Value =
-        serde_json::from_str(&session_update(16_000, 500)).expect("session update JSON");
+    let update: Value = serde_json::from_str(&session_update(
+        &config.encoding,
+        config.requested_sample_rate,
+        config.target_streaming_delay_ms,
+    ))
+    .expect("session update JSON");
     assert_eq!(update["type"], "session.update");
     assert_eq!(update["session"]["audio_format"]["encoding"], "pcm_s16le");
-    assert_eq!(update["session"]["audio_format"]["sample_rate"], 16_000);
+    assert_eq!(update["session"]["audio_format"]["sample_rate"], 8_000);
+    assert_eq!(update["session"]["target_streaming_delay_ms"], 750);
+}
+
+/// A gateway served below a path prefix keeps it: the realtime path is appended
+/// to the configured `api_base`, not substituted for it.
+#[test]
+fn a_provider_path_prefix_is_kept_under_the_realtime_path() {
+    let mut settings = transcription_settings("https://gateway.fixture.invalid/audio/");
+    settings.model = "fixture-suffixed-model".to_owned();
+    let config = VoiceConfig::resolve(&settings).expect("voice configuration");
+    assert_eq!(
+        config.endpoint.as_str(),
+        "wss://gateway.fixture.invalid/audio/v1/audio/transcriptions/realtime\
+         ?model=fixture-suffixed-model"
+    );
+}
+
+#[test]
+fn a_configuration_declaring_no_transcription_model_resolves_to_an_error() {
+    let error = TranscriptionSettings::from_config_view(&transcription_view(
+        json!({"name": "", "sampleRate": 16_000, "encoding": "pcm_s16le"}),
+        json!({"apiBase": "wss://api.mistral.ai", "apiKeyEnvVar": ""}),
+    ))
+    .expect_err("an empty model list resolves to nothing");
+    assert!(error.contains("transcribe_models"), "{error}");
+}
+
+#[test]
+fn an_endpoint_that_is_not_a_url_is_reported_rather_than_opened() {
+    let error = VoiceConfig::resolve(&transcription_settings("not a url"))
+        .expect_err("an unusable endpoint is reported");
+    assert!(error.contains("invalid"), "{error}");
+    let error = VoiceConfig::resolve(&transcription_settings("ftp://gateway.fixture.invalid"))
+        .expect_err("an unsupported scheme is reported");
+    assert!(error.contains("ftp"), "{error}");
+}
+
+/// Reference `resolve_api_key`: the variable the provider names is what a
+/// session presents, an unnamed one leaves the runtime credential in place, and
+/// a named one that resolves to nothing fails naming itself.
+#[test]
+fn the_credential_is_read_under_the_variable_the_provider_names() {
+    assert_eq!(
+        resolve_credential("", "runtime-credential", |_| panic!(
+            "an empty variable is never looked up"
+        )),
+        Ok("runtime-credential".to_owned())
+    );
+    assert_eq!(
+        resolve_credential("FIXTURE_GATEWAY_TOKEN", "runtime-credential", |name| {
+            assert_eq!(name, "FIXTURE_GATEWAY_TOKEN");
+            Some("provider-credential".to_owned())
+        }),
+        Ok("provider-credential".to_owned())
+    );
+    let error = resolve_credential("FIXTURE_GATEWAY_TOKEN", "runtime-credential", |_| None)
+        .expect_err("a named variable that resolves to nothing fails");
+    assert!(error.contains("FIXTURE_GATEWAY_TOKEN"), "{error}");
+    assert!(!error.contains("runtime-credential"), "{error}");
+}
+
+/// The unresolved configuration reaches the operator where they asked for a
+/// recording, and nothing is connected to in the meantime.
+#[tokio::test]
+async fn a_start_on_an_unresolvable_configuration_reports_it_instead_of_connecting() {
+    let mut manager = VoiceManager::production(
+        &json!({"transcription": {"model": {"name": ""}, "provider": {"apiBase": ""}}}),
+        "runtime-credential",
+        std::path::Path::new("/nonexistent-vibe-home"),
+        true,
+    );
+    manager.apply_effects(&[InputEffect::RecordingStartRequested], 1);
+    let event = next_event(&mut manager).await;
+    let InputEvent::VoiceStartResolved {
+        generation: 1,
+        error: Some(error),
+    } = event
+    else {
+        panic!("the start reports the configuration: {event:?}");
+    };
+    assert!(error.contains("transcribe_models"), "{error}");
+    assert!(manager.active.is_none());
+}
+
+/// Reference `LazyVoiceManager`: the configuration is read again rather than
+/// kept from process start, so an edit reaches the next recording.
+#[tokio::test]
+async fn a_configuration_change_is_read_again_into_the_next_session() {
+    let mut manager = VoiceManager::production(
+        &json!({"transcription": {"model": {"name": ""}, "provider": {"apiBase": ""}}}),
+        "runtime-credential",
+        std::path::Path::new("/nonexistent-vibe-home"),
+        true,
+    );
+    assert!(manager.factory.is_err());
+    manager.resync(&transcription_view(
+        json!({
+            "name": "fixture-second-model",
+            "sampleRate": 24_000,
+            "encoding": "pcm_s16le",
+            "targetStreamingDelayMs": 250,
+        }),
+        json!({"apiBase": "wss://gateway.fixture.invalid", "apiKeyEnvVar": ""}),
+    ));
+    assert!(manager.factory.is_ok(), "the edited surface resolves");
+    manager.resync(&json!({}));
+    assert!(
+        manager.factory.is_err(),
+        "a configuration that stops resolving is read again too"
+    );
 }

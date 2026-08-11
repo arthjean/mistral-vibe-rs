@@ -320,11 +320,21 @@ pub(in crate::tui) fn interactive_test_runtime_with_server(
         pending_switch: None,
         telemetry: None,
         voice: VoiceManager::production(
-            "test-credential".to_owned(),
-            "https://provider.invalid",
+            &json!({
+                "transcription": {
+                    "model": {
+                        "name": "test-transcribe-model",
+                        "sampleRate": 16_000,
+                        "encoding": "pcm_s16le",
+                        "targetStreamingDelayMs": 500,
+                    },
+                    "provider": {"apiBase": "https://provider.invalid", "apiKeyEnvVar": ""},
+                },
+            }),
+            "test-credential",
+            std::path::Path::new("/nonexistent-vibe-home"),
             false,
-        )
-        .expect("test voice manager"),
+        ),
     }
 }
 

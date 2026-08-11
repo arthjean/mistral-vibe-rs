@@ -17,10 +17,10 @@
 //! The wire families are measured at the seam each side actually builds a
 //! request from: the corpus holds the URL the reference hands its websocket
 //! opener and the request it hands its HTTP sender, and this port answers with
-//! [`super::realtime::VoiceConfig`] and [`super::realtime::session_update`],
-//! which is what a running session opens and sends. Where this build resolves
-//! from something other than the configured provider, the ledger below names
-//! the story that closes the gap rather than the replay passing quietly.
+//! [`super::settings::TranscriptionSettings`], [`super::realtime::VoiceConfig`]
+//! and [`super::realtime::session_update`], resolved per document, which is what
+//! a running session opens and sends. Where this build still answers something
+//! else, the ledger below names it rather than the replay passing quietly.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -34,10 +34,8 @@ use vibe_core::config::registry::default_document;
 use vibe_core::config::{ConfigPaths, ConfigSnapshot, LayeredConfig};
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
-use super::realtime::{
-    DEFAULT_MODEL, DEFAULT_SAMPLE_RATE, DRAIN_TIMEOUT, TARGET_STREAMING_DELAY_MS, VoiceConfig,
-    session_update,
-};
+use super::realtime::{DRAIN_TIMEOUT, VoiceConfig, session_update};
+use super::settings::TranscriptionSettings;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/voice/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/voice.py";
@@ -49,10 +47,6 @@ const CORPUS_SCHEMA_VERSION: u32 = 1;
 const MINIMUM_SCENARIOS: usize = 200;
 /// The file the layered store reads a user document from.
 const CONFIG_FILE: &str = "config.toml";
-/// What `--api-base` defaults to, which is where this build takes the voice
-/// endpoint from today instead of from the configured provider. The corpus
-/// measures the gap; US-208 closes it.
-const CLI_API_BASE_DEFAULT: &str = "https://api.mistral.ai/v1/chat/completions";
 
 /// Every family the corpus declares and this replay reads. A family the
 /// capture adds without a reader here fails the replay by name rather than
@@ -107,50 +101,25 @@ const DIVERGENCES: &[(&str, &str)] = &[
     ),
     (
         "transcriptionResolution/cause/*",
-        "PENDING US-210: the reference raises on a document it cannot resolve, and this port's \
-         load repairs and its view falls back to the first declared entry, so no cause is \
-         reported",
+        "ACCEPTED: the reference raises on a document whose active alias or provider resolves to \
+         nothing and loses its whole configuration with it, while this port's view falls back to \
+         the first declared entry and keeps serving the document; the fallback is the published \
+         behavior `crates/vibe-core/src/config/view.rs` documents, and US-208 makes a session \
+         address whatever it resolves to",
     ),
     (
         "transcriptionResolution/configView/*",
-        "PENDING US-210: a resolution failure takes the reference's whole `ConfigView` down, and \
-         this port publishes a view for every document",
+        "ACCEPTED: the same divergence read at the projection; a resolution failure takes the \
+         reference's whole `ConfigView` down and this port publishes a view for every document it \
+         loads",
     ),
     (
         "speechResolution/cause/*",
-        "PENDING US-210: as above, on the read-aloud surface",
+        "ACCEPTED: as above, on the read-aloud surface",
     ),
     (
         "speechResolution/configView/*",
-        "PENDING US-210: as above, on the read-aloud surface",
-    ),
-    (
-        "wireFrames/transcription.endpointUrl/*",
-        "PENDING US-208: this build takes the voice endpoint from `--api-base` and hard-codes the \
-         model in its query, so a configured provider and a configured model name reach neither",
-    ),
-    (
-        "wireFrames/transcription.model/*",
-        "PENDING US-208: the model on the wire is a constant here, not the configured entry",
-    ),
-    (
-        "wireFrames/transcription.sampleRate/*",
-        "PENDING US-208: the session frame carries a constant sample rate, not the configured one",
-    ),
-    (
-        "wireFrames/transcription.targetStreamingDelayMs/*",
-        "PENDING US-208: the session frame carries a constant streaming delay, not the configured \
-         one",
-    ),
-    (
-        "wireFrames/transcription.credentialEnvVar/*",
-        "PENDING US-209: this build presents the credential it was started with and never reads \
-         the variable the provider names",
-    ),
-    (
-        "wireFrames/transcription.serverUrl/*",
-        "PENDING US-208: the server a session is opened against is the one `--api-base` names \
-         here, so a configured provider's `api_base` reaches no frame",
+        "ACCEPTED: as above, on the read-aloud surface",
     ),
     (
         "wireFrames/speech.*",
@@ -550,18 +519,23 @@ fn integer_at(view: &Value, pointer: &str) -> i64 {
 }
 
 /// The URL a session would open and the frame it would send, built the way a
-/// running client builds them: from the endpoint this build was started with.
+/// running client builds them: from the transcription surface of the view the
+/// document publishes.
 struct PortTranscriptionFrame {
     endpoint: String,
+    server_url: String,
     model: String,
     encoding: String,
     sample_rate: i64,
     target_streaming_delay_ms: i64,
+    credential_env_var: String,
 }
 
-fn port_transcription_frame() -> PortTranscriptionFrame {
-    let config = VoiceConfig::from_api_base(CLI_API_BASE_DEFAULT)
-        .expect("the shipped API base builds a voice endpoint");
+/// The frame a session opened against `view` would carry, or nothing where the
+/// configuration resolves to no session at all.
+fn port_transcription_frame(view: &Value) -> Option<PortTranscriptionFrame> {
+    let settings = TranscriptionSettings::from_config_view(view).ok()?;
+    let config = VoiceConfig::resolve(&settings).ok()?;
     let model = config
         .endpoint
         .query_pairs()
@@ -569,17 +543,20 @@ fn port_transcription_frame() -> PortTranscriptionFrame {
         .map(|(_, value)| value.into_owned())
         .unwrap_or_default();
     let frame: Value = serde_json::from_str(&session_update(
+        &config.encoding,
         config.requested_sample_rate,
         config.target_streaming_delay_ms,
     ))
     .expect("the session frame is JSON");
-    PortTranscriptionFrame {
+    Some(PortTranscriptionFrame {
         endpoint: config.endpoint.to_string(),
+        server_url: settings.api_base.clone(),
         model,
         encoding: string_at(&frame, "/session/audio_format/encoding"),
         sample_rate: integer_at(&frame, "/session/audio_format/sample_rate"),
         target_streaming_delay_ms: integer_at(&frame, "/session/target_streaming_delay_ms"),
-    }
+        credential_env_var: settings.api_key_env_var.clone(),
+    })
 }
 
 // --------------------------------------------------------------------------
@@ -758,7 +735,12 @@ fn run_constants(constants: &Constants, report: &mut Report) {
         &constants.vocabularies.audio_client,
         &vec![string_at(&view, "/transcription/provider/client")],
     );
-    let port_frame = port_transcription_frame();
+    // What a session opened on the shipped defaults would carry. The three
+    // values below used to be constants in the transport; they are read off the
+    // resolved session now, so the assertion is that the shipped configuration
+    // resolves what the reference ships rather than that a literal matches one.
+    let port_frame =
+        port_transcription_frame(&view).expect("the shipped defaults resolve a voice session");
     report.check(
         "constants",
         "transcriptionEncodings",
@@ -792,21 +774,21 @@ fn run_constants(constants: &Constants, report: &mut Report) {
         "defaultModel",
         "voice",
         &constants.transcribe.model_name,
-        &DEFAULT_MODEL.to_owned(),
+        &port_frame.model,
     );
     report.check(
         "constants",
         "defaultSampleRate",
         "voice",
         &integer_default("sample_rate"),
-        &i64::from(DEFAULT_SAMPLE_RATE),
+        &port_frame.sample_rate,
     );
     report.check(
         "constants",
         "defaultStreamingDelay",
         "voice",
         &integer_default("target_streaming_delay_ms"),
-        &i64::from(TARGET_STREAMING_DELAY_MS),
+        &port_frame.target_streaming_delay_ms,
     );
     report.check(
         "constants",
@@ -1027,16 +1009,14 @@ fn run_speech_resolution(corpus: &Corpus, report: &mut Report) {
 
 fn run_wire_frames(corpus: &Corpus, report: &mut Report) {
     let index = documents(corpus);
-    let port = port_transcription_frame();
     for case in &corpus.wire_frames {
         // A document this port cannot load leaves no session to open, so there
         // is no frame of its own to compare against the reference's.
-        if Loaded::from_document(document(&index, &case.case))
-            .view()
-            .is_none()
-        {
+        let Some(view) = Loaded::from_document(document(&index, &case.case)).view() else {
             continue;
-        }
+        };
+        let port = port_transcription_frame(&view)
+            .unwrap_or_else(|| panic!("`{}` resolves a voice session", case.case));
         if let Some(frame) = case.transcription.as_ref() {
             report.check(
                 "wireFrames",
@@ -1073,28 +1053,24 @@ fn run_wire_frames(corpus: &Corpus, report: &mut Report) {
                 &frame.target_streaming_delay_ms,
                 &port.target_streaming_delay_ms,
             );
-            // The credential a session presents is the one the provider names.
-            // This build presents whatever it was started with, so the compared
-            // value is the variable the view publishes and nothing this build
-            // reads.
+            // The credential a session presents is the one the provider names,
+            // so the variable the session resolved under is what answers here.
             report.check(
                 "wireFrames",
                 "transcription.credentialEnvVar",
                 &case.case,
                 &frame.credential.env_var,
-                &String::new(),
+                &port.credential_env_var,
             );
             // The server the reference's client holds is the `api_base` of the
-            // provider it resolved. This build opens its session against the
-            // endpoint it was started with, so that is what answers here; the
-            // provider it merely publishes in its view would report a
-            // conformance no session has.
+            // provider it resolved, and so is the one this session is opened
+            // against.
             report.check(
                 "wireFrames",
                 "transcription.serverUrl",
                 &case.case,
                 &frame.server_url,
-                &CLI_API_BASE_DEFAULT.to_owned(),
+                &port.server_url,
             );
             assert!(
                 frame

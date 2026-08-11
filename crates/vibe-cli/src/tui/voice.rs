@@ -1,8 +1,10 @@
 //! Voice input lifecycle and deterministic state boundary.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use serde_json::Value;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
@@ -11,6 +13,7 @@ use super::chat_input::{InputEffect, InputEvent};
 mod realtime;
 mod recorder;
 mod session;
+mod settings;
 mod state;
 
 pub use state::VoicePhase;
@@ -18,6 +21,7 @@ pub(crate) use state::{VoiceCommand, VoiceState, VoiceUpdate, VoiceUpdateOutcome
 
 use realtime::VoiceConfig;
 use session::ProductionVoiceSessionFactory;
+use settings::TranscriptionSettings;
 
 const UPDATE_QUEUE_CAPACITY: usize = 128;
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
@@ -48,7 +52,15 @@ pub(super) trait VoiceSessionFactory: Send + Sync {
 /// work to the deterministic composer reducer.
 pub(super) struct VoiceManager {
     enabled: bool,
-    factory: Arc<dyn VoiceSessionFactory>,
+    /// The session factory the configuration resolved to, or why it resolved to
+    /// none. A configuration this build cannot address is answered when a
+    /// recording is asked for, the way the reference answers one with a null
+    /// transcribe client, rather than taken as a startup failure.
+    factory: Result<Arc<dyn VoiceSessionFactory>, String>,
+    /// What a resolution needs beyond the configuration itself, kept so the
+    /// surface can be resolved again when the configuration changes.
+    fallback_credential: String,
+    vibe_home: PathBuf,
     updates_tx: mpsc::Sender<InputEvent>,
     updates_rx: mpsc::Receiver<InputEvent>,
     active: Option<ActiveVoice>,
@@ -57,23 +69,61 @@ pub(super) struct VoiceManager {
 }
 
 impl VoiceManager {
+    /// Resolves the transcription session from the published configuration:
+    /// the endpoint, the model, the wire values and the credential the provider
+    /// entry names, with the session's own credential standing in only where the
+    /// provider names no variable.
     pub(super) fn production(
-        credential: String,
-        api_base: &str,
+        config_view: &Value,
+        fallback_credential: &str,
+        vibe_home: &Path,
         enabled: bool,
-    ) -> Result<Self, String> {
-        let config = VoiceConfig::from_api_base(api_base)?;
-        Ok(Self::new(
-            Arc::new(ProductionVoiceSessionFactory::new(credential, config)),
+    ) -> Self {
+        let mut manager = Self::with_factory(
+            Err("Voice mode is not configured".to_owned()),
             enabled,
-        ))
+            fallback_credential.to_owned(),
+            vibe_home.to_path_buf(),
+        );
+        manager.resync(config_view);
+        manager
     }
 
+    /// Resolves the transcription surface again from the configuration as it
+    /// stands now.
+    ///
+    /// Reference `LazyVoiceManager`, which materializes its manager, and with it
+    /// its transcribe client, from the current configuration rather than from
+    /// the one the process started on: an operator who changes the active model
+    /// or its provider is recording against the new one on the next start. A
+    /// session already running keeps the endpoint it opened.
+    pub(super) fn resync(&mut self, config_view: &Value) {
+        self.factory = TranscriptionSettings::from_config_view(config_view).and_then(|settings| {
+            let credential = settings.credential(&self.fallback_credential, &self.vibe_home)?;
+            let config = VoiceConfig::resolve(&settings)?;
+            let factory: Arc<dyn VoiceSessionFactory> =
+                Arc::new(ProductionVoiceSessionFactory::new(credential, config));
+            Ok(factory)
+        });
+    }
+
+    #[cfg(test)]
     fn new(factory: Arc<dyn VoiceSessionFactory>, enabled: bool) -> Self {
+        Self::with_factory(Ok(factory), enabled, String::new(), PathBuf::new())
+    }
+
+    fn with_factory(
+        factory: Result<Arc<dyn VoiceSessionFactory>, String>,
+        enabled: bool,
+        fallback_credential: String,
+        vibe_home: PathBuf,
+    ) -> Self {
         let (updates_tx, updates_rx) = mpsc::channel(UPDATE_QUEUE_CAPACITY);
         Self {
             enabled,
             factory,
+            fallback_credential,
+            vibe_home,
             updates_tx,
             updates_rx,
             active: None,
@@ -145,6 +195,15 @@ impl VoiceManager {
             });
             return;
         }
+        // A configuration that resolves to no session is reported here, where
+        // the operator asked for a recording, and nothing is connected to.
+        if let Err(error) = &self.factory {
+            let _ = self.updates_tx.try_send(InputEvent::VoiceStartResolved {
+                generation,
+                error: Some(error.clone()),
+            });
+            return;
+        }
         if self.active.is_some() {
             return;
         }
@@ -156,10 +215,11 @@ impl VoiceManager {
     }
 
     fn start_now(&mut self, generation: u64) {
+        let Ok(factory) = self.factory.as_ref() else {
+            return;
+        };
         let (control, receiver) = watch::channel(VoiceControl::Running);
-        let task = self
-            .factory
-            .spawn(generation, self.updates_tx.clone(), receiver);
+        let task = factory.spawn(generation, self.updates_tx.clone(), receiver);
         self.active = Some(ActiveVoice {
             generation,
             control,

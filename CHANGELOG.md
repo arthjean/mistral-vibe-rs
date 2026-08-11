@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Address the transcription session the configuration names. The endpoint, the
+  model, the sample rate, the encoding and the target streaming delay now come
+  from `active_transcribe_model`, its `[[transcribe_models]]` entry and that
+  entry's provider instead of from constants and the LLM `--api-base`, so voice
+  mode works on a self-hosted or regional audio gateway, including one served
+  below a path prefix. The credential is read under the `api_key_env_var` the
+  provider declares, from the environment first and the credential store
+  second, and a provider naming no variable keeps the credential the session
+  started with. A configuration that resolves to no session no longer connects
+  to a default: the start reports it, naming the missing configuration or the
+  unset credential variable and never the secret. The audio surface is read
+  again on every configuration change, so an edited model or provider takes
+  effect on the next recording rather than at the next process start.
+
 - Give `[compaction_model]` the alias rule and the field defaults every
   `[[models]]` entry already had. A table declaring a name and a provider is
   published with an alias borrowed from its name, the `ModelConfig` defaults and

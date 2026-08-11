@@ -1314,18 +1314,25 @@ fn start_runtime(
         Some(preferences.mode.clone()),
         preferences.reasoning_effort.clone(),
     ))?;
-    let voice_enabled = service
+    // The audio surface is resolved from the configuration this session
+    // publishes, not from the LLM endpoint: the transcription model, its wire
+    // values, the provider's endpoint and the variable its credential is read
+    // from all come from the same view a settings screen renders.
+    let published_config = service
         .public_call("config/read", json!({"sessionId": session_id}))
         .ok()
-        .and_then(|result| {
-            result
-                .get("config")
-                .and_then(|config| config.get("voiceModeEnabled"))
-                .and_then(Value::as_bool)
-        })
+        .and_then(|result| result.get("config").cloned())
+        .unwrap_or(Value::Null);
+    let voice_enabled = published_config
+        .get("voiceModeEnabled")
+        .and_then(Value::as_bool)
         .unwrap_or(false);
-    let voice = VoiceManager::production(voice_credential, &arguments.api_base, voice_enabled)
-        .map_err(CliError::Terminal)?;
+    let voice = VoiceManager::production(
+        &published_config,
+        &voice_credential,
+        &startup::vibe_home_directory(arguments, working_directory),
+        voice_enabled,
+    );
     let session = service.session(&session_id)?;
     let agent_name = session
         .intent

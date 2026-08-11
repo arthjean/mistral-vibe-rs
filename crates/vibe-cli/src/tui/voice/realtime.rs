@@ -16,24 +16,31 @@ use url::Url;
 
 use crate::tui::chat_input::InputEvent;
 
-pub(super) const DEFAULT_MODEL: &str = "voxtral-mini-transcribe-realtime-2602";
-pub(super) const DEFAULT_SAMPLE_RATE: u32 = 16_000;
-pub(super) const TARGET_STREAMING_DELAY_MS: u32 = 500;
+use super::settings::TranscriptionSettings;
+
 pub(super) const START_TIMEOUT: Duration = Duration::from_secs(10);
 pub(super) const DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+/// The path the realtime transcription endpoint is served under, appended to
+/// whatever path the configured `api_base` already carries so a gateway served
+/// below a prefix is addressed under it.
+const REALTIME_PATH: &str = "/v1/audio/transcriptions/realtime";
 const USER_AGENT_VALUE: &str = concat!("mistral-vibe-rs/", env!("CARGO_PKG_VERSION"));
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct VoiceConfig {
     pub(super) endpoint: Url,
     pub(super) requested_sample_rate: u32,
+    pub(super) encoding: String,
     pub(super) target_streaming_delay_ms: u32,
 }
 
 impl VoiceConfig {
-    pub(super) fn from_api_base(api_base: &str) -> Result<Self, String> {
-        let mut endpoint =
-            Url::parse(api_base).map_err(|error| format!("Voice API URL is invalid: {error}"))?;
+    /// The session the configured provider and model describe: the provider's
+    /// endpoint carries the model in its query, and the model's own wire values
+    /// are what the session frame is built from.
+    pub(super) fn resolve(settings: &TranscriptionSettings) -> Result<Self, String> {
+        let mut endpoint = Url::parse(&settings.api_base)
+            .map_err(|error| format!("Voice API URL is invalid: {error}"))?;
         let websocket_scheme = match endpoint.scheme() {
             "https" | "wss" => "wss",
             "http" | "ws" => "ws",
@@ -42,15 +49,17 @@ impl VoiceConfig {
         endpoint
             .set_scheme(websocket_scheme)
             .map_err(|()| "Voice API URL scheme could not be set".to_owned())?;
-        endpoint.set_path("/v1/audio/transcriptions/realtime");
+        let prefix = endpoint.path().trim_end_matches('/').to_owned();
+        endpoint.set_path(&format!("{prefix}{REALTIME_PATH}"));
         endpoint.set_query(None);
         endpoint
             .query_pairs_mut()
-            .append_pair("model", DEFAULT_MODEL);
+            .append_pair("model", &settings.model);
         Ok(Self {
             endpoint,
-            requested_sample_rate: DEFAULT_SAMPLE_RATE,
-            target_streaming_delay_ms: TARGET_STREAMING_DELAY_MS,
+            requested_sample_rate: settings.sample_rate,
+            encoding: settings.encoding.clone(),
+            target_streaming_delay_ms: settings.target_streaming_delay_ms,
         })
     }
 
@@ -89,6 +98,7 @@ pub(super) async fn prepare_transcription(
     websocket
         .send(Message::Text(
             session_update(
+                &config.encoding,
                 config.requested_sample_rate,
                 config.target_streaming_delay_ms,
             )
@@ -195,12 +205,16 @@ async fn wait_for_session(websocket: &mut RealtimeSocket) -> Result<(), String> 
     .map_err(|_| "Transcription session setup timed out".to_owned())?
 }
 
-pub(super) fn session_update(sample_rate: u32, target_streaming_delay_ms: u32) -> String {
+pub(super) fn session_update(
+    encoding: &str,
+    sample_rate: u32,
+    target_streaming_delay_ms: u32,
+) -> String {
     json!({
         "type": "session.update",
         "session": {
             "audio_format": {
-                "encoding": "pcm_s16le",
+                "encoding": encoding,
                 "sample_rate": sample_rate,
             },
             "target_streaming_delay_ms": target_streaming_delay_ms,
