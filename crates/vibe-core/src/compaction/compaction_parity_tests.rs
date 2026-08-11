@@ -73,8 +73,9 @@ const DIVERGENCES: &[(&str, &str)] = &[
     ),
     (
         "managerCallType/callType",
-        "The reference labels the compaction request with a telemetry call type this port does \
-         not model; it marks the same request through the provider metadata instead",
+        "The reference labels the compaction request with the telemetry call type its request \
+         census reads back; no model call here is routed through a census yet, so this port marks \
+         the same request through the provider metadata instead",
     ),
 ];
 
