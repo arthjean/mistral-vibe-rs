@@ -23,6 +23,7 @@ pub enum OverlayKind {
     McpAuth,
     Connectors,
     Voice,
+    VoiceModel,
     Debug,
     Status,
     DataRetention,

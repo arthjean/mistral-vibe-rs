@@ -4,8 +4,8 @@ use super::super::chat_input::ChatInputState;
 use super::super::controls::ControlState;
 use super::super::interaction::{ConfigLayerTarget, OverlayAction, OverlayKind};
 use super::super::pickers::{
-    config_choice_overlay, config_target_overlay, remote_project_create_overlay, theme_overlay,
-    thinking_overlay,
+    VOICE_MODEL_FIELDS, config_choice_overlay, config_target_overlay,
+    remote_project_create_overlay, theme_overlay, thinking_overlay,
 };
 use super::super::setup::ResolvedTheme;
 use super::super::state::TuiState;
@@ -17,7 +17,7 @@ use super::config::{
 };
 use super::mcp::{McpEffect, reduce_auth_action};
 use super::{
-    OverlayEffect, resume_selected_session, show_config, show_model, show_voice,
+    OverlayEffect, resume_selected_session, show_config, show_model, show_voice, show_voice_model,
     sync_voice_preference,
 };
 
@@ -182,6 +182,15 @@ pub(super) async fn select_overlay_item(
             return Some(OverlayEffect::Mcp(reduce_auth_action(&action)));
         }
         OverlayKind::Voice => {
+            // The two active-model fields open their own choice list; every
+            // other entry of this overlay is a toggle.
+            if VOICE_MODEL_FIELDS
+                .into_iter()
+                .any(|(field, _, _)| field == item.id)
+            {
+                show_voice_model(runtime, state, &item.id);
+                return None;
+            }
             let current = configured_value(runtime, &item.id)
                 .and_then(|value| value.as_bool())
                 .unwrap_or(false);
@@ -194,6 +203,26 @@ pub(super) async fn select_overlay_item(
                 super::config::apply_render_preferences(runtime, state);
                 show_voice(runtime, state);
             }
+        }
+        OverlayKind::VoiceModel => {
+            let OverlayAction::ConfigChoice { path, value } = item.action else {
+                state.push_diagnostic("Audio model choice is malformed");
+                return None;
+            };
+            let target = selected_config_target(runtime).unwrap_or_else(|| "user".to_owned());
+            if persist_config_setting(runtime, &target, &[path.as_str()], value, false, state) {
+                // Both audio surfaces are resolved again where the write
+                // landed: `sync_voice_preference` rebuilds the transcription
+                // session and `apply_render_preferences` the speech client, so
+                // the next recording and the next narrated turn address the
+                // model that was just chosen.
+                sync_voice_preference(runtime, composer);
+                super::config::apply_render_preferences(runtime, state);
+            }
+            // A write that failed already reported why; reopening the settings
+            // from the configuration as it stands leaves the previous value
+            // selected rather than showing one that never landed.
+            show_voice(runtime, state);
         }
         OverlayKind::Proxy => {
             let current =

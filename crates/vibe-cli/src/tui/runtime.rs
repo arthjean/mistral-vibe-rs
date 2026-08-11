@@ -247,6 +247,20 @@ pub(in crate::tui) fn interactive_test_runtime_with_server(
     session_id: &str,
     server: vibe_app_server::server::AppServer,
 ) -> InteractiveRuntime {
+    interactive_test_runtime_with_trust(session_id, server, true)
+}
+
+/// The same runtime with the session's workspace trust chosen by the caller.
+///
+/// `config/*` is dispatched against the attached session's trust, so a test
+/// that needs a project write refused asks for an untrusted session rather than
+/// relying on a filesystem the write would fail on for another reason.
+#[cfg(test)]
+pub(in crate::tui) fn interactive_test_runtime_with_trust(
+    session_id: &str,
+    server: vibe_app_server::server::AppServer,
+    trusted: bool,
+) -> InteractiveRuntime {
     use vibe_app_server::client::{LiveDriverConfig, SessionOptions};
     use vibe_core::compaction::manager::CompactionPromptResolution;
 
@@ -274,7 +288,7 @@ pub(in crate::tui) fn interactive_test_runtime_with_server(
             working_directory: "/workspace".to_owned(),
             session_id: Some(session_id.to_owned()),
             add_directories: Vec::new(),
-            trusted: true,
+            trusted,
             agent: None,
             tool_filters: Vec::new(),
             enabled_tools: Vec::new(),

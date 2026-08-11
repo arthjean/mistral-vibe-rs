@@ -9,6 +9,10 @@ mod mcp;
 mod overlay;
 mod runtime;
 
+#[cfg(test)]
+#[path = "workflow/audio_surface_tests.rs"]
+mod audio_surface_tests;
+
 use super::chat_input::ChatInputState;
 use super::clipboard::{SystemClipboard, SystemClipboardPort};
 use super::commands::{CommandId, parse_command_in};
@@ -16,8 +20,9 @@ use super::controls::ControlState;
 use super::debug_console::{DebugConsole, PAGE_SIZE as DEBUG_PAGE_SIZE};
 use super::interaction::{Overlay, OverlayKind, RemoteProjectAction, TeleportPushAction};
 use super::pickers::{
-    config_overlay, help_overlay, model_overlay, proxy_overlay, rewind_targets, sessions_overlay,
-    status_overlay, theme_overlay, thinking_overlay, voice_overlay,
+    VOICE_MODEL_FIELDS, audio_model_aliases, config_overlay, help_overlay, model_overlay,
+    proxy_overlay, rewind_targets, sessions_overlay, status_overlay, theme_overlay,
+    thinking_overlay, voice_model_overlay, voice_overlay,
 };
 use super::rewind::{RewindEffect, RewindState, reduce_key as reduce_rewind_key};
 use super::session_picker::{
@@ -724,8 +729,41 @@ pub(super) fn show_rewind(runtime: &mut InteractiveRuntime, state: &mut TuiState
 
 fn show_voice(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
     if let Some(fields) = config::published_fields(runtime, state) {
-        state.overlay = Some(voice_overlay(&fields));
+        let view = published_config_view(runtime).unwrap_or(Value::Null);
+        state.overlay = Some(voice_overlay(&fields, &view));
     }
+}
+
+/// The choice list one audio family offers, opened from the voice settings.
+///
+/// Reference `_apply_dynamic_choices`: the two active-model fields are strings
+/// on the wire and choice lists on the screen, and the options are the aliases
+/// the projection publishes rather than anything the client invents.
+fn show_voice_model(runtime: &mut InteractiveRuntime, state: &mut TuiState, field: &str) {
+    let Some((_, list, label)) = VOICE_MODEL_FIELDS
+        .into_iter()
+        .find(|(name, _, _)| *name == field)
+    else {
+        return;
+    };
+    let Some(fields) = config::published_fields(runtime, state) else {
+        return;
+    };
+    let current = fields
+        .get(field)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let view = published_config_view(runtime).unwrap_or(Value::Null);
+    let aliases = audio_model_aliases(&view, list, &current);
+    if aliases.is_empty() {
+        state.push_diagnostic(format!(
+            "No {} is declared; add one before selecting it",
+            label.to_lowercase()
+        ));
+        return;
+    }
+    state.overlay = Some(voice_model_overlay(field, label, &aliases, &current));
 }
 
 fn show_proxy(runtime: &mut InteractiveRuntime, state: &mut TuiState) {

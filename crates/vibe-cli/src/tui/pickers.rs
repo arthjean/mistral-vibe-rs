@@ -413,22 +413,107 @@ pub fn sessions_overlay(result: &Value, current_session_id: &str) -> Overlay {
     Overlay::new(OverlayKind::Sessions, "Saved sessions", items)
 }
 
+/// The two audio families the voice settings publish a choice list for, as
+/// `(field, the `ConfigView` alias list that feeds it, label)`.
+///
+/// The reference promotes exactly these two fields from plain strings to
+/// enums when its settings screen renders them, and builds each list from the
+/// aliases the projection publishes
+/// (`vibe/cli/textual_ui/screens/config/config_screen.py:110-111` reading
+/// `vibe/app_server/config.py:73-74`).
+pub(super) const VOICE_MODEL_FIELDS: [(&str, &str, &str); 2] = [
+    (
+        "active_transcribe_model",
+        "transcribeModels",
+        "Transcription model",
+    ),
+    ("active_tts_model", "ttsModels", "Speech model"),
+];
+
+/// `snapshot` is the published field document and `view` the `ConfigView` the
+/// two alias lists live on, because the field surface publishes the audio
+/// families as the entry lists they are written as and only the view projects
+/// them down to aliases.
 #[must_use]
-pub fn voice_overlay(snapshot: &Value) -> Overlay {
+pub fn voice_overlay(snapshot: &Value, view: &Value) -> Overlay {
     let config = snapshot.get("config").unwrap_or(snapshot);
-    Overlay::new(
-        OverlayKind::Voice,
-        "Voice settings",
-        [
-            ("voice_mode_enabled", "Voice mode"),
-            ("narrator_enabled", "Narrator (experimental)"),
-        ]
+    let mut items = [
+        ("voice_mode_enabled", "Voice mode"),
+        ("narrator_enabled", "Narrator (experimental)"),
+    ]
+    .into_iter()
+    .map(|(key, label)| {
+        let enabled = config.get(key).and_then(Value::as_bool).unwrap_or(false);
+        OverlayItem::new(key, label, if enabled { "On" } else { "Off" }, false)
+    })
+    .collect::<Vec<_>>();
+    items.extend(VOICE_MODEL_FIELDS.map(|(field, list, label)| {
+        let current = config
+            .get(field)
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        // A family declaring one entry still shows it: the reference offers a
+        // one-option list rather than hiding the field.
+        let declared = audio_model_aliases(view, list, current).len();
+        OverlayItem::new(
+            field,
+            label,
+            format!(
+                "{} · {declared} declared",
+                if current.is_empty() { "—" } else { current }
+            ),
+            false,
+        )
+    }));
+    Overlay::new(OverlayKind::Voice, "Voice settings", items)
+}
+
+/// The aliases one audio family publishes, which is what its choice list is
+/// built from.
+///
+/// The configured value is kept even when the list does not carry it, so a
+/// session running on an alias the active configuration no longer declares
+/// still shows what it runs on, exactly as the model picker does.
+#[must_use]
+pub fn audio_model_aliases(view: &Value, list: &str, current: &str) -> Vec<String> {
+    let mut aliases = view
+        .get(list)
+        .and_then(Value::as_array)
         .into_iter()
-        .map(|(key, label)| {
-            let enabled = config.get(key).and_then(Value::as_bool).unwrap_or(false);
-            OverlayItem::new(key, label, if enabled { "On" } else { "Off" }, false)
-        })
-        .collect(),
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+    if !current.is_empty() && !aliases.iter().any(|alias| alias == current) {
+        aliases.push(current.to_owned());
+    }
+    aliases.sort();
+    aliases.dedup();
+    aliases
+}
+
+/// The choice list one audio family offers, written back through the same
+/// configuration path every other choice overlay writes through.
+#[must_use]
+pub fn voice_model_overlay(field: &str, label: &str, aliases: &[String], current: &str) -> Overlay {
+    Overlay::new(
+        OverlayKind::VoiceModel,
+        format!("Select {}", label.to_lowercase()),
+        aliases
+            .iter()
+            .map(|alias| {
+                OverlayItem::new(
+                    format!("{field}:{alias}"),
+                    alias.clone(),
+                    if alias == current { "current" } else { "" },
+                    false,
+                )
+                .with_action(OverlayAction::ConfigChoice {
+                    path: field.to_owned(),
+                    value: Value::String(alias.clone()),
+                })
+            })
+            .collect(),
     )
 }
 

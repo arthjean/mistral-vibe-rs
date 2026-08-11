@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Pick the transcription and speech model from the voice settings. `/voice` now
+  offers `active_transcribe_model` and `active_tts_model` beside the two
+  toggles, each as a choice list built from the aliases the configuration
+  publishes, including the entry a family declares on its own. A confirmed
+  choice is written through the same configuration path every other setting is,
+  and both audio surfaces are resolved again from it, so the next recording and
+  the next narrated turn address the model that was chosen. A write that cannot
+  land leaves the previous value selected and says why. A `[[tts_models]]` entry
+  now publishes its output container as a closed vocabulary rather than as a
+  free string.
+
 - Speak the turn summary the narrator produces. With `narrator_enabled` on, a
   completed turn is posted to the `[[tts_models]]` entry `active_tts_model`
   names, at its provider's `api_base`, carrying that entry's model, voice and

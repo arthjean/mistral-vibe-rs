@@ -74,9 +74,9 @@ const METADATA: [&str; 4] = ["schemaVersion", "reference", "note", "documents"];
 /// starts with the prefix, which is how a divergence that reproduces across
 /// every document is recorded once.
 ///
-/// Most entries here are pending rather than accepted: this epic builds the
-/// instrument, and EP-061 and EP-062 are what remove the rows. The staleness
-/// check is what forces a row out once its story lands.
+/// Every entry here is now an accepted divergence: EP-061, EP-062 and EP-063
+/// removed the pending rows their stories closed, and the staleness check is
+/// what forces a row out once its behavior conforms.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
         "constants/providerApiKeyEnvVarDefault/*",
@@ -84,11 +84,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
          and fills it per shipped provider, so the field default and the shipped value differ; \
          this port materializes whole provider entries in its default document, and the defaults \
          view it answers with here is the shipped variable rather than the field default",
-    ),
-    (
-        "constants/speechOutputFormats/*",
-        "PENDING US-214: the speech transport posts whatever format the active entry declares, \
-         and the audio model choice that publishes the vocabulary itself is not built yet",
     ),
     (
         "constants/recordingModes/*",
@@ -506,6 +501,25 @@ fn port_cause(loaded: &Loaded) -> &'static str {
     }
 }
 
+/// The output containers this build publishes for a `[[tts_models]]` entry.
+///
+/// The reference declares them as a literal on `TTSModelConfig.response_format`;
+/// this port declares the same closed set on the field schema `config/fields/read`
+/// serves, which is what a settings surface builds its choice list from.
+fn published_speech_output_formats() -> Option<Vec<String>> {
+    let schema = vibe_core::config::registry::FIELDS
+        .iter()
+        .find(|field| field.name == "tts_models")?
+        .schema_extra;
+    serde_json::from_str::<Value>(schema)
+        .ok()?
+        .pointer("/items/properties/response_format/enum")?
+        .as_array()?
+        .iter()
+        .map(|value| value.as_str().map(ToOwned::to_owned))
+        .collect()
+}
+
 fn string_at(view: &Value, pointer: &str) -> String {
     view.pointer(pointer)
         .and_then(Value::as_str)
@@ -793,12 +807,15 @@ fn run_constants(constants: &Constants, report: &mut Report) {
         &constants.vocabularies.transcription_encoding,
         &vec![port_frame.encoding.clone()],
     );
+    // US-214 published the vocabulary: the settings surface offers the speech
+    // model, and the `tts_models` schema declares the containers a chosen entry
+    // may name, which is what the reference's own literal declares.
     report.check(
         "constants",
         "speechOutputFormats",
         "vocabulary",
         &Some(constants.vocabularies.speech_output_format.clone()),
-        &None,
+        &published_speech_output_formats(),
     );
     report.check(
         "constants",
