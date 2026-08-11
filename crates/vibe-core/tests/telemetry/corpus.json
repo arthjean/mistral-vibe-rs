@@ -1,0 +1,4570 @@
+{
+  "attachmentCounts": [
+    {
+      "case": "no-message",
+      "counts": {},
+      "supportsImages": true
+    },
+    {
+      "case": "no-images",
+      "counts": {},
+      "supportsImages": true
+    },
+    {
+      "case": "images-with-support",
+      "counts": {
+        "image": 2
+      },
+      "supportsImages": true
+    },
+    {
+      "case": "images-without-support",
+      "counts": {},
+      "supportsImages": false
+    }
+  ],
+  "baseMetadata": [
+    {
+      "base": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "experiments": {
+          "ab": "on"
+        },
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "experiments",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "case": "full-launch-context-main_call",
+      "launchFields": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "terminal_emulator": "ghostty"
+      },
+      "request": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "call_source": "vibe_code",
+        "call_type": "main_call",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "message_id": "oracle-message",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": {
+        "client_name": "oracle-client",
+        "entrypoint": "cli"
+      }
+    },
+    {
+      "base": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "experiments": {
+          "ab": "on"
+        },
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "experiments",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "case": "full-launch-context-secondary_call",
+      "launchFields": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "terminal_emulator": "ghostty"
+      },
+      "request": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "call_source": "vibe_code",
+        "call_type": "secondary_call",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": {
+        "client_name": "oracle-client",
+        "entrypoint": "cli"
+      }
+    },
+    {
+      "base": {
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "user_plan",
+        "version"
+      ],
+      "case": "no-launch-context-main_call",
+      "launchFields": null,
+      "request": {
+        "call_source": "vibe_code",
+        "call_type": "main_call",
+        "message_id": "oracle-message",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "call_source",
+        "call_type",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "user_plan",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": null
+    },
+    {
+      "base": {
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "user_plan",
+        "version"
+      ],
+      "case": "no-launch-context-secondary_call",
+      "launchFields": null,
+      "request": {
+        "call_source": "vibe_code",
+        "call_type": "secondary_call",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "call_source",
+        "call_type",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "user_plan",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": null
+    },
+    {
+      "base": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "terminal_emulator",
+        "version"
+      ],
+      "case": "no-session-main_call",
+      "launchFields": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "terminal_emulator": "ghostty"
+      },
+      "request": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "call_source": "vibe_code",
+        "call_type": "main_call",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "message_id": "oracle-message",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "message_id",
+        "os",
+        "os_version",
+        "terminal_emulator",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": {
+        "client_name": "oracle-client",
+        "entrypoint": "cli"
+      }
+    },
+    {
+      "base": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "terminal_emulator",
+        "version"
+      ],
+      "case": "no-session-secondary_call",
+      "launchFields": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "terminal_emulator": "ghostty"
+      },
+      "request": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "call_source": "vibe_code",
+        "call_type": "secondary_call",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "terminal_emulator",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": {
+        "client_name": "oracle-client",
+        "entrypoint": "cli"
+      }
+    },
+    {
+      "base": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "session_id",
+        "terminal_emulator",
+        "version"
+      ],
+      "case": "empty-experiments-main_call",
+      "launchFields": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "terminal_emulator": "ghostty"
+      },
+      "request": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "call_source": "vibe_code",
+        "call_type": "main_call",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "message_id": "oracle-message",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "message_id",
+        "os",
+        "os_version",
+        "session_id",
+        "terminal_emulator",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": {
+        "client_name": "oracle-client",
+        "entrypoint": "cli"
+      }
+    },
+    {
+      "base": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "session_id",
+        "terminal_emulator",
+        "version"
+      ],
+      "case": "empty-experiments-secondary_call",
+      "launchFields": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "terminal_emulator": "ghostty"
+      },
+      "request": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "call_source": "vibe_code",
+        "call_type": "secondary_call",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "session_id",
+        "terminal_emulator",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": {
+        "client_name": "oracle-client",
+        "entrypoint": "cli"
+      }
+    },
+    {
+      "base": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "version"
+      ],
+      "case": "no-terminal-emulator-main_call",
+      "launchFields": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "terminal_emulator": null
+      },
+      "request": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "call_source": "vibe_code",
+        "call_type": "main_call",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "message_id": "oracle-message",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": {
+        "client_name": "oracle-client",
+        "entrypoint": "cli"
+      }
+    },
+    {
+      "base": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "version"
+      ],
+      "case": "no-terminal-emulator-secondary_call",
+      "launchFields": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "terminal_emulator": null
+      },
+      "request": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "call_source": "vibe_code",
+        "call_type": "secondary_call",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": {
+        "client_name": "oracle-client",
+        "entrypoint": "cli"
+      }
+    },
+    {
+      "base": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "experiments": {
+          "ab": "off"
+        },
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "experiments",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "version"
+      ],
+      "case": "no-user-plan-main_call",
+      "launchFields": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "terminal_emulator": "ghostty"
+      },
+      "request": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "call_source": "vibe_code",
+        "call_type": "main_call",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "message_id": "oracle-message",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": {
+        "client_name": "oracle-client",
+        "entrypoint": "cli"
+      }
+    },
+    {
+      "base": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "experiments": {
+          "ab": "off"
+        },
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "baseKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "experiments",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "version"
+      ],
+      "case": "no-user-plan-secondary_call",
+      "launchFields": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "terminal_emulator": "ghostty"
+      },
+      "request": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "call_source": "vibe_code",
+        "call_type": "secondary_call",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "version": "{version}"
+      },
+      "requestKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "version"
+      ],
+      "requestKeysWithNulls": [
+        "agent_entrypoint",
+        "agent_version",
+        "call_source",
+        "call_type",
+        "client_name",
+        "client_version",
+        "experiments",
+        "message_id",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "sentryTags": {
+        "client_name": "oracle-client",
+        "entrypoint": "cli"
+      }
+    }
+  ],
+  "constants": {
+    "endpoint": {
+      "defaultApiKeyVariable": "MISTRAL_API_KEY",
+      "defaultBaseUrl": "https://api.mistral.ai",
+      "defaultMistralServerUrl": "https://api.mistral.ai",
+      "eventsPath": "/v1/datalake/events"
+    },
+    "logging": {
+      "backupCount": 0,
+      "defaultLevel": "WARNING",
+      "defaultMaxBytes": 10485760,
+      "fieldOrder": [
+        "timestamp",
+        "ppid",
+        "pid",
+        "level",
+        "message"
+      ],
+      "fieldSeparator": " ",
+      "levels": [
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL"
+      ],
+      "loggerName": "vibe",
+      "patternDigest": {
+        "digest": "943341824f8d68e4ddc5ffc58eb94bfeac690139e3055081ba0fed3b1f6c8375",
+        "length": 125
+      },
+      "patternGroups": 5,
+      "pollIntervalSeconds": 0.5,
+      "readChunkSize": 8192,
+      "relativeLogFile": "logs/vibe.log"
+    },
+    "tracing": {
+      "agentName": "mistral-vibe",
+      "hookNameKey": "vibe.hook.name",
+      "hookTypeKey": "vibe.hook.type",
+      "mistralOtelPath": "/telemetry",
+      "mistralProviderValue": "mistral_ai",
+      "operationNames": {
+        "chat": "chat",
+        "executeTool": "execute_tool",
+        "invokeAgent": "invoke_agent"
+      },
+      "providerApiStyleKey": "vibe.provider.api_style",
+      "requestCallTypeKey": "vibe.request.call_type",
+      "requestMessageIdKey": "vibe.request.message_id",
+      "requestStreamingKey": "vibe.request.streaming",
+      "semanticKeys": {
+        "agentName": "gen_ai.agent.name",
+        "conversationId": "gen_ai.conversation.id",
+        "httpRequestMethod": "http.request.method",
+        "httpResponseStatusCode": "http.response.status_code",
+        "httpUrl": "http.url",
+        "operationName": "gen_ai.operation.name",
+        "providerName": "gen_ai.provider.name",
+        "requestMaxTokens": "gen_ai.request.max_tokens",
+        "requestModel": "gen_ai.request.model",
+        "requestTemperature": "gen_ai.request.temperature",
+        "responseFinishReasons": "gen_ai.response.finish_reasons",
+        "responseId": "gen_ai.response.id",
+        "responseModel": "gen_ai.response.model",
+        "toolCallArguments": "gen_ai.tool.call.arguments",
+        "toolCallId": "gen_ai.tool.call.id",
+        "toolCallResult": "gen_ai.tool.call.result",
+        "toolName": "gen_ai.tool.name",
+        "toolType": "gen_ai.tool.type",
+        "usageInputTokens": "gen_ai.usage.input_tokens",
+        "usageOutputTokens": "gen_ai.usage.output_tokens"
+      },
+      "tracerName": "mistral_vibe",
+      "tracesExportPath": "v1/traces"
+    },
+    "transport": {
+      "authorizationScheme": "Bearer",
+      "connectTimeoutSeconds": 5.0,
+      "contentType": "application/json",
+      "headerNames": [
+        "Content-Type",
+        "Authorization",
+        "User-Agent"
+      ],
+      "maxConnections": 10,
+      "maxKeepaliveConnections": 5,
+      "timeoutSeconds": 5.0,
+      "userAgentGeneric": "Mistral-Vibe/{version}",
+      "userAgentMistral": "mistral-client-python/Mistral-Vibe/{version}",
+      "userAgentUnknown": "Mistral-Vibe/{version}"
+    },
+    "vocabularies": {
+      "agentEntrypoints": [
+        "cli",
+        "acp",
+        "programmatic",
+        "unknown"
+      ],
+      "attachmentKinds": [
+        "image"
+      ],
+      "baseMetadataFields": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "os",
+        "os_version",
+        "version",
+        "terminal_emulator",
+        "session_id",
+        "parent_session_id",
+        "experiments",
+        "user_plan"
+      ],
+      "callSourceDefault": "vibe_code",
+      "callTypes": [
+        "main_call",
+        "secondary_call"
+      ],
+      "otelRedactionModes": [
+        "default",
+        "none",
+        "strict"
+      ],
+      "projectSelectionSources": [
+        "saved_link",
+        "selected_existing",
+        "matched_project",
+        "created_project",
+        "cancelled"
+      ],
+      "remoteProjectOutcomes": [
+        "configured",
+        "created",
+        "unlinked",
+        "cancelled"
+      ],
+      "requestMetadataFields": [
+        "call_type",
+        "call_source",
+        "message_id"
+      ],
+      "teleportContextSummaryStatuses": [
+        "skipped",
+        "generated",
+        "failed"
+      ],
+      "teleportFailureStages": [
+        "no_history",
+        "ineligible",
+        "context_summary",
+        "git_check",
+        "push",
+        "workflow_start",
+        "cancelled"
+      ],
+      "terminalEmulators": [
+        "vscode",
+        "vscode_insiders",
+        "cursor",
+        "jetbrains",
+        "apple_terminal",
+        "iterm2",
+        "wezterm",
+        "ghostty",
+        "alacritty",
+        "kitty",
+        "hyper",
+        "windows_terminal",
+        "unknown"
+      ]
+    }
+  },
+  "documents": [
+    {
+      "id": "mistral-active",
+      "toml": "\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n"
+    },
+    {
+      "id": "telemetry-disabled",
+      "toml": "\nenable_telemetry = false\nactive_model = \"oracle\"\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n"
+    },
+    {
+      "id": "third-party-only",
+      "toml": "\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[[providers]]\nname = \"third-party\"\napi_base = \"https://third-party.example.test/v1\"\napi_key_env_var = \"ORACLE_THIRD_PARTY_KEY\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"third-party\"\nalias = \"oracle\"\n"
+    },
+    {
+      "id": "third-party-active-mistral-configured",
+      "toml": "\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[[providers]]\nname = \"third-party\"\napi_base = \"https://third-party.example.test/v1\"\napi_key_env_var = \"ORACLE_THIRD_PARTY_KEY\"\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"third-party\"\nalias = \"oracle\"\n"
+    },
+    {
+      "id": "mistral-behind-a-proxy",
+      "toml": "\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://proxy.example.test/gateway/v1\"\napi_key_env_var = \"ORACLE_PROXY_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n"
+    },
+    {
+      "id": "mistral-base-without-a-version-segment",
+      "toml": "\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://bare.example.test\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n"
+    },
+    {
+      "id": "mistral-without-a-resolvable-key",
+      "toml": "\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_ABSENT_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n"
+    },
+    {
+      "id": "mistral-with-the-default-key-variable",
+      "toml": "\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n"
+    }
+  ],
+  "envelope": [
+    {
+      "active": true,
+      "bodyKeys": [
+        "event",
+        "properties"
+      ],
+      "case": "mistral-active-correlation-no",
+      "configuration": "mistral-active",
+      "contentType": "application/json",
+      "correlationId": null,
+      "correlationIdRequested": false,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "init_duration_ms": 1234,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "init_duration_ms",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "init_duration_ms": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://api.mistral.ai/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    },
+    {
+      "active": true,
+      "bodyKeys": [
+        "correlation_id",
+        "event",
+        "properties"
+      ],
+      "case": "mistral-active-correlation-yes",
+      "configuration": "mistral-active",
+      "contentType": "application/json",
+      "correlationId": "oracle-correlation",
+      "correlationIdRequested": true,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "init_duration_ms": 1234,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "init_duration_ms",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "init_duration_ms": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://api.mistral.ai/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    },
+    {
+      "active": false,
+      "bodyKeys": [],
+      "case": "telemetry-disabled-correlation-no",
+      "configuration": "telemetry-disabled",
+      "contentType": null,
+      "correlationId": null,
+      "correlationIdRequested": false,
+      "credentialResolved": true,
+      "credentialVariable": null,
+      "enabled": false,
+      "event": null,
+      "flushed": true,
+      "headerNames": [],
+      "properties": {},
+      "propertyKeys": [],
+      "propertyTypes": {},
+      "sent": false,
+      "url": null,
+      "userAgent": null
+    },
+    {
+      "active": false,
+      "bodyKeys": [],
+      "case": "telemetry-disabled-correlation-yes",
+      "configuration": "telemetry-disabled",
+      "contentType": null,
+      "correlationId": null,
+      "correlationIdRequested": true,
+      "credentialResolved": true,
+      "credentialVariable": null,
+      "enabled": false,
+      "event": null,
+      "flushed": true,
+      "headerNames": [],
+      "properties": {},
+      "propertyKeys": [],
+      "propertyTypes": {},
+      "sent": false,
+      "url": null,
+      "userAgent": null
+    },
+    {
+      "active": false,
+      "bodyKeys": [],
+      "case": "third-party-only-correlation-no",
+      "configuration": "third-party-only",
+      "contentType": null,
+      "correlationId": null,
+      "correlationIdRequested": false,
+      "credentialResolved": false,
+      "credentialVariable": null,
+      "enabled": true,
+      "event": null,
+      "flushed": true,
+      "headerNames": [],
+      "properties": {},
+      "propertyKeys": [],
+      "propertyTypes": {},
+      "sent": false,
+      "url": null,
+      "userAgent": null
+    },
+    {
+      "active": false,
+      "bodyKeys": [],
+      "case": "third-party-only-correlation-yes",
+      "configuration": "third-party-only",
+      "contentType": null,
+      "correlationId": null,
+      "correlationIdRequested": true,
+      "credentialResolved": false,
+      "credentialVariable": null,
+      "enabled": true,
+      "event": null,
+      "flushed": true,
+      "headerNames": [],
+      "properties": {},
+      "propertyKeys": [],
+      "propertyTypes": {},
+      "sent": false,
+      "url": null,
+      "userAgent": null
+    },
+    {
+      "active": true,
+      "bodyKeys": [
+        "event",
+        "properties"
+      ],
+      "case": "third-party-active-mistral-configured-correlation-no",
+      "configuration": "third-party-active-mistral-configured",
+      "contentType": "application/json",
+      "correlationId": null,
+      "correlationIdRequested": false,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "init_duration_ms": 1234,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "init_duration_ms",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "init_duration_ms": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://api.mistral.ai/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    },
+    {
+      "active": true,
+      "bodyKeys": [
+        "correlation_id",
+        "event",
+        "properties"
+      ],
+      "case": "third-party-active-mistral-configured-correlation-yes",
+      "configuration": "third-party-active-mistral-configured",
+      "contentType": "application/json",
+      "correlationId": "oracle-correlation",
+      "correlationIdRequested": true,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "init_duration_ms": 1234,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "init_duration_ms",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "init_duration_ms": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://api.mistral.ai/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    },
+    {
+      "active": true,
+      "bodyKeys": [
+        "event",
+        "properties"
+      ],
+      "case": "mistral-behind-a-proxy-correlation-no",
+      "configuration": "mistral-behind-a-proxy",
+      "contentType": "application/json",
+      "correlationId": null,
+      "correlationIdRequested": false,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_PROXY_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "init_duration_ms": 1234,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "init_duration_ms",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "init_duration_ms": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://proxy.example.test/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    },
+    {
+      "active": true,
+      "bodyKeys": [
+        "correlation_id",
+        "event",
+        "properties"
+      ],
+      "case": "mistral-behind-a-proxy-correlation-yes",
+      "configuration": "mistral-behind-a-proxy",
+      "contentType": "application/json",
+      "correlationId": "oracle-correlation",
+      "correlationIdRequested": true,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_PROXY_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "init_duration_ms": 1234,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "init_duration_ms",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "init_duration_ms": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://proxy.example.test/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    },
+    {
+      "active": true,
+      "bodyKeys": [
+        "event",
+        "properties"
+      ],
+      "case": "mistral-base-without-a-version-segment-correlation-no",
+      "configuration": "mistral-base-without-a-version-segment",
+      "contentType": "application/json",
+      "correlationId": null,
+      "correlationIdRequested": false,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "init_duration_ms": 1234,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "init_duration_ms",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "init_duration_ms": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://api.mistral.ai/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    },
+    {
+      "active": true,
+      "bodyKeys": [
+        "correlation_id",
+        "event",
+        "properties"
+      ],
+      "case": "mistral-base-without-a-version-segment-correlation-yes",
+      "configuration": "mistral-base-without-a-version-segment",
+      "contentType": "application/json",
+      "correlationId": "oracle-correlation",
+      "correlationIdRequested": true,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "init_duration_ms": 1234,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "init_duration_ms",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "init_duration_ms": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://api.mistral.ai/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    },
+    {
+      "active": false,
+      "bodyKeys": [],
+      "case": "mistral-without-a-resolvable-key-correlation-no",
+      "configuration": "mistral-without-a-resolvable-key",
+      "contentType": null,
+      "correlationId": null,
+      "correlationIdRequested": false,
+      "credentialResolved": false,
+      "credentialVariable": null,
+      "enabled": true,
+      "event": null,
+      "flushed": true,
+      "headerNames": [],
+      "properties": {},
+      "propertyKeys": [],
+      "propertyTypes": {},
+      "sent": false,
+      "url": null,
+      "userAgent": null
+    },
+    {
+      "active": false,
+      "bodyKeys": [],
+      "case": "mistral-without-a-resolvable-key-correlation-yes",
+      "configuration": "mistral-without-a-resolvable-key",
+      "contentType": null,
+      "correlationId": null,
+      "correlationIdRequested": true,
+      "credentialResolved": false,
+      "credentialVariable": null,
+      "enabled": true,
+      "event": null,
+      "flushed": true,
+      "headerNames": [],
+      "properties": {},
+      "propertyKeys": [],
+      "propertyTypes": {},
+      "sent": false,
+      "url": null,
+      "userAgent": null
+    },
+    {
+      "active": false,
+      "bodyKeys": [],
+      "case": "mistral-with-the-default-key-variable-correlation-no",
+      "configuration": "mistral-with-the-default-key-variable",
+      "contentType": null,
+      "correlationId": null,
+      "correlationIdRequested": false,
+      "credentialResolved": false,
+      "credentialVariable": null,
+      "enabled": true,
+      "event": null,
+      "flushed": true,
+      "headerNames": [],
+      "properties": {},
+      "propertyKeys": [],
+      "propertyTypes": {},
+      "sent": false,
+      "url": null,
+      "userAgent": null
+    },
+    {
+      "active": false,
+      "bodyKeys": [],
+      "case": "mistral-with-the-default-key-variable-correlation-yes",
+      "configuration": "mistral-with-the-default-key-variable",
+      "contentType": null,
+      "correlationId": null,
+      "correlationIdRequested": true,
+      "credentialResolved": false,
+      "credentialVariable": null,
+      "enabled": true,
+      "event": null,
+      "flushed": true,
+      "headerNames": [],
+      "properties": {},
+      "propertyKeys": [],
+      "propertyTypes": {},
+      "sent": false,
+      "url": null,
+      "userAgent": null
+    },
+    {
+      "active": true,
+      "bodyKeys": [
+        "event",
+        "properties"
+      ],
+      "case": "caller-properties-win-over-metadata",
+      "configuration": "mistral-active",
+      "contentType": "application/json",
+      "correlationId": null,
+      "correlationIdRequested": false,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "extra": 1,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "authored-by-the-caller"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "extra",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "extra": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://api.mistral.ai/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    },
+    {
+      "active": true,
+      "bodyKeys": [
+        "event",
+        "properties"
+      ],
+      "case": "empty-correlation-id",
+      "configuration": "mistral-active",
+      "contentType": "application/json",
+      "correlationId": null,
+      "correlationIdRequested": true,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "init_duration_ms": 1234,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "client_name",
+        "client_version",
+        "init_duration_ms",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "init_duration_ms": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://api.mistral.ai/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    }
+  ],
+  "eventPayloads": [
+    {
+      "correlated": false,
+      "event": "vibe.admin_config_applied",
+      "properties": {
+        "has_error": true,
+        "nb_enforced_fields": 2,
+        "outcome": "applied"
+      },
+      "propertyKeys": [
+        "has_error",
+        "nb_enforced_fields",
+        "outcome"
+      ],
+      "propertyTypes": {
+        "has_error": "bool",
+        "nb_enforced_fields": "int",
+        "outcome": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.at_mention_inserted",
+      "properties": {
+        "context_types": {
+          "file": 2
+        },
+        "file_extensions": {
+          ".rs": 2
+        },
+        "message_id": "oracle-message",
+        "nb_mentions": 2
+      },
+      "propertyKeys": [
+        "context_types",
+        "file_extensions",
+        "message_id",
+        "nb_mentions"
+      ],
+      "propertyTypes": {
+        "context_types": "object",
+        "file_extensions": "object",
+        "message_id": "string",
+        "nb_mentions": "int"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.audio.transcription.cancel_recording",
+      "properties": {
+        "recording_duration_ms": "{float}",
+        "recording_id": "oracle-recording"
+      },
+      "propertyKeys": [
+        "recording_duration_ms",
+        "recording_id"
+      ],
+      "propertyTypes": {
+        "recording_duration_ms": "string",
+        "recording_id": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.audio.transcription.done",
+      "properties": {
+        "recording_duration_ms": "{float}",
+        "recording_id": "oracle-recording",
+        "transcript_length": 17,
+        "transcription_duration_ms": "{float}"
+      },
+      "propertyKeys": [
+        "recording_duration_ms",
+        "recording_id",
+        "transcript_length",
+        "transcription_duration_ms"
+      ],
+      "propertyTypes": {
+        "recording_duration_ms": "string",
+        "recording_id": "string",
+        "transcript_length": "int",
+        "transcription_duration_ms": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.audio.transcription.error",
+      "properties": {
+        "error_message": "oracle failure",
+        "recording_duration_ms": "{float}",
+        "recording_id": "oracle-recording",
+        "transcription_duration_ms": "{float}"
+      },
+      "propertyKeys": [
+        "error_message",
+        "recording_duration_ms",
+        "recording_id",
+        "transcription_duration_ms"
+      ],
+      "propertyTypes": {
+        "error_message": "string",
+        "recording_duration_ms": "string",
+        "recording_id": "string",
+        "transcription_duration_ms": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.audio.transcription.start",
+      "properties": {
+        "recording_id": "oracle-recording"
+      },
+      "propertyKeys": [
+        "recording_id"
+      ],
+      "propertyTypes": {
+        "recording_id": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.auto_compact_triggered",
+      "properties": {
+        "auto_compact_threshold": 120000,
+        "nb_context_tokens_before": 150000,
+        "status": "success"
+      },
+      "propertyKeys": [
+        "auto_compact_threshold",
+        "nb_context_tokens_before",
+        "status"
+      ],
+      "propertyTypes": {
+        "auto_compact_threshold": "int",
+        "nb_context_tokens_before": "int",
+        "status": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.compaction_failed",
+      "properties": {
+        "reason": "tool_call"
+      },
+      "propertyKeys": [
+        "reason"
+      ],
+      "propertyTypes": {
+        "reason": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.new_session",
+      "properties": {
+        "entrypoint": "cli",
+        "has_agents_md": true,
+        "nb_mcp_servers": 2,
+        "nb_models": 4,
+        "nb_skills": 3
+      },
+      "propertyKeys": [
+        "entrypoint",
+        "has_agents_md",
+        "nb_mcp_servers",
+        "nb_models",
+        "nb_skills"
+      ],
+      "propertyTypes": {
+        "entrypoint": "string",
+        "has_agents_md": "bool",
+        "nb_mcp_servers": "int",
+        "nb_models": "int",
+        "nb_skills": "int"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.onboarding_api_key_added",
+      "properties": {
+        "custom_domain": true
+      },
+      "propertyKeys": [
+        "custom_domain"
+      ],
+      "propertyTypes": {
+        "custom_domain": "bool"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.read_aloud.ended",
+      "properties": {
+        "elapsed_seconds": "{float}",
+        "error_type": null,
+        "read_aloud_session_id": "{string}",
+        "speed_selection": null,
+        "status": "completed"
+      },
+      "propertyKeys": [
+        "elapsed_seconds",
+        "error_type",
+        "read_aloud_session_id",
+        "speed_selection",
+        "status"
+      ],
+      "propertyTypes": {
+        "elapsed_seconds": "string",
+        "error_type": "null",
+        "read_aloud_session_id": "string",
+        "speed_selection": "null",
+        "status": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.read_aloud.play_started",
+      "properties": {
+        "read_aloud_session_id": "{string}",
+        "speed_selection": null,
+        "time_to_first_read_s": "{float}"
+      },
+      "propertyKeys": [
+        "read_aloud_session_id",
+        "speed_selection",
+        "time_to_first_read_s"
+      ],
+      "propertyTypes": {
+        "read_aloud_session_id": "string",
+        "speed_selection": "null",
+        "time_to_first_read_s": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.read_aloud.requested",
+      "properties": {
+        "read_aloud_session_id": "{string}",
+        "trigger": "autoplay_next_message"
+      },
+      "propertyKeys": [
+        "read_aloud_session_id",
+        "trigger"
+      ],
+      "propertyTypes": {
+        "read_aloud_session_id": "string",
+        "trigger": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.ready",
+      "properties": {
+        "init_duration_ms": 1234
+      },
+      "propertyKeys": [
+        "init_duration_ms"
+      ],
+      "propertyTypes": {
+        "init_duration_ms": "int"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.remote_project_configured",
+      "properties": {
+        "outcome": "configured",
+        "project_picker_shown": true,
+        "project_selection_source": "created_project"
+      },
+      "propertyKeys": [
+        "outcome",
+        "project_picker_shown",
+        "project_selection_source"
+      ],
+      "propertyTypes": {
+        "outcome": "string",
+        "project_picker_shown": "bool",
+        "project_selection_source": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.request_sent",
+      "properties": {
+        "attachment_counts": {},
+        "call_source": "vibe_code",
+        "call_type": "main_call",
+        "message_id": "oracle-message",
+        "model": "oracle-model",
+        "nb_context_chars": 2048,
+        "nb_context_messages": 6,
+        "nb_prompt_chars": 512
+      },
+      "propertyKeys": [
+        "attachment_counts",
+        "call_source",
+        "call_type",
+        "message_id",
+        "model",
+        "nb_context_chars",
+        "nb_context_messages",
+        "nb_prompt_chars"
+      ],
+      "propertyTypes": {
+        "attachment_counts": "object",
+        "call_source": "string",
+        "call_type": "string",
+        "message_id": "string",
+        "model": "string",
+        "nb_context_chars": "int",
+        "nb_context_messages": "int",
+        "nb_prompt_chars": "int"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.session_closed",
+      "properties": {},
+      "propertyKeys": [],
+      "propertyTypes": {},
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.slash_command_used",
+      "properties": {
+        "command": "oracle",
+        "command_type": "builtin"
+      },
+      "propertyKeys": [
+        "command",
+        "command_type"
+      ],
+      "propertyTypes": {
+        "command": "string",
+        "command_type": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": null,
+      "event": "vibe.startup",
+      "properties": null,
+      "propertyKeys": [
+        "agent_ready_duration_ms",
+        "first_frame_duration_ms",
+        "session_init_duration_ms"
+      ],
+      "propertyTypes": null,
+      "source": "callSite"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.teleport_completed",
+      "properties": {
+        "context_summary": "generated",
+        "context_summary_chars": 480,
+        "nb_session_messages": 12,
+        "project_candidate_count_loaded": 3,
+        "project_multi_repo_match_count": 2,
+        "project_picker_shown": true,
+        "project_repo_remote_changed": false,
+        "project_selection_source": "selected_existing",
+        "push_required": true,
+        "saved_project_link_cleared": false
+      },
+      "propertyKeys": [
+        "context_summary",
+        "context_summary_chars",
+        "nb_session_messages",
+        "project_candidate_count_loaded",
+        "project_multi_repo_match_count",
+        "project_picker_shown",
+        "project_repo_remote_changed",
+        "project_selection_source",
+        "push_required",
+        "saved_project_link_cleared"
+      ],
+      "propertyTypes": {
+        "context_summary": "string",
+        "context_summary_chars": "int",
+        "nb_session_messages": "int",
+        "project_candidate_count_loaded": "int",
+        "project_multi_repo_match_count": "int",
+        "project_picker_shown": "bool",
+        "project_repo_remote_changed": "bool",
+        "project_selection_source": "string",
+        "push_required": "bool",
+        "saved_project_link_cleared": "bool"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.teleport_failed",
+      "properties": {
+        "context_summary": "failed",
+        "context_summary_chars": null,
+        "error_class": "OracleError",
+        "failure_kind": "http",
+        "http_status_code": 403,
+        "nb_session_messages": 12,
+        "project_picker_shown": false,
+        "push_required": true,
+        "stage": "push"
+      },
+      "propertyKeys": [
+        "context_summary",
+        "context_summary_chars",
+        "error_class",
+        "failure_kind",
+        "http_status_code",
+        "nb_session_messages",
+        "project_picker_shown",
+        "push_required",
+        "stage"
+      ],
+      "propertyTypes": {
+        "context_summary": "string",
+        "context_summary_chars": "null",
+        "error_class": "string",
+        "failure_kind": "string",
+        "http_status_code": "int",
+        "nb_session_messages": "int",
+        "project_picker_shown": "bool",
+        "push_required": "bool",
+        "stage": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.tool_call_finished",
+      "properties": {
+        "agent_profile_name": "oracle-profile",
+        "approval_type": "session",
+        "bash_background": false,
+        "decision": "approved",
+        "file_extension": ".rs",
+        "message_id": "oracle-message",
+        "model": "oracle-model",
+        "nb_files_created": 1,
+        "nb_files_modified": 0,
+        "status": "success",
+        "tool_name": "write_file"
+      },
+      "propertyKeys": [
+        "agent_profile_name",
+        "approval_type",
+        "bash_background",
+        "decision",
+        "file_extension",
+        "message_id",
+        "model",
+        "nb_files_created",
+        "nb_files_modified",
+        "status",
+        "tool_name"
+      ],
+      "propertyTypes": {
+        "agent_profile_name": "string",
+        "approval_type": "string",
+        "bash_background": "bool",
+        "decision": "string",
+        "file_extension": "string",
+        "message_id": "string",
+        "model": "string",
+        "nb_files_created": "int",
+        "nb_files_modified": "int",
+        "status": "string",
+        "tool_name": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.user_cancelled_action",
+      "properties": {
+        "action": "interrupt_agent"
+      },
+      "propertyKeys": [
+        "action"
+      ],
+      "propertyTypes": {
+        "action": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
+      "event": "vibe.user_copied_text",
+      "properties": {
+        "text_length": 11
+      },
+      "propertyKeys": [
+        "text_length"
+      ],
+      "propertyTypes": {
+        "text_length": "int"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": true,
+      "event": "vibe.user_rating_feedback",
+      "properties": {
+        "model": "oracle-model",
+        "rating": 5
+      },
+      "propertyKeys": [
+        "model",
+        "rating"
+      ],
+      "propertyTypes": {
+        "model": "string",
+        "rating": "int"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": null,
+      "event": "vibe.voice_mode_toggled",
+      "properties": null,
+      "propertyKeys": [
+        "enabled"
+      ],
+      "propertyTypes": null,
+      "source": "callSite"
+    }
+  ],
+  "eventVocabulary": [
+    {
+      "event": "vibe.admin_config_applied",
+      "sender": "send_admin_config_applied",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.at_mention_inserted",
+      "sender": "send_at_mention_inserted",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.audio.transcription.cancel_recording",
+      "sender": "driven",
+      "sites": [
+        "vibe/cli/voice_manager/voice_manager.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.audio.transcription.done",
+      "sender": "driven",
+      "sites": [
+        "vibe/cli/voice_manager/voice_manager.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.audio.transcription.error",
+      "sender": "driven",
+      "sites": [
+        "vibe/cli/voice_manager/voice_manager.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.audio.transcription.start",
+      "sender": "driven",
+      "sites": [
+        "vibe/cli/voice_manager/voice_manager.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.auto_compact_triggered",
+      "sender": "send_auto_compact_triggered",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.compaction_failed",
+      "sender": "send_compaction_failed",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.new_session",
+      "sender": "send_new_session",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.onboarding_api_key_added",
+      "sender": "send_onboarding_api_key_added",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.read_aloud.ended",
+      "sender": "driven",
+      "sites": [
+        "vibe/cli/narrator_manager/narrator_manager.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.read_aloud.play_started",
+      "sender": "driven",
+      "sites": [
+        "vibe/cli/narrator_manager/narrator_manager.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.read_aloud.requested",
+      "sender": "driven",
+      "sites": [
+        "vibe/cli/narrator_manager/narrator_manager.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.ready",
+      "sender": "send_ready",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.remote_project_configured",
+      "sender": "send_remote_project_configured",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.request_sent",
+      "sender": "send_request_sent",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.session_closed",
+      "sender": "send_session_closed",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.slash_command_used",
+      "sender": "send_slash_command_used",
+      "sites": [
+        "vibe/acp/agent.py",
+        "vibe/acp/commands/controller.py",
+        "vibe/cli/textual_ui/app.py",
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.startup",
+      "sender": null,
+      "sites": [
+        "vibe/cli/textual_ui/app.py"
+      ],
+      "source": "callSite"
+    },
+    {
+      "event": "vibe.teleport_completed",
+      "sender": "send_teleport_completed",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.teleport_failed",
+      "sender": "send_teleport_failed",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.tool_call_finished",
+      "sender": "send_tool_call_finished",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.user_cancelled_action",
+      "sender": "send_user_cancelled_action",
+      "sites": [
+        "vibe/acp/agent.py",
+        "vibe/cli/textual_ui/app.py",
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.user_copied_text",
+      "sender": "send_user_copied_text",
+      "sites": [
+        "vibe/cli/textual_ui/app.py",
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.user_rating_feedback",
+      "sender": "send_user_rating_feedback",
+      "sites": [
+        "vibe/cli/textual_ui/app.py",
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.voice_mode_toggled",
+      "sender": null,
+      "sites": [
+        "vibe/cli/textual_ui/app.py"
+      ],
+      "source": "callSite"
+    }
+  ],
+  "exporterConfig": [
+    {
+      "case": "explicit-endpoint",
+      "configuration": "mistral-active",
+      "credentialVariable": null,
+      "enableOtel": null,
+      "enableTelemetry": null,
+      "endpoint": "https://collector.example.test/v1/traces",
+      "endpointRequested": "https://collector.example.test",
+      "headerNames": [],
+      "providerInstalled": null,
+      "resolved": true
+    },
+    {
+      "case": "explicit-endpoint-with-a-trailing-slash",
+      "configuration": "mistral-active",
+      "credentialVariable": null,
+      "enableOtel": null,
+      "enableTelemetry": null,
+      "endpoint": "https://collector.example.test/v1/traces",
+      "endpointRequested": "https://collector.example.test/",
+      "headerNames": [],
+      "providerInstalled": null,
+      "resolved": true
+    },
+    {
+      "case": "explicit-endpoint-with-a-path",
+      "configuration": "mistral-active",
+      "credentialVariable": null,
+      "enableOtel": null,
+      "enableTelemetry": null,
+      "endpoint": "https://collector.example.test/ingest/v1/traces",
+      "endpointRequested": "https://collector.example.test/ingest",
+      "headerNames": [],
+      "providerInstalled": null,
+      "resolved": true
+    },
+    {
+      "case": "derived-from-mistral",
+      "configuration": "mistral-active",
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enableOtel": null,
+      "enableTelemetry": null,
+      "endpoint": "https://api.mistral.ai/telemetry/v1/traces",
+      "endpointRequested": "",
+      "headerNames": [
+        "Authorization"
+      ],
+      "providerInstalled": null,
+      "resolved": true
+    },
+    {
+      "case": "derived-from-a-proxy",
+      "configuration": "mistral-behind-a-proxy",
+      "credentialVariable": "ORACLE_PROXY_KEY",
+      "enableOtel": null,
+      "enableTelemetry": null,
+      "endpoint": "https://proxy.example.test/telemetry/v1/traces",
+      "endpointRequested": "",
+      "headerNames": [
+        "Authorization"
+      ],
+      "providerInstalled": null,
+      "resolved": true
+    },
+    {
+      "case": "derived-from-a-base-without-a-version",
+      "configuration": "mistral-base-without-a-version-segment",
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enableOtel": null,
+      "enableTelemetry": null,
+      "endpoint": "https://api.mistral.ai/telemetry/v1/traces",
+      "endpointRequested": "",
+      "headerNames": [
+        "Authorization"
+      ],
+      "providerInstalled": null,
+      "resolved": true
+    },
+    {
+      "case": "derived-without-a-resolvable-key",
+      "configuration": "mistral-without-a-resolvable-key",
+      "credentialVariable": null,
+      "enableOtel": null,
+      "enableTelemetry": null,
+      "endpoint": null,
+      "endpointRequested": "",
+      "headerNames": [],
+      "providerInstalled": null,
+      "resolved": false
+    },
+    {
+      "case": "no-mistral-provider",
+      "configuration": "third-party-only",
+      "credentialVariable": "MISTRAL_API_KEY",
+      "enableOtel": null,
+      "enableTelemetry": null,
+      "endpoint": "https://api.mistral.ai/telemetry/v1/traces",
+      "endpointRequested": "",
+      "headerNames": [
+        "Authorization"
+      ],
+      "providerInstalled": null,
+      "resolved": true
+    },
+    {
+      "case": "no-provider-at-all",
+      "configuration": null,
+      "credentialVariable": "MISTRAL_API_KEY",
+      "enableOtel": null,
+      "enableTelemetry": null,
+      "endpoint": "https://api.mistral.ai/telemetry/v1/traces",
+      "endpointRequested": "",
+      "headerNames": [
+        "Authorization"
+      ],
+      "providerInstalled": null,
+      "resolved": true
+    },
+    {
+      "case": "setup-telemetry-off",
+      "configuration": "mistral-active",
+      "credentialVariable": null,
+      "enableOtel": true,
+      "enableTelemetry": false,
+      "endpoint": null,
+      "endpointRequested": "",
+      "headerNames": [],
+      "providerInstalled": false,
+      "resolved": null
+    },
+    {
+      "case": "setup-otel-off",
+      "configuration": "mistral-active",
+      "credentialVariable": null,
+      "enableOtel": false,
+      "enableTelemetry": true,
+      "endpoint": null,
+      "endpointRequested": "",
+      "headerNames": [],
+      "providerInstalled": false,
+      "resolved": null
+    },
+    {
+      "case": "setup-both-on",
+      "configuration": "mistral-active",
+      "credentialVariable": null,
+      "enableOtel": true,
+      "enableTelemetry": true,
+      "endpoint": null,
+      "endpointRequested": "",
+      "headerNames": [],
+      "providerInstalled": true,
+      "resolved": null
+    },
+    {
+      "case": "setup-both-on-explicit-endpoint",
+      "configuration": "mistral-active",
+      "credentialVariable": null,
+      "enableOtel": true,
+      "enableTelemetry": true,
+      "endpoint": null,
+      "endpointRequested": "https://collector.example.test",
+      "headerNames": [],
+      "providerInstalled": true,
+      "resolved": null
+    },
+    {
+      "case": "setup-both-on-without-a-key",
+      "configuration": "mistral-without-a-resolvable-key",
+      "credentialVariable": null,
+      "enableOtel": true,
+      "enableTelemetry": true,
+      "endpoint": null,
+      "endpointRequested": "",
+      "headerNames": [],
+      "providerInstalled": false,
+      "resolved": null
+    }
+  ],
+  "logConfig": [
+    {
+      "backupCount": 0,
+      "case": "defaults",
+      "directoryCreated": true,
+      "duplicateGuarded": true,
+      "encoding": "utf-8",
+      "handlerCount": 1,
+      "level": "WARNING",
+      "loggerLevel": "DEBUG",
+      "maxBytes": 10485760,
+      "raised": null
+    },
+    {
+      "backupCount": 0,
+      "case": "level-debug",
+      "directoryCreated": true,
+      "duplicateGuarded": true,
+      "encoding": "utf-8",
+      "handlerCount": 1,
+      "level": "DEBUG",
+      "loggerLevel": "DEBUG",
+      "maxBytes": 10485760,
+      "raised": null
+    },
+    {
+      "backupCount": 0,
+      "case": "level-lowercase",
+      "directoryCreated": true,
+      "duplicateGuarded": true,
+      "encoding": "utf-8",
+      "handlerCount": 1,
+      "level": "INFO",
+      "loggerLevel": "DEBUG",
+      "maxBytes": 10485760,
+      "raised": null
+    },
+    {
+      "backupCount": 0,
+      "case": "level-unknown",
+      "directoryCreated": true,
+      "duplicateGuarded": true,
+      "encoding": "utf-8",
+      "handlerCount": 1,
+      "level": "WARNING",
+      "loggerLevel": "DEBUG",
+      "maxBytes": 10485760,
+      "raised": null
+    },
+    {
+      "backupCount": 0,
+      "case": "level-empty",
+      "directoryCreated": true,
+      "duplicateGuarded": true,
+      "encoding": "utf-8",
+      "handlerCount": 1,
+      "level": "WARNING",
+      "loggerLevel": "DEBUG",
+      "maxBytes": 10485760,
+      "raised": null
+    },
+    {
+      "backupCount": 0,
+      "case": "debug-mode-true",
+      "directoryCreated": true,
+      "duplicateGuarded": true,
+      "encoding": "utf-8",
+      "handlerCount": 1,
+      "level": "DEBUG",
+      "loggerLevel": "DEBUG",
+      "maxBytes": 10485760,
+      "raised": null
+    },
+    {
+      "backupCount": 0,
+      "case": "debug-mode-other",
+      "directoryCreated": true,
+      "duplicateGuarded": true,
+      "encoding": "utf-8",
+      "handlerCount": 1,
+      "level": "ERROR",
+      "loggerLevel": "DEBUG",
+      "maxBytes": 10485760,
+      "raised": null
+    },
+    {
+      "backupCount": 0,
+      "case": "max-bytes",
+      "directoryCreated": true,
+      "duplicateGuarded": true,
+      "encoding": "utf-8",
+      "handlerCount": 1,
+      "level": "WARNING",
+      "loggerLevel": "DEBUG",
+      "maxBytes": 4096,
+      "raised": null
+    },
+    {
+      "backupCount": 0,
+      "case": "max-bytes-zero",
+      "directoryCreated": true,
+      "duplicateGuarded": true,
+      "encoding": "utf-8",
+      "handlerCount": 1,
+      "level": "WARNING",
+      "loggerLevel": "DEBUG",
+      "maxBytes": 0,
+      "raised": null
+    },
+    {
+      "backupCount": null,
+      "case": "max-bytes-invalid",
+      "directoryCreated": true,
+      "duplicateGuarded": null,
+      "encoding": null,
+      "handlerCount": 0,
+      "level": null,
+      "loggerLevel": null,
+      "maxBytes": null,
+      "raised": "ValueError"
+    }
+  ],
+  "logEncoding": [
+    {
+      "decoded": "oracle plain message",
+      "encoded": "oracle plain message",
+      "input": "oracle plain message",
+      "roundTrips": true
+    },
+    {
+      "decoded": "oracle message with a backslash \\ inside",
+      "encoded": "oracle message with a backslash \\\\ inside",
+      "input": "oracle message with a backslash \\ inside",
+      "roundTrips": true
+    },
+    {
+      "decoded": "oracle message\nwith a newline",
+      "encoded": "oracle message\\nwith a newline",
+      "input": "oracle message\nwith a newline",
+      "roundTrips": true
+    },
+    {
+      "decoded": "oracle message with \\n already written out",
+      "encoded": "oracle message with \\\\n already written out",
+      "input": "oracle message with \\n already written out",
+      "roundTrips": true
+    },
+    {
+      "decoded": "oracle message with a trailing backslash \\",
+      "encoded": "oracle message with a trailing backslash \\\\",
+      "input": "oracle message with a trailing backslash \\",
+      "roundTrips": true
+    },
+    {
+      "decoded": "",
+      "encoded": "",
+      "input": "",
+      "roundTrips": true
+    },
+    {
+      "decoded": "already\\escaped",
+      "encoded": "already\\\\escaped",
+      "input": null,
+      "roundTrips": null
+    },
+    {
+      "decoded": "trailing\\",
+      "encoded": "trailing\\",
+      "input": null,
+      "roundTrips": null
+    },
+    {
+      "decoded": "\n",
+      "encoded": "\\n",
+      "input": null,
+      "roundTrips": null
+    },
+    {
+      "decoded": "t",
+      "encoded": "\\t",
+      "input": null,
+      "roundTrips": null
+    },
+    {
+      "decoded": "plain",
+      "encoded": "plain",
+      "input": null,
+      "roundTrips": null
+    }
+  ],
+  "logFormat": [
+    {
+      "case": "debug-message-0",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "DEBUG",
+      "line": "{timestamp} {ppid} {pid} DEBUG oracle plain message",
+      "message": "oracle plain message"
+    },
+    {
+      "case": "debug-message-1",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "DEBUG",
+      "line": "{timestamp} {ppid} {pid} DEBUG oracle message with a backslash \\\\ inside",
+      "message": "oracle message with a backslash \\ inside"
+    },
+    {
+      "case": "debug-message-2",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "DEBUG",
+      "line": "{timestamp} {ppid} {pid} DEBUG oracle message\\nwith a newline",
+      "message": "oracle message\nwith a newline"
+    },
+    {
+      "case": "debug-message-3",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "DEBUG",
+      "line": "{timestamp} {ppid} {pid} DEBUG oracle message with \\\\n already written out",
+      "message": "oracle message with \\n already written out"
+    },
+    {
+      "case": "debug-message-4",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "DEBUG",
+      "line": "{timestamp} {ppid} {pid} DEBUG oracle message with a trailing backslash \\\\",
+      "message": "oracle message with a trailing backslash \\"
+    },
+    {
+      "case": "debug-message-5",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "DEBUG",
+      "line": "{timestamp} {ppid} {pid} DEBUG ",
+      "message": ""
+    },
+    {
+      "case": "info-message-0",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "INFO",
+      "line": "{timestamp} {ppid} {pid} INFO oracle plain message",
+      "message": "oracle plain message"
+    },
+    {
+      "case": "info-message-1",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "INFO",
+      "line": "{timestamp} {ppid} {pid} INFO oracle message with a backslash \\\\ inside",
+      "message": "oracle message with a backslash \\ inside"
+    },
+    {
+      "case": "info-message-2",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "INFO",
+      "line": "{timestamp} {ppid} {pid} INFO oracle message\\nwith a newline",
+      "message": "oracle message\nwith a newline"
+    },
+    {
+      "case": "info-message-3",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "INFO",
+      "line": "{timestamp} {ppid} {pid} INFO oracle message with \\\\n already written out",
+      "message": "oracle message with \\n already written out"
+    },
+    {
+      "case": "info-message-4",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "INFO",
+      "line": "{timestamp} {ppid} {pid} INFO oracle message with a trailing backslash \\\\",
+      "message": "oracle message with a trailing backslash \\"
+    },
+    {
+      "case": "info-message-5",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "INFO",
+      "line": "{timestamp} {ppid} {pid} INFO ",
+      "message": ""
+    },
+    {
+      "case": "warning-message-0",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "WARNING",
+      "line": "{timestamp} {ppid} {pid} WARNING oracle plain message",
+      "message": "oracle plain message"
+    },
+    {
+      "case": "warning-message-1",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "WARNING",
+      "line": "{timestamp} {ppid} {pid} WARNING oracle message with a backslash \\\\ inside",
+      "message": "oracle message with a backslash \\ inside"
+    },
+    {
+      "case": "warning-message-2",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "WARNING",
+      "line": "{timestamp} {ppid} {pid} WARNING oracle message\\nwith a newline",
+      "message": "oracle message\nwith a newline"
+    },
+    {
+      "case": "warning-message-3",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "WARNING",
+      "line": "{timestamp} {ppid} {pid} WARNING oracle message with \\\\n already written out",
+      "message": "oracle message with \\n already written out"
+    },
+    {
+      "case": "warning-message-4",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "WARNING",
+      "line": "{timestamp} {ppid} {pid} WARNING oracle message with a trailing backslash \\\\",
+      "message": "oracle message with a trailing backslash \\"
+    },
+    {
+      "case": "warning-message-5",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "WARNING",
+      "line": "{timestamp} {ppid} {pid} WARNING ",
+      "message": ""
+    },
+    {
+      "case": "error-message-0",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "ERROR",
+      "line": "{timestamp} {ppid} {pid} ERROR oracle plain message",
+      "message": "oracle plain message"
+    },
+    {
+      "case": "error-message-1",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "ERROR",
+      "line": "{timestamp} {ppid} {pid} ERROR oracle message with a backslash \\\\ inside",
+      "message": "oracle message with a backslash \\ inside"
+    },
+    {
+      "case": "error-message-2",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "ERROR",
+      "line": "{timestamp} {ppid} {pid} ERROR oracle message\\nwith a newline",
+      "message": "oracle message\nwith a newline"
+    },
+    {
+      "case": "error-message-3",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "ERROR",
+      "line": "{timestamp} {ppid} {pid} ERROR oracle message with \\\\n already written out",
+      "message": "oracle message with \\n already written out"
+    },
+    {
+      "case": "error-message-4",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "ERROR",
+      "line": "{timestamp} {ppid} {pid} ERROR oracle message with a trailing backslash \\\\",
+      "message": "oracle message with a trailing backslash \\"
+    },
+    {
+      "case": "error-message-5",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "ERROR",
+      "line": "{timestamp} {ppid} {pid} ERROR ",
+      "message": ""
+    },
+    {
+      "case": "critical-message-0",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "CRITICAL",
+      "line": "{timestamp} {ppid} {pid} CRITICAL oracle plain message",
+      "message": "oracle plain message"
+    },
+    {
+      "case": "critical-message-1",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "CRITICAL",
+      "line": "{timestamp} {ppid} {pid} CRITICAL oracle message with a backslash \\\\ inside",
+      "message": "oracle message with a backslash \\ inside"
+    },
+    {
+      "case": "critical-message-2",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "CRITICAL",
+      "line": "{timestamp} {ppid} {pid} CRITICAL oracle message\\nwith a newline",
+      "message": "oracle message\nwith a newline"
+    },
+    {
+      "case": "critical-message-3",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "CRITICAL",
+      "line": "{timestamp} {ppid} {pid} CRITICAL oracle message with \\\\n already written out",
+      "message": "oracle message with \\n already written out"
+    },
+    {
+      "case": "critical-message-4",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "CRITICAL",
+      "line": "{timestamp} {ppid} {pid} CRITICAL oracle message with a trailing backslash \\\\",
+      "message": "oracle message with a trailing backslash \\"
+    },
+    {
+      "case": "critical-message-5",
+      "exceptionEncodedNewlines": null,
+      "exceptionSeparator": null,
+      "hasException": false,
+      "level": "CRITICAL",
+      "line": "{timestamp} {ppid} {pid} CRITICAL ",
+      "message": ""
+    },
+    {
+      "case": "error-with-exception-info",
+      "exceptionEncodedNewlines": true,
+      "exceptionSeparator": " ",
+      "hasException": true,
+      "level": "ERROR",
+      "line": "{timestamp} {ppid} {pid} ERROR oracle message with an exception",
+      "message": "oracle message with an exception"
+    }
+  ],
+  "logPagination": [
+    {
+      "case": "limit-100-offset-0",
+      "cursor": null,
+      "hasMore": false,
+      "limit": 100,
+      "lineNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13
+      ],
+      "messages": [
+        "oracle entry 11",
+        "oracle entry 10",
+        "oracle entry 9",
+        "oracle entry 8",
+        "oracle entry 7",
+        "oracle entry 6",
+        "oracle entry 5",
+        "oracle entry 4",
+        "oracle entry 3",
+        "oracle entry 2",
+        "oracle entry 1",
+        "oracle entry 0"
+      ],
+      "newLinesCountReset": null,
+      "offset": 0
+    },
+    {
+      "case": "limit-5-offset-0",
+      "cursor": 5,
+      "hasMore": true,
+      "limit": 5,
+      "lineNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "messages": [
+        "oracle entry 11",
+        "oracle entry 10",
+        "oracle entry 9",
+        "oracle entry 8",
+        "oracle entry 7"
+      ],
+      "newLinesCountReset": null,
+      "offset": 0
+    },
+    {
+      "case": "limit-5-offset-5",
+      "cursor": 10,
+      "hasMore": true,
+      "limit": 5,
+      "lineNumbers": [
+        1,
+        2,
+        3,
+        4,
+        6
+      ],
+      "messages": [
+        "oracle entry 6",
+        "oracle entry 5",
+        "oracle entry 4",
+        "oracle entry 3",
+        "oracle entry 2"
+      ],
+      "newLinesCountReset": null,
+      "offset": 5
+    },
+    {
+      "case": "limit-5-offset-10",
+      "cursor": null,
+      "hasMore": false,
+      "limit": 5,
+      "lineNumbers": [
+        1,
+        2,
+        3
+      ],
+      "messages": [
+        "oracle entry 2",
+        "oracle entry 1",
+        "oracle entry 0"
+      ],
+      "newLinesCountReset": null,
+      "offset": 10
+    },
+    {
+      "case": "limit-5-offset-20",
+      "cursor": null,
+      "hasMore": false,
+      "limit": 5,
+      "lineNumbers": [],
+      "messages": [],
+      "newLinesCountReset": null,
+      "offset": 20
+    },
+    {
+      "case": "limit-1-offset-0",
+      "cursor": 1,
+      "hasMore": true,
+      "limit": 1,
+      "lineNumbers": [
+        1
+      ],
+      "messages": [
+        "oracle entry 11"
+      ],
+      "newLinesCountReset": null,
+      "offset": 0
+    },
+    {
+      "case": "limit-1-offset-11",
+      "cursor": 12,
+      "hasMore": true,
+      "limit": 1,
+      "lineNumbers": [
+        1
+      ],
+      "messages": [
+        "oracle entry 1"
+      ],
+      "newLinesCountReset": null,
+      "offset": 11
+    },
+    {
+      "case": "limit-12-offset-0",
+      "cursor": 12,
+      "hasMore": true,
+      "limit": 12,
+      "lineNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13
+      ],
+      "messages": [
+        "oracle entry 11",
+        "oracle entry 10",
+        "oracle entry 9",
+        "oracle entry 8",
+        "oracle entry 7",
+        "oracle entry 6",
+        "oracle entry 5",
+        "oracle entry 4",
+        "oracle entry 3",
+        "oracle entry 2",
+        "oracle entry 1",
+        "oracle entry 0"
+      ],
+      "newLinesCountReset": null,
+      "offset": 0
+    },
+    {
+      "case": "limit-100-offset-3",
+      "cursor": null,
+      "hasMore": false,
+      "limit": 100,
+      "lineNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        9,
+        10
+      ],
+      "messages": [
+        "oracle entry 8",
+        "oracle entry 7",
+        "oracle entry 6",
+        "oracle entry 5",
+        "oracle entry 4",
+        "oracle entry 3",
+        "oracle entry 2",
+        "oracle entry 1",
+        "oracle entry 0"
+      ],
+      "newLinesCountReset": null,
+      "offset": 3
+    },
+    {
+      "case": "file-absent",
+      "cursor": null,
+      "hasMore": false,
+      "limit": 100,
+      "lineNumbers": [],
+      "messages": [],
+      "newLinesCountReset": null,
+      "offset": 0
+    },
+    {
+      "case": "file-empty",
+      "cursor": null,
+      "hasMore": false,
+      "limit": 100,
+      "lineNumbers": [],
+      "messages": [],
+      "newLinesCountReset": null,
+      "offset": 0
+    },
+    {
+      "case": "file-shrank-between-polls",
+      "cursor": 62,
+      "hasMore": false,
+      "limit": 0,
+      "lineNumbers": [],
+      "messages": [
+        "oracle entry 0"
+      ],
+      "newLinesCountReset": 1,
+      "offset": 0
+    }
+  ],
+  "logParse": [
+    {
+      "case": "well-formed",
+      "level": "WARNING",
+      "line": "2026-02-21T10:28:51.529718+00:00 12 34 WARNING oracle message",
+      "lineNumber": 7,
+      "message": "oracle message",
+      "parsed": true,
+      "pid": 34,
+      "ppid": 12,
+      "timestamp": "2026-02-21T10:28:51.529718+00:00"
+    },
+    {
+      "case": "without-an-offset",
+      "level": "INFO",
+      "line": "2026-02-21T10:28:51.529718 12 34 INFO oracle message",
+      "lineNumber": 7,
+      "message": "oracle message",
+      "parsed": true,
+      "pid": 34,
+      "ppid": 12,
+      "timestamp": "2026-02-21T10:28:51.529718"
+    },
+    {
+      "case": "with-an-encoded-newline",
+      "level": "ERROR",
+      "line": "2026-02-21T10:28:51.529718+00:00 12 34 ERROR oracle\\nmessage",
+      "lineNumber": 7,
+      "message": "oracle\\nmessage",
+      "parsed": true,
+      "pid": 34,
+      "ppid": 12,
+      "timestamp": "2026-02-21T10:28:51.529718+00:00"
+    },
+    {
+      "case": "malformed-timestamp",
+      "level": null,
+      "line": "21-02-2026 12 34 WARNING oracle message",
+      "lineNumber": null,
+      "message": null,
+      "parsed": false,
+      "pid": null,
+      "ppid": null,
+      "timestamp": null
+    },
+    {
+      "case": "unknown-level",
+      "level": null,
+      "line": "2026-02-21T10:28:51.529718+00:00 12 34 TRACE oracle message",
+      "lineNumber": null,
+      "message": null,
+      "parsed": false,
+      "pid": null,
+      "ppid": null,
+      "timestamp": null
+    },
+    {
+      "case": "missing-message",
+      "level": null,
+      "line": "2026-02-21T10:28:51.529718+00:00 12 34 WARNING",
+      "lineNumber": null,
+      "message": null,
+      "parsed": false,
+      "pid": null,
+      "ppid": null,
+      "timestamp": null
+    },
+    {
+      "case": "empty-line",
+      "level": null,
+      "line": "",
+      "lineNumber": null,
+      "message": null,
+      "parsed": false,
+      "pid": null,
+      "ppid": null,
+      "timestamp": null
+    },
+    {
+      "case": "not-a-log-line",
+      "level": null,
+      "line": "oracle wrote this by hand",
+      "lineNumber": null,
+      "message": null,
+      "parsed": false,
+      "pid": null,
+      "ppid": null,
+      "timestamp": null
+    },
+    {
+      "case": "negative-identifiers",
+      "level": null,
+      "line": "2026-02-21T10:28:51.529718+00:00 -1 34 WARNING oracle",
+      "lineNumber": null,
+      "message": null,
+      "parsed": false,
+      "pid": null,
+      "ppid": null,
+      "timestamp": null
+    },
+    {
+      "case": "extra-whitespace",
+      "level": "DEBUG",
+      "line": "2026-02-21T10:28:51.529718+00:00   12   34   DEBUG   oracle message",
+      "lineNumber": 7,
+      "message": "oracle message",
+      "parsed": true,
+      "pid": 34,
+      "ppid": 12,
+      "timestamp": "2026-02-21T10:28:51.529718+00:00"
+    },
+    {
+      "case": "no-fractional-seconds",
+      "level": null,
+      "line": "2026-02-21T10:28:51+00:00 12 34 WARNING oracle message",
+      "lineNumber": null,
+      "message": null,
+      "parsed": false,
+      "pid": null,
+      "ppid": null,
+      "timestamp": null
+    },
+    {
+      "case": "critical-level",
+      "level": "CRITICAL",
+      "line": "2026-02-21T10:28:51.529718+00:00 12 34 CRITICAL oracle message",
+      "lineNumber": 7,
+      "message": "oracle message",
+      "parsed": true,
+      "pid": 34,
+      "ppid": 12,
+      "timestamp": "2026-02-21T10:28:51.529718+00:00"
+    }
+  ],
+  "note": "Telemetry and observability corpus: what the pinned reference's datalake client, metadata builders, event senders, tracing module, redaction policy, log formatter and log reader answer for each scripted input. Values, key sets, vocabularies and verdicts are committed as they stand because the scenarios supplied them; a credential is recorded as the environment variable it came from and never as a value, and every reference-authored sentence is committed as a SHA-256 digest and a length. Regenerate with scripts/parity/telemetry.py --corpus when the pinned reference moves.",
+  "providerNames": [
+    {
+      "input": "mistral",
+      "normalized": "mistral_ai"
+    },
+    {
+      "input": "mistral_ai",
+      "normalized": "mistral_ai"
+    },
+    {
+      "input": "mistral-ai",
+      "normalized": "mistral_ai"
+    },
+    {
+      "input": "MISTRAL",
+      "normalized": "mistral_ai"
+    },
+    {
+      "input": "  mistral  ",
+      "normalized": "mistral_ai"
+    },
+    {
+      "input": "google_vertex",
+      "normalized": "gcp.vertex_ai"
+    },
+    {
+      "input": "google-vertex",
+      "normalized": "gcp.vertex_ai"
+    },
+    {
+      "input": "vertex",
+      "normalized": "gcp.vertex_ai"
+    },
+    {
+      "input": "google",
+      "normalized": "gcp.gen_ai"
+    },
+    {
+      "input": "azure_openai",
+      "normalized": "azure.ai.openai"
+    },
+    {
+      "input": "bedrock",
+      "normalized": "aws.bedrock"
+    },
+    {
+      "input": "xai",
+      "normalized": "x_ai"
+    },
+    {
+      "input": "openai",
+      "normalized": "openai"
+    },
+    {
+      "input": "anthropic",
+      "normalized": "anthropic"
+    },
+    {
+      "input": "unknown-provider",
+      "normalized": "unknown_provider"
+    },
+    {
+      "input": "",
+      "normalized": "unknown"
+    },
+    {
+      "input": null,
+      "normalized": "unknown"
+    }
+  ],
+  "redaction": [
+    {
+      "addedKeys": [],
+      "attributeSet": "content-attributes",
+      "case": "content-attributes-default",
+      "mode": "default",
+      "removedKeys": [],
+      "replacedKeys": [],
+      "spanName": "chat oracle-model",
+      "survivingKeys": [
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "gen_ai.response.finish_reasons",
+        "gen_ai.tool.call.arguments",
+        "gen_ai.tool.call.result",
+        "gen_ai.tool.name",
+        "gen_ai.usage.input_tokens",
+        "gen_ai.usage.output_tokens",
+        "http.request.method",
+        "http.response.status_code",
+        "vibe.provider.api_style",
+        "vibe.request.call_type"
+      ],
+      "unchangedKeys": [
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "gen_ai.response.finish_reasons",
+        "gen_ai.tool.call.arguments",
+        "gen_ai.tool.call.result",
+        "gen_ai.tool.name",
+        "gen_ai.usage.input_tokens",
+        "gen_ai.usage.output_tokens",
+        "http.request.method",
+        "http.response.status_code",
+        "vibe.provider.api_style",
+        "vibe.request.call_type"
+      ]
+    },
+    {
+      "addedKeys": [],
+      "attributeSet": "content-attributes",
+      "case": "content-attributes-none",
+      "mode": "none",
+      "removedKeys": [],
+      "replacedKeys": [],
+      "spanName": "chat oracle-model",
+      "survivingKeys": [
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "gen_ai.response.finish_reasons",
+        "gen_ai.tool.call.arguments",
+        "gen_ai.tool.call.result",
+        "gen_ai.tool.name",
+        "gen_ai.usage.input_tokens",
+        "gen_ai.usage.output_tokens",
+        "http.request.method",
+        "http.response.status_code",
+        "vibe.provider.api_style",
+        "vibe.request.call_type"
+      ],
+      "unchangedKeys": [
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "gen_ai.response.finish_reasons",
+        "gen_ai.tool.call.arguments",
+        "gen_ai.tool.call.result",
+        "gen_ai.tool.name",
+        "gen_ai.usage.input_tokens",
+        "gen_ai.usage.output_tokens",
+        "http.request.method",
+        "http.response.status_code",
+        "vibe.provider.api_style",
+        "vibe.request.call_type"
+      ]
+    },
+    {
+      "addedKeys": [],
+      "attributeSet": "content-attributes",
+      "case": "content-attributes-strict",
+      "mode": "strict",
+      "removedKeys": [],
+      "replacedKeys": [
+        "gen_ai.tool.call.arguments",
+        "gen_ai.tool.call.result"
+      ],
+      "spanName": "chat oracle-model",
+      "survivingKeys": [
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "gen_ai.response.finish_reasons",
+        "gen_ai.tool.call.arguments",
+        "gen_ai.tool.call.result",
+        "gen_ai.tool.name",
+        "gen_ai.usage.input_tokens",
+        "gen_ai.usage.output_tokens",
+        "http.request.method",
+        "http.response.status_code",
+        "vibe.provider.api_style",
+        "vibe.request.call_type"
+      ],
+      "unchangedKeys": [
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "gen_ai.response.finish_reasons",
+        "gen_ai.tool.name",
+        "gen_ai.usage.input_tokens",
+        "gen_ai.usage.output_tokens",
+        "http.request.method",
+        "http.response.status_code",
+        "vibe.provider.api_style",
+        "vibe.request.call_type"
+      ]
+    },
+    {
+      "addedKeys": [],
+      "attributeSet": "credential-shaped-attributes",
+      "case": "credential-shaped-attributes-default",
+      "mode": "default",
+      "removedKeys": [],
+      "replacedKeys": [
+        "gen_ai.tool.call.arguments",
+        "vibe.provider.api_style"
+      ],
+      "spanName": "chat oracle-model",
+      "survivingKeys": [
+        "gen_ai.request.model",
+        "gen_ai.tool.call.arguments",
+        "http.url",
+        "vibe.provider.api_style"
+      ],
+      "unchangedKeys": [
+        "gen_ai.request.model",
+        "http.url"
+      ]
+    },
+    {
+      "addedKeys": [],
+      "attributeSet": "credential-shaped-attributes",
+      "case": "credential-shaped-attributes-none",
+      "mode": "none",
+      "removedKeys": [],
+      "replacedKeys": [],
+      "spanName": "chat oracle-model",
+      "survivingKeys": [
+        "gen_ai.request.model",
+        "gen_ai.tool.call.arguments",
+        "http.url",
+        "vibe.provider.api_style"
+      ],
+      "unchangedKeys": [
+        "gen_ai.request.model",
+        "gen_ai.tool.call.arguments",
+        "http.url",
+        "vibe.provider.api_style"
+      ]
+    },
+    {
+      "addedKeys": [],
+      "attributeSet": "credential-shaped-attributes",
+      "case": "credential-shaped-attributes-strict",
+      "mode": "strict",
+      "removedKeys": [],
+      "replacedKeys": [
+        "gen_ai.tool.call.arguments",
+        "http.url",
+        "vibe.provider.api_style"
+      ],
+      "spanName": "chat oracle-model",
+      "survivingKeys": [
+        "gen_ai.request.model",
+        "gen_ai.tool.call.arguments",
+        "http.url",
+        "vibe.provider.api_style"
+      ],
+      "unchangedKeys": [
+        "gen_ai.request.model"
+      ]
+    }
+  ],
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+  },
+  "schemaVersion": 1,
+  "spans": [
+    {
+      "attributeKeys": [
+        "gen_ai.agent.name",
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model"
+      ],
+      "attributes": {
+        "gen_ai.agent.name": "mistral-vibe",
+        "gen_ai.conversation.id": "oracle-session",
+        "gen_ai.operation.name": "invoke_agent",
+        "gen_ai.provider.name": "mistral_ai",
+        "gen_ai.request.model": "oracle-model"
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "agent-span",
+      "name": "invoke_agent mistral-vibe",
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "OK",
+      "statusDescription": null
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.agent.name",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name"
+      ],
+      "attributes": {
+        "gen_ai.agent.name": "mistral-vibe",
+        "gen_ai.operation.name": "invoke_agent",
+        "gen_ai.provider.name": "mistral_ai"
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "agent-span-without-model-or-session",
+      "name": "invoke_agent mistral-vibe",
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "OK",
+      "statusDescription": null
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.tool.call.arguments",
+        "gen_ai.tool.call.id",
+        "gen_ai.tool.call.result",
+        "gen_ai.tool.name",
+        "gen_ai.tool.type"
+      ],
+      "attributes": {
+        "gen_ai.conversation.id": "oracle-session",
+        "gen_ai.operation.name": "execute_tool",
+        "gen_ai.tool.call.arguments": "{\"path\":\"a.rs\"}",
+        "gen_ai.tool.call.id": "oracle-call",
+        "gen_ai.tool.call.result": "oracle result",
+        "gen_ai.tool.name": "read_file",
+        "gen_ai.tool.type": "function"
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "tool-span-inside-an-agent-span",
+      "name": "execute_tool read_file",
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "OK",
+      "statusDescription": null
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.agent.name",
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model"
+      ],
+      "attributes": {
+        "gen_ai.agent.name": "mistral-vibe",
+        "gen_ai.conversation.id": "oracle-session",
+        "gen_ai.operation.name": "invoke_agent",
+        "gen_ai.provider.name": "mistral_ai",
+        "gen_ai.request.model": "oracle-model"
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "tool-span-inside-an-agent-span",
+      "name": "invoke_agent mistral-vibe",
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "OK",
+      "statusDescription": null
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.operation.name",
+        "gen_ai.tool.call.arguments",
+        "gen_ai.tool.call.id",
+        "gen_ai.tool.name",
+        "gen_ai.tool.type"
+      ],
+      "attributes": {
+        "gen_ai.operation.name": "execute_tool",
+        "gen_ai.tool.call.arguments": "{\"path\":\"a.rs\"}",
+        "gen_ai.tool.call.id": "oracle-call",
+        "gen_ai.tool.name": "read_file",
+        "gen_ai.tool.type": "function"
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "tool-span-without-a-parent",
+      "name": "execute_tool read_file",
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "OK",
+      "statusDescription": null
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.max_tokens",
+        "gen_ai.request.model",
+        "gen_ai.request.temperature",
+        "gen_ai.response.finish_reasons",
+        "gen_ai.response.id",
+        "gen_ai.response.model",
+        "gen_ai.usage.input_tokens",
+        "gen_ai.usage.output_tokens",
+        "http.request.method",
+        "http.response.status_code",
+        "http.url",
+        "vibe.provider.api_style",
+        "vibe.request.call_type",
+        "vibe.request.message_id",
+        "vibe.request.streaming"
+      ],
+      "attributes": {
+        "gen_ai.conversation.id": "oracle-session",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "mistral_ai",
+        "gen_ai.request.max_tokens": 512,
+        "gen_ai.request.model": "oracle-model",
+        "gen_ai.request.temperature": 0.3,
+        "gen_ai.response.finish_reasons": [
+          "stop"
+        ],
+        "gen_ai.response.id": "oracle-response",
+        "gen_ai.response.model": "oracle-response-model",
+        "gen_ai.usage.input_tokens": 120,
+        "gen_ai.usage.output_tokens": 34,
+        "http.request.method": "POST",
+        "http.response.status_code": 200,
+        "http.url": "https://api.mistral.ai/v1/chat/completions",
+        "vibe.provider.api_style": "openai",
+        "vibe.request.call_type": "main_call",
+        "vibe.request.message_id": "oracle-message",
+        "vibe.request.streaming": true
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "model-call-span-inside-an-agent-span",
+      "name": "chat oracle-model",
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "OK",
+      "statusDescription": null
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.agent.name",
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model"
+      ],
+      "attributes": {
+        "gen_ai.agent.name": "mistral-vibe",
+        "gen_ai.conversation.id": "oracle-session",
+        "gen_ai.operation.name": "invoke_agent",
+        "gen_ai.provider.name": "mistral_ai",
+        "gen_ai.request.model": "oracle-model"
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "model-call-span-inside-an-agent-span",
+      "name": "invoke_agent mistral-vibe",
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "OK",
+      "statusDescription": null
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "vibe.provider.api_style",
+        "vibe.request.streaming"
+      ],
+      "attributes": {
+        "gen_ai.conversation.id": "oracle-metadata-session",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "third_party",
+        "gen_ai.request.model": "oracle-model",
+        "vibe.provider.api_style": "openai",
+        "vibe.request.streaming": false
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "model-call-span-from-metadata-session",
+      "name": "chat oracle-model",
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "OK",
+      "statusDescription": null
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.tool.call.id",
+        "gen_ai.tool.name",
+        "vibe.hook.name",
+        "vibe.hook.type"
+      ],
+      "attributes": {
+        "gen_ai.tool.call.id": "oracle-call",
+        "gen_ai.tool.name": "read_file",
+        "vibe.hook.name": "oracle-hook",
+        "vibe.hook.type": "pre_tool_use"
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "hook-span",
+      "name": "hook pre_tool_use oracle-hook",
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "OK",
+      "statusDescription": null
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.conversation.id",
+        "vibe.hook.name",
+        "vibe.hook.type"
+      ],
+      "attributes": {
+        "gen_ai.conversation.id": "oracle-session",
+        "vibe.hook.name": "oracle-hook",
+        "vibe.hook.type": "stop"
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "hook-span-inside-an-agent-span",
+      "name": "hook stop oracle-hook",
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "OK",
+      "statusDescription": null
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.agent.name",
+        "gen_ai.conversation.id",
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model"
+      ],
+      "attributes": {
+        "gen_ai.agent.name": "mistral-vibe",
+        "gen_ai.conversation.id": "oracle-session",
+        "gen_ai.operation.name": "invoke_agent",
+        "gen_ai.provider.name": "mistral_ai",
+        "gen_ai.request.model": "oracle-model"
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "hook-span-inside-an-agent-span",
+      "name": "invoke_agent mistral-vibe",
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "OK",
+      "statusDescription": null
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "vibe.provider.api_style",
+        "vibe.request.streaming"
+      ],
+      "attributes": {
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "mistral_ai",
+        "gen_ai.request.model": "oracle-model",
+        "vibe.provider.api_style": "openai",
+        "vibe.request.streaming": false
+      },
+      "backendProvider": "mistral",
+      "backendStatus": 503,
+      "bodyRan": true,
+      "case": "model-call-span-raising-a-backend-error",
+      "name": "chat oracle-model",
+      "raised": "BackendError",
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "ERROR",
+      "statusDescription": {
+        "digest": "c41b61334e5c9b9c747a81b8aba3d516ea2a9dd647ec9672b16ee9bf62074091",
+        "length": 42
+      }
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "vibe.provider.api_style",
+        "vibe.request.streaming"
+      ],
+      "attributes": {
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "mistral_ai",
+        "gen_ai.request.model": "oracle-model",
+        "vibe.provider.api_style": "openai",
+        "vibe.request.streaming": false
+      },
+      "backendProvider": "mistral",
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "model-call-span-raising-a-backend-error-without-a-status",
+      "name": "chat oracle-model",
+      "raised": "BackendError",
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "ERROR",
+      "statusDescription": {
+        "digest": "8b0f72ae2129322a8601a78921563e806ed2d82a87d9f2e66284c0075e7edf2e",
+        "length": 42
+      }
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "vibe.provider.api_style",
+        "vibe.request.streaming"
+      ],
+      "attributes": {
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "mistral_ai",
+        "gen_ai.request.model": "oracle-model",
+        "vibe.provider.api_style": "openai",
+        "vibe.request.streaming": false
+      },
+      "backendProvider": "mistral",
+      "backendStatus": 429,
+      "bodyRan": true,
+      "case": "model-call-span-wrapping-a-backend-error",
+      "name": "chat oracle-model",
+      "raised": "RuntimeError",
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "ERROR",
+      "statusDescription": {
+        "digest": "3210c7f78c57ec5083463e9712e9392c5f51dddb711ffee895ed0f35a1bbf782",
+        "length": 42
+      }
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "vibe.provider.api_style",
+        "vibe.request.streaming"
+      ],
+      "attributes": {
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "mistral_ai",
+        "gen_ai.request.model": "oracle-model",
+        "vibe.provider.api_style": "openai",
+        "vibe.request.streaming": false
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "model-call-span-raising-an-unhandled-exception",
+      "name": "chat oracle-model",
+      "raised": "RuntimeError",
+      "recordUnhandledException": false,
+      "recordedExceptions": 0,
+      "recording": true,
+      "statusCode": "ERROR",
+      "statusDescription": {
+        "digest": "f5a3e3a1615b137dba42d2489af83972faba66a65d5addcf9f5c9c466a8fd61f",
+        "length": 38
+      }
+    },
+    {
+      "attributeKeys": [
+        "gen_ai.operation.name",
+        "gen_ai.tool.call.arguments",
+        "gen_ai.tool.call.id",
+        "gen_ai.tool.name",
+        "gen_ai.tool.type"
+      ],
+      "attributes": {
+        "gen_ai.operation.name": "execute_tool",
+        "gen_ai.tool.call.arguments": "{}",
+        "gen_ai.tool.call.id": "oracle-call",
+        "gen_ai.tool.name": "read_file",
+        "gen_ai.tool.type": "function"
+      },
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "tool-span-raising-an-unhandled-exception",
+      "name": "execute_tool read_file",
+      "raised": "RuntimeError",
+      "recordUnhandledException": true,
+      "recordedExceptions": 1,
+      "recording": true,
+      "statusCode": "ERROR",
+      "statusDescription": {
+        "digest": "76f09c527d093e0114b0044eaf19634ec0cbcdf253aa3f79348366770e5d98b2",
+        "length": 24
+      }
+    },
+    {
+      "attributeKeys": [],
+      "attributes": {},
+      "backendProvider": null,
+      "backendStatus": null,
+      "bodyRan": true,
+      "case": "agent-span-without-a-provider",
+      "name": null,
+      "raised": null,
+      "recordUnhandledException": null,
+      "recordedExceptions": 0,
+      "recording": false,
+      "statusCode": null,
+      "statusDescription": null
+    }
+  ]
+}
