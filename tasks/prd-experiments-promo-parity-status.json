@@ -18,10 +18,10 @@
     {
       "id": "EP-002",
       "title": "The configuration fields the layer writes",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 2,
-      "stories_done": 0,
+      "stories_done": 2,
       "stories_in_review": 0
     },
     {
@@ -116,29 +116,29 @@
       "id": "US-004",
       "title": "Declare the routed model fields and resolve them on read",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-003"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
     },
     {
       "id": "US-005",
       "title": "Unpin active_model and gate the managed shell family",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-004"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
     },
     {
       "id": "US-006",
