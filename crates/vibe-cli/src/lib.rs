@@ -33,7 +33,7 @@ use vibe_core::auth::KeyringStore;
 use vibe_core::mcp::SamplingHandler;
 use vibe_core::observability::{self, init_file_logging};
 use vibe_core::telemetry::{
-    LaunchContext, ReqwestTelemetryTransport, TelemetryClient, TelemetryConfig,
+    ClientTelemetry, LaunchContext, ReqwestTelemetryTransport, TelemetryClient, TelemetryConfig,
     TelemetryConfigGetter, TelemetryContext, TelemetryEventObserver, TelemetryRecord,
     detect_terminal_emulator,
 };
@@ -163,7 +163,8 @@ pub async fn run(
             &arguments,
             release3,
             Some(driver.sampling_handler(&arguments.model)),
-        )?;
+        )?
+        .using_client_telemetry(telemetry.clone());
         let census = arguments
             .workdir
             .clone()
@@ -729,6 +730,22 @@ impl CliTelemetryObserver {
 impl EventObserver for CliTelemetryObserver {
     fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
         self.events.observe(event)
+    }
+}
+
+/// The same client every terminal-side event travels through also carries the
+/// ones a client recorded on the app server, which is what the reference does
+/// by handing `telemetry/record` to the agent loop's own client.
+impl ClientTelemetry for CliTelemetryObserver {
+    fn record_client_event(
+        &self,
+        name: &str,
+        properties: serde_json::Map<String, serde_json::Value>,
+        session_id: Option<&str>,
+        correlate_last_request: bool,
+    ) {
+        self.events
+            .record_client_event(name, properties, session_id, correlate_last_request);
     }
 }
 
