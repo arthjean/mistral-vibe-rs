@@ -24,6 +24,7 @@ use vibe_app_server::release3::{Release3Paths, Release3Service};
 use vibe_app_server::transport::{MAX_FRAME_BYTES, read_bounded_frame};
 use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
+use vibe_core::observability::{LogLevel, init_file_logging, log};
 use vibe_core::tracing::{TracingGuard, TracingSetup, setup_tracing};
 
 const WRITER_QUEUE_CAPACITY: usize = 1_024;
@@ -288,6 +289,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // `{vibe_home}/.env` stands in for an unset process variable, which is what
     // the reference startup leaves behind after loading the file.
     let dotenv = DotenvValues::global(&vibe_home);
+    // The log file opens before the first session, so an editor that never sees
+    // stderr still leaves a trace on disk for the operator who reads one.
+    install_file_logging(&vibe_home);
     let credential_environment = dotenv
         .variable("VIBE_CREDENTIAL_ENV")
         .unwrap_or_else(|| "MISTRAL_API_KEY".to_owned());
@@ -350,17 +354,36 @@ fn install_tracing(vibe_home: &Path, dotenv: &DotenvValues) -> Option<TracingGua
     match setup_tracing(&snapshot.effective, &credentials) {
         TracingSetup::Installed(guard) => Some(guard),
         TracingSetup::UnusableEndpoint { endpoint } => {
-            eprintln!(
+            report_degradation(&format!(
                 "OTEL tracing is enabled but `{endpoint}` is not a usable collector; skipping."
-            );
+            ));
             None
         }
         TracingSetup::MissingCredential { variable } => {
-            eprintln!("OTEL tracing is enabled but {variable} is not set; skipping.");
+            report_degradation(&format!(
+                "OTEL tracing is enabled but {variable} is not set; skipping."
+            ));
             None
         }
         TracingSetup::Disabled => None,
     }
+}
+
+/// Reference `init_file_logging`, called from the ACP entrypoint before the
+/// first session. A file that cannot be opened is reported once and the editor
+/// session starts anyway.
+fn install_file_logging(vibe_home: &Path) {
+    let path = vibe_home.join("logs").join("vibe.log");
+    if let Err(error) = init_file_logging(&path, &|name| std::env::var(name).ok()) {
+        eprintln!("Logging to {} is unavailable: {error}", path.display());
+    }
+}
+
+/// A startup degradation, told to the editor on stderr and left on disk for the
+/// operator who reads the log afterward.
+fn report_degradation(message: &str) {
+    eprintln!("{message}");
+    log(LogLevel::Warning, message);
 }
 
 async fn run_stdio<R, W, D>(
