@@ -95,7 +95,7 @@ pub fn telemetry_user_agent(backend: Option<&str>) -> String {
 static SERVER_URL: LazyLock<Option<Regex>> =
     LazyLock::new(|| Regex::new(r"^(https?://.+)(/v\d+.*)").ok());
 
-fn server_url_from_api_base(api_base: &str) -> Option<String> {
+pub(crate) fn server_url_from_api_base(api_base: &str) -> Option<String> {
     let captures = SERVER_URL.as_ref()?.captures(api_base)?;
     Some(captures.get(1)?.as_str().to_owned())
 }

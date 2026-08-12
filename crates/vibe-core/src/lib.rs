@@ -43,5 +43,6 @@ pub mod storage;
 pub mod telemetry;
 pub mod text;
 pub mod tools;
+pub mod tracing;
 pub mod updates;
 pub mod workspace;

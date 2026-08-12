@@ -22,6 +22,12 @@
 //! divergence stopped reproducing fails as stale, which is what forces a row out
 //! once the behavior conforms.
 
+#![expect(
+    deprecated,
+    reason = "`opentelemetry-semantic-conventions` 0.32.1 deprecates the whole `gen_ai.*` family \
+              for having moved to the GenAI semantic-conventions repository, without changing a \
+              single key string"
+)]
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -31,10 +37,24 @@ use std::sync::Arc;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
+use opentelemetry_sdk::trace::SpanData;
+use opentelemetry_semantic_conventions::attribute as semconv;
+
 use crate::compaction::{CompactionFailureReason, CompactionStatus};
 use crate::config::registry::{FIELDS, default_document};
 use crate::config::{ConfigPaths, LayeredConfig};
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::tracing::{
+    AGENT_NAME, AgentSpan, BackendFailure, HOOK_NAME_KEY, HOOK_TYPE_KEY, HookSpan,
+    MISTRAL_OTEL_PATH, MISTRAL_PROVIDER_VALUE, ModelCallSpan, OPERATION_CHAT,
+    OPERATION_EXECUTE_TOOL, OPERATION_INVOKE_AGENT, OtelExporterConfig, OtelRedactionMode,
+    PROVIDER_API_STYLE_KEY, REQUEST_CALL_TYPE_KEY, REQUEST_MESSAGE_ID_KEY, REQUEST_STREAMING_KEY,
+    TRACER_NAME, TRACES_EXPORT_PATH, ToolSpan, TracedError, agent_span, build_span_exporter_config,
+    harness as tracing_harness, hook_span, model_call_span, otel_credential_variable,
+    provider_attribute_value, redaction, set_model_call_http_status,
+    set_model_call_response_metadata, set_model_call_usage, set_tool_result, setup_tracing,
+    tool_span,
+};
 
 use super::{
     LaunchContext, TELEMETRY_ATTACHMENT_IMAGE, TELEMETRY_AUTHORIZATION_SCHEME,
@@ -115,29 +135,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
     (
         "eventPayloads/correlated/vibe.admin_config_applied",
         "ACCEPTED: as above",
-    ),
-    // -- EP-004: OpenTelemetry tracing --------------------------------------
-    (
-        "constants/tracing/*",
-        "OPEN (US-013, US-014): no tracer, no span families and no attribute keys exist in this \
-         build; `enable_otel`, `otel_endpoint` and `otel_redaction` are declared in \
-         `crates/vibe-core/src/config/registry.rs` and read by nothing",
-    ),
-    (
-        "exporterConfig/*",
-        "OPEN (US-013): no exporter configuration is resolved by this build",
-    ),
-    (
-        "spans/*",
-        "OPEN (US-014): no span family exists in this build",
-    ),
-    (
-        "providerNames/normalized/*",
-        "OPEN (US-015): the provider-name normalization has no counterpart",
-    ),
-    (
-        "redaction/*",
-        "OPEN (US-015): no redaction policy exists in this build",
     ),
     // -- EP-005: file logging and the log reader ----------------------------
     (
@@ -362,24 +359,16 @@ struct PayloadEntry {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ExporterCase {
     case: String,
-    #[expect(
-        dead_code,
-        reason = "the request is the input; the resolution is the answer"
-    )]
     endpoint_requested: String,
     configuration: Option<String>,
     resolved: Option<bool>,
     endpoint: Option<String>,
     header_names: Vec<String>,
-    #[expect(
-        dead_code,
-        reason = "the variable is compared once US-013 resolves one"
-    )]
     credential_variable: Option<String>,
-    #[expect(dead_code, reason = "as above")]
     enable_telemetry: Option<bool>,
-    #[expect(dead_code, reason = "as above")]
     enable_otel: Option<bool>,
+    /// Absent on a resolution case and present on a setup one, which is what
+    /// tells the two apart.
     provider_installed: Option<bool>,
 }
 
@@ -389,13 +378,8 @@ struct SpanCase {
     case: String,
     name: Option<String>,
     attribute_keys: Vec<String>,
-    #[expect(dead_code, reason = "US-014 compares the values once the keys exist")]
     attributes: Value,
     status_code: Option<String>,
-    #[expect(
-        dead_code,
-        reason = "the description is a digest, compared once US-014 writes one"
-    )]
     status_description: Option<Value>,
     recorded_exceptions: u64,
     recording: bool,
@@ -428,28 +412,14 @@ struct ProviderNameCase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RedactionCase {
     case: String,
-    #[expect(dead_code, reason = "the set is named by the case")]
+    /// The set the case carried in, which is what the replay authors again.
     attribute_set: String,
-    #[expect(dead_code, reason = "as above")]
     mode: String,
-    #[expect(
-        dead_code,
-        reason = "the span name survives redaction, compared once US-015 exports"
-    )]
     span_name: String,
     surviving_keys: Vec<String>,
-    #[expect(
-        dead_code,
-        reason = "the replaced set is the complement of the unchanged one"
-    )]
     unchanged_keys: Vec<String>,
     replaced_keys: Vec<String>,
-    #[expect(
-        dead_code,
-        reason = "the policy adds no key at the pin; US-015 compares it"
-    )]
     added_keys: Vec<String>,
-    #[expect(dead_code, reason = "as above")]
     removed_keys: Vec<String>,
 }
 
@@ -1292,12 +1262,86 @@ fn run_constants(constants: &Constants, report: &mut Report) {
     run_vocabularies(&constants.vocabularies, report);
 }
 
-/// Every tracing constant, compared against the nothing this build declares.
-/// Flattened rather than enumerated field by field so a key the reference adds
-/// is compared without editing this module.
+/// Every tracing constant, read off the module that declares it. Flattened
+/// rather than enumerated field by field, so a key the reference adds arrives
+/// here with no counterpart and fails by name instead of passing unread.
 fn run_tracing_constants(tracing: &Value, report: &mut Report) {
+    let declared = BTreeMap::from([
+        ("agentName", AGENT_NAME),
+        ("hookNameKey", HOOK_NAME_KEY),
+        ("hookTypeKey", HOOK_TYPE_KEY),
+        ("mistralOtelPath", MISTRAL_OTEL_PATH),
+        ("mistralProviderValue", MISTRAL_PROVIDER_VALUE),
+        ("operationNames.chat", OPERATION_CHAT),
+        ("operationNames.executeTool", OPERATION_EXECUTE_TOOL),
+        ("operationNames.invokeAgent", OPERATION_INVOKE_AGENT),
+        ("providerApiStyleKey", PROVIDER_API_STYLE_KEY),
+        ("requestCallTypeKey", REQUEST_CALL_TYPE_KEY),
+        ("requestMessageIdKey", REQUEST_MESSAGE_ID_KEY),
+        ("requestStreamingKey", REQUEST_STREAMING_KEY),
+        ("semanticKeys.agentName", semconv::GEN_AI_AGENT_NAME),
+        (
+            "semanticKeys.conversationId",
+            semconv::GEN_AI_CONVERSATION_ID,
+        ),
+        (
+            "semanticKeys.httpRequestMethod",
+            semconv::HTTP_REQUEST_METHOD,
+        ),
+        (
+            "semanticKeys.httpResponseStatusCode",
+            semconv::HTTP_RESPONSE_STATUS_CODE,
+        ),
+        ("semanticKeys.httpUrl", semconv::HTTP_URL),
+        ("semanticKeys.operationName", semconv::GEN_AI_OPERATION_NAME),
+        ("semanticKeys.providerName", semconv::GEN_AI_PROVIDER_NAME),
+        (
+            "semanticKeys.requestMaxTokens",
+            semconv::GEN_AI_REQUEST_MAX_TOKENS,
+        ),
+        ("semanticKeys.requestModel", semconv::GEN_AI_REQUEST_MODEL),
+        (
+            "semanticKeys.requestTemperature",
+            semconv::GEN_AI_REQUEST_TEMPERATURE,
+        ),
+        (
+            "semanticKeys.responseFinishReasons",
+            semconv::GEN_AI_RESPONSE_FINISH_REASONS,
+        ),
+        ("semanticKeys.responseId", semconv::GEN_AI_RESPONSE_ID),
+        ("semanticKeys.responseModel", semconv::GEN_AI_RESPONSE_MODEL),
+        (
+            "semanticKeys.toolCallArguments",
+            semconv::GEN_AI_TOOL_CALL_ARGUMENTS,
+        ),
+        ("semanticKeys.toolCallId", semconv::GEN_AI_TOOL_CALL_ID),
+        (
+            "semanticKeys.toolCallResult",
+            semconv::GEN_AI_TOOL_CALL_RESULT,
+        ),
+        ("semanticKeys.toolName", semconv::GEN_AI_TOOL_NAME),
+        ("semanticKeys.toolType", semconv::GEN_AI_TOOL_TYPE),
+        (
+            "semanticKeys.usageInputTokens",
+            semconv::GEN_AI_USAGE_INPUT_TOKENS,
+        ),
+        (
+            "semanticKeys.usageOutputTokens",
+            semconv::GEN_AI_USAGE_OUTPUT_TOKENS,
+        ),
+        ("tracerName", TRACER_NAME),
+        ("tracesExportPath", TRACES_EXPORT_PATH),
+    ]);
     for (field, value) in flatten(tracing) {
-        report.check_absent("constants", "tracing", &field, &value, None);
+        report.check(
+            "constants",
+            "tracing",
+            &field,
+            &value,
+            &declared
+                .get(field.as_str())
+                .map_or(Value::Null, |declared| json!(declared)),
+        );
     }
 }
 
@@ -1955,68 +1999,696 @@ fn declared_types(types: &Value) -> BTreeMap<String, String> {
         .unwrap_or_default()
 }
 
+/// The three tracing keys a setup case writes over its document, the way the
+/// capture writes them: the document's own `enable_telemetry` line is dropped
+/// and the case's own three keys are written above what is left.
+fn setup_document(document: &str, telemetry: bool, otel: bool, endpoint: &str) -> toml::Table {
+    let body = document
+        .lines()
+        .filter(|line| !line.starts_with("enable_telemetry"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "enable_telemetry = {telemetry}\nenable_otel = {otel}\notel_endpoint = \"{endpoint}\"\n\
+         {body}"
+    )
+    .parse()
+    .expect("the setup document parses")
+}
+
+/// The exporter resolution and the two-key gate, read where a starting binary
+/// reads them: [`build_span_exporter_config`] for the endpoint and the header
+/// set, and [`setup_tracing`] for whether a provider ends up installed.
 fn run_exporter_config(corpus: &Corpus, report: &mut Report) {
+    let documents = corpus
+        .documents
+        .iter()
+        .map(|document| (document.id.as_str(), document.toml.as_str()))
+        .collect::<BTreeMap<_, _>>();
     for entry in &corpus.exporter_config {
         let case = entry.case.as_str();
-        report.check_absent("exporterConfig", "resolved", case, &entry.resolved, None);
-        report.check_absent("exporterConfig", "endpoint", case, &entry.endpoint, None);
-        report.check_absent(
+        let document = entry
+            .configuration
+            .as_deref()
+            .map(|configuration| {
+                *documents
+                    .get(configuration)
+                    .unwrap_or_else(|| panic!("`{case}` names a declared document"))
+            })
+            .unwrap_or_default();
+        if entry.provider_installed.is_some() {
+            let table = setup_document(
+                document,
+                entry.enable_telemetry.unwrap_or(true),
+                entry.enable_otel.unwrap_or_default(),
+                &entry.endpoint_requested,
+            );
+            let setup = setup_tracing(&table, &oracle_credentials);
+            let installed = setup.is_installed();
+            drop(setup);
+            tracing_harness::uninstall();
+            report.check(
+                "exporterConfig",
+                "providerInstalled",
+                case,
+                &entry.provider_installed,
+                &Some(installed),
+            );
+            report.check("exporterConfig", "resolved", case, &entry.resolved, &None);
+            report.check("exporterConfig", "endpoint", case, &entry.endpoint, &None);
+            report.check(
+                "exporterConfig",
+                "headerNames",
+                case,
+                &entry.header_names,
+                &Vec::new(),
+            );
+            report.check(
+                "exporterConfig",
+                "credentialVariable",
+                case,
+                &entry.credential_variable,
+                &None,
+            );
+            continue;
+        }
+        let table = document
+            .parse::<toml::Table>()
+            .unwrap_or_else(|error| panic!("`{case}` parses: {error}"));
+        let resolved =
+            build_span_exporter_config(&entry.endpoint_requested, &table, &oracle_credentials);
+        report.check(
+            "exporterConfig",
+            "resolved",
+            case,
+            &entry.resolved,
+            &Some(resolved.is_some()),
+        );
+        report.check(
+            "exporterConfig",
+            "endpoint",
+            case,
+            &entry.endpoint,
+            &resolved.as_ref().map(|config| config.endpoint.clone()),
+        );
+        report.check(
             "exporterConfig",
             "headerNames",
             case,
             &entry.header_names,
-            None,
+            &resolved
+                .as_ref()
+                .map(OtelExporterConfig::header_names)
+                .unwrap_or_default(),
         );
-        report.check_absent(
+        report.check(
+            "exporterConfig",
+            "credentialVariable",
+            case,
+            &entry.credential_variable,
+            &resolved
+                .as_ref()
+                .filter(|config| !config.headers.is_empty())
+                .map(|_| otel_credential_variable(&table)),
+        );
+        report.check(
             "exporterConfig",
             "providerInstalled",
             case,
             &entry.provider_installed,
-            None,
+            &None,
         );
     }
 }
 
-fn run_spans(corpus: &Corpus, report: &mut Report) {
-    for entry in &corpus.spans {
+/// One span as this build produced it, in the shape the capture recorded the
+/// reference's.
+#[derive(Debug, Default)]
+struct PortSpan {
+    name: Option<String>,
+    attribute_keys: Vec<String>,
+    attributes: Value,
+    status_code: Option<String>,
+    status_description: Option<Value>,
+    recorded_exceptions: u64,
+    recording: bool,
+}
+
+impl PortSpan {
+    /// A span the collector received, which is a span that was recorded.
+    fn exported(span: &SpanData) -> Self {
+        let mut attributes = Map::new();
+        for attribute in &span.attributes {
+            attributes.insert(
+                attribute.key.as_str().to_owned(),
+                attribute_value(&attribute.value),
+            );
+        }
+        let (status_code, status_description) = match &span.status {
+            opentelemetry::trace::Status::Ok => (Some("OK".to_owned()), None),
+            opentelemetry::trace::Status::Unset => (Some("UNSET".to_owned()), None),
+            opentelemetry::trace::Status::Error { description } => {
+                (Some("ERROR".to_owned()), Some(digest(description)))
+            }
+        };
+        Self {
+            name: Some(span.name.to_string()),
+            attribute_keys: attributes.keys().cloned().collect(),
+            attributes: Value::Object(attributes),
+            status_code,
+            status_description,
+            recorded_exceptions: span.events.events.len() as u64,
+            recording: true,
+        }
+    }
+
+    /// A span no provider recorded, which is what a build with tracing off
+    /// produces and the reference's `INVALID_SPAN` answers.
+    fn unrecorded() -> Self {
+        Self {
+            attributes: Value::Object(Map::new()),
+            ..Self::default()
+        }
+    }
+}
+
+/// An attribute value as the corpus records it. The reference records a tuple as
+/// a list, so an array lands as one here too.
+fn attribute_value(value: &opentelemetry::Value) -> Value {
+    match value {
+        opentelemetry::Value::Bool(value) => json!(value),
+        opentelemetry::Value::I64(value) => json!(value),
+        opentelemetry::Value::F64(value) => json!(value),
+        opentelemetry::Value::String(value) => json!(value.as_str()),
+        opentelemetry::Value::Array(opentelemetry::Array::Bool(items)) => json!(items),
+        opentelemetry::Value::Array(opentelemetry::Array::I64(items)) => json!(items),
+        opentelemetry::Value::Array(opentelemetry::Array::F64(items)) => json!(items),
+        opentelemetry::Value::Array(opentelemetry::Array::String(items)) => json!(
+            items
+                .iter()
+                .map(opentelemetry::StringValue::as_str)
+                .collect::<Vec<_>>()
+        ),
+        _ => Value::Null,
+    }
+}
+
+/// A message recorded by its length and its SHA-256, never by its content, the
+/// way the capture records every reference-authored string.
+fn digest(value: &str) -> Value {
+    use sha2::Digest as _;
+
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(value.as_bytes());
+    json!({
+        "length": value.chars().count(),
+        "digest": crate::text::hex_encode(&hasher.finalize()),
+    })
+}
+
+/// A failure with no backend behind it. The class name is what the reference's
+/// model-call status quotes, so the fixture is named after the exception the
+/// capture raised.
+#[derive(Debug)]
+struct OracleRuntimeError {
+    message: &'static str,
+    backend: Option<BackendFailure>,
+}
+
+impl std::fmt::Display for OracleRuntimeError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.message)
+    }
+}
+
+impl TracedError for OracleRuntimeError {
+    fn error_type(&self) -> &'static str {
+        "RuntimeError"
+    }
+
+    fn backend_failure(&self) -> Option<BackendFailure> {
+        self.backend.clone()
+    }
+}
+
+/// The backend failure the capture raised, whose provider and status are what
+/// the status description quotes.
+#[derive(Debug)]
+struct OracleBackendError {
+    status: Option<i64>,
+}
+
+impl std::fmt::Display for OracleBackendError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("oracle reason")
+    }
+}
+
+impl TracedError for OracleBackendError {
+    fn error_type(&self) -> &'static str {
+        "BackendError"
+    }
+
+    fn backend_failure(&self) -> Option<BackendFailure> {
+        Some(BackendFailure {
+            provider: Some("mistral".to_owned()),
+            status: self.status,
+        })
+    }
+}
+
+type OracleResult = Result<(), OracleRuntimeError>;
+
+/// The scripted span run the capture drove, opened here through the same four
+/// families. Every case drains the collector, so the spans one case exported are
+/// compared against the entries the corpus records for it, in the order they
+/// ended: a child before the parent it ran inside.
+async fn port_spans() -> Vec<(String, PortSpan)> {
+    let harness = tracing_harness::Harness::install();
+    let mut produced: Vec<(String, PortSpan)> = Vec::new();
+    let mut drain = |case: &str, harness: &tracing_harness::Harness| {
+        for span in harness.drain() {
+            produced.push((case.to_owned(), PortSpan::exported(&span)));
+        }
+    };
+
+    let agent = AgentSpan {
+        model: Some("oracle-model"),
+        session_id: Some("oracle-session"),
+    };
+    let tool = ToolSpan {
+        tool_name: "read_file",
+        call_id: "oracle-call",
+        arguments: r#"{"path":"a.rs"}"#,
+    };
+    let model_call = ModelCallSpan {
+        provider_name: "mistral",
+        provider_api_style: "openai",
+        model: "oracle-model",
+        ..ModelCallSpan::default()
+    };
+
+    let _: OracleResult = agent_span(agent, async { Ok(()) }).await;
+    drain("agent-span", &harness);
+
+    let _: OracleResult = agent_span(AgentSpan::default(), async { Ok(()) }).await;
+    drain("agent-span-without-model-or-session", &harness);
+
+    let _: OracleResult = agent_span(agent, async {
+        tool_span(tool, async {
+            set_tool_result("oracle result");
+            Ok(())
+        })
+        .await
+    })
+    .await;
+    drain("tool-span-inside-an-agent-span", &harness);
+
+    let _: OracleResult = tool_span(tool, async { Ok(()) }).await;
+    drain("tool-span-without-a-parent", &harness);
+
+    let _: OracleResult = agent_span(agent, async {
+        model_call_span(
+            ModelCallSpan {
+                streaming: true,
+                temperature: Some(0.3),
+                max_tokens: Some(512),
+                call_type: Some("main_call"),
+                message_id: Some("oracle-message"),
+                http_url: Some("https://api.mistral.ai/v1/chat/completions"),
+                ..model_call
+            },
+            async {
+                set_model_call_http_status(200);
+                set_model_call_usage(120, 34);
+                set_model_call_response_metadata(&json!({
+                    "id": "oracle-response",
+                    "model": "oracle-response-model",
+                    "choices": [{"finish_reason": "stop"}],
+                }));
+                Ok(())
+            },
+        )
+        .await
+    })
+    .await;
+    drain("model-call-span-inside-an-agent-span", &harness);
+
+    let _: OracleResult = model_call_span(
+        ModelCallSpan {
+            provider_name: "third-party",
+            session_id: Some("oracle-metadata-session"),
+            ..model_call
+        },
+        async { Ok(()) },
+    )
+    .await;
+    drain("model-call-span-from-metadata-session", &harness);
+
+    let _: OracleResult = hook_span(
+        HookSpan {
+            hook_name: "oracle-hook",
+            hook_type: "pre_tool_use",
+            tool_name: Some("read_file"),
+            tool_call_id: Some("oracle-call"),
+        },
+        async { Ok(()) },
+    )
+    .await;
+    drain("hook-span", &harness);
+
+    let _: OracleResult = agent_span(agent, async {
+        hook_span(
+            HookSpan {
+                hook_name: "oracle-hook",
+                hook_type: "stop",
+                tool_name: None,
+                tool_call_id: None,
+            },
+            async { Ok(()) },
+        )
+        .await
+    })
+    .await;
+    drain("hook-span-inside-an-agent-span", &harness);
+
+    for (case, status) in [
+        ("model-call-span-raising-a-backend-error", Some(503)),
+        (
+            "model-call-span-raising-a-backend-error-without-a-status",
+            None,
+        ),
+    ] {
+        let _: Result<(), OracleBackendError> =
+            model_call_span(model_call, async { Err(OracleBackendError { status }) }).await;
+        drain(case, &harness);
+    }
+
+    let _: OracleResult = model_call_span(model_call, async {
+        Err(OracleRuntimeError {
+            message: "oracle wrapper",
+            backend: Some(BackendFailure {
+                provider: Some("mistral".to_owned()),
+                status: Some(429),
+            }),
+        })
+    })
+    .await;
+    drain("model-call-span-wrapping-a-backend-error", &harness);
+
+    let _: OracleResult = model_call_span(model_call, async {
+        Err(OracleRuntimeError {
+            message: "oracle unhandled failure",
+            backend: None,
+        })
+    })
+    .await;
+    drain("model-call-span-raising-an-unhandled-exception", &harness);
+
+    let _: OracleResult = tool_span(
+        ToolSpan {
+            arguments: "{}",
+            ..tool
+        },
+        async {
+            Err(OracleRuntimeError {
+                message: "oracle unhandled failure",
+                backend: None,
+            })
+        },
+    )
+    .await;
+    drain("tool-span-raising-an-unhandled-exception", &harness);
+
+    drop(harness);
+    // The never-raise policy, measured where no provider is installed at all:
+    // the body still runs and the span it runs under is not recording.
+    let recording: Result<bool, OracleRuntimeError> = agent_span(
+        AgentSpan {
+            model: Some("oracle-model"),
+            session_id: None,
+        },
+        async {
+            Ok(
+                opentelemetry::trace::TraceContextExt::span(&opentelemetry::Context::current())
+                    .is_recording(),
+            )
+        },
+    )
+    .await;
+    produced.push((
+        "agent-span-without-a-provider".to_owned(),
+        PortSpan {
+            recording: recording.unwrap_or(true),
+            ..PortSpan::unrecorded()
+        },
+    ));
+    produced
+}
+
+fn run_spans(corpus: &Corpus, report: &mut Report, produced: &[(String, PortSpan)]) {
+    for (index, entry) in corpus.spans.iter().enumerate() {
         let case = entry.case.as_str();
-        report.check_absent("spans", "name", case, &entry.name, None);
-        report.check_absent("spans", "attributeKeys", case, &entry.attribute_keys, None);
-        report.check_absent("spans", "statusCode", case, &entry.status_code, None);
-        report.check_absent(
+        let port = produced.get(index).filter(|(name, _)| name == case);
+        assert!(
+            port.is_some(),
+            "the replay produced no span for `{case}` at position {index}; the scripted run and \
+             the corpus disagree on what this build opens"
+        );
+        let port = port.map(|(_, span)| span);
+        report.check(
+            "spans",
+            "name",
+            case,
+            &entry.name,
+            &port.and_then(|span| span.name.clone()),
+        );
+        report.check(
+            "spans",
+            "attributeKeys",
+            case,
+            &entry.attribute_keys,
+            &port
+                .map(|span| span.attribute_keys.clone())
+                .unwrap_or_default(),
+        );
+        report.check(
+            "spans",
+            "attributes",
+            case,
+            &entry.attributes,
+            &port
+                .map(|span| span.attributes.clone())
+                .unwrap_or(Value::Null),
+        );
+        report.check(
+            "spans",
+            "statusCode",
+            case,
+            &entry.status_code,
+            &port.and_then(|span| span.status_code.clone()),
+        );
+        report.check(
+            "spans",
+            "statusDescription",
+            case,
+            &entry.status_description,
+            &port.and_then(|span| span.status_description.clone()),
+        );
+        report.check(
             "spans",
             "recordedExceptions",
             case,
             &entry.recorded_exceptions,
-            None,
+            &port
+                .map(|span| span.recorded_exceptions)
+                .unwrap_or_default(),
         );
-        report.check_absent("spans", "recording", case, &entry.recording, None);
+        report.check(
+            "spans",
+            "recording",
+            case,
+            &entry.recording,
+            &port.is_some_and(|span| span.recording),
+        );
     }
+    assert_eq!(
+        produced.len(),
+        corpus.spans.len(),
+        "this build opened {} spans and the corpus records {}",
+        produced.len(),
+        corpus.spans.len()
+    );
 }
 
 fn run_provider_names(corpus: &Corpus, report: &mut Report) {
     for entry in &corpus.provider_names {
         let case = entry.input.as_deref().unwrap_or("<none>");
-        report.check_absent("providerNames", "normalized", case, &entry.normalized, None);
+        report.check(
+            "providerNames",
+            "normalized",
+            case,
+            &entry.normalized,
+            &provider_attribute_value(entry.input.as_deref()),
+        );
+    }
+}
+
+/// The two attribute sets the capture carried into each mode. Every value is
+/// authored here, so what is compared is which key kept its value and which one
+/// lost it, never a credential.
+fn redaction_set(name: &str) -> Vec<opentelemetry::KeyValue> {
+    match name {
+        "content-attributes" => vec![
+            opentelemetry::KeyValue::new("gen_ai.operation.name", "chat"),
+            opentelemetry::KeyValue::new("gen_ai.provider.name", "mistral_ai"),
+            opentelemetry::KeyValue::new("gen_ai.request.model", "oracle-model"),
+            opentelemetry::KeyValue::new("gen_ai.conversation.id", "oracle-session"),
+            opentelemetry::KeyValue::new("gen_ai.tool.name", "read_file"),
+            opentelemetry::KeyValue::new(
+                "gen_ai.tool.call.arguments",
+                r#"{"file_path": "/oracle/workspace/file.rs"}"#,
+            ),
+            opentelemetry::KeyValue::new("gen_ai.tool.call.result", "oracle tool output"),
+            opentelemetry::KeyValue::new("gen_ai.usage.input_tokens", 120_i64),
+            opentelemetry::KeyValue::new("gen_ai.usage.output_tokens", 34_i64),
+            opentelemetry::KeyValue::new(
+                "gen_ai.response.finish_reasons",
+                opentelemetry::Value::Array(vec![opentelemetry::StringValue::from("stop")].into()),
+            ),
+            opentelemetry::KeyValue::new("http.request.method", "POST"),
+            opentelemetry::KeyValue::new("http.response.status_code", 200_i64),
+            opentelemetry::KeyValue::new("vibe.provider.api_style", "openai"),
+            opentelemetry::KeyValue::new("vibe.request.call_type", "main_call"),
+        ],
+        _ => vec![
+            opentelemetry::KeyValue::new("gen_ai.request.model", "oracle-model"),
+            opentelemetry::KeyValue::new(
+                "gen_ai.tool.call.arguments",
+                "sk-oracleoracleoracleoracle",
+            ),
+            opentelemetry::KeyValue::new(
+                "vibe.provider.api_style",
+                "Bearer oracleoracleoracleoracle",
+            ),
+            opentelemetry::KeyValue::new("http.url", "https://api.mistral.ai/v1/chat/completions"),
+        ],
+    }
+}
+
+/// What one redaction case exported: the keys that survived, the ones whose
+/// value is unchanged, and the four sets the capture derives from them.
+struct Redacted {
+    span_name: String,
+    surviving: Vec<String>,
+    unchanged: Vec<String>,
+    replaced: Vec<String>,
+    added: Vec<String>,
+    removed: Vec<String>,
+}
+
+fn port_redaction(mode: &str, set: &str) -> Redacted {
+    let declared = redaction_set(set);
+    let policy = redaction::RedactionPolicy::for_mode(OtelRedactionMode::parse(mode));
+    let harness = policy.map_or_else(
+        tracing_harness::Harness::install,
+        tracing_harness::Harness::install_redacting,
+    );
+    harness.record("chat oracle-model", declared.clone());
+    let exported = harness.drain();
+    drop(harness);
+    let span = exported
+        .first()
+        .expect("the redaction case exported one span");
+    let mut surviving = Vec::new();
+    let mut unchanged = Vec::new();
+    for attribute in &span.attributes {
+        let key = attribute.key.as_str().to_owned();
+        if declared
+            .iter()
+            .any(|entry| entry.key == attribute.key && entry.value == attribute.value)
+        {
+            unchanged.push(key.clone());
+        }
+        surviving.push(key);
+    }
+    surviving.sort_unstable();
+    unchanged.sort_unstable();
+    let declared_keys = declared
+        .iter()
+        .map(|entry| entry.key.as_str().to_owned())
+        .collect::<Vec<_>>();
+    let replaced = surviving
+        .iter()
+        .filter(|key| !unchanged.contains(key))
+        .cloned()
+        .collect();
+    let added = surviving
+        .iter()
+        .filter(|key| !declared_keys.contains(key))
+        .cloned()
+        .collect();
+    let mut removed = declared_keys
+        .iter()
+        .filter(|key| !surviving.contains(key))
+        .cloned()
+        .collect::<Vec<_>>();
+    removed.sort_unstable();
+    Redacted {
+        span_name: span.name.to_string(),
+        surviving,
+        unchanged,
+        replaced,
+        added,
+        removed,
     }
 }
 
 fn run_redaction(corpus: &Corpus, report: &mut Report) {
     for entry in &corpus.redaction {
         let case = entry.case.as_str();
-        report.check_absent(
+        let port = port_redaction(&entry.mode, &entry.attribute_set);
+        report.check(
+            "redaction",
+            "spanName",
+            case,
+            &entry.span_name,
+            &port.span_name,
+        );
+        report.check(
             "redaction",
             "survivingKeys",
             case,
             &entry.surviving_keys,
-            None,
+            &port.surviving,
         );
-        report.check_absent(
+        report.check(
+            "redaction",
+            "unchangedKeys",
+            case,
+            &entry.unchanged_keys,
+            &port.unchanged,
+        );
+        report.check(
             "redaction",
             "replacedKeys",
             case,
             &entry.replaced_keys,
-            None,
+            &port.replaced,
+        );
+        report.check(
+            "redaction",
+            "addedKeys",
+            case,
+            &entry.added_keys,
+            &port.added,
+        );
+        report.check(
+            "redaction",
+            "removedKeys",
+            case,
+            &entry.removed_keys,
+            &port.removed,
         );
     }
 }
@@ -2202,6 +2874,15 @@ fn the_ledger_fails_an_unrecorded_divergence_and_a_stale_entry() {
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
     let corpus = corpus();
+    // The tracer provider is process-global, so the three families that install
+    // one hold the tracing lock for the whole replay rather than racing the
+    // module's own tests for it.
+    let _exclusive = tracing_harness::exclusive();
+    let produced = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime for the span families")
+        .block_on(port_spans());
     println!(
         "telemetry: divergence ledger ({} entries)",
         DIVERGENCES.len()
@@ -2240,7 +2921,7 @@ fn the_committed_corpus_replays_against_this_port() {
     comparisons += settle(&report, "exporterConfig");
 
     let mut report = Report::default();
-    run_spans(&corpus, &mut report);
+    run_spans(&corpus, &mut report, &produced);
     comparisons += settle(&report, "spans");
 
     let mut report = Report::default();
