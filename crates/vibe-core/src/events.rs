@@ -157,6 +157,37 @@ pub enum EngineEvent {
     Retrying {
         reason: String,
     },
+    /// A backend request the turn is about to make, and what it is made of.
+    ///
+    /// It carries no history, like [`EngineEvent::Stats`]: the projection
+    /// ignores it and only a live observer reads it. The reference has no
+    /// counterpart because its agent loop calls a telemetry client in place;
+    /// this port reports telemetry from the event stream, so what that client
+    /// would have read travels here. It carries more than any one payload
+    /// needs: the profile and the image support are what the *tool* events this
+    /// request produces report, resolved once where they are known.
+    RequestSent {
+        /// The model the request addresses, resolved from the turn's override
+        /// or from the provider itself.
+        model: String,
+        /// The active agent profile, reference `self.agent_profile.name`.
+        agent_profile: String,
+        /// Characters across every message the request carries.
+        nb_context_chars: u64,
+        nb_context_messages: u64,
+        /// Characters of the operator's own prompt for this turn.
+        nb_prompt_chars: u64,
+        /// Images the request carries, before the provider's support is read.
+        nb_images: u64,
+        /// Whether the provider serving the request accepts images at all,
+        /// which is the reference's `supports_images` gate on the attachment
+        /// counts.
+        supports_images: bool,
+        /// The public entry the operator's message was projected as, which is
+        /// what the reference calls `_current_user_message_id`.
+        #[serde(default)]
+        message_id: Option<String>,
+    },
 }
 
 /// What rotated the session under an active turn.
@@ -1247,6 +1278,7 @@ fn reduce_event(
         }
         EngineEvent::Stats { .. }
         | EngineEvent::Retrying { .. }
+        | EngineEvent::RequestSent { .. }
         | EngineEvent::CompactionOutcome { .. } => {}
         EngineEvent::Lifecycle {
             state: next,

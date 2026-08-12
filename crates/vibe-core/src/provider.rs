@@ -340,6 +340,12 @@ where
         )
     }
 
+    /// The model every request addresses when the turn names no override.
+    #[must_use]
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+
     #[must_use]
     pub fn with_retry_policy(mut self, retry: RetryPolicy) -> Self {
         self.retry = retry;

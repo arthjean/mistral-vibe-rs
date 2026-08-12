@@ -43,6 +43,9 @@ pub type PersistenceFuture<'a> = Pin<Box<dyn Future<Output = Result<(), String>>
 const TOOL_STREAM_CAPACITY: usize = 256;
 /// Stands in for a tool result the turn was cancelled before receiving.
 const INTERRUPTED_TOOL_RESULT: &str = "Tool execution interrupted";
+/// The profile a turn runs under when its caller names none. Reference
+/// `BuiltinAgentName.DEFAULT`.
+pub const DEFAULT_AGENT_PROFILE: &str = "default";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SessionStats {
@@ -53,6 +56,15 @@ pub struct SessionStats {
 
 pub trait CompletionProvider: Send + Sync {
     fn complete<'a>(&'a self, input: &'a ProviderInput) -> ProviderFuture<'a>;
+
+    /// The model this provider addresses when a turn names no override.
+    ///
+    /// Reference `config.get_active_model().alias`, which the telemetry client
+    /// reads back for every request and tool event. A provider that answers
+    /// nothing leaves those events reporting the turn's own override.
+    fn model(&self) -> Option<&str> {
+        None
+    }
 
     /// Streams one completion, reporting every retry to `retries`.
     ///
@@ -135,6 +147,10 @@ where
     ) -> ProviderStreamFuture<'a> {
         Box::pin(ProviderBackend::stream_observed(self, input, retries))
     }
+
+    fn model(&self) -> Option<&str> {
+        Some(ProviderBackend::model(self))
+    }
 }
 
 impl<P> CompletionProvider for Arc<P>
@@ -155,6 +171,10 @@ where
         retries: &'a (dyn RetrySink + 'a),
     ) -> ProviderStreamFuture<'a> {
         (**self).stream_observed(input, retries)
+    }
+
+    fn model(&self) -> Option<&str> {
+        (**self).model()
     }
 }
 
@@ -560,6 +580,10 @@ pub struct ConversationEngine<P, T = NoTools, C = RejectCompaction, S = NoopTran
     /// How a slash-invoked skill resolves, when the session publishes one.
     /// Absent, a `/name` prompt is an ordinary message.
     invoked_skills: Option<Arc<dyn crate::skills::InvokedSkillResolver>>,
+    /// The agent profile this turn runs under, which every request and tool
+    /// event reports. Reference `self.agent_profile.name`, whose default
+    /// profile is named `default`.
+    agent_profile: String,
 }
 
 impl<P> ConversationEngine<P> {
@@ -576,6 +600,7 @@ impl<P> ConversationEngine<P> {
             middleware: Vec::new(),
             compaction: CompactionSettings::default(),
             invoked_skills: None,
+            agent_profile: DEFAULT_AGENT_PROFILE.to_owned(),
         }
     }
 }
@@ -594,6 +619,7 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             middleware: self.middleware,
             compaction: self.compaction,
             invoked_skills: self.invoked_skills,
+            agent_profile: self.agent_profile,
         }
     }
 
@@ -610,6 +636,7 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             middleware: self.middleware,
             compaction: self.compaction,
             invoked_skills: self.invoked_skills,
+            agent_profile: self.agent_profile,
         }
     }
 
@@ -626,6 +653,7 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             middleware: self.middleware,
             compaction: self.compaction,
             invoked_skills: self.invoked_skills,
+            agent_profile: self.agent_profile,
         }
     }
 
@@ -666,6 +694,14 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
         resolver: Arc<dyn crate::skills::InvokedSkillResolver>,
     ) -> Self {
         self.invoked_skills = Some(resolver);
+        self
+    }
+
+    /// Names the agent profile this turn runs under. Absent, the turn reports
+    /// the reference's default profile.
+    #[must_use]
+    pub fn with_agent_profile(mut self, profile: impl Into<String>) -> Self {
+        self.agent_profile = profile.into();
         self
     }
 }
@@ -732,6 +768,10 @@ where
         recorder.emit(EngineEvent::UserMessage {
             content: prompt.clone(),
         })?;
+        // Reference `_current_user_message_id`: every request and tool event of
+        // this turn reports the operator's message, as the projection published
+        // it.
+        let message_id = recorder.last_entry_id();
         messages.push(ModelMessage::user(prompt.clone()));
         self.inject_invoked_skill(&mut recorder, &mut messages, &prompt)?;
         recorder.emit(EngineEvent::Title {
@@ -802,6 +842,7 @@ where
                 MiddlewareAction::Continue => {}
             }
             input.messages.clone_from(&messages);
+            self.record_request(&mut recorder, &input, &prompt, message_id.clone())?;
             let completion = match self
                 .stream_completion(&mut recorder, &input, &cancellation)
                 .await?
@@ -1071,6 +1112,39 @@ where
     }
 
     /// Streams one provider completion, projecting text and reasoning as it arrives.
+    /// Reports the request the turn is about to make, which is what the
+    /// reference's agent loop hands its telemetry client one call earlier.
+    fn record_request(
+        &self,
+        recorder: &mut TurnRecorder<'_>,
+        input: &ProviderInput,
+        prompt: &str,
+        message_id: Option<String>,
+    ) -> Result<(), EngineError> {
+        let model = input
+            .model_override
+            .clone()
+            .or_else(|| self.provider.model().map(ToOwned::to_owned))
+            .unwrap_or_default();
+        recorder.emit(EngineEvent::RequestSent {
+            model,
+            agent_profile: self.agent_profile.clone(),
+            nb_context_chars: input
+                .messages
+                .iter()
+                .map(|message| message.content().chars().count() as u64)
+                .sum(),
+            nb_context_messages: input.messages.len() as u64,
+            nb_prompt_chars: prompt.chars().count() as u64,
+            nb_images: input.images.len() as u64,
+            // Every provider this port ships accepts images on the request it
+            // builds; a backend that refuses one refuses it at the wire, which
+            // is not a telemetry decision.
+            supports_images: true,
+            message_id,
+        })
+    }
+
     async fn stream_completion(
         &self,
         recorder: &mut TurnRecorder<'_>,
@@ -1445,6 +1519,16 @@ impl<'a> TurnRecorder<'a> {
 
     fn state(&self) -> &ProjectionSnapshot {
         self.reducer.state()
+    }
+
+    /// The public entry identifier the projection gave the event just emitted,
+    /// which is what a client reads as `id`.
+    fn last_entry_id(&self) -> Option<String> {
+        let event_id = self.next_event_id.checked_sub(1)?;
+        Some(self.state().turn_id.as_ref().map_or_else(
+            || format!("entry-{event_id}"),
+            |turn_id| format!("entry-{turn_id}-{event_id}"),
+        ))
     }
 
     fn has_callback(&self, callback_id: &str) -> bool {
@@ -1969,6 +2053,77 @@ mod tests {
                 ))
                 .count(),
             1
+        );
+    }
+
+    /// US-009: every model call reports the request it is about to make, with
+    /// the model, the profile and the user message the events of that request
+    /// carry. Reference `send_request_sent`'s call site in the agent loop.
+    #[tokio::test]
+    async fn every_model_call_reports_the_request_it_makes() {
+        let provider = ScriptedProvider::new([
+            Ok(completion(
+                "",
+                vec![ModelToolCall {
+                    id: "call-1".to_owned(),
+                    name: "first".to_owned(),
+                    arguments: "{}".to_owned(),
+                }],
+            )),
+            Ok(completion("done", Vec::new())),
+        ]);
+        let observer = Arc::new(RecordingObserver::default());
+        let recorded = Arc::clone(&observer);
+        let mut input = provider_input();
+        input.turn_id = Some("turn-1".to_owned());
+        input.model_override = Some("oracle-model".to_owned());
+        ConversationEngine::new(provider)
+            .with_tools(FakeTools)
+            .with_agent_profile("oracle-profile")
+            .with_observer(observer)
+            .run_turn("session-1", input, "hello", CancellationToken::default())
+            .await
+            .expect("the turn runs");
+
+        let events = recorded.events.lock().expect("observer lock").clone();
+        let requests = events
+            .iter()
+            .filter_map(|event| match event {
+                EngineEvent::RequestSent {
+                    model,
+                    agent_profile,
+                    nb_context_messages,
+                    nb_prompt_chars,
+                    message_id,
+                    ..
+                } => Some((
+                    model.clone(),
+                    agent_profile.clone(),
+                    *nb_context_messages,
+                    *nb_prompt_chars,
+                    message_id.clone(),
+                )),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            requests.len(),
+            2,
+            "one request is reported per model call, the tool answer included"
+        );
+        let (model, profile, messages, prompt_chars, message_id) = &requests[0];
+        assert_eq!(model, "oracle-model");
+        assert_eq!(profile, "oracle-profile");
+        assert_eq!(*messages, 2, "the system prompt and the operator's turn");
+        assert_eq!(*prompt_chars, 5);
+        assert_eq!(
+            message_id.as_deref(),
+            Some("entry-turn-1-1"),
+            "the identifier is the entry the operator's message was projected as"
+        );
+        assert!(
+            requests[1].2 > *messages,
+            "the second call carries the assistant turn and the tool answer too"
         );
     }
 
