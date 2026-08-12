@@ -239,6 +239,7 @@ struct Constants {
     tracing: Value,
     vocabularies: Vocabularies,
     logging: Value,
+    sentry: Value,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1257,7 +1258,21 @@ fn run_constants(constants: &Constants, report: &mut Report) {
 
     run_tracing_constants(&constants.tracing, report);
     run_logging_constants(&constants.logging, report);
+    run_sentry_constants(&constants.sentry, report);
     run_vocabularies(&constants.vocabularies, report);
+}
+
+/// The reference ships its crash reporter dormant: both DSNs are `None` at the
+/// pin, so `sentry_sdk.init(dsn=None)` never initializes and `init_sentry`
+/// always answers `False` (`vibe/observability/sentry.py:15-16,177-209`). This
+/// port initializes no crash reporter at all, which conforms exactly while the
+/// reference stays dormant and stops conforming the moment it sets a DSN, which
+/// is what makes the divergence `docs/parity.md` records a measured one rather
+/// than a reading.
+fn run_sentry_constants(sentry: &Value, report: &mut Report) {
+    for (field, configured) in flatten(sentry) {
+        report.check("constants", "sentry", &field, &configured, &json!(false));
+    }
 }
 
 /// Every tracing constant, read off the module that declares it. Flattened

@@ -565,6 +565,7 @@ def capture_constants(reference: Path) -> dict[str, Any]:
     )
     from vibe.utils import AgentEntrypoint
     from vibe.core import tracing
+    from vibe.observability import sentry as sentry_module
     from vibe.utils.http import get_user_agent
     from vibe.utils.terminal import TerminalEmulator
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
@@ -676,6 +677,14 @@ def capture_constants(reference: Path) -> dict[str, Any]:
             # are what the replay compares, never the expression itself.
             "patternGroups": DEFAULT_LOG_PATTERN.groups,
             "patternDigest": digest(DEFAULT_LOG_PATTERN.pattern),
+        },
+        # Whether the reference ships a crash reporter that can initialize. Both
+        # DSNs are None at the pin, which is what makes the subtree dormant and
+        # what the port's absent crash reporter is measured against. Recorded as
+        # booleans: a DSN is a credential-shaped value and never enters a corpus.
+        "sentry": {
+            "cliDsnConfigured": sentry_module._CLI_SENTRY_DSN is not None,
+            "acpDsnConfigured": sentry_module._ACP_SENTRY_DSN is not None,
         },
     }
 

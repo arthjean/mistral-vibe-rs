@@ -1011,6 +1011,10 @@
       "readChunkSize": 8192,
       "relativeLogFile": "logs/vibe.log"
     },
+    "sentry": {
+      "acpDsnConfigured": false,
+      "cliDsnConfigured": false
+    },
     "tracing": {
       "agentName": "mistral-vibe",
       "hookNameKey": "vibe.hook.name",
