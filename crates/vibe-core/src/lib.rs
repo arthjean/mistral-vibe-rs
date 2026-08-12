@@ -18,6 +18,8 @@ pub mod config;
 pub mod continuity;
 pub mod engine;
 pub mod events;
+#[cfg(test)]
+mod experiments_parity_tests;
 pub mod extensions;
 pub mod images;
 pub mod integrations;
