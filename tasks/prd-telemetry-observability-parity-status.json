@@ -3,7 +3,7 @@
     "file": "tasks/prd-telemetry-observability-parity.md",
     "title": "Telemetry and Observability Parity",
     "created_at": "2026-08-11",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -54,10 +54,10 @@
     {
       "id": "EP-006",
       "title": "Residual surfaces and recorded divergences",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 2,
-      "stories_done": 0,
+      "stories_done": 2,
       "stories_in_review": 0
     }
   ],
@@ -318,21 +318,21 @@
       "id": "US-019",
       "title": "Serve telemetry/send on ACP and ship telemetry/record",
       "epic": "EP-006",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-010"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
     },
     {
       "id": "US-020",
       "title": "Record the divergences and restate the score",
       "epic": "EP-006",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
@@ -340,9 +340,9 @@
         "US-018",
         "US-019"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
     }
   ]
 }
