@@ -109,6 +109,8 @@ use self::voice::{SpeechEvent, SpeechManager, VoiceManager};
 use crate::{
     Arguments, CliError, CliTelemetryObserver, bootstrap, telemetry_observer, validate_arguments,
 };
+use vibe_core::telemetry::TelemetryRecord;
+use vibe_core::telemetry::records::{Startup, TelemetryCommandKind, TeleportProgress};
 
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const INITIAL_HISTORY_LIMIT: usize = 200;
@@ -420,10 +422,22 @@ pub async fn run_interactive(
         };
     }
 
+    // Reference `_pending_new_session_telemetry` and
+    // `_startup_telemetry_sent`: both are once-per-process latches, the first
+    // fired where the session settles and the second where the first frame has
+    // been drawn.
+    let mut session_reported = false;
+    let mut startup_reported = false;
     let event_loop = async {
         let mut exit = false;
         while !exit {
             session_started |= runtime.is_some();
+            if let Some(runtime) = runtime.as_ref()
+                && !session_reported
+            {
+                session_reported = true;
+                report_session_opened(runtime, &working_directory, &arguments);
+            }
             if let Some(runtime) = runtime.as_mut() {
                 if runtime.ui_operation_sender.is_none() {
                     runtime.ui_operation_sender = Some(ui_operation_sender.clone());
@@ -561,6 +575,12 @@ pub async fn run_interactive(
                     );
                 })
                 .map_err(|error| CliError::Terminal(error.to_string()))?;
+            if let Some(runtime) = runtime.as_ref()
+                && !startup_reported
+            {
+                startup_reported = true;
+                report_startup(runtime);
+            }
             if mounted_startup.needs_fatal_render() {
                 match drain_ready_terminal_events(&mut events)? {
                     ReadyInputDrain::Empty => {
@@ -783,6 +803,11 @@ pub async fn run_interactive(
     let summary = runtime.as_mut().map(session_exit_summary);
     let (close_result, shutdown_result) = if let Some(mut runtime) = runtime {
         let session_id = runtime.session_id.clone();
+        // Reference `emit_session_closed_telemetry`, raised before the session
+        // is closed so the census still names it.
+        if let Some(telemetry) = runtime.telemetry.as_ref() {
+            let _ = telemetry.enqueue(&TelemetryRecord::SessionClosed, Some(&session_id));
+        }
         let close = runtime
             .service
             .close_session(&session_id)
@@ -1096,9 +1121,14 @@ pub(in crate::tui) fn persist_setting(
     .is_some()
 }
 
-fn apply_public_notifications(dispatch: &PublicDispatch, state: &mut TuiState) {
+fn apply_public_notifications(
+    dispatch: &PublicDispatch,
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+) {
     for notification in &dispatch.notifications {
         if notification.method == "vibeCode/teleport/event" {
+            record_teleport_progress(notification.params.get("event"), runtime);
             if let Some(event) = notification.params.get("event")
                 && event.get("kind").and_then(Value::as_str) == Some("push_required")
             {
@@ -1124,6 +1154,73 @@ fn apply_public_notifications(dispatch: &PublicDispatch, state: &mut TuiState) {
         }
     }
 }
+
+/// Reference `TeleportTelemetryTracker.record_event` and the two senders that
+/// close a run: the tracker walks the stages the run reports and answers a
+/// completed or a failed event where it ends.
+fn record_teleport_progress(event: Option<&Value>, runtime: &mut InteractiveRuntime) {
+    let Some(event) = event else {
+        return;
+    };
+    let Some(tracker) = runtime.teleport_telemetry.as_mut() else {
+        return;
+    };
+    let kind = event
+        .get("kind")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if let Some(progress) = match kind {
+        "summarizing_context" => Some(TeleportProgress::SummarizingContext),
+        "checking_git" => Some(TeleportProgress::CheckingGit),
+        "push_required" => Some(TeleportProgress::PushRequired),
+        "pushing" => Some(TeleportProgress::Pushing),
+        "starting_workflow" => Some(TeleportProgress::StartingWorkflow),
+        "complete" => Some(TeleportProgress::Complete),
+        _ => None,
+    } {
+        tracker.record_progress(progress);
+    }
+    let record = match kind {
+        "complete" => Some(tracker.completed()),
+        "cancelled" => {
+            tracker.record_cancelled();
+            tracker.failed()
+        }
+        "failed" => {
+            let (code, status) = service_error_of(event);
+            tracker.record_service_error(code, status.map(|_| "http".to_owned()), status);
+            tracker.failed()
+        }
+        _ => None,
+    };
+    let Some(record) = record else {
+        return;
+    };
+    runtime.teleport_telemetry = None;
+    runtime.project_picker = None;
+    if let Some(telemetry) = runtime.telemetry.as_ref() {
+        let _ = telemetry.enqueue(&record, Some(runtime.session_id.as_str()));
+    }
+}
+
+/// Reference `record_service_error`'s two arguments, read off the failure event
+/// the server published: the class the service named, and the HTTP status it
+/// answered with when it answered with one. A saved-link selection the service
+/// refused with a 403 or a 404 is what the status decides.
+fn service_error_of(event: &Value) -> (&str, Option<u64>) {
+    let error = event.get("error");
+    let code = error
+        .and_then(|error| error.get("code"))
+        .and_then(Value::as_str)
+        .unwrap_or(TELEPORT_ERROR_CLASS);
+    let status = error
+        .and_then(|error| error.pointer("/details/httpStatusCode"))
+        .and_then(Value::as_u64);
+    (code, status)
+}
+
+/// What a failure that named no class reports as one.
+const TELEPORT_ERROR_CLASS: &str = "TeleportError";
 
 fn teleport_event_message(event: Option<&Value>) -> Result<(String, EntryStatus), &'static str> {
     let event = event.ok_or("Teleport event omitted its payload")?;
@@ -1280,16 +1377,18 @@ async fn settle_transcript_pointer(state: &mut TuiState, column: u16, row: u16) 
     }
     state.transcript_view.extend_selection(cell);
     if state.autocopy_to_clipboard {
-        copy_transcript_selection(state);
+        // A drag copies as it goes, so no event is raised here: the reference
+        // reports a copy the operator asked for, not one the selection made.
+        let _ = copy_transcript_selection(state);
     }
 }
 
 /// Reference `action_copy_selection`: copies the transcript selection when one
-/// exists, and reports a clipboard refusal without discarding it.
-fn copy_transcript_selection(state: &mut TuiState) -> bool {
-    let Some(selection) = state.transcript_view.selected_text() else {
-        return false;
-    };
+/// exists, and reports a clipboard refusal without discarding it. The copied
+/// text is answered back because its length is what `vibe.user_copied_text`
+/// reports; the text itself never leaves the process.
+fn copy_transcript_selection(state: &mut TuiState) -> Option<String> {
+    let selection = state.transcript_view.selected_text()?;
     match clipboard::SystemClipboardPort::copy_text(&clipboard::SystemClipboard, &selection) {
         Ok(()) => push_local_notice(
             state,
@@ -1298,7 +1397,7 @@ fn copy_transcript_selection(state: &mut TuiState) -> bool {
         ),
         Err(_) => state.push_diagnostic("Failed to copy: clipboard not available"),
     }
-    true
+    Some(selection)
 }
 
 /// Reference `_try_load_previous`: reveals the page above the debug window and
@@ -1347,6 +1446,7 @@ fn start_runtime(
     .using_release4_service(bootstrap::cloud_service(credential)?);
     let mut service =
         HeadlessService::new_interactive_shared_with_server(Arc::new(driver), server)?;
+    let session_start = std::time::Instant::now();
     let session_id = service.start_session(&bootstrap::session_options(
         arguments,
         working_directory,
@@ -1354,6 +1454,8 @@ fn start_runtime(
         Some(preferences.mode.clone()),
         preferences.reasoning_effort.clone(),
     ))?;
+    let session_init_duration_ms =
+        u64::try_from(session_start.elapsed().as_millis()).unwrap_or(u64::MAX);
     // The audio surface is resolved from the configuration this session
     // publishes, not from the LLM endpoint: the transcription model, its wire
     // values, the provider's endpoint and the variable its credential is read
@@ -1417,9 +1519,147 @@ fn start_runtime(
         cloud: CloudWorkflowState::default(),
         pending_switch: None,
         telemetry: Some(telemetry),
+        project_picker: None,
+        teleport_telemetry: None,
+        session_init_duration_ms: Some(session_init_duration_ms),
         voice,
         speech,
     })
+}
+
+/// Reference `emit_new_session_telemetry` and `emit_ready_telemetry`, which the
+/// agent loop raises together once initialization settles: the session census
+/// first, then how long reaching it took.
+fn report_session_opened(
+    runtime: &InteractiveRuntime,
+    working_directory: &Path,
+    arguments: &Arguments,
+) {
+    let Some(telemetry) = runtime.telemetry.as_ref() else {
+        return;
+    };
+    let session = Some(runtime.session_id.as_str());
+    let _ = telemetry.enqueue(
+        &TelemetryRecord::NewSession(crate::session_census(
+            &runtime.release3,
+            working_directory,
+            arguments.trust,
+        )),
+        session,
+    );
+    let _ = telemetry.enqueue(
+        &TelemetryRecord::Ready {
+            init_duration_ms: crate::since_process_start_ms(),
+        },
+        session,
+    );
+}
+
+/// Reference `_send_startup_telemetry_once`: the three durations, once per
+/// process, taken where the first frame has just been drawn.
+fn report_startup(runtime: &InteractiveRuntime) {
+    let Some(telemetry) = runtime.telemetry.as_ref() else {
+        return;
+    };
+    let elapsed = crate::since_process_start_ms();
+    let _ = telemetry.enqueue(
+        &TelemetryRecord::Startup(Startup {
+            first_frame_duration_ms: Some(elapsed),
+            agent_ready_duration_ms: Some(elapsed),
+            session_init_duration_ms: runtime.session_init_duration_ms,
+        }),
+        Some(runtime.session_id.as_str()),
+    );
+}
+
+/// Reference `_handle_command` and `_send_skill_telemetry`: one event, whose
+/// type tells a built-in command from a skill invocation.
+pub(in crate::tui) fn report_slash_command(
+    runtime: &InteractiveRuntime,
+    command_line: &str,
+    kind: TelemetryCommandKind,
+) {
+    let Some(telemetry) = runtime.telemetry.as_ref() else {
+        return;
+    };
+    let Some(command) = command_line.split_whitespace().next() else {
+        return;
+    };
+    let _ = telemetry.enqueue(
+        &TelemetryRecord::SlashCommandUsed {
+            command: command.to_owned(),
+            kind,
+        },
+        Some(runtime.session_id.as_str()),
+    );
+}
+
+/// Reference `action_toggle_voice_mode`.
+pub(in crate::tui) fn report_voice_mode_toggled(runtime: &InteractiveRuntime, enabled: bool) {
+    let Some(telemetry) = runtime.telemetry.as_ref() else {
+        return;
+    };
+    let _ = telemetry.enqueue(
+        &TelemetryRecord::VoiceModeToggled { enabled },
+        Some(runtime.session_id.as_str()),
+    );
+}
+
+/// Reference `send_user_copied_text`, which the pinned reference publishes on
+/// its client without a live call site. The copy shortcut is where this port
+/// raises it, and the text itself never travels: only its length does.
+pub(in crate::tui) fn report_copied_text(runtime: Option<&InteractiveRuntime>, copied: &str) {
+    let Some(runtime) = runtime else {
+        return;
+    };
+    let Some(telemetry) = runtime.telemetry.as_ref() else {
+        return;
+    };
+    let _ = telemetry.enqueue(
+        &TelemetryRecord::UserCopiedText {
+            text_length: copied.chars().count() as u64,
+        },
+        Some(runtime.session_id.as_str()),
+    );
+}
+
+/// Reference `vibe.user_cancelled_action`, raised at the three sites the
+/// reference raises it: an interrupted agent, a refused approval and a
+/// cancelled question.
+pub(in crate::tui) fn report_cancelled_action(
+    runtime: Option<&InteractiveRuntime>,
+    action: CancelledAction,
+) {
+    let Some(runtime) = runtime else {
+        return;
+    };
+    let Some(telemetry) = runtime.telemetry.as_ref() else {
+        return;
+    };
+    let _ = telemetry.enqueue(
+        &TelemetryRecord::UserCancelledAction {
+            action: action.label().to_owned(),
+        },
+        Some(runtime.session_id.as_str()),
+    );
+}
+
+/// The three actions the reference names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::tui) enum CancelledAction {
+    InterruptAgent,
+    RejectApproval,
+    CancelQuestion,
+}
+
+impl CancelledAction {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::InterruptAgent => "interrupt_agent",
+            Self::RejectApproval => "reject_approval",
+            Self::CancelQuestion => "cancel_question",
+        }
+    }
 }
 
 fn runtime_skills(release3: &Release3Service) -> BTreeMap<String, RuntimeSkill> {
@@ -1715,6 +1955,137 @@ mod tests {
                 Poll::Pending
             }
         }
+    }
+
+    /// US-011: a teleport run walks the stages its own notifications report,
+    /// and the completed event carries the picker payload the run started with.
+    #[test]
+    fn a_teleport_run_reports_the_stage_it_reached() {
+        let temporary = tempfile::tempdir().expect("temporary home");
+        let release3 = Release3Service::for_runtime_session_root(
+            temporary.path().join(".vibe/sessions"),
+            temporary.path().join("workspace"),
+        );
+        let mut runtime = runtime::interactive_test_runtime_with_server(
+            "teleport-telemetry",
+            vibe_app_server::server::AppServer::with_release3_service(release3),
+        );
+        runtime.project_picker = Some(vibe_core::telemetry::records::ProjectPicker {
+            shown: true,
+            selection_source: Some(
+                vibe_core::telemetry::records::ProjectSelectionSource::SavedLink,
+            ),
+            candidate_count_loaded: Some(3),
+            multi_repo_match_count: Some(1),
+            saved_project_link_cleared: Some(false),
+            repo_remote_changed: Some(false),
+        });
+        runtime.teleport_telemetry = Some(vibe_core::telemetry::records::TeleportTracker::new(
+            12,
+            vibe_core::telemetry::records::TeleportFailureStage::Ineligible,
+            runtime.project_picker,
+        ));
+
+        for kind in ["summarizing_context", "checking_git", "pushing"] {
+            record_teleport_progress(Some(&json!({"kind": kind})), &mut runtime);
+        }
+        let tracker = runtime
+            .teleport_telemetry
+            .clone()
+            .expect("the run is still open");
+        let failed = tracker.failed();
+        assert!(
+            failed.is_none(),
+            "a run that classified no error reports nothing"
+        );
+
+        // The service refuses the saved link with a 403, which is what clears
+        // it, and the failure is attributed to the stage the run had reached.
+        record_teleport_progress(
+            Some(&json!({
+                "kind": "failed",
+                "error": {
+                    "code": "ServiceTeleportError",
+                    "message": "refused",
+                    "details": {"httpStatusCode": 403},
+                },
+            })),
+            &mut runtime,
+        );
+        assert!(
+            runtime.teleport_telemetry.is_none() && runtime.project_picker.is_none(),
+            "a terminal event closes the run"
+        );
+
+        let mut tracker = vibe_core::telemetry::records::TeleportTracker::new(
+            12,
+            vibe_core::telemetry::records::TeleportFailureStage::Ineligible,
+            None,
+        );
+        tracker.record_progress(vibe_core::telemetry::records::TeleportProgress::Pushing);
+        tracker.record_service_error("ServiceTeleportError", Some("http".to_owned()), Some(403));
+        let record = tracker.failed().expect("a classified error is a failure");
+        let properties = record
+            .attributes(None)
+            .expect("the payload carries no unsafe label")
+            .into_properties();
+        assert_eq!(properties["stage"], json!("push"));
+        assert_eq!(properties["http_status_code"], json!(403));
+    }
+
+    /// US-011: the failure event the server publishes is where the class and
+    /// the status come from, and a failure carrying neither still names a
+    /// class rather than an empty one.
+    #[test]
+    fn a_failure_event_answers_the_class_and_the_status_the_service_named() {
+        assert_eq!(
+            service_error_of(&json!({
+                "kind": "failed",
+                "error": {
+                    "message": "refused",
+                    "code": "ServiceTeleportError",
+                    "details": {"httpStatusCode": 403},
+                },
+            })),
+            ("ServiceTeleportError", Some(403))
+        );
+        assert_eq!(
+            service_error_of(&json!({
+                "kind": "failed",
+                "error": {"message": "the remote went away", "details": Value::Null},
+            })),
+            ("TeleportError", None)
+        );
+    }
+
+    /// US-008: the session census is read off the services a session is built
+    /// from rather than from the banner.
+    #[test]
+    fn the_session_census_counts_what_the_configuration_declares() {
+        let temporary = tempfile::tempdir().expect("temporary home");
+        let workspace = temporary.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("the workspace is created");
+        std::fs::write(workspace.join("AGENTS.md"), "instructions")
+            .expect("the instructions file is written");
+        let release3 = Release3Service::for_runtime_session_root(
+            temporary.path().join(".vibe/sessions"),
+            workspace.clone(),
+        );
+
+        let census = crate::session_census(&release3, &workspace, true);
+
+        assert!(
+            census.has_agents_md,
+            "the workspace publishes instructions to the agent"
+        );
+        assert!(
+            census.nb_models >= 1,
+            "the shipped defaults declare at least the default model"
+        );
+        assert!(
+            !crate::has_agents_md(temporary.path()),
+            "a directory with no instructions file reports none"
+        );
     }
 
     /// The shipped defaults reach the terminal client: with no configuration

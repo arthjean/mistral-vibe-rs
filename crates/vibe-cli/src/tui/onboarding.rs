@@ -14,16 +14,18 @@ pub mod model;
 mod render;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use toml::{Table, Value};
 use vibe_app_server::release3::Release3Service;
 use vibe_core::auth::PersistOutcome;
+use vibe_core::telemetry::TelemetryRecord;
 
 use self::context::OnboardingContext;
 use self::model::{OnboardingOutcome, OnboardingPorts};
 use super::setup::PersistedCredentialStore;
 use super::startup;
-use crate::{Arguments, CliError};
+use crate::{Arguments, CliError, CliTelemetryObserver};
 
 /// How the caller leaves the flow. Reference `run_onboarding` callers:
 /// `--setup` exits after any conclusion, and the interactive launch continues
@@ -101,6 +103,9 @@ pub fn exit_plan(outcome: &OnboardingOutcome, global_env_file: &Path) -> ExitPla
 struct ProductionPorts<'a> {
     store: &'a PersistedCredentialStore,
     release3: &'a Release3Service,
+    /// Where the onboarding event goes. Absent when the transport could not be
+    /// built, which leaves onboarding working and silent.
+    telemetry: Option<Arc<CliTelemetryObserver>>,
 }
 
 impl OnboardingPorts for ProductionPorts<'_> {
@@ -112,9 +117,23 @@ impl OnboardingPorts for ProductionPorts<'_> {
         custom_domain: bool,
     ) -> PersistOutcome {
         let backend_is_mistral = provider.get("backend").and_then(Value::as_str) == Some("mistral");
-        self.store
-            .persist_report(env_key, backend_is_mistral, api_key, custom_domain)
-            .outcome
+        let report = self
+            .store
+            .persist_report(env_key, backend_is_mistral, api_key, custom_domain);
+        // Reference `send_onboarding_api_key_added`, raised for a Mistral
+        // provider on every completed save. No session exists yet, so the
+        // census reports none.
+        if let Some(telemetry) = self.telemetry.as_ref() {
+            for event in &report.telemetry {
+                let _ = telemetry.enqueue(
+                    &TelemetryRecord::OnboardingApiKeyAdded {
+                        custom_domain: event.custom_domain,
+                    },
+                    None,
+                );
+            }
+        }
+        report.outcome
     }
 
     fn persist_provider(&mut self, provider: &Table) -> bool {
@@ -143,11 +162,16 @@ pub async fn run_onboarding(
             .as_ref()
             .and_then(|document| document.get("config")),
     );
+    let telemetry = crate::telemetry_observer(arguments, &release3).ok();
     let mut ports = ProductionPorts {
         store: credential_store,
         release3: &release3,
+        telemetry: telemetry.clone(),
     };
     let run = driver::run_flow(context, &mut ports).await?;
+    if let Some(telemetry) = telemetry {
+        telemetry.flush().await;
+    }
     let plan = exit_plan(&run.outcome, &global_env_file(vibe_home));
     if plan.persist_theme {
         persist_theme(&release3, run.selected_theme);

@@ -347,8 +347,10 @@ async fn control_chord(
 }
 
 fn copy_selection(context: &mut KeyContext<'_>) {
-    if !copy_transcript_selection(context.state) {
-        copy_prompt_selection(context.input.editor(), context.state);
+    let copied = copy_transcript_selection(context.state)
+        .or_else(|| copy_prompt_selection(context.input.editor(), context.state));
+    if let Some(copied) = copied {
+        super::report_copied_text(context.runtime.as_ref(), &copied);
     }
 }
 
@@ -634,24 +636,17 @@ fn take_submission(key: KeyEvent, context: &mut KeyContext<'_>) -> Option<String
     submitted
 }
 
-pub(super) fn copy_prompt_selection(editor: &PromptEditor, state: &mut TuiState) -> bool {
-    let Some(selection) = editor.selected_text() else {
-        return false;
-    };
+pub(super) fn copy_prompt_selection(editor: &PromptEditor, state: &mut TuiState) -> Option<String> {
+    let selection = editor.selected_text()?;
     match SystemClipboard.copy_text(&selection) {
-        Ok(()) => {
-            push_local_notice(
-                state,
-                "Selection copied to clipboard",
-                EntryStatus::Completed,
-            );
-            true
-        }
-        Err(_) => {
-            state.push_diagnostic("Failed to copy: clipboard not available");
-            true
-        }
+        Ok(()) => push_local_notice(
+            state,
+            "Selection copied to clipboard",
+            EntryStatus::Completed,
+        ),
+        Err(_) => state.push_diagnostic("Failed to copy: clipboard not available"),
     }
+    Some(selection)
 }
 
 pub(super) fn resume_paused_queue(editor: &PromptEditor, state: &mut TuiState) -> bool {

@@ -200,6 +200,17 @@ pub(super) fn respond_to_pending_callback(
         return;
     }
     let callback_cancelled = choice == CallbackChoice::Cancel;
+    // Reference `app.py:3349` and `app.py:3361`: a refused approval and a
+    // cancelled question are both reported, under the action each names.
+    match (&pending.request, &choice) {
+        (CallbackRequest::Approval { .. }, CallbackChoice::Deny { .. }) => {
+            super::report_cancelled_action(Some(runtime), super::CancelledAction::RejectApproval);
+        }
+        (CallbackRequest::UserInput { .. }, CallbackChoice::Cancel) => {
+            super::report_cancelled_action(Some(runtime), super::CancelledAction::CancelQuestion);
+        }
+        _ => {}
+    }
     let dispatch = match controls.prepare_answer(&pending.turn_id, &pending.callback_id, &choice) {
         Ok(dispatch) => dispatch,
         Err(error) => {

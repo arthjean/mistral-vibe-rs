@@ -171,6 +171,9 @@ pub(super) fn request_active_turn_interrupt(
         return false;
     };
     if active.cancellation == CancellationPhase::Active {
+        // Reference `action_interrupt_or_quit`: the interruption is reported
+        // where the operator asks for it, whatever the server answers.
+        super::report_cancelled_action(Some(runtime), super::CancelledAction::InterruptAgent);
         let interrupt = match runtime
             .service
             .interrupt(&runtime.session_id, &active.turn_id)

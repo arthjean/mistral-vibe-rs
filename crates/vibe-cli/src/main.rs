@@ -9,6 +9,10 @@ use vibe_cli::tui::startup::PreparedInvocation;
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    // Reference `PROCESS_START_MONOTONIC`, read at import time: the startup
+    // durations are measured from here, so the reading is taken before any
+    // work rather than at the first event that reports it.
+    vibe_cli::mark_process_start();
     // `vibe mcp` is a command of its own upstream, decided before the
     // interactive parser runs so that `mcp` is never read as a prompt.
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();

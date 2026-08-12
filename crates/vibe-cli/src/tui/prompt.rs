@@ -1,8 +1,13 @@
+use std::collections::BTreeMap;
 use std::path::Path;
+
+use vibe_core::telemetry::TelemetryRecord;
+use vibe_core::telemetry::records::{AtMentionInserted, TelemetryCommandKind};
 
 use super::attachments::{PreparedSubmission, PromptDraft, prepare_submission};
 use super::clipboard_images::ClipboardImageManager;
 use super::controls::ControlState;
+use super::path_resources::MentionStats;
 use super::state::TuiState;
 use super::{
     ActiveTurn, CliError, InteractiveRuntime, RuntimeSkill, settle_unstarted_reservation,
@@ -154,6 +159,19 @@ pub(super) async fn start_prompt_with_client_id(
         state.push_diagnostic("Setup is required before starting a session. Restart with --setup.");
         return Ok(false);
     };
+    // Reference `_record_mentions`, raised where the turn is submitted: a
+    // prompt that mentioned nothing reports nothing, and the message the
+    // mentions belong to travels with them.
+    report_mentions(
+        runtime,
+        &prepared.mention_stats,
+        prepared.turn.client_user_message_id.clone(),
+    );
+    // Reference `_send_skill_telemetry`: a prompt whose first word names a
+    // published skill is a slash command of type `skill`.
+    if invoked_skill(runtime, &prepared.turn.prompt).is_some() {
+        super::report_slash_command(runtime, &prepared.turn.prompt, TelemetryCommandKind::Skill);
+    }
     let reservation = runtime
         .service
         .reserve_prepared_prompt(
@@ -184,6 +202,35 @@ pub(super) async fn start_prompt_with_client_id(
     *active = Some(started);
     state.waiting = true;
     Ok(true)
+}
+
+/// Reference `_record_mentions`.
+fn report_mentions(runtime: &InteractiveRuntime, stats: &MentionStats, message_id: Option<String>) {
+    if stats.count == 0 {
+        return;
+    }
+    let Some(telemetry) = runtime.telemetry.as_ref() else {
+        return;
+    };
+    let _ = telemetry.enqueue(
+        &TelemetryRecord::AtMentionInserted(AtMentionInserted {
+            nb_mentions: stats.count as u64,
+            context_types: counts(&stats.context_types),
+            // Reference `stats.file_extensions or None`: no file mention
+            // reports null rather than an empty object.
+            file_extensions: (!stats.file_extensions.is_empty())
+                .then(|| counts(&stats.file_extensions)),
+            message_id,
+        }),
+        Some(runtime.session_id.as_str()),
+    );
+}
+
+fn counts(source: &BTreeMap<String, usize>) -> BTreeMap<String, u64> {
+    source
+        .iter()
+        .map(|(key, value)| (key.clone(), *value as u64))
+        .collect()
 }
 
 pub(super) fn is_user_skill(runtime: Option<&InteractiveRuntime>, input: &str) -> bool {

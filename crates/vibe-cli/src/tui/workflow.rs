@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde_json::{Value, json};
+use vibe_core::telemetry::records::TelemetryCommandKind;
 use vibe_core::workspace::WARNING_TAG;
 
 mod config;
@@ -125,6 +126,11 @@ pub(super) async fn dispatch_command(
     let Some(parsed) = parse_command_in(command_line, &command_context) else {
         return CommandAction::Unhandled;
     };
+    // Reference `_handle_command`: the event is recorded where the command is
+    // resolved, before it runs, and reports the name the operator typed.
+    if let Some(runtime) = runtime.as_ref() {
+        super::report_slash_command(runtime, command_line, TelemetryCommandKind::Builtin);
+    }
     let command_id = parsed.id;
     let command_arguments = parsed.arguments.to_owned();
     if runtime_busy {
@@ -598,6 +604,11 @@ fn sync_voice_preference(runtime: &mut InteractiveRuntime, composer: &mut ChatIn
     let enabled = configured_value(runtime, "voice_mode_enabled")
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
+    // Reference `action_toggle_voice_mode`: the event reports a change of the
+    // preference, so a resynchronization that moves nothing sends nothing.
+    if enabled != runtime.voice.enabled() {
+        super::report_voice_mode_toggled(runtime, enabled);
+    }
     runtime.voice.set_enabled(enabled);
     // Reference `LazyVoiceManager`: the audio surface is resolved from the
     // configuration as it stands, so an edited active model, provider or

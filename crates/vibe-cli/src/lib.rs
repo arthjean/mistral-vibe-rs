@@ -16,11 +16,12 @@ pub mod tui;
 
 use std::collections::BTreeMap;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::{ArgAction, Parser, ValueEnum};
 use serde::Serialize;
+use serde_json::Value;
 use thiserror::Error;
 use vibe_app_server::client::{
     ClientError, HeadlessService, LiveTurnDriver, ProgrammaticTeleportEvent, ProgrammaticTurn,
@@ -31,9 +32,9 @@ use vibe_app_server::server::AppServer;
 use vibe_core::auth::KeyringStore;
 use vibe_core::mcp::SamplingHandler;
 use vibe_core::telemetry::{
-    LaunchContext, ReqwestTelemetryTransport, TelemetryAttributes, TelemetryClient,
-    TelemetryConfig, TelemetryConfigGetter, TelemetryContext, TelemetryEvent,
-    TelemetryEventObserver, TelemetryField, detect_terminal_emulator,
+    LaunchContext, ReqwestTelemetryTransport, TelemetryClient, TelemetryConfig,
+    TelemetryConfigGetter, TelemetryContext, TelemetryEventObserver, TelemetryRecord,
+    detect_terminal_emulator,
 };
 use vibe_core::{engine::EventObserver, events::EventEnvelope};
 
@@ -151,6 +152,9 @@ pub async fn run(
             .migrate_configuration()
             .map_err(|error| CliError::Configuration(error.to_string()))?;
         let telemetry = telemetry_observer(&arguments, &release3)?;
+        // The server takes ownership of the service, and the session census is
+        // read off the same one.
+        let census_service = release3.clone();
         let mut driver = LiveTurnDriver::from_credential(config, credential)?;
         driver = driver.with_event_observer(telemetry.clone());
         let server = production_server(
@@ -158,7 +162,25 @@ pub async fn run(
             release3,
             Some(driver.sampling_handler(&arguments.model)),
         )?;
-        let result = execute_with_server(arguments, driver, server, stdout, stderr).await;
+        let census = arguments
+            .workdir
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .map(|working_directory| {
+                session_census(&census_service, &working_directory, arguments.trust)
+            });
+        let result = execute_with_server(
+            arguments,
+            driver,
+            server,
+            Some(SessionTelemetry {
+                observer: telemetry.clone(),
+                census,
+            }),
+            stdout,
+            stderr,
+        )
+        .await;
         telemetry.flush().await;
         result
     }
@@ -173,13 +195,29 @@ pub async fn execute<D>(
 where
     D: TurnDriver,
 {
-    execute_with_server(arguments, driver, AppServer::default(), stdout, stderr).await
+    execute_with_server(
+        arguments,
+        driver,
+        AppServer::default(),
+        None,
+        stdout,
+        stderr,
+    )
+    .await
+}
+
+/// What the programmatic path reports about the session it opens: the observer
+/// every event goes to, and the census `vibe.new_session` carries.
+struct SessionTelemetry {
+    observer: Arc<CliTelemetryObserver>,
+    census: Option<vibe_core::telemetry::records::NewSession>,
 }
 
 async fn execute_with_server<D>(
     arguments: Arguments,
     driver: D,
     server: AppServer,
+    telemetry: Option<SessionTelemetry>,
     stdout: &mut impl Write,
     stderr: &mut impl Write,
 ) -> Result<(), CliError>
@@ -209,6 +247,22 @@ where
     );
     let mut service = HeadlessService::new_shared_with_server(Arc::new(driver), server)?;
     let session_id = service.start_session(&options)?;
+    // Reference `emit_new_session_telemetry` and `emit_ready_telemetry`: the
+    // agent loop raises both once its initialization settles, whichever
+    // entrypoint launched it.
+    if let Some(telemetry) = telemetry.as_ref() {
+        if let Some(census) = telemetry.census.clone() {
+            let _ = telemetry
+                .observer
+                .enqueue(&TelemetryRecord::NewSession(census), Some(&session_id));
+        }
+        let _ = telemetry.observer.enqueue(
+            &TelemetryRecord::Ready {
+                init_duration_ms: since_process_start_ms(),
+            },
+            Some(&session_id),
+        );
+    }
     let mut close_session_id = session_id.clone();
     let turn_result: Result<ProgrammaticTurn, CliError> = if arguments.teleport {
         service
@@ -330,6 +384,13 @@ where
         }
         Err(error) => Err(error),
     };
+    // Reference `emit_session_closed_telemetry`, raised before the session is
+    // closed so the census still names it.
+    if let Some(telemetry) = telemetry.as_ref() {
+        let _ = telemetry
+            .observer
+            .enqueue(&TelemetryRecord::SessionClosed, Some(&close_session_id));
+    }
     let close_result = service.close_session(&close_session_id).await;
     let shutdown_result = service.shutdown();
     execution?;
@@ -549,6 +610,70 @@ pub(crate) fn arguments_for_test() -> Arguments {
     }
 }
 
+/// Reference `emit_new_session_telemetry`'s four counts, read off the same
+/// services a session is built from: the workspace instructions file, every
+/// discovered skill, the MCP servers this session would connect and the models
+/// the merged configuration declares.
+pub(crate) fn session_census(
+    release3: &Release3Service,
+    working_directory: &Path,
+    trust: bool,
+) -> vibe_core::telemetry::records::NewSession {
+    let nb_skills = release3
+        .dispatch("skills/list", &BTreeMap::new())
+        .ok()
+        .and_then(|dispatch| dispatch.result.get("skills").cloned())
+        .as_ref()
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len) as u64;
+    let nb_mcp_servers = release3
+        .mcp_servers_for_session(working_directory, trust, &[])
+        .map_or(0, |servers| servers.len()) as u64;
+    let nb_models = release3
+        .layered_config()
+        .load()
+        .ok()
+        .and_then(|snapshot| snapshot.effective.get("models").cloned())
+        .map_or(0, |models| match models {
+            toml::Value::Array(entries) => entries.len(),
+            toml::Value::Table(entries) => entries.len(),
+            _ => 0,
+        }) as u64;
+    vibe_core::telemetry::records::NewSession {
+        has_agents_md: has_agents_md(working_directory),
+        nb_skills,
+        nb_mcp_servers,
+        nb_models,
+    }
+}
+
+/// Reference `has_agents_md_file`: the workspace publishes instructions to the
+/// agent under either spelling.
+#[must_use]
+pub(crate) fn has_agents_md(working_directory: &Path) -> bool {
+    ["AGENTS.md", "VIBE.md"]
+        .into_iter()
+        .any(|name| working_directory.join(name).is_file())
+}
+
+/// Reference `PROCESS_START_MONOTONIC`: what the startup durations are
+/// measured from. `mark_process_start` fixes it at the top of `main`; a caller
+/// that never marks it reads it at the first measurement, which is the same
+/// reading the reference takes when its module is imported late.
+static PROCESS_START: std::sync::LazyLock<std::time::Instant> =
+    std::sync::LazyLock::new(std::time::Instant::now);
+
+/// Fixes the process start reading. Idempotent.
+pub fn mark_process_start() {
+    let _ = *PROCESS_START;
+}
+
+/// How long ago the process started, in milliseconds.
+#[must_use]
+pub(crate) fn since_process_start_ms() -> u64 {
+    u64::try_from(PROCESS_START.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
 pub(crate) struct CliTelemetryObserver {
     events: TelemetryEventObserver<ReqwestTelemetryTransport>,
 }
@@ -568,20 +693,29 @@ impl CliTelemetryObserver {
         model: &str,
         session_id: &str,
     ) -> Result<(), String> {
-        let mut attributes = TelemetryAttributes::default();
-        attributes
-            .count(TelemetryField::Rating, u64::from(rating))
-            .label(TelemetryField::Version, env!("CARGO_PKG_VERSION"))
-            .map_err(|error| error.to_string())?
-            .label(TelemetryField::Model, model)
-            .map_err(|error| error.to_string())?;
+        self.enqueue(
+            &TelemetryRecord::FeedbackSubmitted {
+                rating: u64::from(rating),
+                model: model.to_owned(),
+            },
+            Some(session_id),
+        )
+    }
+
+    /// Queues one event a client surface raised: a slash command, a copied
+    /// selection, a cancelled action, an inserted mention, the voice toggle,
+    /// the audio managers or the teleport tracker.
+    ///
+    /// The reference hands each of these to the agent loop's own telemetry
+    /// client, so they carry the same census and the same gate as an event the
+    /// turn itself produced.
+    pub(crate) fn enqueue(
+        &self,
+        record: &TelemetryRecord,
+        session_id: Option<&str>,
+    ) -> Result<(), String> {
         self.events
-            .record(
-                TelemetryEvent::FeedbackSubmitted,
-                attributes,
-                Some(session_id),
-                None,
-            )
+            .record(record, session_id)
             .map_err(|error| error.to_string())
     }
 

@@ -3,6 +3,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 use vibe_app_server::client::PublicDispatch;
+use vibe_core::telemetry::TelemetryRecord;
+use vibe_core::telemetry::records::{
+    ProjectPicker, ProjectSelectionSource, RemoteProjectOutcome, TeleportFailureStage,
+    TeleportTracker, multi_repo_match_count, teleport_early_failure,
+};
 
 use super::cloud_workflow::ProjectSelection;
 use super::interaction::RemoteProjectAction;
@@ -326,6 +331,7 @@ pub(in crate::tui) fn apply_pending_operation(
     let dispatch = match result {
         Ok(dispatch) => dispatch,
         Err(error) => {
+            report_teleport_start_failure(&operation, runtime, state);
             state.push_diagnostic(error);
             restore_remote_project_overlay(runtime, state);
             return;
@@ -342,6 +348,7 @@ pub(in crate::tui) fn apply_pending_operation(
             working_directory,
             project_id,
         } => {
+            resolve_selection(runtime, ProjectSelectionSource::SelectedExisting);
             let project_name = value
                 .pointer("/project/name")
                 .and_then(Value::as_str)
@@ -379,6 +386,7 @@ pub(in crate::tui) fn apply_pending_operation(
             working_directory,
             requested_name,
         } => {
+            resolve_selection(runtime, ProjectSelectionSource::CreatedProject);
             let Some(project_id) = value
                 .pointer("/project/projectId")
                 .and_then(Value::as_str)
@@ -409,6 +417,18 @@ pub(in crate::tui) fn apply_pending_operation(
             state.overlay = None;
             runtime.remote_project_overlay = None;
             runtime.remote_project_draft = None;
+            // Reference `RemoteProjectOutcome`: closing the picker is an
+            // outcome of its own, and unlinking is a different one from
+            // walking away.
+            if let Some(picker) = resolve_selection(runtime, ProjectSelectionSource::Cancelled) {
+                let outcome = if unlink {
+                    RemoteProjectOutcome::Unlinked
+                } else {
+                    RemoteProjectOutcome::Cancelled
+                };
+                report_remote_project(runtime, outcome, picker);
+            }
+            runtime.project_picker = None;
             if unlink {
                 push_local_notice(
                     state,
@@ -428,6 +448,142 @@ pub(in crate::tui) fn apply_pending_operation(
     }
 }
 
+/// Reference `build_project_picker_telemetry`: what the picker reports about
+/// itself before the operator answers it.
+///
+/// `shown` is decided by the caller, because a teleport whose project resolved
+/// from the saved link never opens one.
+fn picker_payload(view: Option<&Value>, shown: bool) -> ProjectPicker {
+    let Some(view) = view else {
+        return ProjectPicker {
+            shown,
+            ..ProjectPicker::hidden()
+        };
+    };
+    let projects = view
+        .pointer("/state/projects")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let remote = view
+        .pointer("/state/repoUrl")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let repositories = projects
+        .iter()
+        .map(|project| {
+            project
+                .get("repositories")
+                .and_then(Value::as_array)
+                .map(|repositories| {
+                    repositories
+                        .iter()
+                        .filter_map(|repository| {
+                            repository
+                                .get("repoUrl")
+                                .and_then(Value::as_str)
+                                .map(ToOwned::to_owned)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>();
+    ProjectPicker {
+        shown,
+        selection_source: None,
+        candidate_count_loaded: Some(projects.len() as u64),
+        multi_repo_match_count: Some(multi_repo_match_count(
+            repositories.iter().map(Vec::as_slice),
+            remote,
+        )),
+        saved_project_link_cleared: Some(
+            view.get("savedProjectLinkCleared")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        ),
+        repo_remote_changed: Some(
+            view.get("projectRepoRemoteChanged")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        ),
+    }
+}
+
+/// Names how the project this run uses was chosen, and answers the payload the
+/// events carry.
+fn resolve_selection(
+    runtime: &mut InteractiveRuntime,
+    source: ProjectSelectionSource,
+) -> Option<ProjectPicker> {
+    let picker = runtime.project_picker.as_mut()?;
+    picker.selection_source = Some(source);
+    Some(*picker)
+}
+
+/// What a teleport reports as its error class when the refusal reached the
+/// client as prose rather than as a classified service error.
+const TELEPORT_START_ERROR_CLASS: &str = "TeleportStartError";
+
+/// Reference `_fail_early` and `send_failure_if_needed`: a teleport the service
+/// refused still reports a failure, even when the refusal answered the request
+/// itself and no progress event ever arrived.
+///
+/// A run already under way is attributed to the stage its tracker had reached;
+/// one refused before it started has no tracker, which is the early-failure
+/// payload the reference sends from the same place.
+fn report_teleport_start_failure(
+    operation: &ProjectPendingOperation,
+    runtime: &mut InteractiveRuntime,
+    state: &TuiState,
+) {
+    if !matches!(
+        operation,
+        ProjectPendingOperation::Open { teleport: true, .. }
+            | ProjectPendingOperation::TeleportStart { .. }
+            | ProjectPendingOperation::TeleportResponse
+    ) {
+        return;
+    }
+    let record = match runtime.teleport_telemetry.as_mut() {
+        Some(tracker) => {
+            tracker.record_unexpected_error(TELEPORT_START_ERROR_CLASS);
+            tracker.failed()
+        }
+        // Reference `_require_teleport_available`: the refusal that never
+        // starts a run is attributed to the eligibility stage.
+        None => Some(teleport_early_failure(
+            TeleportFailureStage::Ineligible,
+            TELEPORT_START_ERROR_CLASS,
+            state.entries.len() as u64,
+        )),
+    };
+    runtime.teleport_telemetry = None;
+    runtime.project_picker = None;
+    let Some(record) = record else {
+        return;
+    };
+    if let Some(telemetry) = runtime.telemetry.as_ref() {
+        let _ = telemetry.enqueue(&record, Some(runtime.session_id.as_str()));
+    }
+}
+
+/// Reference `send_remote_project_configured`, raised where the operator's
+/// answer settles the link.
+fn report_remote_project(
+    runtime: &InteractiveRuntime,
+    outcome: RemoteProjectOutcome,
+    picker: ProjectPicker,
+) {
+    let Some(telemetry) = runtime.telemetry.as_ref() else {
+        return;
+    };
+    let _ = telemetry.enqueue(
+        &TelemetryRecord::RemoteProjectConfigured { outcome, picker },
+        Some(runtime.session_id.as_str()),
+    );
+}
+
 fn apply_open_result(
     value: &Value,
     working_directory: PathBuf,
@@ -444,6 +600,7 @@ fn apply_open_result(
         state.push_diagnostic("Remote project picker omitted its identity");
         return;
     };
+    runtime.project_picker = Some(picker_payload(value.get("view"), true));
     if !teleport {
         let Some(view) = value.get("view") else {
             state.push_diagnostic("Remote project picker omitted its view");
@@ -461,6 +618,15 @@ fn apply_open_result(
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
     {
+        // A project the saved link resolved is never picked, so the payload
+        // reports a picker that was not shown. `resolvedProjectId` is answered
+        // for a saved link alone, which is the selection source it names, and
+        // the source is what decides whether a refused link is reported as
+        // cleared.
+        runtime.project_picker = Some(ProjectPicker {
+            selection_source: Some(ProjectSelectionSource::SavedLink),
+            ..picker_payload(value.get("view"), false)
+        });
         begin_teleport(
             picker_id,
             project_id,
@@ -515,11 +681,21 @@ fn complete_project_selection(
             runtime,
             state,
         ),
-        Some(ProjectSelection::Configured) => push_local_notice(
-            state,
-            &format!("Linked this repository to Vibe Code project **{project_name}**."),
-            EntryStatus::Completed,
-        ),
+        Some(ProjectSelection::Configured) => {
+            if let Some(picker) = runtime.project_picker {
+                let outcome = match picker.selection_source {
+                    Some(ProjectSelectionSource::CreatedProject) => RemoteProjectOutcome::Created,
+                    _ => RemoteProjectOutcome::Configured,
+                };
+                report_remote_project(runtime, outcome, picker);
+            }
+            runtime.project_picker = None;
+            push_local_notice(
+                state,
+                &format!("Linked this repository to Vibe Code project **{project_name}**."),
+                EntryStatus::Completed,
+            );
+        }
         None => {
             state.push_diagnostic("Remote project selection completed without an active picker");
         }
@@ -534,6 +710,14 @@ fn begin_teleport(
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
+    // Reference `TeleportTelemetryTracker`, built where the run starts: a
+    // failure before any progress is attributed to the eligibility stage, which
+    // is the last thing checked before the first yield.
+    runtime.teleport_telemetry = Some(TeleportTracker::new(
+        state.entries.len() as u64,
+        TeleportFailureStage::Ineligible,
+        runtime.project_picker,
+    ));
     let operation_id = format!(
         "teleport-{}",
         SystemTime::now()
@@ -605,6 +789,115 @@ mod tests {
             }],
         };
         assert!(teleport_dispatch_is_terminal(&dispatch));
+    }
+
+    /// The picker view a saved link resolves a project from.
+    fn saved_link_open_result() -> Value {
+        json!({
+            "pickerId": "picker-1",
+            "resolvedProjectId": "project-1",
+            "view": {
+                "state": {
+                    "repoUrl": "git@example.test:vibe.git",
+                    "projects": [
+                        {
+                            "projectId": "project-1",
+                            "name": "vibe",
+                            "isReadOnly": false,
+                            "repositories": [
+                                {"repoUrl": "git@example.test:vibe.git", "defaultBranch": "main"},
+                                {"repoUrl": "git@example.test:other.git", "defaultBranch": null},
+                            ],
+                        },
+                    ],
+                },
+                "savedProjectLinkCleared": false,
+                "projectRepoRemoteChanged": false,
+            },
+        })
+    }
+
+    /// US-011: `resolvedProjectId` is answered for a saved link alone, so the
+    /// run it starts reports that source, and a service that refuses the link
+    /// with a 403 is what reports it as cleared.
+    #[test]
+    fn a_saved_link_teleport_reports_its_source_and_clears_a_refused_link() {
+        let mut runtime = interactive_test_runtime("teleport-saved-link");
+        let mut state = TuiState::new("teleport-saved-link");
+
+        apply_open_result(
+            &saved_link_open_result(),
+            PathBuf::from("/workspace"),
+            true,
+            None,
+            &mut runtime,
+            &mut state,
+        );
+
+        let picker = runtime.project_picker.expect("the run carries a payload");
+        assert_eq!(
+            picker.selection_source,
+            Some(ProjectSelectionSource::SavedLink)
+        );
+        assert!(!picker.shown, "a link that resolved opens no picker");
+        assert_eq!(
+            picker.multi_repo_match_count,
+            Some(1),
+            "the linked project carries a second repository"
+        );
+
+        let mut tracker = runtime
+            .teleport_telemetry
+            .clone()
+            .expect("the run opened a tracker");
+        tracker.record_service_error("ServiceTeleportError", Some("http".to_owned()), Some(403));
+        let record = tracker.failed().expect("a classified error is a failure");
+        let properties = record
+            .attributes(None)
+            .expect("the payload carries no unsafe label")
+            .into_properties();
+        assert_eq!(properties["saved_project_link_cleared"], json!(true));
+    }
+
+    /// US-011: a teleport the service refused answers the request rather than
+    /// reporting progress, and the refusal still closes the run.
+    #[test]
+    fn a_refused_teleport_request_closes_the_run() {
+        let mut runtime = interactive_test_runtime("teleport-refused");
+        let mut state = TuiState::new("teleport-refused");
+        apply_open_result(
+            &saved_link_open_result(),
+            PathBuf::from("/workspace"),
+            true,
+            None,
+            &mut runtime,
+            &mut state,
+        );
+        assert!(runtime.teleport_telemetry.is_some());
+
+        apply_pending_operation(
+            ProjectPendingOperation::TeleportStart {
+                operation_id: "teleport-1".to_owned(),
+            },
+            Err("Teleport requires an active Mistral model".to_owned()),
+            &mut runtime,
+            &mut state,
+        );
+
+        assert!(
+            runtime.teleport_telemetry.is_none() && runtime.project_picker.is_none(),
+            "a refused request is terminal for the run"
+        );
+
+        // A refusal that never opened a run reports the stage it never left.
+        let record = teleport_early_failure(TeleportFailureStage::Ineligible, "OracleError", 7);
+        let properties = record
+            .attributes(None)
+            .expect("the payload carries no unsafe label")
+            .into_properties();
+        assert_eq!(properties["stage"], json!("ineligible"));
+        assert_eq!(properties["push_required"], json!(false));
+        assert_eq!(properties["nb_session_messages"], json!(7));
     }
 
     #[test]

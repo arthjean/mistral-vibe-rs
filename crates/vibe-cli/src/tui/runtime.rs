@@ -12,6 +12,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use vibe_app_server::client::{HeadlessService, LiveTurnDriver, PublicDispatch};
 use vibe_app_server::release3::Release3Service;
+use vibe_core::telemetry::records::{ProjectPicker, TeleportTracker};
 
 use super::chat_input::Safety;
 use super::clipboard_images::{ImageModel, ImageModels};
@@ -63,6 +64,18 @@ pub(super) struct InteractiveRuntime {
     pub(super) cloud: CloudWorkflowState,
     pub(super) pending_switch: Option<switching::SwitchRequest>,
     pub(super) telemetry: Option<Arc<CliTelemetryObserver>>,
+    /// What the project picker reported about itself, carried into the
+    /// teleport and remote-project events. Reference
+    /// `build_project_picker_telemetry`, whose payload is built where the
+    /// picker opens and completed where the operator answers it.
+    pub(super) project_picker: Option<ProjectPicker>,
+    /// The teleport run in flight, and the stage machine it walks. Reference
+    /// `TeleportTelemetryTracker`.
+    pub(super) teleport_telemetry: Option<TeleportTracker>,
+    /// How long `session/new` took, which is one of the three durations
+    /// `vibe.startup` reports. Reference
+    /// `resources.runtime.session_init_duration_ms`.
+    pub(super) session_init_duration_ms: Option<u64>,
     pub(super) voice: VoiceManager,
     /// The read-aloud transport, resolved from the same published view the
     /// transcription session is.
@@ -177,7 +190,7 @@ pub(super) fn apply_ui_operation_completion(
     }
     runtime.active_ui_operation = None;
     if let Ok(dispatch) = &completion.result {
-        apply_public_notifications(dispatch, state);
+        apply_public_notifications(dispatch, runtime, state);
     }
     match completion.operation {
         UiOperation::Mcp(operation) => {
@@ -336,6 +349,9 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
         cloud: CloudWorkflowState::default(),
         pending_switch: None,
         telemetry: None,
+        project_picker: None,
+        teleport_telemetry: None,
+        session_init_duration_ms: None,
         voice: VoiceManager::production(
             &json!({
                 "transcription": {
