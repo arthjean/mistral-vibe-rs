@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Write a log file at `$VIBE_HOME/logs/vibe.log`, so a failure that happens
+  before the app server attaches leaves a trace on disk. A record is one line,
+  `<timestamp> <ppid> <pid> <LEVEL> <message>`, with backslashes and newlines
+  encoded so a message carrying either stays on its line and decodes back
+  exactly. `DEBUG_MODE=true` sets the level to `DEBUG`, `LOG_LEVEL` names one
+  otherwise and an unknown name falls back to `WARNING`, and `LOG_MAX_BYTES`
+  moves the 10 MiB ceiling the file rotates at, keeping no backup. Opening the
+  file twice attaches nothing new, and a directory that cannot be created or
+  written is reported once and starts the binary anyway.
+
+- Answer the debug console from that file rather than from a buffer this process
+  kept, so a line another process wrote is readable and every entry carries the
+  identifiers of the process that wrote it instead of zeros. A page is newest
+  first, `limit` and `offset` walk backward from the end, a page that filled its
+  limit says where the next one starts, no log file at all is an empty page
+  rather than an error, and a line that does not parse is skipped rather than
+  failing the read.
+
 - Export OpenTelemetry spans, so the three configuration keys that advertised
   tracing finally do something. With `enable_telemetry` and `enable_otel` both
   on, the binary installs an OTLP HTTP exporter pointed at `otel_endpoint` when
