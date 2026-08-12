@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Leave `active_model` unpinned in the document a fresh installation writes, as
+  the reference does, and resolve the alias when it is read: a pinned value
+  still wins, an empty one selects `routed_default_model` when it names a
+  configured model, then the shipped default alias, then the first model there
+  is. The model new turns run on is unchanged, and only the stored document
+  differs from what earlier builds wrote.
+
+- Declare `routed_default_model` and `routed_model_config`, the two fields a
+  routing rollout writes. The definition arrives as the JSON text of one model
+  and is read through the reference's own field types, so a quoted price is a
+  number and a key the model does not declare is dropped; a definition that
+  does not read is ignored with a validation warning rather than failing the
+  load. A definition whose alias matches the routed one and that no
+  configuration declares is merged into the model map under that alias.
+
+- Select the managed shell session family with `managed_shell_tools_enabled`
+  rather than with the `VIBE_MANAGED_SHELL_TOOLS` environment variable, which
+  is withdrawn. The field is read from the session's merged configuration at
+  every registration, so a value written after startup reaches the next one.
+  The three fields are filled by a runtime rather than by an operator and are
+  withheld from the settings screen, as the reference withholds them.
+
 - Ship the event a client records. `telemetry/record` now hands its name and its
   properties to the same telemetry client the turn's own events travel through,
   under the same envelope and behind the same `enable_telemetry` key, in
@@ -901,8 +923,8 @@
   publication: a Windows shell family whose interpreter is uninstalled while a
   session runs leaves the surface at the next turn. Withheld tools are named on
   `diagnostics/list`.
-- Publish the Windows shell families. On Windows, under the
-  `VIBE_MANAGED_SHELL_TOOLS` rollout, `git_bash`, `git_bash_output`,
+- Publish the Windows shell families. On Windows, under
+  `managed_shell_tools_enabled`, `git_bash`, `git_bash_output`,
   `git_bash_stdin`, `git_bash_sessions` and `git_bash_log_file` appear when a
   Git Bash is installed, and the matching `powershell_*` names appear when
   PowerShell is installed and Git Bash is not. Each family drives its own
@@ -916,8 +938,8 @@
   and reports its own truncation, a non-zero exit carries the status and both
   streams, and a command that times out or whose turn is cancelled has its
   process group terminated.
-- Add the managed shell session family behind the `VIBE_MANAGED_SHELL_TOOLS`
-  rollout, standing in for the reference experiment variant: `bash` gains
+- Add the managed shell session family behind `managed_shell_tools_enabled`,
+  the field the reference experiment writes: `bash` gains
   `background`, `cwd`, `env`, `shell` and the two timeout controls, and
   `bash_output`, `bash_stdin`, `bash_sessions` and `bash_log_file` poll, feed,
   list and read the sessions it leaves running. A call that overrides the
