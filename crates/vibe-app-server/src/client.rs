@@ -3239,6 +3239,13 @@ impl LiveTurnDriver {
             observer,
             Arc::clone(&self.event_observer),
         ));
+        // Reference `self.agent_profile.name`, which every request and tool
+        // event reports and which defaults to the built-in profile.
+        let agent_profile = reservation
+            .intent
+            .agent
+            .clone()
+            .unwrap_or_else(|| vibe_core::engine::DEFAULT_AGENT_PROFILE.to_owned());
         let limits = EngineLimits {
             max_steps: reservation.intent.max_turns.unwrap_or(20),
             max_total_tokens: reservation.intent.max_tokens.unwrap_or(200_000),
@@ -3428,6 +3435,7 @@ impl LiveTurnDriver {
                 .with_limits(limits)
                 .with_baseline(baseline)
                 .with_compaction_settings(reservation.compaction.clone())
+                .with_agent_profile(agent_profile.clone())
                 .with_observer(observer);
             if let Some(warning) = context_warning {
                 engine = engine.with_middleware(warning);
@@ -3475,6 +3483,7 @@ impl LiveTurnDriver {
                 )))
                 .with_limits(limits)
                 .with_compaction_settings(reservation.compaction.clone())
+                .with_agent_profile(agent_profile.clone())
                 .with_observer(observer);
             if let Some(warning) = context_warning {
                 engine = engine.with_middleware(warning);
