@@ -1,7 +1,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -20,9 +20,11 @@ use vibe_app_server::client::{
     CompactionDriverFuture, DriverError, DriverFuture, EventObserver, LiveDriverConfig,
     LiveTurnDriver, TurnDriver, TurnReservation,
 };
+use vibe_app_server::release3::{Release3Paths, Release3Service};
 use vibe_app_server::transport::{MAX_FRAME_BYTES, read_bounded_frame};
 use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
+use vibe_core::tracing::{TracingGuard, TracingSetup, setup_tracing};
 
 const WRITER_QUEUE_CAPACITY: usize = 1_024;
 const MAX_CONCURRENT_REQUESTS: usize = 128;
@@ -289,6 +291,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let credential_environment = dotenv
         .variable("VIBE_CREDENTIAL_ENV")
         .unwrap_or_else(|| "MISTRAL_API_KEY".to_owned());
+    // The span exporter is installed before the first session is opened, and
+    // its guard lives as long as this process: dropping it flushes the batch.
+    let _tracing = install_tracing(&vibe_home, &dotenv);
     let config = LiveDriverConfig {
         compaction_prompts: CompactionPromptResolution::default(),
         style: dotenv
@@ -324,6 +329,38 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         true,
     )
     .await
+}
+
+/// Installs the span exporter this editor session exports through, when the
+/// merged configuration asks for one. Reference reads `enable_telemetry` on the
+/// ACP path too, and this port reads the same document the terminal client
+/// reads.
+fn install_tracing(vibe_home: &Path, dotenv: &DotenvValues) -> Option<TracingGuard> {
+    let service = Release3Service::new(
+        Release3Paths {
+            vibe_home: vibe_home.to_path_buf(),
+            working_directory: std::env::current_dir().unwrap_or_else(|_| vibe_home.to_path_buf()),
+            session_root: vibe_home.join("sessions"),
+        },
+        false,
+    )
+    .ok()?;
+    let snapshot = service.layered_config().load().ok()?;
+    let credentials = |variable: &str| dotenv.variable(variable).filter(|value| !value.is_empty());
+    match setup_tracing(&snapshot.effective, &credentials) {
+        TracingSetup::Installed(guard) => Some(guard),
+        TracingSetup::UnusableEndpoint { endpoint } => {
+            eprintln!(
+                "OTEL tracing is enabled but `{endpoint}` is not a usable collector; skipping."
+            );
+            None
+        }
+        TracingSetup::MissingCredential { variable } => {
+            eprintln!("OTEL tracing is enabled but {variable} is not set; skipping.");
+            None
+        }
+        TracingSetup::Disabled => None,
+    }
 }
 
 async fn run_stdio<R, W, D>(
