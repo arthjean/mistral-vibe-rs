@@ -164,12 +164,51 @@ pub struct TeleportStartRequest {
     pub repository: TeleportRepository,
 }
 
+/// Why a Teleport start failed: the error as the service rendered it, and the
+/// HTTP status that produced it when a status is what produced it.
+///
+/// The status travels beside the error rather than inside it. [`CloudError`]
+/// classifies a failure as unavailable, unauthorized or git, and that
+/// classification decides remappings elsewhere that a numeric code must not
+/// move; a consumer that needs the number reads it here. Reference
+/// `TeleportFailureDetails.http_status_code`, which is what tells a saved
+/// project link the service refused from one that merely failed.
+#[derive(Debug)]
+pub struct TeleportStartFailure {
+    pub error: CloudError,
+    pub http_status_code: Option<u16>,
+}
+
+impl From<CloudError> for TeleportStartFailure {
+    fn from(error: CloudError) -> Self {
+        Self {
+            error,
+            http_status_code: None,
+        }
+    }
+}
+
+impl std::fmt::Display for TeleportStartFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.error.fmt(formatter)
+    }
+}
+
+impl std::error::Error for TeleportStartFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+
+pub type TeleportFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<String, TeleportStartFailure>> + Send + 'a>>;
+
 pub trait TeleportCloud: Send + Sync {
-    fn start(&self, request: &TeleportStartRequest) -> Result<String, CloudError>;
+    fn start(&self, request: &TeleportStartRequest) -> Result<String, TeleportStartFailure>;
 }
 
 pub trait AsyncTeleportCloud: Send + Sync {
-    fn start<'a>(&'a self, request: &'a TeleportStartRequest) -> CloudFuture<'a, String>;
+    fn start<'a>(&'a self, request: &'a TeleportStartRequest) -> TeleportFuture<'a>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -405,10 +444,11 @@ impl ProjectCloud for UnavailableProjectCloud {
 struct UnavailableTeleportCloud;
 
 impl TeleportCloud for UnavailableTeleportCloud {
-    fn start(&self, _request: &TeleportStartRequest) -> Result<String, CloudError> {
+    fn start(&self, _request: &TeleportStartRequest) -> Result<String, TeleportStartFailure> {
         Err(CloudError::Unavailable(
             "Teleport is not configured; provide MISTRAL_API_KEY and retry".to_owned(),
-        ))
+        )
+        .into())
     }
 }
 
@@ -519,7 +559,14 @@ impl VibeCodeHttpCloud {
             .into_project()
     }
 
-    async fn start_teleport(&self, request: &TeleportStartRequest) -> Result<String, CloudError> {
+    /// The Teleport start, with the HTTP status kept beside a failure the
+    /// service answered with one: a saved project link the service refused
+    /// with a 403 or a 404 is reported as cleared, and only the number tells
+    /// that refusal from an ordinary outage.
+    async fn start_teleport(
+        &self,
+        request: &TeleportStartRequest,
+    ) -> Result<String, TeleportStartFailure> {
         validate_cloud_text(&request.project_id, "project ID")?;
         validate_cloud_text(&request.idempotency_key, "Teleport idempotency key")?;
         validate_cloud_text(&request.summary, "Teleport message")?;
@@ -534,7 +581,8 @@ impl VibeCodeHttpCloud {
             if diff.content.len() > MAX_TELEPORT_DIFF_ENCODED_BYTES {
                 return Err(CloudError::Git(format!(
                     "working-tree diff exceeded the {MAX_TELEPORT_DIFF_ENCODED_BYTES} byte safety limit"
-                )));
+                ))
+                .into());
             }
             validate_cloud_text(diff.format, "repository diff format")?;
             validate_cloud_text(diff.encoding, "repository diff encoding")?;
@@ -571,11 +619,22 @@ impl VibeCodeHttpCloud {
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
                 Ok(response) if response.status() == StatusCode::GATEWAY_TIMEOUT => {
-                    return Err(ambiguous_teleport_error());
+                    return Err(ambiguous_teleport_error().into());
                 }
                 Ok(response) => {
-                    let response: TeleportResponse =
-                        self.decode(response, "Vibe Code Teleport start").await?;
+                    let status = response.status();
+                    let decoded = self
+                        .decode::<TeleportResponse>(response, "Vibe Code Teleport start")
+                        .await;
+                    let response = match decoded {
+                        Ok(response) => response,
+                        Err(error) => {
+                            return Err(TeleportStartFailure {
+                                error,
+                                http_status_code: (!status.is_success()).then(|| status.as_u16()),
+                            });
+                        }
+                    };
                     for (value, label) in [
                         (&response.session_id, "Teleport session ID"),
                         (&response.web_session_id, "Teleport web session ID"),
@@ -587,7 +646,8 @@ impl VibeCodeHttpCloud {
                         return Err(CloudError::Unavailable(
                             "Vibe Code Teleport returned a different project; local state is unchanged"
                                 .to_owned(),
-                        ));
+                        )
+                        .into());
                     }
                     let url = Url::parse(&response.url).map_err(|_| {
                         CloudError::Unavailable(
@@ -600,7 +660,8 @@ impl VibeCodeHttpCloud {
                     {
                         return Err(CloudError::Unavailable(
                             "Vibe Code Teleport returned an unsafe URL".to_owned(),
-                        ));
+                        )
+                        .into());
                     }
                     return Ok(response.url);
                 }
@@ -611,12 +672,12 @@ impl VibeCodeHttpCloud {
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
                 Err(error) if is_ambiguous_request_error(&error) => {
-                    return Err(ambiguous_teleport_error());
+                    return Err(ambiguous_teleport_error().into());
                 }
-                Err(_) => return Err(cloud_request_error("Vibe Code Teleport start")),
+                Err(_) => return Err(cloud_request_error("Vibe Code Teleport start").into()),
             }
         }
-        Err(ambiguous_teleport_error())
+        Err(ambiguous_teleport_error().into())
     }
 }
 
@@ -636,7 +697,7 @@ impl AsyncProjectCloud for VibeCodeHttpCloud {
 }
 
 impl AsyncTeleportCloud for VibeCodeHttpCloud {
-    fn start<'a>(&'a self, request: &'a TeleportStartRequest) -> CloudFuture<'a, String> {
+    fn start<'a>(&'a self, request: &'a TeleportStartRequest) -> TeleportFuture<'a> {
         Box::pin(async move { self.start_teleport(request).await })
     }
 }
@@ -1677,6 +1738,9 @@ struct TeleportOperation {
     branch_not_pushed: bool,
     url: Option<String>,
     error: Option<String>,
+    /// The HTTP status a failed start answered with, when a status is what it
+    /// answered with. Reference `TeleportFailureDetails.http_status_code`.
+    error_status: Option<u16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -2041,15 +2105,15 @@ impl Release4Service {
     async fn teleport_start_cloud(
         &self,
         request: TeleportStartRequest,
-    ) -> Result<String, CloudError> {
+    ) -> Result<String, TeleportStartFailure> {
         match self.teleport_cloud.clone() {
             TeleportCloudBackend::Sync(cloud) => {
                 tokio::task::spawn_blocking(move || cloud.start(&request))
                     .await
                     .map_err(|_| {
-                        CloudError::Unavailable(
+                        TeleportStartFailure::from(CloudError::Unavailable(
                             "Teleport background task stopped unexpectedly".to_owned(),
-                        )
+                        ))
                     })?
             }
             TeleportCloudBackend::Async(cloud) => cloud.start(&request).await,
@@ -2418,6 +2482,7 @@ impl Release4Service {
             branch_not_pushed: false,
             url: None,
             error: None,
+            error_status: None,
         };
         let mut notifications = vec![teleport_notification(&operation)];
         operation.state = TeleportState::CheckingGit;
@@ -2491,8 +2556,9 @@ impl Release4Service {
                 operation.state = TeleportState::Complete;
                 notifications.push(teleport_notification(operation));
             }
-            Err(error) => {
-                operation.error = Some(error.to_string());
+            Err(failure) => {
+                operation.error = Some(failure.to_string());
+                operation.error_status = failure.http_status_code;
                 operation.state = TeleportState::Failed;
                 notifications.push(teleport_notification(operation));
             }
@@ -2600,8 +2666,9 @@ impl Release4Service {
                     operation.state = TeleportState::Complete;
                     notifications.push(teleport_notification(operation));
                 }
-                Err(error) => {
-                    operation.error = Some(error.to_string());
+                Err(failure) => {
+                    operation.error = Some(failure.to_string());
+                    operation.error_status = failure.http_status_code;
                     operation.state = TeleportState::Failed;
                     notifications.push(teleport_notification(operation));
                 }
@@ -3327,7 +3394,13 @@ fn teleport_notification(operation: &TeleportOperation) -> Release4Notification 
             "error": {
                 "message": operation.error,
                 "code": "teleport_failed",
-                "details": Value::Null,
+                // Reference `TeleportFailureDetails`: the status is what tells
+                // a saved project link the service refused from an outage, so
+                // it travels when the service answered with one and the key
+                // stays null when it did not.
+                "details": operation
+                    .error_status
+                    .map(|status| json!({"httpStatusCode": status})),
             },
         }),
         TeleportState::Cancelled => {
@@ -3727,9 +3800,14 @@ mod tests {
     }
 
     impl TeleportCloud for FixtureTeleport {
-        fn start(&self, request: &TeleportStartRequest) -> Result<String, CloudError> {
+        fn start(&self, request: &TeleportStartRequest) -> Result<String, TeleportStartFailure> {
             if self.fail.load(AtomicOrdering::Relaxed) {
-                Err(CloudError::Unauthorized("sign in again".to_owned()))
+                // The service refuses the project rather than the credential,
+                // which is the failure a saved link is cleared for.
+                Err(TeleportStartFailure {
+                    error: CloudError::Unauthorized("sign in again".to_owned()),
+                    http_status_code: Some(403),
+                })
             } else {
                 Ok(format!(
                     "https://cloud.example/teleport/{}",
@@ -4020,7 +4098,10 @@ mod tests {
 
         assert!(matches!(
             cloud.start_teleport(&request).await,
-            Err(CloudError::Unauthorized(message)) if message.contains("authenticate")
+            Err(TeleportStartFailure {
+                error: CloudError::Unauthorized(message),
+                http_status_code: Some(401),
+            }) if message.contains("authenticate")
         ));
         captured
             .recv_timeout(Duration::from_secs(2))
@@ -4057,7 +4138,10 @@ mod tests {
 
         assert!(matches!(
             cloud.start_teleport(&request).await,
-            Err(CloudError::Unavailable(message)) if message.contains("invalid response")
+            Err(TeleportStartFailure {
+                error: CloudError::Unavailable(message),
+                http_status_code: None,
+            }) if message.contains("invalid response")
         ));
         captured
             .recv_timeout(Duration::from_secs(2))
@@ -4120,10 +4204,14 @@ mod tests {
     }
 
     impl TeleportCloud for CapturingTeleport {
-        fn start(&self, request: &TeleportStartRequest) -> Result<String, CloudError> {
+        fn start(&self, request: &TeleportStartRequest) -> Result<String, TeleportStartFailure> {
             self.requests
                 .lock()
-                .map_err(|_| CloudError::Unavailable("capture lock failed".to_owned()))?
+                .map_err(|_| {
+                    TeleportStartFailure::from(CloudError::Unavailable(
+                        "capture lock failed".to_owned(),
+                    ))
+                })?
                 .push(request.clone());
             Ok("https://cloud.example/teleport/dirty-only".to_owned())
         }
@@ -5123,10 +5211,12 @@ mod tests {
             )
             .await
             .expect("typed cloud failure");
-        assert_eq!(
-            failed.notifications.last().expect("failure event").params["event"]["kind"],
-            json!("failed")
-        );
+        let event = &failed.notifications.last().expect("failure event").params["event"];
+        assert_eq!(event["kind"], json!("failed"));
+        // US-011: the status the service answered with travels in the failure
+        // details, because it is what tells a saved project link the service
+        // refused from an ordinary outage.
+        assert_eq!(event["error"]["details"]["httpStatusCode"], json!(403));
     }
 
     #[tokio::test]
@@ -5438,6 +5528,7 @@ mod tests {
             branch_not_pushed: false,
             url: None,
             error: None,
+            error_status: None,
         };
         service
             .lock_teleports()

@@ -4522,7 +4522,7 @@ mod tests {
     use crate::release3::{Release3Paths, Release3Service};
     use crate::release4::{
         CloudError, GitProbe, GitSnapshot, Project, ProjectCloud, ProjectPage, ProjectRepository,
-        Release4Service, TeleportCloud, TeleportStartRequest,
+        Release4Service, TeleportCloud, TeleportStartFailure, TeleportStartRequest,
     };
     use crate::server::SessionStatus;
     use vibe_core::compaction::CompactionFailureReason;
@@ -5243,7 +5243,7 @@ command = "/must-not-run"
     struct ProgrammaticTeleport;
 
     impl TeleportCloud for ProgrammaticTeleport {
-        fn start(&self, request: &TeleportStartRequest) -> Result<String, CloudError> {
+        fn start(&self, request: &TeleportStartRequest) -> Result<String, TeleportStartFailure> {
             Ok(format!("https://cloud.example/{}", request.idempotency_key))
         }
     }

@@ -18,7 +18,7 @@ use vibe_app_server::client::{
 };
 use vibe_app_server::release4::{
     CloudError, GitProbe, GitSnapshot, Project, ProjectCloud, ProjectPage, ProjectRepository,
-    TeleportCloud, TeleportStartRequest,
+    TeleportCloud, TeleportStartFailure, TeleportStartRequest,
 };
 use vibe_app_server::server::ToolInvocation;
 
@@ -242,7 +242,7 @@ impl ProjectCloud for FixtureProjectCloud {
 pub(super) struct FixtureTeleportCloud;
 
 impl TeleportCloud for FixtureTeleportCloud {
-    fn start(&self, request: &TeleportStartRequest) -> Result<String, CloudError> {
+    fn start(&self, request: &TeleportStartRequest) -> Result<String, TeleportStartFailure> {
         Ok(format!(
             "https://cloud.example.test/teleport/{}",
             request.idempotency_key

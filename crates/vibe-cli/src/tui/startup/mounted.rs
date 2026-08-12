@@ -202,7 +202,8 @@ mod tests {
 
     use vibe_app_server::release4::{
         CloudError, GitProbe, GitSnapshot, Project, ProjectCloud, ProjectGitSnapshot, ProjectPage,
-        ProjectRepository, Release4Service, TeleportCloud, TeleportStartRequest,
+        ProjectRepository, Release4Service, TeleportCloud, TeleportStartFailure,
+        TeleportStartRequest,
     };
     use vibe_app_server::server::AppServer;
 
@@ -315,10 +316,14 @@ mod tests {
     }
 
     impl TeleportCloud for CapturingStartupTeleport {
-        fn start(&self, request: &TeleportStartRequest) -> Result<String, CloudError> {
+        fn start(&self, request: &TeleportStartRequest) -> Result<String, TeleportStartFailure> {
             self.requests
                 .lock()
-                .map_err(|_| CloudError::Unavailable("fixture lock was poisoned".to_owned()))?
+                .map_err(|_| {
+                    TeleportStartFailure::from(CloudError::Unavailable(
+                        "fixture lock was poisoned".to_owned(),
+                    ))
+                })?
                 .push(request.clone());
             Ok("https://cloud.example/teleport/startup".to_owned())
         }

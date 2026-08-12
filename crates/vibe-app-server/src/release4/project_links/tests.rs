@@ -19,7 +19,7 @@ use vibe_protocol::{Envelope, TransportKind, decode_frame};
 use crate::app_server_surface_parity_tests::census_issues;
 use crate::release4::{
     CloudError, CommandGitProbe, Project, ProjectCloud, ProjectPage, ProjectRepository,
-    Release4Service, SavedProjectLink, TeleportCloud, TeleportStartRequest,
+    Release4Service, SavedProjectLink, TeleportCloud, TeleportStartFailure, TeleportStartRequest,
 };
 use crate::server::{AppServer, DeferredWork, ServerConnection};
 
@@ -103,10 +103,8 @@ impl ProjectCloud for FixtureProjects {
 struct UnusedTeleport;
 
 impl TeleportCloud for UnusedTeleport {
-    fn start(&self, _request: &TeleportStartRequest) -> Result<String, CloudError> {
-        Err(CloudError::Unavailable(
-            "Teleport is not exercised here".to_owned(),
-        ))
+    fn start(&self, _request: &TeleportStartRequest) -> Result<String, TeleportStartFailure> {
+        Err(CloudError::Unavailable("Teleport is not exercised here".to_owned()).into())
     }
 }
 
