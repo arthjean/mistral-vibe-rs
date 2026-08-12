@@ -51,6 +51,7 @@ pub use vibe_core::policy::{
 use vibe_core::policy::{PermissionRule, PermissionStore, ToolGuard, TrustDecision, TrustRootKind};
 use vibe_core::scratchpad::{cleanup_scratchpad, init_scratchpad, scratchpad_path};
 use vibe_core::storage::HydratedSession;
+use vibe_core::telemetry::{ClientTelemetry, NoClientTelemetry};
 pub use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
 use vibe_core::tools::shell::{ShellRollout, ShellTools};
 pub use vibe_core::tools::{
@@ -391,6 +392,11 @@ pub struct AppServer {
     /// until a client declares a capability, which is what keeps a client that
     /// hosts nothing on the server's own filesystem and terminals.
     client_tools: Arc<ClientToolBridge>,
+    /// Where a client-authored event reaches the datalake. The reference hands
+    /// it to the agent loop's own telemetry client; the adapter that owns one
+    /// installs it here, and a server built without one keeps the event on
+    /// `diagnostics/logs/read` alone.
+    client_telemetry: Arc<dyn ClientTelemetry>,
     next_session: Arc<AtomicU64>,
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
@@ -433,6 +439,7 @@ impl Default for AppServer {
                 ShellRollout::from_environment(MANAGED_SHELL_VARIABLE),
             )),
             client_tools: Arc::new(ClientToolBridge::default()),
+            client_telemetry: Arc::new(NoClientTelemetry),
             next_session: Arc::new(AtomicU64::new(1)),
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
@@ -492,6 +499,20 @@ impl AppServer {
     #[must_use]
     pub fn using_release4_service(mut self, service: Release4Service) -> Self {
         self.release4 = Arc::new(service);
+        self
+    }
+
+    /// Installs where `telemetry/record` ships a client-authored event.
+    ///
+    /// The reference reaches the agent loop's telemetry client from the same
+    /// resource set that serves the method
+    /// (`vibe/app_server/_resources.py:488-499`). Nothing here decides whether
+    /// the event travels: the sink re-reads `enable_telemetry` and the Mistral
+    /// provider on every send, exactly as an event the turn itself produced
+    /// does.
+    #[must_use]
+    pub fn using_client_telemetry(mut self, telemetry: Arc<dyn ClientTelemetry>) -> Self {
+        self.client_telemetry = telemetry;
         self
     }
 
@@ -3874,13 +3895,13 @@ impl ServerConnection {
     /// Records a client-reported event against the attached session.
     ///
     /// The reference forwards the event to the agent loop's telemetry client,
-    /// which ships it to the datalake under the reference envelope. This port
-    /// publishes a deliberately different envelope from a closed vocabulary
-    /// (`docs/parity.md`, Accepted divergences), so a client-authored name and
-    /// its free-form properties have no envelope to travel in. The event is
-    /// written to the log file an operator reads back through
-    /// `diagnostics/logs/read`, and is dropped entirely when `enable_telemetry`
-    /// is off, which is the decision the reference delegates to the same key.
+    /// which ships it to the datalake under the open-properties envelope
+    /// (`vibe/app_server/_resources.py:488-499`). This port now publishes that
+    /// envelope too, so the event travels through the sink an adapter
+    /// installed, carrying the client's own name and its properties unmodified.
+    /// It is also written to the log file an operator reads back through
+    /// `diagnostics/logs/read`, and both are dropped when `enable_telemetry` is
+    /// off, which is the decision the reference delegates to the same key.
     fn telemetry_record(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<TelemetryRecordParams>(&request.params) {
             Ok(params) => params,
@@ -3907,6 +3928,12 @@ impl ServerConnection {
                     );
                 }
             }
+            self.server.client_telemetry.record_client_event(
+                &params.name,
+                params.properties.into_iter().collect(),
+                Some(&params.session_id),
+                params.correlate_last_request,
+            );
         }
         success_batch(request.id, BTreeMap::new())
     }
@@ -8543,6 +8570,114 @@ mod tests {
                 entries,
                 usize::from(enabled),
                 "enable_telemetry = {enabled} decides whether the event is kept"
+            );
+        }
+    }
+
+    /// What a client-authored event handed to the telemetry client looks like.
+    #[derive(Debug, Clone, PartialEq)]
+    struct RecordedClientEvent {
+        name: String,
+        properties: serde_json::Map<String, Value>,
+        session_id: Option<String>,
+        correlate_last_request: bool,
+    }
+
+    #[derive(Default)]
+    struct RecordingClientTelemetry {
+        events: Mutex<Vec<RecordedClientEvent>>,
+    }
+
+    impl ClientTelemetry for RecordingClientTelemetry {
+        fn record_client_event(
+            &self,
+            name: &str,
+            properties: serde_json::Map<String, Value>,
+            session_id: Option<&str>,
+            correlate_last_request: bool,
+        ) {
+            if let Ok(mut events) = self.events.lock() {
+                events.push(RecordedClientEvent {
+                    name: name.to_owned(),
+                    properties,
+                    session_id: session_id.map(ToOwned::to_owned),
+                    correlate_last_request,
+                });
+            }
+        }
+    }
+
+    /// Reference `_dispatch_telemetry` hands the recorded event to the agent
+    /// loop's telemetry client, which ships it under the open-properties
+    /// envelope. The name and the properties are the client's, so neither is
+    /// rewritten, and the same key that keeps the event off the log keeps it
+    /// off the wire.
+    #[test]
+    fn a_recorded_client_event_reaches_the_telemetry_client_unmodified() {
+        for enabled in [true, false] {
+            let temporary = tempfile::tempdir().expect("temporary workspace");
+            let working_directory = temporary.path().join("workspace");
+            let vibe_home = temporary.path().join("home");
+            fs::create_dir_all(working_directory.join(".vibe")).expect("project config directory");
+            fs::create_dir_all(&vibe_home).expect("user config directory");
+            fs::write(
+                working_directory.join(".vibe/config.toml"),
+                format!("enable_telemetry = {enabled}\n"),
+            )
+            .expect("telemetry configuration");
+            let release3 = Release3Service::new(
+                crate::release3::Release3Paths {
+                    vibe_home,
+                    working_directory: working_directory.clone(),
+                    session_root: temporary.path().join("sessions"),
+                },
+                true,
+            )
+            .expect("release-3 service");
+            let telemetry = Arc::new(RecordingClientTelemetry::default());
+            let server = AppServer::with_release3_service(release3)
+                .using_client_telemetry(telemetry.clone());
+            let mut connection = server.connect(TransportKind::InProcess);
+            initialize(&mut connection);
+            connection.dispatch(&request(
+                2,
+                "session/start",
+                json!({"sessionId": "session-1", "workingDirectory": working_directory}),
+            ));
+
+            connection.dispatch(&request(
+                3,
+                "telemetry/record",
+                json!({
+                    "sessionId": "session-1",
+                    "name": "vibe.user_rating_feedback",
+                    "properties": {"rating": 4, "model": "medium", "note": "a path/like value"},
+                    "correlateLastRequest": true
+                }),
+            ));
+
+            let events = telemetry.events.lock().expect("recorded events").clone();
+            if !enabled {
+                assert!(
+                    events.is_empty(),
+                    "enable_telemetry = false ships nothing: {events:?}"
+                );
+                continue;
+            }
+            let event = events.first().expect("one shipped event").clone();
+            assert_eq!(event.name, "vibe.user_rating_feedback");
+            assert_eq!(
+                event.properties,
+                json!({"rating": 4, "model": "medium", "note": "a path/like value"})
+                    .as_object()
+                    .expect("an object")
+                    .clone(),
+                "a client's properties travel unmodified"
+            );
+            assert_eq!(event.session_id.as_deref(), Some("session-1"));
+            assert!(
+                event.correlate_last_request,
+                "the correlation the client asked for is carried"
             );
         }
     }

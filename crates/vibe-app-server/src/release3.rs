@@ -557,7 +557,8 @@ impl Release3Service {
             .unwrap_or(true)
     }
 
-    /// Whether the configuration lets a client-recorded event be kept.
+    /// Whether the configuration lets a client-recorded event be kept and
+    /// shipped.
     ///
     /// `telemetry/record` is the only caller: the reference hands the event to
     /// the agent loop's telemetry client, which drops it when the same key is
