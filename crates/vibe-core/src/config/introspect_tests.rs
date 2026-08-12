@@ -97,14 +97,16 @@ fn the_described_surface_is_the_published_registry_without_the_tool_table() {
     let described_names: Vec<&str> = described.fields.iter().map(|field| field.name).collect();
     let expected: Vec<&str> = registry::FIELDS
         .iter()
-        .filter(|spec| spec.published && spec.name != "tools")
+        .filter(|spec| spec.published && !introspect::HIDDEN_FIELDS.contains(&spec.name))
         .map(|spec| spec.name)
         .collect();
     assert_eq!(described_names, expected);
-    assert!(
-        !described_names.contains(&"tools"),
-        "per-tool settings have no editor on either side"
-    );
+    for hidden in introspect::HIDDEN_FIELDS {
+        assert!(
+            !described_names.contains(&hidden),
+            "`{hidden}` is a runtime-filled field the reference hides from the settings screen"
+        );
+    }
 
     // The popular set is the reference one, which `surface_parity_tests` holds
     // against the captured corpus.

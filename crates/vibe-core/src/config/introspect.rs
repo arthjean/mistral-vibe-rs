@@ -12,9 +12,17 @@ use super::patch::JsonPointer;
 use super::registry::{self, FieldDefault};
 use super::{ConfigLayerKind, ConfigSnapshot, ConfigTarget, is_sensitive_key, redact_value};
 
-/// Per-tool settings are excluded: the reference leaves them out of the settings
-/// screen, and neither side offers a per-tool editor.
-const EXCLUDED_FIELD: &str = "tools";
+/// Reference `HIDDEN_SETTINGS`: the fields a runtime fills rather than an
+/// operator, which no settings screen offers an editor for. Per-tool settings
+/// are excluded because neither side renders a per-tool editor; the other three
+/// are written by the experiments layer and would be meaningless as manual
+/// entries.
+pub const HIDDEN_FIELDS: [&str; 4] = [
+    "managed_shell_tools_enabled",
+    "routed_default_model",
+    "routed_model_config",
+    "tools",
+];
 
 /// One field's value in one layer.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -54,7 +62,7 @@ pub struct ConfigFields {
 pub fn describe_fields(snapshot: &ConfigSnapshot) -> Vec<ConfigFieldView> {
     registry::FIELDS
         .iter()
-        .filter(|spec| spec.published && spec.name != EXCLUDED_FIELD)
+        .filter(|spec| spec.published && !HIDDEN_FIELDS.contains(&spec.name))
         .map(|spec| ConfigFieldView {
             name: spec.name,
             kind: spec.kind.as_str(),

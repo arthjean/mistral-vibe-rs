@@ -115,11 +115,10 @@ const CONTROL_KEYS: [(&str, &[u8]); 40] = [
 
 /// Which variant of the host's shell family the session publishes.
 ///
-/// The reference resolves this from a remote experiment whose default variant
-/// is `legacy`, and the Rust port has no experiment client, so the managed
-/// family stays absent unless an operator asks for it. The environment
-/// variable is that ask: it is the only local switch, and it mirrors how
-/// `web_search` resolves its credential.
+/// The reference resolves this from `managed_shell_tools_enabled`, which its
+/// own remote experiment writes and whose default variant is `legacy`. The
+/// configuration field is the single switch on both sides: an operator sets it
+/// in a file, or the experiments layer sets it below every file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ShellRollout {
     /// Reference `MANAGED_SHELL_TOOLS_LEGACY`, the default variant.
@@ -130,13 +129,15 @@ pub enum ShellRollout {
 }
 
 impl ShellRollout {
-    /// The variant `variable` selects, defaulting to [`ShellRollout::Legacy`]
-    /// exactly as the reference experiment does when nothing resolves.
+    /// The variant the session configuration selects, defaulting to
+    /// [`ShellRollout::Legacy`] exactly as the reference experiment does when
+    /// nothing resolves.
     #[must_use]
-    pub fn from_environment(variable: &str) -> Self {
-        match std::env::var(variable).ok().as_deref() {
-            Some("1" | "true" | "managed") => Self::Managed,
-            _ => Self::Legacy,
+    pub fn from_config(config: &ToolConfigResolver) -> Self {
+        if config.managed_shell_tools_enabled() {
+            Self::Managed
+        } else {
+            Self::Legacy
         }
     }
 }
@@ -433,7 +434,6 @@ pub type HostResolver = Arc<dyn Fn() -> HostShells + Send + Sync>;
 #[derive(Clone)]
 pub struct ShellTools {
     vibe_home: PathBuf,
-    rollout: ShellRollout,
     host: HostResolver,
     sessions: Arc<StdMutex<BTreeMap<String, Arc<SessionShell>>>>,
 }
@@ -443,7 +443,6 @@ impl std::fmt::Debug for ShellTools {
         formatter
             .debug_struct("ShellTools")
             .field("vibe_home", &self.vibe_home)
-            .field("rollout", &self.rollout)
             .field("host", &(self.host)())
             .finish_non_exhaustive()
     }
@@ -540,33 +539,24 @@ impl SessionShell {
 
 impl ShellTools {
     #[must_use]
-    pub fn new(vibe_home: impl Into<PathBuf>, rollout: ShellRollout) -> Self {
-        Self::with_host_resolver(vibe_home, rollout, Arc::new(HostShells::detect))
+    pub fn new(vibe_home: impl Into<PathBuf>) -> Self {
+        Self::with_host_resolver(vibe_home, Arc::new(HostShells::detect))
     }
 
     /// The same tools against a stated host, which is how a POSIX test drives
     /// the Windows families.
     #[must_use]
-    pub fn with_host(
-        vibe_home: impl Into<PathBuf>,
-        rollout: ShellRollout,
-        host: HostShells,
-    ) -> Self {
-        Self::with_host_resolver(vibe_home, rollout, Arc::new(move || host.clone()))
+    pub fn with_host(vibe_home: impl Into<PathBuf>, host: HostShells) -> Self {
+        Self::with_host_resolver(vibe_home, Arc::new(move || host.clone()))
     }
 
     /// The same tools against a host answered anew at every publication, which
     /// is what [`ShellTools::new`] installs and what lets a test move the
     /// machine under a running session.
     #[must_use]
-    pub fn with_host_resolver(
-        vibe_home: impl Into<PathBuf>,
-        rollout: ShellRollout,
-        host: HostResolver,
-    ) -> Self {
+    pub fn with_host_resolver(vibe_home: impl Into<PathBuf>, host: HostResolver) -> Self {
         Self {
             vibe_home: vibe_home.into(),
-            rollout,
             host,
             sessions: Arc::new(StdMutex::new(BTreeMap::new())),
         }
@@ -594,7 +584,13 @@ impl ShellTools {
             scratchpad,
         } = guard;
         let host = (self.host)();
-        let Some((family, managed)) = published_family(&host, self.rollout) else {
+        // Reference `_is_enabled_for_shell_rollout` asks the session
+        // configuration at every availability check, so the rollout is read
+        // here rather than frozen when the family was constructed: a rollout
+        // that arrives after startup, which is what the experiments layer
+        // writes, reaches the next registration.
+        let rollout = ShellRollout::from_config(config);
+        let Some((family, managed)) = published_family(&host, rollout) else {
             return Ok(Vec::new());
         };
         let Some(shell_config) = family_config(family, &host) else {
@@ -617,9 +613,9 @@ impl ShellTools {
             ShellFamily::Bash => None,
             ShellFamily::GitBash | ShellFamily::PowerShell => {
                 let resolver = self.host.clone();
-                let rollout = self.rollout;
+                let tool_config = config.clone();
                 Some(Arc::new(move || {
-                    published_family(&resolver(), rollout)
+                    published_family(&resolver(), ShellRollout::from_config(&tool_config))
                         .is_some_and(|(published, _)| published == family)
                 }))
             }

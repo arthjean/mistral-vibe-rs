@@ -48,40 +48,29 @@ const VIBE_HOME_PLACEHOLDER: &str = "{vibe_home}";
 
 /// Reference fields this port does not declare, each with the reason.
 ///
-/// All four arrived with the v2.24.0 re-pin (US-142) and belong to one upstream
-/// feature: an `active_model` that may be left unpinned, resolved at read time
-/// from a routed default, plus the greeting and managed-shell toggles that
-/// shipped with it. Declaring the keys without the resolution they feed would
-/// publish a schema whose values change nothing, which is the failure mode
-/// `docs/parity.md` names. They are recorded here so the gap is visible and the
-/// replay still fails on any *other* undeclared field.
+/// US-004 and US-005 shortened this list to one: the three fields the
+/// GrowthBook layer writes are declared here now, each with the resolution that
+/// gives it an effect, so the only entry left is the greeting toggle, whose
+/// consumer belongs to app-server parity and which no experiment targets. The
+/// gap stays visible and the replay still fails on any *other* undeclared
+/// field.
 ///
 /// An entry whose field becomes declared fails the replay as stale.
-const UNDECLARED_FIELDS: &[(&str, &str)] = &[
-    (
-        "managed_shell_tools_enabled",
-        "US-142: v2.24.0 managed shell rollout, unported",
-    ),
-    (
-        "routed_default_model",
-        "US-142: v2.24.0 unpinned active model, unported",
-    ),
-    (
-        "routed_model_config",
-        "US-142: v2.24.0 unpinned active model, unported",
-    ),
-    ("show_greeting", "US-142: v2.24.0 greeting toggle, unported"),
-];
+const UNDECLARED_FIELDS: &[(&str, &str)] = &[(
+    "show_greeting",
+    "US-142: v2.24.0 greeting toggle, unported; narrowed to the greeting by US-005",
+)];
 
-/// The sentinel v2.24.0 ships for `active_model`, meaning "not pinned": the
-/// reference resolves it to a default model when it reads the value, so the
-/// document it ships now carries an empty alias where this port still ships the
-/// alias itself. The consequence of the same unported feature as
-/// [`UNDECLARED_FIELDS`], recorded as a value rather than as a field.
+/// The sentinel v2.24.0 ships for `active_model`, meaning "not pinned": both
+/// implementations now carry it in the document they ship and resolve it when
+/// the alias is read, so this constant describes the shipped document rather
+/// than a divergence from it.
 const UNPINNED_ACTIVE_MODEL: &str = "";
 
-/// The alias this port pins instead, which is what the reference resolves the
-/// sentinel to when no routed default is configured.
+/// What the sentinel resolves to when no routed default is configured, which is
+/// the alias this port used to pin outright. Unpinning `active_model` must not
+/// move the model an installation actually runs on, and this is the constant
+/// that holds it still.
 const PINNED_ACTIVE_MODEL: &str = "mistral-medium-3.5";
 
 /// A ledger as a lookup, so a divergence is named once and read by name.
@@ -300,11 +289,20 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
         ],
         "the locally declared key set changed; record the divergence in the PRD"
     );
+    // The numerator is the reference field set minus what the ledger still
+    // records as undeclared, so the count `docs/parity.md` quotes moves when the
+    // ledger does instead of restating the denominator twice.
+    let undeclared = corpus
+        .fields
+        .iter()
+        .filter(|field| recorded.contains_key(&field.name))
+        .count();
     println!(
-        "config surface: {}/{} reference fields declared, {} local, at {}",
-        corpus.fields.len(),
+        "config surface: {}/{} reference fields declared, {} local, {} recorded undeclared, at {}",
+        corpus.fields.len() - undeclared,
         corpus.fields.len(),
         local.len(),
+        undeclared,
         &corpus.reference.commit[..12]
     );
 }
@@ -331,14 +329,19 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
     let recorded = ledger(UNDECLARED_FIELDS);
     let mut unpinned_observed = false;
     for (key, expected) in &corpus.defaults.document {
-        // The unpinned sentinel is the one value this port deliberately still
-        // ships differently, and it is asserted rather than skipped: the port
-        // must pin exactly the alias the reference resolves the sentinel to.
+        // The unpinned sentinel reaches the document unchanged on both sides,
+        // and the alias it resolves to is asserted beside it: unpinning the key
+        // must leave the model an installation runs on exactly where it was.
         if key == "active_model" && expected.as_str() == Some(UNPINNED_ACTIVE_MODEL) {
             assert_eq!(
                 actual.get(key).and_then(JsonValue::as_str),
+                Some(UNPINNED_ACTIVE_MODEL),
+                "the port ships a pinned alias where the reference ships the sentinel"
+            );
+            assert_eq!(
+                snapshot.active_model_alias(),
                 Some(PINNED_ACTIVE_MODEL),
-                "the port ships neither the reference sentinel nor the alias it resolves to"
+                "the shipped sentinel resolves to another model than the alias it replaced"
             );
             unpinned_observed = true;
             continue;
@@ -503,22 +506,18 @@ fn every_model_scenario_validates_to_the_document_the_reference_validates() {
         let snapshot = config
             .load()
             .unwrap_or_else(|error| panic!("{}: {error}", scenario.name));
-        // The unpinned sentinel is the recorded v2.24.0 divergence: where the
-        // reference leaves the alias empty and resolves it on read, this port
-        // pins the alias the reference would resolve to. Every other scenario
-        // is compared as it stands.
-        let expected_alias = if scenario.active_model == UNPINNED_ACTIVE_MODEL {
+        // The unpinned sentinel survives the merge on both sides: the reference
+        // leaves the alias empty and resolves it on read, and so does this
+        // port. Every scenario is therefore compared as it stands.
+        if scenario.active_model == UNPINNED_ACTIVE_MODEL {
             unpinned_observed = true;
-            PINNED_ACTIVE_MODEL
-        } else {
-            scenario.active_model.as_str()
-        };
+        }
         assert_eq!(
             snapshot
                 .effective
                 .get("active_model")
                 .and_then(Value::as_str),
-            Some(expected_alias),
+            Some(scenario.active_model.as_str()),
             "{}: the active model diverges",
             scenario.name
         );

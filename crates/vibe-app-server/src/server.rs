@@ -53,7 +53,7 @@ use vibe_core::scratchpad::{cleanup_scratchpad, init_scratchpad, scratchpad_path
 use vibe_core::storage::HydratedSession;
 use vibe_core::telemetry::{ClientTelemetry, NoClientTelemetry};
 pub use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
-use vibe_core::tools::shell::{ShellRollout, ShellTools};
+use vibe_core::tools::shell::ShellTools;
 pub use vibe_core::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolInvocation,
     ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
@@ -71,9 +71,6 @@ const INITIALIZE_METHOD: &str = "initialize";
 const INITIALIZED_NOTIFICATION: &str = "initialized";
 const SHUTDOWN_METHOD: &str = "shutdown";
 const EXIT_NOTIFICATION: &str = "exit";
-/// Where the managed shell rollout is read from, standing in for the reference
-/// experiment variant that has no client in this port.
-const MANAGED_SHELL_VARIABLE: &str = "VIBE_MANAGED_SHELL_TOOLS";
 /// What a tool-surface diagnostic is attributed to: the tool filters and the
 /// availability conditions both come from the configuration the session loaded.
 pub(crate) const CONFIG_FILE_LABEL: &str = "config.toml";
@@ -430,14 +427,11 @@ impl Default for AppServer {
                 home.clone(),
                 WebSearchAccess::from_environment(&DotenvValues::global(&home), "MISTRAL_API_KEY"),
             )),
-            // The reference gates the managed shell family on a remote
-            // experiment whose default variant is `legacy`. There is no
-            // experiment client here, so the operator's environment is the
-            // only thing that can ask for the managed variant.
-            shell_tools: Arc::new(ShellTools::new(
-                home,
-                ShellRollout::from_environment(MANAGED_SHELL_VARIABLE),
-            )),
+            // The rollout is not resolved here: `register` reads
+            // `managed_shell_tools_enabled` off the session's configuration
+            // resolver, which follows every load, so a value written after
+            // startup still selects the family.
+            shell_tools: Arc::new(ShellTools::new(home)),
             client_tools: Arc::new(ClientToolBridge::default()),
             client_telemetry: Arc::new(NoClientTelemetry),
             next_session: Arc::new(AtomicU64::new(1)),
@@ -8281,6 +8275,79 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    /// US-005: the managed shell family is selected by
+    /// `managed_shell_tools_enabled`, which is the field the experiments layer
+    /// writes and the only switch the reference reads.
+    ///
+    /// Absent and `false` publish the one-shot command tool alone; `true` adds
+    /// the four session tools, and the managed variant wins the family name by
+    /// selection priority.
+    #[tokio::test]
+    async fn the_managed_shell_family_is_selected_by_the_configuration_field() {
+        for (document, managed) in [
+            ("", false),
+            ("managed_shell_tools_enabled = false\n", false),
+            ("managed_shell_tools_enabled = true\n", true),
+        ] {
+            let temporary = tempfile::tempdir().expect("temporary home");
+            let home = temporary.path().join("home");
+            let workspace = temporary.path().join("workspace");
+            std::fs::create_dir_all(&home).expect("home directory");
+            std::fs::create_dir_all(&workspace).expect("workspace directory");
+            if !document.is_empty() {
+                std::fs::write(home.join("config.toml"), document).expect("configuration fixture");
+            }
+            let release3 = Release3Service::new(
+                crate::release3::Release3Paths {
+                    vibe_home: home,
+                    working_directory: workspace.clone(),
+                    session_root: temporary.path().join("sessions"),
+                },
+                false,
+            )
+            .expect("release-3 service");
+            let server = AppServer::with_release3_service(release3);
+            let mut connection = server.connect(TransportKind::InProcess);
+            initialize(&mut connection);
+            connection.dispatch(&request(
+                2,
+                "session/start",
+                json!({"sessionId": "session-1", "workingDirectory": workspace}),
+            ));
+
+            let listed =
+                connection.dispatch(&request(3, "tools/list", json!({"sessionId": "session-1"})));
+            let published = match decode_frame(&listed.outbound[0]).expect("tools response") {
+                Envelope::Success(SuccessResponse { result, .. }) => result["tools"]
+                    .as_array()
+                    .map(|published| {
+                        published
+                            .iter()
+                            .filter_map(|tool| tool["name"].as_str().map(ToOwned::to_owned))
+                            .collect::<BTreeSet<_>>()
+                    })
+                    .expect("tools/list answers with the published names"),
+                other => unreachable!("tools/list did not answer: {other:?}"),
+            };
+            assert!(
+                published.contains("bash"),
+                "`{document}` published no command tool: {published:?}"
+            );
+            for session_tool in [
+                "bash_stdin",
+                "bash_output",
+                "bash_sessions",
+                "bash_log_file",
+            ] {
+                assert_eq!(
+                    published.contains(session_tool),
+                    managed,
+                    "`{document}` disagrees on `{session_tool}`: {published:?}"
+                );
+            }
+        }
     }
 
     #[tokio::test]

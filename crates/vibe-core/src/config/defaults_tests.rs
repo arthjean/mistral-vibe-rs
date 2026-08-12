@@ -322,3 +322,211 @@ fn a_compaction_model_on_another_provider_than_the_active_one_fails() {
         Some("devstral-small-latest")
     );
 }
+
+// --------------------------------------------------------------------------
+// The routed model an experiment assigns
+// --------------------------------------------------------------------------
+
+/// A layered configuration over the shipped defaults with `user` in the
+/// selected file and `experiments` in the layer the GrowthBook assignment
+/// fills, which is where the two routed keys actually arrive.
+fn routed(user: &str, experiments: &str) -> Result<ConfigSnapshot, ConfigError> {
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let home = temporary.path().join("home/.vibe");
+    fs::create_dir_all(&home).expect("home directory");
+    if !user.is_empty() {
+        fs::write(home.join(CONFIG_FILE), user).expect("user fixture");
+    }
+    LayeredConfig::new(
+        ConfigPaths {
+            vibe_home: home,
+            working_directory: temporary.path().join("project"),
+        },
+        default_document(),
+    )
+    .with_experiments(
+        experiments
+            .parse::<Table>()
+            .expect("the experiment layer parses"),
+    )
+    .load()
+}
+
+/// The definition a routing variant carries, as the layer re-encodes it: the
+/// JSON text of one model, which the load coerces before anything reads it.
+///
+/// The prices are quoted and the surplus key is there on purpose: this is the
+/// shape the oracle records under `configMapping/routing-with-model-config` in
+/// `crates/vibe-core/tests/experiments/corpus.json`, and reference
+/// `ModelConfig` reads a quoted price as the number it spells and ignores a key
+/// it does not declare.
+const ROUTED_DEFINITION: &str = concat!(
+    r#"routed_model_config = "{\"name\": \"vibe-routed-latest\", "#,
+    r#"\"provider\": \"mistral\", \"alias\": \"routed\", \"supports_images\": true, "#,
+    r#"\"input_price\": \"0.0\", \"output_price\": \"1.5\", \"graduated\": true}""#,
+    "\n",
+);
+
+/// US-004: an unpinned installation runs on the model the rollout routed it to,
+/// which is what makes `routed_default_model` more than a key nothing reads.
+#[test]
+fn an_unpinned_active_model_resolves_to_the_routed_default() {
+    let snapshot = routed(
+        "",
+        concat!(
+            "routed_default_model = \"local\"\n",
+            "system_prompt_id = \"cli\"\n",
+        ),
+    )
+    .expect("the assignment loads");
+
+    assert_eq!(
+        snapshot.effective["active_model"].as_str(),
+        Some(""),
+        "the document keeps the sentinel; only the read resolves"
+    );
+    assert_eq!(snapshot.active_model_alias(), Some("local"));
+    // The `config/read` view is a real reader of the resolved alias, so the
+    // assignment is observed where a client would see it.
+    assert_eq!(
+        snapshot.config_view()["activeModel"]["alias"],
+        JsonValue::from("local")
+    );
+}
+
+/// A rollout naming a model this installation does not configure selects the
+/// shipped default instead of failing, reference `resolve_default_model_alias`.
+#[test]
+fn a_routed_default_naming_no_configured_model_falls_back_to_the_shipped_alias() {
+    let snapshot = routed("", "routed_default_model = \"absent\"\n")
+        .expect("an unresolvable routed default still loads");
+
+    assert_eq!(snapshot.active_model_alias(), Some("mistral-medium-3.5"));
+    assert!(
+        snapshot.validation_warnings.is_empty(),
+        "an unresolvable routed default is not a repair: {:?}",
+        snapshot.validation_warnings
+    );
+}
+
+/// US-004: the definition travelling with the alias is merged into the model
+/// map, so a rollout can route onto a model no shipped default declares.
+#[test]
+fn a_routed_definition_is_merged_into_the_model_map_under_its_alias() {
+    let snapshot = routed(
+        "",
+        &format!("routed_default_model = \"routed\"\n{ROUTED_DEFINITION}"),
+    )
+    .expect("the routed definition loads");
+
+    let entry = snapshot.effective["models"]["routed"]
+        .as_table()
+        .expect("the routed alias reached the model map");
+    assert_eq!(entry["name"].as_str(), Some("vibe-routed-latest"));
+    assert_eq!(entry["provider"].as_str(), Some("mistral"));
+    assert_eq!(entry["supports_images"].as_bool(), Some(true));
+    // The rollout quotes its prices and the model reads them as numbers, so a
+    // price reaches the map as one rather than as the text that spelled it.
+    assert_eq!(entry["input_price"].as_float(), Some(0.0));
+    assert_eq!(entry["output_price"].as_float(), Some(1.5));
+    assert!(
+        !entry.contains_key("graduated"),
+        "a key the model does not declare reached the map: {entry:?}"
+    );
+    // The injected entry is completed like any other: the per-entry defaults
+    // and the global compaction threshold both reach it.
+    assert_eq!(entry["temperature"].as_float(), Some(0.2));
+    assert_eq!(entry["auto_compact_threshold"].as_integer(), Some(200_000));
+    assert_eq!(snapshot.active_model_alias(), Some("routed"));
+    assert_eq!(
+        snapshot.config_view()["activeModel"]["name"],
+        JsonValue::from("vibe-routed-latest")
+    );
+}
+
+/// Reference `_coerce_routed_model_config` drops text that is not a model.
+/// Nothing else moves, and the load still succeeds.
+///
+/// A value the model cannot read makes the whole definition unusable, not just
+/// the field carrying it: a temperature that spells no number and a thinking
+/// level outside the five the model names are both measured against the oracle
+/// as dropping the definition outright.
+#[test]
+fn a_routed_definition_that_is_not_a_model_is_dropped_with_a_warning() {
+    for payload in [
+        "routed_model_config = \"not json at all\"\n",
+        "routed_model_config = \"[1, 2, 3]\"\n",
+        "routed_model_config = \"{\\\"provider\\\": \\\"mistral\\\"}\"\n",
+        concat!(
+            r#"routed_model_config = "{\"name\": \"m\", \"provider\": \"mistral\", "#,
+            r#"\"alias\": \"routed\", \"temperature\": \"hot\"}""#,
+            "\n",
+        ),
+        concat!(
+            r#"routed_model_config = "{\"name\": \"m\", \"provider\": \"mistral\", "#,
+            r#"\"alias\": \"routed\", \"thinking\": \"extreme\"}""#,
+            "\n",
+        ),
+    ] {
+        let snapshot = routed("", &format!("routed_default_model = \"routed\"\n{payload}"))
+            .unwrap_or_else(|error| panic!("{payload}: {error}"));
+        assert!(
+            !snapshot.effective.contains_key("routed_model_config"),
+            "{payload}: an unusable definition reached the document"
+        );
+        assert!(
+            !snapshot.effective["models"]
+                .as_table()
+                .expect("models")
+                .contains_key("routed"),
+            "{payload}: an unusable definition was injected anyway"
+        );
+        assert_eq!(
+            snapshot.validation_warnings.len(),
+            1,
+            "{payload}: {:?}",
+            snapshot.validation_warnings
+        );
+        assert_eq!(snapshot.active_model_alias(), Some("mistral-medium-3.5"));
+    }
+}
+
+/// A definition naming another alias than the routed one is left where it is:
+/// reference `_inject_routed_model` compares the two before injecting.
+#[test]
+fn a_routed_definition_disagreeing_with_the_routed_alias_is_not_injected() {
+    let snapshot = routed(
+        "",
+        &format!("routed_default_model = \"elsewhere\"\n{ROUTED_DEFINITION}"),
+    )
+    .expect("the mismatched definition loads");
+
+    assert!(
+        !snapshot.effective["models"]
+            .as_table()
+            .expect("models")
+            .contains_key("elsewhere"),
+        "a definition carrying another alias was injected"
+    );
+    assert_eq!(snapshot.active_model_alias(), Some("mistral-medium-3.5"));
+}
+
+/// US-005: a pinned alias wins outright, and the routed definition is not even
+/// injected, because the routed alias can never be selected for that operator.
+#[test]
+fn a_pinned_active_model_wins_over_the_routed_default() {
+    let snapshot = routed(
+        "active_model = \"local\"\n",
+        &format!("routed_default_model = \"routed\"\n{ROUTED_DEFINITION}"),
+    )
+    .expect("the pinned alias loads");
+
+    assert_eq!(snapshot.active_model_alias(), Some("local"));
+    assert!(
+        !snapshot.effective["models"]
+            .as_table()
+            .expect("models")
+            .contains_key("routed"),
+        "a pinned installation was given a routed definition it cannot select"
+    );
+}

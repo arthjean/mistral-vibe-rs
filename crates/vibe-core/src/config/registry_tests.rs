@@ -9,11 +9,14 @@ use super::registry::{
 };
 use super::*;
 
-/// The fields that publish no default. `compaction_model` has none upstream
-/// either, `tools` is filled by tool discovery rather than by a declaration,
-/// and the three legacy proxy keys are unset until an operator writes one.
-const WITHOUT_DEFAULT: [&str; 5] = [
+/// The fields that publish no default. `compaction_model` and
+/// `routed_model_config` have none upstream either, both being optional model
+/// definitions TOML cannot carry as null, `tools` is filled by tool discovery
+/// rather than by a declaration, and the three legacy proxy keys are unset
+/// until an operator writes one.
+const WITHOUT_DEFAULT: [&str; 6] = [
     "compaction_model",
+    "routed_model_config",
     "tools",
     "proxy",
     "tls_ca_path",
@@ -161,10 +164,6 @@ fn lookup_falls_back_to_replace_for_an_unregistered_key() {
 /// through unnoticed.
 fn realigned_defaults() -> BTreeMap<&'static str, (Option<JsonValue>, JsonValue)> {
     BTreeMap::from([
-        (
-            "active_model",
-            (Some(json!("")), json!("mistral-medium-3.5")),
-        ),
         ("theme", (Some(json!("system")), json!("auto"))),
         ("show_thinking_nodes", (Some(json!(true)), json!(false))),
         ("mcp_servers", (None, json!([]))),

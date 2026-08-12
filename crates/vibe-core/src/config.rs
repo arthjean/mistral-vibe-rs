@@ -32,9 +32,16 @@ mod view;
 pub use dotenv::{DotenvValues, global_env_file};
 pub use events::{ConfigChangeBus, ConfigChangeEvent, ConfigSubscription};
 pub use harness::{ConfigSource, HarnessFiles};
-pub use introspect::{ConfigFieldView, ConfigFields, ConfigLayerValue};
+pub use introspect::{ConfigFieldView, ConfigFields, ConfigLayerValue, HIDDEN_FIELDS};
 pub use patch::{ConfigMutation, JsonPointer, PatchError, PatchOperation};
 pub use proxy::{ProxyEnvironmentStore, ProxyKey, ProxyKeyError};
+
+/// The alias new turns run on, empty where the operator pinned nothing.
+const ACTIVE_MODEL_FIELD: &str = "active_model";
+/// The alias an experiment routes an unpinned installation onto.
+const ROUTED_DEFAULT_MODEL_FIELD: &str = "routed_default_model";
+/// The definition of that alias, carried by the same experiment.
+const ROUTED_MODEL_CONFIG_FIELD: &str = "routed_model_config";
 
 const CONFIG_FILE: &str = "config.toml";
 const PROJECT_DIRECTORY: &str = ".vibe";
@@ -182,6 +189,15 @@ pub struct IntegrationPreference {
 }
 
 impl ConfigSnapshot {
+    /// The alias new turns run on, with the unpinned sentinel resolved.
+    ///
+    /// The merged document keeps the sentinel, so anything selecting a model
+    /// reads it through here rather than through `active_model` directly.
+    #[must_use]
+    pub fn active_model_alias(&self) -> Option<&str> {
+        active_model_alias(&self.effective)
+    }
+
     #[must_use]
     pub fn public_view(&self) -> JsonValue {
         json!({
@@ -2051,10 +2067,11 @@ fn persist_models_as_list(table: &mut Table, persisted_order: &[String]) {
 }
 
 /// The rules the reference applies once the merged document is validated, in
-/// the order its validators run: the session log directory is resolved, an
-/// emptied model set is rejected, the global compaction threshold reaches the
-/// models that set none, and an `active_model` naming nothing configured falls
-/// back to the first model.
+/// the order its validators run: the routed model definition is coerced and
+/// injected, the session log directory is resolved, an emptied model set is
+/// rejected, the global compaction threshold reaches the models that set none,
+/// and an `active_model` naming nothing configured falls back to the first
+/// model.
 ///
 /// Every rule is skipped when the key it governs is absent. A stack composed
 /// without the shipped defaults, which is what a fixture builds, therefore
@@ -2066,18 +2083,238 @@ fn finalize_effective(
     model_order: &[String],
 ) -> Result<Vec<String>, ConfigError> {
     resolve_session_log_dir(effective, vibe_home, user_home_directory())?;
+    // The reference coerces `routed_model_config` in a `BeforeValidator`, so
+    // the definition is already typed by the time `_inject_routed_model` reads
+    // it, and both run before the model entries are completed.
+    let mut warnings: Vec<String> = coerce_routed_model_config(effective).into_iter().collect();
+    inject_routed_model(effective);
     require_configured_model(effective)?;
     complete_model_entries(effective);
     complete_compaction_model(effective);
     propagate_auto_compact_threshold(effective);
-    let warnings = apply_active_model_fallback(effective, model_order)
-        .into_iter()
-        .collect();
+    warnings.extend(apply_active_model_fallback(effective, model_order));
     // The active-model fallback runs first so the provider comparison reads the
     // model the session will actually use, which is the order the reference's
     // validators run in.
     check_compaction_model_provider(effective)?;
     Ok(warnings)
+}
+
+/// Reference `_coerce_routed_model_config`: the experiments layer carries the
+/// routed definition as the JSON text of a model, which is read back as the
+/// model itself.
+///
+/// The reference returns `None` for text that does not validate, dropping the
+/// value silently. This port drops it too and records why: an operator reading
+/// `validationWarnings` is the only way an unusable rollout payload is visible
+/// from here, where upstream the rollout owner reads it from the service.
+fn coerce_routed_model_config(effective: &mut Table) -> Option<String> {
+    let raw = effective
+        .get(ROUTED_MODEL_CONFIG_FIELD)?
+        .as_str()?
+        .to_owned();
+    let coerced = serde_json::from_str::<JsonValue>(&raw)
+        .ok()
+        .and_then(|value| validate_model_definition(&value));
+    match coerced {
+        Some(entry) => {
+            effective.insert(ROUTED_MODEL_CONFIG_FIELD.to_owned(), Value::Table(entry));
+            None
+        }
+        None => {
+            effective.remove(ROUTED_MODEL_CONFIG_FIELD);
+            Some("Routed model definition is not a model configuration; ignoring it.".to_owned())
+        }
+    }
+}
+
+/// One JSON object read as reference `ModelConfig`, or `None` where the model
+/// would refuse it.
+///
+/// The definition arrives as service-supplied JSON rather than as an operator's
+/// TOML, so it is the one model this port reads through the reference's own
+/// field types instead of through TOML's: the rollout payload the oracle
+/// records writes its prices as JSON strings, which the model reads as the
+/// numbers they spell. A key the model does not declare is dropped, as
+/// `extra="ignore"` drops it, and the field defaults are left to the completion
+/// every other model entry goes through.
+fn validate_model_definition(value: &JsonValue) -> Option<Table> {
+    let object = value.as_object()?;
+    let mut entry = Table::new();
+    for (key, value) in object {
+        if let Some(value) = coerce_model_field(key, value)? {
+            entry.insert(key.clone(), value);
+        }
+    }
+    // The two fields the model requires without a default.
+    if !entry.contains_key("name") || !entry.contains_key("provider") {
+        return None;
+    }
+    // Reference `_default_alias_to_name`, which every `ModelConfig` carries: a
+    // definition naming no alias is addressed by its name.
+    if let Some(name) = entry.get("name").cloned()
+        && !entry.contains_key("alias")
+    {
+        entry.insert("alias".to_owned(), name);
+    }
+    Some(entry)
+}
+
+/// One `ModelConfig` field read as the model types it, reference
+/// `vibe/core/config/models.py:415` under pydantic's lax mode: `None` where the
+/// value does not read, and `Some(None)` where it carries nothing, which is an
+/// undeclared key or the null an optional field accepts and TOML cannot hold.
+fn coerce_model_field(key: &str, value: &JsonValue) -> Option<Option<Value>> {
+    let coerced = match key {
+        // A string field reads a string and nothing else, which is the one
+        // coercion lax mode refuses.
+        "name" | "provider" | "alias" => value.as_str().map(|text| Value::String(text.to_owned())),
+        "temperature" | "input_price" | "output_price" => as_number(value).map(Value::Float),
+        "cached_input_price" => {
+            if value.is_null() {
+                return Some(None);
+            }
+            as_number(value).map(Value::Float)
+        }
+        "auto_compact_threshold" => as_integer(value).map(Value::Integer),
+        "supports_images" => as_flag(value).map(Value::Boolean),
+        "thinking" => value
+            .as_str()
+            .filter(|level| registry::THINKING_VALUES.contains(level))
+            .map(|level| Value::String(level.to_owned())),
+        _ => return Some(None),
+    };
+    coerced.map(Some)
+}
+
+/// A number as lax mode reads one: the JSON number itself, the boolean read as
+/// one or zero, or a string spelling one, surrounding space included.
+fn as_number(value: &JsonValue) -> Option<f64> {
+    match value {
+        JsonValue::Number(number) => number.as_f64(),
+        JsonValue::Bool(flag) => Some(f64::from(u8::from(*flag))),
+        JsonValue::String(text) => text.trim().parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+/// An integer as lax mode reads one: a number carrying no fraction, in the
+/// range the field holds. A string spells a decimal or it is not one, which is
+/// why `"12.0"` reads as twelve where `"12e0"` reads as nothing.
+fn as_integer(value: &JsonValue) -> Option<i64> {
+    if let JsonValue::Number(number) = value
+        && number.is_i64()
+    {
+        return number.as_i64();
+    }
+    if let JsonValue::String(text) = value
+        && text.contains(['e', 'E'])
+    {
+        return None;
+    }
+    as_number(value)
+        .filter(|number| {
+            number.is_finite()
+                && number.fract() == 0.0
+                && *number >= i64::MIN as f64
+                && *number <= i64::MAX as f64
+        })
+        .map(|number| number as i64)
+}
+
+/// A boolean as lax mode reads one: the JSON boolean, the number one or zero,
+/// or one of the words pydantic spells them with, which it reads without
+/// trimming and without regard to case.
+fn as_flag(value: &JsonValue) -> Option<bool> {
+    match value {
+        JsonValue::Bool(flag) => Some(*flag),
+        JsonValue::Number(_) => match as_number(value)? {
+            1.0 => Some(true),
+            0.0 => Some(false),
+            _ => None,
+        },
+        JsonValue::String(text) => match text.to_ascii_lowercase().as_str() {
+            "1" | "true" | "t" | "yes" | "y" | "on" => Some(true),
+            "0" | "false" | "f" | "no" | "n" | "off" => Some(false),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Reference `_inject_routed_model`: an unpinned installation whose experiment
+/// routed it onto an alias the configuration does not declare gets the
+/// definition the same experiment supplied.
+///
+/// A pinned `active_model` skips the injection outright, because the routed
+/// alias can never be selected for that installation.
+fn inject_routed_model(effective: &mut Table) {
+    if effective
+        .get(ACTIVE_MODEL_FIELD)
+        .and_then(Value::as_str)
+        .is_some_and(|alias| alias != registry::UNPINNED_ACTIVE_MODEL)
+    {
+        return;
+    }
+    let Some(alias) = effective
+        .get(ROUTED_DEFAULT_MODEL_FIELD)
+        .and_then(Value::as_str)
+        .filter(|alias| !alias.is_empty())
+        .map(ToOwned::to_owned)
+    else {
+        return;
+    };
+    let Some(entry) = effective
+        .get(ROUTED_MODEL_CONFIG_FIELD)
+        .and_then(Value::as_table)
+        .filter(|entry| entry.get("alias").and_then(Value::as_str) == Some(alias.as_str()))
+        .cloned()
+    else {
+        return;
+    };
+    let Some(models) = effective
+        .get_mut(merge::MODELS_FIELD)
+        .and_then(Value::as_table_mut)
+    else {
+        return;
+    };
+    if models.contains_key(&alias) {
+        return;
+    }
+    models.insert(alias, Value::Table(entry));
+}
+
+/// Reference `resolve_default_model_alias`: the routed alias when it names a
+/// configured model, the shipped default alias when that one is configured, and
+/// the first configured model otherwise.
+fn default_model_alias(effective: &Table) -> Option<&str> {
+    let models = effective.get(merge::MODELS_FIELD)?.as_table()?;
+    let routed = effective
+        .get(ROUTED_DEFAULT_MODEL_FIELD)
+        .and_then(Value::as_str)
+        .filter(|alias| !alias.is_empty() && models.contains_key(*alias));
+    routed
+        .or_else(|| {
+            models
+                .contains_key(registry::DEFAULT_ACTIVE_MODEL_ALIAS)
+                .then_some(registry::DEFAULT_ACTIVE_MODEL_ALIAS)
+        })
+        .or_else(|| models.keys().next().map(String::as_str))
+}
+
+/// Reference `get_active_model`'s alias step: the pinned alias, or the resolved
+/// default when the operator pinned nothing.
+///
+/// Every reader of the active model goes through this rather than through
+/// `active_model` itself, because the merged document carries the reference's
+/// unpinned sentinel where an installation was never pinned.
+#[must_use]
+pub fn active_model_alias(effective: &Table) -> Option<&str> {
+    effective
+        .get(ACTIVE_MODEL_FIELD)
+        .and_then(Value::as_str)
+        .filter(|alias| *alias != registry::UNPINNED_ACTIVE_MODEL)
+        .or_else(|| default_model_alias(effective))
 }
 
 /// Reference `_check_compaction_model_provider`: a configured compaction model
@@ -2138,10 +2375,14 @@ fn declares_provider(effective: &Table, name: &str) -> bool {
         })
 }
 
-/// The merged entry `active_model` names, in either persisted shape.
+/// The merged entry the active model resolves to, in either persisted shape.
+///
+/// Reference `_check_compaction_model_provider` compares against
+/// `get_active_model`, so the sentinel resolves here rather than reading as an
+/// alias no model carries.
 fn active_model_entry(effective: &Table) -> Option<Table> {
-    let alias = effective.get("active_model")?.as_str()?;
-    match effective.get("models") {
+    let alias = active_model_alias(effective)?;
+    match effective.get(merge::MODELS_FIELD) {
         Some(Value::Table(models)) => models.get(alias).and_then(Value::as_table).cloned(),
         Some(Value::Array(models)) => models
             .iter()
@@ -2339,12 +2580,21 @@ fn propagate_auto_compact_threshold(effective: &mut Table) {
 /// Reference `_apply_active_model_fallback`: an `active_model` naming nothing
 /// configured selects the first configured model and records a warning instead
 /// of failing the load.
+///
+/// The unpinned sentinel names nothing on purpose and is left alone, exactly as
+/// the reference guard leaves it: it is resolved by [`active_model_alias`] when
+/// the alias is read, never by rewriting the document.
 fn apply_active_model_fallback(effective: &mut Table, model_order: &[String]) -> Option<String> {
-    let models = effective.get("models").and_then(Value::as_table)?;
+    let models = effective
+        .get(merge::MODELS_FIELD)
+        .and_then(Value::as_table)?;
     if models.is_empty() {
         return None;
     }
-    let active = effective.get("active_model").and_then(Value::as_str)?;
+    let active = effective
+        .get(ACTIVE_MODEL_FIELD)
+        .and_then(Value::as_str)
+        .filter(|alias| !alias.is_empty())?;
     if models.contains_key(active) {
         return None;
     }

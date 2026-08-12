@@ -2828,15 +2828,19 @@ mod tests {
             .as_array()
             .expect("the response carries a field list");
         assert_eq!(response.result["targets"], json!(["user", "project"]));
-        assert!(
-            fields.iter().all(|field| field["name"] != json!("tools")),
-            "per-tool settings have no editor on either side"
-        );
+        for hidden in vibe_core::config::HIDDEN_FIELDS {
+            assert!(
+                fields.iter().all(|field| field["name"] != json!(hidden)),
+                "`{hidden}` is filled by a runtime and has no editor on either side"
+            );
+        }
         assert_eq!(
             fields.len(),
             vibe_core::config::registry::FIELDS
                 .iter()
-                .filter(|spec| spec.published && spec.name != "tools")
+                .filter(|spec| {
+                    spec.published && !vibe_core::config::HIDDEN_FIELDS.contains(&spec.name)
+                })
                 .count()
         );
 
@@ -2931,7 +2935,17 @@ mod tests {
         let snapshot = service.config_document().expect("config read");
         let config = &snapshot["config"];
 
-        assert_eq!(config["active_model"], json!("mistral-medium-3.5"));
+        // The shipped document carries the reference's unpinned sentinel; the
+        // alias it resolves to is read through the snapshot, never off the key.
+        assert_eq!(config["active_model"], json!(""));
+        assert_eq!(
+            service
+                .layered_config()
+                .load()
+                .expect("config loads")
+                .active_model_alias(),
+            Some("mistral-medium-3.5")
+        );
         assert_eq!(config["theme"], json!("auto"));
         assert_eq!(config["auto_compact_threshold"], json!(200_000));
         assert_eq!(

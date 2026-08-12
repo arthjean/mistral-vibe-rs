@@ -142,6 +142,21 @@ fn windows_host(git_bash: Option<&str>, powershell: Option<&str>) -> HostShells 
     }
 }
 
+/// A guard whose configuration selects `rollout`, which is where the shell
+/// family reads it from: reference `_is_enabled_for_shell_rollout` asks the
+/// session configuration rather than the family it is publishing.
+fn guard_for(
+    policy: PermissionStore,
+    approval: Arc<dyn ApprovalAgent>,
+    rollout: ShellRollout,
+) -> ToolGuard {
+    let guard = ToolGuard::new(policy, approval);
+    guard
+        .config
+        .set_managed_shell_tools(rollout == ShellRollout::Managed);
+    guard
+}
+
 async fn harness_on(
     host: HostShells,
     rollout: ShellRollout,
@@ -160,14 +175,14 @@ async fn harness_on(
     let (approval, requests) = ScriptedApproval::new(decision);
     let registry = ToolRegistry::default();
     let family = published_family(&host, rollout).map_or(ShellFamily::Bash, |(family, _)| family);
-    let tools = ShellTools::with_host(directory.path().join("home"), rollout, host);
+    let tools = ShellTools::with_host(directory.path().join("home"), host);
     tools
         .register(
             "session-1",
             directory.path(),
             &registry,
             None,
-            &ToolGuard::new(policy.clone(), approval as Arc<dyn ApprovalAgent>),
+            &guard_for(policy.clone(), approval as Arc<dyn ApprovalAgent>, rollout),
         )
         .expect("the shell family registers");
     Harness {
@@ -1212,7 +1227,6 @@ async fn a_windows_family_leaves_the_surface_when_its_interpreter_goes_away() {
     let registry = ToolRegistry::default();
     let tools = ShellTools::with_host_resolver(
         directory.path().join("home"),
-        ShellRollout::Managed,
         Arc::new(move || {
             if probe.load(Ordering::Acquire) {
                 git_bash_host()
@@ -1228,9 +1242,10 @@ async fn a_windows_family_leaves_the_surface_when_its_interpreter_goes_away() {
             directory.path(),
             &registry,
             None,
-            &ToolGuard::new(
+            &guard_for(
                 PermissionStore::default(),
                 approval as Arc<dyn ApprovalAgent>,
+                ShellRollout::Managed,
             ),
         )
         .expect("the Git Bash family registers");
@@ -1827,18 +1842,18 @@ async fn terminal_client_harness(client: Arc<TerminalClient>) -> Harness {
         .expect("trust");
     let (approval, requests) = ScriptedApproval::new(ApprovalDecision::ApproveOnce);
     let registry = ToolRegistry::default();
-    let tools = ShellTools::with_host(
-        directory.path().join("home"),
-        ShellRollout::Legacy,
-        posix_host(),
-    );
+    let tools = ShellTools::with_host(directory.path().join("home"), posix_host());
     tools
         .register(
             "session-1",
             directory.path(),
             &registry,
             Some(ClientToolIo::new("session-1", client)),
-            &ToolGuard::new(policy.clone(), approval as Arc<dyn ApprovalAgent>),
+            &guard_for(
+                policy.clone(),
+                approval as Arc<dyn ApprovalAgent>,
+                ShellRollout::Legacy,
+            ),
         )
         .expect("the shell family registers");
     Harness {

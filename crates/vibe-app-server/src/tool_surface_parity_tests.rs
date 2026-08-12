@@ -312,6 +312,11 @@ async fn published_specs_with(
         api_key: SecretString::from("probe"),
     });
     let guard = ToolGuard::new(policy, Arc::new(RejectApproval));
+    // The shell family reads its rollout off the session configuration, which
+    // is what reference `_is_enabled_for_shell_rollout` reads.
+    guard
+        .config
+        .set_managed_shell_tools(rollout == ShellRollout::Managed);
     BuiltinTools::new(directory.path(), access)
         .register(
             "session-1",
@@ -324,7 +329,7 @@ async fn published_specs_with(
     WorkspaceTools::new(workspace, review)
         .register(&registry, &guard)
         .expect("workspace tools register");
-    ShellTools::with_host(directory.path().join("home"), rollout, host)
+    ShellTools::with_host(directory.path().join("home"), host)
         .register("session-1", directory.path(), &registry, None, &guard)
         .expect("the shell family registers");
     let (sender, _receiver) = tokio::sync::mpsc::channel(1);

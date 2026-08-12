@@ -26,6 +26,16 @@ use toml::Value;
 use super::THEME_VALUES;
 use crate::text::hex_encode;
 
+/// Reference `UNPINNED_ACTIVE_MODEL`: the `active_model` value meaning "the
+/// operator pinned nothing". It is resolved when the alias is read rather than
+/// when the document is composed, so a routed default can still select the
+/// model an installation runs on.
+pub const UNPINNED_ACTIVE_MODEL: &str = "";
+
+/// Reference `DEFAULT_ACTIVE_MODEL_CONFIG.alias`, which is what an unpinned
+/// installation resolves to when no experiment routed it elsewhere.
+pub const DEFAULT_ACTIVE_MODEL_ALIAS: &str = "mistral-medium-3.5";
+
 /// How a field's values from two layers combine. These are the four strategies
 /// the reference schema actually declares; `shallow` and `conflict` exist in the
 /// reference vocabulary but no field adopts them, so they are unreachable and
@@ -242,7 +252,7 @@ const REPLACE: MergeStrategy = MergeStrategy::Replace;
 const CONCAT: MergeStrategy = MergeStrategy::Concat;
 const DEEP_MERGE: MergeStrategy = MergeStrategy::DeepMerge;
 
-const THINKING_VALUES: &[&str] = &["off", "low", "medium", "high", "max"];
+pub(super) const THINKING_VALUES: &[&str] = &["off", "low", "medium", "high", "max"];
 const NOTIFICATION_VALUES: &[&str] = &["off", "unfocused", "always"];
 const OTEL_REDACTION_VALUES: &[&str] = &["default", "none", "strict"];
 
@@ -293,6 +303,27 @@ const MODEL_ITEMS: &str = r#"{
 
 const COMPACTION_MODEL: &str = r#"{
     "type": ["object", "null"],
+    "required": ["name", "provider"],
+    "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "provider": {"type": "string", "minLength": 1},
+        "alias": {"type": "string", "minLength": 1},
+        "temperature": {"type": "number"},
+        "input_price": {"type": "number"},
+        "output_price": {"type": "number"},
+        "cached_input_price": {"type": ["number", "null"]},
+        "thinking": {"enum": ["off", "low", "medium", "high", "max"]},
+        "supports_images": {"type": "boolean"},
+        "auto_compact_threshold": {"type": "integer"}
+    }
+}"#;
+
+/// `routed_model_config` is written by the experiments layer as the JSON text
+/// of a model definition and read back as the definition itself, so both forms
+/// validate. Reference `_coerce_routed_model_config` is the coercion, and
+/// [`crate::config`] runs it before the merged document is finalized.
+const ROUTED_MODEL_CONFIG: &str = r#"{
+    "type": ["object", "string", "null"],
     "required": ["name", "provider"],
     "properties": {
         "name": {"type": "string", "minLength": 1},
@@ -613,10 +644,20 @@ pub static FIELDS: &[FieldSpec] = &[
     FieldSpec::declared("active_model", FieldKind::Str, REPLACE)
         .popular()
         .published(
-            FieldDefault::Str("mistral-medium-3.5"),
-            "Alias of the model new turns run on.",
+            FieldDefault::Str(UNPINNED_ACTIVE_MODEL),
+            "Alias of the model new turns run on. Empty means the resolved default.",
             "",
         ),
+    FieldSpec::declared("routed_default_model", FieldKind::Str, REPLACE).published(
+        FieldDefault::Str(""),
+        "Alias an experiment routes an unpinned installation onto.",
+        "",
+    ),
+    FieldSpec::declared("routed_model_config", FieldKind::Complex, REPLACE).published(
+        FieldDefault::None,
+        "Definition of the routed alias, supplied with it by the same experiment.",
+        ROUTED_MODEL_CONFIG,
+    ),
     FieldSpec::union("providers", FieldKind::Complex, "name").published(
         FieldDefault::Json(DEFAULT_PROVIDERS),
         "API providers models are served from.",
@@ -881,6 +922,11 @@ pub static FIELDS: &[FieldSpec] = &[
     FieldSpec::declared("system_prompt_id", FieldKind::Str, REPLACE).published(
         FieldDefault::Str("cli"),
         "Identifier of the system prompt the agent runs with.",
+        "",
+    ),
+    FieldSpec::declared("managed_shell_tools_enabled", FieldKind::Bool, REPLACE).published(
+        FieldDefault::Bool(false),
+        "Publish the managed shell session family in place of the one-shot command tool.",
         "",
     ),
     FieldSpec::declared("compaction_prompt_id", FieldKind::Str, REPLACE).published(

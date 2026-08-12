@@ -1822,15 +1822,17 @@ fn startup_preferences(
     arguments: &Arguments,
     release3: &Release3Service,
 ) -> Result<StartupPreferences, CliError> {
-    let document = release3
-        .config_document()
+    // One load answers both: the document the rest of this reads, and the alias
+    // the sentinel resolves to, which is never the raw `active_model` value.
+    let snapshot = release3
+        .layered_config()
+        .load()
         .map_err(|error| CliError::Terminal(error.to_string()))?;
+    let configured_model = snapshot.active_model_alias().map(ToOwned::to_owned);
+    let document = snapshot.public_view();
     let config = document.get("config");
-    let configured_model = config
-        .and_then(|config| config.get("active_model"))
-        .and_then(Value::as_str);
     let model = if arguments.model == DEFAULT_MODEL {
-        configured_model.unwrap_or(&arguments.model).to_owned()
+        configured_model.unwrap_or_else(|| arguments.model.clone())
     } else {
         arguments.model.clone()
     };

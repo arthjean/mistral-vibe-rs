@@ -22,6 +22,7 @@
 //! selected by [`ToolConfigResolver::with_posix_shell`].
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock, TryLockError};
 
 use serde_json::Value as JsonValue;
@@ -33,6 +34,10 @@ use crate::policy::PermissionMode;
 /// The `tools` table an operator writes settings into, and the key every
 /// resolved document is addressed under.
 pub const TOOL_SETTINGS_KEY: &str = "tools";
+
+/// The configuration field selecting the managed shell family, reference
+/// `managed_shell_tools_enabled`.
+const MANAGED_SHELL_KEY: &str = "managed_shell_tools_enabled";
 
 // --------------------------------------------------------------------------
 // Declarations
@@ -988,6 +993,9 @@ pub const MAX_RESOLUTION_BLOCK_MILLIS: u128 = 50;
 pub struct ToolConfigResolver {
     settings: Arc<RwLock<Table>>,
     diagnostics: Arc<Mutex<Vec<String>>>,
+    /// The shell rollout the merged configuration resolved, shared with every
+    /// clone so a narrowed resolver still answers what the configuration says.
+    managed_shell: Arc<AtomicBool>,
     session_permissions: Option<SessionPermissions>,
     posix_shell: bool,
 }
@@ -1016,6 +1024,7 @@ impl ToolConfigResolver {
         Self {
             settings: Arc::new(RwLock::new(Table::new())),
             diagnostics: Arc::new(Mutex::new(Vec::new())),
+            managed_shell: Arc::new(AtomicBool::new(false)),
             session_permissions: None,
             posix_shell: !cfg!(windows),
         }
@@ -1095,7 +1104,8 @@ impl ToolConfigResolver {
         *lock_through_poison(&self.diagnostics) = diagnostics;
     }
 
-    /// Reads the `tools` table out of `snapshot` and caches it.
+    /// Reads the `tools` table and the shell rollout out of `snapshot` and
+    /// caches both.
     pub fn refresh(&self, snapshot: &ConfigSnapshot) {
         let tools = snapshot
             .effective
@@ -1103,7 +1113,36 @@ impl ToolConfigResolver {
             .and_then(Value::as_table)
             .cloned()
             .unwrap_or_default();
+        self.set_managed_shell_tools(
+            snapshot
+                .effective
+                .get(MANAGED_SHELL_KEY)
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        );
         self.update(tools);
+    }
+
+    /// Whether the managed shell family is published in place of the one-shot
+    /// command tool.
+    ///
+    /// Reference `_is_enabled_for_shell_rollout` reads
+    /// `managed_shell_tools_enabled` off the session configuration at every
+    /// availability check; here the value is cached by [`Self::refresh`] and
+    /// read at every registration, which is the same freshness through the same
+    /// bus every `tools.<name>` change already travels on.
+    #[must_use]
+    pub fn managed_shell_tools_enabled(&self) -> bool {
+        self.managed_shell.load(Ordering::Relaxed)
+    }
+
+    /// Sets the rollout directly, for a caller that composes no configuration.
+    ///
+    /// The flag is shared by every clone, as the settings cache is: a family
+    /// published against a narrowed resolver still reads the rollout the
+    /// configuration resolved.
+    pub fn set_managed_shell_tools(&self, enabled: bool) {
+        self.managed_shell.store(enabled, Ordering::Relaxed);
     }
 
     /// Caches `config` now and keeps the cache current for as long as the store

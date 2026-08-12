@@ -159,8 +159,11 @@ fn provider_entries(effective: &Table) -> Vec<Table> {
 
 /// The provider entry serving the active model, in either persisted model
 /// shape: an array of entries carrying their own alias, or a table keyed by it.
+///
+/// The alias is resolved rather than read, because a document that pins nothing
+/// carries the reference's unpinned sentinel.
 fn active_provider(effective: &Table, providers: &[Table]) -> Option<Table> {
-    let alias = effective.get("active_model")?.as_str()?;
+    let alias = crate::config::active_model_alias(effective)?;
     let model = match effective.get("models") {
         Some(toml::Value::Table(models)) => models.get(alias)?.as_table()?.clone(),
         Some(toml::Value::Array(models)) => models

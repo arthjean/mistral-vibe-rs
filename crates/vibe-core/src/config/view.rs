@@ -126,12 +126,13 @@ impl ConfigSnapshot {
         }
     }
 
-    /// The active model entry, keyed by the alias `active_model` names.
+    /// The active model entry, keyed by the alias the active model resolves to.
     ///
     /// `models` is written as an array and read back keyed by alias, so both
-    /// forms are resolved here rather than at every call site.
+    /// forms are resolved here rather than at every call site, and so is the
+    /// unpinned sentinel the merged document carries.
     fn active_model(&self) -> Option<Table> {
-        let alias = self.effective.get("active_model")?.as_str()?;
+        let alias = self.active_model_alias()?;
         match self.effective.get("models") {
             Some(Value::Table(models)) => {
                 models
