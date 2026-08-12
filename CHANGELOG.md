@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Export OpenTelemetry spans, so the three configuration keys that advertised
+  tracing finally do something. With `enable_telemetry` and `enable_otel` both
+  on, the binary installs an OTLP HTTP exporter pointed at `otel_endpoint` when
+  one is set and at the Mistral provider's own collector otherwise, and a turn
+  is reported as the four upstream span families: one `invoke_agent` span per
+  turn, a `chat` span per model call carrying the request model, the API style,
+  the temperature, the token counts and the HTTP status it was answered with, an
+  `execute_tool` span per tool call carrying its arguments and result, and a
+  `hook` span per hook run carrying the tool it guards. The conversation
+  identifier is published once by the turn and read back by every descendant, so
+  a collector shows one tree per turn. `otel_redaction` decides what leaves the
+  process: `strict` replaces every content-bearing attribute outright, the
+  default scans values for credentials and personal data, and `none` exports
+  what the span carried. Tracing never changes an outcome: with no exporter
+  installed, or with one that fails, the turn, the tool call and the hook answer
+  exactly what they answered before. When tracing is on and the credential
+  variable resolves to nothing, the binary names the variable and starts anyway.
+
 - Ship telemetry under the upstream envelope, and let the configuration decide
   it. An event now travels as `{"event", "properties"}` plus a correlation
   identifier when there is one, with the properties being the 15-field identity,
