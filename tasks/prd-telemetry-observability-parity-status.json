@@ -45,10 +45,10 @@
     {
       "id": "EP-005",
       "title": "File logging and the log reader",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 2,
-      "stories_done": 0,
+      "stories_done": 2,
       "stories_in_review": 0
     },
     {
@@ -290,29 +290,29 @@
       "id": "US-017",
       "title": "Structured rotating file logging",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-004"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
     },
     {
       "id": "US-018",
       "title": "Answer diagnostics/logs/read from the file",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-017"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
     },
     {
       "id": "US-019",
