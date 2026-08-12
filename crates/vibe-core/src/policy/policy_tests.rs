@@ -959,3 +959,23 @@ async fn symlink_escape_requires_external_permission() {
         PermissionScope::OutsideDirectory
     );
 }
+
+/// A tool executor reports its failures as strings, so the prefix a refusal
+/// carries is the only thing that tells an operator's refusal from a tool that
+/// failed on its own once the error has crossed that boundary. This holds the
+/// constant to the rendering it names.
+#[test]
+fn the_denial_prefix_is_what_a_denial_reports() {
+    let denied = PolicyError::Denied("approval denied".to_owned()).to_string();
+    assert!(
+        denied.starts_with(super::DENIAL_PREFIX),
+        "`{denied}` no longer starts with `{}`",
+        super::DENIAL_PREFIX
+    );
+    assert!(
+        !PolicyError::StaleApproval
+            .to_string()
+            .starts_with(super::DENIAL_PREFIX),
+        "only a refusal carries the prefix"
+    );
+}

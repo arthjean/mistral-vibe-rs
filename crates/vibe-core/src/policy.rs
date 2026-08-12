@@ -855,6 +855,14 @@ impl PolicyLease {
     }
 }
 
+/// What every refusal message starts with.
+///
+/// A tool executor reports its failures as strings, so this prefix is the only
+/// thing that tells an operator's refusal from a tool that failed on its own
+/// once the error has crossed that boundary. `the_denial_prefix_is_what_a_
+/// denial_reports` holds it to [`PolicyError::Denied`]'s own rendering.
+pub const DENIAL_PREFIX: &str = "permission denied: ";
+
 #[derive(Debug, Error)]
 pub enum PolicyError {
     #[error("permission denied: {0}")]
