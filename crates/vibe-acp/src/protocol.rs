@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use thiserror::Error;
 use vibe_app_server::client::ClientError;
 
@@ -143,6 +143,21 @@ pub struct AcpForkSession {
     pub mcp_servers: Vec<Value>,
     #[serde(default, rename = "_meta")]
     pub meta: Option<Value>,
+}
+
+/// The payload the `telemetry/send` extension notification carries.
+///
+/// Reference `TelemetryNotification` (`vibe/acp/agent.py:215-220`): the editor
+/// names the event, carries its own properties and the session they belong to.
+/// A field the model does not declare is ignored rather than refused, which is
+/// what its `extra="ignore"` config does.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpTelemetryNotification {
+    pub event: String,
+    #[serde(default)]
+    pub properties: Map<String, Value>,
+    pub session_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -5,6 +5,7 @@ mod client_tools;
 mod commands;
 mod lifecycle;
 mod prompt;
+mod telemetry;
 mod updates;
 
 use std::path::Path;

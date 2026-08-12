@@ -22,10 +22,20 @@ use vibe_app_server::client::{
 };
 use vibe_app_server::release3::{Release3Paths, Release3Service};
 use vibe_app_server::transport::{MAX_FRAME_BYTES, read_bounded_frame};
+use vibe_core::auth::KeyringStore;
 use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
 use vibe_core::observability::{LogLevel, init_file_logging, log};
+use vibe_core::telemetry::{
+    LaunchContext, ReqwestTelemetryTransport, TelemetryClient, TelemetryConfig,
+    TelemetryConfigGetter, TelemetryContext, TelemetryEventObserver,
+};
 use vibe_core::tracing::{TracingGuard, TracingSetup, setup_tracing};
+
+/// The extension notification an editor records telemetry through. The wire
+/// name carries the underscore ACP requires on an extension method, which the
+/// reference's router strips before dispatching it.
+const TELEMETRY_SEND_METHOD: &str = "_telemetry/send";
 
 const WRITER_QUEUE_CAPACITY: usize = 1_024;
 const MAX_CONCURRENT_REQUESTS: usize = 128;
@@ -319,20 +329,92 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             7_500_000,
         )?,
     };
+    // One client carries the editor session's events: the turn's own, through
+    // the driver, and the ones an editor records, through the app server.
+    let telemetry = acp_telemetry_observer(&vibe_home, &dotenv);
     let driver = DeferredTurnDriver::new({
         let vibe_home = vibe_home.clone();
-        move || LiveTurnDriver::from_environment(config.clone(), &DotenvValues::global(&vibe_home))
+        let telemetry = telemetry.clone();
+        move || {
+            let driver = LiveTurnDriver::from_environment(
+                config.clone(),
+                &DotenvValues::global(&vibe_home),
+            )?;
+            Ok(match telemetry.clone() {
+                Some(telemetry) => driver.with_event_observer(telemetry),
+                None => driver,
+            })
+        }
     });
     run_stdio(
         BufReader::new(tokio::io::stdin()),
         tokio::io::stdout(),
         driver,
-        Some(session_root),
-        credential_environment,
-        Arc::new(ProductionAuthEnvironment::new(vibe_home)),
-        true,
+        StdioOptions {
+            session_root: Some(session_root),
+            credential_environment,
+            auth_environment: Arc::new(ProductionAuthEnvironment::new(vibe_home)),
+            production_cloud: true,
+            telemetry,
+        },
     )
     .await
+}
+
+/// What this binary reports about itself on every event. Reference
+/// `build_launch_context` at [acp/entrypoint.py:82-87], whose entrypoint is
+/// `acp` and whose client is `vibe_acp` with no terminal emulator, since an
+/// editor session is attached to none.
+fn acp_telemetry_context() -> TelemetryContext {
+    TelemetryContext {
+        launch: Some(LaunchContext {
+            agent_entrypoint: "acp".to_owned(),
+            agent_version: env!("CARGO_PKG_VERSION").to_owned(),
+            client_name: "vibe_acp".to_owned(),
+            client_version: env!("CARGO_PKG_VERSION").to_owned(),
+            terminal_emulator: None,
+        }),
+        ..TelemetryContext::default()
+    }
+}
+
+/// The client every event of this editor session travels through.
+///
+/// Nothing here decides whether telemetry is on: [`TelemetryConfig::resolve`]
+/// re-reads `enable_telemetry` and the Mistral provider from the merged
+/// configuration on every send, which is the same key the reference reads on
+/// this path (`vibe/acp/entrypoint.py:99-100`). A home that publishes no
+/// configuration, or a transport that cannot be built, installs no client and
+/// the editor session runs without telemetry.
+fn acp_telemetry_observer(
+    vibe_home: &Path,
+    dotenv: &DotenvValues,
+) -> Option<Arc<TelemetryEventObserver<ReqwestTelemetryTransport>>> {
+    let service = Release3Service::new(
+        Release3Paths {
+            vibe_home: vibe_home.to_path_buf(),
+            working_directory: std::env::current_dir().unwrap_or_else(|_| vibe_home.to_path_buf()),
+            session_root: vibe_home.join("sessions"),
+        },
+        false,
+    )
+    .ok()?;
+    let configuration = service.layered_config();
+    let environment = dotenv.environment();
+    let store = KeyringStore::native();
+    // Reference `resolve_api_key`: the environment the dotenv load left behind
+    // first, then the OS keyring, which is where onboarding puts the key.
+    let credentials =
+        move |name: &str| vibe_core::auth::resolve_api_key(name, &environment, &store);
+    let config: TelemetryConfigGetter = Arc::new(move || match configuration.load() {
+        Ok(snapshot) => TelemetryConfig::resolve(&snapshot.effective, &credentials),
+        Err(_) => TelemetryConfig::disabled(),
+    });
+    let transport = ReqwestTelemetryTransport::try_new().ok()?;
+    Some(Arc::new(TelemetryEventObserver::new(
+        TelemetryClient::new(config, transport),
+        acp_telemetry_context(),
+    )))
 }
 
 /// Installs the span exporter this editor session exports through, when the
@@ -386,24 +468,40 @@ fn report_degradation(message: &str) {
     log(LogLevel::Warning, message);
 }
 
-async fn run_stdio<R, W, D>(
-    mut reader: R,
-    writer: W,
-    driver: D,
+/// What one editor session is opened with, beyond its transport and its driver.
+struct StdioOptions {
     session_root: Option<PathBuf>,
     credential_environment: String,
     auth_environment: Arc<dyn AcpAuthEnvironment>,
     production_cloud: bool,
+    telemetry: Option<Arc<TelemetryEventObserver<ReqwestTelemetryTransport>>>,
+}
+
+async fn run_stdio<R, W, D>(
+    mut reader: R,
+    writer: W,
+    driver: D,
+    options: StdioOptions,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
     R: AsyncBufRead + Unpin,
     W: AsyncWrite + Unpin + Send + 'static,
     D: TurnDriver + 'static,
 {
+    let StdioOptions {
+        session_root,
+        credential_environment,
+        auth_environment,
+        production_cloud,
+        telemetry,
+    } = options;
     let (writer_tx, writer_rx) = mpsc::channel(WRITER_QUEUE_CAPACITY);
     let writer_task = tokio::spawn(writer_loop(writer, writer_rx));
     let client = Arc::new(StdioClientPort::new(writer_tx.clone()));
     let mut agent = AcpAgent::new(driver)?;
+    if let Some(telemetry) = telemetry.clone() {
+        agent = agent.with_client_telemetry(telemetry);
+    }
     if let Some(session_root) = session_root {
         agent = agent.with_session_root(session_root);
     }
@@ -461,6 +559,22 @@ where
             }
             continue;
         }
+        // Extension notifications reach the wire under a leading underscore and
+        // carry no id. The reference's router hands every one to
+        // `ext_notification`, which serves `telemetry/send` and returns on any
+        // other name, and its connection swallows what the handler raises
+        // because a notification is answered with nothing.
+        if request.id.is_null() && request.method.starts_with('_') {
+            if request.method == TELEMETRY_SEND_METHOD
+                && let Err(error) = agent.telemetry_notification(&request.params).await
+            {
+                log(
+                    LogLevel::Warning,
+                    &format!("Dropping an ACP telemetry notification: {error}"),
+                );
+            }
+            continue;
+        }
         if request.method == "shutdown" {
             let response = match agent.disconnect().await {
                 Ok(()) => success_response(request.id, json!({})),
@@ -494,6 +608,12 @@ where
     requests.abort_all();
     while requests.join_next().await.is_some() {}
     agent.disconnect().await?;
+    // Reference `TelemetryClient.aclose`: a delivery already in flight is
+    // awaited before the process leaves, so a last event is not lost to the
+    // shutdown that raised it.
+    if let Some(telemetry) = telemetry {
+        telemetry.flush().await;
+    }
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     writer_tx
         .send(WriterMessage::Shutdown(shutdown_tx))

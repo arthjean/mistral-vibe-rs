@@ -182,10 +182,13 @@ where
             BufReader::new(server_reader),
             server_writer,
             driver,
-            session_root,
-            "MISTRAL_API_KEY".to_owned(),
-            auth_environment,
-            false,
+            StdioOptions {
+                session_root,
+                credential_environment: "MISTRAL_API_KEY".to_owned(),
+                auth_environment,
+                production_cloud: false,
+                telemetry: None,
+            },
         )
         .await
         .map_err(|error| error.to_string())
@@ -298,6 +301,47 @@ async fn client_request_limit_and_disconnect_fail_closed() {
         .expect_err("disconnect rejects pending request");
     assert!(error.contains("disconnected"), "{error}");
     assert!(client.pending.lock().expect("pending lock").is_empty());
+}
+
+/// The reference's router hands every extension notification to
+/// `ext_notification`, which serves `telemetry/send` and returns on any other
+/// name, and its connection answers a notification with nothing. So none of
+/// these three frames puts anything on the wire, including the one whose
+/// payload the model refuses.
+#[tokio::test]
+async fn extension_notifications_are_served_without_answering_the_wire() {
+    let mut peer = spawn_stdio(EchoTurnDriver::new("answer"));
+    initialize(&mut peer, 1).await;
+    let session_id = new_session(&mut peer, 2, "/workspace").await;
+
+    for notification in [
+        json!({
+            "jsonrpc": "2.0",
+            "method": "_telemetry/send",
+            "params": {
+                "event": "vibe.at_mention_inserted",
+                "properties": {"mention_type": "file"},
+                "sessionId": session_id,
+            },
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "_telemetry/send",
+            "params": {"event": "vibe.at_mention_inserted"},
+        }),
+        json!({"jsonrpc": "2.0", "method": "_editor/heartbeat", "params": {}}),
+    ] {
+        peer.send(notification).await;
+    }
+
+    peer.send(request(3, "session/list", json!({}))).await;
+    let (preceding, response) = peer.response(3).await;
+    assert!(
+        preceding.is_empty(),
+        "an extension notification was answered: {preceding:?}"
+    );
+    assert!(response.get("error").is_none(), "{response}");
+    peer.shutdown(4).await;
 }
 
 #[tokio::test]
