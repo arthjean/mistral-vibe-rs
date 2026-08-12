@@ -975,8 +975,11 @@ published schema stops advertising a capability the binary lacks.
 **Acceptance Criteria:**
 - [ ] Given the workspace, when the dependencies are added, then they are
       `opentelemetry` 0.32, `opentelemetry_sdk` 0.32, `opentelemetry-otlp` 0.32
-      with `trace`, `http-proto` and `reqwest-client`, and
-      `opentelemetry-semantic-conventions` 0.32 with `semconv_experimental`
+      with `trace`, `http-proto` and `reqwest-blocking-client`, and
+      `opentelemetry-semantic-conventions` 0.32 with `semconv_experimental`.
+      The blocking client is load-bearing: `BatchSpanProcessor` exports from its
+      own thread through `futures_executor::block_on`, so the async client
+      panics there for want of a reactor and no span ever leaves the process
 - [ ] Given `enable_telemetry` false or `enable_otel` false, when setup runs,
       then no provider is installed and no exporter is constructed
 - [ ] Given `otel_endpoint` set, when the exporter is built, then the endpoint
@@ -1078,10 +1081,15 @@ real execution paths so that tracing reflects what the agent actually did.
       of it
 - [ ] Given a model call returns, when its span closes, then the HTTP status and
       the input and output token counts are attached
-- [ ] Given a subagent turn, when its spans are produced, then they carry the
-      parent conversation id
-- [ ] Given a cancelled turn, when the spans close, then the agent span carries
-      an error status and no span is left unended
+- [ ] Given a subagent turn, when its spans are produced, then they hang off the
+      tool span that delegated them and carry the child conversation id, which
+      is what the reference produces: `_loop.py:1183` opens one `agent_span` per
+      loop and the child loop publishes its own session id in baggage
+- [ ] Given a cancelled turn, when the spans close, then no span is left unended
+      and the agent span reports what the reference reports: a user cancellation
+      leaves `_conversation_loop` normally (`_loop.py:1668`) and closes the span
+      `OK`, and a cancellation that unwinds the turn leaves the status unset,
+      because `_safe_span` only decides a status for an `Exception`
 - [ ] Given tracing is disabled, when a turn runs, then no tracing code path
       allocates an exporter and the turn's measured duration is unchanged
 

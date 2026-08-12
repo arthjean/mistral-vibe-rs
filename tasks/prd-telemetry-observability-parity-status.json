@@ -36,10 +36,10 @@
     {
       "id": "EP-004",
       "title": "OpenTelemetry tracing",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 4,
-      "stories_done": 0,
+      "stories_done": 4,
       "stories_in_review": 0
     },
     {
@@ -234,57 +234,57 @@
       "id": "US-013",
       "title": "Install the tracer provider and resolve the exporter",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-004"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
     },
     {
       "id": "US-014",
       "title": "The four span families",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-013"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
     },
     {
       "id": "US-015",
       "title": "Redaction and provider normalization",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-014"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
     },
     {
       "id": "US-016",
       "title": "Wire tracing into the turn, tools and hooks",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-014"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
     },
     {
       "id": "US-017",
