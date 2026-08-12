@@ -36,6 +36,7 @@ use vibe_core::telemetry::{
     TelemetryConfigGetter, TelemetryContext, TelemetryEventObserver, TelemetryRecord,
     detect_terminal_emulator,
 };
+use vibe_core::tracing::{TracingGuard, TracingSetup, setup_tracing};
 use vibe_core::{engine::EventObserver, events::EventEnvelope};
 
 pub const ADAPTER_NAME: &str = "vibe-cli";
@@ -757,6 +758,41 @@ fn telemetry_credentials(
     store: KeyringStore,
 ) -> impl Fn(&str) -> Option<String> + Send + Sync {
     move |name| vibe_core::auth::resolve_api_key(name, &environment, &store)
+}
+
+/// Installs the span exporter this process exports through, when the merged
+/// configuration asks for one.
+///
+/// Reference installs it once per process from the app-server runtime; this
+/// port has no such latch because the guard is the lifetime: held here for the
+/// whole run, it flushes what a batch is still holding when the binary exits.
+/// An unreadable configuration installs nothing, matching the way telemetry
+/// itself reads one.
+#[must_use]
+pub fn install_tracing(arguments: &Arguments) -> Option<TracingGuard> {
+    let credentials = telemetry_credentials(
+        bootstrap::dotenv_values(arguments).environment(),
+        KeyringStore::native(),
+    );
+    let setup = match Release3Service::default().layered_config().load() {
+        Ok(snapshot) => setup_tracing(&snapshot.effective, &credentials),
+        Err(_) => TracingSetup::Disabled,
+    };
+    match setup {
+        TracingSetup::Installed(guard) => Some(guard),
+        TracingSetup::UnusableEndpoint { endpoint } => {
+            eprintln!(
+                "OTEL tracing is enabled but `{endpoint}` is not a usable collector; skipping."
+            );
+            None
+        }
+        TracingSetup::MissingCredential { variable } => {
+            // Reference logs the same warning and starts anyway.
+            eprintln!("OTEL tracing is enabled but {variable} is not set; skipping.");
+            None
+        }
+        TracingSetup::Disabled => None,
+    }
 }
 
 /// The observer every engine event reaches.

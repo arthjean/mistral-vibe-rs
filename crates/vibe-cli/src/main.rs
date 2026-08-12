@@ -26,7 +26,11 @@ async fn main() -> ExitCode {
             }
         };
     }
-    let invocation = match PreparedInvocation::prepare(Arguments::parse()) {
+    let arguments = Arguments::parse();
+    // The span exporter is installed before any turn can open a span, and its
+    // guard lives as long as the process: dropping it flushes the batch.
+    let _tracing = vibe_cli::install_tracing(&arguments);
+    let invocation = match PreparedInvocation::prepare(arguments) {
         Ok(invocation) => invocation,
         Err(error) => {
             eprintln!("{error}");
