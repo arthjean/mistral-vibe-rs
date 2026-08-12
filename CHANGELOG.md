@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Ship the event a client records. `telemetry/record` now hands its name and its
+  properties to the same telemetry client the turn's own events travel through,
+  under the same envelope and behind the same `enable_telemetry` key, in
+  addition to leaving the entry on the debug console. What a client recorded is
+  carried unmodified: the identity census travels underneath its properties and
+  the client's own keys win.
+
+- Accept the `telemetry/send` notification on the editor protocol, so an editor
+  reports what it observes through the same client the terminal uses.
+  `vibe.at_mention_inserted` is recorded with the properties the editor sent,
+  and `vibe.user_rating_feedback` with the rating it supplied, defaulting to
+  zero, the alias of the model the session runs on, and a correlation with the
+  last request. Any other event name is ignored with a warning naming it, a
+  notification for a session that is not open is dropped, and neither an
+  unsupported name nor an invalid payload is answered on the wire, since a
+  notification carries no identifier to answer.
+
 - Write a log file at `$VIBE_HOME/logs/vibe.log`, so a failure that happens
   before the app server attaches leaves a trace on disk. A record is one line,
   `<timestamp> <ppid> <pid> <LEVEL> <message>`, with backslashes and newlines
