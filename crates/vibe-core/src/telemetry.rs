@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
+use std::time::Duration;
 
 use regex::Regex;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
@@ -29,8 +30,13 @@ use thiserror::Error;
 use toml::Table;
 use url::Url;
 
+use crate::compaction::CompactionStatus;
 use crate::engine::EventObserver;
-use crate::events::{EngineEvent, EventEnvelope, LifecycleState};
+use crate::events::{EngineEvent, EventEnvelope};
+
+pub mod records;
+
+pub use records::TelemetryRecord;
 
 /// The server a delivery falls back to when a provider's `api_base` carries no
 /// version segment to derive one from. Reference
@@ -348,6 +354,16 @@ pub enum TelemetryCallType {
     SecondaryCall,
 }
 
+impl TelemetryCallType {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::MainCall => "main_call",
+            Self::SecondaryCall => "secondary_call",
+        }
+    }
+}
+
 /// Reference `TelemetryRequestMetadata`: the base census plus the three fields
 /// a request-scoped event adds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -584,71 +600,179 @@ fn terminal_emulator_from(lookup: &dyn Fn(&str) -> Option<String>) -> &'static s
 // The events this port authors
 // --------------------------------------------------------------------------
 
+/// Every event name this port publishes.
+///
+/// The reference raises 26 across its client and its five satellite emitters.
+/// This vocabulary carries 25 of them: `vibe.admin_config_applied` reports on
+/// the org-managed configuration layer, which no part of this port fetches or
+/// composes, and the accepted-divergence table of `docs/parity.md` records that
+/// rather than declaring a name nothing can raise.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TelemetryEvent {
     NewSession,
     SessionClosed,
     Ready,
+    Startup,
     RequestSent,
     ToolCallFinished,
     AtMentionInserted,
     AutoCompactTriggered,
     CompactionFailed,
+    SlashCommandUsed,
+    UserCopiedText,
+    UserCancelledAction,
+    VoiceModeToggled,
+    OnboardingApiKeyAdded,
     TeleportCompleted,
     TeleportFailed,
     FeedbackSubmitted,
     RemoteProjectConfigured,
+    TranscriptionStarted,
+    TranscriptionCancelled,
+    TranscriptionDone,
+    TranscriptionFailed,
+    ReadAloudRequested,
+    ReadAloudPlayStarted,
+    ReadAloudEnded,
 }
 
 impl TelemetryEvent {
+    /// Every name this port publishes, which is what the replay measures the
+    /// vocabulary against.
+    pub const ALL: [Self; 25] = [
+        Self::NewSession,
+        Self::SessionClosed,
+        Self::Ready,
+        Self::Startup,
+        Self::RequestSent,
+        Self::ToolCallFinished,
+        Self::AtMentionInserted,
+        Self::AutoCompactTriggered,
+        Self::CompactionFailed,
+        Self::SlashCommandUsed,
+        Self::UserCopiedText,
+        Self::UserCancelledAction,
+        Self::VoiceModeToggled,
+        Self::OnboardingApiKeyAdded,
+        Self::TeleportCompleted,
+        Self::TeleportFailed,
+        Self::FeedbackSubmitted,
+        Self::RemoteProjectConfigured,
+        Self::TranscriptionStarted,
+        Self::TranscriptionCancelled,
+        Self::TranscriptionDone,
+        Self::TranscriptionFailed,
+        Self::ReadAloudRequested,
+        Self::ReadAloudPlayStarted,
+        Self::ReadAloudEnded,
+    ];
+
     #[must_use]
     pub const fn event_name(self) -> &'static str {
         match self {
             Self::NewSession => "vibe.new_session",
             Self::SessionClosed => "vibe.session_closed",
             Self::Ready => "vibe.ready",
+            Self::Startup => "vibe.startup",
             Self::RequestSent => "vibe.request_sent",
             Self::ToolCallFinished => "vibe.tool_call_finished",
             Self::AtMentionInserted => "vibe.at_mention_inserted",
             Self::AutoCompactTriggered => "vibe.auto_compact_triggered",
             Self::CompactionFailed => "vibe.compaction_failed",
+            Self::SlashCommandUsed => "vibe.slash_command_used",
+            Self::UserCopiedText => "vibe.user_copied_text",
+            Self::UserCancelledAction => "vibe.user_cancelled_action",
+            Self::VoiceModeToggled => "vibe.voice_mode_toggled",
+            Self::OnboardingApiKeyAdded => "vibe.onboarding_api_key_added",
             Self::TeleportCompleted => "vibe.teleport_completed",
             Self::TeleportFailed => "vibe.teleport_failed",
             Self::FeedbackSubmitted => "vibe.user_rating_feedback",
             Self::RemoteProjectConfigured => "vibe.remote_project_configured",
+            Self::TranscriptionStarted => "vibe.audio.transcription.start",
+            Self::TranscriptionCancelled => "vibe.audio.transcription.cancel_recording",
+            Self::TranscriptionDone => "vibe.audio.transcription.done",
+            Self::TranscriptionFailed => "vibe.audio.transcription.error",
+            Self::ReadAloudRequested => "vibe.read_aloud.requested",
+            Self::ReadAloudPlayStarted => "vibe.read_aloud.play_started",
+            Self::ReadAloudEnded => "vibe.read_aloud.ended",
         }
     }
 }
 
+/// Every property key an event this port authors can carry, drawn from the
+/// reference's own senders. A key is spelled once, here, so a payload cannot
+/// invent one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TelemetryField {
     Action,
-    AgentProfile,
+    AgentProfileName,
+    AgentReadyDurationMs,
     ApprovalType,
-    AttachmentCount,
+    AttachmentCounts,
     AutoCompactThreshold,
+    BashBackground,
+    CallSource,
     CallType,
     ClientName,
     ClientVersion,
+    Command,
     CommandType,
-    ContextMessageCount,
-    ContextTokensBefore,
+    ContextSummary,
+    ContextSummaryChars,
+    ContextTypes,
+    CustomDomain,
     Decision,
-    DurationMs,
+    ElapsedSeconds,
+    Enabled,
     Entrypoint,
+    ErrorClass,
+    ErrorMessage,
+    ErrorType,
     FailureKind,
-    FileCount,
     FileExtension,
-    MentionKind,
+    FileExtensions,
+    FirstFrameDurationMs,
+    HasAgentsMd,
+    HttpStatusCode,
+    InitDurationMs,
+    MessageId,
     Model,
-    Platform,
-    PromptCharacterCount,
+    NbContextChars,
+    NbContextMessages,
+    NbContextTokensBefore,
+    NbFilesCreated,
+    NbFilesModified,
+    NbMcpServers,
+    NbMentions,
+    NbModels,
+    NbPromptChars,
+    NbSessionMessages,
+    NbSkills,
+    Outcome,
+    ProjectCandidateCountLoaded,
+    ProjectMultiRepoMatchCount,
+    ProjectPickerShown,
+    ProjectRepoRemoteChanged,
+    ProjectSelectionSource,
+    PushRequired,
     Rating,
+    ReadAloudSessionId,
     Reason,
+    RecordingDurationMs,
+    RecordingId,
+    SavedProjectLinkCleared,
+    SessionInitDurationMs,
+    SpeedSelection,
     Stage,
     Status,
+    TerminalEmulator,
+    TextLength,
+    TimeToFirstReadS,
     ToolName,
+    TranscriptLength,
+    TranscriptionDurationMs,
+    Trigger,
     Version,
 }
 
@@ -656,31 +780,73 @@ impl TelemetryField {
     const fn key(self) -> &'static str {
         match self {
             Self::Action => "action",
-            Self::AgentProfile => "agent_profile",
+            Self::AgentProfileName => "agent_profile_name",
+            Self::AgentReadyDurationMs => "agent_ready_duration_ms",
             Self::ApprovalType => "approval_type",
-            Self::AttachmentCount => "attachment_count",
+            Self::AttachmentCounts => "attachment_counts",
             Self::AutoCompactThreshold => "auto_compact_threshold",
+            Self::BashBackground => "bash_background",
+            Self::CallSource => "call_source",
             Self::CallType => "call_type",
             Self::ClientName => "client_name",
             Self::ClientVersion => "client_version",
+            Self::Command => "command",
             Self::CommandType => "command_type",
-            Self::ContextMessageCount => "context_message_count",
-            Self::ContextTokensBefore => "nb_context_tokens_before",
+            Self::ContextSummary => "context_summary",
+            Self::ContextSummaryChars => "context_summary_chars",
+            Self::ContextTypes => "context_types",
+            Self::CustomDomain => "custom_domain",
             Self::Decision => "decision",
-            Self::DurationMs => "duration_ms",
+            Self::ElapsedSeconds => "elapsed_seconds",
+            Self::Enabled => "enabled",
             Self::Entrypoint => "entrypoint",
+            Self::ErrorClass => "error_class",
+            Self::ErrorMessage => "error_message",
+            Self::ErrorType => "error_type",
             Self::FailureKind => "failure_kind",
-            Self::FileCount => "file_count",
             Self::FileExtension => "file_extension",
-            Self::MentionKind => "mention_kind",
+            Self::FileExtensions => "file_extensions",
+            Self::FirstFrameDurationMs => "first_frame_duration_ms",
+            Self::HasAgentsMd => "has_agents_md",
+            Self::HttpStatusCode => "http_status_code",
+            Self::InitDurationMs => "init_duration_ms",
+            Self::MessageId => "message_id",
             Self::Model => "model",
-            Self::Platform => "platform",
-            Self::PromptCharacterCount => "prompt_character_count",
+            Self::NbContextChars => "nb_context_chars",
+            Self::NbContextMessages => "nb_context_messages",
+            Self::NbContextTokensBefore => "nb_context_tokens_before",
+            Self::NbFilesCreated => "nb_files_created",
+            Self::NbFilesModified => "nb_files_modified",
+            Self::NbMcpServers => "nb_mcp_servers",
+            Self::NbMentions => "nb_mentions",
+            Self::NbModels => "nb_models",
+            Self::NbPromptChars => "nb_prompt_chars",
+            Self::NbSessionMessages => "nb_session_messages",
+            Self::NbSkills => "nb_skills",
+            Self::Outcome => "outcome",
+            Self::ProjectCandidateCountLoaded => "project_candidate_count_loaded",
+            Self::ProjectMultiRepoMatchCount => "project_multi_repo_match_count",
+            Self::ProjectPickerShown => "project_picker_shown",
+            Self::ProjectRepoRemoteChanged => "project_repo_remote_changed",
+            Self::ProjectSelectionSource => "project_selection_source",
+            Self::PushRequired => "push_required",
             Self::Rating => "rating",
+            Self::ReadAloudSessionId => "read_aloud_session_id",
             Self::Reason => "reason",
+            Self::RecordingDurationMs => "recording_duration_ms",
+            Self::RecordingId => "recording_id",
+            Self::SavedProjectLinkCleared => "saved_project_link_cleared",
+            Self::SessionInitDurationMs => "session_init_duration_ms",
+            Self::SpeedSelection => "speed_selection",
             Self::Stage => "stage",
             Self::Status => "status",
+            Self::TerminalEmulator => "terminal_emulator",
+            Self::TextLength => "text_length",
+            Self::TimeToFirstReadS => "time_to_first_read_s",
             Self::ToolName => "tool_name",
+            Self::TranscriptLength => "transcript_length",
+            Self::TranscriptionDurationMs => "transcription_duration_ms",
+            Self::Trigger => "trigger",
             Self::Version => "version",
         }
     }
@@ -708,14 +874,109 @@ impl TelemetryAttributes {
         Ok(self)
     }
 
+    /// A label the reference carries as null rather than dropping when its
+    /// source has no value: `decision`, `message_id`, `file_extension` and the
+    /// read-aloud error type all travel that way.
+    pub fn optional_label(
+        &mut self,
+        field: TelemetryField,
+        value: Option<impl Into<String>>,
+    ) -> Result<&mut Self, TelemetryError> {
+        match value {
+            Some(value) => self.label(field, value),
+            None => Ok(self.null(field)),
+        }
+    }
+
+    /// A value that is content rather than a label.
+    ///
+    /// The one payload that needs it is the transcription failure, whose whole
+    /// subject is the endpoint's message; the validators exist to keep a path
+    /// or a secret out of a *label*, and refusing this one would drop the event
+    /// the reference sends.
+    pub fn text(&mut self, field: TelemetryField, value: impl Into<String>) -> &mut Self {
+        self.0
+            .insert(field.key().to_owned(), Value::String(value.into()));
+        self
+    }
+
     pub fn count(&mut self, field: TelemetryField, value: u64) -> &mut Self {
         self.0
             .insert(field.key().to_owned(), Value::Number(value.into()));
         self
     }
 
+    pub fn optional_count(&mut self, field: TelemetryField, value: Option<u64>) -> &mut Self {
+        match value {
+            Some(value) => self.count(field, value),
+            None => self.null(field),
+        }
+    }
+
     pub fn flag(&mut self, field: TelemetryField, value: bool) -> &mut Self {
         self.0.insert(field.key().to_owned(), Value::Bool(value));
+        self
+    }
+
+    /// A map of counts, as `attachment_counts`, `context_types` and
+    /// `file_extensions` carry. An empty map travels as an empty object, which
+    /// is what the reference's comprehension over no attachments leaves.
+    pub fn counts(&mut self, field: TelemetryField, values: &BTreeMap<String, u64>) -> &mut Self {
+        let object = values
+            .iter()
+            .map(|(key, value)| (key.clone(), Value::Number((*value).into())))
+            .collect::<Map<String, Value>>();
+        self.0.insert(field.key().to_owned(), Value::Object(object));
+        self
+    }
+
+    pub fn optional_counts(
+        &mut self,
+        field: TelemetryField,
+        values: Option<&BTreeMap<String, u64>>,
+    ) -> &mut Self {
+        match values {
+            Some(values) => self.counts(field, values),
+            None => self.null(field),
+        }
+    }
+
+    /// A duration in fractional milliseconds, which is what the reference's
+    /// `time.monotonic()` arithmetic produces for the audio events.
+    pub fn millis(&mut self, field: TelemetryField, value: Duration) -> &mut Self {
+        self.number(field, value.as_secs_f64() * 1_000.0)
+    }
+
+    pub fn optional_millis(&mut self, field: TelemetryField, value: Option<Duration>) -> &mut Self {
+        match value {
+            Some(value) => self.millis(field, value),
+            None => self.null(field),
+        }
+    }
+
+    /// A duration in fractional seconds, as the two read-aloud measures carry.
+    pub fn seconds(&mut self, field: TelemetryField, value: Duration) -> &mut Self {
+        self.number(field, value.as_secs_f64())
+    }
+
+    /// A key the reference sends with no value, as opposed to one it omits.
+    pub fn null(&mut self, field: TelemetryField) -> &mut Self {
+        self.0.insert(field.key().to_owned(), Value::Null);
+        self
+    }
+
+    /// A finite fractional number, which is the only kind JSON has. A reading
+    /// that is not finite cannot be serialized at all, so it travels as null
+    /// rather than dropping the event that carries it.
+    fn number(&mut self, field: TelemetryField, value: f64) -> &mut Self {
+        match serde_json::Number::from_f64(value) {
+            Some(number) => {
+                self.0.insert(field.key().to_owned(), Value::Number(number));
+            }
+            None => {
+                self.0.insert(field.key().to_owned(), Value::Null);
+            }
+        }
         self
     }
 
@@ -910,19 +1171,50 @@ pub enum TelemetryOutcome {
     Sent,
 }
 
-pub struct TelemetryProjection {
-    pub event: TelemetryEvent,
-    pub attributes: TelemetryAttributes,
-    pub correlation_id: Option<String>,
-    /// Set on a request-scoped event, which reports the request census rather
-    /// than the base one. Reference `build_request_metadata`'s call sites.
-    pub call_type: Option<TelemetryCallType>,
+/// What the turn's own events reported about the request they belong to.
+///
+/// The reference reads the model, the profile and the current message
+/// identifier off its agent loop where it builds each event. This port projects
+/// events from a stream, so the same facts are remembered here as they pass:
+/// [`EngineEvent::RequestSent`] sets them and the tool events of that request
+/// read them back.
+#[derive(Debug, Default)]
+struct TurnContext {
+    model: String,
+    agent_profile: String,
+    message_id: Option<String>,
+    /// What a rating correlates with. Reference `last_correlation_id`, which
+    /// its loop fills from the identifier the backend answered with; this port
+    /// has no such header, so the turn that made the request is what a rating
+    /// of that request points at.
+    last_correlation_id: Option<String>,
+    /// Tool calls the model declared and that have not answered yet, by
+    /// identifier. The reference reads the same pair off its `ResolvedToolCall`.
+    calls: BTreeMap<String, PendingToolCall>,
+}
+
+/// What a tool event reports for a fact no request named yet. The reference
+/// always has an active model and an active profile; a stream that answers a
+/// tool call before any request has none, and reports the same `unknown` its
+/// absent entrypoint reports rather than an empty label.
+fn known(value: &str) -> String {
+    if value.is_empty() {
+        return "unknown".to_owned();
+    }
+    value.to_owned()
+}
+
+#[derive(Debug)]
+struct PendingToolCall {
+    name: String,
+    arguments: Value,
 }
 
 pub struct TelemetryEventObserver<T> {
     client: Arc<TelemetryClient<T>>,
     context: TelemetryContext,
     pending: Mutex<Vec<tokio::task::JoinHandle<()>>>,
+    turn: Mutex<TurnContext>,
 }
 
 impl<T> TelemetryEventObserver<T>
@@ -935,50 +1227,50 @@ where
             client: Arc::new(client),
             context,
             pending: Mutex::new(Vec::new()),
+            turn: Mutex::new(TurnContext::default()),
         }
     }
 
-    /// Queues one event this port authors outside the engine stream, which is
-    /// how a client surface such as the rating prompt reports.
+    /// Queues one event raised outside the engine stream, which is how every
+    /// client surface reports: the rating prompt, the slash commands, the voice
+    /// toggle, the two audio managers and the teleport tracker.
     pub fn record(
         &self,
-        event: TelemetryEvent,
-        attributes: TelemetryAttributes,
+        record: &TelemetryRecord,
         session_id: Option<&str>,
-        correlation_id: Option<String>,
     ) -> Result<(), TelemetryError> {
-        self.queue(
-            TelemetryProjection {
-                event,
-                attributes,
-                correlation_id,
-                call_type: None,
-            },
-            session_id,
-        )
+        let correlation_id = record.correlates_last_request().then(|| {
+            self.turn
+                .lock()
+                .ok()
+                .and_then(|turn| turn.last_correlation_id.clone())
+        });
+        self.queue(record, session_id, correlation_id.flatten())
     }
 
     /// Builds the envelope and hands the delivery to a task, so neither the
     /// configuration read nor the request touches the caller's path.
     fn queue(
         &self,
-        projection: TelemetryProjection,
+        record: &TelemetryRecord,
         session_id: Option<&str>,
+        correlation_id: Option<String>,
     ) -> Result<(), TelemetryError> {
-        if let Some(correlation_id) = projection.correlation_id.as_deref() {
+        if let Some(correlation_id) = correlation_id.as_deref() {
             validate_safe_identifier(correlation_id)?;
         }
-        let census = match projection.call_type {
+        let census = match record.call_type() {
             Some(call_type) => self
                 .context
                 .request_metadata(session_id, call_type, None)
                 .properties(),
             None => self.context.base_metadata(session_id).properties(),
         };
+        let attributes = record.attributes(self.context.launch.as_ref())?;
         let envelope = TelemetryEnvelope::new(
-            projection.event.event_name(),
-            merge_properties(census, projection.attributes.into_properties()),
-            projection.correlation_id,
+            record.event().event_name(),
+            merge_properties(census, attributes.into_properties()),
+            correlation_id,
         );
         // Telemetry never decides whether a caller runs: an observer reached
         // from outside a runtime drops the delivery rather than failing the
@@ -1007,52 +1299,98 @@ where
             let _ = task.await;
         }
     }
-}
 
-impl<T> EventObserver for TelemetryEventObserver<T>
-where
-    T: TelemetryTransport + 'static,
-{
-    fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
-        let projections =
-            TelemetryProjection::from_engine_event(event).map_err(|error| error.to_string())?;
-        for projection in projections {
-            self.queue(projection, Some(&event.session_id))
-                .map_err(|error| error.to_string())?;
-        }
-        Ok(())
-    }
-}
-
-impl TelemetryProjection {
-    /// The records one engine event reports.
+    /// The records one engine event reports, with the turn context updated by
+    /// the events that carry it.
     ///
     /// Most events report one or none; a compaction reports two when its
     /// summarization failed with a classified reason, because the reference
     /// sends the auto-compaction record from the loop and the failure record
     /// from the manager, for the same compaction.
-    pub fn from_engine_event(event: &EventEnvelope) -> Result<Vec<Self>, TelemetryError> {
-        let mut attributes = TelemetryAttributes::default();
-        let projected = match &event.event {
+    fn project(&self, event: &EventEnvelope) -> Vec<TelemetryRecord> {
+        let Ok(mut turn) = self.turn.lock() else {
+            return Vec::new();
+        };
+        match &event.event {
+            EngineEvent::RequestSent {
+                model,
+                agent_profile,
+                nb_context_chars,
+                nb_context_messages,
+                nb_prompt_chars,
+                nb_images,
+                supports_images,
+                message_id,
+            } => {
+                turn.model.clone_from(model);
+                turn.agent_profile.clone_from(agent_profile);
+                turn.message_id.clone_from(message_id);
+                turn.last_correlation_id.clone_from(&event.turn_id);
+                vec![TelemetryRecord::RequestSent(records::RequestSent {
+                    model: model.clone(),
+                    nb_context_chars: *nb_context_chars,
+                    nb_context_messages: *nb_context_messages,
+                    nb_prompt_chars: *nb_prompt_chars,
+                    // Every request this port makes is the turn's own. The
+                    // summarization request is the reference's only secondary
+                    // call, and `docs/parity.md` records that it carries no
+                    // census here.
+                    call_type: TelemetryCallType::MainCall,
+                    message_id: message_id.clone(),
+                    attachment_counts: attachment_counts(*nb_images as usize, *supports_images),
+                })]
+            }
+            EngineEvent::ToolCall {
+                call_id,
+                name,
+                arguments,
+            } => {
+                turn.calls.insert(
+                    call_id.clone(),
+                    PendingToolCall {
+                        name: name.clone(),
+                        arguments: serde_json::from_str(arguments).unwrap_or(Value::Null),
+                    },
+                );
+                Vec::new()
+            }
             EngineEvent::ToolResult {
-                duration_ms,
+                call_id,
+                content,
+                typed_result,
                 is_error,
-                cancelled,
                 ..
             } => {
-                attributes
-                    .count(TelemetryField::DurationMs, *duration_ms)
-                    .label(
-                        TelemetryField::Status,
-                        if *cancelled {
-                            "cancelled"
-                        } else if *is_error {
-                            "failure"
-                        } else {
-                            "success"
-                        },
-                    )?;
-                Some((TelemetryEvent::ToolCallFinished, None))
+                let Some(call) = turn.calls.remove(call_id) else {
+                    return Vec::new();
+                };
+                // Reference `_ask_approval`: a refusal is a `skip` verdict on an
+                // `ask` permission, and the event it produces is `skipped`
+                // rather than a failure. The refusal crosses the tool boundary
+                // as the message the policy denied with, which is the only
+                // thing that tells it from a tool that failed on its own.
+                let declined = *is_error && content.starts_with(crate::policy::DENIAL_PREFIX);
+                let status = match (declined, *is_error) {
+                    (true, _) => records::TelemetryToolStatus::Skipped,
+                    (false, true) => records::TelemetryToolStatus::Failure,
+                    (false, false) => records::TelemetryToolStatus::Success,
+                };
+                let decision = declined.then_some(records::ToolDecision {
+                    verdict: records::TelemetryToolVerdict::Skip,
+                    approval_type: records::TelemetryApprovalType::Ask,
+                });
+                vec![TelemetryRecord::ToolCallFinished(
+                    records::ToolCallFinished::new(records::ToolCallReport {
+                        tool_name: &call.name,
+                        status,
+                        arguments: &call.arguments,
+                        result: (!*is_error).then_some(typed_result),
+                        decision,
+                        agent_profile_name: &known(&turn.agent_profile),
+                        model: &known(&turn.model),
+                        message_id: turn.message_id.clone(),
+                    }),
+                )]
             }
             EngineEvent::CompactionOutcome {
                 status,
@@ -1061,65 +1399,50 @@ impl TelemetryProjection {
                 reason,
                 ..
             } => {
-                attributes
-                    .count(TelemetryField::ContextTokensBefore, *context_tokens_before)
-                    .count(TelemetryField::AutoCompactThreshold, *threshold)
-                    .label(TelemetryField::Status, status.label())?;
-                if let Some(reason) = reason {
+                let compaction = TelemetryRecord::AutoCompactTriggered {
+                    nb_context_tokens_before: *context_tokens_before,
+                    auto_compact_threshold: *threshold,
+                    status: status.label(),
+                };
+                match reason {
                     // The reference's failure record carries the classified
                     // reason and nothing else: no prompt, no transcript, no
                     // summary text.
-                    let mut failure = TelemetryAttributes::default();
-                    failure.label(TelemetryField::Reason, reason.label())?;
-                    return Ok(vec![
-                        Self {
-                            event: TelemetryEvent::AutoCompactTriggered,
-                            attributes,
-                            correlation_id: event.turn_id.clone(),
-                            call_type: None,
+                    Some(reason) => vec![
+                        compaction,
+                        TelemetryRecord::CompactionFailed {
+                            reason: reason.label(),
                         },
-                        Self {
-                            event: TelemetryEvent::CompactionFailed,
-                            attributes: failure,
-                            correlation_id: event.turn_id.clone(),
-                            call_type: None,
-                        },
-                    ]);
+                    ],
+                    None => vec![compaction],
                 }
-                Some((TelemetryEvent::AutoCompactTriggered, None))
             }
             // The variant this port emitted before the boundary pair existed.
             // Nothing emits it any more; a transcript that carries one still
             // reports the compaction it recorded, without a status it never
             // held.
-            EngineEvent::Compaction { .. } => Some((TelemetryEvent::AutoCompactTriggered, None)),
-            EngineEvent::Lifecycle { state, .. } => match state {
-                LifecycleState::Running => {
-                    attributes.label(TelemetryField::Status, lifecycle_label(*state))?;
-                    // The turn's own model call, which the reference labels
-                    // `main_call` in the request census.
-                    Some((
-                        TelemetryEvent::RequestSent,
-                        Some(TelemetryCallType::MainCall),
-                    ))
-                }
-                LifecycleState::Idle
-                | LifecycleState::WaitingCallback
-                | LifecycleState::Completed
-                | LifecycleState::Failed
-                | LifecycleState::Cancelled => None,
-            },
-            _ => None,
-        };
-        Ok(projected
-            .map(|(projected, call_type)| Self {
-                event: projected,
-                attributes,
-                correlation_id: event.turn_id.clone(),
-                call_type,
-            })
-            .into_iter()
-            .collect())
+            EngineEvent::Compaction { .. } => vec![TelemetryRecord::AutoCompactTriggered {
+                nb_context_tokens_before: 0,
+                auto_compact_threshold: 0,
+                status: CompactionStatus::Success.label(),
+            }],
+            _ => Vec::new(),
+        }
+    }
+}
+
+impl<T> EventObserver for TelemetryEventObserver<T>
+where
+    T: TelemetryTransport + 'static,
+{
+    /// A projection failure never reaches the turn: an event whose label the
+    /// validators refuse is dropped, on the same terms as a delivery that
+    /// fails, because telemetry decides nothing about whether a caller runs.
+    fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
+        for record in self.project(event) {
+            let _ = self.queue(&record, Some(&event.session_id), None);
+        }
+        Ok(())
     }
 }
 
@@ -1167,17 +1490,6 @@ fn validate_safe_identifier(value: &str) -> Result<(), TelemetryError> {
         return Err(TelemetryError::InvalidIdentifier);
     }
     Ok(())
-}
-
-const fn lifecycle_label(state: LifecycleState) -> &'static str {
-    match state {
-        LifecycleState::Idle => "idle",
-        LifecycleState::Running => "running",
-        LifecycleState::WaitingCallback => "waiting_callback",
-        LifecycleState::Completed => "completed",
-        LifecycleState::Failed => "failed",
-        LifecycleState::Cancelled => "cancelled",
-    }
 }
 
 #[cfg(test)]

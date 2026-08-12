@@ -9,8 +9,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde_json::json;
 
+use super::records::{
+    ProjectPicker, ProjectSelectionSource, TelemetryToolStatus, TeleportFailureStage,
+    TeleportProgress, TeleportTracker, ToolCallFinished,
+};
 use super::*;
 use crate::compaction::{CompactionFailureReason, CompactionStatus};
+use crate::events::LifecycleState;
 
 #[derive(Default)]
 struct RecordingTransport {
@@ -292,7 +297,7 @@ async fn a_failed_delivery_never_reaches_the_caller() {
     );
     let observer = TelemetryEventObserver::new(client, context());
     observer
-        .observe(&lifecycle_event(LifecycleState::Running))
+        .observe(&request_event())
         .expect("the observer never reports a delivery failure");
     observer.flush().await;
 }
@@ -340,7 +345,7 @@ fn an_observer_outside_a_runtime_drops_the_delivery() {
         context(),
     );
     observer
-        .observe(&lifecycle_event(LifecycleState::Running))
+        .observe(&request_event())
         .expect("the observer never reports a queueing failure");
     assert_eq!(observer.client.transport.calls.load(Ordering::SeqCst), 0);
 }
@@ -354,9 +359,10 @@ fn an_authored_correlation_identifier_is_bounded() {
         context(),
     );
     assert_eq!(
-        observer.record(
-            TelemetryEvent::Ready,
-            TelemetryAttributes::default(),
+        observer.queue(
+            &TelemetryRecord::Ready {
+                init_duration_ms: 12
+            },
             None,
             Some("../session".to_owned()),
         ),
@@ -377,6 +383,58 @@ fn lifecycle_event(state: LifecycleState) -> EventEnvelope {
             message: None,
         },
     }
+}
+
+/// The request boundary event the engine emits before every model call.
+fn request_event() -> EventEnvelope {
+    EventEnvelope {
+        session_id: "oracle-session".to_owned(),
+        turn_id: Some("oracle-turn".to_owned()),
+        emitted_at: 1,
+        event_id: 1,
+        event: EngineEvent::RequestSent {
+            model: "oracle-model".to_owned(),
+            agent_profile: "oracle-profile".to_owned(),
+            nb_context_chars: 2048,
+            nb_context_messages: 6,
+            nb_prompt_chars: 512,
+            nb_images: 0,
+            supports_images: true,
+            message_id: Some("oracle-message".to_owned()),
+        },
+    }
+}
+
+/// One tool call answered, as the engine reports the pair.
+fn tool_events(content: &str, is_error: bool) -> [EventEnvelope; 2] {
+    [
+        EventEnvelope {
+            session_id: "oracle-session".to_owned(),
+            turn_id: Some("oracle-turn".to_owned()),
+            emitted_at: 1,
+            event_id: 2,
+            event: EngineEvent::ToolCall {
+                call_id: "call-1".to_owned(),
+                name: "write_file".to_owned(),
+                arguments: json!({"file_path": "/oracle/workspace/File.RS"}).to_string(),
+            },
+        },
+        EventEnvelope {
+            session_id: "oracle-session".to_owned(),
+            turn_id: Some("oracle-turn".to_owned()),
+            emitted_at: 1,
+            event_id: 3,
+            event: EngineEvent::ToolResult {
+                call_id: "call-1".to_owned(),
+                content: content.to_owned(),
+                typed_result: json!({}),
+                display: json!({}),
+                duration_ms: 9,
+                is_error,
+                cancelled: false,
+            },
+        },
+    ]
 }
 
 /// The base census carries the twelve reference fields, and a field with no
@@ -600,35 +658,43 @@ async fn a_reloaded_document_decides_the_next_event() {
 
 // -- The engine projection -------------------------------------------------
 
+/// What one engine event projects to, as the observer projects it.
+fn project(event: &EventEnvelope) -> Vec<TelemetryRecord> {
+    let observer = TelemetryEventObserver::new(
+        TelemetryClient::disabled(RecordingTransport::default()),
+        context(),
+    );
+    observer.project(event)
+}
+
+/// The properties one record puts on the wire.
+fn properties(record: &TelemetryRecord) -> Map<String, Value> {
+    record
+        .attributes(None)
+        .expect("the record carries no unsafe label")
+        .into_properties()
+}
+
 /// The engine projection never copies event content into a property.
 #[test]
 fn engine_projection_never_copies_event_content() {
-    let event = EventEnvelope {
-        session_id: "session".to_owned(),
-        turn_id: Some("turn-1".to_owned()),
-        emitted_at: 1,
-        event_id: 1,
-        event: EngineEvent::ToolResult {
-            call_id: "call".to_owned(),
-            content: "sk-secret /home/arthur/private".to_owned(),
-            typed_result: json!({"secret": "token"}),
-            display: json!({"output": "private"}),
-            duration_ms: 9,
-            is_error: true,
-            cancelled: false,
-        },
+    let [call, result] = tool_events("sk-secret /home/arthur/private", true);
+    let observer = TelemetryEventObserver::new(
+        TelemetryClient::disabled(RecordingTransport::default()),
+        context(),
+    );
+    observer.project(&call);
+    let projected = observer.project(&result);
+    let [record] = projected.as_slice() else {
+        panic!("an answered tool call reports one record");
     };
-    let projection = TelemetryProjection::from_engine_event(&event)
-        .expect("projection")
-        .pop()
-        .expect("telemetry event");
     let envelope = TelemetryEnvelope::new(
-        projection.event.event_name(),
+        record.event().event_name(),
         merge_properties(
             context().base_metadata(Some("session")).properties(),
-            projection.attributes.into_properties(),
+            properties(record),
         ),
-        projection.correlation_id,
+        None,
     );
     let encoded = serde_json::to_string(&envelope).expect("JSON");
     assert!(!encoded.contains("sk-secret"));
@@ -639,23 +705,21 @@ fn engine_projection_never_copies_event_content() {
 /// A turn completing is not a session closing.
 #[test]
 fn turn_completion_is_not_misreported_as_session_close() {
+    assert!(project(&lifecycle_event(LifecycleState::Completed)).is_empty());
     assert!(
-        TelemetryProjection::from_engine_event(&lifecycle_event(LifecycleState::Completed))
-            .expect("projection")
-            .is_empty()
+        project(&lifecycle_event(LifecycleState::Running)).is_empty(),
+        "a running turn is a status, not a request: the request event reports one"
     );
 }
 
-/// The request-scoped event reports the request census, carrying the call type
-/// and the source, and the session it was observed on.
+/// US-009: the request event carries the eight reference fields, and the
+/// envelope reports it on the session it was observed on.
 #[tokio::test]
-async fn a_request_event_reports_the_request_census() {
+async fn a_request_event_reports_the_reference_payload() {
     let transport = RecordingTransport::default();
     let client = TelemetryClient::new(getter(mistral_document(true)), transport);
     let observer = TelemetryEventObserver::new(client, context());
-    observer
-        .observe(&lifecycle_event(LifecycleState::Running))
-        .expect("observe");
+    observer.observe(&request_event()).expect("observe");
     observer.flush().await;
     let sent = observer
         .client
@@ -673,11 +737,465 @@ async fn a_request_event_reports_the_request_census() {
         &format!("mistral-client-python/Mistral-Vibe/{VERSION}")
     );
     assert_eq!(envelope.event, "vibe.request_sent");
+    assert_eq!(envelope.properties["model"], json!("oracle-model"));
+    assert_eq!(envelope.properties["nb_context_chars"], json!(2048));
+    assert_eq!(envelope.properties["nb_context_messages"], json!(6));
+    assert_eq!(envelope.properties["nb_prompt_chars"], json!(512));
     assert_eq!(envelope.properties["call_type"], json!("main_call"));
     assert_eq!(envelope.properties["call_source"], json!("vibe_code"));
+    assert_eq!(envelope.properties["message_id"], json!("oracle-message"));
+    assert_eq!(envelope.properties["attachment_counts"], json!({}));
     assert_eq!(envelope.properties["session_id"], json!("oracle-session"));
-    assert_eq!(envelope.properties["status"], json!("running"));
-    assert_eq!(envelope.correlation_id.as_deref(), Some("oracle-turn"));
+    assert_eq!(
+        envelope.correlation_id, None,
+        "only a rating correlates with the request it rates"
+    );
+}
+
+/// US-009: an answered tool call reports the eleven reference fields, with the
+/// model, the profile and the message identifier read off the request it
+/// belongs to.
+#[test]
+fn a_tool_call_reports_the_reference_payload() {
+    let observer = TelemetryEventObserver::new(
+        TelemetryClient::disabled(RecordingTransport::default()),
+        context(),
+    );
+    observer.project(&request_event());
+    let [call, result] = tool_events("written", false);
+    observer.project(&call);
+    let projected = observer.project(&result);
+    let [record] = projected.as_slice() else {
+        panic!("an answered tool call reports one record");
+    };
+    let properties = properties(record);
+    let mut keys = properties.keys().cloned().collect::<Vec<_>>();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "agent_profile_name",
+            "approval_type",
+            "decision",
+            "file_extension",
+            "message_id",
+            "model",
+            "nb_files_created",
+            "nb_files_modified",
+            "status",
+            "tool_name",
+        ],
+        "the eleventh field, `bash_background`, is omitted where no mode was named"
+    );
+    assert_eq!(properties["tool_name"], json!("write_file"));
+    assert_eq!(properties["status"], json!("success"));
+    assert_eq!(properties["model"], json!("oracle-model"));
+    assert_eq!(properties["agent_profile_name"], json!("oracle-profile"));
+    assert_eq!(properties["message_id"], json!("oracle-message"));
+    assert_eq!(properties["nb_files_created"], json!(1));
+    assert_eq!(properties["nb_files_modified"], json!(0));
+    assert_eq!(
+        properties["file_extension"],
+        json!(".rs"),
+        "the suffix is lowercased, as `_extract_file_extension` lowercases it"
+    );
+    assert_eq!(
+        (&properties["decision"], &properties["approval_type"]),
+        (&Value::Null, &Value::Null),
+        "no decision was recorded, so both travel as null rather than absent"
+    );
+}
+
+/// US-009: a call the operator declined is `skipped` with the reference's
+/// verdict, and a call that failed on its own is a `failure` with none.
+#[test]
+fn a_declined_call_is_skipped_and_a_failed_one_is_a_failure() {
+    for (content, status, decision) in [
+        (
+            format!("{}approval denied", crate::policy::DENIAL_PREFIX),
+            json!("skipped"),
+            json!("skip"),
+        ),
+        ("the tool crashed".to_owned(), json!("failure"), Value::Null),
+    ] {
+        let observer = TelemetryEventObserver::new(
+            TelemetryClient::disabled(RecordingTransport::default()),
+            context(),
+        );
+        let [call, result] = tool_events(&content, true);
+        observer.project(&call);
+        let projected = observer.project(&result);
+        let [record] = projected.as_slice() else {
+            panic!("an answered tool call reports one record");
+        };
+        let properties = properties(record);
+        assert_eq!(properties["status"], status);
+        assert_eq!(properties["decision"], decision);
+        assert_eq!(
+            properties["nb_files_created"],
+            json!(0),
+            "a call that produced no result reports no file metrics"
+        );
+        assert_eq!(properties["file_extension"], Value::Null);
+    }
+}
+
+/// US-009: the mode a bash result reports wins over the requested one, and
+/// neither being a boolean omits the key.
+#[test]
+fn the_bash_mode_is_read_from_the_result_first() {
+    for (arguments, result, expected) in [
+        (
+            json!({"background": false}),
+            json!({"background": true}),
+            Some(true),
+        ),
+        (json!({"background": true}), json!({}), Some(true)),
+        (json!({}), json!({}), None),
+    ] {
+        let call = ToolCallFinished::new(records::ToolCallReport {
+            tool_name: "bash",
+            status: TelemetryToolStatus::Success,
+            arguments: &arguments,
+            result: Some(&result),
+            decision: None,
+            agent_profile_name: "profile",
+            model: "model",
+            message_id: None,
+        });
+        assert_eq!(call.bash_background, expected);
+        let record = TelemetryRecord::ToolCallFinished(call);
+        assert_eq!(
+            properties(&record).get("bash_background"),
+            expected.map(Value::Bool).as_ref()
+        );
+    }
+}
+
+/// US-008: the session census carries the four counts plus the launch context
+/// the reference repeats, and no launch context reports an unknown entrypoint
+/// with the client fields absent.
+#[test]
+fn the_new_session_payload_carries_the_launch_context() {
+    let session = records::NewSession {
+        has_agents_md: true,
+        nb_skills: 3,
+        nb_mcp_servers: 2,
+        nb_models: 4,
+    };
+    let record = TelemetryRecord::NewSession(session);
+    let launch = LaunchContext {
+        agent_entrypoint: "cli".to_owned(),
+        agent_version: "1.0".to_owned(),
+        client_name: "oracle-client".to_owned(),
+        client_version: "2.0".to_owned(),
+        terminal_emulator: Some("ghostty".to_owned()),
+    };
+    let carried = record
+        .attributes(Some(&launch))
+        .expect("the payload carries no unsafe label")
+        .into_properties();
+    assert_eq!(carried["entrypoint"], json!("cli"));
+    assert_eq!(carried["client_name"], json!("oracle-client"));
+    assert_eq!(carried["terminal_emulator"], json!("ghostty"));
+    assert_eq!(carried["has_agents_md"], json!(true));
+    assert_eq!(carried["nb_skills"], json!(3));
+
+    let bare = properties(&record);
+    assert_eq!(bare["entrypoint"], json!("unknown"));
+    assert_eq!(bare["client_name"], Value::Null);
+    assert_eq!(bare["client_version"], Value::Null);
+    assert_eq!(bare["terminal_emulator"], Value::Null);
+}
+
+/// US-008: the startup event reports each duration as null when its
+/// measurement never happened.
+#[test]
+fn an_unmeasured_startup_duration_is_null() {
+    let record = TelemetryRecord::Startup(records::Startup {
+        first_frame_duration_ms: Some(12),
+        ..records::Startup::default()
+    });
+    let properties = properties(&record);
+    assert_eq!(properties["first_frame_duration_ms"], json!(12));
+    assert_eq!(properties["agent_ready_duration_ms"], Value::Null);
+    assert_eq!(properties["session_init_duration_ms"], Value::Null);
+}
+
+/// US-010: the leading slash is stripped, as the reference's `lstrip` strips
+/// it.
+#[test]
+fn a_slash_command_reports_the_bare_name() {
+    let record = TelemetryRecord::SlashCommandUsed {
+        command: "/compact".to_owned(),
+        kind: records::TelemetryCommandKind::Skill,
+    };
+    let properties = properties(&record);
+    assert_eq!(properties["command"], json!("compact"));
+    assert_eq!(properties["command_type"], json!("skill"));
+}
+
+/// US-011: the tracker walks the reference's stages, clears a saved link the
+/// service refused, and sends no failure for a run that succeeded.
+#[test]
+fn the_teleport_tracker_walks_the_reference_stages() {
+    let picker = ProjectPicker {
+        shown: true,
+        selection_source: Some(ProjectSelectionSource::SavedLink),
+        candidate_count_loaded: Some(3),
+        multi_repo_match_count: Some(2),
+        saved_project_link_cleared: Some(false),
+        repo_remote_changed: Some(false),
+    };
+    let mut tracker = TeleportTracker::new(12, TeleportFailureStage::Ineligible, Some(picker));
+    tracker.record_progress(TeleportProgress::SummarizingContext);
+    tracker.record_context_summary_generated(480);
+    tracker.record_progress(TeleportProgress::CheckingGit);
+    tracker.record_progress(TeleportProgress::Pushing);
+    tracker.record_service_error("ServiceTeleportError", Some("http".to_owned()), Some(403));
+    let failed = tracker
+        .failed()
+        .expect("a classified error reports a failure");
+    let carried = properties(&failed);
+    assert_eq!(failed.event(), TelemetryEvent::TeleportFailed);
+    assert_eq!(carried["stage"], json!("push"));
+    assert_eq!(carried["error_class"], json!("ServiceTeleportError"));
+    assert_eq!(carried["failure_kind"], json!("http"));
+    assert_eq!(carried["http_status_code"], json!(403));
+    assert_eq!(carried["context_summary"], json!("generated"));
+    assert_eq!(carried["context_summary_chars"], json!(480));
+    assert_eq!(carried["nb_session_messages"], json!(12));
+    assert_eq!(
+        carried["saved_project_link_cleared"],
+        json!(true),
+        "a saved link the service answered 403 for is the link it refused"
+    );
+    assert_eq!(carried["project_multi_repo_match_count"], json!(2));
+
+    tracker.record_progress(TeleportProgress::Complete);
+    assert!(
+        tracker.failed().is_none(),
+        "a run that completed sends no failure, whatever it recorded on the way"
+    );
+    assert_eq!(
+        properties(&tracker.completed())["push_required"],
+        json!(false)
+    );
+
+    let mut cancelled = TeleportTracker::new(0, TeleportFailureStage::NoHistory, None);
+    cancelled.record_cancelled();
+    let record = cancelled.failed().expect("a cancellation is a failure");
+    let carried = properties(&record);
+    assert_eq!(carried["stage"], json!("cancelled"));
+    assert_eq!(carried["error_class"], json!("CancelledError"));
+
+    let silent = TeleportTracker::new(0, TeleportFailureStage::NoHistory, None);
+    assert!(
+        silent.failed().is_none(),
+        "a run that classified no error sends nothing"
+    );
+}
+
+/// US-011: reference `count_multi_repo_matches`. A project counts when it
+/// carries more than one repository and one of them is the current remote, so
+/// the ordinary multi-repository project is what the count is about; a
+/// single-repository project and a multi-repository project linked elsewhere
+/// both count for nothing, and a workspace on no remote counts nothing at all.
+#[test]
+fn the_multi_repo_count_counts_linked_projects_carrying_several_repositories() {
+    let remote = "git@example.test:vibe.git";
+    let other = "git@example.test:other.git".to_owned();
+    let projects: Vec<Vec<String>> = vec![
+        vec![remote.to_owned(), other.clone()],
+        vec![remote.to_owned(), remote.to_owned()],
+        vec![remote.to_owned()],
+        vec![other.clone(); 2],
+    ];
+    assert_eq!(
+        records::multi_repo_match_count(projects.iter().map(Vec::as_slice), remote),
+        2,
+        "the two linked projects carrying a second repository are the matches"
+    );
+    assert_eq!(
+        records::multi_repo_match_count(projects.iter().map(Vec::as_slice), ""),
+        0,
+        "a workspace on no remote matches nothing"
+    );
+}
+
+/// US-012: playback that never started reports zero rather than a negative or
+/// an absent measure, and the key set is the reference's.
+#[test]
+fn a_read_aloud_that_never_played_reports_zero() {
+    let record = TelemetryRecord::ReadAloudEnded {
+        read_aloud_session_id: "read-1".to_owned(),
+        status: records::ReadAloudStatus::Canceled,
+        error_type: None,
+        elapsed: std::time::Duration::ZERO,
+    };
+    let properties = properties(&record);
+    let mut keys = properties.keys().cloned().collect::<Vec<_>>();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "elapsed_seconds",
+            "error_type",
+            "read_aloud_session_id",
+            "speed_selection",
+            "status",
+        ]
+    );
+    assert_eq!(properties["elapsed_seconds"], json!(0.0));
+    assert_eq!(properties["status"], json!("canceled"));
+    assert_eq!(properties["error_type"], Value::Null);
+    assert_eq!(properties["speed_selection"], Value::Null);
+}
+
+/// US-012: a transcription failure carries the endpoint's own message, which is
+/// the one payload the label validators are not applied to.
+#[test]
+fn a_transcription_failure_carries_its_message() {
+    let record = TelemetryRecord::TranscriptionFailed {
+        recording_id: "req-1".to_owned(),
+        message: "the endpoint refused: /tmp/audio.wav".to_owned(),
+        transcription_duration: std::time::Duration::from_millis(1500),
+        recording_duration: None,
+    };
+    let properties = properties(&record);
+    assert_eq!(
+        properties["error_message"],
+        json!("the endpoint refused: /tmp/audio.wav")
+    );
+    assert_eq!(properties["transcription_duration_ms"], json!(1500.0));
+    assert_eq!(
+        properties["recording_duration_ms"],
+        Value::Null,
+        "a recording that never stopped cleanly reports no duration"
+    );
+}
+
+/// Every event name this build publishes is produced by a record, so a declared
+/// name can never ship without a producer.
+#[test]
+fn every_published_event_name_has_a_record() {
+    let records = [
+        TelemetryRecord::NewSession(records::NewSession {
+            has_agents_md: false,
+            nb_skills: 0,
+            nb_mcp_servers: 0,
+            nb_models: 0,
+        }),
+        TelemetryRecord::SessionClosed,
+        TelemetryRecord::Ready {
+            init_duration_ms: 1,
+        },
+        TelemetryRecord::Startup(records::Startup::default()),
+        TelemetryRecord::RequestSent(records::RequestSent {
+            model: "model".to_owned(),
+            nb_context_chars: 0,
+            nb_context_messages: 0,
+            nb_prompt_chars: 0,
+            call_type: TelemetryCallType::MainCall,
+            message_id: None,
+            attachment_counts: BTreeMap::new(),
+        }),
+        TelemetryRecord::ToolCallFinished(ToolCallFinished::new(records::ToolCallReport {
+            tool_name: "bash",
+            status: TelemetryToolStatus::Success,
+            arguments: &json!({}),
+            result: None,
+            decision: None,
+            agent_profile_name: "profile",
+            model: "model",
+            message_id: None,
+        })),
+        TelemetryRecord::AtMentionInserted(records::AtMentionInserted {
+            nb_mentions: 1,
+            context_types: BTreeMap::new(),
+            file_extensions: None,
+            message_id: None,
+        }),
+        TelemetryRecord::AutoCompactTriggered {
+            nb_context_tokens_before: 0,
+            auto_compact_threshold: 0,
+            status: "success",
+        },
+        TelemetryRecord::CompactionFailed {
+            reason: "tool_call",
+        },
+        TelemetryRecord::SlashCommandUsed {
+            command: "help".to_owned(),
+            kind: records::TelemetryCommandKind::Builtin,
+        },
+        TelemetryRecord::UserCopiedText { text_length: 1 },
+        TelemetryRecord::UserCancelledAction {
+            action: "interrupt_agent".to_owned(),
+        },
+        TelemetryRecord::VoiceModeToggled { enabled: true },
+        TelemetryRecord::OnboardingApiKeyAdded {
+            custom_domain: false,
+        },
+        TelemetryRecord::FeedbackSubmitted {
+            rating: 5,
+            model: "model".to_owned(),
+        },
+        TeleportTracker::new(0, TeleportFailureStage::NoHistory, None).completed(),
+        records::teleport_early_failure(TeleportFailureStage::NoHistory, "Error", 0),
+        TelemetryRecord::RemoteProjectConfigured {
+            outcome: records::RemoteProjectOutcome::Configured,
+            picker: ProjectPicker::hidden(),
+        },
+        TelemetryRecord::TranscriptionStarted {
+            recording_id: "req".to_owned(),
+        },
+        TelemetryRecord::TranscriptionCancelled {
+            recording_id: "req".to_owned(),
+            recording_duration: std::time::Duration::ZERO,
+        },
+        TelemetryRecord::TranscriptionDone {
+            recording_id: "req".to_owned(),
+            transcript_length: 0,
+            transcription_duration: std::time::Duration::ZERO,
+            recording_duration: std::time::Duration::ZERO,
+        },
+        TelemetryRecord::TranscriptionFailed {
+            recording_id: "req".to_owned(),
+            message: String::new(),
+            transcription_duration: std::time::Duration::ZERO,
+            recording_duration: None,
+        },
+        TelemetryRecord::ReadAloudRequested {
+            read_aloud_session_id: "read".to_owned(),
+            trigger: records::ReadAloudTrigger::AutoplayNextMessage,
+        },
+        TelemetryRecord::ReadAloudPlayStarted {
+            read_aloud_session_id: "read".to_owned(),
+            time_to_first_read: std::time::Duration::ZERO,
+        },
+        TelemetryRecord::ReadAloudEnded {
+            read_aloud_session_id: "read".to_owned(),
+            status: records::ReadAloudStatus::Completed,
+            error_type: None,
+            elapsed: std::time::Duration::ZERO,
+        },
+    ];
+    let produced = records
+        .iter()
+        .map(TelemetryRecord::event)
+        .collect::<Vec<_>>();
+    for event in TelemetryEvent::ALL {
+        assert!(
+            produced.contains(&event),
+            "`{}` is published without a record that produces it",
+            event.event_name()
+        );
+    }
+    for record in &records {
+        record
+            .attributes(None)
+            .expect("every payload this port authors passes its own validators");
+    }
 }
 
 fn compaction_outcome(
@@ -708,13 +1226,12 @@ fn a_compaction_outcome_reports_the_reference_payload() {
         (CompactionStatus::Failure, "failure"),
         (CompactionStatus::Cancelled, "cancelled"),
     ] {
-        let projections = TelemetryProjection::from_engine_event(&compaction_outcome(status, None))
-            .expect("projection");
+        let projections = project(&compaction_outcome(status, None));
         let [record] = projections.as_slice() else {
             panic!("an unclassified outcome reports one record");
         };
-        assert_eq!(record.event, TelemetryEvent::AutoCompactTriggered);
-        let encoded = serde_json::to_value(&record.attributes).expect("attributes");
+        assert_eq!(record.event(), TelemetryEvent::AutoCompactTriggered);
+        let encoded = properties(record);
         assert_eq!(encoded["nb_context_tokens_before"], 150_000);
         assert_eq!(encoded["auto_compact_threshold"], 120_000);
         assert_eq!(encoded["status"], label);
@@ -725,18 +1242,17 @@ fn a_compaction_outcome_reports_the_reference_payload() {
 /// reason and nothing else.
 #[test]
 fn a_classified_failure_reports_both_records() {
-    let projections = TelemetryProjection::from_engine_event(&compaction_outcome(
+    let projections = project(&compaction_outcome(
         CompactionStatus::Failure,
         Some(CompactionFailureReason::ToolCall),
-    ))
-    .expect("projection");
+    ));
     let [triggered, failed] = projections.as_slice() else {
         panic!("a classified failure reports two records");
     };
-    assert_eq!(triggered.event, TelemetryEvent::AutoCompactTriggered);
-    assert_eq!(failed.event, TelemetryEvent::CompactionFailed);
+    assert_eq!(triggered.event(), TelemetryEvent::AutoCompactTriggered);
+    assert_eq!(failed.event(), TelemetryEvent::CompactionFailed);
     assert_eq!(
-        serde_json::to_value(&failed.attributes).expect("attributes"),
+        Value::Object(properties(failed)),
         json!({"reason": "tool_call"}),
         "the failure record carries the reason and no transcript"
     );

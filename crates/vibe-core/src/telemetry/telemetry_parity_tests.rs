@@ -34,7 +34,6 @@ use serde_json::{Map, Value, json};
 use crate::compaction::{CompactionFailureReason, CompactionStatus};
 use crate::config::registry::{FIELDS, default_document};
 use crate::config::{ConfigPaths, LayeredConfig};
-use crate::events::{EngineEvent, EventEnvelope, LifecycleState};
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
 use super::{
@@ -42,9 +41,9 @@ use super::{
     TELEMETRY_CALL_SOURCE, TELEMETRY_DEFAULT_API_KEY_VARIABLE, TELEMETRY_DEFAULT_BASE_URL,
     TELEMETRY_MAX_CONNECTIONS, TELEMETRY_MAX_KEEPALIVE_CONNECTIONS, TELEMETRY_PATH,
     TELEMETRY_TIMEOUT_SECONDS, TelemetryCallType, TelemetryClient, TelemetryConfig,
-    TelemetryContext, TelemetryEnvelope, TelemetryEvent, TelemetryFuture, TelemetryProjection,
+    TelemetryContext, TelemetryEnvelope, TelemetryEvent, TelemetryFuture, TelemetryRecord,
     TelemetryTransport, attachment_counts, merge_properties, platform_id, platform_version,
-    telemetry_headers, telemetry_user_agent,
+    records, telemetry_headers, telemetry_user_agent,
 };
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/telemetry/corpus.json";
@@ -94,64 +93,28 @@ const METADATA: [&str; 4] = ["schemaVersion", "reference", "note", "documents"];
 const DIVERGENCES: &[(&str, &str)] = &[
     // -- EP-002: closed. What the epic left standing ------------------------
     (
-        "constants/teleport*",
-        "OPEN (US-011): the teleport payload vocabularies arrive with the teleport events",
-    ),
-    (
-        "constants/projectSelectionSources/*",
-        "OPEN (US-011): as above",
-    ),
-    (
-        "constants/remoteProjectOutcomes/*",
-        "OPEN (US-011): as above",
-    ),
-    (
         "baseMetadata/sentryTags/*",
         "ACCEPTED: the reference ships Sentry dormant, both DSNs null at the pin, so no crash \
          reporter exists here to tag; US-020 records the dormancy",
     ),
-    // -- EP-003: the event vocabulary and its payloads ----------------------
-    (
-        "eventVocabulary/published/vibe.startup",
-        "OPEN (US-008): the startup durations are not recorded by this build",
-    ),
-    (
-        "eventVocabulary/published/vibe.slash_command_used",
-        "OPEN (US-010): the slash-command record is not sent by this build",
-    ),
-    (
-        "eventVocabulary/published/vibe.user_copied_text",
-        "OPEN (US-010): the copy record is not sent by this build",
-    ),
-    (
-        "eventVocabulary/published/vibe.user_cancelled_action",
-        "OPEN (US-010): the cancellation record is not sent by this build",
-    ),
-    (
-        "eventVocabulary/published/vibe.voice_mode_toggled",
-        "OPEN (US-010): the voice toggle is not recorded by this build",
-    ),
+    // -- EP-003: closed. What the epic left standing ------------------------
     (
         "eventVocabulary/published/vibe.admin_config_applied",
-        "OPEN (US-010): the administered-configuration record is not sent by this build",
+        "ACCEPTED: the event reports on the org-managed configuration layer, which this port \
+         neither fetches nor composes; declaring a name nothing can raise would be worse than \
+         recording its absence, and US-020 records it",
     ),
     (
-        "eventVocabulary/published/vibe.onboarding_api_key_added",
-        "OPEN (US-010): the onboarding record is not sent by this build",
+        "eventPayloads/propertyKeys/vibe.admin_config_applied",
+        "ACCEPTED: as above",
     ),
     (
-        "eventVocabulary/published/vibe.audio.*",
-        "OPEN (US-012): the four transcription events are kept in a local ring buffer by \
-         `crates/vibe-cli/src/tui/mod.rs` instead of being sent",
+        "eventPayloads/propertyTypes/vibe.admin_config_applied",
+        "ACCEPTED: as above",
     ),
     (
-        "eventVocabulary/published/vibe.read_aloud.*",
-        "OPEN (US-012): the narrator has no telemetry here at all",
-    ),
-    (
-        "eventPayloads/propertyKeys/*",
-        "OPEN (US-008 through US-012): this build projects four events from engine events and \
-         carries neither their full key sets nor the other twenty-two",
+        "eventPayloads/correlated/vibe.admin_config_applied",
+        "ACCEPTED: as above",
     ),
     // -- EP-004: OpenTelemetry tracing --------------------------------------
     (
@@ -386,14 +349,12 @@ struct PayloadEntry {
     )]
     source: String,
     property_keys: Vec<String>,
+    property_types: Option<Value>,
     #[expect(
         dead_code,
-        reason = "US-008 through US-012 compare the types once the keys match"
+        reason = "the values are the capture's own inputs; the key set and the types are the                   contract, and a value vocabulary the capture invented is not one"
     )]
-    property_types: Option<Value>,
-    #[expect(dead_code, reason = "as above")]
     properties: Option<Value>,
-    #[expect(dead_code, reason = "as above")]
     correlated: Option<bool>,
 }
 
@@ -779,31 +740,14 @@ fn published_choices(field: &str) -> Option<Vec<String>> {
     )
 }
 
-/// Every [`TelemetryEvent`] variant, which is the vocabulary this build is
-/// measured over. Kept exhaustive by [`declared_name`].
-const ALL_EVENTS: [TelemetryEvent; 12] = [
-    TelemetryEvent::NewSession,
-    TelemetryEvent::SessionClosed,
-    TelemetryEvent::Ready,
-    TelemetryEvent::RequestSent,
-    TelemetryEvent::ToolCallFinished,
-    TelemetryEvent::AtMentionInserted,
-    TelemetryEvent::AutoCompactTriggered,
-    TelemetryEvent::CompactionFailed,
-    TelemetryEvent::TeleportCompleted,
-    TelemetryEvent::TeleportFailed,
-    TelemetryEvent::FeedbackSubmitted,
-    TelemetryEvent::RemoteProjectConfigured,
-];
-
 /// The wire name each variant is measured under, restated here rather than read
 /// from [`TelemetryEvent::event_name`], so a rename on one side fails the
 /// replay instead of moving both the question and the answer.
 ///
-/// The match carries no wildcard, which is what keeps [`ALL_EVENTS`]
+/// The match carries no wildcard, which is what keeps the vocabulary
 /// exhaustive: a variant added to [`TelemetryEvent`] stops this module
-/// compiling until it is named here and listed above. Without that guard a new
-/// event would ship with no corpus entry and
+/// compiling until it is named here. Without that guard a new event would ship
+/// with no corpus entry and
 /// [`every_event_this_build_publishes_has_a_corpus_entry`] would pass quietly,
 /// which is the one way this replay could overstate the score.
 const fn declared_name(event: TelemetryEvent) -> &'static str {
@@ -811,21 +755,34 @@ const fn declared_name(event: TelemetryEvent) -> &'static str {
         TelemetryEvent::NewSession => "vibe.new_session",
         TelemetryEvent::SessionClosed => "vibe.session_closed",
         TelemetryEvent::Ready => "vibe.ready",
+        TelemetryEvent::Startup => "vibe.startup",
         TelemetryEvent::RequestSent => "vibe.request_sent",
         TelemetryEvent::ToolCallFinished => "vibe.tool_call_finished",
         TelemetryEvent::AtMentionInserted => "vibe.at_mention_inserted",
         TelemetryEvent::AutoCompactTriggered => "vibe.auto_compact_triggered",
         TelemetryEvent::CompactionFailed => "vibe.compaction_failed",
+        TelemetryEvent::SlashCommandUsed => "vibe.slash_command_used",
+        TelemetryEvent::UserCopiedText => "vibe.user_copied_text",
+        TelemetryEvent::UserCancelledAction => "vibe.user_cancelled_action",
+        TelemetryEvent::VoiceModeToggled => "vibe.voice_mode_toggled",
+        TelemetryEvent::OnboardingApiKeyAdded => "vibe.onboarding_api_key_added",
         TelemetryEvent::TeleportCompleted => "vibe.teleport_completed",
         TelemetryEvent::TeleportFailed => "vibe.teleport_failed",
         TelemetryEvent::FeedbackSubmitted => "vibe.user_rating_feedback",
         TelemetryEvent::RemoteProjectConfigured => "vibe.remote_project_configured",
+        TelemetryEvent::TranscriptionStarted => "vibe.audio.transcription.start",
+        TelemetryEvent::TranscriptionCancelled => "vibe.audio.transcription.cancel_recording",
+        TelemetryEvent::TranscriptionDone => "vibe.audio.transcription.done",
+        TelemetryEvent::TranscriptionFailed => "vibe.audio.transcription.error",
+        TelemetryEvent::ReadAloudRequested => "vibe.read_aloud.requested",
+        TelemetryEvent::ReadAloudPlayStarted => "vibe.read_aloud.play_started",
+        TelemetryEvent::ReadAloudEnded => "vibe.read_aloud.ended",
     }
 }
 
 /// The event names this build publishes.
 fn published_events() -> Vec<TelemetryEvent> {
-    ALL_EVENTS.to_vec()
+    TelemetryEvent::ALL.to_vec()
 }
 
 /// The launch context the capture drove the reference's builders with, so both
@@ -1000,65 +957,223 @@ fn sorted_keys(value: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// The attribute keys this build attaches to one event name, driven through the
-/// projection the engine observer uses.
+/// Payload keys whose value is a clock reading or a generated identifier, which
+/// the capture records as a type marker rather than a value. Named as
+/// `VOLATILE_KEYS` in the capture names them.
+const VOLATILE_KEYS: [&str; 5] = [
+    "recording_duration_ms",
+    "transcription_duration_ms",
+    "time_to_first_read_s",
+    "elapsed_seconds",
+    "read_aloud_session_id",
+];
+
+/// The record this build raises for one reference event name, built with the
+/// inputs the capture drove the reference's own sender with.
 ///
-/// The four events below are the ones an engine event reaches; the rest have no
-/// producer here at all, which is what the ledger records.
-fn port_payload_keys(event: &str) -> Option<Vec<String>> {
-    let envelopes = [
-        EventEnvelope {
-            session_id: "oracle-session".to_owned(),
-            turn_id: Some("oracle-turn".to_owned()),
-            emitted_at: 1,
-            event_id: 1,
-            event: EngineEvent::ToolResult {
-                call_id: "oracle-call".to_owned(),
-                content: "oracle result".to_owned(),
-                typed_result: json!({}),
-                display: json!({}),
-                duration_ms: 9,
-                is_error: false,
-                cancelled: false,
-            },
+/// Every name the corpus carries is answered here except
+/// `vibe.admin_config_applied`, which reports on the org-managed configuration
+/// layer this port does not compose; the ledger records that.
+fn port_record(event: &str) -> Option<TelemetryRecord> {
+    let picker = || records::ProjectPicker {
+        shown: true,
+        selection_source: Some(records::ProjectSelectionSource::SelectedExisting),
+        candidate_count_loaded: Some(3),
+        multi_repo_match_count: Some(2),
+        saved_project_link_cleared: Some(false),
+        repo_remote_changed: Some(false),
+    };
+    Some(match event {
+        "vibe.new_session" => TelemetryRecord::NewSession(records::NewSession {
+            has_agents_md: true,
+            nb_skills: 3,
+            nb_mcp_servers: 2,
+            nb_models: 4,
+        }),
+        "vibe.session_closed" => TelemetryRecord::SessionClosed,
+        "vibe.ready" => TelemetryRecord::Ready {
+            init_duration_ms: 1234,
         },
-        EventEnvelope {
-            session_id: "oracle-session".to_owned(),
-            turn_id: Some("oracle-turn".to_owned()),
-            emitted_at: 1,
-            event_id: 2,
-            event: EngineEvent::CompactionOutcome {
-                compaction_id: "oracle-compaction".to_owned(),
-                status: CompactionStatus::Failure,
-                context_tokens_before: 150_000,
-                threshold: 120_000,
-                reason: Some(CompactionFailureReason::ToolCall),
-            },
-        },
-        EventEnvelope {
-            session_id: "oracle-session".to_owned(),
-            turn_id: Some("oracle-turn".to_owned()),
-            emitted_at: 1,
-            event_id: 3,
-            event: EngineEvent::Lifecycle {
-                state: LifecycleState::Running,
-                message: None,
-            },
-        },
-    ];
-    for envelope in &envelopes {
-        for projection in
-            TelemetryProjection::from_engine_event(envelope).expect("the projection succeeds")
-        {
-            if projection.event.event_name() != event {
-                continue;
-            }
-            let attributes =
-                serde_json::to_value(&projection.attributes).expect("attributes serialize");
-            return Some(sorted_keys(&attributes));
+        "vibe.startup" => TelemetryRecord::Startup(records::Startup {
+            first_frame_duration_ms: Some(12),
+            agent_ready_duration_ms: Some(34),
+            session_init_duration_ms: Some(56),
+        }),
+        "vibe.request_sent" => TelemetryRecord::RequestSent(records::RequestSent {
+            model: "oracle-model".to_owned(),
+            nb_context_chars: 2048,
+            nb_context_messages: 6,
+            nb_prompt_chars: 512,
+            call_type: TelemetryCallType::MainCall,
+            message_id: Some("oracle-message".to_owned()),
+            attachment_counts: BTreeMap::new(),
+        }),
+        "vibe.tool_call_finished" => TelemetryRecord::ToolCallFinished(
+            records::ToolCallFinished::new(records::ToolCallReport {
+                tool_name: "write_file",
+                status: records::TelemetryToolStatus::Success,
+                arguments: &json!({
+                    "file_path": "/oracle/workspace/file.rs",
+                    "background": false,
+                }),
+                result: Some(&json!({"background": false})),
+                decision: Some(records::ToolDecision {
+                    verdict: records::TelemetryToolVerdict::Execute,
+                    approval_type: records::TelemetryApprovalType::Ask,
+                }),
+                agent_profile_name: "oracle-profile",
+                model: "oracle-model",
+                message_id: Some("oracle-message".to_owned()),
+            }),
+        ),
+        "vibe.at_mention_inserted" => {
+            TelemetryRecord::AtMentionInserted(records::AtMentionInserted {
+                nb_mentions: 2,
+                context_types: BTreeMap::from([("file".to_owned(), 2)]),
+                file_extensions: Some(BTreeMap::from([(".rs".to_owned(), 2)])),
+                message_id: Some("oracle-message".to_owned()),
+            })
         }
-    }
-    None
+        "vibe.auto_compact_triggered" => TelemetryRecord::AutoCompactTriggered {
+            nb_context_tokens_before: 150_000,
+            auto_compact_threshold: 120_000,
+            status: CompactionStatus::Success.label(),
+        },
+        "vibe.compaction_failed" => TelemetryRecord::CompactionFailed {
+            reason: CompactionFailureReason::ToolCall.label(),
+        },
+        "vibe.slash_command_used" => TelemetryRecord::SlashCommandUsed {
+            command: "/oracle".to_owned(),
+            kind: records::TelemetryCommandKind::Builtin,
+        },
+        "vibe.user_copied_text" => TelemetryRecord::UserCopiedText { text_length: 11 },
+        "vibe.user_cancelled_action" => TelemetryRecord::UserCancelledAction {
+            action: "interrupt_agent".to_owned(),
+        },
+        "vibe.voice_mode_toggled" => TelemetryRecord::VoiceModeToggled { enabled: true },
+        "vibe.onboarding_api_key_added" => TelemetryRecord::OnboardingApiKeyAdded {
+            custom_domain: true,
+        },
+        "vibe.user_rating_feedback" => TelemetryRecord::FeedbackSubmitted {
+            rating: 5,
+            model: "oracle-model".to_owned(),
+        },
+        "vibe.teleport_completed" => {
+            let mut tracker = records::TeleportTracker::new(
+                12,
+                records::TeleportFailureStage::Ineligible,
+                Some(picker()),
+            );
+            tracker.record_progress(records::TeleportProgress::CheckingGit);
+            tracker.record_progress(records::TeleportProgress::Pushing);
+            tracker.record_context_summary_generated(480);
+            tracker.completed()
+        }
+        "vibe.teleport_failed" => {
+            let mut tracker = records::TeleportTracker::new(
+                12,
+                records::TeleportFailureStage::Ineligible,
+                Some(records::ProjectPicker::hidden()),
+            );
+            tracker.record_progress(records::TeleportProgress::Pushing);
+            tracker.record_context_summary_failed();
+            tracker.record_progress(records::TeleportProgress::Pushing);
+            tracker.record_service_error("OracleError", Some("http".to_owned()), Some(403));
+            tracker.failed()?
+        }
+        "vibe.remote_project_configured" => TelemetryRecord::RemoteProjectConfigured {
+            outcome: records::RemoteProjectOutcome::Configured,
+            picker: records::ProjectPicker {
+                shown: true,
+                selection_source: Some(records::ProjectSelectionSource::CreatedProject),
+                candidate_count_loaded: None,
+                multi_repo_match_count: None,
+                saved_project_link_cleared: None,
+                repo_remote_changed: None,
+            },
+        },
+        "vibe.audio.transcription.start" => TelemetryRecord::TranscriptionStarted {
+            recording_id: "oracle-recording".to_owned(),
+        },
+        "vibe.audio.transcription.cancel_recording" => TelemetryRecord::TranscriptionCancelled {
+            recording_id: "oracle-recording".to_owned(),
+            recording_duration: std::time::Duration::from_millis(1500),
+        },
+        "vibe.audio.transcription.done" => TelemetryRecord::TranscriptionDone {
+            recording_id: "oracle-recording".to_owned(),
+            transcript_length: 17,
+            transcription_duration: std::time::Duration::from_millis(1500),
+            recording_duration: std::time::Duration::from_millis(1500),
+        },
+        "vibe.audio.transcription.error" => TelemetryRecord::TranscriptionFailed {
+            recording_id: "oracle-recording".to_owned(),
+            message: "oracle failure".to_owned(),
+            transcription_duration: std::time::Duration::from_millis(1500),
+            recording_duration: Some(std::time::Duration::from_millis(1500)),
+        },
+        "vibe.read_aloud.requested" => TelemetryRecord::ReadAloudRequested {
+            read_aloud_session_id: "oracle-read-aloud".to_owned(),
+            trigger: records::ReadAloudTrigger::AutoplayNextMessage,
+        },
+        "vibe.read_aloud.play_started" => TelemetryRecord::ReadAloudPlayStarted {
+            read_aloud_session_id: "oracle-read-aloud".to_owned(),
+            time_to_first_read: std::time::Duration::from_millis(250),
+        },
+        "vibe.read_aloud.ended" => TelemetryRecord::ReadAloudEnded {
+            read_aloud_session_id: "oracle-read-aloud".to_owned(),
+            status: records::ReadAloudStatus::Completed,
+            error_type: None,
+            elapsed: std::time::Duration::from_millis(900),
+        },
+        _ => return None,
+    })
+}
+
+/// The properties one event of this build puts on the wire, measured the way
+/// the capture measured the reference's: the census the envelope merges is
+/// removed, so what is left is what the sender itself decided.
+fn port_payload(event: &str) -> Option<Map<String, Value>> {
+    let record = port_record(event)?;
+    let context = oracle_context();
+    let census = context.base_metadata(Some("oracle-session")).properties();
+    let properties = record
+        .attributes(context.launch.as_ref())
+        .expect("every payload this port authors passes its own validators")
+        .into_properties();
+    Some(
+        properties
+            .into_iter()
+            .filter(|(key, value)| census.get(key) != Some(value))
+            .map(|(key, value)| {
+                let value = if VOLATILE_KEYS.contains(&key.as_str()) {
+                    Value::String(format!("{{{}}}", type_name(&value)))
+                } else {
+                    value
+                };
+                (key, value)
+            })
+            .collect(),
+    )
+}
+
+fn port_payload_keys(event: &str) -> Option<Vec<String>> {
+    Some(sorted_keys(&Value::Object(port_payload(event)?)))
+}
+
+/// The value types this build reports for one event, which is the half of a
+/// payload contract a key set cannot carry.
+fn port_payload_types(event: &str) -> Option<BTreeMap<String, String>> {
+    Some(
+        port_payload(event)?
+            .into_iter()
+            .map(|(key, value)| (key, type_name(&value)))
+            .collect(),
+    )
+}
+
+/// Whether this build correlates one event with the request it belongs to.
+fn port_payload_correlated(event: &str) -> Option<bool> {
+    Some(port_record(event)?.correlates_last_request())
 }
 
 // --------------------------------------------------------------------------
@@ -1331,34 +1446,49 @@ fn run_vocabularies(vocabularies: &Vocabularies, report: &mut Report) {
         &declared,
         &added,
     );
-    report.check_absent(
+    report.check(
         "constants",
         "teleportFailureStages",
         case,
         &vocabularies.teleport_failure_stages,
-        None,
+        &labels(&records::TeleportFailureStage::ALL, |stage| stage.label()),
     );
-    report.check_absent(
+    report.check(
         "constants",
         "teleportContextSummaryStatuses",
         case,
         &vocabularies.teleport_context_summary_statuses,
-        None,
+        &labels(&records::TeleportContextSummaryStatus::ALL, |status| {
+            status.label()
+        }),
     );
-    report.check_absent(
+    report.check(
         "constants",
         "projectSelectionSources",
         case,
         &vocabularies.project_selection_sources,
-        None,
+        &labels(&records::ProjectSelectionSource::ALL, |source| {
+            source.label()
+        }),
     );
-    report.check_absent(
+    report.check(
         "constants",
         "remoteProjectOutcomes",
         case,
         &vocabularies.remote_project_outcomes,
-        None,
+        &labels(&records::RemoteProjectOutcome::ALL, |outcome| {
+            outcome.label()
+        }),
     );
+}
+
+/// The wire values a closed vocabulary publishes, in its declaration order,
+/// which is the order the capture records it in.
+fn labels<T: Copy>(variants: &[T], label: impl Fn(T) -> &'static str) -> Vec<String> {
+    variants
+        .iter()
+        .map(|variant| label(*variant).to_owned())
+        .collect()
 }
 
 /// The serialized names of an enum's variants, sorted, which is the vocabulary a
@@ -1788,7 +1918,41 @@ fn run_event_payloads(corpus: &Corpus, report: &mut Report) {
             &entry.property_keys,
             port_payload_keys(&entry.event).as_ref(),
         );
+        // The two call-site events are read from the reference's source rather
+        // than driven, so the capture recorded no types for them and there is
+        // nothing to compare beyond the key set.
+        if let Some(types) = entry.property_types.as_ref() {
+            report.check_absent(
+                "eventPayloads",
+                "propertyTypes",
+                &entry.event,
+                &declared_types(types),
+                port_payload_types(&entry.event).as_ref(),
+            );
+            report.check_absent(
+                "eventPayloads",
+                "correlated",
+                &entry.event,
+                &entry.correlated.unwrap_or_default(),
+                port_payload_correlated(&entry.event).as_ref(),
+            );
+        }
     }
+}
+
+/// The captured type map, as the map this build is compared against.
+fn declared_types(types: &Value) -> BTreeMap<String, String> {
+    types
+        .as_object()
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|(key, value)| {
+                    value.as_str().map(|value| (key.clone(), value.to_owned()))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn run_exporter_config(corpus: &Corpus, report: &mut Report) {
