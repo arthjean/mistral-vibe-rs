@@ -43,6 +43,7 @@ use vibe_core::integrations::redact;
 use vibe_core::matching::NameFilter;
 use vibe_core::mcp::McpServerConfig;
 use vibe_core::middleware::CompactionSettings;
+use vibe_core::observability::{FileLog, LogLevel, LogSettings};
 pub use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionRequirement,
     PolicyError,
@@ -401,7 +402,13 @@ impl Default for AppServer {
         let home = vibe_home();
         Self {
             sessions: Arc::new(Mutex::new(SessionRegistry::default())),
-            resources: Arc::new(Mutex::new(ResourceService::default())),
+            // Reference `_resources.py` builds its `LogReader` over `LOG_FILE`
+            // at construction. A ceiling the environment spells wrong leaves
+            // the reader on the same file with the shipped defaults: reading a
+            // log never depends on what writing one resolved.
+            resources: Arc::new(Mutex::new(ResourceService::default().logging_to(
+                FileLog::in_home(&home, LogSettings::from_environment().unwrap_or_default()),
+            ))),
             resource_backend: Some(Arc::new(CoreResourceBackend::default())),
             release3: Arc::new(Release3Service::default()),
             release4: Arc::new(Release4Service::default()),
@@ -445,10 +452,7 @@ impl AppServer {
 
     #[must_use]
     pub fn with_release3_service(service: Release3Service) -> Self {
-        Self {
-            release3: Arc::new(service),
-            ..Self::default()
-        }
+        Self::default().using_release3_service(service)
     }
 
     #[must_use]
@@ -460,8 +464,28 @@ impl AppServer {
     }
 
     #[must_use]
-    pub fn using_release3_service(mut self, service: Release3Service) -> Self {
-        self.release3 = Arc::new(service);
+    pub fn using_release3_service(self, service: Release3Service) -> Self {
+        // The log file follows the home the service reads under, so a server
+        // built for another home neither writes to nor answers from the
+        // operator's.
+        let log = FileLog::in_home(
+            service.vibe_home(),
+            LogSettings::from_environment().unwrap_or_default(),
+        );
+        let mut server = self.logging_to(log);
+        server.release3 = Arc::new(service);
+        server
+    }
+
+    /// The file this server records to and answers `diagnostics/logs/read`
+    /// from. Reference builds one `LogReader` over `LOG_FILE` per resource set;
+    /// naming the file here is what lets a host, and a test, keep the operator's
+    /// out of it.
+    #[must_use]
+    pub fn logging_to(self, log: FileLog) -> Self {
+        if let Ok(mut resources) = self.resources.lock() {
+            resources.set_log(log);
+        }
         self
     }
 
@@ -3854,9 +3878,9 @@ impl ServerConnection {
     /// publishes a deliberately different envelope from a closed vocabulary
     /// (`docs/parity.md`, Accepted divergences), so a client-authored name and
     /// its free-form properties have no envelope to travel in. The event is
-    /// kept where an operator can read it back, on `diagnostics/logs/read`,
-    /// and is dropped entirely when `enable_telemetry` is off, which is the
-    /// decision the reference delegates to the same key.
+    /// written to the log file an operator reads back through
+    /// `diagnostics/logs/read`, and is dropped entirely when `enable_telemetry`
+    /// is off, which is the decision the reference delegates to the same key.
     fn telemetry_record(&mut self, request: ServerRequest) -> DispatchBatch {
         let params = match from_params::<TelemetryRecordParams>(&request.params) {
             Ok(params) => params,
@@ -3874,7 +3898,7 @@ impl ServerConnection {
                 params.name, params.session_id, params.correlate_last_request
             );
             match self.server.resources.lock() {
-                Ok(mut resources) => resources.record_log(now_millis(), "INFO", &message),
+                Ok(resources) => resources.record_log(LogLevel::Info, &message),
                 Err(_) => {
                     return error_batch(
                         request.id,
@@ -8442,9 +8466,14 @@ mod tests {
     }
 
     /// The client's own event stream, which the reference hands to the agent
-    /// loop's telemetry client and this port keeps where an operator can read
-    /// it. Both gate it on `enable_telemetry`, so a client that records against
-    /// a session with telemetry off leaves nothing behind.
+    /// loop's telemetry client and this port writes to the log file an operator
+    /// reads. Both gate it on `enable_telemetry`, so a client that records
+    /// against a session with telemetry off leaves nothing behind.
+    ///
+    /// The sink is opened at `DEBUG` rather than at the level the environment
+    /// resolves, because what is under test is the gate: an informational
+    /// record is invisible under the shipped `WARNING` default, upstream as
+    /// much as here.
     #[test]
     fn a_recorded_client_event_is_kept_only_while_telemetry_is_enabled() {
         for enabled in [true, false] {
@@ -8467,7 +8496,13 @@ mod tests {
                 true,
             )
             .expect("release-3 service");
-            let server = AppServer::with_release3_service(release3);
+            let server = AppServer::with_release3_service(release3).logging_to(FileLog::new(
+                temporary.path().join("logs").join("vibe.log"),
+                LogSettings {
+                    level: LogLevel::Debug,
+                    ..LogSettings::default()
+                },
+            ));
             let mut connection = server.connect(TransportKind::InProcess);
             initialize(&mut connection);
             connection.dispatch(&request(

@@ -22,6 +22,7 @@ use vibe_core::mcp::{
     DefaultMcpPeerFactory, McpPeerFactory, McpRegistry, McpServerConfig, McpServerStatus,
     McpServerView, McpTransportConfig,
 };
+use vibe_core::observability::{FileLog, LOG_DEFAULT_PAGE_LIMIT, LogLevel, entry_identity};
 use vibe_core::platform::{Platform, parse_policy_path};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionMode,
@@ -279,7 +280,11 @@ pub struct ResourceService {
     /// The last integration state each session's backend reported.
     backend_integrations: BTreeMap<String, IntegrationState>,
     diagnostics: Vec<(String, String)>,
-    logs: Vec<(u64, String, String)>,
+    /// The file `diagnostics/logs/read` answers from and [`Self::record_log`]
+    /// writes to. Reference constructs a `LogReader` over `LOG_FILE` beside the
+    /// session; unset here means no home was resolved, and the method answers
+    /// an empty page rather than an error.
+    log: Option<FileLog>,
     feedback_actions: Vec<String>,
     connectors: BTreeMap<String, bool>,
     mcp: BTreeMap<String, McpSource>,
@@ -288,6 +293,22 @@ pub struct ResourceService {
 }
 
 impl ResourceService {
+    /// The log file this service records to and answers `diagnostics/logs/read`
+    /// from. Reference builds its `LogReader` over `LOG_FILE` directly; the
+    /// path is passed in here so a test, and a second server in the same
+    /// process, read the file they wrote rather than the operator's.
+    #[must_use]
+    pub fn logging_to(mut self, log: FileLog) -> Self {
+        self.set_log(log);
+        self
+    }
+
+    /// Re-points an already-built service at another file, which is what a
+    /// server given a home after construction does.
+    pub fn set_log(&mut self, log: FileLog) {
+        self.log = Some(log);
+    }
+
     pub fn dispatch(
         &mut self,
         method: &str,
@@ -442,12 +463,13 @@ impl ResourceService {
         push_bounded(&mut self.diagnostics, MAX_RESOURCE_RECORDS, entry);
     }
 
-    pub fn record_log(&mut self, timestamp: u64, level: &str, message: &str) {
-        push_bounded(
-            &mut self.logs,
-            MAX_RESOURCE_RECORDS,
-            (timestamp, bounded(level), redact(message)),
-        );
+    /// Writes one record to the log file this service reads back, or nowhere at
+    /// all when no file was resolved. A record never fails a call: an unwritable
+    /// file is dropped the way [`vibe_core::observability::log`] drops one.
+    pub fn record_log(&self, level: LogLevel, message: &str) {
+        if let Some(log) = &self.log {
+            drop(log.write(level, &redact(message), None));
+        }
     }
 
     pub fn close_session(&mut self, session_id: &str) {
@@ -512,37 +534,44 @@ impl ResourceService {
         })
     }
 
+    /// Reference `_diagnostics_logs_read`: one page of the log file, newest
+    /// first, parsed into the seven fields a debug console renders.
+    ///
+    /// The page comes from the file rather than from anything this process
+    /// remembers, so a line another process wrote is readable and the process
+    /// identifiers are the ones that wrote it.
     fn logs_read(
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<ResourceDispatch, ResourceError> {
         let offset = usize_param(params, "offset", 0, 0, usize::MAX)?;
-        let limit = usize_param(params, "limit", 100, 1, 500)?;
-        let entries = self
-            .logs
+        let limit = usize_param(params, "limit", LOG_DEFAULT_PAGE_LIMIT, 1, 500)?;
+        let page = self
+            .log
+            .as_ref()
+            .map(|log| log.reader().get_logs(limit, offset))
+            .unwrap_or_default();
+        let entries = page
+            .entries
             .iter()
-            .enumerate()
-            .skip(offset)
-            .take(limit)
-            .map(|(index, (timestamp, level, message))| {
+            .map(|entry| {
                 json!({
-                    "id": format!("log-{index}"),
-                    "timestamp": timestamp,
-                    "ppid": 0,
-                    "pid": 0,
-                    "level": level,
-                    "message": redact(message),
-                    "rawLine": redact(message)
+                    "id": entry_identity(&entry.raw_line),
+                    "timestamp": entry.timestamp,
+                    "ppid": entry.ppid,
+                    "pid": entry.pid,
+                    "level": entry.level,
+                    "message": redact(&entry.message),
+                    "rawLine": redact(&entry.raw_line)
                 })
             })
             .collect::<Vec<_>>();
-        let cursor = offset.saturating_add(entries.len());
         Ok(read_only([(
             "logs",
             json!({
                 "entries": entries,
-                "hasMore": cursor < self.logs.len(),
-                "cursor": (cursor < self.logs.len()).then_some(cursor)
+                "hasMore": page.has_more,
+                "cursor": page.cursor
             }),
         )]))
     }
@@ -1269,29 +1298,158 @@ mod tests {
         }
     }
 
+    /// A service whose log file is its own, so the test reads what it wrote
+    /// rather than the operator's home.
+    fn logging_service() -> (tempfile::TempDir, ResourceService) {
+        let enclosure = tempfile::tempdir().expect("a log enclosure");
+        let service = ResourceService::default().logging_to(FileLog::in_home(
+            enclosure.path(),
+            vibe_core::observability::LogSettings::default(),
+        ));
+        (enclosure, service)
+    }
+
+    fn read_logs(service: &mut ResourceService, limit: u64, offset: u64) -> Value {
+        service
+            .dispatch(
+                "diagnostics/logs/read",
+                &params(json!({"limit": limit, "offset": offset})),
+                false,
+            )
+            .expect("logs")
+            .result["logs"]
+            .clone()
+    }
+
     #[test]
     fn diagnostics_and_logs_redact_sensitive_text() {
-        let mut resources = ResourceService::default();
+        let (_enclosure, mut resources) = logging_service();
         resources.record_diagnostic("config.toml", "Authorization: Bearer secret");
-        resources.record_log(1, "ERROR", "token=secret");
+        resources.record_log(LogLevel::Error, "token=secret");
         let diagnostics = resources
             .dispatch("diagnostics/list", &BTreeMap::new(), false)
             .expect("diagnostics");
-        let logs = resources
-            .dispatch(
-                "diagnostics/logs/read",
-                &params(json!({"limit": 10, "offset": 0})),
-                false,
-            )
-            .expect("logs");
+        let logs = read_logs(&mut resources, 10, 0);
         assert_eq!(
             diagnostics.result["issues"][0]["message"],
             "[redacted sensitive error]"
         );
-        assert_eq!(
-            logs.result["logs"]["entries"][0]["message"],
-            "[redacted sensitive error]"
+        assert_eq!(logs["entries"][0]["message"], "[redacted sensitive error]");
+    }
+
+    /// US-018: the page comes from the file, so it carries the identifiers of
+    /// the process that wrote the line rather than the zeros a memory buffer
+    /// had nothing better to publish.
+    #[test]
+    fn a_page_carries_the_parsed_line_and_the_writing_process() {
+        let (enclosure, mut resources) = logging_service();
+        resources.record_log(LogLevel::Error, "the turn failed");
+        // A line another process wrote is the same line to the reader.
+        let path = enclosure.path().join("logs").join("vibe.log");
+        let elsewhere = vibe_core::observability::format_log_line(
+            vibe_core::auth::UtcTimestamp::now(),
+            4_242,
+            4_243,
+            LogLevel::Warning,
+            "another process was here",
+            None,
         );
+        let existing = std::fs::read_to_string(&path).expect("the log file");
+        std::fs::write(&path, format!("{existing}{elsewhere}\n")).expect("the appended line");
+
+        let logs = read_logs(&mut resources, 10, 0);
+        let newest = &logs["entries"][0];
+        assert_eq!(newest["message"], "another process was here");
+        assert_eq!(newest["ppid"], 4_242);
+        assert_eq!(newest["pid"], 4_243);
+        assert_eq!(newest["level"], "WARNING");
+        assert!(
+            newest["rawLine"]
+                .as_str()
+                .is_some_and(|line| line.ends_with("another process was here")),
+            "the raw line is published whole: {newest}"
+        );
+        assert!(
+            newest["timestamp"]
+                .as_str()
+                .is_some_and(|timestamp| timestamp.contains('T')),
+            "the timestamp is the stamp the line carried: {newest}"
+        );
+        assert!(
+            newest["id"].as_str().is_some_and(|id| id.len() == 64),
+            "the identity is a digest of the raw line: {newest}"
+        );
+        let (ppid, pid) = vibe_core::observability::process_identifiers();
+        assert_eq!(logs["entries"][1]["pid"], pid);
+        assert_eq!(logs["entries"][1]["ppid"], ppid);
+        assert_eq!(logs["hasMore"], json!(false));
+        assert_eq!(logs["cursor"], Value::Null);
+    }
+
+    /// US-018: a page that filled its limit says where the next one starts, and
+    /// the one that did not says nothing.
+    #[test]
+    fn a_filled_page_reports_where_the_next_one_starts() {
+        let (_enclosure, mut resources) = logging_service();
+        for index in 0..4 {
+            resources.record_log(LogLevel::Error, &format!("record {index}"));
+        }
+        let first = read_logs(&mut resources, 2, 0);
+        assert_eq!(first["entries"][0]["message"], "record 3");
+        assert_eq!(first["hasMore"], json!(true));
+        assert_eq!(first["cursor"], json!(2));
+        let last = read_logs(&mut resources, 10, 2);
+        assert_eq!(
+            last["entries"]
+                .as_array()
+                .map(|entries| entries.len())
+                .unwrap_or_default(),
+            2
+        );
+        assert_eq!(last["hasMore"], json!(false));
+        assert_eq!(last["cursor"], Value::Null);
+    }
+
+    /// US-018: no file at all is an empty page rather than an error, and a
+    /// limit outside the published range is refused before anything is read.
+    #[test]
+    fn an_absent_file_is_empty_and_an_impossible_page_is_refused() {
+        let (_enclosure, mut resources) = logging_service();
+        let logs = read_logs(&mut resources, 10, 0);
+        assert_eq!(logs["entries"], json!([]));
+        assert_eq!(logs["hasMore"], json!(false));
+        assert_eq!(logs["cursor"], Value::Null);
+        for page in [json!({"limit": 0}), json!({"limit": 501})] {
+            let error = resources
+                .dispatch("diagnostics/logs/read", &params(page.clone()), false)
+                .expect_err("the page is refused");
+            assert!(
+                matches!(error, ResourceError::InvalidParams(_)),
+                "{page} must be refused as invalid params: {error}"
+            );
+        }
+    }
+
+    /// US-018: a hand-edited line does not fail the request, and it does not
+    /// disappear from the numbering either.
+    #[test]
+    fn a_line_the_pattern_refuses_is_skipped_rather_than_failing_the_page() {
+        let (enclosure, mut resources) = logging_service();
+        resources.record_log(LogLevel::Error, "the turn failed");
+        let path = enclosure.path().join("logs").join("vibe.log");
+        let existing = std::fs::read_to_string(&path).expect("the log file");
+        std::fs::write(&path, format!("{existing}an operator pasted this\n"))
+            .expect("the pasted line");
+        let logs = read_logs(&mut resources, 10, 0);
+        assert_eq!(
+            logs["entries"]
+                .as_array()
+                .map(|entries| entries.len())
+                .unwrap_or_default(),
+            1,
+            "only the line that parses is published: {logs}"
+        );
+        assert_eq!(logs["entries"][0]["message"], "the turn failed");
     }
 
     /// US-107: a permanent approval the configuration file refused is kept for

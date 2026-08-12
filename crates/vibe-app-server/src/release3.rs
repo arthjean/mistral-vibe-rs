@@ -234,6 +234,13 @@ impl Release3Service {
         Ok(Self::build(paths, project_trusted))
     }
 
+    /// The home this service reads its configuration and credentials under, and
+    /// the one the log file belongs to.
+    #[must_use]
+    pub fn vibe_home(&self) -> &Path {
+        &self.paths.vibe_home
+    }
+
     fn build(paths: Release3Paths, project_trusted: bool) -> Self {
         // The Defaults layer is the shipped document at every construction
         // site: a service built without it composes a configuration the
