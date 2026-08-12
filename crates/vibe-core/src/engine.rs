@@ -21,12 +21,17 @@ use crate::middleware::{
     MiddlewareAction, MiddlewarePipeline, ResetReason,
 };
 use crate::provider::{
-    AssistantMessage, ProviderBackend, ProviderChunk, ProviderError, ProviderInput, ProviderStream,
-    ProviderTransport, RetrySink, TransportError, Usage, aggregate_provider_chunks,
+    AssistantMessage, ModelCallDescriptor, ProviderBackend, ProviderChunk, ProviderError,
+    ProviderInput, ProviderStream, ProviderTransport, RetrySink, TransportError, Usage,
+    aggregate_provider_chunks,
 };
 use crate::storage::{SessionMetadata, SessionStore};
 use crate::text::bounded_utf8;
 use crate::tools::{MAX_TOOL_ERROR_BYTES, ToolExecutionOutput};
+use crate::tracing::{
+    AgentSpan, BackendFailure, ModelCallSpan, ToolSpan, TracedError, agent_span, model_call_span,
+    set_model_call_response_metadata, set_model_call_usage, set_tool_result, tool_span,
+};
 
 pub type ProviderFuture<'a> =
     Pin<Box<dyn Future<Output = Result<AssistantMessage, ProviderError>> + Send + 'a>>;
@@ -63,6 +68,16 @@ pub trait CompletionProvider: Send + Sync {
     /// reads back for every request and tool event. A provider that answers
     /// nothing leaves those events reporting the turn's own override.
     fn model(&self) -> Option<&str> {
+        None
+    }
+
+    /// What the model call span reports about the request this provider makes.
+    ///
+    /// Reference opens that span inside the backend, which is the only layer
+    /// that knows the provider, the API style and the URL. Here the span is
+    /// opened by the turn, so the backend publishes those three and a provider
+    /// that answers nothing leaves the span carrying what the turn knows.
+    fn call_descriptor(&self) -> Option<ModelCallDescriptor> {
         None
     }
 
@@ -151,6 +166,10 @@ where
     fn model(&self) -> Option<&str> {
         Some(ProviderBackend::model(self))
     }
+
+    fn call_descriptor(&self) -> Option<ModelCallDescriptor> {
+        Some(ProviderBackend::call_descriptor(self))
+    }
 }
 
 impl<P> CompletionProvider for Arc<P>
@@ -175,6 +194,10 @@ where
 
     fn model(&self) -> Option<&str> {
         (**self).model()
+    }
+
+    fn call_descriptor(&self) -> Option<ModelCallDescriptor> {
+        (**self).call_descriptor()
     }
 }
 
@@ -730,15 +753,47 @@ where
         .await
     }
 
+    /// Runs one turn under the span the whole trace hangs off. Reference
+    /// `_loop.py` opens `agent_span` around its run loop, which is what puts
+    /// every model call, tool call and hook of the turn under one parent and
+    /// publishes the conversation id the descendants read back.
     pub async fn run_turn_controlled(
         &self,
         session_id: impl Into<String>,
-        mut input: ProviderInput,
+        input: ProviderInput,
         prompt: impl Into<String>,
         cancellation: CancellationToken,
         controls: TurnControlHandle,
     ) -> Result<TurnOutcome, EngineError> {
-        let prompt = prompt.into();
+        let session_id = session_id.into();
+        let model = input
+            .model_override
+            .clone()
+            .or_else(|| self.provider.model().map(ToOwned::to_owned));
+        agent_span(
+            AgentSpan {
+                model: model.as_deref(),
+                session_id: Some(&session_id),
+            },
+            self.run_traced_turn(
+                session_id.clone(),
+                input,
+                prompt.into(),
+                cancellation,
+                controls,
+            ),
+        )
+        .await
+    }
+
+    async fn run_traced_turn(
+        &self,
+        session_id: String,
+        mut input: ProviderInput,
+        prompt: String,
+        cancellation: CancellationToken,
+        controls: TurnControlHandle,
+    ) -> Result<TurnOutcome, EngineError> {
         let mut recorder =
             TurnRecorder::new(self.observer.as_ref(), session_id, input.turn_id.as_deref());
         let mut messages = input.messages.clone();
@@ -1145,11 +1200,76 @@ where
         })
     }
 
+    /// Streams one completion under the span that reports it. Reference opens
+    /// `model_call_span` inside its backend; here the turn opens it and the
+    /// backend fills in the HTTP status from inside, which is the same span
+    /// either way because the request is polled under it.
     async fn stream_completion(
         &self,
         recorder: &mut TurnRecorder<'_>,
         input: &ProviderInput,
         cancellation: &CancellationToken,
+    ) -> Result<StreamOutcome, EngineError> {
+        let descriptor = self
+            .provider
+            .call_descriptor()
+            .unwrap_or(ModelCallDescriptor {
+                provider_name: String::new(),
+                api_style: String::new(),
+                endpoint: String::new(),
+            });
+        let model = input
+            .model_override
+            .clone()
+            .or_else(|| self.provider.model().map(ToOwned::to_owned))
+            .unwrap_or_default();
+        let outcome = model_call_span(
+            ModelCallSpan {
+                provider_name: &descriptor.provider_name,
+                provider_api_style: &descriptor.api_style,
+                model: &model,
+                streaming: input.stream,
+                temperature: input
+                    .limits
+                    .temperature_millis
+                    .map(|thousandths| f64::from(thousandths) / 1000.0),
+                max_tokens: Some(i64::from(input.limits.max_tokens)),
+                session_id: None,
+                call_type: input.metadata.get("call_type").map(String::as_str),
+                message_id: input.metadata.get("message_id").map(String::as_str),
+                http_method: None,
+                http_url: Some(&descriptor.endpoint),
+            },
+            async {
+                match self
+                    .stream_traced_completion(recorder, input, cancellation, &model)
+                    .await
+                {
+                    // A backend that refused is a failing span and an answered
+                    // turn: the outcome the caller reads is unchanged, and the
+                    // span carries the refusal it would otherwise never see.
+                    Ok(StreamOutcome::Completed(Err(error))) => {
+                        Err(ModelCallFailure::Provider(error))
+                    }
+                    Ok(outcome) => Ok(outcome),
+                    Err(error) => Err(ModelCallFailure::Engine(error)),
+                }
+            },
+        )
+        .await;
+        match outcome {
+            Ok(outcome) => Ok(outcome),
+            Err(ModelCallFailure::Provider(error)) => Ok(StreamOutcome::Completed(Err(error))),
+            Err(ModelCallFailure::Engine(error)) => Err(error),
+        }
+    }
+
+    async fn stream_traced_completion(
+        &self,
+        recorder: &mut TurnRecorder<'_>,
+        input: &ProviderInput,
+        cancellation: &CancellationToken,
+        model: &str,
     ) -> Result<StreamOutcome, EngineError> {
         // Retries are reported while the request is still waiting: a client
         // renders the wait, so learning about it once the backend gave up would
@@ -1211,9 +1331,19 @@ where
                 ),
             )));
         }
-        Ok(StreamOutcome::Completed(
-            aggregate_provider_chunks(chunks, stream.correlation_id).map(Box::new),
-        ))
+        let aggregated = aggregate_provider_chunks(chunks, stream.correlation_id);
+        if let Ok(message) = &aggregated {
+            // Reference `set_model_call_usage` and
+            // `set_model_call_response_metadata`, both read off the answered
+            // response rather than off the request.
+            set_model_call_usage(message.usage.input_tokens, message.usage.output_tokens);
+            set_model_call_response_metadata(&serde_json::json!({
+                "model": model,
+                "id": message.correlation_id,
+                "choices": [{"finish_reason": message.stop_reason}],
+            }));
+        }
+        Ok(StreamOutcome::Completed(aggregated.map(Box::new)))
     }
 
     /// Compacts the transcript, whether a policy asked for it or an overflow
@@ -1332,13 +1462,28 @@ where
             });
             pending.push(
                 async move {
-                    (
-                        index,
-                        started,
-                        self.tools
-                            .execute_stream(&call.name, &call.arguments, output)
-                            .await,
+                    // Reference `_loop.py` opens `tool_span` around the
+                    // execution itself, so a tool that streams for a minute is
+                    // one span rather than a point in the parent's timeline.
+                    let result = tool_span(
+                        ToolSpan {
+                            tool_name: &call.name,
+                            call_id: &call.id,
+                            arguments: &call.arguments,
+                        },
+                        async {
+                            let result = self
+                                .tools
+                                .execute_stream(&call.name, &call.arguments, output)
+                                .await;
+                            if let Ok(output) = &result {
+                                set_tool_result(&output.model_text);
+                            }
+                            result
+                        },
                     )
+                    .await;
+                    (index, started, result)
                 }
                 .boxed(),
             );
@@ -1693,6 +1838,47 @@ pub enum EngineError {
     ControlStatePoisoned,
 }
 
+/// What one model call can fail with, so the span reads a refusal as a failure
+/// while the turn still reads it as an answer.
+#[derive(Debug, Error)]
+enum ModelCallFailure {
+    #[error(transparent)]
+    Provider(ProviderError),
+    #[error(transparent)]
+    Engine(EngineError),
+}
+
+impl TracedError for ModelCallFailure {
+    fn error_type(&self) -> &'static str {
+        match self {
+            Self::Provider(error) => error.error_type(),
+            Self::Engine(error) => error.error_type(),
+        }
+    }
+
+    fn backend_failure(&self) -> Option<BackendFailure> {
+        match self {
+            Self::Provider(error) => error.backend_failure(),
+            Self::Engine(error) => error.backend_failure(),
+        }
+    }
+}
+
+impl TracedError for EngineError {
+    fn error_type(&self) -> &'static str {
+        "EngineError"
+    }
+
+    /// Reference `_backend_error_from` walks the cause chain; the only cause a
+    /// turn failure carries here is the provider error it wraps.
+    fn backend_failure(&self) -> Option<BackendFailure> {
+        match self {
+            Self::Provider(error) => error.backend_failure(),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, VecDeque};
@@ -1971,6 +2157,158 @@ mod tests {
                 })
                 .collect::<Vec<_>>(),
             ["provider answered HTTP 503"]
+        );
+    }
+
+    /// US-016: the turn is one agent span, every model call and tool call the
+    /// turn made hangs off it, the usage the aggregation read reaches the model
+    /// call span, and the conversation id the turn published reaches the tool
+    /// call. Reference `_loop.py` opens `agent_span` around the run loop and
+    /// `tool_span` around each execution.
+    #[tokio::test]
+    async fn a_turn_hangs_every_call_off_one_agent_span() {
+        let _exclusive = crate::tracing::harness::exclusive();
+        let harness = crate::tracing::harness::Harness::install();
+        let provider = ScriptedProvider::new([
+            Ok(completion(
+                "",
+                vec![ModelToolCall {
+                    id: "call-1".to_owned(),
+                    name: "read".to_owned(),
+                    arguments: "{}".to_owned(),
+                }],
+            )),
+            Ok(completion("done", Vec::new())),
+        ]);
+        let mut input = provider_input();
+        input.model_override = Some("model-1".to_owned());
+        let outcome = ConversationEngine::new(provider)
+            .with_tools(FakeTools)
+            .run_turn("session-1", input, "hello", CancellationToken::default())
+            .await
+            .expect("turn completes");
+        assert_eq!(outcome.stop_reason, TurnStopReason::Complete);
+        let drained = harness.drain();
+        drop(harness);
+        // The provider is global, so a test running beside this one exports
+        // into the same collector. This turn is one trace, and the trace is
+        // what tells its spans apart from everyone else's.
+        let trace = drained
+            .iter()
+            .find(|span| {
+                span.name == "invoke_agent mistral-vibe"
+                    && span.attributes.iter().any(|attribute| {
+                        attribute.key.as_str() == "gen_ai.request.model"
+                            && attribute.value.as_str() == "model-1"
+                    })
+            })
+            .map(|span| span.span_context.trace_id())
+            .expect("the turn opened an agent span");
+        let spans = drained
+            .iter()
+            .filter(|span| span.span_context.trace_id() == trace)
+            .collect::<Vec<_>>();
+
+        let agents = spans
+            .iter()
+            .filter(|span| span.name == "invoke_agent mistral-vibe")
+            .copied()
+            .collect::<Vec<_>>();
+        assert_eq!(agents.len(), 1, "one turn is one agent span");
+        let parent = agents[0].span_context.span_id();
+        let attribute = |span: &opentelemetry_sdk::trace::SpanData, key: &str| {
+            span.attributes
+                .iter()
+                .find(|attribute| attribute.key.as_str() == key)
+                .map(|attribute| attribute.value.to_string())
+        };
+        assert_eq!(
+            attribute(agents[0], "gen_ai.request.model"),
+            Some("model-1".to_owned())
+        );
+
+        let calls = spans
+            .iter()
+            .filter(|span| span.name.starts_with("chat "))
+            .copied()
+            .collect::<Vec<_>>();
+        assert_eq!(calls.len(), 2, "both cycles opened a model call span");
+        for call in &calls {
+            assert_eq!(
+                call.parent_span_id, parent,
+                "every model call is a descendant"
+            );
+            assert_eq!(
+                attribute(call, "gen_ai.usage.input_tokens"),
+                Some("2".to_owned()),
+                "the usage the aggregation read reached the span it ran under"
+            );
+            assert_eq!(
+                attribute(call, "gen_ai.response.finish_reasons"),
+                Some("[\"stop\"]".to_owned())
+            );
+        }
+
+        let tools = spans
+            .iter()
+            .filter(|span| span.name == "execute_tool read")
+            .copied()
+            .collect::<Vec<_>>();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].parent_span_id, parent);
+        assert_eq!(
+            attribute(tools[0], "gen_ai.conversation.id"),
+            Some("session-1".to_owned()),
+            "the tool call read the conversation id out of the turn's baggage"
+        );
+        assert_eq!(
+            attribute(tools[0], "gen_ai.tool.call.id"),
+            Some("call-1".to_owned())
+        );
+    }
+
+    /// US-016: a cancelled turn leaves no span open and closes the agent span
+    /// the way the reference closes it. Reference `_conversation_loop` returns
+    /// normally on a user cancellation (`_loop.py:1668`), so `_safe_span` reads
+    /// no exception and sets `OK`; only a cancellation that unwinds the turn
+    /// leaves the status unset, because `_safe_span` decides a status for an
+    /// `Exception` and nothing else.
+    #[tokio::test]
+    async fn a_cancelled_turn_closes_its_agent_span() {
+        let _exclusive = crate::tracing::harness::exclusive();
+        let harness = crate::tracing::harness::Harness::install();
+        let cancellation = CancellationToken::default();
+        cancellation.cancel();
+        let outcome = ConversationEngine::new(ScriptedProvider::new([Ok(completion(
+            "unreached",
+            Vec::new(),
+        ))]))
+        .run_turn("session-cancelled", provider_input(), "hello", cancellation)
+        .await
+        .expect("cancellation is an outcome");
+        assert_eq!(outcome.stop_reason, TurnStopReason::Cancelled);
+        let spans = harness.drain();
+        drop(harness);
+        let agent = spans
+            .iter()
+            .filter(|span| {
+                span.name == "invoke_agent mistral-vibe"
+                    && span.attributes.iter().any(|attribute| {
+                        attribute.key.as_str() == "gen_ai.conversation.id"
+                            && attribute.value.as_str() == "session-cancelled"
+                    })
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(agent.len(), 1, "the turn closed exactly one agent span");
+        assert_eq!(agent[0].status, opentelemetry::trace::Status::Ok);
+        let trace = agent[0].span_context.trace_id();
+        let opened = spans
+            .iter()
+            .filter(|span| span.span_context.trace_id() == trace)
+            .count();
+        assert_eq!(
+            opened, 1,
+            "a cancelled turn opened no model call and no tool call"
         );
     }
 

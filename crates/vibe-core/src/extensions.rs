@@ -345,6 +345,19 @@ pub enum HookKind {
     PostAgent,
 }
 
+impl HookKind {
+    /// The kind as a hook file writes it, which is also what a hook span names
+    /// itself after. Reference `hook_span(hook_type=...)`.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::PreTool => "pre_tool",
+            Self::PostTool => "post_tool",
+            Self::PostAgent => "post_agent",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HookSpec {
@@ -1012,14 +1025,29 @@ impl HookManager {
                         .is_some_and(|name| matches_wildcard(matcher, name))
                 })
         }) {
-            let mut attempt = 0_u8;
-            let execution = loop {
-                let result = execute_hook(&hook, &invocation, &self.working_directory).await;
-                if result.is_ok() || attempt >= hook.retries {
-                    break result;
-                }
-                attempt = attempt.saturating_add(1);
-            };
+            // Reference `hooks/manager.py` opens `hook_span` around the whole
+            // run of one hook, retries included, so a hook that succeeded on
+            // its second attempt is one span rather than two.
+            let execution = crate::tracing::hook_span(
+                crate::tracing::HookSpan {
+                    hook_name: &hook.name,
+                    hook_type: hook.kind.label(),
+                    tool_name: invocation.tool_name.as_deref(),
+                    tool_call_id: invocation.tool_call_id.as_deref(),
+                },
+                async {
+                    let mut attempt = 0_u8;
+                    loop {
+                        let result =
+                            execute_hook(&hook, &invocation, &self.working_directory).await;
+                        if result.is_ok() || attempt >= hook.retries {
+                            break result;
+                        }
+                        attempt = attempt.saturating_add(1);
+                    }
+                },
+            )
+            .await;
             match execution {
                 Ok(response) => {
                     if let Some(message) = response.system_message {
@@ -1064,6 +1092,12 @@ impl HookManager {
             denied,
             notices,
         })
+    }
+}
+
+impl crate::tracing::TracedError for ExtensionError {
+    fn error_type(&self) -> &'static str {
+        "ExtensionError"
     }
 }
 
@@ -2053,6 +2087,70 @@ mod tests {
         assert!(result.denied.is_none());
     }
 
+    /// US-016: one hook run is one span, named after the kind and the hook and
+    /// carrying the tool it guards. Reference `hooks/manager.py` opens
+    /// `hook_span` around the run, so a chain of two hooks is two spans.
+    #[tokio::test]
+    async fn every_hook_run_opens_its_own_span() {
+        let _exclusive = crate::tracing::harness::exclusive();
+        let harness = crate::tracing::harness::Harness::install();
+        let temporary = tempfile::tempdir().expect("temporary root");
+        #[cfg(unix)]
+        let (program, args) = (
+            PathBuf::from("/bin/sh"),
+            vec![
+                "-c".to_owned(),
+                "printf '%s' '{\"decision\":\"allow\"}'".to_owned(),
+            ],
+        );
+        #[cfg(windows)]
+        let (program, args) = (
+            PathBuf::from("cmd.exe"),
+            vec!["/C".to_owned(), "echo {\"decision\":\"allow\"}".to_owned()],
+        );
+        let manager = HookManager::new(
+            vec![HookSpec {
+                name: "guard".to_owned(),
+                kind: HookKind::PreTool,
+                program,
+                args,
+                matcher: Some("read_*".to_owned()),
+                timeout_ms: 30_000,
+                retries: 0,
+                strict: false,
+                source: ExtensionSource::User,
+            }],
+            temporary.path().to_path_buf(),
+        );
+        manager
+            .run(HookInvocation {
+                kind: HookKind::PreTool,
+                session_id: "session".to_owned(),
+                parent_session_id: None,
+                tool_name: Some("read_file".to_owned()),
+                tool_call_id: Some("call".to_owned()),
+                payload: json!({}),
+                output_text: String::new(),
+            })
+            .await
+            .expect("hook chain completes");
+        let spans = harness.drain();
+        drop(harness);
+        let span = spans
+            .iter()
+            .find(|span| span.name == "hook pre_tool guard")
+            .expect("the hook run opened a span");
+        let attribute = |key: &str| {
+            span.attributes
+                .iter()
+                .find(|attribute| attribute.key.as_str() == key)
+                .map(|attribute| attribute.value.to_string())
+        };
+        assert_eq!(attribute("vibe.hook.type"), Some("pre_tool".to_owned()));
+        assert_eq!(attribute("gen_ai.tool.name"), Some("read_file".to_owned()));
+        assert_eq!(attribute("gen_ai.tool.call.id"), Some("call".to_owned()));
+    }
+
     struct FakeSubagent;
 
     impl SubagentRunner for FakeSubagent {
@@ -2063,6 +2161,93 @@ mod tests {
         ) -> SubagentFuture<'a> {
             Box::pin(async move { Ok(format!("{}:{}", context.agent.name, context.prompt)) })
         }
+    }
+
+    /// A subagent that opens the span its own turn would open, which is what
+    /// makes the delegation path itself measurable.
+    struct TracingSubagent;
+
+    impl SubagentRunner for TracingSubagent {
+        fn run<'a>(
+            &'a self,
+            context: ChildContext,
+            _cancellation: CancellationToken,
+        ) -> SubagentFuture<'a> {
+            Box::pin(async move {
+                let outcome: Result<(), String> = crate::tracing::agent_span(
+                    crate::tracing::AgentSpan {
+                        model: None,
+                        session_id: Some(&context.child_session_id),
+                    },
+                    async { Ok(()) },
+                )
+                .await;
+                outcome.map(|()| "delegated".to_owned())
+            })
+        }
+    }
+
+    /// US-016: a delegation is awaited inside the tool span that asked for it,
+    /// so the child's own agent span hangs off that span rather than opening a
+    /// second trace, and it publishes the child conversation id the way
+    /// reference `_loop.py` does, one `agent_span` per loop.
+    #[tokio::test]
+    async fn a_delegated_turn_hangs_off_the_tool_span_that_asked_for_it() {
+        let _exclusive = crate::tracing::harness::exclusive();
+        let harness = crate::tracing::harness::Harness::install();
+        let temporary = tempfile::tempdir().expect("temporary sessions");
+        let store = SessionStore::new(temporary.path());
+        store
+            .create("parent", "/workspace", None, 1)
+            .expect("parent session");
+        let manager = SubagentManager::new(store, Arc::new(TracingSubagent));
+        let effect = crate::tracing::tool_span(
+            crate::tracing::ToolSpan {
+                tool_name: "task",
+                call_id: "call",
+                arguments: "{}",
+            },
+            async {
+                manager
+                    .delegate(
+                        DelegationRequest {
+                            parent_session_id: "parent".to_owned(),
+                            agent: builtin_agent("explore", AgentKind::Subagent),
+                            prompt: "inspect".to_owned(),
+                            logging: ChildLoggingPolicy::SummaryOnly,
+                        },
+                        10,
+                    )
+                    .await
+            },
+        )
+        .await
+        .expect("delegation completes");
+        let spans = harness.drain();
+        drop(harness);
+        let tool = spans
+            .iter()
+            .find(|span| span.name == "execute_tool task")
+            .expect("the delegating tool span was exported");
+        let child = spans
+            .iter()
+            .find(|span| span.name == "invoke_agent mistral-vibe")
+            .expect("the delegated turn opened its own agent span");
+        assert_eq!(
+            child.span_context.trace_id(),
+            tool.span_context.trace_id(),
+            "the delegated turn stays inside the trace that asked for it"
+        );
+        assert_eq!(child.parent_span_id, tool.span_context.span_id());
+        assert_eq!(
+            child
+                .attributes
+                .iter()
+                .find(|attribute| attribute.key.as_str() == "gen_ai.conversation.id")
+                .map(|attribute| attribute.value.to_string()),
+            Some(effect.child_session_id),
+            "the child publishes its own conversation id, as the reference does"
+        );
     }
 
     struct HangingSubagent {

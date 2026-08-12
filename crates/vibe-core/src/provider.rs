@@ -172,6 +172,22 @@ pub enum ProviderStyle {
 }
 
 impl ProviderStyle {
+    /// The style as it is written in a configuration document, which is also
+    /// what a model call span reports as the provider it addressed: this port
+    /// builds a backend from a style rather than from a provider entry, so the
+    /// style is the only identity the request carries.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Mistral => "mistral",
+            Self::Openai => "openai",
+            Self::Reasoning => "reasoning",
+            Self::OpenaiResponses => "openai-responses",
+            Self::Anthropic => "anthropic",
+            Self::VertexAnthropic => "vertex-anthropic",
+        }
+    }
+
     pub fn parse(value: &str) -> Result<Self, ProviderError> {
         match value {
             "mistral" => Ok(Self::Mistral),
@@ -346,6 +362,16 @@ where
         &self.model
     }
 
+    /// What the model call span this request runs under reports about it.
+    #[must_use]
+    pub fn call_descriptor(&self) -> ModelCallDescriptor {
+        ModelCallDescriptor {
+            provider_name: self.style.label().to_owned(),
+            api_style: self.style.label().to_owned(),
+            endpoint: self.endpoint.clone(),
+        }
+    }
+
     #[must_use]
     pub fn with_retry_policy(mut self, retry: RetryPolicy) -> Self {
         self.retry = retry;
@@ -472,6 +498,10 @@ where
         &self,
         response: WireStreamResponse,
     ) -> Result<ProviderStream, ProviderError> {
+        // The status reaches the span the turn opened, on the refusing paths as
+        // much as on the answering one, which is where the reference sets it
+        // too. With no provider installed the setter is a no-op.
+        crate::tracing::set_model_call_http_status(response.status);
         if response.status == 401 || response.status == 403 {
             return Err(ProviderError::Authentication {
                 status: response.status,
@@ -649,6 +679,17 @@ pub struct Usage {
     pub output_tokens: u64,
 }
 
+/// What a backend reports about the request it makes, which is what a model
+/// call span carries beyond what the turn itself knows. Reference
+/// `GenericBackend._model_call_span`, whose provider name, API style and URL
+/// come from the provider entry rather than from the turn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelCallDescriptor {
+    pub provider_name: String,
+    pub api_style: String,
+    pub endpoint: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AssistantMessage {
@@ -695,6 +736,30 @@ pub enum ProviderError {
     MissingUsage,
     #[error("provider response was refused: {0}")]
     Refusal(String),
+}
+
+impl crate::tracing::TracedError for ProviderError {
+    fn error_type(&self) -> &'static str {
+        "ProviderError"
+    }
+
+    /// Reference `_backend_error_from`: the HTTP failures are this port's
+    /// `BackendError`, and everything else is a local failure the span records
+    /// as an exception. The provider is left for the span to fill in, which is
+    /// the one that knows which backend it addressed.
+    fn backend_failure(&self) -> Option<crate::tracing::BackendFailure> {
+        let status = match self {
+            Self::Authentication { status }
+            | Self::HttpStatus { status }
+            | Self::RetryExhausted { status } => Some(i64::from(*status)),
+            Self::ContextOverflow => Some(413),
+            _ => return None,
+        };
+        Some(crate::tracing::BackendFailure {
+            provider: None,
+            status,
+        })
+    }
 }
 
 fn build_chat_request(
@@ -1837,6 +1902,56 @@ mod tests {
         assert_eq!(message.usage.output_tokens, 7);
         assert_eq!(message.stop_reason, "tool_calls");
         assert_eq!(message.correlation_id.as_deref(), Some("request-1"));
+    }
+
+    /// US-016: the backend reports the status it was answered with to the span
+    /// the turn opened around the call, on the refusing path as much as on the
+    /// answering one. Reference sets it from inside its own `model_call_span`;
+    /// here the span is one layer up and the request is polled under it, which
+    /// is what makes the active-span setter reach the right span.
+    #[tokio::test]
+    async fn a_request_reports_its_status_to_the_span_it_runs_under() {
+        let _exclusive = crate::tracing::harness::exclusive();
+        let harness = crate::tracing::harness::Harness::install();
+        for (status, expected) in [(200_u16, "200"), (401, "401")] {
+            let response = WireResponse {
+                status,
+                headers: BTreeMap::new(),
+                chunks: vec![
+                    br#"data: {"choices":[{"delta":{"content":"answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":4,"completion_tokens":7}}"#
+                        .to_vec(),
+                ],
+            };
+            let backend = backend(ProviderStyle::Openai, response);
+            let descriptor = backend.call_descriptor();
+            let _: Result<(), ProviderError> = crate::tracing::model_call_span(
+                crate::tracing::ModelCallSpan {
+                    provider_name: &descriptor.provider_name,
+                    provider_api_style: &descriptor.api_style,
+                    model: "test-model",
+                    http_url: Some(&descriptor.endpoint),
+                    ..crate::tracing::ModelCallSpan::default()
+                },
+                async {
+                    backend.complete(&input()).await?;
+                    Ok(())
+                },
+            )
+            .await;
+            let spans = harness.drain();
+            let span = spans
+                .iter()
+                .find(|span| span.name == "chat test-model")
+                .expect("the model call span was exported");
+            assert_eq!(
+                span.attributes
+                    .iter()
+                    .find(|attribute| attribute.key.as_str() == "http.response.status_code")
+                    .map(|attribute| attribute.value.to_string()),
+                Some(expected.to_owned()),
+                "the status the backend was answered with reached the span"
+            );
+        }
     }
 
     #[tokio::test]
