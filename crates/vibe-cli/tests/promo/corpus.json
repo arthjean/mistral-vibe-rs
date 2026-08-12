@@ -1,0 +1,299 @@
+{
+  "note": "VS Code promo corpus: the ceiling, the start instant, the predicate, and what the pinned reference's filesystem repository reads back out of each cache.toml document. The two reference sentences are committed as a byte length and a SHA-256 because NOTICE forbids shipping reference-authored prose; the replay asserts this port's own sentences never match either digest. Regenerate with scripts/parity/experiments.py --corpus when the pinned reference moves.",
+  "promoConstants": [
+    {
+      "id": "maxShownCount",
+      "value": 10
+    },
+    {
+      "id": "promoStart",
+      "value": "2026-05-28T16:00:00+00:00"
+    },
+    {
+      "id": "promoStartEpochSeconds",
+      "value": 1779984000
+    },
+    {
+      "id": "cacheSection",
+      "value": "vscode_extension_promo"
+    },
+    {
+      "id": "cacheFile",
+      "value": "cache.toml"
+    },
+    {
+      "id": "extensionUri",
+      "value": "vscode:extension/mistralai.mistral-vibe-code"
+    },
+    {
+      "id": "linkLabel",
+      "value": "VS Code extension"
+    }
+  ],
+  "promoPredicate": [
+    {
+      "id": "absent/a-day-before-the-start",
+      "instant": "2026-05-27T16:00:00+00:00",
+      "show": false,
+      "shownCount": null
+    },
+    {
+      "id": "absent/a-second-before-the-start",
+      "instant": "2026-05-28T15:59:59+00:00",
+      "show": false,
+      "shownCount": null
+    },
+    {
+      "id": "absent/exactly-at-the-start",
+      "instant": "2026-05-28T16:00:00+00:00",
+      "show": true,
+      "shownCount": null
+    },
+    {
+      "id": "absent/a-second-after-the-start",
+      "instant": "2026-05-28T16:00:01+00:00",
+      "show": true,
+      "shownCount": null
+    },
+    {
+      "id": "absent/long-after-the-start",
+      "instant": "2027-01-01T00:00:00+00:00",
+      "show": true,
+      "shownCount": null
+    },
+    {
+      "id": "zero/a-day-before-the-start",
+      "instant": "2026-05-27T16:00:00+00:00",
+      "show": false,
+      "shownCount": 0
+    },
+    {
+      "id": "zero/a-second-before-the-start",
+      "instant": "2026-05-28T15:59:59+00:00",
+      "show": false,
+      "shownCount": 0
+    },
+    {
+      "id": "zero/exactly-at-the-start",
+      "instant": "2026-05-28T16:00:00+00:00",
+      "show": true,
+      "shownCount": 0
+    },
+    {
+      "id": "zero/a-second-after-the-start",
+      "instant": "2026-05-28T16:00:01+00:00",
+      "show": true,
+      "shownCount": 0
+    },
+    {
+      "id": "zero/long-after-the-start",
+      "instant": "2027-01-01T00:00:00+00:00",
+      "show": true,
+      "shownCount": 0
+    },
+    {
+      "id": "one-below-the-ceiling/a-day-before-the-start",
+      "instant": "2026-05-27T16:00:00+00:00",
+      "show": false,
+      "shownCount": 9
+    },
+    {
+      "id": "one-below-the-ceiling/a-second-before-the-start",
+      "instant": "2026-05-28T15:59:59+00:00",
+      "show": false,
+      "shownCount": 9
+    },
+    {
+      "id": "one-below-the-ceiling/exactly-at-the-start",
+      "instant": "2026-05-28T16:00:00+00:00",
+      "show": true,
+      "shownCount": 9
+    },
+    {
+      "id": "one-below-the-ceiling/a-second-after-the-start",
+      "instant": "2026-05-28T16:00:01+00:00",
+      "show": true,
+      "shownCount": 9
+    },
+    {
+      "id": "one-below-the-ceiling/long-after-the-start",
+      "instant": "2027-01-01T00:00:00+00:00",
+      "show": true,
+      "shownCount": 9
+    },
+    {
+      "id": "at-the-ceiling/a-day-before-the-start",
+      "instant": "2026-05-27T16:00:00+00:00",
+      "show": false,
+      "shownCount": 10
+    },
+    {
+      "id": "at-the-ceiling/a-second-before-the-start",
+      "instant": "2026-05-28T15:59:59+00:00",
+      "show": false,
+      "shownCount": 10
+    },
+    {
+      "id": "at-the-ceiling/exactly-at-the-start",
+      "instant": "2026-05-28T16:00:00+00:00",
+      "show": false,
+      "shownCount": 10
+    },
+    {
+      "id": "at-the-ceiling/a-second-after-the-start",
+      "instant": "2026-05-28T16:00:01+00:00",
+      "show": false,
+      "shownCount": 10
+    },
+    {
+      "id": "at-the-ceiling/long-after-the-start",
+      "instant": "2027-01-01T00:00:00+00:00",
+      "show": false,
+      "shownCount": 10
+    },
+    {
+      "id": "above-the-ceiling/a-day-before-the-start",
+      "instant": "2026-05-27T16:00:00+00:00",
+      "show": false,
+      "shownCount": 11
+    },
+    {
+      "id": "above-the-ceiling/a-second-before-the-start",
+      "instant": "2026-05-28T15:59:59+00:00",
+      "show": false,
+      "shownCount": 11
+    },
+    {
+      "id": "above-the-ceiling/exactly-at-the-start",
+      "instant": "2026-05-28T16:00:00+00:00",
+      "show": false,
+      "shownCount": 11
+    },
+    {
+      "id": "above-the-ceiling/a-second-after-the-start",
+      "instant": "2026-05-28T16:00:01+00:00",
+      "show": false,
+      "shownCount": 11
+    },
+    {
+      "id": "above-the-ceiling/long-after-the-start",
+      "instant": "2027-01-01T00:00:00+00:00",
+      "show": false,
+      "shownCount": 11
+    }
+  ],
+  "promoProse": [
+    {
+      "digest": "5fe42f817a799174b4bef12727ccf50041189254040830449355e9e8a6ade28f",
+      "id": "standalone",
+      "length": 109
+    },
+    {
+      "digest": "9c823188bdfe26a0ca95ad0ea21ffdd5fffee837bc667c6a07f2c0e3c565c840",
+      "id": "whatsNewSuffix",
+      "length": 108
+    }
+  ],
+  "promoState": [
+    {
+      "document": null,
+      "documentAfterWrite": null,
+      "id": "no-cache-file",
+      "shownCount": null
+    },
+    {
+      "document": "",
+      "documentAfterWrite": null,
+      "id": "empty-cache-file",
+      "shownCount": null
+    },
+    {
+      "document": "[update_cache]\nlatest_version = \"1.0.0\"\n",
+      "documentAfterWrite": null,
+      "id": "section-absent",
+      "shownCount": null
+    },
+    {
+      "document": "[vscode_extension_promo]\n",
+      "documentAfterWrite": null,
+      "id": "empty-section",
+      "shownCount": null
+    },
+    {
+      "document": "[vscode_extension_promo]\nshown_count = 4\n",
+      "documentAfterWrite": null,
+      "id": "valid-count",
+      "shownCount": 4
+    },
+    {
+      "document": "[vscode_extension_promo]\nshown_count = 0\n",
+      "documentAfterWrite": null,
+      "id": "zero-count",
+      "shownCount": 0
+    },
+    {
+      "document": "[vscode_extension_promo]\nshown_count = \"4\"\n",
+      "documentAfterWrite": null,
+      "id": "count-is-a-string",
+      "shownCount": null
+    },
+    {
+      "document": "[vscode_extension_promo]\nshown_count = 4.0\n",
+      "documentAfterWrite": null,
+      "id": "count-is-a-float",
+      "shownCount": null
+    },
+    {
+      "document": "[vscode_extension_promo]\nshown_count = true\n",
+      "documentAfterWrite": null,
+      "id": "count-is-a-boolean",
+      "shownCount": true
+    },
+    {
+      "document": "[vscode_extension_promo]\nshown_count = -1\n",
+      "documentAfterWrite": null,
+      "id": "count-is-negative",
+      "shownCount": -1
+    },
+    {
+      "document": "[vscode_extension_promo\nshown_count = 4\n",
+      "documentAfterWrite": null,
+      "id": "malformed-toml",
+      "shownCount": null
+    },
+    {
+      "document": "[vscode_extension_promo]\nunrelated = 1\nshown_count = 6\n",
+      "documentAfterWrite": null,
+      "id": "other-keys-in-the-section",
+      "shownCount": 6
+    },
+    {
+      "document": "[update_cache]\nlatest_version = \"1.2.3\"\nstored_at_timestamp = 42\n",
+      "documentAfterWrite": {
+        "update_cache": {
+          "latest_version": "1.2.3",
+          "stored_at_timestamp": 42
+        },
+        "vscode_extension_promo": {
+          "shown_count": 3
+        }
+      },
+      "id": "write-preserves-siblings",
+      "shownCount": 3
+    },
+    {
+      "document": null,
+      "documentAfterWrite": {
+        "vscode_extension_promo": {
+          "shown_count": 2
+        }
+      },
+      "id": "write-creates-the-file",
+      "shownCount": 2
+    }
+  ],
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+  },
+  "schemaVersion": 1
+}
