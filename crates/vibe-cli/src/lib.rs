@@ -31,6 +31,7 @@ use vibe_app_server::release3::Release3Service;
 use vibe_app_server::server::AppServer;
 use vibe_core::auth::KeyringStore;
 use vibe_core::mcp::SamplingHandler;
+use vibe_core::observability::{self, init_file_logging};
 use vibe_core::telemetry::{
     LaunchContext, ReqwestTelemetryTransport, TelemetryClient, TelemetryConfig,
     TelemetryConfigGetter, TelemetryContext, TelemetryEventObserver, TelemetryRecord,
@@ -760,6 +761,26 @@ fn telemetry_credentials(
     move |name| vibe_core::auth::resolve_api_key(name, &environment, &store)
 }
 
+/// Opens the log file this process writes to, at the reference path under the
+/// home the invocation resolves.
+///
+/// Reference initializes file logging in its entrypoint before anything else
+/// runs, so a failure that happens before the app server attaches still leaves
+/// a line on disk. The degradation is reported once and the binary starts
+/// anyway: an operator who cannot write a log still gets a session.
+pub fn install_file_logging(arguments: &Arguments) {
+    let working_directory = arguments
+        .workdir
+        .clone()
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("."));
+    let home = tui::startup::vibe_home_directory(arguments, &working_directory);
+    let path = home.join("logs").join("vibe.log");
+    if let Err(error) = init_file_logging(&path, &|name| std::env::var(name).ok()) {
+        eprintln!("Logging to {} is unavailable: {error}", path.display());
+    }
+}
+
 /// Installs the span exporter this process exports through, when the merged
 /// configuration asks for one.
 ///
@@ -781,18 +802,28 @@ pub fn install_tracing(arguments: &Arguments) -> Option<TracingGuard> {
     match setup {
         TracingSetup::Installed(guard) => Some(guard),
         TracingSetup::UnusableEndpoint { endpoint } => {
-            eprintln!(
+            report_degradation(&format!(
                 "OTEL tracing is enabled but `{endpoint}` is not a usable collector; skipping."
-            );
+            ));
             None
         }
         TracingSetup::MissingCredential { variable } => {
             // Reference logs the same warning and starts anyway.
-            eprintln!("OTEL tracing is enabled but {variable} is not set; skipping.");
+            report_degradation(&format!(
+                "OTEL tracing is enabled but {variable} is not set; skipping."
+            ));
             None
         }
         TracingSetup::Disabled => None,
     }
+}
+
+/// A startup degradation, told to the operator on the terminal and left on disk
+/// for the one who reads the log afterward. Reference warns through the same
+/// logger the file handler is attached to.
+fn report_degradation(message: &str) {
+    eprintln!("{message}");
+    observability::log(observability::LogLevel::Warning, message);
 }
 
 /// The observer every engine event reaches.
@@ -897,6 +928,42 @@ mod tests {
             session_root: None,
             fake_response: Some("world".to_owned()),
         }
+    }
+
+    /// US-017: the binary opens the reference path under the home the
+    /// invocation resolves, before anything else can fail, and a second call
+    /// attaches nothing new. The installation is process-wide, so this is the
+    /// one test that owns it.
+    #[test]
+    fn the_binary_opens_the_log_file_under_the_home_it_resolves() {
+        let enclosure = tempfile::tempdir().expect("a home enclosure");
+        let home = enclosure.path().join(".vibe");
+        let mut invocation = arguments(OutputMode::Text);
+        invocation.session_root = Some(home.join("sessions"));
+        install_file_logging(&invocation);
+
+        let installed = observability::installed_log().expect("a log file is installed");
+        assert_eq!(installed.path(), home.join("logs").join("vibe.log"));
+        assert!(installed.path().is_file(), "the file opens at startup");
+
+        observability::log(observability::LogLevel::Critical, "the oracle was here");
+        let page = installed.reader().get_logs(10, 0);
+        assert_eq!(
+            page.entries
+                .first()
+                .map(|entry| entry.message.clone())
+                .unwrap_or_default(),
+            "the oracle was here",
+            "a record written through the installed logger reads back"
+        );
+
+        // A second initialization attaches nothing: the file stays the one
+        // already open, which is the guard the reference keeps per path.
+        install_file_logging(&invocation);
+        assert_eq!(
+            observability::installed_log().map(observability::FileLog::path),
+            Some(home.join("logs").join("vibe.log").as_path())
+        );
     }
 
     #[test]

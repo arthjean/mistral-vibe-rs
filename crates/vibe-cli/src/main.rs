@@ -27,6 +27,9 @@ async fn main() -> ExitCode {
         };
     }
     let arguments = Arguments::parse();
+    // The log file opens before anything else can fail, so a startup that dies
+    // before the app server attaches still leaves a line behind.
+    vibe_cli::install_file_logging(&arguments);
     // The span exporter is installed before any turn can open a span, and its
     // guard lives as long as the process: dropping it flushes the batch.
     let _tracing = vibe_cli::install_tracing(&arguments);
