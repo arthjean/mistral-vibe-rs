@@ -28,6 +28,8 @@ mod path_normalization;
 mod path_resources;
 pub mod pickers;
 mod plan_review;
+#[cfg(test)]
+mod promo_parity_tests;
 mod prompt;
 mod queue;
 mod remote_project_workflow;
