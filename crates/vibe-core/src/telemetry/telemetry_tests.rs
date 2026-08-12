@@ -333,6 +333,82 @@ fn authored_labels_are_validated_and_client_properties_are_not() {
     );
 }
 
+/// Reference `TelemetryClient.send_telemetry_event` reached through
+/// `telemetry/record`: the census travels under the client's own properties,
+/// the client's keys win, nothing it recorded is rewritten, and the correlation
+/// it asked for is the turn that made the last request.
+#[tokio::test]
+async fn a_client_recorded_event_carries_the_census_under_its_own_properties() {
+    let observer = TelemetryEventObserver::new(
+        TelemetryClient::new(
+            getter(mistral_document(true)),
+            RecordingTransport::default(),
+        ),
+        context(),
+    );
+    observer
+        .observe(&request_event())
+        .expect("the request event");
+    let mut properties = Map::new();
+    properties.insert("rating".to_owned(), json!(4));
+    // A value the label validators would refuse on an event this port authors.
+    properties.insert("note".to_owned(), json!("/home/arthur/private.rs\nsecond"));
+    // A census key the client overrides, which the reference lets it do.
+    properties.insert("version".to_owned(), json!("client-authored"));
+    observer.record_client_event(
+        "vibe.user_rating_feedback",
+        properties.clone(),
+        Some("oracle-session"),
+        true,
+    );
+    observer.flush().await;
+
+    let sent = observer
+        .client
+        .transport
+        .sent
+        .lock()
+        .expect("the recorded deliveries")
+        .clone();
+    let (_, _, envelope) = sent.last().expect("the client event was delivered").clone();
+    assert_eq!(envelope.event, "vibe.user_rating_feedback");
+    assert_eq!(
+        envelope.correlation_id.as_deref(),
+        Some("oracle-turn"),
+        "a correlated event points at the turn that made the last request"
+    );
+    for (key, value) in properties {
+        assert_eq!(
+            envelope.properties.get(&key),
+            Some(&value),
+            "`{key}` travels as the client recorded it"
+        );
+    }
+    assert_eq!(
+        envelope.properties.get("session_id"),
+        Some(&json!("oracle-session")),
+        "the census travels underneath"
+    );
+    assert_eq!(
+        envelope.properties.get("client_name"),
+        Some(&json!("oracle-client"))
+    );
+
+    // A rating the client did not correlate carries no identifier.
+    observer.record_client_event("vibe.at_mention_inserted", Map::new(), None, false);
+    observer.flush().await;
+    let sent = observer
+        .client
+        .transport
+        .sent
+        .lock()
+        .expect("the recorded deliveries")
+        .clone();
+    let (_, _, envelope) = sent.last().expect("the second client event").clone();
+    assert_eq!(envelope.correlation_id, None);
+    assert_eq!(envelope.properties.get("session_id"), None);
+}
+
 /// An observer reached from outside a runtime drops the delivery rather than
 /// failing the path that produced the event.
 #[test]

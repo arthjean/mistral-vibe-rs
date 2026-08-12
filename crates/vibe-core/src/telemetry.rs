@@ -1210,6 +1210,42 @@ struct PendingToolCall {
     arguments: Value,
 }
 
+/// Where an event a client authored is handed to, so a wire dispatch can ship
+/// one without holding a transport of its own.
+///
+/// Reference `TelemetryResource.record`, whose `telemetry/record` request the
+/// app server hands to the agent loop's own telemetry client
+/// (`vibe/app_server/_resources.py:488-499`). The name and the properties are
+/// the client's, so neither is rewritten here: only the census is merged
+/// underneath them, and the caller's keys win. The reference validates nothing
+/// on this path either, which is why the label validators this port applies to
+/// its own events are absent from it, asserted by
+/// `authored_labels_are_validated_and_client_properties_are_not`.
+pub trait ClientTelemetry: Send + Sync {
+    fn record_client_event(
+        &self,
+        name: &str,
+        properties: Map<String, Value>,
+        session_id: Option<&str>,
+        correlate_last_request: bool,
+    );
+}
+
+/// The sink a server with no telemetry client installed answers with, which
+/// keeps `telemetry/record` answering empty rather than failing.
+pub struct NoClientTelemetry;
+
+impl ClientTelemetry for NoClientTelemetry {
+    fn record_client_event(
+        &self,
+        _name: &str,
+        _properties: Map<String, Value>,
+        _session_id: Option<&str>,
+        _correlate_last_request: bool,
+    ) {
+    }
+}
+
 pub struct TelemetryEventObserver<T> {
     client: Arc<TelemetryClient<T>>,
     context: TelemetryContext,
@@ -1239,13 +1275,8 @@ where
         record: &TelemetryRecord,
         session_id: Option<&str>,
     ) -> Result<(), TelemetryError> {
-        let correlation_id = record.correlates_last_request().then(|| {
-            self.turn
-                .lock()
-                .ok()
-                .and_then(|turn| turn.last_correlation_id.clone())
-        });
-        self.queue(record, session_id, correlation_id.flatten())
+        let correlation_id = self.correlation(record.correlates_last_request());
+        self.queue(record, session_id, correlation_id)
     }
 
     /// Builds the envelope and hands the delivery to a task, so neither the
@@ -1272,11 +1303,18 @@ where
             merge_properties(census, attributes.into_properties()),
             correlation_id,
         );
+        self.deliver(envelope);
+        Ok(())
+    }
+
+    /// Hands one envelope to a task and remembers it, so [`Self::flush`] still
+    /// awaits a delivery the caller never sees.
+    fn deliver(&self, envelope: TelemetryEnvelope) {
         // Telemetry never decides whether a caller runs: an observer reached
         // from outside a runtime drops the delivery rather than failing the
         // path that produced the event.
         let Ok(runtime) = tokio::runtime::Handle::try_current() else {
-            return Ok(());
+            return;
         };
         let client = Arc::clone(&self.client);
         let task = runtime.spawn(async move {
@@ -1286,7 +1324,6 @@ where
             pending.retain(|task| !task.is_finished());
             pending.push(task);
         }
-        Ok(())
     }
 
     pub async fn flush(&self) {
@@ -1298,6 +1335,18 @@ where
         for task in pending {
             let _ = task.await;
         }
+    }
+
+    /// What a request that asked to correlate points at: the turn that made the
+    /// last backend request, which is this port's `last_correlation_id`.
+    fn correlation(&self, correlate_last_request: bool) -> Option<String> {
+        if !correlate_last_request {
+            return None;
+        }
+        self.turn
+            .lock()
+            .ok()
+            .and_then(|turn| turn.last_correlation_id.clone())
     }
 
     /// The records one engine event reports, with the turn context updated by
@@ -1428,6 +1477,29 @@ where
             }],
             _ => Vec::new(),
         }
+    }
+}
+
+impl<T> ClientTelemetry for TelemetryEventObserver<T>
+where
+    T: TelemetryTransport + 'static,
+{
+    /// Reference `TelemetryClient.send_telemetry_event`: the census first, the
+    /// client's own properties second, and a correlation id only when the
+    /// caller asked for one and a request has already been made.
+    fn record_client_event(
+        &self,
+        name: &str,
+        properties: Map<String, Value>,
+        session_id: Option<&str>,
+        correlate_last_request: bool,
+    ) {
+        let census = self.context.base_metadata(session_id).properties();
+        self.deliver(TelemetryEnvelope::new(
+            name,
+            merge_properties(census, properties),
+            self.correlation(correlate_last_request),
+        ));
     }
 }
 
