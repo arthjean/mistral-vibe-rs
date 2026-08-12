@@ -1,0 +1,302 @@
+{
+  "prd": {
+    "file": "tasks/prd-experiments-promo-parity.md",
+    "title": "Experiments, GrowthBook and the VS Code Promo",
+    "created_at": "2026-08-12",
+    "status": "IN_PROGRESS"
+  },
+  "epics": [
+    {
+      "id": "EP-001",
+      "title": "The experiments oracle and its corpus",
+      "status": "DONE",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 3,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-002",
+      "title": "The configuration fields the layer writes",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 2,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-003",
+      "title": "The experiments engine",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-004",
+      "title": "The GrowthBook configuration layer",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 2,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-005",
+      "title": "Session lifecycle and telemetry exposure",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-006",
+      "title": "The VS Code extension promo",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 2,
+      "stories_done": 0,
+      "stories_in_review": 0
+    },
+    {
+      "id": "EP-007",
+      "title": "Score restatement and the divergence ledger",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 1,
+      "stories_done": 0,
+      "stories_in_review": 0
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Capture the eval client and the manager",
+      "epic": "EP-001",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [],
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
+    },
+    {
+      "id": "US-002",
+      "title": "Capture the layer, the session and the promo",
+      "epic": "EP-001",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-001"
+      ],
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
+    },
+    {
+      "id": "US-003",
+      "title": "Replay both corpora from Rust with a ledger",
+      "epic": "EP-001",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-001",
+        "US-002"
+      ],
+      "started_at": "2026-08-12",
+      "completed_at": "2026-08-12",
+      "reviewed_at": "2026-08-12"
+    },
+    {
+      "id": "US-004",
+      "title": "Declare the routed model fields and resolve them on read",
+      "epic": "EP-002",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-003"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-005",
+      "title": "Unpin active_model and gate the managed shell family",
+      "epic": "EP-002",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-004"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-006",
+      "title": "The eval payload models and their resolution",
+      "epic": "EP-003",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-003"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-007",
+      "title": "The remote eval client",
+      "epic": "EP-003",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-006"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-008",
+      "title": "The experiment manager",
+      "epic": "EP-003",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-006"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-009",
+      "title": "Map variants onto configuration fields",
+      "epic": "EP-004",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-005",
+        "US-008"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-010",
+      "title": "Seat the layer below the selected TOML",
+      "epic": "EP-004",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-009"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-011",
+      "title": "Resolve the caller's organization identity",
+      "epic": "EP-005",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-003"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-012",
+      "title": "Initialize, persist and hydrate a session's experiments",
+      "epic": "EP-005",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-008",
+        "US-010",
+        "US-011"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-013",
+      "title": "Publish confirmed exposures on every telemetry event",
+      "epic": "EP-005",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-012"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-014",
+      "title": "The promo state and its predicate",
+      "epic": "EP-006",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "S",
+      "blocked_by": [
+        "US-003"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-015",
+      "title": "Show the promo and record the exposure",
+      "epic": "EP-006",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-014"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-016",
+      "title": "Restate the rows and record the residual divergences",
+      "epic": "EP-007",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-013",
+        "US-015"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    }
+  ]
+}
