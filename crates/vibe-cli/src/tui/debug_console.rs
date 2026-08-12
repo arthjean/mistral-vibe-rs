@@ -7,6 +7,7 @@
 //! explicit request, and a refresh never disturbs the selection.
 
 use serde_json::Value;
+use vibe_core::auth::UtcTimestamp;
 
 use super::diagnostics::{debug_log_line, log_level_color};
 use super::interaction::{Overlay, OverlayItem, OverlayKind};
@@ -15,6 +16,14 @@ use super::interaction::{Overlay, OverlayItem, OverlayKind};
 pub const PAGE_SIZE: usize = 30;
 /// Reference `LOG_POLL_INTERVAL`, in milliseconds.
 pub const POLL_INTERVAL_MS: u64 = 500;
+
+/// The whole seconds an entry's timestamp names, which is what a rendered line
+/// shows. The page carries the stamp the log line carried, which the reference
+/// publishes as a `datetime` and this port as the text it parsed.
+fn epoch_seconds(timestamp: &str) -> Option<u64> {
+    let micros = UtcTimestamp::parse_iso8601(timestamp)?.micros_since_epoch();
+    u64::try_from(micros.div_euclid(1_000_000)).ok()
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LogLine {
@@ -98,7 +107,8 @@ impl DebugConsole {
             let text = debug_log_line(
                 entry
                     .get("timestamp")
-                    .and_then(Value::as_u64)
+                    .and_then(Value::as_str)
+                    .and_then(epoch_seconds)
                     .unwrap_or_default(),
                 &level,
                 entry
@@ -153,11 +163,17 @@ mod tests {
 
     use super::*;
 
+    /// One page in the shape `diagnostics/logs/read` publishes: the timestamp
+    /// is the stamp the log line carried, which the reference sends as a
+    /// `datetime` and this port as the text it parsed.
     fn page(ids: &[usize], has_more: bool) -> Value {
         json!({"logs": {
             "entries": ids.iter().map(|index| json!({
                 "id": format!("log-{index}"),
-                "timestamp": 1_754_179_200 + index,
+                "timestamp": UtcTimestamp::from_micros_since_epoch(
+                    (1_754_179_200 + i64::try_from(*index).unwrap_or_default()) * 1_000_000,
+                )
+                .to_iso8601(),
                 "level": if index % 2 == 0 { "INFO" } else { "ERROR" },
                 "message": format!("entry {index}"),
             })).collect::<Vec<_>>(),
