@@ -40,9 +40,16 @@ use serde_json::{Map, Value, json};
 use opentelemetry_sdk::trace::SpanData;
 use opentelemetry_semantic_conventions::attribute as semconv;
 
+use crate::auth::UtcTimestamp;
 use crate::compaction::{CompactionFailureReason, CompactionStatus};
 use crate::config::registry::{FIELDS, default_document};
 use crate::config::{ConfigPaths, LayeredConfig};
+use crate::observability::{
+    FileLog, LOG_BACKUP_COUNT, LOG_DEFAULT_MAX_BYTES, LOG_FIELD_ORDER, LOG_FIELD_SEPARATOR,
+    LOG_LINE_PATTERN, LOG_LOGGER_NAME, LOG_POLL_INTERVAL_SECONDS, LOG_READ_CHUNK_SIZE,
+    LOG_RELATIVE_FILE, LogInitError, LogLevel, LogReader, LogSettings, decode_log_message,
+    encode_log_message, format_log_line, log_pattern_groups, parse_log_line, process_identifiers,
+};
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 use crate::tracing::{
     AGENT_NAME, AgentSpan, BackendFailure, HOOK_NAME_KEY, HOOK_TYPE_KEY, HookSpan,
@@ -76,6 +83,22 @@ const CORPUS_SCHEMA_VERSION: u32 = 1;
 const MINIMUM_COMPARISONS: usize = 400;
 /// The file the layered store reads a user document from.
 const CONFIG_FILE: &str = "config.toml";
+
+/// What the capture writes in place of a clock and a pair of process
+/// identifiers, so a line records its format rather than one run of it.
+const TIMESTAMP_PLACEHOLDER: &str = "{timestamp}";
+const PPID_PLACEHOLDER: &str = "{ppid}";
+const PID_PLACEHOLDER: &str = "{pid}";
+/// The exception text the `logFormat` case appends. The reference's traceback
+/// is machine-dependent, so only its separator and the absence of a raw newline
+/// are compared; this stands in for one.
+const EXCEPTION_TEXT: &str = "RuntimeError: oracle failure\n  at the oracle";
+/// The line number the capture hands `_parse_line`, which is the caller's to
+/// decide rather than the parser's to find.
+const LINE_NUMBER: i64 = 7;
+/// The encoding the reference's handler is built with, and the only one this
+/// port writes.
+const ENCODING: &str = "utf-8";
 
 /// Every family the corpus declares and this replay reads. A family the capture
 /// adds without a reader here fails the replay by name rather than passing
@@ -136,29 +159,33 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "eventPayloads/correlated/vibe.admin_config_applied",
         "ACCEPTED: as above",
     ),
-    // -- EP-005: file logging and the log reader ----------------------------
+    // -- EP-005: closed. What the epic left standing ------------------------
     (
-        "logFormat/*",
-        "OPEN (US-017): no structured file log is written by this build",
+        "constants/logging/patternDigest.*",
+        "ACCEPTED: the digest is of the reference's own regular expression, which `NOTICE` forbids \
+         reproducing verbatim; `vibe_core::observability::LOG_LINE_PATTERN` is written for this \
+         port and accepts the same language, which the whole `logParse` family measures line for \
+         line",
     ),
     (
-        "logEncoding/*",
-        "OPEN (US-017): the backslash and newline encoding has no counterpart",
+        "logPagination/messages/file-shrank-between-polls",
+        "ACCEPTED: the case drives the reference's polling watcher, whose `set_consumer` and \
+         `start_watching` have no caller outside `vibe/core/log_reader.py` at the pin, so nothing \
+         upstream ever counts a line for a shrink to reset; this port's console pulls pages \
+         through `diagnostics/logs/read` and reads backward from the end, where a truncated file \
+         needs no reset",
     ),
     (
-        "logParse/*",
-        "OPEN (US-018): `diagnostics/logs/read` answers from a process-local ring buffer in \
-         `crates/vibe-app-server/src/resources.rs`, so no line is ever parsed",
-    ),
-    ("logPagination/*", "OPEN (US-018): as above"),
-    (
-        "logConfig/*",
-        "OPEN (US-017): `LOG_LEVEL`, `DEBUG_MODE` and `LOG_MAX_BYTES` are read by nothing here",
+        "logPagination/lineNumbers/file-shrank-between-polls",
+        "ACCEPTED: as above",
     ),
     (
-        "constants/logging/*",
-        "OPEN (US-017, US-018): the log file, its rotation ceiling, its level vocabulary and its \
-         line pattern have no counterpart",
+        "logPagination/hasMore/file-shrank-between-polls",
+        "ACCEPTED: as above",
+    ),
+    (
+        "logPagination/cursor/file-shrank-between-polls",
+        "ACCEPTED: as above",
     ),
 ];
 
@@ -427,35 +454,20 @@ struct RedactionCase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct LogFormatCase {
     case: String,
-    #[expect(dead_code, reason = "the level is the input; the line is the answer")]
     level: String,
-    #[expect(dead_code, reason = "the message is the input")]
     message: String,
     line: String,
     has_exception: bool,
-    #[expect(
-        dead_code,
-        reason = "US-017 compares the exception tail once a line is written"
-    )]
     exception_separator: Option<String>,
-    #[expect(dead_code, reason = "as above")]
     exception_encoded_newlines: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct LogEncodingCase {
-    #[expect(
-        dead_code,
-        reason = "the input is what the encoded and decoded pair answers for"
-    )]
     input: Option<String>,
     encoded: String,
     decoded: String,
-    #[expect(
-        dead_code,
-        reason = "the round trip is the pair of the two directions above"
-    )]
     round_trips: Option<bool>,
 }
 
@@ -463,7 +475,6 @@ struct LogEncodingCase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct LogParseCase {
     case: String,
-    #[expect(dead_code, reason = "the line is the input")]
     line: String,
     parsed: bool,
     timestamp: Option<String>,
@@ -471,10 +482,6 @@ struct LogParseCase {
     pid: Option<i64>,
     level: Option<String>,
     message: Option<String>,
-    #[expect(
-        dead_code,
-        reason = "the line number is supplied by the caller, not parsed"
-    )]
     line_number: Option<i64>,
 }
 
@@ -482,24 +489,17 @@ struct LogParseCase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct LogPaginationCase {
     case: String,
-    #[expect(
-        dead_code,
-        reason = "the page is the input; the entries are the answer"
-    )]
     limit: u64,
-    #[expect(dead_code, reason = "as above")]
     offset: u64,
     messages: Vec<String>,
-    #[expect(
-        dead_code,
-        reason = "US-018 compares the numbering once entries come from a file"
-    )]
     line_numbers: Vec<i64>,
     has_more: bool,
     cursor: Option<i64>,
     #[expect(
         dead_code,
-        reason = "the shrink reset is compared once a reader holds a position"
+        reason = "the counter a shrink resets belongs to the reference's polling watcher, which \
+                  never starts at the pin and has no counterpart here; the ledger names the two \
+                  fields that answer for it"
     )]
     new_lines_count_reset: Option<i64>,
 }
@@ -509,24 +509,22 @@ struct LogPaginationCase {
 struct LogConfigCase {
     case: String,
     level: Option<String>,
-    max_bytes: Option<u64>,
+    max_bytes: Option<i64>,
     backup_count: Option<u64>,
+    encoding: Option<String>,
     #[expect(
         dead_code,
-        reason = "US-017 compares the encoding once a handler exists"
+        reason = "the reference filters twice, once on the logger and once on the handler; this \
+                  port filters where the record is written, so the level compared is the sink's"
     )]
-    encoding: Option<String>,
-    #[expect(dead_code, reason = "as above")]
     logger_level: Option<String>,
-    #[expect(dead_code, reason = "as above")]
     directory_created: bool,
-    #[expect(dead_code, reason = "as above")]
     handler_count: u64,
-    #[expect(dead_code, reason = "as above")]
     duplicate_guarded: Option<bool>,
     #[expect(
         dead_code,
-        reason = "the raising branch is compared once a resolver exists"
+        reason = "the exception type is Python's; what it decides is compared through the fields \
+                  it leaves unanswered"
     )]
     raised: Option<String>,
 }
@@ -1346,8 +1344,29 @@ fn run_tracing_constants(tracing: &Value, report: &mut Report) {
 }
 
 fn run_logging_constants(logging: &Value, report: &mut Report) {
+    let declared = json!({
+        "backupCount": LOG_BACKUP_COUNT,
+        "defaultLevel": LogLevel::DEFAULT.as_str(),
+        "defaultMaxBytes": LOG_DEFAULT_MAX_BYTES,
+        "fieldOrder": LOG_FIELD_ORDER,
+        "fieldSeparator": LOG_FIELD_SEPARATOR,
+        "levels": LogLevel::ALL.map(LogLevel::as_str),
+        "loggerName": LOG_LOGGER_NAME,
+        "patternDigest": digest(LOG_LINE_PATTERN),
+        "patternGroups": log_pattern_groups(),
+        "pollIntervalSeconds": LOG_POLL_INTERVAL_SECONDS,
+        "readChunkSize": LOG_READ_CHUNK_SIZE,
+        "relativeLogFile": LOG_RELATIVE_FILE,
+    });
+    let declared = flatten(&declared).into_iter().collect::<BTreeMap<_, _>>();
     for (field, value) in flatten(logging) {
-        report.check_absent("constants", "logging", &field, &value, None);
+        report.check(
+            "constants",
+            "logging",
+            &field,
+            &value,
+            declared.get(&field).unwrap_or(&Value::Null),
+        );
     }
 }
 
@@ -2693,55 +2712,375 @@ fn run_redaction(corpus: &Corpus, report: &mut Report) {
     }
 }
 
+/// The line this build writes for one record, with the clock and the process
+/// identifiers replaced the way the capture replaces them, so what is compared
+/// is the format rather than one run of it.
+fn port_log_line(level: LogLevel, message: &str, exception: Option<&str>) -> String {
+    let (ppid, pid) = process_identifiers();
+    let line = format_log_line(UtcTimestamp::now(), ppid, pid, level, message, exception);
+    let mut fields = line.splitn(5, ' ');
+    let timestamp = fields.next().unwrap_or_default();
+    assert!(
+        UtcTimestamp::parse_iso8601(timestamp).is_some(),
+        "the line opens with a timestamp: {line}"
+    );
+    assert_eq!(
+        (
+            fields.next().unwrap_or_default(),
+            fields.next().unwrap_or_default()
+        ),
+        (ppid.to_string().as_str(), pid.to_string().as_str()),
+        "the line carries this process rather than a placeholder"
+    );
+    format!(
+        "{TIMESTAMP_PLACEHOLDER} {PPID_PLACEHOLDER} {PID_PLACEHOLDER} {} {}",
+        fields.next().unwrap_or_default(),
+        fields.next().unwrap_or_default()
+    )
+}
+
 fn run_log_format(corpus: &Corpus, report: &mut Report) {
     for entry in &corpus.log_format {
-        report.check_absent("logFormat", "line", &entry.case, &entry.line, None);
-        report.check_absent(
+        let level = LogLevel::parse(&entry.level).unwrap_or_default();
+        let exception = entry.has_exception.then_some(EXCEPTION_TEXT);
+        // The traceback is machine-dependent, so the capture recorded the line
+        // up to the message and the shape of what follows it. The same line
+        // written without one is that head.
+        let head = port_log_line(level, &entry.message, None);
+        let tail = port_log_line(level, &entry.message, exception)
+            .strip_prefix(head.as_str())
+            .unwrap_or_default()
+            .to_owned();
+        report.check("logFormat", "line", &entry.case, &entry.line, &head);
+        report.check(
             "logFormat",
             "hasException",
             &entry.case,
             &entry.has_exception,
-            None,
+            &!tail.is_empty(),
         );
+        if let Some(separator) = entry.exception_separator.as_deref() {
+            report.check(
+                "logFormat",
+                "exceptionSeparator",
+                &entry.case,
+                &separator.to_owned(),
+                &tail.get(..1).unwrap_or_default().to_owned(),
+            );
+        }
+        if let Some(encoded) = entry.exception_encoded_newlines {
+            report.check(
+                "logFormat",
+                "exceptionEncodedNewlines",
+                &entry.case,
+                &encoded,
+                &!tail.contains('\n'),
+            );
+        }
     }
 }
 
 fn run_log_encoding(corpus: &Corpus, report: &mut Report) {
     for (index, entry) in corpus.log_encoding.iter().enumerate() {
         let case = format!("message-{index}");
-        report.check_absent("logEncoding", "encoded", &case, &entry.encoded, None);
-        report.check_absent("logEncoding", "decoded", &case, &entry.decoded, None);
+        // A record the capture encoded is compared in both directions; one it
+        // only decoded carries no input, and the encoded text is the input.
+        if let Some(input) = entry.input.as_deref() {
+            report.check(
+                "logEncoding",
+                "encoded",
+                &case,
+                &entry.encoded,
+                &encode_log_message(input),
+            );
+        }
+        report.check(
+            "logEncoding",
+            "decoded",
+            &case,
+            &entry.decoded,
+            &decode_log_message(&entry.encoded),
+        );
+        if let Some(round_trips) = entry.round_trips {
+            report.check(
+                "logEncoding",
+                "roundTrips",
+                &case,
+                &round_trips,
+                &(entry
+                    .input
+                    .as_deref()
+                    .map(|input| decode_log_message(&encode_log_message(input)))
+                    .as_deref()
+                    == entry.input.as_deref()),
+            );
+        }
     }
 }
 
 fn run_log_parse(corpus: &Corpus, report: &mut Report) {
     for entry in &corpus.log_parse {
         let case = entry.case.as_str();
-        report.check_absent("logParse", "parsed", case, &entry.parsed, None);
-        report.check_absent("logParse", "level", case, &entry.level, None);
-        report.check_absent("logParse", "message", case, &entry.message, None);
-        report.check_absent("logParse", "timestamp", case, &entry.timestamp, None);
-        report.check_absent("logParse", "ppid", case, &entry.ppid, None);
-        report.check_absent("logParse", "pid", case, &entry.pid, None);
+        let parsed = parse_log_line(&entry.line, LINE_NUMBER);
+        report.check("logParse", "parsed", case, &entry.parsed, &parsed.is_some());
+        report.check(
+            "logParse",
+            "level",
+            case,
+            &entry.level,
+            &parsed.as_ref().map(|entry| entry.level.clone()),
+        );
+        report.check(
+            "logParse",
+            "message",
+            case,
+            &entry.message,
+            &parsed.as_ref().map(|entry| entry.message.clone()),
+        );
+        report.check(
+            "logParse",
+            "timestamp",
+            case,
+            &entry.timestamp,
+            &parsed.as_ref().map(|entry| entry.timestamp.clone()),
+        );
+        report.check(
+            "logParse",
+            "ppid",
+            case,
+            &entry.ppid,
+            &parsed.as_ref().map(|entry| entry.ppid),
+        );
+        report.check(
+            "logParse",
+            "pid",
+            case,
+            &entry.pid,
+            &parsed.as_ref().map(|entry| entry.pid),
+        );
+        report.check(
+            "logParse",
+            "lineNumber",
+            case,
+            &entry.line_number,
+            &parsed.as_ref().map(|entry| entry.line_number),
+        );
     }
+}
+
+/// The file every pagination case is read from, authored the way the capture
+/// authors it: twelve records, a line no pattern matches before the fourth from
+/// the end, and a blank one before the ninth.
+fn pagination_file(enclosure: &Path) -> PathBuf {
+    let mut lines = Vec::new();
+    for index in 0..12 {
+        match index {
+            3 => lines.push("oracle wrote this by hand".to_owned()),
+            8 => lines.push(String::new()),
+            _ => {}
+        }
+        lines.push(format!(
+            "2026-02-21T10:28:{index:02}.100000+00:00 12 34 WARNING oracle entry {index}"
+        ));
+    }
+    let path = enclosure.join("vibe.log");
+    fs::write(&path, format!("{}\n", lines.join("\n"))).expect("the pagination file");
+    path
 }
 
 fn run_log_pagination(corpus: &Corpus, report: &mut Report) {
+    let enclosure = tempfile::tempdir().expect("a pagination enclosure");
+    let populated = pagination_file(enclosure.path());
     for entry in &corpus.log_pagination {
         let case = entry.case.as_str();
-        report.check_absent("logPagination", "messages", case, &entry.messages, None);
-        report.check_absent("logPagination", "hasMore", case, &entry.has_more, None);
-        report.check_absent("logPagination", "cursor", case, &entry.cursor, None);
+        // The shrink case drives the reference's polling watcher, which never
+        // starts at the pin and has no counterpart here; the ledger names it.
+        let page = match case {
+            "file-shrank-between-polls" => None,
+            "file-absent" => Some(
+                LogReader::new(enclosure.path().join("absent.log")).get_logs(
+                    usize::try_from(entry.limit).unwrap_or(0),
+                    usize::try_from(entry.offset).unwrap_or(0),
+                ),
+            ),
+            "file-empty" => {
+                let empty = enclosure.path().join("empty.log");
+                fs::write(&empty, "").expect("the empty file");
+                Some(LogReader::new(empty).get_logs(
+                    usize::try_from(entry.limit).unwrap_or(0),
+                    usize::try_from(entry.offset).unwrap_or(0),
+                ))
+            }
+            _ => Some(LogReader::new(&populated).get_logs(
+                usize::try_from(entry.limit).unwrap_or(0),
+                usize::try_from(entry.offset).unwrap_or(0),
+            )),
+        };
+        report.check_absent(
+            "logPagination",
+            "messages",
+            case,
+            &entry.messages,
+            page.as_ref()
+                .map(|page| {
+                    page.entries
+                        .iter()
+                        .map(|entry| entry.message.clone())
+                        .collect::<Vec<_>>()
+                })
+                .as_ref(),
+        );
+        report.check_absent(
+            "logPagination",
+            "lineNumbers",
+            case,
+            &entry.line_numbers,
+            page.as_ref()
+                .map(|page| {
+                    page.entries
+                        .iter()
+                        .map(|entry| entry.line_number)
+                        .collect::<Vec<_>>()
+                })
+                .as_ref(),
+        );
+        report.check_absent(
+            "logPagination",
+            "hasMore",
+            case,
+            &entry.has_more,
+            page.as_ref().map(|page| &page.has_more),
+        );
+        report.check_absent(
+            "logPagination",
+            "cursor",
+            case,
+            &entry.cursor,
+            page.as_ref().map(|page| &page.cursor),
+        );
     }
 }
 
+/// The environment each `logConfig` case resolves under, named the way the
+/// capture names it.
+fn log_config_environment(case: &str) -> BTreeMap<String, String> {
+    let pairs: &[(&str, &str)] = match case {
+        "level-debug" => &[("LOG_LEVEL", "DEBUG")],
+        "level-lowercase" => &[("LOG_LEVEL", "info")],
+        "level-unknown" => &[("LOG_LEVEL", "TRACE")],
+        "level-empty" => &[("LOG_LEVEL", "")],
+        "debug-mode-true" => &[("LOG_LEVEL", "ERROR"), ("DEBUG_MODE", "true")],
+        "debug-mode-other" => &[("LOG_LEVEL", "ERROR"), ("DEBUG_MODE", "1")],
+        "max-bytes" => &[("LOG_MAX_BYTES", "4096")],
+        "max-bytes-zero" => &[("LOG_MAX_BYTES", "0")],
+        "max-bytes-invalid" => &[("LOG_MAX_BYTES", "not-a-number")],
+        _ => &[],
+    };
+    pairs
+        .iter()
+        .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+        .collect()
+}
+
 fn run_log_config(corpus: &Corpus, report: &mut Report) {
-    for entry in &corpus.log_config {
+    let enclosure = tempfile::tempdir().expect("a configuration enclosure");
+    for (index, entry) in corpus.log_config.iter().enumerate() {
         let case = entry.case.as_str();
-        report.check_absent("logConfig", "level", case, &entry.level, None);
-        report.check_absent("logConfig", "maxBytes", case, &entry.max_bytes, None);
-        report.check_absent("logConfig", "backupCount", case, &entry.backup_count, None);
+        let variables = log_config_environment(case);
+        let read = |name: &str| variables.get(name).cloned();
+        let path = enclosure
+            .path()
+            .join(index.to_string())
+            .join("logs")
+            .join("vibe.log");
+        // The directory is made before the ceiling is read, so the refused case
+        // still leaves it behind, which is what the capture recorded.
+        let installed = install_once(&path, &read);
+        let settings = installed.as_ref().ok().map(FileLog::settings);
+        report.check(
+            "logConfig",
+            "level",
+            case,
+            &entry.level,
+            &settings.map(|settings| settings.level.as_str().to_owned()),
+        );
+        report.check(
+            "logConfig",
+            "maxBytes",
+            case,
+            &entry.max_bytes,
+            &settings.map(|settings| settings.max_bytes),
+        );
+        report.check(
+            "logConfig",
+            "backupCount",
+            case,
+            &entry.backup_count,
+            &settings.map(|_| LOG_BACKUP_COUNT),
+        );
+        report.check(
+            "logConfig",
+            "handlerCount",
+            case,
+            &entry.handler_count,
+            &u64::from(installed.is_ok()),
+        );
+        report.check(
+            "logConfig",
+            "directoryCreated",
+            case,
+            &entry.directory_created,
+            &path.parent().is_some_and(Path::is_dir),
+        );
+        report.check(
+            "logConfig",
+            "encoding",
+            case,
+            &entry.encoding,
+            &settings.map(|_| ENCODING.to_owned()),
+        );
+        // The reference attaches one handler and returns on the second call.
+        // This port installs one file per process, so the second resolution
+        // answers the first one's settings rather than a second sink.
+        report.check(
+            "logConfig",
+            "duplicateGuarded",
+            case,
+            &entry.duplicate_guarded,
+            &installed
+                .as_ref()
+                .ok()
+                .map(|first| install_once(&path, &read).is_ok_and(|second| &second == first)),
+        );
     }
+}
+
+/// What [`init_file_logging`] would install for one path, resolved without
+/// touching the process-wide installation the binaries own.
+///
+/// The global is a `OnceLock`, so a replay driving eleven cases through it
+/// would measure the first one eleven times. The steps are the same ones in the
+/// same order: the directory, then the settings, then a file that opens.
+fn install_once(
+    path: &Path,
+    read: &dyn Fn(&str) -> Option<String>,
+) -> Result<FileLog, LogInitError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|source| LogInitError::Directory {
+            path: parent.to_path_buf(),
+            source,
+        })?;
+    }
+    let settings = LogSettings::resolve(read)?;
+    fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|source| LogInitError::Open {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    Ok(FileLog::new(path, settings))
 }
 
 // --------------------------------------------------------------------------

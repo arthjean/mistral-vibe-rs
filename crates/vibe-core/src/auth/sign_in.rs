@@ -170,6 +170,13 @@ impl UtcTimestamp {
         Self { micros_since_epoch }
     }
 
+    /// The instant as microseconds since the epoch, which a caller rendering a
+    /// coarser stamp divides down.
+    #[must_use]
+    pub const fn micros_since_epoch(self) -> i64 {
+        self.micros_since_epoch
+    }
+
     pub fn now() -> Self {
         let elapsed = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
