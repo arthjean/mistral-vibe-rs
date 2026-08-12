@@ -3,9 +3,9 @@
 //! `vibe/cli/voice_manager/voice_manager.py:202-251` names each event and its
 //! exact property set, and `vibe/cli/voice_manager/telemetry.py:8-30` supplies
 //! the values from a tracking record. These tests drive the manager the way the
-//! event loop drives it, then follow one recorded event through
-//! `telemetry/record` to `diagnostics/logs/read`, which is where
-//! `enable_telemetry` decides whether anything is kept.
+//! event loop drives it, then follow one recorded event to the telemetry
+//! client the loop hands it to, which is where `enable_telemetry` decides
+//! whether anything is sent.
 
 use std::fs;
 use std::sync::Arc;
@@ -24,10 +24,14 @@ use vibe_app_server::server::AppServer;
 use crate::tui::chat_input::{InputEffect, InputEvent};
 use crate::tui::runtime::interactive_test_runtime_with_server;
 
-use super::telemetry::{
-    TRANSCRIPTION_CANCEL, TRANSCRIPTION_DONE, TRANSCRIPTION_ERROR, TRANSCRIPTION_START,
-};
-use super::{AudioEvent, VoiceControl, VoiceManager, VoiceSessionFactory, VoiceSignal};
+use vibe_core::telemetry::TelemetryRecord;
+
+use super::{VoiceControl, VoiceManager, VoiceSessionFactory, VoiceSignal};
+
+const TRANSCRIPTION_START: &str = "vibe.audio.transcription.start";
+const TRANSCRIPTION_CANCEL: &str = "vibe.audio.transcription.cancel_recording";
+const TRANSCRIPTION_DONE: &str = "vibe.audio.transcription.done";
+const TRANSCRIPTION_ERROR: &str = "vibe.audio.transcription.error";
 
 const RECORDING_ID: &str = "req-00000000";
 
@@ -66,7 +70,7 @@ fn manager() -> VoiceManager {
 
 /// Starts a recording through the effect the composer emits, then settles the
 /// session-created signal the endpoint answers with.
-async fn start(manager: &mut VoiceManager, generation: u64) -> Vec<AudioEvent> {
+async fn start(manager: &mut VoiceManager, generation: u64) -> Vec<TelemetryRecord> {
     manager.apply_effects(&[InputEffect::RecordingStartRequested], generation);
     for _ in 0..200 {
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
@@ -80,18 +84,30 @@ async fn start(manager: &mut VoiceManager, generation: u64) -> Vec<AudioEvent> {
 
 /// Hands the manager an event the session would have sent and drains it
 /// through the same reader the event loop calls.
-fn feed(manager: &mut VoiceManager, event: InputEvent) -> Vec<AudioEvent> {
+fn feed(manager: &mut VoiceManager, event: InputEvent) -> Vec<TelemetryRecord> {
     manager.inject_for_test(event);
     while manager.try_next_event().is_some() {}
     manager.take_telemetry()
 }
 
-fn names(events: &[AudioEvent]) -> Vec<&'static str> {
-    events.iter().map(|event| event.name).collect()
+fn names(events: &[TelemetryRecord]) -> Vec<&'static str> {
+    events
+        .iter()
+        .map(|event| event.event().event_name())
+        .collect()
 }
 
-fn keys(event: &AudioEvent) -> Vec<&str> {
-    event.properties.keys().map(String::as_str).collect()
+/// The properties one record puts on the wire, which is what the reference's
+/// call site decides.
+fn properties(record: &TelemetryRecord) -> serde_json::Map<String, Value> {
+    record
+        .attributes(None)
+        .expect("an audio payload carries no unsafe label")
+        .into_properties()
+}
+
+fn keys(record: &TelemetryRecord) -> Vec<String> {
+    properties(record).keys().cloned().collect()
 }
 
 /// A completed transcription reports its identity, its accumulated length and
@@ -102,7 +118,7 @@ async fn a_completed_transcription_reports_start_then_done() {
     let started = start(&mut manager, 1).await;
     assert_eq!(names(&started), [TRANSCRIPTION_START]);
     assert_eq!(
-        started[0].properties.get("recording_id"),
+        properties(&started[0]).get("recording_id"),
         Some(&json!(RECORDING_ID))
     );
     assert_eq!(keys(&started[0]), ["recording_id"]);
@@ -146,16 +162,15 @@ async fn a_completed_transcription_reports_start_then_done() {
             "transcription_duration_ms"
         ]
     );
+    let done = properties(&done[0]);
     assert_eq!(
-        done[0].properties.get("transcript_length"),
+        done.get("transcript_length"),
         Some(&json!(11)),
         "every delta accumulates, as `record_text` does"
     );
     assert!(
-        done[0].properties["recording_duration_ms"].is_number()
-            && done[0].properties["transcription_duration_ms"].is_number(),
-        "both durations are reported: {:?}",
-        done[0].properties
+        done["recording_duration_ms"].is_number() && done["transcription_duration_ms"].is_number(),
+        "both durations are reported: {done:?}"
     );
 }
 
@@ -172,11 +187,9 @@ async fn cancelling_a_recording_reports_the_elapsed_time() {
     let mut keys = keys(&cancelled[0]);
     keys.sort_unstable();
     assert_eq!(keys, ["recording_duration_ms", "recording_id"]);
-    assert_eq!(
-        cancelled[0].properties.get("recording_id"),
-        Some(&json!(RECORDING_ID))
-    );
-    assert!(cancelled[0].properties["recording_duration_ms"].is_number());
+    let cancelled = properties(&cancelled[0]);
+    assert_eq!(cancelled.get("recording_id"), Some(&json!(RECORDING_ID)));
+    assert!(cancelled["recording_duration_ms"].is_number());
 
     manager.apply_effects(&[InputEffect::RecordingCancelRequested], 7);
     assert!(
@@ -213,12 +226,13 @@ async fn a_failed_transcription_reports_the_message_and_a_null_recording_duratio
             "transcription_duration_ms"
         ]
     );
+    let failed = properties(&failed[0]);
     assert_eq!(
-        failed[0].properties.get("error_message"),
+        failed.get("error_message"),
         Some(&json!("Transcription timed out"))
     );
     assert_eq!(
-        failed[0].properties.get("recording_duration_ms"),
+        failed.get("recording_duration_ms"),
         Some(&Value::Null),
         "the recorder never stopped cleanly, so no recording duration was taken"
     );
@@ -279,71 +293,54 @@ async fn the_recording_id_comes_from_the_session_created_frame() {
     }
 }
 
-/// The event reaches `telemetry/record` and is readable afterward under the
-/// reference property names, and `enable_telemetry` decides whether it is kept
-/// at all.
+/// US-012: the loop's recorder drains every queued event and leaves nothing in
+/// the transcript, whatever the telemetry client does with it. Where the events
+/// go, and the `enable_telemetry` gate that decides whether they travel at all,
+/// are the client's own and are held by `telemetry_tests` one layer down.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_recorded_event_is_readable_only_while_telemetry_is_enabled() {
-    for enabled in [true, false] {
-        let temporary = tempfile::tempdir().expect("a temporary vibe home");
-        let vibe_home = temporary.path().join("vibe-home");
-        fs::create_dir_all(&vibe_home).expect("the vibe home is created");
-        fs::write(
-            vibe_home.join("config.toml"),
-            format!("enable_telemetry = {enabled}\n"),
-        )
-        .expect("the seed configuration is written");
-        let service = Release3Service::new(
-            Release3Paths {
-                session_root: vibe_home.join("sessions"),
-                working_directory: temporary.path().join("workspace"),
-                vibe_home,
-            },
-            true,
-        )
-        .expect("the configuration service builds");
-        let mut runtime = interactive_test_runtime_with_server(
-            "audio-telemetry",
-            AppServer::with_release3_service(service),
-        );
-        runtime.voice = manager();
+async fn the_recorder_drains_every_event_without_touching_the_transcript() {
+    let temporary = tempfile::tempdir().expect("a temporary vibe home");
+    let vibe_home = temporary.path().join("vibe-home");
+    fs::create_dir_all(&vibe_home).expect("the vibe home is created");
+    let service = Release3Service::new(
+        Release3Paths {
+            session_root: vibe_home.join("sessions"),
+            working_directory: temporary.path().join("workspace"),
+            vibe_home,
+        },
+        true,
+    )
+    .expect("the configuration service builds");
+    let mut runtime = interactive_test_runtime_with_server(
+        "audio-telemetry",
+        AppServer::with_release3_service(service),
+    );
+    runtime.voice = manager();
 
-        // The events are left queued rather than drained here, so the loop's
-        // own recorder is what carries them to the server.
-        runtime
-            .voice
-            .apply_effects(&[InputEffect::RecordingStartRequested], 1);
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        crate::tui::record_audio_telemetry(&mut runtime);
+    // The events are left queued rather than drained here, so the loop's own
+    // recorder is what carries them.
+    runtime
+        .voice
+        .apply_effects(&[InputEffect::RecordingStartRequested], 1);
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    crate::tui::record_audio_telemetry(&mut runtime);
 
-        let logs = runtime
-            .service
-            .public_call(
-                "diagnostics/logs/read",
-                json!({"sessionId": runtime.session_id}),
-            )
-            .expect("the log page reads");
-        let recorded = logs["logs"]["entries"]
-            .as_array()
-            .expect("a log page")
-            .iter()
-            .filter(|entry| {
-                entry["message"]
-                    .as_str()
-                    .is_some_and(|message| message.contains(TRANSCRIPTION_START))
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(
-            recorded.len(),
-            usize::from(enabled),
-            "enable_telemetry = {enabled} decides whether the event is kept"
-        );
-        if enabled {
-            let message = recorded[0]["message"].as_str().unwrap_or_default();
-            assert!(
-                message.contains("recording_id"),
-                "the reference property name survives the round trip: {message}"
-            );
-        }
-    }
+    assert!(
+        runtime.voice.take_telemetry().is_empty(),
+        "the recorder takes every queued event"
+    );
+    let logs = runtime
+        .service
+        .public_call(
+            "diagnostics/logs/read",
+            json!({"sessionId": runtime.session_id}),
+        )
+        .expect("the log page reads");
+    let entries = logs["logs"]["entries"].as_array().expect("a log page");
+    assert!(
+        !entries.iter().any(|entry| entry["message"]
+            .as_str()
+            .is_some_and(|message| message.contains(TRANSCRIPTION_START))),
+        "an audio event is telemetry, not a diagnostic the operator reads"
+    );
 }

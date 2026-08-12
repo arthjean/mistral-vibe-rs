@@ -451,6 +451,7 @@ pub async fn run_interactive(
                     );
                 }
                 record_audio_telemetry(runtime);
+                record_narrator_telemetry(runtime, &mut state);
                 // The narrator's own transport answers here, so a spoken summary
                 // reaches the same state machine the effects came from.
                 while let Some(event) = runtime.speech.try_next_event() {
@@ -943,11 +944,35 @@ fn apply_speech_event(event: SpeechEvent, state: &mut TuiState) {
     match event {
         SpeechEvent::PlaybackStarted { generation } => state.narrator.playback_started(generation),
         SpeechEvent::Finished { generation, error } => {
-            state.narrator.settle(generation);
-            if let Some(failure) = error {
-                report_speech_failure(state, failure);
+            match error {
+                // Reference `_speak_summary` reports the exception's class
+                // name; this port's transport answers a message rather than an
+                // exception, so the class it names is the failure itself.
+                Some(failure) => {
+                    state.narrator.fail(generation, SPEECH_ERROR_CLASS);
+                    report_speech_failure(state, failure);
+                }
+                None => state.narrator.settle(generation),
             }
         }
+    }
+}
+
+/// What a read-aloud failure reports as its error type.
+const SPEECH_ERROR_CLASS: &str = "SpeechError";
+
+/// Sends the read-aloud events the narrator produced, on the same terms as the
+/// transcription ones.
+pub(in crate::tui) fn record_narrator_telemetry(
+    runtime: &InteractiveRuntime,
+    state: &mut TuiState,
+) {
+    let records = state.narrator.take_telemetry();
+    let Some(telemetry) = runtime.telemetry.as_ref() else {
+        return;
+    };
+    for record in &records {
+        let _ = telemetry.enqueue(record, Some(runtime.session_id.as_str()));
     }
 }
 
@@ -1059,25 +1084,21 @@ fn update_theme(
     }
 }
 
-/// Records the audio lifecycle events the voice manager produced.
+/// Sends the audio lifecycle events the voice manager produced.
 ///
 /// The reference hands each one to the agent loop's telemetry client
-/// (`vibe/cli/voice_manager/voice_manager.py:202-251`); this port hands it to
-/// `telemetry/record`, which honors `enable_telemetry` and keeps what it keeps
-/// on `diagnostics/logs/read`. A recording failure is never surfaced to the
-/// operator: telemetry is best effort on both sides, and a diagnostic here
-/// would put an audio event in the transcript.
+/// (`vibe/cli/voice_manager/voice_manager.py:202-251`), and so does this port:
+/// the same client, the same census and the same `enable_telemetry` gate as
+/// every other event. A delivery failure is never surfaced to the operator:
+/// telemetry is best effort on both sides, and a diagnostic here would put an
+/// audio event in the transcript.
 pub(in crate::tui) fn record_audio_telemetry(runtime: &mut InteractiveRuntime) {
-    for event in runtime.voice.take_telemetry() {
-        let _ = runtime.service.public_call(
-            "telemetry/record",
-            json!({
-                "sessionId": runtime.session_id,
-                "name": event.name,
-                "properties": event.properties,
-                "correlateLastRequest": false,
-            }),
-        );
+    let records = runtime.voice.take_telemetry();
+    let Some(telemetry) = runtime.telemetry.as_ref() else {
+        return;
+    };
+    for record in &records {
+        let _ = telemetry.enqueue(record, Some(runtime.session_id.as_str()));
     }
 }
 

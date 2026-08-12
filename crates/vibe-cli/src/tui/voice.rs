@@ -22,7 +22,8 @@ mod telemetry;
 pub(crate) use speech::{SpeechEvent, SpeechManager};
 pub use state::VoicePhase;
 pub(crate) use state::{VoiceCommand, VoiceState, VoiceUpdate, VoiceUpdateOutcome};
-pub(crate) use telemetry::AudioEvent;
+
+use vibe_core::telemetry::TelemetryRecord;
 
 use realtime::VoiceConfig;
 use session::ProductionVoiceSessionFactory;
@@ -98,8 +99,8 @@ pub(super) struct VoiceManager {
     /// holds the captured buffer, so the recording is measured from the moment
     /// the session reported it running to the moment it stopped.
     recording_started: Option<std::time::Instant>,
-    /// The events produced but not yet handed to `telemetry/record`.
-    telemetry: Vec<AudioEvent>,
+    /// The events produced but not yet handed to the telemetry client.
+    telemetry: Vec<TelemetryRecord>,
 }
 
 impl VoiceManager {
@@ -226,9 +227,9 @@ impl VoiceManager {
 
     /// The audio events produced since the last drain, in the order they fired.
     ///
-    /// The caller records them through `telemetry/record`, which is where
-    /// `enable_telemetry` decides whether anything is kept.
-    pub(crate) fn take_telemetry(&mut self) -> Vec<AudioEvent> {
+    /// The caller hands them to the session's telemetry client, which is where
+    /// `enable_telemetry` decides whether anything is sent.
+    pub(crate) fn take_telemetry(&mut self) -> Vec<TelemetryRecord> {
         self.drain_signals();
         std::mem::take(&mut self.telemetry)
     }

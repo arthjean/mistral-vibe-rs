@@ -8,29 +8,13 @@
 //! `vibe/cli/voice_manager/voice_manager.py:202-251`). This module holds the
 //! same record and builds the same four events from it.
 //!
-//! Where the reference hands each event to its telemetry client, this port
-//! records it through `telemetry/record`, which keeps the event on
-//! `diagnostics/logs/read` and drops it entirely when `enable_telemetry` is
-//! off. That is the telemetry-envelope divergence `docs/parity.md` already
-//! records, applied to the audio surface rather than a second decision.
+//! The payloads themselves live in `vibe_core::telemetry::records`, where the
+//! differential replay can measure them, and each one is handed to the same
+//! client every other event of this process goes to.
 
 use std::time::{Duration, Instant};
 
-use serde_json::{Map, Value, json};
-
-/// The four event names the reference emits, reproduced verbatim because a
-/// client reads them as identifiers rather than as prose.
-pub(crate) const TRANSCRIPTION_START: &str = "vibe.audio.transcription.start";
-pub(crate) const TRANSCRIPTION_CANCEL: &str = "vibe.audio.transcription.cancel_recording";
-pub(crate) const TRANSCRIPTION_DONE: &str = "vibe.audio.transcription.done";
-pub(crate) const TRANSCRIPTION_ERROR: &str = "vibe.audio.transcription.error";
-
-/// One event, ready for `telemetry/record`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct AudioEvent {
-    pub(crate) name: &'static str,
-    pub(crate) properties: Map<String, Value>,
-}
+use vibe_core::telemetry::TelemetryRecord;
 
 /// Reference `TranscriptionTrackingState`: the recording identity, when the
 /// transcription started, how much text it produced and how long the recording
@@ -84,79 +68,43 @@ impl TranscriptionTracking {
         self.start.elapsed()
     }
 
-    fn elapsed_ms(&self) -> u64 {
-        millis(self.elapsed())
-    }
-
-    pub(super) fn start_event(&self) -> AudioEvent {
-        AudioEvent {
-            name: TRANSCRIPTION_START,
-            properties: properties([("recording_id", json!(self.recording_id))]),
+    pub(super) fn start_event(&self) -> TelemetryRecord {
+        TelemetryRecord::TranscriptionStarted {
+            recording_id: self.recording_id.clone(),
         }
     }
 
-    pub(super) fn cancel_event(&self) -> AudioEvent {
-        AudioEvent {
-            name: TRANSCRIPTION_CANCEL,
-            properties: properties([
-                ("recording_id", json!(self.recording_id)),
-                ("recording_duration_ms", json!(self.elapsed_ms())),
-            ]),
+    pub(super) fn cancel_event(&self) -> TelemetryRecord {
+        TelemetryRecord::TranscriptionCancelled {
+            recording_id: self.recording_id.clone(),
+            recording_duration: self.elapsed(),
         }
     }
 
     /// Reference `_on_audio_transcription_done`: a recording whose duration was
     /// never taken reports the transcription's own elapsed time rather than
     /// nothing, so both durations are always present on this event.
-    pub(super) fn done_event(&self) -> AudioEvent {
-        let transcription_duration_ms = self.elapsed_ms();
-        let recording_duration_ms = self
-            .last_recording_duration
-            .map_or(transcription_duration_ms, millis);
-        AudioEvent {
-            name: TRANSCRIPTION_DONE,
-            properties: properties([
-                ("recording_id", json!(self.recording_id)),
-                (
-                    "transcript_length",
-                    json!(self.accumulated_transcript_length),
-                ),
-                (
-                    "transcription_duration_ms",
-                    json!(transcription_duration_ms),
-                ),
-                ("recording_duration_ms", json!(recording_duration_ms)),
-            ]),
+    pub(super) fn done_event(&self) -> TelemetryRecord {
+        let transcription_duration = self.elapsed();
+        TelemetryRecord::TranscriptionDone {
+            recording_id: self.recording_id.clone(),
+            transcript_length: self.accumulated_transcript_length as u64,
+            transcription_duration,
+            recording_duration: self
+                .last_recording_duration
+                .unwrap_or(transcription_duration),
         }
     }
 
     /// Reference `_on_audio_transcription_error`: the recording duration is
     /// reported as it stands, which is null when the recording never stopped
     /// cleanly, rather than being filled in from the transcription's.
-    pub(super) fn error_event(&self, message: &str) -> AudioEvent {
-        AudioEvent {
-            name: TRANSCRIPTION_ERROR,
-            properties: properties([
-                ("recording_id", json!(self.recording_id)),
-                ("error_message", json!(message)),
-                ("transcription_duration_ms", json!(self.elapsed_ms())),
-                (
-                    "recording_duration_ms",
-                    self.last_recording_duration
-                        .map_or(Value::Null, |duration| json!(millis(duration))),
-                ),
-            ]),
+    pub(super) fn error_event(&self, message: &str) -> TelemetryRecord {
+        TelemetryRecord::TranscriptionFailed {
+            recording_id: self.recording_id.clone(),
+            message: message.to_owned(),
+            transcription_duration: self.elapsed(),
+            recording_duration: self.last_recording_duration,
         }
     }
-}
-
-fn properties<const N: usize>(entries: [(&str, Value); N]) -> Map<String, Value> {
-    entries
-        .into_iter()
-        .map(|(name, value)| (name.to_owned(), value))
-        .collect()
-}
-
-fn millis(duration: Duration) -> u64 {
-    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }

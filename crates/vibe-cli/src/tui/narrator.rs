@@ -4,6 +4,54 @@
 //! The manager is a pure state machine over turn events. Summaries and playback
 //! are effects the caller executes, and every late result carries the generation
 //! that produced it so a cancelled turn can never speak.
+//!
+//! It also holds the reference's `ReadAloudTrackingState`
+//! (`vibe/cli/narrator_manager/telemetry.py:9-30`) and queues the three
+//! read-aloud events off it, at the same three points the reference raises
+//! them: where a summary is asked for, where playback starts and where the
+//! session ends. The caller drains the queue into the session's telemetry
+//! client, as it drains the voice manager's.
+
+use std::time::{Duration, Instant};
+
+use vibe_core::telemetry::TelemetryRecord;
+use vibe_core::telemetry::records::{ReadAloudStatus, ReadAloudTrigger};
+
+/// Reference `ReadAloudTrackingState`: when the summary was asked for, when
+/// playback started, and the identifier both report.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ReadAloudTracking {
+    session_id: String,
+    requested_at: Option<Instant>,
+    play_started_at: Option<Instant>,
+}
+
+impl ReadAloudTracking {
+    /// Reference `reset`: a fresh identifier and a fresh request reading.
+    fn reset(&mut self) {
+        self.session_id = vibe_core::session_id::generate_session_id(None);
+        self.requested_at = Some(Instant::now());
+        self.play_started_at = None;
+    }
+
+    fn mark_play_started(&mut self) {
+        self.play_started_at = Some(Instant::now());
+    }
+
+    /// Reference `time_to_first_read_s`: 0.0 when either reading is missing.
+    fn time_to_first_read(&self) -> Duration {
+        match (self.play_started_at, self.requested_at) {
+            (Some(started), Some(requested)) => started.saturating_duration_since(requested),
+            _ => Duration::ZERO,
+        }
+    }
+
+    /// Reference `elapsed_since_play_s`: 0.0 when playback never started.
+    fn elapsed_since_play(&self) -> Duration {
+        self.play_started_at
+            .map_or(Duration::ZERO, |started| started.elapsed())
+    }
+}
 
 /// Reference `NarratorState`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -62,6 +110,9 @@ pub struct NarratorManager {
     data: Option<TurnData>,
     /// The generation whose summary or playback is still outstanding.
     outstanding: Option<u64>,
+    tracking: ReadAloudTracking,
+    /// The events produced but not yet handed to the telemetry client.
+    telemetry: Vec<TelemetryRecord>,
 }
 
 impl Default for NarratorManager {
@@ -80,7 +131,18 @@ impl NarratorManager {
             generation: 0,
             data: None,
             outstanding: None,
+            tracking: ReadAloudTracking {
+                session_id: String::new(),
+                requested_at: None,
+                play_started_at: None,
+            },
+            telemetry: Vec::new(),
         }
+    }
+
+    /// The read-aloud events produced since the last drain.
+    pub fn take_telemetry(&mut self) -> Vec<TelemetryRecord> {
+        std::mem::take(&mut self.telemetry)
     }
 
     #[must_use]
@@ -152,6 +214,13 @@ impl NarratorManager {
         }
         self.state = NarratorState::Summarizing;
         self.outstanding = Some(self.generation);
+        // Reference `on_turn_end`: the tracking record is reset and the
+        // request event raised where the summary is asked for.
+        self.tracking.reset();
+        self.telemetry.push(TelemetryRecord::ReadAloudRequested {
+            read_aloud_session_id: self.tracking.session_id.clone(),
+            trigger: ReadAloudTrigger::AutoplayNextMessage,
+        });
         Some(NarratorEffect::Summarize {
             generation: self.generation,
             user_message: data.user_message,
@@ -184,22 +253,57 @@ impl NarratorManager {
     pub fn playback_started(&mut self, generation: u64) {
         if self.outstanding == Some(generation) {
             self.state = NarratorState::Speaking;
+            self.tracking.mark_play_started();
+            self.telemetry.push(TelemetryRecord::ReadAloudPlayStarted {
+                read_aloud_session_id: self.tracking.session_id.clone(),
+                time_to_first_read: self.tracking.time_to_first_read(),
+            });
         }
     }
 
-    /// Reference `_on_playback_finished` and the TTS failure path.
+    /// Reference `_on_playback_finished`: a session that was speaking ends as
+    /// completed, and one that never reached playback ends silently, as the
+    /// reference's state guard does.
     pub fn settle(&mut self, generation: u64) {
-        if self.outstanding == Some(generation) {
-            self.outstanding = None;
-            self.state = NarratorState::Idle;
+        if self.outstanding != Some(generation) {
+            return;
         }
+        if self.state == NarratorState::Speaking {
+            self.end(ReadAloudStatus::Completed, None);
+        }
+        self.outstanding = None;
+        self.state = NarratorState::Idle;
     }
 
-    /// Reference `cancel`.
+    /// Reference `_speak_summary`'s exception path: the session ends as an
+    /// error naming the failure's class.
+    pub fn fail(&mut self, generation: u64, error_type: impl Into<String>) {
+        if self.outstanding != Some(generation) {
+            return;
+        }
+        self.end(ReadAloudStatus::Error, Some(error_type.into()));
+        self.outstanding = None;
+        self.state = NarratorState::Idle;
+    }
+
+    fn end(&mut self, status: ReadAloudStatus, error_type: Option<String>) {
+        self.telemetry.push(TelemetryRecord::ReadAloudEnded {
+            read_aloud_session_id: self.tracking.session_id.clone(),
+            status,
+            error_type,
+            elapsed: self.tracking.elapsed_since_play(),
+        });
+    }
+
+    /// Reference `cancel`, which reports the session it interrupted whenever
+    /// the machine was not already idle.
     pub fn cancel(&mut self) -> Option<NarratorEffect> {
         self.data = None;
         if self.state == NarratorState::Idle && self.outstanding.is_none() {
             return None;
+        }
+        if self.state != NarratorState::Idle {
+            self.end(ReadAloudStatus::Canceled, None);
         }
         self.outstanding = None;
         self.state = NarratorState::Idle;
@@ -292,6 +396,105 @@ mod tests {
         );
         narrator.settle(1);
         assert_eq!(narrator.state(), NarratorState::Idle);
+    }
+
+    /// The wire names one run produced, in order.
+    fn event_names(narrator: &mut NarratorManager) -> Vec<&'static str> {
+        narrator
+            .take_telemetry()
+            .iter()
+            .map(|record| record.event().event_name())
+            .collect()
+    }
+
+    /// US-012: the three read-aloud events are raised where the reference
+    /// raises them, and the identifier is the same across one run.
+    #[test]
+    fn a_spoken_summary_reports_the_three_read_aloud_events() {
+        let mut narrator = enabled_manager();
+        narrator.on_turn_start("write the parser");
+        narrator.on_assistant_text("done");
+        assert!(
+            event_names(&mut narrator).is_empty(),
+            "nothing is reported before the summary is asked for"
+        );
+        narrator.on_turn_end();
+        assert_eq!(event_names(&mut narrator), ["vibe.read_aloud.requested"]);
+        narrator.apply_summary(1, Some("wrote the parser".to_owned()));
+        narrator.playback_started(1);
+        let started = narrator.take_telemetry();
+        assert_eq!(
+            started
+                .iter()
+                .map(|record| record.event().event_name())
+                .collect::<Vec<_>>(),
+            ["vibe.read_aloud.play_started"]
+        );
+        narrator.settle(1);
+        let ended = narrator.take_telemetry();
+        let [record] = ended.as_slice() else {
+            panic!("a finished playback reports one event");
+        };
+        assert_eq!(record.event().event_name(), "vibe.read_aloud.ended");
+        let properties = record
+            .attributes(None)
+            .expect("the payload carries no unsafe label")
+            .into_properties();
+        assert_eq!(properties["status"], serde_json::json!("completed"));
+        assert!(
+            properties["elapsed_seconds"].is_number(),
+            "playback started, so the elapsed time is a reading"
+        );
+    }
+
+    /// US-012: a summary that never played reports nothing, and a run the
+    /// operator interrupted reports the reference's cancelled spelling.
+    #[test]
+    fn a_run_that_never_played_reports_no_completion() {
+        let mut narrator = enabled_manager();
+        narrator.on_turn_start("write the parser");
+        narrator.on_assistant_text("done");
+        narrator.on_turn_end();
+        narrator.apply_summary(1, Some(String::new()));
+        assert_eq!(
+            event_names(&mut narrator),
+            ["vibe.read_aloud.requested"],
+            "an empty summary settles without ever speaking"
+        );
+
+        let mut narrator = enabled_manager();
+        narrator.on_turn_start("write the parser");
+        narrator.on_assistant_text("done");
+        narrator.on_turn_end();
+        narrator.cancel();
+        let names = event_names(&mut narrator);
+        assert_eq!(
+            names,
+            ["vibe.read_aloud.requested", "vibe.read_aloud.ended"]
+        );
+    }
+
+    /// US-012: a playback failure reports the error status with a class, and
+    /// the elapsed measures stay at zero when playback never started.
+    #[test]
+    fn a_failed_playback_reports_an_error_and_zero_elapsed() {
+        let mut narrator = enabled_manager();
+        narrator.on_turn_start("write the parser");
+        narrator.on_assistant_text("done");
+        narrator.on_turn_end();
+        narrator.apply_summary(1, Some("wrote the parser".to_owned()));
+        narrator.fail(1, "SpeechError");
+        let records = narrator.take_telemetry();
+        let [_requested, ended] = records.as_slice() else {
+            panic!("a failed playback reports the request and the end");
+        };
+        let properties = ended
+            .attributes(None)
+            .expect("the payload carries no unsafe label")
+            .into_properties();
+        assert_eq!(properties["status"], serde_json::json!("error"));
+        assert_eq!(properties["error_type"], serde_json::json!("SpeechError"));
+        assert_eq!(properties["elapsed_seconds"], serde_json::json!(0.0));
     }
 
     #[test]
