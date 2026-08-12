@@ -34,12 +34,29 @@
   now publishes its output container as a closed vocabulary rather than as a
   free string.
 
-- Record the audio lifecycle locally. A transcription session that opens, a
-  recording that is cancelled, a transcription that completes and one that fails
-  each record an event carrying the recording id the endpoint named, the
-  accumulated transcript length and the durations involved. The events are kept
-  on `diagnostics/logs/read` rather than shipped, and `enable_telemetry` decides
-  whether they are kept at all.
+- Report the whole upstream event vocabulary. A session now reports when it
+  opens and closes, how long it took to become ready and how long the terminal
+  took to draw its first frame; every model call reports the model, the context
+  and prompt sizes, the call type and the attachments it carries; every answered
+  tool call reports the tool, how it ended, the operator's decision, the agent
+  profile, the model, the files it created or modified, the extension it touched
+  and whether a shell command ran in the background. A slash command, a copied
+  selection, an interrupted agent, a refused approval, a cancelled question, an
+  inserted `@` mention, the voice toggle and an API key added during onboarding
+  each report themselves too, and so does a teleport run: its completion or its
+  failure, attributed to the stage it reached, with the project picker's own
+  payload merged in, and a link the service refuses is reported as cleared
+  because the failure now carries the HTTP status that refused it. `vibe.admin_config_applied` is the one upstream event this
+  binary does not raise, because it reports on an org-managed configuration
+  layer this binary does not compose.
+
+- Record the audio lifecycle. A transcription session that opens, a recording
+  that is cancelled, a transcription that completes and one that fails each
+  report an event carrying the recording id the endpoint named, the accumulated
+  transcript length and the durations involved, and a narrated turn reports its
+  request, its playback and how it ended. The events are sent under the same
+  envelope and the same `enable_telemetry` gate as every other event rather than
+  being kept locally.
 
 - Watch the workspace while `file_watcher_for_autocomplete` is on. A file
   created, modified or deleted during a session is reflected in the next `@`
