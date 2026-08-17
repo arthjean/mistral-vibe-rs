@@ -49,78 +49,146 @@ impl ClientCapability {
     }
 }
 
-/// One ACP client method exposed as an agent tool. This table is the single
-/// source of truth for the method name, the capability that gates it, and the
-/// arguments it accepts.
-pub(crate) struct ClientToolSpec {
-    pub(crate) tool: &'static str,
-    pub(crate) method: &'static str,
-    pub(crate) capability: ClientCapability,
-    fields: &'static [&'static str],
+/// One ACP client method exposed as an agent tool. The enum is the single
+/// source of truth for the tool name, the wire method, the capability that
+/// gates it, and the arguments it accepts, so none of the four can be declared
+/// without the other three.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ClientTool {
+    ReadTextFile,
+    WriteTextFile,
+    TerminalCreate,
+    TerminalOutput,
+    TerminalWaitForExit,
+    TerminalKill,
+    TerminalRelease,
 }
 
-impl ClientToolSpec {
-    fn input_schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": self
-                .fields
-                .iter()
-                .map(|field| ((*field).to_owned(), json!({"type": "string"})))
-                .collect::<serde_json::Map<_, _>>(),
-            "required": self.fields,
-            "additionalProperties": true,
-        })
+impl ClientTool {
+    pub(crate) const ALL: [Self; 7] = [
+        Self::ReadTextFile,
+        Self::WriteTextFile,
+        Self::TerminalCreate,
+        Self::TerminalOutput,
+        Self::TerminalWaitForExit,
+        Self::TerminalKill,
+        Self::TerminalRelease,
+    ];
+
+    pub(crate) const fn tool(self) -> &'static str {
+        match self {
+            Self::ReadTextFile => "acp_read_text_file",
+            Self::WriteTextFile => "acp_write_text_file",
+            Self::TerminalCreate => "acp_terminal_create",
+            Self::TerminalOutput => "acp_terminal_output",
+            Self::TerminalWaitForExit => "acp_terminal_wait_for_exit",
+            Self::TerminalKill => "acp_terminal_kill",
+            Self::TerminalRelease => "acp_terminal_release",
+        }
+    }
+
+    pub(crate) const fn method(self) -> &'static str {
+        match self {
+            Self::ReadTextFile => "fs/read_text_file",
+            Self::WriteTextFile => "fs/write_text_file",
+            Self::TerminalCreate => "terminal/create",
+            Self::TerminalOutput => "terminal/output",
+            Self::TerminalWaitForExit => "terminal/wait_for_exit",
+            Self::TerminalKill => "terminal/kill",
+            Self::TerminalRelease => "terminal/release",
+        }
+    }
+
+    pub(crate) const fn capability(self) -> ClientCapability {
+        match self {
+            Self::ReadTextFile => ClientCapability::FilesystemRead,
+            Self::WriteTextFile => ClientCapability::FilesystemWrite,
+            Self::TerminalCreate
+            | Self::TerminalOutput
+            | Self::TerminalWaitForExit
+            | Self::TerminalKill
+            | Self::TerminalRelease => ClientCapability::Terminal,
+        }
+    }
+
+    /// The arguments the ACP client method actually accepts. `sessionId` is
+    /// not declared: the handler fills it in from the session the tool was
+    /// registered for, so the model never supplies it.
+    fn input_schema(self) -> Value {
+        match self {
+            Self::ReadTextFile => object_schema(
+                json!({
+                    "path": {"type": "string", "description": "Absolute path of the file to read"},
+                    "line": {"type": "integer", "minimum": 0, "description": "First line to read, counting from 1"},
+                    "limit": {"type": "integer", "minimum": 0, "description": "How many lines to read at most"},
+                }),
+                &["path"],
+            ),
+            Self::WriteTextFile => object_schema(
+                json!({
+                    "path": {"type": "string", "description": "Absolute path of the file to write"},
+                    "content": {"type": "string", "description": "Full text to write to the file"},
+                }),
+                &["path", "content"],
+            ),
+            Self::TerminalCreate => object_schema(
+                json!({
+                    "command": {"type": "string", "description": "Program to run"},
+                    "args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Arguments passed to the program",
+                    },
+                    "env": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "value": {"type": "string"},
+                            },
+                            "required": ["name", "value"],
+                        },
+                        "description": "Environment variables set for the program",
+                    },
+                    "cwd": {"type": "string", "description": "Absolute directory to run the program in"},
+                    "outputByteLimit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "How many output bytes the client retains before truncating from the start",
+                    },
+                }),
+                &["command"],
+            ),
+            Self::TerminalOutput
+            | Self::TerminalWaitForExit
+            | Self::TerminalKill
+            | Self::TerminalRelease => object_schema(
+                json!({
+                    "terminalId": {
+                        "type": "string",
+                        "description": "Identifier a previous terminal creation returned",
+                    },
+                }),
+                &["terminalId"],
+            ),
+        }
     }
 }
 
-pub(crate) const CLIENT_TOOLS: &[ClientToolSpec] = &[
-    ClientToolSpec {
-        tool: "acp_read_text_file",
-        method: "fs/read_text_file",
-        capability: ClientCapability::FilesystemRead,
-        fields: &["path"],
-    },
-    ClientToolSpec {
-        tool: "acp_write_text_file",
-        method: "fs/write_text_file",
-        capability: ClientCapability::FilesystemWrite,
-        fields: &["path", "content"],
-    },
-    ClientToolSpec {
-        tool: "acp_terminal_create",
-        method: "terminal/create",
-        capability: ClientCapability::Terminal,
-        fields: &["command"],
-    },
-    ClientToolSpec {
-        tool: "acp_terminal_output",
-        method: "terminal/output",
-        capability: ClientCapability::Terminal,
-        fields: &["terminalId"],
-    },
-    ClientToolSpec {
-        tool: "acp_terminal_wait_for_exit",
-        method: "terminal/wait_for_exit",
-        capability: ClientCapability::Terminal,
-        fields: &["terminalId"],
-    },
-    ClientToolSpec {
-        tool: "acp_terminal_kill",
-        method: "terminal/kill",
-        capability: ClientCapability::Terminal,
-        fields: &["terminalId"],
-    },
-    ClientToolSpec {
-        tool: "acp_terminal_release",
-        method: "terminal/release",
-        capability: ClientCapability::Terminal,
-        fields: &["terminalId"],
-    },
-];
+fn object_schema(properties: Value, required: &[&str]) -> Value {
+    json!({
+        "type": "object",
+        "properties": properties,
+        "required": required,
+        "additionalProperties": false,
+    })
+}
 
-pub(crate) fn client_tool_spec(method: &str) -> Option<&'static ClientToolSpec> {
-    CLIENT_TOOLS.iter().find(|spec| spec.method == method)
+pub(crate) fn client_tool_for_method(method: &str) -> Option<ClientTool> {
+    ClientTool::ALL
+        .into_iter()
+        .find(|tool| tool.method() == method)
 }
 
 pub(crate) fn declared_client_tools(
@@ -141,19 +209,19 @@ pub(crate) struct AcpClientToolFactory {
 
 impl SessionToolFactory for AcpClientToolFactory {
     fn register(&self, session_id: &str, tools: &ToolRegistry) -> Result<(), String> {
-        for spec in CLIENT_TOOLS
-            .iter()
-            .filter(|spec| spec.capability.enabled(&self.capabilities))
+        for tool in ClientTool::ALL
+            .into_iter()
+            .filter(|tool| tool.capability().enabled(&self.capabilities))
         {
             tools
                 .register(
                     ToolSpec {
-                        name: spec.tool.to_owned(),
+                        name: tool.tool().to_owned(),
                         description: format!(
                             "Execute `{}` through the connected ACP editor client",
-                            spec.method
+                            tool.method()
                         ),
-                        input_schema: spec.input_schema(),
+                        input_schema: tool.input_schema(),
                         output_schema: None,
                         config: Value::Null,
                         state: Value::Null,
@@ -164,7 +232,7 @@ impl SessionToolFactory for AcpClientToolFactory {
                     },
                     client_tool_handler(
                         self.client.clone(),
-                        spec.method,
+                        tool.method(),
                         session_id.to_owned(),
                         self.timeout,
                     ),
@@ -221,9 +289,9 @@ pub(crate) fn require_client_method(
     method: &str,
     capabilities: &AcpClientCapabilities,
 ) -> Result<(), AcpError> {
-    let spec = client_tool_spec(method)
+    let tool = client_tool_for_method(method)
         .ok_or_else(|| AcpError::UnsupportedClientFlow(method.to_owned()))?;
-    if spec.capability.enabled(capabilities) {
+    if tool.capability().enabled(capabilities) {
         Ok(())
     } else {
         Err(AcpError::UnsupportedClientFlow(format!(
