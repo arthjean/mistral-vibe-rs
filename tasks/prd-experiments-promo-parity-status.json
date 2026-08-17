@@ -27,10 +27,10 @@
     {
       "id": "EP-003",
       "title": "The experiments engine",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0,
+      "stories_done": 3,
       "stories_in_review": 0
     },
     {
@@ -144,43 +144,43 @@
       "id": "US-006",
       "title": "The eval payload models and their resolution",
       "epic": "EP-003",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-003"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-17",
+      "completed_at": "2026-08-17",
+      "reviewed_at": "2026-08-17"
     },
     {
       "id": "US-007",
       "title": "The remote eval client",
       "epic": "EP-003",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-006"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-17",
+      "completed_at": "2026-08-17",
+      "reviewed_at": "2026-08-17"
     },
     {
       "id": "US-008",
       "title": "The experiment manager",
       "epic": "EP-003",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-006"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-17",
+      "completed_at": "2026-08-17",
+      "reviewed_at": "2026-08-17"
     },
     {
       "id": "US-009",
