@@ -1,770 +1,9 @@
 {
-  "attributes": [
-    {
-      "attributes": {
-        "agent_version": "{version}",
-        "client_name": null,
-        "client_version": null,
-        "custom_system_prompt": false,
-        "entrypoint": "unknown",
-        "organizationId": null,
-        "os": "{platformId}",
-        "terminal_emulator": null,
-        "userId": "0889ce8313bb7ddbccdae21c86f894ce"
-      },
-      "context": "no-launch-context",
-      "credentialVariable": null,
-      "document": "default-prompt",
-      "id": "default-prompt/no-launch-context",
-      "payloadKeys": [
-        "agent_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "os",
-        "userId"
-      ]
-    },
-    {
-      "attributes": {
-        "agent_version": "9.9.9",
-        "client_name": "vibe",
-        "client_version": "9.9.9",
-        "custom_system_prompt": false,
-        "entrypoint": "cli",
-        "organizationId": "oracle-organization",
-        "os": "{platformId}",
-        "terminal_emulator": null,
-        "userId": "0889ce8313bb7ddbccdae21c86f894ce"
-      },
-      "context": "cli",
-      "credentialVariable": null,
-      "document": "default-prompt",
-      "id": "default-prompt/cli",
-      "payloadKeys": [
-        "agent_version",
-        "client_name",
-        "client_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "organizationId",
-        "os",
-        "userId"
-      ]
-    },
-    {
-      "attributes": {
-        "agent_version": "9.9.9",
-        "client_name": "vibe",
-        "client_version": "9.9.9",
-        "custom_system_prompt": false,
-        "entrypoint": "cli",
-        "organizationId": "oracle-organization",
-        "os": "{platformId}",
-        "terminal_emulator": "vscode",
-        "userId": "0889ce8313bb7ddbccdae21c86f894ce"
-      },
-      "context": "cli-in-vscode",
-      "credentialVariable": null,
-      "document": "default-prompt",
-      "id": "default-prompt/cli-in-vscode",
-      "payloadKeys": [
-        "agent_version",
-        "client_name",
-        "client_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "organizationId",
-        "os",
-        "terminal_emulator",
-        "userId"
-      ]
-    },
-    {
-      "attributes": {
-        "agent_version": "9.9.9",
-        "client_name": "zed",
-        "client_version": "0.1.0",
-        "custom_system_prompt": false,
-        "entrypoint": "acp",
-        "organizationId": "oracle-organization",
-        "os": "{platformId}",
-        "terminal_emulator": "cursor",
-        "userId": "0889ce8313bb7ddbccdae21c86f894ce"
-      },
-      "context": "acp-in-cursor",
-      "credentialVariable": null,
-      "document": "default-prompt",
-      "id": "default-prompt/acp-in-cursor",
-      "payloadKeys": [
-        "agent_version",
-        "client_name",
-        "client_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "organizationId",
-        "os",
-        "terminal_emulator",
-        "userId"
-      ]
-    },
-    {
-      "attributes": {
-        "agent_version": "9.9.9",
-        "client_name": "harness",
-        "client_version": "2.0.0",
-        "custom_system_prompt": false,
-        "entrypoint": "programmatic",
-        "organizationId": "oracle-organization",
-        "os": "{platformId}",
-        "terminal_emulator": "unknown",
-        "userId": "0889ce8313bb7ddbccdae21c86f894ce"
-      },
-      "context": "programmatic",
-      "credentialVariable": null,
-      "document": "default-prompt",
-      "id": "default-prompt/programmatic",
-      "payloadKeys": [
-        "agent_version",
-        "client_name",
-        "client_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "organizationId",
-        "os",
-        "terminal_emulator",
-        "userId"
-      ]
-    },
-    {
-      "attributes": {
-        "agent_version": "{version}",
-        "client_name": null,
-        "client_version": null,
-        "custom_system_prompt": true,
-        "entrypoint": "unknown",
-        "organizationId": null,
-        "os": "{platformId}",
-        "terminal_emulator": null,
-        "userId": "0889ce8313bb7ddbccdae21c86f894ce"
-      },
-      "context": "no-launch-context",
-      "credentialVariable": null,
-      "document": "custom-prompt",
-      "id": "custom-prompt/no-launch-context",
-      "payloadKeys": [
-        "agent_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "os",
-        "userId"
-      ]
-    },
-    {
-      "attributes": {
-        "agent_version": "9.9.9",
-        "client_name": "vibe",
-        "client_version": "9.9.9",
-        "custom_system_prompt": true,
-        "entrypoint": "cli",
-        "organizationId": "oracle-organization",
-        "os": "{platformId}",
-        "terminal_emulator": null,
-        "userId": "0889ce8313bb7ddbccdae21c86f894ce"
-      },
-      "context": "cli",
-      "credentialVariable": null,
-      "document": "custom-prompt",
-      "id": "custom-prompt/cli",
-      "payloadKeys": [
-        "agent_version",
-        "client_name",
-        "client_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "organizationId",
-        "os",
-        "userId"
-      ]
-    },
-    {
-      "attributes": {
-        "agent_version": "9.9.9",
-        "client_name": "vibe",
-        "client_version": "9.9.9",
-        "custom_system_prompt": true,
-        "entrypoint": "cli",
-        "organizationId": "oracle-organization",
-        "os": "{platformId}",
-        "terminal_emulator": "vscode",
-        "userId": "0889ce8313bb7ddbccdae21c86f894ce"
-      },
-      "context": "cli-in-vscode",
-      "credentialVariable": null,
-      "document": "custom-prompt",
-      "id": "custom-prompt/cli-in-vscode",
-      "payloadKeys": [
-        "agent_version",
-        "client_name",
-        "client_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "organizationId",
-        "os",
-        "terminal_emulator",
-        "userId"
-      ]
-    },
-    {
-      "attributes": {
-        "agent_version": "9.9.9",
-        "client_name": "zed",
-        "client_version": "0.1.0",
-        "custom_system_prompt": true,
-        "entrypoint": "acp",
-        "organizationId": "oracle-organization",
-        "os": "{platformId}",
-        "terminal_emulator": "cursor",
-        "userId": "0889ce8313bb7ddbccdae21c86f894ce"
-      },
-      "context": "acp-in-cursor",
-      "credentialVariable": null,
-      "document": "custom-prompt",
-      "id": "custom-prompt/acp-in-cursor",
-      "payloadKeys": [
-        "agent_version",
-        "client_name",
-        "client_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "organizationId",
-        "os",
-        "terminal_emulator",
-        "userId"
-      ]
-    },
-    {
-      "attributes": {
-        "agent_version": "9.9.9",
-        "client_name": "harness",
-        "client_version": "2.0.0",
-        "custom_system_prompt": true,
-        "entrypoint": "programmatic",
-        "organizationId": "oracle-organization",
-        "os": "{platformId}",
-        "terminal_emulator": "unknown",
-        "userId": "0889ce8313bb7ddbccdae21c86f894ce"
-      },
-      "context": "programmatic",
-      "credentialVariable": null,
-      "document": "custom-prompt",
-      "id": "custom-prompt/programmatic",
-      "payloadKeys": [
-        "agent_version",
-        "client_name",
-        "client_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "organizationId",
-        "os",
-        "terminal_emulator",
-        "userId"
-      ]
-    }
-  ],
-  "bucketingKey": [
-    {
-      "bucketingKey": "0889ce8313bb7ddbccdae21c86f894ce",
-      "hexadecimal": true,
-      "id": "ORACLE_MISTRAL_KEY",
-      "length": 32,
-      "stable": true,
-      "variable": "ORACLE_MISTRAL_KEY"
-    },
-    {
-      "bucketingKey": "7e6abf8cb60b43cb238fb13d64aaf928",
-      "hexadecimal": true,
-      "id": "ORACLE_SECOND_KEY",
-      "length": 32,
-      "stable": true,
-      "variable": "ORACLE_SECOND_KEY"
-    },
-    {
-      "bucketingKey": "d885615eeb904f61424687c429caa9f3",
-      "hexadecimal": true,
-      "id": "MISTRAL_API_KEY",
-      "length": 32,
-      "stable": true,
-      "variable": "MISTRAL_API_KEY"
-    },
-    {
-      "bucketingKey": null,
-      "hexadecimal": null,
-      "id": "distinctPerKey",
-      "length": null,
-      "stable": true,
-      "variable": null
-    }
-  ],
-  "configMapping": [
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "no-variants",
-      "variants": {}
-    },
-    {
-      "data": {
-        "system_prompt_id": "tests"
-      },
-      "hasFingerprint": true,
-      "id": "known-system-prompt",
-      "variants": {
-        "vibe_cli_system_prompt": "tests"
-      }
-    },
-    {
-      "data": {
-        "system_prompt_id": "lean"
-      },
-      "hasFingerprint": true,
-      "id": "another-known-system-prompt",
-      "variants": {
-        "vibe_cli_system_prompt": "lean"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "unknown-system-prompt",
-      "variants": {
-        "vibe_cli_system_prompt": "removed_after_graduation"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "empty-system-prompt",
-      "variants": {
-        "vibe_cli_system_prompt": ""
-      }
-    },
-    {
-      "data": {
-        "managed_shell_tools_enabled": true
-      },
-      "hasFingerprint": true,
-      "id": "managed-shell-managed",
-      "variants": {
-        "vibe_cli_managed_shell_tools": "managed"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "managed-shell-legacy",
-      "variants": {
-        "vibe_cli_managed_shell_tools": "legacy"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "managed-shell-unknown",
-      "variants": {
-        "vibe_cli_managed_shell_tools": "something-else"
-      }
-    },
-    {
-      "data": {
-        "routed_default_model": "oracle-routed-alias"
-      },
-      "hasFingerprint": true,
-      "id": "routing-active-model",
-      "variants": {
-        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\"}"
-      }
-    },
-    {
-      "data": {
-        "routed_default_model": "oracle-routed-alias",
-        "routed_model_config": "{\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}"
-      },
-      "hasFingerprint": true,
-      "id": "routing-with-model-config",
-      "variants": {
-        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "routing-empty-object",
-      "variants": {
-        "vibe_cli_default_routing_model": "{}"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "routing-without-active-model",
-      "variants": {
-        "vibe_cli_default_routing_model": "{\"a\": 1}"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "routing-empty-active-model",
-      "variants": {
-        "vibe_cli_default_routing_model": "{\"active_model\": \"\"}"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "routing-active-model-not-a-string",
-      "variants": {
-        "vibe_cli_default_routing_model": "{\"active_model\": 7}"
-      }
-    },
-    {
-      "data": {
-        "routed_default_model": "oracle-routed-alias"
-      },
-      "hasFingerprint": true,
-      "id": "routing-model-config-not-an-object",
-      "variants": {
-        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": []}"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "routing-not-json",
-      "variants": {
-        "vibe_cli_default_routing_model": "not json at all"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "routing-json-array",
-      "variants": {
-        "vibe_cli_default_routing_model": "[1, 2]"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "routing-json-string",
-      "variants": {
-        "vibe_cli_default_routing_model": "\"a string\""
-      }
-    },
-    {
-      "data": {
-        "managed_shell_tools_enabled": true,
-        "routed_default_model": "oracle-routed-alias",
-        "routed_model_config": "{\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}",
-        "system_prompt_id": "tests"
-      },
-      "hasFingerprint": true,
-      "id": "every-experiment",
-      "variants": {
-        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}",
-        "vibe_cli_managed_shell_tools": "managed",
-        "vibe_cli_system_prompt": "tests"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "variants-that-map-to-nothing",
-      "variants": {
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "removed_after_graduation"
-      }
-    },
-    {
-      "data": {},
-      "hasFingerprint": false,
-      "id": "unknown-experiment-name",
-      "variants": {
-        "vibe_cli_unknown_rollout": "on"
-      }
-    },
-    {
-      "data": {
-        "refusal": "NotImplementedError"
-      },
-      "hasFingerprint": null,
-      "id": "persisting-is-refused",
-      "variants": {
-        "vibe_cli_system_prompt": "tests"
-      }
-    }
-  ],
-  "configVariants": [
-    {
-      "assignments": {},
-      "configVariants": {},
-      "id": "uninitialized",
-      "response": null
-    },
-    {
-      "assignments": {},
-      "configVariants": {},
-      "id": "empty-features",
-      "response": {
-        "features": {}
-      }
-    },
-    {
-      "assignments": {
-        "vibe_cli_system_prompt": "tests"
-      },
-      "configVariants": {
-        "vibe_cli_system_prompt": "tests"
-      },
-      "id": "confirmed-exposure",
-      "response": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "inExperiment": true,
-                      "key": "1",
-                      "variationId": 1
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "assignments": {},
-      "configVariants": {
-        "vibe_cli_system_prompt": "tests"
-      },
-      "id": "forced-without-tracks",
-      "response": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "assignments": {},
-      "configVariants": {
-        "vibe_cli_system_prompt": "tests"
-      },
-      "id": "forced-not-in-experiment",
-      "response": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "inExperiment": false,
-                      "key": "1",
-                      "variationId": 1
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "assignments": {},
-      "configVariants": {
-        "vibe_cli_system_prompt": "tests"
-      },
-      "id": "forced-with-in-experiment-absent",
-      "response": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "assignments": {
-        "vibe_cli_system_prompt": "cli"
-      },
-      "configVariants": {
-        "vibe_cli_system_prompt": "cli"
-      },
-      "id": "default-value-without-a-force",
-      "response": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "inExperiment": true,
-                      "key": "1",
-                      "variationId": 1
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "assignments": {},
-      "configVariants": {
-        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\"}"
-      },
-      "id": "forced-object-without-tracks",
-      "response": {
-        "features": {
-          "vibe_cli_default_routing_model": {
-            "defaultValue": "{}",
-            "rules": [
-              {
-                "force": {
-                  "active_model": "oracle-routed-alias"
-                }
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "assignments": {
-        "vibe_cli_managed_shell_tools": "managed"
-      },
-      "configVariants": {
-        "vibe_cli_managed_shell_tools": "managed"
-      },
-      "id": "experiment-key-differs-from-the-feature-key",
-      "response": {
-        "features": {
-          "vibe_cli_managed_shell_tools": {
-            "defaultValue": "legacy",
-            "rules": [
-              {
-                "force": "managed",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "some_other_experiment"
-                    },
-                    "result": {
-                      "inExperiment": true,
-                      "key": "1",
-                      "variationId": 1
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "assignments": {
-        "vibe_cli_system_prompt": "tests"
-      },
-      "configVariants": {
-        "vibe_cli_managed_shell_tools": "managed",
-        "vibe_cli_system_prompt": "tests"
-      },
-      "id": "mixed-confirmed-and-forced",
-      "response": {
-        "features": {
-          "vibe_cli_default_routing_model": {
-            "defaultValue": "{}",
-            "rules": []
-          },
-          "vibe_cli_managed_shell_tools": {
-            "defaultValue": "legacy",
-            "rules": [
-              {
-                "force": "managed"
-              }
-            ]
-          },
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "inExperiment": true,
-                      "key": "1",
-                      "variationId": 1
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
-    }
-  ],
+  "schemaVersion": 1,
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+  },
+  "note": "Experiments corpus: what the pinned reference's remote eval client, experiment manager, GrowthBook configuration layer and session helpers answer for each scripted input. The eval request is intercepted one call before the connection and a socket guard fails the run on any connection attempt, so no scenario depends on a live rollout: in remote evaluation mode the proxy resolves the bucketing and the client only applies the answer. A credential is recorded as the environment variable it came from and never as a value, and the only key derivative committed is the 32-character bucketing digest. Regenerate with scripts/parity/experiments.py --corpus when the pinned reference moves.",
   "constants": [
     {
       "id": "experimentNames",
@@ -777,9 +16,9 @@
     {
       "id": "defaultVariants",
       "value": {
-        "vibe_cli_default_routing_model": "{}",
+        "vibe_cli_system_prompt": "cli",
         "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
+        "vibe_cli_default_routing_model": "{}"
       }
     },
     {
@@ -813,24 +52,24 @@
     {
       "id": "configuredFields",
       "value": {
+        "vibe_cli_system_prompt": [
+          "system_prompt_id"
+        ],
         "vibe_cli_default_routing_model": [
           "routed_default_model",
           "routed_model_config"
         ],
         "vibe_cli_managed_shell_tools": [
           "managed_shell_tools_enabled"
-        ],
-        "vibe_cli_system_prompt": [
-          "system_prompt_id"
         ]
       }
     },
     {
       "id": "experimentsConfigDefaults",
       "value": {
+        "enable": true,
         "api_host": "https://experiments.mistral.services/",
-        "client_key": "sdk-OE8yJgTXZY6tj",
-        "enable": true
+        "client_key": "sdk-OE8yJgTXZY6tj"
       }
     },
     {
@@ -843,427 +82,462 @@
       ]
     }
   ],
-  "evalFailures": [
+  "bucketingKey": [
     {
-      "assignments": {},
-      "configVariants": {},
-      "id": "connection-error",
-      "logs": {
-        "count": 1,
-        "levels": [
-          "WARNING"
-        ]
-      },
-      "requests": 1,
-      "state": null,
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsAreDefaults": true
+      "id": "ORACLE_MISTRAL_KEY",
+      "variable": "ORACLE_MISTRAL_KEY",
+      "bucketingKey": "0889ce8313bb7ddbccdae21c86f894ce",
+      "length": 32,
+      "stable": true,
+      "hexadecimal": true
     },
     {
-      "assignments": {},
-      "configVariants": {},
-      "id": "timeout",
-      "logs": {
-        "count": 1,
-        "levels": [
-          "WARNING"
-        ]
-      },
-      "requests": 1,
-      "state": null,
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsAreDefaults": true
+      "id": "ORACLE_SECOND_KEY",
+      "variable": "ORACLE_SECOND_KEY",
+      "bucketingKey": "7e6abf8cb60b43cb238fb13d64aaf928",
+      "length": 32,
+      "stable": true,
+      "hexadecimal": true
     },
     {
-      "assignments": {},
-      "configVariants": {},
-      "id": "status-400",
-      "logs": {
-        "count": 1,
-        "levels": [
-          "WARNING"
-        ]
-      },
-      "requests": 1,
-      "state": null,
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsAreDefaults": true
+      "id": "MISTRAL_API_KEY",
+      "variable": "MISTRAL_API_KEY",
+      "bucketingKey": "d885615eeb904f61424687c429caa9f3",
+      "length": 32,
+      "stable": true,
+      "hexadecimal": true
     },
     {
-      "assignments": {},
-      "configVariants": {},
-      "id": "status-404",
-      "logs": {
-        "count": 1,
-        "levels": [
-          "WARNING"
-        ]
-      },
-      "requests": 1,
-      "state": null,
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsAreDefaults": true
-    },
-    {
-      "assignments": {},
-      "configVariants": {},
-      "id": "status-500",
-      "logs": {
-        "count": 1,
-        "levels": [
-          "WARNING"
-        ]
-      },
-      "requests": 1,
-      "state": null,
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsAreDefaults": true
-    },
-    {
-      "assignments": {},
-      "configVariants": {},
-      "id": "status-503",
-      "logs": {
-        "count": 1,
-        "levels": [
-          "WARNING"
-        ]
-      },
-      "requests": 1,
-      "state": null,
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsAreDefaults": true
-    },
-    {
-      "assignments": {},
-      "configVariants": {},
-      "id": "non-json-body",
-      "logs": {
-        "count": 1,
-        "levels": [
-          "WARNING"
-        ]
-      },
-      "requests": 1,
-      "state": null,
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsAreDefaults": true
-    },
-    {
-      "assignments": {},
-      "configVariants": {},
-      "id": "body-fails-validation",
-      "logs": {
-        "count": 1,
-        "levels": [
-          "WARNING"
-        ]
-      },
-      "requests": 1,
-      "state": null,
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsAreDefaults": true
-    },
-    {
-      "assignments": {},
-      "configVariants": {},
-      "id": "url-unset",
-      "logs": {
-        "count": 0,
-        "levels": []
-      },
-      "requests": 0,
-      "state": null,
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsAreDefaults": true
-    }
-  ],
-  "evalRequest": [
-    {
-      "attributeKeys": [
-        "agent_version",
-        "client_name",
-        "client_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "organizationId",
-        "os",
-        "terminal_emulator",
-        "userId"
-      ],
-      "attributes": {
-        "agent_version": "9.9.9",
-        "client_name": "oracle-client",
-        "client_version": "1.2.3",
-        "custom_system_prompt": false,
-        "entrypoint": "cli",
-        "organizationId": "oracle-organization",
-        "os": "{platformId}",
-        "terminal_emulator": "vscode",
-        "userId": "0123456789abcdef0123456789abcdef"
-      },
-      "credentialVariable": null,
-      "forcedFeatures": [],
-      "forcedVariations": {},
-      "headerNames": [],
-      "id": "every-attribute",
-      "method": "POST",
-      "payloadKeys": [
-        "attributes",
-        "forcedFeatures",
-        "forcedVariations",
-        "url"
-      ],
-      "requests": 1,
-      "returnedState": "features",
-      "url": "https://experiments.example.test/api/eval/sdk-oracle-client-key",
-      "urlField": ""
-    },
-    {
-      "attributeKeys": [
-        "agent_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "os",
-        "userId"
-      ],
-      "attributes": {
-        "agent_version": "9.9.9",
-        "custom_system_prompt": false,
-        "entrypoint": "cli",
-        "os": "{platformId}",
-        "userId": "0123456789abcdef0123456789abcdef"
-      },
-      "credentialVariable": null,
-      "forcedFeatures": [],
-      "forcedVariations": {},
-      "headerNames": [],
-      "id": "optional-attributes-absent",
-      "method": "POST",
-      "payloadKeys": [
-        "attributes",
-        "forcedFeatures",
-        "forcedVariations",
-        "url"
-      ],
-      "requests": 1,
-      "returnedState": "features",
-      "url": "https://experiments.example.test/api/eval/sdk-oracle-client-key",
-      "urlField": ""
-    },
-    {
-      "attributeKeys": [
-        "agent_version",
-        "client_name",
-        "client_version",
-        "custom_system_prompt",
-        "entrypoint",
-        "organizationId",
-        "os",
-        "terminal_emulator",
-        "userId"
-      ],
-      "attributes": {
-        "agent_version": "9.9.9",
-        "client_name": "oracle-client",
-        "client_version": "1.2.3",
-        "custom_system_prompt": true,
-        "entrypoint": "acp",
-        "organizationId": "oracle-organization",
-        "os": "{platformId}",
-        "terminal_emulator": "vscode",
-        "userId": "0123456789abcdef0123456789abcdef"
-      },
-      "credentialVariable": null,
-      "forcedFeatures": [],
-      "forcedVariations": {},
-      "headerNames": [],
-      "id": "custom-system-prompt",
-      "method": "POST",
-      "payloadKeys": [
-        "attributes",
-        "forcedFeatures",
-        "forcedVariations",
-        "url"
-      ],
-      "requests": 1,
-      "returnedState": "features",
-      "url": "https://experiments.example.test/api/eval/sdk-oracle-client-key",
-      "urlField": ""
-    },
-    {
-      "attributeKeys": null,
-      "attributes": {
-        "connect": 5.0,
-        "pool": 5.0,
-        "read": 5.0,
-        "write": 5.0
-      },
-      "credentialVariable": null,
-      "forcedFeatures": null,
-      "forcedVariations": null,
-      "headerNames": null,
-      "id": "lazyClientTimeout",
-      "method": null,
-      "payloadKeys": null,
-      "requests": 0,
-      "returnedState": null,
-      "url": "https://experiments.example.test/api/eval/sdk-oracle-client-key",
-      "urlField": null
-    },
-    {
-      "attributeKeys": null,
-      "attributes": {
-        "closes": 1
-      },
-      "credentialVariable": null,
-      "forcedFeatures": null,
-      "forcedVariations": null,
-      "headerNames": null,
-      "id": "closeIsIdempotent",
-      "method": null,
-      "payloadKeys": null,
-      "requests": 0,
-      "returnedState": null,
-      "url": null,
-      "urlField": null
+      "id": "distinctPerKey",
+      "variable": null,
+      "bucketingKey": null,
+      "length": null,
+      "stable": true,
+      "hexadecimal": null
     }
   ],
   "evalUrl": [
     {
+      "id": "plain",
       "apiHost": "https://experiments.example.test",
       "clientKey": "sdk-key",
-      "id": "plain",
       "url": "https://experiments.example.test/api/eval/sdk-key"
     },
     {
+      "id": "one-trailing-slash",
       "apiHost": "https://experiments.example.test/",
       "clientKey": "sdk-key",
-      "id": "one-trailing-slash",
       "url": "https://experiments.example.test/api/eval/sdk-key"
     },
     {
+      "id": "three-trailing-slashes",
       "apiHost": "https://experiments.example.test///",
       "clientKey": "sdk-key",
-      "id": "three-trailing-slashes",
       "url": "https://experiments.example.test/api/eval/sdk-key"
     },
     {
+      "id": "host-with-a-path",
       "apiHost": "https://gateway.example.test/growthbook",
       "clientKey": "sdk-key",
-      "id": "host-with-a-path",
       "url": "https://gateway.example.test/growthbook/api/eval/sdk-key"
     },
     {
+      "id": "host-with-a-path-and-a-slash",
       "apiHost": "https://gateway.example.test/gb/",
       "clientKey": "sdk-key",
-      "id": "host-with-a-path-and-a-slash",
       "url": "https://gateway.example.test/gb/api/eval/sdk-key"
     },
     {
+      "id": "surrounding-whitespace",
       "apiHost": "  https://experiments.example.test  ",
       "clientKey": " sdk-key ",
-      "id": "surrounding-whitespace",
       "url": "https://experiments.example.test/api/eval/sdk-key"
     },
     {
+      "id": "empty-host",
       "apiHost": "",
       "clientKey": "sdk-key",
-      "id": "empty-host",
       "url": null
     },
     {
+      "id": "blank-host",
       "apiHost": "   ",
       "clientKey": "sdk-key",
-      "id": "blank-host",
       "url": null
     },
     {
+      "id": "host-of-only-slashes",
       "apiHost": "///",
       "clientKey": "sdk-key",
-      "id": "host-of-only-slashes",
       "url": null
     },
     {
+      "id": "empty-key",
       "apiHost": "https://experiments.example.test",
       "clientKey": "",
-      "id": "empty-key",
       "url": null
     },
     {
+      "id": "blank-key",
       "apiHost": "https://experiments.example.test",
       "clientKey": "  ",
-      "id": "blank-key",
       "url": null
     },
     {
+      "id": "both-empty",
       "apiHost": "",
       "clientKey": "",
-      "id": "both-empty",
       "url": null
+    }
+  ],
+  "evalRequest": [
+    {
+      "id": "every-attribute",
+      "method": "POST",
+      "url": "https://experiments.example.test/api/eval/sdk-oracle-client-key",
+      "headerNames": [],
+      "payloadKeys": [
+        "attributes",
+        "forcedFeatures",
+        "forcedVariations",
+        "url"
+      ],
+      "attributeKeys": [
+        "agent_version",
+        "client_name",
+        "client_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "organizationId",
+        "os",
+        "terminal_emulator",
+        "userId"
+      ],
+      "attributes": {
+        "userId": "0123456789abcdef0123456789abcdef",
+        "entrypoint": "cli",
+        "agent_version": "9.9.9",
+        "client_name": "oracle-client",
+        "client_version": "1.2.3",
+        "os": "{platformId}",
+        "terminal_emulator": "vscode",
+        "custom_system_prompt": false,
+        "organizationId": "oracle-organization"
+      },
+      "forcedVariations": {},
+      "forcedFeatures": [],
+      "urlField": "",
+      "credentialVariable": null,
+      "returnedState": "features",
+      "requests": 1
+    },
+    {
+      "id": "optional-attributes-absent",
+      "method": "POST",
+      "url": "https://experiments.example.test/api/eval/sdk-oracle-client-key",
+      "headerNames": [],
+      "payloadKeys": [
+        "attributes",
+        "forcedFeatures",
+        "forcedVariations",
+        "url"
+      ],
+      "attributeKeys": [
+        "agent_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "os",
+        "userId"
+      ],
+      "attributes": {
+        "userId": "0123456789abcdef0123456789abcdef",
+        "entrypoint": "cli",
+        "agent_version": "9.9.9",
+        "os": "{platformId}",
+        "custom_system_prompt": false
+      },
+      "forcedVariations": {},
+      "forcedFeatures": [],
+      "urlField": "",
+      "credentialVariable": null,
+      "returnedState": "features",
+      "requests": 1
+    },
+    {
+      "id": "custom-system-prompt",
+      "method": "POST",
+      "url": "https://experiments.example.test/api/eval/sdk-oracle-client-key",
+      "headerNames": [],
+      "payloadKeys": [
+        "attributes",
+        "forcedFeatures",
+        "forcedVariations",
+        "url"
+      ],
+      "attributeKeys": [
+        "agent_version",
+        "client_name",
+        "client_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "organizationId",
+        "os",
+        "terminal_emulator",
+        "userId"
+      ],
+      "attributes": {
+        "userId": "0123456789abcdef0123456789abcdef",
+        "entrypoint": "acp",
+        "agent_version": "9.9.9",
+        "client_name": "oracle-client",
+        "client_version": "1.2.3",
+        "os": "{platformId}",
+        "terminal_emulator": "vscode",
+        "custom_system_prompt": true,
+        "organizationId": "oracle-organization"
+      },
+      "forcedVariations": {},
+      "forcedFeatures": [],
+      "urlField": "",
+      "credentialVariable": null,
+      "returnedState": "features",
+      "requests": 1
+    },
+    {
+      "id": "lazyClientTimeout",
+      "method": null,
+      "url": "https://experiments.example.test/api/eval/sdk-oracle-client-key",
+      "headerNames": null,
+      "payloadKeys": null,
+      "attributeKeys": null,
+      "attributes": {
+        "connect": 5.0,
+        "read": 5.0,
+        "write": 5.0,
+        "pool": 5.0
+      },
+      "forcedVariations": null,
+      "forcedFeatures": null,
+      "urlField": null,
+      "credentialVariable": null,
+      "returnedState": null,
+      "requests": 0
+    },
+    {
+      "id": "closeIsIdempotent",
+      "method": null,
+      "url": null,
+      "headerNames": null,
+      "payloadKeys": null,
+      "attributeKeys": null,
+      "attributes": {
+        "closes": 1
+      },
+      "forcedVariations": null,
+      "forcedFeatures": null,
+      "urlField": null,
+      "credentialVariable": null,
+      "returnedState": null,
+      "requests": 0
+    }
+  ],
+  "evalFailures": [
+    {
+      "id": "connection-error",
+      "state": null,
+      "requests": 1,
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsAreDefaults": true,
+      "assignments": {},
+      "configVariants": {},
+      "logs": {
+        "count": 1,
+        "levels": [
+          "WARNING"
+        ]
+      }
+    },
+    {
+      "id": "timeout",
+      "state": null,
+      "requests": 1,
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsAreDefaults": true,
+      "assignments": {},
+      "configVariants": {},
+      "logs": {
+        "count": 1,
+        "levels": [
+          "WARNING"
+        ]
+      }
+    },
+    {
+      "id": "status-400",
+      "state": null,
+      "requests": 1,
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsAreDefaults": true,
+      "assignments": {},
+      "configVariants": {},
+      "logs": {
+        "count": 1,
+        "levels": [
+          "WARNING"
+        ]
+      }
+    },
+    {
+      "id": "status-404",
+      "state": null,
+      "requests": 1,
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsAreDefaults": true,
+      "assignments": {},
+      "configVariants": {},
+      "logs": {
+        "count": 1,
+        "levels": [
+          "WARNING"
+        ]
+      }
+    },
+    {
+      "id": "status-500",
+      "state": null,
+      "requests": 1,
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsAreDefaults": true,
+      "assignments": {},
+      "configVariants": {},
+      "logs": {
+        "count": 1,
+        "levels": [
+          "WARNING"
+        ]
+      }
+    },
+    {
+      "id": "status-503",
+      "state": null,
+      "requests": 1,
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsAreDefaults": true,
+      "assignments": {},
+      "configVariants": {},
+      "logs": {
+        "count": 1,
+        "levels": [
+          "WARNING"
+        ]
+      }
+    },
+    {
+      "id": "non-json-body",
+      "state": null,
+      "requests": 1,
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsAreDefaults": true,
+      "assignments": {},
+      "configVariants": {},
+      "logs": {
+        "count": 1,
+        "levels": [
+          "WARNING"
+        ]
+      }
+    },
+    {
+      "id": "body-fails-validation",
+      "state": null,
+      "requests": 1,
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsAreDefaults": true,
+      "assignments": {},
+      "configVariants": {},
+      "logs": {
+        "count": 1,
+        "levels": [
+          "WARNING"
+        ]
+      }
+    },
+    {
+      "id": "url-unset",
+      "state": null,
+      "requests": 0,
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsAreDefaults": true,
+      "assignments": {},
+      "configVariants": {},
+      "logs": {
+        "count": 0,
+        "levels": []
+      }
     }
   ],
   "featureResolution": [
     {
+      "id": "default-only",
       "definition": {
         "defaultValue": "cli",
         "rules": []
       },
-      "id": "default-only",
       "resolved": "cli"
     },
     {
+      "id": "default-null",
       "definition": {
         "defaultValue": null,
         "rules": []
       },
-      "id": "default-null",
       "resolved": null
     },
     {
+      "id": "no-rules-at-all",
       "definition": {
         "defaultValue": "cli"
       },
-      "id": "no-rules-at-all",
       "resolved": "cli"
     },
     {
+      "id": "forced-string",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1272,10 +546,10 @@
           }
         ]
       },
-      "id": "forced-string",
       "resolved": "tests"
     },
     {
+      "id": "forced-empty-string",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1284,10 +558,10 @@
           }
         ]
       },
-      "id": "forced-empty-string",
       "resolved": ""
     },
     {
+      "id": "forced-false",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1296,10 +570,10 @@
           }
         ]
       },
-      "id": "forced-false",
       "resolved": false
     },
     {
+      "id": "forced-zero",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1308,10 +582,10 @@
           }
         ]
       },
-      "id": "forced-zero",
       "resolved": 0
     },
     {
+      "id": "forced-object",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1322,12 +596,12 @@
           }
         ]
       },
-      "id": "forced-object",
       "resolved": {
         "active_model": "oracle-routed-alias"
       }
     },
     {
+      "id": "forced-array",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1339,13 +613,13 @@
           }
         ]
       },
-      "id": "forced-array",
       "resolved": [
         "a",
         "b"
       ]
     },
     {
+      "id": "first-rule-without-a-force",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1355,10 +629,10 @@
           }
         ]
       },
-      "id": "first-rule-without-a-force",
       "resolved": "tests"
     },
     {
+      "id": "no-rule-carries-a-force",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1368,10 +642,10 @@
           }
         ]
       },
-      "id": "no-rule-carries-a-force",
       "resolved": "cli"
     },
     {
+      "id": "rule-forcing-null",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1380,10 +654,10 @@
           }
         ]
       },
-      "id": "rule-forcing-null",
       "resolved": "cli"
     },
     {
+      "id": "unknown-rule-keys",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1392,560 +666,654 @@
               "country": "FR"
             },
             "coverage": 0.5,
-            "force": "tests",
             "variations": [
               "a",
               "b"
-            ]
+            ],
+            "force": "tests"
           }
         ]
       },
-      "id": "unknown-rule-keys",
       "resolved": "tests"
     },
     {
+      "id": "unknown-feature-keys",
       "definition": {
         "defaultValue": "cli",
+        "rules": [],
+        "scrubbed": true,
         "experiments": [
           {
             "key": "unused"
           }
-        ],
-        "rules": [],
-        "scrubbed": true
+        ]
       },
-      "id": "unknown-feature-keys",
       "resolved": "cli"
     }
   ],
-  "layerPrecedence": [
+  "variantResolution": [
     {
-      "effective": {
-        "system_prompt_id": "tests"
-      },
-      "environment": {},
-      "id": "variant-alone",
-      "overrides": {},
-      "project": null,
-      "user": "",
+      "id": "uninitialized",
+      "response": null,
+      "knownFeatures": null,
       "variants": {
-        "vibe_cli_system_prompt": "tests"
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": null,
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": null
       }
     },
     {
-      "effective": {
-        "system_prompt_id": "lean"
+      "id": "empty-features",
+      "response": {
+        "features": {}
       },
-      "environment": {},
-      "id": "user-toml-wins-over-a-variant",
-      "overrides": {},
-      "project": null,
-      "user": "system_prompt_id = \"lean\"\n",
+      "knownFeatures": [],
       "variants": {
-        "vibe_cli_system_prompt": "tests"
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": null,
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": null
       }
     },
     {
-      "effective": {
-        "system_prompt_id": "minimal"
-      },
-      "environment": {},
-      "id": "project-toml-wins-over-a-variant",
-      "overrides": {},
-      "project": "system_prompt_id = \"minimal\"\n",
-      "user": "",
-      "variants": {
-        "vibe_cli_system_prompt": "tests"
-      }
-    },
-    {
-      "effective": {
-        "managed_shell_tools_enabled": false
-      },
-      "environment": {},
-      "id": "project-toml-disables-the-managed-shell",
-      "overrides": {},
-      "project": "managed_shell_tools_enabled = false\n",
-      "user": "",
-      "variants": {
-        "vibe_cli_managed_shell_tools": "managed"
-      }
-    },
-    {
-      "effective": {
-        "managed_shell_tools_enabled": false
-      },
-      "environment": {},
-      "id": "user-toml-disables-the-managed-shell",
-      "overrides": {},
-      "project": null,
-      "user": "managed_shell_tools_enabled = false\n",
-      "variants": {
-        "vibe_cli_managed_shell_tools": "managed"
-      }
-    },
-    {
-      "effective": {
-        "managed_shell_tools_enabled": true
-      },
-      "environment": {},
-      "id": "managed-shell-variant-alone",
-      "overrides": {},
-      "project": null,
-      "user": "",
-      "variants": {
-        "vibe_cli_managed_shell_tools": "managed"
-      }
-    },
-    {
-      "effective": {
-        "system_prompt_id": "minimal"
-      },
-      "environment": {
-        "VIBE_SYSTEM_PROMPT_ID": "minimal"
-      },
-      "id": "environment-wins-over-a-variant",
-      "overrides": {},
-      "project": null,
-      "user": "",
-      "variants": {
-        "vibe_cli_system_prompt": "tests"
-      }
-    },
-    {
-      "effective": {
-        "system_prompt_id": "lean"
-      },
-      "environment": {},
-      "id": "runtime-override-wins-over-a-variant",
-      "overrides": {
-        "system_prompt_id": "lean"
-      },
-      "project": null,
-      "user": "",
-      "variants": {
-        "vibe_cli_system_prompt": "tests"
-      }
-    },
-    {
-      "effective": {
-        "system_prompt_id": "lean"
-      },
-      "environment": {},
-      "id": "forced-variant-without-tracks-loses-to-the-user-toml",
-      "overrides": {},
-      "project": null,
-      "user": "system_prompt_id = \"lean\"\n",
-      "variants": {
-        "vibe_cli_system_prompt": "tests"
-      }
-    },
-    {
-      "effective": {
-        "system_prompt_id": "cli"
-      },
-      "environment": {},
-      "id": "unknown-variant-leaves-the-default",
-      "overrides": {},
-      "project": null,
-      "user": "",
-      "variants": {
-        "vibe_cli_system_prompt": "removed_after_graduation"
-      }
-    },
-    {
-      "effective": {
-        "activeModelAlias": "oracle-routed-alias",
-        "active_model": "",
-        "resolvedDefaultAlias": "oracle-routed-alias",
-        "routed_default_model": "oracle-routed-alias",
-        "routed_model_config": {
-          "alias": "oracle-routed-alias",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": null,
-          "input_price": 0.0,
-          "name": "oracle-routed-model",
-          "output_price": 0.0,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
+      "id": "string-value",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": [
+              {
+                "force": "tests"
+              }
+            ]
+          }
         }
       },
-      "environment": {},
-      "id": "routing-variant-for-an-unpinned-user",
-      "overrides": {},
-      "project": null,
-      "user": "",
+      "knownFeatures": [
+        "vibe_cli_system_prompt"
+      ],
       "variants": {
+        "vibe_cli_system_prompt": "tests",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": "tests",
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": null
+      }
+    },
+    {
+      "id": "object-value",
+      "response": {
+        "features": {
+          "vibe_cli_default_routing_model": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": {
+                  "active_model": "oracle-routed-alias",
+                  "model_config": {
+                    "name": "oracle-routed-model",
+                    "provider": "mistral",
+                    "alias": "oracle-routed-alias",
+                    "input_price": "0.0",
+                    "output_price": "0.0",
+                    "supports_images": false
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "knownFeatures": [
+        "vibe_cli_default_routing_model"
+      ],
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": null,
+        "vibe_cli_managed_shell_tools": null,
         "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}"
       }
     },
     {
-      "effective": {
-        "activeModelAlias": "oracle",
-        "active_model": "oracle",
-        "resolvedDefaultAlias": "mistral-medium-3.5",
-        "routed_default_model": "oracle-routed-alias"
+      "id": "array-value",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": [
+                  "cli",
+                  "lean"
+                ]
+              }
+            ]
+          }
+        }
       },
-      "environment": {},
-      "id": "routing-variant-loses-to-a-pinned-model",
-      "overrides": {},
-      "project": null,
-      "user": "active_model = \"oracle\"\n",
+      "knownFeatures": [
+        "vibe_cli_system_prompt"
+      ],
       "variants": {
+        "vibe_cli_system_prompt": "[\"cli\", \"lean\"]",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": "[\"cli\", \"lean\"]",
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": null
+      }
+    },
+    {
+      "id": "numeric-value",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": 7
+              }
+            ]
+          }
+        }
+      },
+      "knownFeatures": [
+        "vibe_cli_system_prompt"
+      ],
+      "variants": {
+        "vibe_cli_system_prompt": "7",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": "7",
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": null
+      }
+    },
+    {
+      "id": "boolean-value",
+      "response": {
+        "features": {
+          "vibe_cli_managed_shell_tools": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": true
+              }
+            ]
+          }
+        }
+      },
+      "knownFeatures": [
+        "vibe_cli_managed_shell_tools"
+      ],
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "true",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": null,
+        "vibe_cli_managed_shell_tools": "true",
+        "vibe_cli_default_routing_model": null
+      }
+    },
+    {
+      "id": "resolved-null",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "tracks": []
+              }
+            ]
+          }
+        }
+      },
+      "knownFeatures": [
+        "vibe_cli_system_prompt"
+      ],
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": null,
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": null
+      }
+    },
+    {
+      "id": "default-value-without-a-force",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": []
+          }
+        }
+      },
+      "knownFeatures": [
+        "vibe_cli_system_prompt"
+      ],
+      "variants": {
+        "vibe_cli_system_prompt": "lean",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": "lean",
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": null
+      }
+    },
+    {
+      "id": "unknown-feature-key",
+      "response": {
+        "features": {
+          "vibe_cli_unknown_rollout": {
+            "defaultValue": "x",
+            "rules": [
+              {
+                "force": "y"
+              }
+            ]
+          },
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": [
+              {
+                "force": "tests"
+              }
+            ]
+          }
+        }
+      },
+      "knownFeatures": [
+        "vibe_cli_system_prompt"
+      ],
+      "variants": {
+        "vibe_cli_system_prompt": "tests",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": "tests",
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": null
+      }
+    },
+    {
+      "id": "every-known-feature",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": [
+              {
+                "force": "lean"
+              }
+            ]
+          },
+          "vibe_cli_managed_shell_tools": {
+            "defaultValue": "legacy",
+            "rules": [
+              {
+                "force": "managed"
+              }
+            ]
+          },
+          "vibe_cli_default_routing_model": {
+            "defaultValue": "{}",
+            "rules": [
+              {
+                "force": {
+                  "active_model": "oracle-routed-alias",
+                  "model_config": {
+                    "name": "oracle-routed-model",
+                    "provider": "mistral",
+                    "alias": "oracle-routed-alias",
+                    "input_price": "0.0",
+                    "output_price": "0.0",
+                    "supports_images": false
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "knownFeatures": [
+        "vibe_cli_default_routing_model",
+        "vibe_cli_managed_shell_tools",
+        "vibe_cli_system_prompt"
+      ],
+      "variants": {
+        "vibe_cli_system_prompt": "lean",
+        "vibe_cli_managed_shell_tools": "managed",
+        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": "lean",
+        "vibe_cli_managed_shell_tools": "managed",
         "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}"
       }
     }
   ],
-  "note": "Experiments corpus: what the pinned reference's remote eval client, experiment manager, GrowthBook configuration layer and session helpers answer for each scripted input. The eval request is intercepted one call before the connection and a socket guard fails the run on any connection attempt, so no scenario depends on a live rollout: in remote evaluation mode the proxy resolves the bucketing and the client only applies the answer. A credential is recorded as the environment variable it came from and never as a value, and the only key derivative committed is the 32-character bucketing digest. Regenerate with scripts/parity/experiments.py --corpus when the pinned reference moves.",
-  "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
-  },
-  "schemaVersion": 1,
-  "sessionGates": [
+  "configVariants": [
     {
-      "configuration": "mistral-active",
-      "evalRequests": 1,
-      "helper": "initialize",
-      "id": "initialize/mistral-active/identity",
-      "identityRequests": 1,
-      "identityTimeout": 4.0,
-      "organizationId": "oracle-organization",
-      "persisted": 1,
-      "returned": true
+      "id": "uninitialized",
+      "response": null,
+      "assignments": {},
+      "configVariants": {}
     },
     {
-      "configuration": "mistral-active",
-      "evalRequests": 1,
-      "helper": "initialize",
-      "id": "initialize/mistral-active/no-identity",
-      "identityRequests": 1,
-      "identityTimeout": 4.0,
-      "organizationId": null,
-      "persisted": 1,
-      "returned": true
+      "id": "empty-features",
+      "response": {
+        "features": {}
+      },
+      "assignments": {},
+      "configVariants": {}
     },
     {
-      "configuration": "telemetry-disabled",
-      "evalRequests": 0,
-      "helper": "initialize",
-      "id": "initialize/telemetry-disabled/identity",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
+      "id": "confirmed-exposure",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "assignments": {
+        "vibe_cli_system_prompt": "tests"
+      },
+      "configVariants": {
+        "vibe_cli_system_prompt": "tests"
+      }
     },
     {
-      "configuration": "telemetry-disabled",
-      "evalRequests": 0,
-      "helper": "initialize",
-      "id": "initialize/telemetry-disabled/no-identity",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
+      "id": "forced-without-tracks",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": [
+              {
+                "force": "tests"
+              }
+            ]
+          }
+        }
+      },
+      "assignments": {},
+      "configVariants": {
+        "vibe_cli_system_prompt": "tests"
+      }
     },
     {
-      "configuration": "experiments-disabled",
-      "evalRequests": 0,
-      "helper": "initialize",
-      "id": "initialize/experiments-disabled/identity",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
+      "id": "forced-not-in-experiment",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": false
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "assignments": {},
+      "configVariants": {
+        "vibe_cli_system_prompt": "tests"
+      }
     },
     {
-      "configuration": "experiments-disabled",
-      "evalRequests": 0,
-      "helper": "initialize",
-      "id": "initialize/experiments-disabled/no-identity",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
+      "id": "forced-with-in-experiment-absent",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "assignments": {},
+      "configVariants": {
+        "vibe_cli_system_prompt": "tests"
+      }
     },
     {
-      "configuration": "both-gates-off",
-      "evalRequests": 0,
-      "helper": "initialize",
-      "id": "initialize/both-gates-off/identity",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
+      "id": "default-value-without-a-force",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": [
+              {
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "assignments": {
+        "vibe_cli_system_prompt": "cli"
+      },
+      "configVariants": {
+        "vibe_cli_system_prompt": "cli"
+      }
     },
     {
-      "configuration": "both-gates-off",
-      "evalRequests": 0,
-      "helper": "initialize",
-      "id": "initialize/both-gates-off/no-identity",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
+      "id": "forced-object-without-tracks",
+      "response": {
+        "features": {
+          "vibe_cli_default_routing_model": {
+            "defaultValue": "{}",
+            "rules": [
+              {
+                "force": {
+                  "active_model": "oracle-routed-alias"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "assignments": {},
+      "configVariants": {
+        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\"}"
+      }
     },
     {
-      "configuration": "third-party-only",
-      "evalRequests": 0,
-      "helper": "initialize",
-      "id": "initialize/third-party-only/identity",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
+      "id": "experiment-key-differs-from-the-feature-key",
+      "response": {
+        "features": {
+          "vibe_cli_managed_shell_tools": {
+            "defaultValue": "legacy",
+            "rules": [
+              {
+                "force": "managed",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "some_other_experiment"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "assignments": {
+        "vibe_cli_managed_shell_tools": "managed"
+      },
+      "configVariants": {
+        "vibe_cli_managed_shell_tools": "managed"
+      }
     },
     {
-      "configuration": "third-party-only",
-      "evalRequests": 0,
-      "helper": "initialize",
-      "id": "initialize/third-party-only/no-identity",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "mistral-without-a-resolvable-key",
-      "evalRequests": 0,
-      "helper": "initialize",
-      "id": "initialize/mistral-without-a-resolvable-key/identity",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "mistral-without-a-resolvable-key",
-      "evalRequests": 0,
-      "helper": "initialize",
-      "id": "initialize/mistral-without-a-resolvable-key/no-identity",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "custom-system-prompt",
-      "evalRequests": 1,
-      "helper": "initialize",
-      "id": "initialize/custom-system-prompt/identity",
-      "identityRequests": 1,
-      "identityTimeout": 4.0,
-      "organizationId": "oracle-organization",
-      "persisted": 1,
-      "returned": true
-    },
-    {
-      "configuration": "custom-system-prompt",
-      "evalRequests": 1,
-      "helper": "initialize",
-      "id": "initialize/custom-system-prompt/no-identity",
-      "identityRequests": 1,
-      "identityTimeout": 4.0,
-      "organizationId": null,
-      "persisted": 1,
-      "returned": true
-    },
-    {
-      "configuration": "mistral-active",
-      "evalRequests": 1,
-      "helper": "initialize",
-      "id": "initialize/eval-fails",
-      "identityRequests": 1,
-      "identityTimeout": 4.0,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "mistral-active",
-      "evalRequests": 1,
-      "helper": "initialize",
-      "id": "initialize/eval-returns-nothing",
-      "identityRequests": 1,
-      "identityTimeout": 4.0,
-      "organizationId": null,
-      "persisted": 1,
-      "returned": true
-    },
-    {
-      "configuration": "mistral-active",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/mistral-active/metadata-absent",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "mistral-active",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/mistral-active/metadata-without-experiments",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "mistral-active",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/mistral-active/metadata-with-experiments",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": true
-    },
-    {
-      "configuration": "telemetry-disabled",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/telemetry-disabled/metadata-absent",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "telemetry-disabled",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/telemetry-disabled/metadata-without-experiments",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "telemetry-disabled",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/telemetry-disabled/metadata-with-experiments",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "experiments-disabled",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/experiments-disabled/metadata-absent",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "experiments-disabled",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/experiments-disabled/metadata-without-experiments",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "experiments-disabled",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/experiments-disabled/metadata-with-experiments",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "both-gates-off",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/both-gates-off/metadata-absent",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "both-gates-off",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/both-gates-off/metadata-without-experiments",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
-    },
-    {
-      "configuration": "both-gates-off",
-      "evalRequests": 0,
-      "helper": "hydrate",
-      "id": "hydrate/both-gates-off/metadata-with-experiments",
-      "identityRequests": 0,
-      "identityTimeout": null,
-      "organizationId": null,
-      "persisted": 0,
-      "returned": false
+      "id": "mixed-confirmed-and-forced",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_managed_shell_tools": {
+            "defaultValue": "legacy",
+            "rules": [
+              {
+                "force": "managed"
+              }
+            ]
+          },
+          "vibe_cli_default_routing_model": {
+            "defaultValue": "{}",
+            "rules": []
+          }
+        }
+      },
+      "assignments": {
+        "vibe_cli_system_prompt": "tests"
+      },
+      "configVariants": {
+        "vibe_cli_system_prompt": "tests",
+        "vibe_cli_managed_shell_tools": "managed"
+      }
     }
   ],
   "variantLabels": [
     {
+      "id": "track-value-string",
+      "definition": {
+        "defaultValue": "cli",
+        "rules": [
+          {
+            "force": "tests",
+            "tracks": [
+              {
+                "experiment": {
+                  "key": "vibe_cli_system_prompt"
+                },
+                "result": {
+                  "key": "1",
+                  "variationId": 1,
+                  "value": "from-track",
+                  "inExperiment": true
+                }
+              }
+            ]
+          }
+        ]
+      },
       "assignments": {
         "vibe_cli_system_prompt": "from-track"
       },
-      "definition": {
-        "defaultValue": "cli",
-        "rules": [
-          {
-            "force": "tests",
-            "tracks": [
-              {
-                "experiment": {
-                  "key": "vibe_cli_system_prompt"
-                },
-                "result": {
-                  "inExperiment": true,
-                  "key": "1",
-                  "value": "from-track",
-                  "variationId": 1
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "id": "track-value-string",
       "reported": true
     },
     {
-      "assignments": {
-        "vibe_cli_system_prompt": "{\"variant\": \"managed\"}"
-      },
+      "id": "track-value-object",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1957,25 +1325,25 @@
                   "key": "vibe_cli_system_prompt"
                 },
                 "result": {
-                  "inExperiment": true,
                   "key": "1",
+                  "variationId": 1,
                   "value": {
                     "variant": "managed"
                   },
-                  "variationId": 1
+                  "inExperiment": true
                 }
               }
             ]
           }
         ]
       },
-      "id": "track-value-object",
+      "assignments": {
+        "vibe_cli_system_prompt": "{\"variant\": \"managed\"}"
+      },
       "reported": true
     },
     {
-      "assignments": {
-        "vibe_cli_system_prompt": "tests"
-      },
+      "id": "falls-back-to-the-resolved-value",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -1987,22 +1355,22 @@
                   "key": "vibe_cli_system_prompt"
                 },
                 "result": {
-                  "inExperiment": true,
                   "key": "1",
-                  "variationId": 1
+                  "variationId": 1,
+                  "inExperiment": true
                 }
               }
             ]
           }
         ]
       },
-      "id": "falls-back-to-the-resolved-value",
+      "assignments": {
+        "vibe_cli_system_prompt": "tests"
+      },
       "reported": true
     },
     {
-      "assignments": {
-        "vibe_cli_system_prompt": "cli"
-      },
+      "id": "falls-back-to-the-default-value",
       "definition": {
         "defaultValue": "cli",
         "rules": [
@@ -2013,22 +1381,48 @@
                   "key": "vibe_cli_system_prompt"
                 },
                 "result": {
-                  "inExperiment": true,
                   "key": "1",
-                  "variationId": 1
+                  "variationId": 1,
+                  "inExperiment": true
                 }
               }
             ]
           }
         ]
       },
-      "id": "falls-back-to-the-default-value",
+      "assignments": {
+        "vibe_cli_system_prompt": "cli"
+      },
       "reported": true
     },
     {
+      "id": "falls-back-to-the-result-key",
+      "definition": {
+        "defaultValue": null,
+        "rules": [
+          {
+            "tracks": [
+              {
+                "experiment": {
+                  "key": "vibe_cli_system_prompt"
+                },
+                "result": {
+                  "key": "control",
+                  "variationId": 1,
+                  "inExperiment": true
+                }
+              }
+            ]
+          }
+        ]
+      },
       "assignments": {
         "vibe_cli_system_prompt": "control"
       },
+      "reported": true
+    },
+    {
+      "id": "falls-back-to-the-variation-id",
       "definition": {
         "defaultValue": null,
         "rules": [
@@ -2039,22 +1433,21 @@
                   "key": "vibe_cli_system_prompt"
                 },
                 "result": {
-                  "inExperiment": true,
-                  "key": "control",
-                  "variationId": 1
+                  "variationId": 3,
+                  "inExperiment": true
                 }
               }
             ]
           }
         ]
       },
-      "id": "falls-back-to-the-result-key",
-      "reported": true
-    },
-    {
       "assignments": {
         "vibe_cli_system_prompt": "3"
       },
+      "reported": true
+    },
+    {
+      "id": "variation-id-zero",
       "definition": {
         "defaultValue": null,
         "rules": [
@@ -2065,44 +1458,21 @@
                   "key": "vibe_cli_system_prompt"
                 },
                 "result": {
-                  "inExperiment": true,
-                  "variationId": 3
+                  "variationId": 0,
+                  "inExperiment": true
                 }
               }
             ]
           }
         ]
       },
-      "id": "falls-back-to-the-variation-id",
-      "reported": true
-    },
-    {
       "assignments": {
         "vibe_cli_system_prompt": "0"
       },
-      "definition": {
-        "defaultValue": null,
-        "rules": [
-          {
-            "tracks": [
-              {
-                "experiment": {
-                  "key": "vibe_cli_system_prompt"
-                },
-                "result": {
-                  "inExperiment": true,
-                  "variationId": 0
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "id": "variation-id-zero",
       "reported": true
     },
     {
-      "assignments": {},
+      "id": "exhausted-fallback",
       "definition": {
         "defaultValue": null,
         "rules": [
@@ -2120,13 +1490,11 @@
           }
         ]
       },
-      "id": "exhausted-fallback",
+      "assignments": {},
       "reported": false
     },
     {
-      "assignments": {
-        "vibe_cli_system_prompt": "second"
-      },
+      "id": "last-confirmed-track-wins",
       "definition": {
         "defaultValue": null,
         "rules": [
@@ -2137,10 +1505,10 @@
                   "key": "vibe_cli_system_prompt"
                 },
                 "result": {
-                  "inExperiment": true,
                   "key": "1",
+                  "variationId": 1,
                   "value": "first",
-                  "variationId": 1
+                  "inExperiment": true
                 }
               },
               {
@@ -2148,349 +1516,981 @@
                   "key": "vibe_cli_system_prompt"
                 },
                 "result": {
-                  "inExperiment": true,
                   "key": "1",
+                  "variationId": 1,
                   "value": "second",
-                  "variationId": 1
+                  "inExperiment": true
                 }
               }
             ]
           }
         ]
       },
-      "id": "last-confirmed-track-wins",
+      "assignments": {
+        "vibe_cli_system_prompt": "second"
+      },
       "reported": true
     }
   ],
-  "variantResolution": [
+  "configMapping": [
     {
-      "id": "uninitialized",
-      "knownFeatures": null,
-      "response": null,
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsOrNone": {
-        "vibe_cli_default_routing_model": null,
-        "vibe_cli_managed_shell_tools": null,
-        "vibe_cli_system_prompt": null
-      }
+      "id": "no-variants",
+      "variants": {},
+      "data": {},
+      "hasFingerprint": false
     },
     {
-      "id": "empty-features",
-      "knownFeatures": [],
-      "response": {
-        "features": {}
-      },
+      "id": "known-system-prompt",
       "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsOrNone": {
-        "vibe_cli_default_routing_model": null,
-        "vibe_cli_managed_shell_tools": null,
-        "vibe_cli_system_prompt": null
-      }
-    },
-    {
-      "id": "string-value",
-      "knownFeatures": [
-        "vibe_cli_system_prompt"
-      ],
-      "response": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests"
-              }
-            ]
-          }
-        }
-      },
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
         "vibe_cli_system_prompt": "tests"
       },
-      "variantsOrNone": {
-        "vibe_cli_default_routing_model": null,
-        "vibe_cli_managed_shell_tools": null,
-        "vibe_cli_system_prompt": "tests"
-      }
+      "data": {
+        "system_prompt_id": "tests"
+      },
+      "hasFingerprint": true
     },
     {
-      "id": "object-value",
-      "knownFeatures": [
-        "vibe_cli_default_routing_model"
-      ],
-      "response": {
-        "features": {
-          "vibe_cli_default_routing_model": {
-            "defaultValue": null,
-            "rules": [
-              {
-                "force": {
-                  "active_model": "oracle-routed-alias",
-                  "model_config": {
-                    "alias": "oracle-routed-alias",
-                    "input_price": "0.0",
-                    "name": "oracle-routed-model",
-                    "output_price": "0.0",
-                    "provider": "mistral",
-                    "supports_images": false
-                  }
-                }
-              }
-            ]
-          }
-        }
-      },
+      "id": "another-known-system-prompt",
       "variants": {
-        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsOrNone": {
-        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}",
-        "vibe_cli_managed_shell_tools": null,
-        "vibe_cli_system_prompt": null
-      }
-    },
-    {
-      "id": "array-value",
-      "knownFeatures": [
-        "vibe_cli_system_prompt"
-      ],
-      "response": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": null,
-            "rules": [
-              {
-                "force": [
-                  "cli",
-                  "lean"
-                ]
-              }
-            ]
-          }
-        }
-      },
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "[\"cli\", \"lean\"]"
-      },
-      "variantsOrNone": {
-        "vibe_cli_default_routing_model": null,
-        "vibe_cli_managed_shell_tools": null,
-        "vibe_cli_system_prompt": "[\"cli\", \"lean\"]"
-      }
-    },
-    {
-      "id": "numeric-value",
-      "knownFeatures": [
-        "vibe_cli_system_prompt"
-      ],
-      "response": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": null,
-            "rules": [
-              {
-                "force": 7
-              }
-            ]
-          }
-        }
-      },
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "7"
-      },
-      "variantsOrNone": {
-        "vibe_cli_default_routing_model": null,
-        "vibe_cli_managed_shell_tools": null,
-        "vibe_cli_system_prompt": "7"
-      }
-    },
-    {
-      "id": "boolean-value",
-      "knownFeatures": [
-        "vibe_cli_managed_shell_tools"
-      ],
-      "response": {
-        "features": {
-          "vibe_cli_managed_shell_tools": {
-            "defaultValue": null,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "true",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsOrNone": {
-        "vibe_cli_default_routing_model": null,
-        "vibe_cli_managed_shell_tools": "true",
-        "vibe_cli_system_prompt": null
-      }
-    },
-    {
-      "id": "resolved-null",
-      "knownFeatures": [
-        "vibe_cli_system_prompt"
-      ],
-      "response": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": null,
-            "rules": [
-              {
-                "tracks": []
-              }
-            ]
-          }
-        }
-      },
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "cli"
-      },
-      "variantsOrNone": {
-        "vibe_cli_default_routing_model": null,
-        "vibe_cli_managed_shell_tools": null,
-        "vibe_cli_system_prompt": null
-      }
-    },
-    {
-      "id": "default-value-without-a-force",
-      "knownFeatures": [
-        "vibe_cli_system_prompt"
-      ],
-      "response": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "lean",
-            "rules": []
-          }
-        }
-      },
-      "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
         "vibe_cli_system_prompt": "lean"
       },
-      "variantsOrNone": {
-        "vibe_cli_default_routing_model": null,
-        "vibe_cli_managed_shell_tools": null,
-        "vibe_cli_system_prompt": "lean"
-      }
+      "data": {
+        "system_prompt_id": "lean"
+      },
+      "hasFingerprint": true
     },
     {
-      "id": "unknown-feature-key",
-      "knownFeatures": [
-        "vibe_cli_system_prompt"
-      ],
-      "response": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests"
-              }
-            ]
-          },
-          "vibe_cli_unknown_rollout": {
-            "defaultValue": "x",
-            "rules": [
-              {
-                "force": "y"
-              }
-            ]
-          }
-        }
-      },
+      "id": "unknown-system-prompt",
       "variants": {
-        "vibe_cli_default_routing_model": "{}",
-        "vibe_cli_managed_shell_tools": "legacy",
-        "vibe_cli_system_prompt": "tests"
+        "vibe_cli_system_prompt": "removed_after_graduation"
       },
-      "variantsOrNone": {
-        "vibe_cli_default_routing_model": null,
-        "vibe_cli_managed_shell_tools": null,
-        "vibe_cli_system_prompt": "tests"
-      }
+      "data": {},
+      "hasFingerprint": false
     },
     {
-      "id": "every-known-feature",
-      "knownFeatures": [
-        "vibe_cli_default_routing_model",
-        "vibe_cli_managed_shell_tools",
-        "vibe_cli_system_prompt"
-      ],
-      "response": {
-        "features": {
-          "vibe_cli_default_routing_model": {
-            "defaultValue": "{}",
-            "rules": [
-              {
-                "force": {
-                  "active_model": "oracle-routed-alias",
-                  "model_config": {
-                    "alias": "oracle-routed-alias",
-                    "input_price": "0.0",
-                    "name": "oracle-routed-model",
-                    "output_price": "0.0",
-                    "provider": "mistral",
-                    "supports_images": false
-                  }
-                }
-              }
-            ]
-          },
-          "vibe_cli_managed_shell_tools": {
-            "defaultValue": "legacy",
-            "rules": [
-              {
-                "force": "managed"
-              }
-            ]
-          },
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "lean"
-              }
-            ]
-          }
-        }
-      },
+      "id": "empty-system-prompt",
       "variants": {
-        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}",
+        "vibe_cli_system_prompt": ""
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "managed-shell-managed",
+      "variants": {
+        "vibe_cli_managed_shell_tools": "managed"
+      },
+      "data": {
+        "managed_shell_tools_enabled": true
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "managed-shell-legacy",
+      "variants": {
+        "vibe_cli_managed_shell_tools": "legacy"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "managed-shell-unknown",
+      "variants": {
+        "vibe_cli_managed_shell_tools": "something-else"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "routing-active-model",
+      "variants": {
+        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\"}"
+      },
+      "data": {
+        "routed_default_model": "oracle-routed-alias"
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "routing-with-model-config",
+      "variants": {
+        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}"
+      },
+      "data": {
+        "routed_default_model": "oracle-routed-alias",
+        "routed_model_config": "{\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}"
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "routing-empty-object",
+      "variants": {
+        "vibe_cli_default_routing_model": "{}"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "routing-without-active-model",
+      "variants": {
+        "vibe_cli_default_routing_model": "{\"a\": 1}"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "routing-empty-active-model",
+      "variants": {
+        "vibe_cli_default_routing_model": "{\"active_model\": \"\"}"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "routing-active-model-not-a-string",
+      "variants": {
+        "vibe_cli_default_routing_model": "{\"active_model\": 7}"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "routing-model-config-not-an-object",
+      "variants": {
+        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": []}"
+      },
+      "data": {
+        "routed_default_model": "oracle-routed-alias"
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "routing-not-json",
+      "variants": {
+        "vibe_cli_default_routing_model": "not json at all"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "routing-json-array",
+      "variants": {
+        "vibe_cli_default_routing_model": "[1, 2]"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "routing-json-string",
+      "variants": {
+        "vibe_cli_default_routing_model": "\"a string\""
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "every-experiment",
+      "variants": {
+        "vibe_cli_system_prompt": "tests",
         "vibe_cli_managed_shell_tools": "managed",
-        "vibe_cli_system_prompt": "lean"
+        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}"
       },
-      "variantsOrNone": {
-        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}",
-        "vibe_cli_managed_shell_tools": "managed",
-        "vibe_cli_system_prompt": "lean"
+      "data": {
+        "system_prompt_id": "tests",
+        "routed_default_model": "oracle-routed-alias",
+        "routed_model_config": "{\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}",
+        "managed_shell_tools_enabled": true
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "variants-that-map-to-nothing",
+      "variants": {
+        "vibe_cli_system_prompt": "removed_after_graduation",
+        "vibe_cli_managed_shell_tools": "legacy"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "unknown-experiment-name",
+      "variants": {
+        "vibe_cli_unknown_rollout": "on"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "persisting-is-refused",
+      "variants": {
+        "vibe_cli_system_prompt": "tests"
+      },
+      "data": {
+        "refusal": "NotImplementedError"
+      },
+      "hasFingerprint": null
+    }
+  ],
+  "layerPrecedence": [
+    {
+      "id": "variant-alone",
+      "user": "",
+      "project": null,
+      "environment": {},
+      "overrides": {},
+      "variants": {
+        "vibe_cli_system_prompt": "tests"
+      },
+      "effective": {
+        "system_prompt_id": "tests"
       }
+    },
+    {
+      "id": "user-toml-wins-over-a-variant",
+      "user": "system_prompt_id = \"lean\"\n",
+      "project": null,
+      "environment": {},
+      "overrides": {},
+      "variants": {
+        "vibe_cli_system_prompt": "tests"
+      },
+      "effective": {
+        "system_prompt_id": "lean"
+      }
+    },
+    {
+      "id": "project-toml-wins-over-a-variant",
+      "user": "",
+      "project": "system_prompt_id = \"minimal\"\n",
+      "environment": {},
+      "overrides": {},
+      "variants": {
+        "vibe_cli_system_prompt": "tests"
+      },
+      "effective": {
+        "system_prompt_id": "minimal"
+      }
+    },
+    {
+      "id": "project-toml-disables-the-managed-shell",
+      "user": "",
+      "project": "managed_shell_tools_enabled = false\n",
+      "environment": {},
+      "overrides": {},
+      "variants": {
+        "vibe_cli_managed_shell_tools": "managed"
+      },
+      "effective": {
+        "managed_shell_tools_enabled": false
+      }
+    },
+    {
+      "id": "user-toml-disables-the-managed-shell",
+      "user": "managed_shell_tools_enabled = false\n",
+      "project": null,
+      "environment": {},
+      "overrides": {},
+      "variants": {
+        "vibe_cli_managed_shell_tools": "managed"
+      },
+      "effective": {
+        "managed_shell_tools_enabled": false
+      }
+    },
+    {
+      "id": "managed-shell-variant-alone",
+      "user": "",
+      "project": null,
+      "environment": {},
+      "overrides": {},
+      "variants": {
+        "vibe_cli_managed_shell_tools": "managed"
+      },
+      "effective": {
+        "managed_shell_tools_enabled": true
+      }
+    },
+    {
+      "id": "environment-wins-over-a-variant",
+      "user": "",
+      "project": null,
+      "environment": {
+        "VIBE_SYSTEM_PROMPT_ID": "minimal"
+      },
+      "overrides": {},
+      "variants": {
+        "vibe_cli_system_prompt": "tests"
+      },
+      "effective": {
+        "system_prompt_id": "minimal"
+      }
+    },
+    {
+      "id": "runtime-override-wins-over-a-variant",
+      "user": "",
+      "project": null,
+      "environment": {},
+      "overrides": {
+        "system_prompt_id": "lean"
+      },
+      "variants": {
+        "vibe_cli_system_prompt": "tests"
+      },
+      "effective": {
+        "system_prompt_id": "lean"
+      }
+    },
+    {
+      "id": "forced-variant-without-tracks-loses-to-the-user-toml",
+      "user": "system_prompt_id = \"lean\"\n",
+      "project": null,
+      "environment": {},
+      "overrides": {},
+      "variants": {
+        "vibe_cli_system_prompt": "tests"
+      },
+      "effective": {
+        "system_prompt_id": "lean"
+      }
+    },
+    {
+      "id": "unknown-variant-leaves-the-default",
+      "user": "",
+      "project": null,
+      "environment": {},
+      "overrides": {},
+      "variants": {
+        "vibe_cli_system_prompt": "removed_after_graduation"
+      },
+      "effective": {
+        "system_prompt_id": "cli"
+      }
+    },
+    {
+      "id": "routing-variant-for-an-unpinned-user",
+      "user": "",
+      "project": null,
+      "environment": {},
+      "overrides": {},
+      "variants": {
+        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}"
+      },
+      "effective": {
+        "active_model": "",
+        "routed_default_model": "oracle-routed-alias",
+        "routed_model_config": {
+          "name": "oracle-routed-model",
+          "provider": "mistral",
+          "alias": "oracle-routed-alias",
+          "temperature": 0.2,
+          "input_price": 0.0,
+          "output_price": 0.0,
+          "cached_input_price": null,
+          "thinking": "off",
+          "supports_images": false,
+          "auto_compact_threshold": 200000
+        },
+        "resolvedDefaultAlias": "oracle-routed-alias",
+        "activeModelAlias": "oracle-routed-alias"
+      }
+    },
+    {
+      "id": "routing-variant-loses-to-a-pinned-model",
+      "user": "active_model = \"oracle\"\n",
+      "project": null,
+      "environment": {},
+      "overrides": {},
+      "variants": {
+        "vibe_cli_default_routing_model": "{\"active_model\": \"oracle-routed-alias\", \"model_config\": {\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}}"
+      },
+      "effective": {
+        "active_model": "oracle",
+        "routed_default_model": "oracle-routed-alias",
+        "resolvedDefaultAlias": "mistral-medium-3.5",
+        "activeModelAlias": "oracle"
+      }
+    }
+  ],
+  "sessionGates": [
+    {
+      "id": "initialize/mistral-active/identity",
+      "helper": "initialize",
+      "configuration": "mistral-active",
+      "returned": true,
+      "evalRequests": 1,
+      "identityRequests": 1,
+      "identityTimeout": 4.0,
+      "persisted": 1,
+      "organizationId": "oracle-organization"
+    },
+    {
+      "id": "initialize/mistral-active/no-identity",
+      "helper": "initialize",
+      "configuration": "mistral-active",
+      "returned": true,
+      "evalRequests": 1,
+      "identityRequests": 1,
+      "identityTimeout": 4.0,
+      "persisted": 1,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/telemetry-disabled/identity",
+      "helper": "initialize",
+      "configuration": "telemetry-disabled",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/telemetry-disabled/no-identity",
+      "helper": "initialize",
+      "configuration": "telemetry-disabled",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/experiments-disabled/identity",
+      "helper": "initialize",
+      "configuration": "experiments-disabled",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/experiments-disabled/no-identity",
+      "helper": "initialize",
+      "configuration": "experiments-disabled",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/both-gates-off/identity",
+      "helper": "initialize",
+      "configuration": "both-gates-off",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/both-gates-off/no-identity",
+      "helper": "initialize",
+      "configuration": "both-gates-off",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/third-party-only/identity",
+      "helper": "initialize",
+      "configuration": "third-party-only",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/third-party-only/no-identity",
+      "helper": "initialize",
+      "configuration": "third-party-only",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/mistral-without-a-resolvable-key/identity",
+      "helper": "initialize",
+      "configuration": "mistral-without-a-resolvable-key",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/mistral-without-a-resolvable-key/no-identity",
+      "helper": "initialize",
+      "configuration": "mistral-without-a-resolvable-key",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/custom-system-prompt/identity",
+      "helper": "initialize",
+      "configuration": "custom-system-prompt",
+      "returned": true,
+      "evalRequests": 1,
+      "identityRequests": 1,
+      "identityTimeout": 4.0,
+      "persisted": 1,
+      "organizationId": "oracle-organization"
+    },
+    {
+      "id": "initialize/custom-system-prompt/no-identity",
+      "helper": "initialize",
+      "configuration": "custom-system-prompt",
+      "returned": true,
+      "evalRequests": 1,
+      "identityRequests": 1,
+      "identityTimeout": 4.0,
+      "persisted": 1,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/eval-fails",
+      "helper": "initialize",
+      "configuration": "mistral-active",
+      "returned": false,
+      "evalRequests": 1,
+      "identityRequests": 1,
+      "identityTimeout": 4.0,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "initialize/eval-returns-nothing",
+      "helper": "initialize",
+      "configuration": "mistral-active",
+      "returned": true,
+      "evalRequests": 1,
+      "identityRequests": 1,
+      "identityTimeout": 4.0,
+      "persisted": 1,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/mistral-active/metadata-absent",
+      "helper": "hydrate",
+      "configuration": "mistral-active",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/mistral-active/metadata-without-experiments",
+      "helper": "hydrate",
+      "configuration": "mistral-active",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/mistral-active/metadata-with-experiments",
+      "helper": "hydrate",
+      "configuration": "mistral-active",
+      "returned": true,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/telemetry-disabled/metadata-absent",
+      "helper": "hydrate",
+      "configuration": "telemetry-disabled",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/telemetry-disabled/metadata-without-experiments",
+      "helper": "hydrate",
+      "configuration": "telemetry-disabled",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/telemetry-disabled/metadata-with-experiments",
+      "helper": "hydrate",
+      "configuration": "telemetry-disabled",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/experiments-disabled/metadata-absent",
+      "helper": "hydrate",
+      "configuration": "experiments-disabled",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/experiments-disabled/metadata-without-experiments",
+      "helper": "hydrate",
+      "configuration": "experiments-disabled",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/experiments-disabled/metadata-with-experiments",
+      "helper": "hydrate",
+      "configuration": "experiments-disabled",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/both-gates-off/metadata-absent",
+      "helper": "hydrate",
+      "configuration": "both-gates-off",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/both-gates-off/metadata-without-experiments",
+      "helper": "hydrate",
+      "configuration": "both-gates-off",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    },
+    {
+      "id": "hydrate/both-gates-off/metadata-with-experiments",
+      "helper": "hydrate",
+      "configuration": "both-gates-off",
+      "returned": false,
+      "evalRequests": 0,
+      "identityRequests": 0,
+      "identityTimeout": null,
+      "persisted": 0,
+      "organizationId": null
+    }
+  ],
+  "attributes": [
+    {
+      "id": "default-prompt/no-launch-context",
+      "document": "default-prompt",
+      "context": "no-launch-context",
+      "attributes": {
+        "userId": "0889ce8313bb7ddbccdae21c86f894ce",
+        "entrypoint": "unknown",
+        "agent_version": "{version}",
+        "client_name": null,
+        "client_version": null,
+        "os": "{platformId}",
+        "terminal_emulator": null,
+        "custom_system_prompt": false,
+        "organizationId": null
+      },
+      "payloadKeys": [
+        "agent_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "os",
+        "userId"
+      ],
+      "credentialVariable": null
+    },
+    {
+      "id": "default-prompt/cli",
+      "document": "default-prompt",
+      "context": "cli",
+      "attributes": {
+        "userId": "0889ce8313bb7ddbccdae21c86f894ce",
+        "entrypoint": "cli",
+        "agent_version": "9.9.9",
+        "client_name": "vibe",
+        "client_version": "9.9.9",
+        "os": "{platformId}",
+        "terminal_emulator": null,
+        "custom_system_prompt": false,
+        "organizationId": "oracle-organization"
+      },
+      "payloadKeys": [
+        "agent_version",
+        "client_name",
+        "client_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "organizationId",
+        "os",
+        "userId"
+      ],
+      "credentialVariable": null
+    },
+    {
+      "id": "default-prompt/cli-in-vscode",
+      "document": "default-prompt",
+      "context": "cli-in-vscode",
+      "attributes": {
+        "userId": "0889ce8313bb7ddbccdae21c86f894ce",
+        "entrypoint": "cli",
+        "agent_version": "9.9.9",
+        "client_name": "vibe",
+        "client_version": "9.9.9",
+        "os": "{platformId}",
+        "terminal_emulator": "vscode",
+        "custom_system_prompt": false,
+        "organizationId": "oracle-organization"
+      },
+      "payloadKeys": [
+        "agent_version",
+        "client_name",
+        "client_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "organizationId",
+        "os",
+        "terminal_emulator",
+        "userId"
+      ],
+      "credentialVariable": null
+    },
+    {
+      "id": "default-prompt/acp-in-cursor",
+      "document": "default-prompt",
+      "context": "acp-in-cursor",
+      "attributes": {
+        "userId": "0889ce8313bb7ddbccdae21c86f894ce",
+        "entrypoint": "acp",
+        "agent_version": "9.9.9",
+        "client_name": "zed",
+        "client_version": "0.1.0",
+        "os": "{platformId}",
+        "terminal_emulator": "cursor",
+        "custom_system_prompt": false,
+        "organizationId": "oracle-organization"
+      },
+      "payloadKeys": [
+        "agent_version",
+        "client_name",
+        "client_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "organizationId",
+        "os",
+        "terminal_emulator",
+        "userId"
+      ],
+      "credentialVariable": null
+    },
+    {
+      "id": "default-prompt/programmatic",
+      "document": "default-prompt",
+      "context": "programmatic",
+      "attributes": {
+        "userId": "0889ce8313bb7ddbccdae21c86f894ce",
+        "entrypoint": "programmatic",
+        "agent_version": "9.9.9",
+        "client_name": "harness",
+        "client_version": "2.0.0",
+        "os": "{platformId}",
+        "terminal_emulator": "unknown",
+        "custom_system_prompt": false,
+        "organizationId": "oracle-organization"
+      },
+      "payloadKeys": [
+        "agent_version",
+        "client_name",
+        "client_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "organizationId",
+        "os",
+        "terminal_emulator",
+        "userId"
+      ],
+      "credentialVariable": null
+    },
+    {
+      "id": "custom-prompt/no-launch-context",
+      "document": "custom-prompt",
+      "context": "no-launch-context",
+      "attributes": {
+        "userId": "0889ce8313bb7ddbccdae21c86f894ce",
+        "entrypoint": "unknown",
+        "agent_version": "{version}",
+        "client_name": null,
+        "client_version": null,
+        "os": "{platformId}",
+        "terminal_emulator": null,
+        "custom_system_prompt": true,
+        "organizationId": null
+      },
+      "payloadKeys": [
+        "agent_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "os",
+        "userId"
+      ],
+      "credentialVariable": null
+    },
+    {
+      "id": "custom-prompt/cli",
+      "document": "custom-prompt",
+      "context": "cli",
+      "attributes": {
+        "userId": "0889ce8313bb7ddbccdae21c86f894ce",
+        "entrypoint": "cli",
+        "agent_version": "9.9.9",
+        "client_name": "vibe",
+        "client_version": "9.9.9",
+        "os": "{platformId}",
+        "terminal_emulator": null,
+        "custom_system_prompt": true,
+        "organizationId": "oracle-organization"
+      },
+      "payloadKeys": [
+        "agent_version",
+        "client_name",
+        "client_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "organizationId",
+        "os",
+        "userId"
+      ],
+      "credentialVariable": null
+    },
+    {
+      "id": "custom-prompt/cli-in-vscode",
+      "document": "custom-prompt",
+      "context": "cli-in-vscode",
+      "attributes": {
+        "userId": "0889ce8313bb7ddbccdae21c86f894ce",
+        "entrypoint": "cli",
+        "agent_version": "9.9.9",
+        "client_name": "vibe",
+        "client_version": "9.9.9",
+        "os": "{platformId}",
+        "terminal_emulator": "vscode",
+        "custom_system_prompt": true,
+        "organizationId": "oracle-organization"
+      },
+      "payloadKeys": [
+        "agent_version",
+        "client_name",
+        "client_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "organizationId",
+        "os",
+        "terminal_emulator",
+        "userId"
+      ],
+      "credentialVariable": null
+    },
+    {
+      "id": "custom-prompt/acp-in-cursor",
+      "document": "custom-prompt",
+      "context": "acp-in-cursor",
+      "attributes": {
+        "userId": "0889ce8313bb7ddbccdae21c86f894ce",
+        "entrypoint": "acp",
+        "agent_version": "9.9.9",
+        "client_name": "zed",
+        "client_version": "0.1.0",
+        "os": "{platformId}",
+        "terminal_emulator": "cursor",
+        "custom_system_prompt": true,
+        "organizationId": "oracle-organization"
+      },
+      "payloadKeys": [
+        "agent_version",
+        "client_name",
+        "client_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "organizationId",
+        "os",
+        "terminal_emulator",
+        "userId"
+      ],
+      "credentialVariable": null
+    },
+    {
+      "id": "custom-prompt/programmatic",
+      "document": "custom-prompt",
+      "context": "programmatic",
+      "attributes": {
+        "userId": "0889ce8313bb7ddbccdae21c86f894ce",
+        "entrypoint": "programmatic",
+        "agent_version": "9.9.9",
+        "client_name": "harness",
+        "client_version": "2.0.0",
+        "os": "{platformId}",
+        "terminal_emulator": "unknown",
+        "custom_system_prompt": true,
+        "organizationId": "oracle-organization"
+      },
+      "payloadKeys": [
+        "agent_version",
+        "client_name",
+        "client_version",
+        "custom_system_prompt",
+        "entrypoint",
+        "organizationId",
+        "os",
+        "terminal_emulator",
+        "userId"
+      ],
+      "credentialVariable": null
     }
   ]
 }

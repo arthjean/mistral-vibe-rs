@@ -2224,10 +2224,20 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def write_json(path: Path, document: dict[str, Any]) -> None:
+    """Write one corpus, keeping every key in the order it was authored in.
+
+    Key order is load-bearing here rather than cosmetic. An object-valued
+    variant is answered as ``json.dumps`` of the value the eval response
+    carried, which is the wire order, so a writer that sorted the recorded
+    response would hand a replay an input that cannot produce the recorded
+    answer. Every dict this capture builds is built deterministically, so
+    insertion order is as stable as a sort would be.
+    """
+
     path.parent.mkdir(parents=True, exist_ok=True)
     staged = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     staged.write_text(
-        json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        json.dumps(document, indent=2, sort_keys=False, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
     os.replace(staged, path)
