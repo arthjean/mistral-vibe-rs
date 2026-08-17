@@ -9,11 +9,37 @@ use std::sync::Arc;
 use vibe_app_server::client::TurnDriver;
 
 use crate::protocol::{AcpClientCapabilities, AcpClientInfo, AcpError};
-use crate::session::{AcpHarness, SessionSlot, now_millis};
+use crate::session::{AcpHarness, now_millis};
 
 /// Closed sessions stay recorded so repeated closes remain idempotent, but the
 /// tombstones are evicted oldest-first instead of growing without bound.
 pub(crate) const MAX_CLOSED_SESSIONS: usize = 1_024;
+
+/// Lifecycle of one session ID. A single slot replaces the parallel active,
+/// loading, closing, and closed collections the agent used to reconcile.
+pub(crate) enum SessionSlot<D>
+where
+    D: TurnDriver,
+{
+    Loading,
+    Active(Arc<AcpHarness<D>>),
+    Closing(Arc<AcpHarness<D>>),
+    /// Retains the closed identity so repeated closes stay idempotent. The
+    /// sequence bounds retention: the oldest tombstone is evicted first.
+    Closed(u64),
+}
+
+impl<D> SessionSlot<D>
+where
+    D: TurnDriver,
+{
+    pub(crate) fn harness(&self) -> Option<&Arc<AcpHarness<D>>> {
+        match self {
+            Self::Active(harness) | Self::Closing(harness) => Some(harness),
+            Self::Loading | Self::Closed(_) => None,
+        }
+    }
+}
 
 pub(crate) struct AgentState<D>
 where
@@ -110,17 +136,20 @@ where
     }
 
     /// Publishes a loaded session, unless the reservation was dropped by a
-    /// concurrent disconnect.
+    /// concurrent disconnect. The two ways that happens are reported apart:
+    /// the adapter shut down, or something else claimed the identity while the
+    /// load was in flight.
     pub(crate) fn finish_load(
         &mut self,
         reserved_id: &str,
         session_id: String,
         harness: Arc<AcpHarness<D>>,
     ) -> Result<(), AcpError> {
-        if !self.initialized
-            || !matches!(self.sessions.get(reserved_id), Some(SessionSlot::Loading))
-        {
+        if !self.initialized {
             return Err(AcpError::NotInitialized);
+        }
+        if !matches!(self.sessions.get(reserved_id), Some(SessionSlot::Loading)) {
+            return Err(AcpError::SessionConflict(reserved_id.to_owned()));
         }
         self.sessions.remove(reserved_id);
         self.insert_active(session_id, harness);

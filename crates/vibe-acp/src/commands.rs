@@ -15,80 +15,108 @@ use crate::protocol::{AcpError, AcpPromptResponse, AcpUsage};
 use crate::session::{AcpHarness, ActivePhase};
 use crate::updates::{UpdateSender, queue_update, text_chunk};
 
-pub(crate) struct CommandInfo {
-    pub(crate) name: &'static str,
-    description: &'static str,
-    hint: Option<&'static str>,
+/// Every command the adapter serves itself. The enum is the single source of
+/// truth: what is advertised, what parses, and what executes all derive from
+/// it, so a command cannot be published without a branch that runs it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Command {
+    Compact,
+    DataRetention,
+    Help,
+    Log,
+    Mcp,
+    ProxySetup,
+    Reload,
+    Teleport,
 }
 
-const COMMANDS: &[CommandInfo] = &[
-    CommandInfo {
-        name: "compact",
-        description: "Compact conversation history by summarizing it",
-        hint: Some("Optional instructions for the summary"),
-    },
-    CommandInfo {
-        name: "data-retention",
-        description: "Show data-retention information",
-        hint: None,
-    },
-    CommandInfo {
-        name: "help",
-        description: "Show available commands and keyboard shortcuts",
-        hint: None,
-    },
-    CommandInfo {
-        name: "log",
-        description: "Show session logging status",
-        hint: None,
-    },
-    CommandInfo {
-        name: "mcp",
-        description: "Show MCP status, login guidance, or log out a server",
-        hint: Some("status | login <alias> | logout <alias>"),
-    },
-    CommandInfo {
-        name: "proxy-setup",
-        description: "Configure proxy and TLS certificate settings",
-        hint: Some("KEY value to set, KEY to unset, or empty for help"),
-    },
-    CommandInfo {
-        name: "reload",
-        description: "Reload configuration, agent instructions, and skills",
-        hint: None,
-    },
-    CommandInfo {
-        name: "teleport",
-        description: "Teleport session to Vibe Code Web",
-        hint: None,
-    },
-];
+impl Command {
+    /// Declaration order is advertisement order, which the reference sorts by
+    /// name.
+    const ALL: [Self; 8] = [
+        Self::Compact,
+        Self::DataRetention,
+        Self::Help,
+        Self::Log,
+        Self::Mcp,
+        Self::ProxySetup,
+        Self::Reload,
+        Self::Teleport,
+    ];
 
-/// `teleport` only exists when the cloud service is configured.
-pub(crate) fn catalog(vibe_code_enabled: bool) -> impl Iterator<Item = &'static CommandInfo> {
-    COMMANDS
-        .iter()
-        .filter(move |command| vibe_code_enabled || command.name != "teleport")
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
+            Self::Compact => "compact",
+            Self::DataRetention => "data-retention",
+            Self::Help => "help",
+            Self::Log => "log",
+            Self::Mcp => "mcp",
+            Self::ProxySetup => "proxy-setup",
+            Self::Reload => "reload",
+            Self::Teleport => "teleport",
+        }
+    }
+
+    const fn description(self) -> &'static str {
+        match self {
+            Self::Compact => "Compact conversation history by summarizing it",
+            Self::DataRetention => "Show data-retention information",
+            Self::Help => "Show available commands and keyboard shortcuts",
+            Self::Log => "Show session logging status",
+            Self::Mcp => "Show MCP status, login guidance, or log out a server",
+            Self::ProxySetup => "Configure proxy and TLS certificate settings",
+            Self::Reload => "Reload configuration, agent instructions, and skills",
+            Self::Teleport => "Teleport session to Vibe Code Web",
+        }
+    }
+
+    const fn hint(self) -> Option<&'static str> {
+        match self {
+            Self::Compact => Some("Optional instructions for the summary"),
+            Self::Mcp => Some("status | login <alias> | logout <alias>"),
+            Self::ProxySetup => Some("KEY value to set, KEY to unset, or empty for help"),
+            Self::DataRetention | Self::Help | Self::Log | Self::Reload | Self::Teleport => None,
+        }
+    }
+
+    /// `teleport` only exists when the cloud service is configured.
+    const fn needs_vibe_code(self) -> bool {
+        matches!(self, Self::Teleport)
+    }
+
+    fn available(self, vibe_code_enabled: bool) -> bool {
+        vibe_code_enabled || !self.needs_vibe_code()
+    }
+
+    fn advertisement(self) -> Value {
+        let mut encoded = json!({
+            "name": self.name(),
+            "description": self.description(),
+        });
+        if let Some(hint) = self.hint() {
+            encoded["input"] = json!({"hint": hint});
+        }
+        encoded
+    }
+}
+
+pub(crate) fn catalog(vibe_code_enabled: bool) -> impl Iterator<Item = Command> {
+    Command::ALL
+        .into_iter()
+        .filter(move |command| command.available(vibe_code_enabled))
 }
 
 pub(crate) fn advertised(vibe_code_enabled: bool) -> Vec<Value> {
     catalog(vibe_code_enabled)
-        .map(|command| {
-            let mut encoded = json!({
-                "name": command.name,
-                "description": command.description,
-            });
-            if let Some(hint) = command.hint {
-                encoded["input"] = json!({"hint": hint});
-            }
-            encoded
-        })
+        .map(Command::advertisement)
         .collect()
 }
 
+/// One recognized command. Only [`builtin_command`] builds this, which is what
+/// lets [`run`] dispatch a `Teleport` without re-checking availability.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BuiltinCommand {
-    name: String,
+    command: Command,
     arguments: String,
     raw: String,
 }
@@ -107,9 +135,9 @@ pub(crate) fn builtin_command(
     let raw = block.get("text").and_then(Value::as_str)?.trim();
     let mut parts = raw.strip_prefix('/')?.splitn(2, char::is_whitespace);
     let name = parts.next()?.to_ascii_lowercase();
-    catalog(vibe_code_enabled).find(|command| command.name == name)?;
+    let command = catalog(vibe_code_enabled).find(|command| command.name() == name)?;
     Some(BuiltinCommand {
-        name,
+        command,
         arguments: parts.next().map(str::trim).unwrap_or_default().to_owned(),
         raw: raw.to_owned(),
     })
@@ -176,7 +204,6 @@ where
     D: TurnDriver,
 {
     harness.begin(ActivePhase::Builtin)?;
-    harness.clear_cancel();
     let result = run(agent, &CommandSink { harness, sender }, command).await;
     harness.release()?;
     result
@@ -191,37 +218,34 @@ where
     D: TurnDriver,
 {
     sink.echo_user(&command.raw)?;
-    match command.name.as_str() {
-        "help" => sink.reply(&help_text(agent.vibe_code_enabled()))?,
-        "compact" => compact(sink, &command.arguments).await?,
-        "reload" => reload(sink).await?,
-        "log" => sink.reply("Session logging paths are not exposed by this configuration.")?,
-        "mcp" => {
+    match command.command {
+        Command::Help => sink.reply(&help_text(agent.vibe_code_enabled()))?,
+        Command::Compact => compact(sink, &command.arguments).await?,
+        Command::Reload => reload(sink).await?,
+        Command::Log => {
+            sink.reply("Session logging paths are not exposed by this configuration.")?;
+        }
+        Command::Mcp => {
             let reply = mcp::execute(sink, &command.arguments).await;
             sink.reply(&reply)?;
         }
-        "teleport" if agent.vibe_code_enabled() => teleport::execute(agent, sink).await?,
-        "proxy-setup" => {
+        Command::Teleport => teleport::execute(agent, sink).await?,
+        Command::ProxySetup => {
             let reply = proxy::execute(sink, &command.arguments).await;
             sink.reply(&reply)?;
         }
-        "data-retention" => sink.reply(
+        Command::DataRetention => sink.reply(
             "Data retention is controlled by the configured model provider and any connected \
              services. Local session transcripts remain under the configured Vibe session \
              directory.",
         )?,
-        unknown => {
-            return Err(AcpError::InvalidParams(format!(
-                "unknown built-in command `{unknown}`"
-            )));
-        }
     }
     Ok(command_response())
 }
 
 fn help_text(vibe_code_enabled: bool) -> String {
     let lines = catalog(vibe_code_enabled)
-        .map(|command| format!("- `/{}`: {}", command.name, command.description))
+        .map(|command| format!("- `/{}`: {}", command.name(), command.description()))
         .collect::<Vec<_>>()
         .join("\n");
     format!("### Available Commands\n\n{lines}")

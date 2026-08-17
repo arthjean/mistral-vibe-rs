@@ -5,8 +5,9 @@ use vibe_app_server::client::{HeadlessService, TurnDriver};
 
 use crate::protocol::AcpError;
 
+/// The largest history page this adapter asks for, and therefore the largest
+/// one it serves: the internal walk and the public limit are the same bound.
 pub(crate) const HISTORY_PAGE_SIZE: usize = 500;
-pub(crate) const MAX_HISTORY_PAGE_SIZE: usize = 500;
 const MAX_HISTORY_ENTRIES: usize = 100_000;
 
 pub(crate) fn history_page<D>(

@@ -8,12 +8,12 @@ use serde_json::{Value, json};
 use vibe_app_server::client::EchoTurnDriver;
 
 use super::{RecordingTurnDriver, prompt, start_session};
-use crate::agent::state::MAX_CLOSED_SESSIONS;
+use crate::agent::state::{MAX_CLOSED_SESSIONS, SessionSlot};
 use crate::agent::{AcpAgent, SESSION_LIST_PAGE_SIZE};
 use crate::protocol::{
     AcpError, AcpForkSession, AcpInitializeRequest, AcpLoadSession, AcpNewSession,
 };
-use crate::session::{SessionSettings, SessionSlot, Thinking};
+use crate::session::{ActivePhase, SessionSettings, Thinking};
 
 #[test]
 fn persisted_thinking_boolean_and_effort_round_trip_without_losing_off() {
@@ -107,6 +107,73 @@ fn session_load_reservation_is_atomic() {
             .count(),
         1
     );
+}
+
+/// Claiming work and cancelling it share the phase lock, so a cancel that
+/// races the end of one claim cannot latch onto the next. The two conflicts a
+/// session can report are also kept apart: a busy session and a claimed
+/// identity are different failures and render as different sentences.
+#[tokio::test]
+async fn cancellation_is_scoped_to_one_claim_and_conflicts_read_apart() {
+    let agent = AcpAgent::new(EchoTurnDriver::new("answer")).expect("agent starts");
+    agent.initialize().expect("ACP initializes");
+    let session = start_session(&agent, "/workspace");
+    let harness = agent
+        .session_harness(&session.session_id)
+        .expect("session harness");
+
+    // An idle session has no claim to cancel, so nothing is latched.
+    assert_eq!(
+        harness.request_cancel().expect("idle cancel"),
+        ActivePhase::Idle
+    );
+    assert!(!harness.is_cancelled());
+
+    harness.begin(ActivePhase::Builtin).expect("claim");
+    assert!(matches!(
+        harness.begin(ActivePhase::Builtin),
+        Err(AcpError::SessionBusy(_))
+    ));
+    assert_eq!(
+        harness.request_cancel().expect("busy cancel"),
+        ActivePhase::Builtin
+    );
+    assert!(harness.is_cancelled());
+    harness.cancelled().await;
+
+    // The next claim starts uncancelled without anyone clearing the flag.
+    harness.release().expect("release");
+    harness.begin(ActivePhase::Reserving).expect("second claim");
+    assert!(!harness.is_cancelled());
+    harness.release().expect("release");
+
+    let busy = AcpError::SessionBusy("s-1".to_owned()).to_string();
+    assert_eq!(busy, "ACP session `s-1` already has active work");
+    let claimed = AcpError::SessionConflict("s-1".to_owned()).to_string();
+    assert_eq!(
+        claimed,
+        "ACP session `s-1` is already claimed by another lifecycle operation"
+    );
+    agent.disconnect().await.expect("disconnect");
+}
+
+/// A load whose reservation is taken over reports the conflict rather than
+/// claiming the adapter was never initialized.
+#[tokio::test]
+async fn a_stolen_load_reservation_reports_a_conflict() {
+    let agent = AcpAgent::new(EchoTurnDriver::new("answer")).expect("agent starts");
+    agent.initialize().expect("ACP initializes");
+    let session = start_session(&agent, "/workspace");
+    let harness = agent
+        .session_harness(&session.session_id)
+        .expect("session harness");
+    let mut state = agent.lock_state().expect("agent state");
+    state.begin_load("durable").expect("reservation");
+    state.abort_load("durable");
+    assert!(matches!(
+        state.finish_load("durable", "durable".to_owned(), harness),
+        Err(AcpError::SessionConflict(_))
+    ));
 }
 
 #[tokio::test]
@@ -438,6 +505,56 @@ async fn list_pagination_is_stable_filtered_and_never_repeats_active_sessions() 
     agent.disconnect().await.expect("disconnect");
 }
 
+/// A probe is stopped on every outcome, and the work's own failure is what the
+/// caller sees. `HeadlessService` has no `Drop`, so a probe whose work fails
+/// would otherwise stay running for the life of the process.
+#[tokio::test]
+async fn a_failed_probe_is_stopped_and_reports_its_own_failure() {
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let cwd = temporary.path().to_string_lossy().into_owned();
+    let agent = AcpAgent::new(EchoTurnDriver::new("answer"))
+        .expect("agent starts")
+        .with_session_root(temporary.path().join("sessions"));
+    agent.initialize().expect("ACP initializes");
+
+    let refused = agent.with_probe(&cwd, &[], |_| {
+        Err::<(), _>(AcpError::InvalidParams("work refused".to_owned()))
+    });
+    assert!(
+        matches!(refused, Err(AcpError::InvalidParams(message)) if message == "work refused"),
+        "the shutdown outcome masked the work's failure"
+    );
+
+    // Loading a session saved for another directory fails inside the probe.
+    // The adapter stays usable afterward, which it would not if a stalled
+    // service still held the session root.
+    let session = start_session(&agent, &cwd);
+    agent
+        .close_session(&session.session_id)
+        .await
+        .expect("close");
+    assert!(matches!(
+        agent.load_session(AcpLoadSession {
+            session_id: session.session_id.clone(),
+            cwd: "/elsewhere".to_owned(),
+            additional_directories: Vec::new(),
+            mcp_servers: Vec::new(),
+            meta: None,
+        }),
+        Err(AcpError::InvalidParams(_))
+    ));
+    agent
+        .load_session(AcpLoadSession {
+            session_id: session.session_id,
+            cwd,
+            additional_directories: Vec::new(),
+            mcp_servers: Vec::new(),
+            meta: None,
+        })
+        .expect("the refused load released its reservation and its probe");
+    agent.disconnect().await.expect("disconnect");
+}
+
 #[test]
 fn production_cloud_is_lazy_when_the_configured_credential_is_absent() {
     const MISSING: &str = "VIBE_ACP_CLOUD_CREDENTIAL_MUST_REMAIN_UNSET_582F1";
@@ -501,13 +618,14 @@ async fn load_and_fork_reconstruct_settings_and_attach_roots_and_stdio_mcp() {
         .expect("fork");
     assert_eq!(
         forked
+            .settings
             .modes
             .as_ref()
             .and_then(|modes| modes.get("currentModeId")),
         Some(&json!("plan"))
     );
     assert_eq!(
-        forked.config_options.as_ref().and_then(|options| {
+        forked.settings.config_options.as_ref().and_then(|options| {
             options
                 .iter()
                 .find(|option| option["id"] == "thinking")
@@ -556,13 +674,14 @@ async fn load_and_fork_reconstruct_settings_and_attach_roots_and_stdio_mcp() {
         .expect("load");
     assert_eq!(
         loaded
+            .settings
             .modes
             .as_ref()
             .and_then(|modes| modes.get("currentModeId")),
         Some(&json!("plan"))
     );
     assert_eq!(
-        loaded.config_options.as_ref().and_then(|options| {
+        loaded.settings.config_options.as_ref().and_then(|options| {
             options
                 .iter()
                 .find(|option| option["id"] == "thinking")

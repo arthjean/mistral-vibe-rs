@@ -12,7 +12,7 @@ use super::{
     UserInputOnceDriver, prompt, start_session, text_prompt,
 };
 use crate::agent::AcpAgent;
-use crate::agent::turn::{acp_approval_options, approval_output_from_acp};
+use crate::agent::turn::callbacks::{acp_approval_options, approval_output_from_acp};
 use crate::protocol::AcpError;
 use crate::updates::MAX_ACP_UPDATE_QUEUE;
 
@@ -53,6 +53,44 @@ async fn lifecycle_rich_content_and_updates_stay_on_public_app_server_contracts(
         .await
         .expect("ACP session closes");
     agent.disconnect().await.expect("ACP disconnects");
+}
+
+/// The usage update measures against the context window the canonical session
+/// publishes, which is what the reference reads as `runtime.context_window`.
+/// A hard-coded size would drift the moment a model declares another one.
+#[tokio::test]
+async fn usage_updates_report_the_canonical_context_window() {
+    let agent = AcpAgent::new(EchoTurnDriver::new("answer")).expect("agent starts");
+    agent.initialize().expect("ACP initializes");
+    let session = start_session(&agent, "/workspace");
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(MAX_ACP_UPDATE_QUEUE);
+    agent
+        .prompt_content_streaming(&session.session_id, text_prompt("question"), sender)
+        .await
+        .expect("prompt completes");
+
+    let harness = agent
+        .session_harness(&session.session_id)
+        .expect("session harness");
+    let published = harness
+        .service
+        .lock()
+        .await
+        .public_call(
+            "stats/read",
+            json!({"sessionId": session.session_id.clone()}),
+        )
+        .expect("stats read")
+        .get("contextWindow")
+        .and_then(Value::as_u64)
+        .expect("context window");
+    assert!(published > 0, "the fixture session publishes no window");
+
+    let usage = std::iter::from_fn(|| receiver.try_recv().ok())
+        .find(|update| update.update["sessionUpdate"] == json!("usage_update"))
+        .expect("usage update");
+    assert_eq!(usage.update["size"], json!(published));
+    agent.disconnect().await.expect("disconnect");
 }
 
 #[tokio::test]

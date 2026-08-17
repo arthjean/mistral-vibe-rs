@@ -5,9 +5,9 @@ use vibe_app_server::client::PublicHistoryEntry;
 
 use crate::mcp::project_acp_mcp_servers;
 use crate::protocol::AcpError;
-use crate::updates::{
-    MAX_PROMPT_BLOCKS, history_entry_updates, public_entry_updates, queue_update, turn_request,
-};
+use crate::updates::prompt::{MAX_PROMPT_BLOCKS, turn_request};
+use crate::updates::stream::public_entry_updates;
+use crate::updates::{history_entry_updates, queue_update};
 
 #[test]
 fn bounded_update_queue_fails_closed_on_saturation_and_disconnect() {
@@ -44,10 +44,11 @@ fn cumulative_public_entries_emit_only_new_text_and_keep_tool_identity() {
     let first = message("Hel", "in_progress");
     let second = message("Hello", "in_progress");
     let completed = message("Hello", "completed");
-    let first_updates = public_entry_updates(None, &first).expect("initial update");
-    let second_updates = public_entry_updates(Some(&first), &second).expect("delta update");
+    let first_updates = public_entry_updates(None, &first, "message-1").expect("initial update");
+    let second_updates =
+        public_entry_updates(Some(&first), &second, "message-1").expect("delta update");
     let completion_updates =
-        public_entry_updates(Some(&second), &completed).expect("completion update");
+        public_entry_updates(Some(&second), &completed, "message-1").expect("completion update");
     assert_eq!(first_updates[0]["content"]["text"], "Hel");
     assert_eq!(second_updates[0]["content"]["text"], "lo");
     assert_eq!(second_updates[0]["messageId"], "message-1");
@@ -69,7 +70,8 @@ fn cumulative_public_entries_emit_only_new_text_and_keep_tool_identity() {
     let first_reasoning = reasoning("think");
     let second_reasoning = reasoning("thinking");
     let reasoning_delta =
-        public_entry_updates(Some(&first_reasoning), &second_reasoning).expect("reasoning delta");
+        public_entry_updates(Some(&first_reasoning), &second_reasoning, "reasoning-1")
+            .expect("reasoning delta");
     assert_eq!(reasoning_delta[0]["content"]["text"], "ing");
     assert_eq!(reasoning_delta[0]["messageId"], "reasoning-1");
 
@@ -101,9 +103,9 @@ fn cumulative_public_entries_emit_only_new_text_and_keep_tool_identity() {
     };
     let running = effect("running", "in_progress", "a");
     let completed_effect = effect("completed", "completed", "ab");
-    let started = public_entry_updates(None, &running).expect("tool starts");
+    let started = public_entry_updates(None, &running, "tool-1").expect("tool starts");
     let progressed =
-        public_entry_updates(Some(&running), &completed_effect).expect("tool progresses");
+        public_entry_updates(Some(&running), &completed_effect, "tool-1").expect("tool progresses");
     assert_eq!(started[0]["sessionUpdate"], "tool_call");
     assert_eq!(progressed[0]["sessionUpdate"], "tool_call_update");
     assert_eq!(progressed[0]["toolCallId"], "tool-1");
@@ -250,11 +252,17 @@ fn session_updates_carry_the_projected_message_identity() {
         "content": [{"type": "text", "text": "hello"}],
     }))
     .expect("public message");
-    let updates = public_entry_updates(None, &entry).expect("user message projects");
+    let updates = public_entry_updates(None, &entry, "message-9").expect("user message projects");
     assert_eq!(updates[0]["sessionUpdate"], "user_message_chunk");
     assert_eq!(updates[0]["messageId"], "message-9");
     assert_eq!(
         updates[0]["content"],
         json!({"type": "text", "text": "hello"})
     );
+
+    // A turn hands the first user message the identity `session/fork` anchors
+    // on, and the projection carries it instead of the canonical entry ID.
+    let anchored =
+        public_entry_updates(None, &entry, "history:7:user").expect("anchored message projects");
+    assert_eq!(anchored[0]["messageId"], "history:7:user");
 }

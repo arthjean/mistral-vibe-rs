@@ -26,7 +26,8 @@ pub use client_tools::{AcpClientFuture, AcpClientPort, DEFAULT_CLIENT_TOOL_TIMEO
 pub use protocol::{
     ACP_PROTOCOL_VERSION, AcpAgentCapabilities, AcpClientCapabilities, AcpClientInfo, AcpError,
     AcpFilesystemCapabilities, AcpForkSession, AcpImplementation, AcpInitializeRequest,
-    AcpInitializeResponse, AcpListSessions, AcpLoadSession, AcpNewSession, AcpPromptCapabilities,
-    AcpPromptResponse, AcpSession, AcpSessionInfo, AcpSessionList, AcpSessionUpdate, AcpUsage,
+    AcpInitializeResponse, AcpListSessions, AcpLoadSession, AcpLoadedSession, AcpNewSession,
+    AcpPromptCapabilities, AcpPromptResponse, AcpSession, AcpSessionInfo, AcpSessionList,
+    AcpSessionSettings, AcpSessionUpdate, AcpUsage,
 };
 pub use updates::MAX_ACP_UPDATE_QUEUE;

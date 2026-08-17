@@ -160,14 +160,35 @@ pub struct AcpTelemetryNotification {
     pub session_id: String,
 }
 
+/// What a session's negotiated settings look like on the wire. Both the
+/// `session/new` and `session/load` responses carry exactly this, which is why
+/// neither one owns the shape.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AcpSession {
-    pub session_id: String,
+pub struct AcpSessionSettings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modes: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config_options: Option<Vec<Value>>,
+}
+
+/// The `session/new` and `session/fork` response: the settings, under the
+/// identity the agent minted.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpSession {
+    pub session_id: String,
+    #[serde(flatten)]
+    pub settings: AcpSessionSettings,
+}
+
+/// The `session/load` response, which ACP declares without an identity: the
+/// client already named the session it asked to load.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpLoadedSession {
+    #[serde(flatten)]
+    pub settings: AcpSessionSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -236,8 +257,14 @@ pub enum AcpError {
     AuthFailure(String),
     #[error("ACP session `{0}` was not found")]
     SessionNotFound(String),
-    #[error("ACP session `{0}` already exists")]
+    /// Two lifecycle operations claimed the same session identity.
+    #[error("ACP session `{0}` is already claimed by another lifecycle operation")]
     SessionConflict(String),
+    /// The session exists and is busy: a prompt or a built-in command already
+    /// holds it. Distinct from [`Self::SessionConflict`], which is about the
+    /// identity rather than the work.
+    #[error("ACP session `{0}` already has active work")]
+    SessionBusy(String),
     #[error("invalid ACP parameters: {0}")]
     InvalidParams(String),
     #[error("invalid ACP response: {0}")]
@@ -276,7 +303,7 @@ impl AcpError {
             | Self::UnsupportedProtocol(_)
             | Self::UnsupportedAuthentication(_) => -32602,
             Self::SessionNotFound(_) => -32001,
-            Self::SessionConflict(_) | Self::AlreadyInitialized => -32002,
+            Self::SessionConflict(_) | Self::SessionBusy(_) | Self::AlreadyInitialized => -32002,
             Self::NotInitialized => -32003,
             Self::Disconnected => -32004,
             Self::Backpressure => -32005,
