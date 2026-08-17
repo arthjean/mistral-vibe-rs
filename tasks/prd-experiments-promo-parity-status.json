@@ -45,10 +45,10 @@
     {
       "id": "EP-005",
       "title": "Session lifecycle and telemetry exposure",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0,
+      "stories_done": 3,
       "stories_in_review": 0
     },
     {
@@ -215,21 +215,21 @@
       "id": "US-011",
       "title": "Resolve the caller's organization identity",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-003"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-17",
+      "completed_at": "2026-08-18",
+      "reviewed_at": "2026-08-18"
     },
     {
       "id": "US-012",
       "title": "Initialize, persist and hydrate a session's experiments",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
@@ -237,23 +237,23 @@
         "US-010",
         "US-011"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-17",
+      "completed_at": "2026-08-18",
+      "reviewed_at": "2026-08-18"
     },
     {
       "id": "US-013",
       "title": "Publish confirmed exposures on every telemetry event",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-012"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-17",
+      "completed_at": "2026-08-18",
+      "reviewed_at": "2026-08-18"
     },
     {
       "id": "US-014",
