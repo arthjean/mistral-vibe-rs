@@ -42,15 +42,18 @@ use crate::config::{
     ConfigPaths, ConfigTarget, EXPERIMENTS_LAYER_NAME, ExperimentsLayer, LayeredConfig,
     configured_fields, default_model_alias,
 };
-use crate::experiments::recorder::{Outcome, RecordingTransport};
+use crate::experiments::recorder::{Outcome, RecordingSink, RecordingTransport};
 use crate::experiments::{
-    BUCKETING_KEY_LENGTH, EVAL_PATH_TEMPLATE, EVAL_REQUEST_TIMEOUT, EvalPayload,
-    ExperimentAttributes, ExperimentManager, ExperimentName, FeatureDefinition, JsonValue,
-    RemoteEvalClient, build_eval_url, hash_api_key,
+    BUCKETING_KEY_LENGTH, EVAL_PATH_TEMPLATE, EVAL_REQUEST_TIMEOUT, EXPERIMENT_IDENTITY_TIMEOUT,
+    EvalPayload, EvalResponse, ExperimentAttributes, ExperimentManager, ExperimentName,
+    FeatureDefinition, JsonValue, RemoteEvalClient, build_attributes, build_eval_url, hash_api_key,
+    hydrate_experiments_from_session, initialize_experiments,
 };
+use crate::identity::IDENTITY_PATH;
+use crate::identity::recorder::RecordingResolver;
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 use crate::prompt::PromptResolver;
-use crate::telemetry::platform_id;
+use crate::telemetry::{LaunchContext, platform_id, version};
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/experiments/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/experiments.py";
@@ -183,27 +186,12 @@ const FAMILIES: &[Family] = &[
 /// Cases where this build answers something other than the reference, each with
 /// the reason and the story that closes it.
 ///
-/// Every entry here is open work rather than an accepted divergence: the layer
-/// and the session lifecycle are still absent and answer [`None`]. The
-/// staleness check is what forces a row out once its behavior conforms, so the
-/// ledger cannot outlive the gap it records, and EP-003 closing the engine took
-/// its fifteen rows out in the same change that filled [`port_case`].
-const DIVERGENCES: &[(&str, &str)] = &[
-    // -- EP-005: the session lifecycle --------------------------------------
-    (
-        "constants/value/identityPath",
-        "OPEN: US-011 ports the identity gateway the organization attribute depends on",
-    ),
-    ("constants/value/identityTimeoutSeconds", "OPEN: as above"),
-    (
-        "sessionGates/*",
-        "OPEN: US-012 ports the two session helpers, their gates and their persistence",
-    ),
-    (
-        "attributes/*",
-        "OPEN: US-012 builds the nine attributes from a launch context",
-    ),
-];
+/// Empty, and that is the measurement: every family of this corpus replays
+/// conforming. Each entry was open work rather than an accepted divergence, and
+/// the staleness check is what forced the rows out as their surfaces landed:
+/// EP-003 took the fifteen engine rows, EP-004 the layer rows and EP-005 the
+/// four the identity gateway and the session helpers answered.
+const DIVERGENCES: &[(&str, &str)] = &[];
 
 /// One family's shape: which case fields the capture authored and which ones
 /// both sides answer.
@@ -387,6 +375,10 @@ const ORACLE_USER_ID: &str = "0123456789abcdef0123456789abcdef";
 /// What the capture writes in place of the machine's own platform.
 const PLATFORM_ID_PLACEHOLDER: &str = "{platformId}";
 
+/// What the capture writes in place of the running build's own version, which
+/// is what an attribute answers when no adapter reports one.
+const VERSION_PLACEHOLDER: &str = "{version}";
+
 /// The credential sentinels the capture exports, mirroring `SENTINELS` in
 /// `scripts/parity/experiments.py`. They are authored strings that stand where
 /// an API key would, which is what lets the bucketing family be measured
@@ -462,6 +454,8 @@ fn port_case(family: &str, case: &Case<'_>, runtime: &Runtime) -> Option<Map<Str
         "variantLabels" => Some(variant_labels_answer(case)),
         "configMapping" => Some(config_mapping_answer(case)),
         "layerPrecedence" => Some(layer_precedence_answer(case)),
+        "sessionGates" => Some(session_gates_answer(case, runtime)),
+        "attributes" => Some(attributes_answer(case)),
         _ => None,
     }
 }
@@ -505,6 +499,8 @@ fn constants_answer(case: &str) -> Option<Map<String, Value>> {
         // property of the type rather than of a runtime check.
         "everyNameHasADefault" => Value::Bool(true),
         "evalPathTemplate" => Value::String(EVAL_PATH_TEMPLATE.to_owned()),
+        "identityPath" => Value::String(IDENTITY_PATH.to_owned()),
+        "identityTimeoutSeconds" => seconds(EXPERIMENT_IDENTITY_TIMEOUT),
         "evalTimeoutSeconds" => timeout_seconds(),
         "bucketingKeyLength" => Value::from(BUCKETING_KEY_LENGTH),
         "layerName" => Value::String(EXPERIMENTS_LAYER_NAME.to_owned()),
@@ -534,8 +530,12 @@ fn constants_answer(case: &str) -> Option<Map<String, Value>> {
 /// The eval timeout as the number the corpus records, read off the duration the
 /// HTTP client is actually built with.
 fn timeout_seconds() -> Value {
-    serde_json::Number::from_f64(EVAL_REQUEST_TIMEOUT.as_secs_f64())
-        .map_or(Value::Null, Value::Number)
+    seconds(EVAL_REQUEST_TIMEOUT)
+}
+
+/// One duration as the number of seconds the corpus records.
+fn seconds(duration: std::time::Duration) -> Value {
+    serde_json::Number::from_f64(duration.as_secs_f64()).map_or(Value::Null, Value::Number)
 }
 
 /// The keys of one JSON object, sorted, which is how the capture records a key
@@ -653,13 +653,15 @@ fn oracle_attributes(case: &str) -> ExperimentAttributes {
     attributes
 }
 
-/// The machine's own platform replaced by the placeholder the capture records,
-/// so the corpus stays portable.
+/// The machine's own platform and this build's own version replaced by the
+/// placeholders the capture records, so the corpus stays portable across
+/// machines and across releases.
 fn scrub(value: &Value) -> Value {
     match value {
         Value::String(text) if *text == platform_id() => {
             Value::String(PLATFORM_ID_PLACEHOLDER.to_owned())
         }
+        Value::String(text) if text == version() => Value::String(VERSION_PLACEHOLDER.to_owned()),
         Value::Object(entries) => Value::Object(
             entries
                 .iter()
@@ -1214,6 +1216,396 @@ fn layer_precedence_answer(case: &Case<'_>) -> Map<String, Value> {
         })
         .collect::<Map<_, _>>();
     answered("effective", Value::Object(effective))
+}
+
+// -- sessionGates ---------------------------------------------------------
+
+/// The documents every session scenario is composed over, spelled the way
+/// `GATE_CONFIGURATIONS` in `scripts/parity/experiments.py` spells them. The
+/// script authored them, so reproducing them here copies nothing the licensing
+/// boundary protects.
+const GATE_CONFIGURATIONS: [(&str, &str); 7] = [
+    (
+        "mistral-active",
+        r#"
+enable_telemetry = true
+active_model = "oracle"
+
+[experiments]
+enable = true
+
+[[providers]]
+name = "mistral"
+api_base = "https://api.mistral.ai/v1"
+api_key_env_var = "ORACLE_MISTRAL_KEY"
+backend = "mistral"
+
+[[models]]
+name = "oracle-model"
+provider = "mistral"
+alias = "oracle"
+"#,
+    ),
+    (
+        "telemetry-disabled",
+        r#"
+enable_telemetry = false
+active_model = "oracle"
+
+[experiments]
+enable = true
+
+[[providers]]
+name = "mistral"
+api_base = "https://api.mistral.ai/v1"
+api_key_env_var = "ORACLE_MISTRAL_KEY"
+backend = "mistral"
+
+[[models]]
+name = "oracle-model"
+provider = "mistral"
+alias = "oracle"
+"#,
+    ),
+    (
+        "experiments-disabled",
+        r#"
+enable_telemetry = true
+active_model = "oracle"
+
+[experiments]
+enable = false
+
+[[providers]]
+name = "mistral"
+api_base = "https://api.mistral.ai/v1"
+api_key_env_var = "ORACLE_MISTRAL_KEY"
+backend = "mistral"
+
+[[models]]
+name = "oracle-model"
+provider = "mistral"
+alias = "oracle"
+"#,
+    ),
+    (
+        "both-gates-off",
+        r#"
+enable_telemetry = false
+active_model = "oracle"
+
+[experiments]
+enable = false
+
+[[providers]]
+name = "mistral"
+api_base = "https://api.mistral.ai/v1"
+api_key_env_var = "ORACLE_MISTRAL_KEY"
+backend = "mistral"
+
+[[models]]
+name = "oracle-model"
+provider = "mistral"
+alias = "oracle"
+"#,
+    ),
+    (
+        "third-party-only",
+        r#"
+enable_telemetry = true
+active_model = "oracle"
+
+[experiments]
+enable = true
+
+[[providers]]
+name = "third-party"
+api_base = "https://third-party.example.test/v1"
+api_key_env_var = "ORACLE_THIRD_PARTY_KEY"
+
+[[models]]
+name = "oracle-model"
+provider = "third-party"
+alias = "oracle"
+"#,
+    ),
+    (
+        "mistral-without-a-resolvable-key",
+        r#"
+enable_telemetry = true
+active_model = "oracle"
+
+[experiments]
+enable = true
+
+[[providers]]
+name = "mistral"
+api_base = "https://api.mistral.ai/v1"
+api_key_env_var = "ORACLE_ABSENT_KEY"
+backend = "mistral"
+
+[[models]]
+name = "oracle-model"
+provider = "mistral"
+alias = "oracle"
+"#,
+    ),
+    (
+        "custom-system-prompt",
+        r#"
+enable_telemetry = true
+active_model = "oracle"
+system_prompt_id = "lean"
+
+[experiments]
+enable = true
+
+[[providers]]
+name = "mistral"
+api_base = "https://api.mistral.ai/v1"
+api_key_env_var = "ORACLE_MISTRAL_KEY"
+backend = "mistral"
+
+[[models]]
+name = "oracle-model"
+provider = "mistral"
+alias = "oracle"
+"#,
+    ),
+];
+
+/// The identity a scenario that resolves one answers, and the organization it
+/// carries into the attributes.
+const ORACLE_ORGANIZATION: &str = "oracle-organization";
+
+/// The eval body every gate scenario is answered with unless the case names a
+/// failure: one forced system-prompt feature carrying a confirmed track.
+const GATE_RESPONSE: &str = r#"{"features": {"vibe_cli_system_prompt": {"defaultValue": "cli",
+    "rules": [{"force": "tests", "tracks": [{"experiment": {"key": "vibe_cli_system_prompt"},
+    "result": {"key": "1", "variationId": 1, "inExperiment": true}}]}]}}}"#;
+
+/// The document one gate configuration names.
+fn gate_document(configuration: &str) -> &'static str {
+    GATE_CONFIGURATIONS
+        .into_iter()
+        .find(|(id, _)| *id == configuration)
+        .map(|(_, document)| document)
+        .unwrap_or_else(|| panic!("{configuration} is a gate configuration this replay knows"))
+}
+
+/// The configuration one gate document validates to: the declared defaults with
+/// the document written over them, key by key.
+///
+/// This is the composition the capture drove the reference over, which reads
+/// one authored document against its schema defaults. It is deliberately not a
+/// [`LayeredConfig`] load: the shipped defaults layer declares its own
+/// `providers`, and a *union* merge would put a Mistral provider under the
+/// `third-party-only` case that the document does not declare. What this family
+/// measures is what the session helpers read out of a configuration, and the
+/// composition of the configuration itself is `layerPrecedence`'s subject.
+fn gate_effective(configuration: &str) -> Table {
+    let authored = gate_document(configuration)
+        .parse::<Table>()
+        .unwrap_or_else(|error| panic!("the {configuration} document parses: {error}"));
+    let mut composed = default_document();
+    write_over(&mut composed, &authored);
+    composed
+}
+
+/// `overlay` written over `target`: a table is merged key by key and everything
+/// else, arrays included, replaces what it covers.
+fn write_over(target: &mut Table, overlay: &Table) {
+    for (key, value) in overlay {
+        match (target.get_mut(key), value) {
+            (Some(toml::Value::Table(existing)), toml::Value::Table(incoming)) => {
+                write_over(existing, incoming);
+            }
+            _ => {
+                target.insert(key.clone(), value.clone());
+            }
+        }
+    }
+}
+
+/// How the capture's exported variables become credentials, without any of them
+/// being read off this machine's environment.
+fn gate_credentials(name: &str) -> Option<String> {
+    SENTINELS
+        .into_iter()
+        .find(|(variable, _)| *variable == name)
+        .map(|(_, sentinel)| sentinel.to_owned())
+}
+
+fn session_gates_answer(case: &Case<'_>, runtime: &Runtime) -> Map<String, Value> {
+    let configuration = case
+        .input_str("configuration")
+        .expect("every session case names its configuration");
+    let effective = gate_effective(configuration);
+    let mut answers = Map::new();
+    let scenario = case.id.rsplit('/').next().unwrap_or_default();
+    match case.input_str("helper") {
+        Some("hydrate") => {
+            let transport = Arc::new(RecordingTransport::answering(GATE_RESPONSE));
+            let mut manager = ExperimentManager::new(RemoteEvalClient::with_transport(
+                build_eval_url(ORACLE_API_HOST, ORACLE_CLIENT_KEY),
+                Arc::clone(&transport) as _,
+            ));
+            // The reference reads the field off the session metadata, where an
+            // absent metadata and a metadata carrying no experiments are the
+            // same absent state, so both answer the same here.
+            let state = (scenario == "metadata-with-experiments").then(|| {
+                serde_json::from_str::<EvalResponse>(GATE_RESPONSE)
+                    .expect("the authored gate response validates")
+            });
+            let hydrated = hydrate_experiments_from_session(&effective, &mut manager, state);
+            answers.insert("returned".to_owned(), Value::Bool(hydrated));
+            answers.insert(
+                "evalRequests".to_owned(),
+                Value::from(transport.request_count()),
+            );
+            answers.insert("identityRequests".to_owned(), Value::from(0));
+            answers.insert("identityTimeout".to_owned(), Value::Null);
+            answers.insert("persisted".to_owned(), Value::from(0));
+            answers.insert("organizationId".to_owned(), Value::Null);
+        }
+        _ => {
+            let outcome = match scenario {
+                "eval-fails" => Outcome::Answer {
+                    status: 500,
+                    body: r#"{"features": {}}"#.to_owned(),
+                },
+                "eval-returns-nothing" => Outcome::ok(r#"{"features": {}}"#),
+                _ => Outcome::ok(GATE_RESPONSE),
+            };
+            let identity = (scenario == "identity").then_some(ORACLE_ORGANIZATION);
+            let transport = Arc::new(RecordingTransport::new(outcome));
+            let mut manager = ExperimentManager::new(RemoteEvalClient::with_transport(
+                build_eval_url(ORACLE_API_HOST, ORACLE_CLIENT_KEY),
+                Arc::clone(&transport) as _,
+            ));
+            let resolver = RecordingResolver::answering(identity, SENTINELS[1].1);
+            let sink = RecordingSink::default();
+            let refreshed = runtime.block_on(initialize_experiments(
+                &effective,
+                &gate_credentials,
+                &mut manager,
+                None,
+                &resolver,
+                &sink,
+            ));
+            let calls = resolver.calls();
+            answers.insert("returned".to_owned(), Value::Bool(refreshed));
+            answers.insert(
+                "evalRequests".to_owned(),
+                Value::from(transport.request_count()),
+            );
+            answers.insert("identityRequests".to_owned(), Value::from(calls.len()));
+            answers.insert(
+                "identityTimeout".to_owned(),
+                calls
+                    .first()
+                    .and_then(|call| call.timeout)
+                    .map_or(Value::Null, seconds),
+            );
+            answers.insert("persisted".to_owned(), Value::from(sink.count()));
+            answers.insert(
+                "organizationId".to_owned(),
+                transport
+                    .requests()
+                    .first()
+                    .and_then(|request| request.payload.pointer("/attributes/organizationId"))
+                    .cloned()
+                    .unwrap_or(Value::Null),
+            );
+        }
+    }
+    answers
+}
+
+// -- attributes -----------------------------------------------------------
+
+/// The launch contexts the capture builds attributes from, by the name it gives
+/// each one.
+fn launch_context(context: &str) -> Option<LaunchContext> {
+    let launch = |entrypoint: &str, client: &str, client_version: &str, terminal: Option<&str>| {
+        LaunchContext {
+            agent_entrypoint: entrypoint.to_owned(),
+            agent_version: "9.9.9".to_owned(),
+            client_name: client.to_owned(),
+            client_version: client_version.to_owned(),
+            terminal_emulator: terminal.map(ToOwned::to_owned),
+        }
+    };
+    match context {
+        "no-launch-context" => None,
+        "cli" => Some(launch("cli", "vibe", "9.9.9", None)),
+        "cli-in-vscode" => Some(launch("cli", "vibe", "9.9.9", Some("vscode"))),
+        "acp-in-cursor" => Some(launch("acp", "zed", "0.1.0", Some("cursor"))),
+        "programmatic" => Some(launch("programmatic", "harness", "2.0.0", Some("unknown"))),
+        other => panic!("{other} is a launch context this replay knows"),
+    }
+}
+
+/// One set of attributes as the object the capture records: every declared key,
+/// including the ones an absent option leaves null on the way out.
+fn attribute_object(attributes: &ExperimentAttributes) -> Value {
+    let text =
+        |value: Option<&String>| value.map_or(Value::Null, |value| Value::String(value.clone()));
+    Value::Object(
+        [
+            ("userId", Value::String(attributes.user_id.clone())),
+            ("entrypoint", Value::String(attributes.entrypoint.clone())),
+            (
+                "agent_version",
+                Value::String(attributes.agent_version.clone()),
+            ),
+            ("client_name", text(attributes.client_name.as_ref())),
+            ("client_version", text(attributes.client_version.as_ref())),
+            ("os", Value::String(attributes.os.clone())),
+            (
+                "terminal_emulator",
+                text(attributes.terminal_emulator.as_ref()),
+            ),
+            (
+                "custom_system_prompt",
+                Value::Bool(attributes.custom_system_prompt),
+            ),
+            ("organizationId", text(attributes.organization_id.as_ref())),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), value))
+        .collect(),
+    )
+}
+
+fn attributes_answer(case: &Case<'_>) -> Map<String, Value> {
+    let configuration = match case.input_str("document") {
+        Some("custom-prompt") => "custom-system-prompt",
+        _ => "mistral-active",
+    };
+    let context = case
+        .input_str("context")
+        .expect("every attributes case names its launch context");
+    let launch = launch_context(context);
+    let attributes = build_attributes(
+        &gate_effective(configuration),
+        SENTINELS[1].1,
+        launch.as_ref(),
+        (context != "no-launch-context").then(|| ORACLE_ORGANIZATION.to_owned()),
+    );
+    let posted = serde_json::to_value(&attributes).expect("the attributes serialize");
+    let mut answers = Map::new();
+    answers.insert(
+        "attributes".to_owned(),
+        scrub(&attribute_object(&attributes)),
+    );
+    answers.insert("payloadKeys".to_owned(), sorted_keys(&posted));
+    answers.insert(
+        "credentialVariable".to_owned(),
+        sentinel_variable(&attributes.user_id)
+            .map_or(Value::Null, |variable| Value::String(variable.to_owned())),
+    );
+    answers
 }
 
 // --------------------------------------------------------------------------
