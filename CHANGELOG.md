@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Resolve a session's rollout once, off the startup path. With
+  `enable_telemetry` and `experiments.enable` both on, a Mistral provider
+  present and its variable resolving, a detached lookup posts nine attributes
+  to the configured eval host and applies what comes back: the variants land in
+  the configuration layer that sits below every file a human wrote, and the
+  confirmed exposures travel on every telemetry event the session sends
+  afterward. The credential never leaves as itself, only as the truncated
+  SHA-256 the bucketing key is, and the organization a rollout can be scoped to
+  is read from the provider's own `/users/me` under a four second budget.
+  Nothing waits on any of it: either gate turned off issues no request at all,
+  and a failed lookup, an unreadable identity and a third-party provider each
+  leave the session on its declared variants. What a session resolved is
+  written to its metadata, so a resumed session and a fork reuse it instead of
+  asking again, and a session that quits mid-lookup cancels the request rather
+  than waiting for it.
+
 - Leave `active_model` unpinned in the document a fresh installation writes, as
   the reference does, and resolve the alias when it is read: a pinned value
   still wins, an empty one selects `routed_default_model` when it names a
