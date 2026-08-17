@@ -36,7 +36,7 @@ fn compose_snapshot(documents: &[&str]) -> Result<ConfigSnapshot, ConfigError> {
         defaults,
     );
     if let Some(document) = experiments {
-        config.experiments = document.parse().expect("fixture TOML");
+        config.set_experiments(document.parse().expect("fixture TOML"));
     }
     if let Some(document) = layers.next() {
         config.runtime = document.parse().expect("fixture TOML");

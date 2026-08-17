@@ -655,7 +655,7 @@ fn replay(scenario: &Scenario) {
         documents.next().unwrap_or_default(),
     );
     if let Some(experiments) = documents.next() {
-        config.experiments = experiments;
+        config.set_experiments(experiments);
     }
     if let Some(selected) = documents.next() {
         fs::write(home.join(CONFIG_FILE), selected.to_string()).expect("selected fixture");

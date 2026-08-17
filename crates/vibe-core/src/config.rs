@@ -452,7 +452,12 @@ pub struct LayeredConfig {
     /// The pass behind [`ConfigLayerKind::Discovered`], or `None` when nothing
     /// discovers anything for this store, which leaves the layer empty.
     discovery: Option<ConfigDiscovery>,
-    experiments: Table,
+    /// The document behind [`ConfigLayerKind::Experiments`], shared by every
+    /// clone of this store because a rollout resolves after a session is
+    /// already running: reference `_sync_growthbook_layer_variants` writes into
+    /// the orchestrator's own layer object, and every reader that had already
+    /// taken a handle composes with what it wrote.
+    experiments: Arc<Mutex<Table>>,
     runtime: Table,
     agent: Table,
     environment: BTreeMap<String, String>,
@@ -480,7 +485,7 @@ impl LayeredConfig {
             paths,
             defaults,
             discovery: None,
-            experiments: Table::new(),
+            experiments: Arc::new(Mutex::new(Table::new())),
             runtime: Table::new(),
             agent: Table::new(),
             environment: BTreeMap::new(),
@@ -564,9 +569,37 @@ impl LayeredConfig {
     }
 
     #[must_use]
-    pub fn with_experiments(mut self, values: Table) -> Self {
-        self.experiments = values;
+    pub fn with_experiments(self, values: Table) -> Self {
+        self.set_experiments(values);
         self
+    }
+
+    /// Publishes what [`ConfigLayerKind::Experiments`] composes, for every
+    /// handle onto this store.
+    ///
+    /// This is the write a resolved rollout makes, and it is a write rather
+    /// than a builder because the assignment arrives after every consumer has
+    /// already taken its handle. The next [`Self::load`] composes it, which is
+    /// what carries it to the caches that follow a load.
+    pub fn set_experiments(&self, values: Table) {
+        *self
+            .experiments
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = values;
+    }
+
+    /// Publishes the variants a resolved rollout assigned, mapped onto the
+    /// fields the layer writes.
+    ///
+    /// Reference `_sync_growthbook_layer_variants`.
+    pub fn set_experiment_variants(
+        &self,
+        variants: &BTreeMap<String, String>,
+        prompt_resolves: PromptResolves,
+    ) {
+        self.set_experiments(
+            ExperimentsLayer::from_variants(variants, prompt_resolves).into_values(),
+        );
     }
 
     /// Installs the document `variants` map onto, which is how a resolved
@@ -582,9 +615,8 @@ impl LayeredConfig {
         variants: &BTreeMap<String, String>,
         prompt_resolves: PromptResolves,
     ) -> Self {
-        self.with_experiments(
-            ExperimentsLayer::from_variants(variants, prompt_resolves).into_values(),
-        )
+        self.set_experiment_variants(variants, prompt_resolves);
+        self
     }
 
     #[must_use]
@@ -700,7 +732,11 @@ impl LayeredConfig {
             // telemetry, but it never silently overrides a value a human wrote.
             ConfigLayer {
                 kind: ConfigLayerKind::Experiments,
-                values: self.experiments.clone(),
+                values: self
+                    .experiments
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone(),
             },
             ConfigLayer {
                 kind: ConfigLayerKind::SelectedToml,
@@ -3004,7 +3040,7 @@ winner = "defaults"
             "active_model = \"project\"\n[future]\nunknown = \"kept\"\n",
         )
         .expect("project fixture");
-        config.experiments = table("thinking = \"low\"");
+        config.set_experiments(table("thinking = \"low\""));
         config.environment = BTreeMap::from([
             ("VIBE_ACTIVE_MODEL".to_owned(), "\"environment\"".to_owned()),
             (
