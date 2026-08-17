@@ -5,6 +5,7 @@ mod app_server_surface_parity_tests;
 mod builtin_agents;
 pub mod client;
 pub mod client_tools;
+pub mod experiments;
 mod host;
 mod images;
 mod live_projection;

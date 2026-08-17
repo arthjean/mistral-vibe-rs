@@ -303,6 +303,30 @@ impl Release3Service {
         self.config.clone()
     }
 
+    /// The store a session's transcript and metadata live in.
+    #[must_use]
+    pub fn session_store(&self) -> SessionStore {
+        self.store.clone()
+    }
+
+    /// Whether the open workspace is trusted, which is what decides the project
+    /// half of every discovery.
+    #[must_use]
+    pub const fn project_trusted(&self) -> bool {
+        self.project_trusted
+    }
+
+    /// The project directories a prompt is resolved from, which are none in an
+    /// untrusted workspace.
+    #[must_use]
+    pub fn project_prompt_roots(&self) -> Vec<PathBuf> {
+        if self.project_trusted {
+            vec![self.paths.working_directory.join(".vibe/prompts")]
+        } else {
+            Vec::new()
+        }
+    }
+
     /// The per-tool configuration a session's tools resolve through.
     #[must_use]
     pub fn tool_config(&self) -> ToolConfigResolver {

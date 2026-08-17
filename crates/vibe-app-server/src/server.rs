@@ -549,6 +549,16 @@ impl AppServer {
     }
 
     #[must_use]
+    /// The configuration and session service this server composes over.
+    ///
+    /// Handed back so an adapter can attach a runtime that has to read and
+    /// write the *same* configuration the server's own sessions read, which is
+    /// what a resolved rollout depends on: a second service would compose a
+    /// second document.
+    pub fn release3_service(&self) -> Release3Service {
+        self.release3.as_ref().clone()
+    }
+
     pub fn connect(&self, transport: TransportKind) -> ServerConnection {
         ServerConnection {
             server: self.clone(),

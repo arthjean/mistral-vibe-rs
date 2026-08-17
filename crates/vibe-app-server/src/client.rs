@@ -854,6 +854,13 @@ impl InProcessClient {
         Ok(session_id)
     }
 
+    /// The configuration and session service the server behind this client
+    /// composes over.
+    #[must_use]
+    pub fn release3_service(&self) -> crate::release3::Release3Service {
+        self.server.release3_service()
+    }
+
     pub async fn configure_pending_mcp(&mut self, session_id: &str) -> Result<(), ClientError> {
         self.configure_pending_mcp_with_diagnostics(session_id)
             .await
@@ -1618,6 +1625,12 @@ where
 
     pub fn start_session(&mut self, options: &SessionOptions) -> Result<String, ClientError> {
         self.client.start_session(options)
+    }
+
+    /// The configuration and session service this session composes over.
+    #[must_use]
+    pub fn release3_service(&self) -> crate::release3::Release3Service {
+        self.client.release3_service()
     }
 
     pub async fn initialize_pending_mcp(
