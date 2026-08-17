@@ -402,15 +402,67 @@ fn properties_of<T: Serialize>(census: &T) -> Map<String, Value> {
         .unwrap_or_default()
 }
 
+/// The confirmed exposures every event of this process reports, as the handle a
+/// session publishes into and a census reads out of.
+///
+/// A rollout is resolved off the startup path and lands after the telemetry
+/// client is already built, so the exposures cannot be a value the context was
+/// constructed with. The reference reads them through a getter closed over its
+/// experiment manager; this is that getter, as a handle every clone of the
+/// context shares. A context nobody publishes into reports nothing, which is
+/// what an unenrolled session, a disabled gate and a failed lookup all produce.
+#[derive(Debug, Clone, Default)]
+pub struct ExperimentExposures(Arc<Mutex<BTreeMap<String, String>>>);
+
+impl ExperimentExposures {
+    /// Replaces what every later event reports.
+    ///
+    /// Reference `ExperimentManager.assignments` is re-read on every send, so
+    /// the last publication is what an event carries.
+    pub fn publish(&self, assignments: BTreeMap<String, String>) {
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = assignments;
+    }
+
+    /// What an event built now would report.
+    #[must_use]
+    pub fn resolved(&self) -> BTreeMap<String, String> {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+}
+
+impl From<BTreeMap<String, String>> for ExperimentExposures {
+    fn from(assignments: BTreeMap<String, String>) -> Self {
+        Self(Arc::new(Mutex::new(assignments)))
+    }
+}
+
+/// Two handles are equal when they report the same exposures, which is what a
+/// census comparison is about.
+impl PartialEq for ExperimentExposures {
+    fn eq(&self, other: &Self) -> bool {
+        self.resolved() == other.resolved()
+    }
+}
+
+impl Eq for ExperimentExposures {}
+
 /// What every event of this process reports before its own payload. Reference
 /// `TelemetryClient.__init__`'s six getters, held as values because this port
 /// reads the session from the event it is projecting rather than from a
-/// getter.
+/// getter. The exposures are the exception: they resolve after the client is
+/// built, so they are read through [`ExperimentExposures`] on every send, as
+/// the reference reads them through its own getter.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TelemetryContext {
     pub launch: Option<LaunchContext>,
     pub parent_session_id: Option<String>,
-    pub experiments: BTreeMap<String, String>,
+    pub experiments: ExperimentExposures,
     pub user_plan: Option<String>,
 }
 
@@ -431,8 +483,8 @@ impl TelemetryContext {
             session_id: session_id.map(ToOwned::to_owned),
             parent_session_id: self.parent_session_id.clone(),
             // Reference `experiments or None`: an empty map is absent rather
-            // than an empty object.
-            experiments: (!self.experiments.is_empty()).then(|| self.experiments.clone()),
+            // than an empty object, which is what an unenrolled session sends.
+            experiments: Some(self.experiments.resolved()).filter(|map| !map.is_empty()),
             user_plan: self.user_plan.clone(),
         }
     }

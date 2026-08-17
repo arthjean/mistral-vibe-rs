@@ -97,7 +97,7 @@ fn context() -> TelemetryContext {
             terminal_emulator: Some("ghostty".to_owned()),
         }),
         parent_session_id: Some("oracle-parent-session".to_owned()),
-        experiments: BTreeMap::new(),
+        experiments: ExperimentExposures::default(),
         user_plan: Some("oracle-plan".to_owned()),
     }
 }
@@ -589,7 +589,7 @@ fn experiments_are_absent_rather_than_empty() {
             .contains_key("experiments")
     );
     let filled = TelemetryContext {
-        experiments: BTreeMap::from([("ab".to_owned(), "on".to_owned())]),
+        experiments: BTreeMap::from([("ab".to_owned(), "on".to_owned())]).into(),
         ..context()
     };
     assert_eq!(

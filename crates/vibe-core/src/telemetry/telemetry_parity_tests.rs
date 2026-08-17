@@ -64,7 +64,7 @@ use crate::tracing::{
 };
 
 use super::{
-    LaunchContext, TELEMETRY_ATTACHMENT_IMAGE, TELEMETRY_AUTHORIZATION_SCHEME,
+    ExperimentExposures, LaunchContext, TELEMETRY_ATTACHMENT_IMAGE, TELEMETRY_AUTHORIZATION_SCHEME,
     TELEMETRY_CALL_SOURCE, TELEMETRY_DEFAULT_API_KEY_VARIABLE, TELEMETRY_DEFAULT_BASE_URL,
     TELEMETRY_MAX_CONNECTIONS, TELEMETRY_MAX_KEEPALIVE_CONNECTIONS, TELEMETRY_PATH,
     TELEMETRY_TIMEOUT_SECONDS, TelemetryCallType, TelemetryClient, TelemetryConfig,
@@ -772,7 +772,7 @@ fn oracle_context() -> TelemetryContext {
     TelemetryContext {
         launch: Some(oracle_launch(Some("ghostty"))),
         parent_session_id: Some("oracle-parent-session".to_owned()),
-        experiments: BTreeMap::new(),
+        experiments: ExperimentExposures::default(),
         user_plan: Some("oracle-plan".to_owned()),
     }
 }
@@ -1488,7 +1488,7 @@ fn run_vocabularies(vocabularies: &Vocabularies, report: &mut Report) {
     let populated = TelemetryContext {
         launch: Some(oracle_launch(Some("ghostty"))),
         parent_session_id: Some("oracle-parent-session".to_owned()),
-        experiments: BTreeMap::from([("ab".to_owned(), "on".to_owned())]),
+        experiments: BTreeMap::from([("ab".to_owned(), "on".to_owned())]).into(),
         user_plan: Some("oracle-plan".to_owned()),
     };
     let base = Value::Object(populated.base_metadata(Some("oracle-session")).properties());
@@ -1813,6 +1813,7 @@ fn metadata_inputs(scenario: &str) -> Option<(TelemetryContext, Option<&'static 
             .iter()
             .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
             .collect::<BTreeMap<_, _>>()
+            .into()
     };
     Some(match scenario {
         "full-launch-context" => (
@@ -1828,7 +1829,7 @@ fn metadata_inputs(scenario: &str) -> Option<(TelemetryContext, Option<&'static 
             TelemetryContext {
                 launch: None,
                 parent_session_id: parent,
-                experiments: BTreeMap::new(),
+                experiments: ExperimentExposures::default(),
                 user_plan: plan,
             },
             session,
