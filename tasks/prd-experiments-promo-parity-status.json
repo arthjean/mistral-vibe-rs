@@ -36,10 +36,10 @@
     {
       "id": "EP-004",
       "title": "The GrowthBook configuration layer",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 2,
-      "stories_done": 0,
+      "stories_done": 2,
       "stories_in_review": 0
     },
     {
@@ -186,30 +186,30 @@
       "id": "US-009",
       "title": "Map variants onto configuration fields",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-005",
         "US-008"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-17",
+      "completed_at": "2026-08-17",
+      "reviewed_at": "2026-08-17"
     },
     {
       "id": "US-010",
       "title": "Seat the layer below the selected TOML",
       "epic": "EP-004",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-009"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-17",
+      "completed_at": "2026-08-17",
+      "reviewed_at": "2026-08-17"
     },
     {
       "id": "US-011",
