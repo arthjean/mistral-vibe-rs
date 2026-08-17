@@ -64,8 +64,10 @@ fn the_discovered_layer_sits_above_the_defaults_and_below_the_selected_file() {
         [
             ConfigLayerKind::Defaults,
             ConfigLayerKind::Discovered,
-            ConfigLayerKind::SelectedToml,
+            // US-010: the assignment composes below the selected file, where
+            // reference `build_default_orchestrator` seats it.
             ConfigLayerKind::Experiments,
+            ConfigLayerKind::SelectedToml,
             ConfigLayerKind::Environment,
             ConfigLayerKind::Runtime,
             ConfigLayerKind::Agent,

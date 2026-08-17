@@ -561,14 +561,23 @@ const DEFAULT_EXPERIMENTS: &str = r#"{
 
 const EMPTY_LIST: &str = "[]";
 
+/// The compaction threshold this build ships, which the reference declares once
+/// and reads in two places: as the default of the global `auto_compact_threshold`
+/// field, and as the default of the same field on one model.
+///
+/// Reference `DEFAULT_AUTO_COMPACT_THRESHOLD`.
+pub const DEFAULT_AUTO_COMPACT_THRESHOLD: i64 = 200_000;
+
 /// The per-entry defaults the reference `ModelConfig` fills in once a merged
 /// model reaches validation. A merged entry only carries what its layers set,
 /// so the load completes it from here.
 ///
 /// `cached_input_price` is absent on purpose: it defaults to null upstream and
 /// TOML carries no null, so an entry that sets none stays without the key.
-/// `auto_compact_threshold` is absent too: it is filled from the global value
-/// rather than from a per-model constant.
+/// `auto_compact_threshold` is absent too: an entry of `models` is filled from
+/// the global value rather than from a per-model constant. The one definition
+/// that is not an entry of `models` falls back to
+/// [`DEFAULT_AUTO_COMPACT_THRESHOLD`] instead.
 pub const MODEL_DEFAULTS: &str = r#"{
     "temperature": 0.2,
     "input_price": 0.0,
@@ -676,7 +685,7 @@ pub static FIELDS: &[FieldSpec] = &[
     FieldSpec::declared("auto_compact_threshold", FieldKind::Int, REPLACE)
         .popular()
         .published(
-            FieldDefault::Int(200_000),
+            FieldDefault::Int(DEFAULT_AUTO_COMPACT_THRESHOLD),
             "Token count above which a conversation is compacted. A model may set its own.",
             r#"{"minimum": 0}"#,
         ),

@@ -638,8 +638,9 @@ fn replay(scenario: &Scenario) {
     fs::create_dir_all(&home).expect("home directory");
 
     // Every layer is composed through the real load: the lowest becomes the
-    // defaults document, the next the selected file, and the rest the
-    // experiments, runtime and agent layers, in the order `load` composes them.
+    // defaults document, the next the experiments assignment, and the rest the
+    // selected file, the runtime and the agent layers, in the order `load`
+    // composes them.
     let mut documents = scenario.layers.iter().map(|layer| {
         layer
             .toml
@@ -653,11 +654,11 @@ fn replay(scenario: &Scenario) {
         },
         documents.next().unwrap_or_default(),
     );
-    if let Some(selected) = documents.next() {
-        fs::write(home.join(CONFIG_FILE), selected.to_string()).expect("selected fixture");
-    }
     if let Some(experiments) = documents.next() {
         config.experiments = experiments;
+    }
+    if let Some(selected) = documents.next() {
+        fs::write(home.join(CONFIG_FILE), selected.to_string()).expect("selected fixture");
     }
     if let Some(runtime) = documents.next() {
         config.runtime = runtime;

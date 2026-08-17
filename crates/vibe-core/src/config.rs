@@ -20,6 +20,7 @@ use crate::text::hex_encode;
 
 pub mod dotenv;
 pub mod events;
+pub mod experiments_layer;
 pub mod harness;
 pub mod introspect;
 mod merge;
@@ -31,6 +32,9 @@ mod view;
 
 pub use dotenv::{DotenvValues, global_env_file};
 pub use events::{ConfigChangeBus, ConfigChangeEvent, ConfigSubscription};
+pub use experiments_layer::{
+    EXPERIMENTS_LAYER_NAME, ExperimentsLayer, PromptResolves, configured_fields,
+};
 pub use harness::{ConfigSource, HarnessFiles};
 pub use introspect::{ConfigFieldView, ConfigFields, ConfigLayerValue, HIDDEN_FIELDS};
 pub use patch::{ConfigMutation, JsonPointer, PatchError, PatchOperation};
@@ -89,8 +93,13 @@ pub enum ConfigLayerKind {
     /// schema defaults and the selected file, so every file an operator owns
     /// overrides it.
     Discovered,
-    SelectedToml,
+    /// What a resolved rollout assigns, composed from
+    /// [`experiments_layer::ExperimentsLayer`]. Reference
+    /// `build_default_orchestrator`, which seats `GrowthbookLayer` directly
+    /// above the schema defaults, so a value written in any file an operator
+    /// owns beats an assignment.
     Experiments,
+    SelectedToml,
     Environment,
     Runtime,
     Agent,
@@ -560,6 +569,24 @@ impl LayeredConfig {
         self
     }
 
+    /// Installs the document `variants` map onto, which is how a resolved
+    /// rollout reaches [`ConfigLayerKind::Experiments`].
+    ///
+    /// The variants are the ones
+    /// [`crate::experiments::ExperimentManager::config_variants`] answers, and
+    /// `prompt_resolves` is the session's own prompt resolution, which decides
+    /// whether a prompt variant is written at all.
+    #[must_use]
+    pub fn with_experiment_variants(
+        self,
+        variants: &BTreeMap<String, String>,
+        prompt_resolves: PromptResolves,
+    ) -> Self {
+        self.with_experiments(
+            ExperimentsLayer::from_variants(variants, prompt_resolves).into_values(),
+        )
+    }
+
     #[must_use]
     pub fn with_runtime_overrides(mut self, values: Table) -> Self {
         self.runtime = values;
@@ -666,13 +693,18 @@ impl LayeredConfig {
                 kind: ConfigLayerKind::Discovered,
                 values: discovered,
             },
-            ConfigLayer {
-                kind: ConfigLayerKind::SelectedToml,
-                values: selected.clone(),
-            },
+            // The experiment assignment composes below the selected file:
+            // reference `build_default_orchestrator` seats `GrowthbookLayer`
+            // directly above the schema defaults so that every file an operator
+            // owns overrides an assignment. Enrollment is still reported to
+            // telemetry, but it never silently overrides a value a human wrote.
             ConfigLayer {
                 kind: ConfigLayerKind::Experiments,
                 values: self.experiments.clone(),
+            },
+            ConfigLayer {
+                kind: ConfigLayerKind::SelectedToml,
+                values: selected.clone(),
             },
             ConfigLayer {
                 kind: ConfigLayerKind::Environment,
@@ -1531,6 +1563,8 @@ mod dotenv_tests;
 #[cfg(test)]
 mod events_tests;
 #[cfg(test)]
+mod experiments_layer_tests;
+#[cfg(test)]
 mod harness_tests;
 #[cfg(test)]
 mod introspect_tests;
@@ -2070,8 +2104,8 @@ fn persist_models_as_list(table: &mut Table, persisted_order: &[String]) {
 /// the order its validators run: the routed model definition is coerced and
 /// injected, the session log directory is resolved, an emptied model set is
 /// rejected, the global compaction threshold reaches the models that set none,
-/// and an `active_model` naming nothing configured falls back to the first
-/// model.
+/// the routed definition takes the shipped one instead, and an `active_model`
+/// naming nothing configured falls back to the first model.
 ///
 /// Every rule is skipped when the key it governs is absent. A stack composed
 /// without the shipped defaults, which is what a fixture builds, therefore
@@ -2092,6 +2126,7 @@ fn finalize_effective(
     complete_model_entries(effective);
     complete_compaction_model(effective);
     propagate_auto_compact_threshold(effective);
+    complete_routed_threshold(effective);
     warnings.extend(apply_active_model_fallback(effective, model_order));
     // The active-model fallback runs first so the provider comparison reads the
     // model the session will actually use, which is the order the reference's
@@ -2115,7 +2150,11 @@ fn coerce_routed_model_config(effective: &mut Table) -> Option<String> {
         .to_owned();
     let coerced = serde_json::from_str::<JsonValue>(&raw)
         .ok()
-        .and_then(|value| validate_model_definition(&value));
+        .and_then(|value| validate_model_definition(&value))
+        .map(|mut entry| {
+            complete_model_definition(&mut entry);
+            entry
+        });
     match coerced {
         Some(entry) => {
             effective.insert(ROUTED_MODEL_CONFIG_FIELD.to_owned(), Value::Table(entry));
@@ -2126,6 +2165,56 @@ fn coerce_routed_model_config(effective: &mut Table) -> Option<String> {
             Some("Routed model definition is not a model configuration; ignoring it.".to_owned())
         }
     }
+}
+
+/// Fills a routed definition with the per-entry defaults, the same completion
+/// an entry of `models` goes through.
+///
+/// The reference reads `routed_model_config` as a `ModelConfig`, so the field
+/// it publishes carries every default the model declares rather than only the
+/// keys the rollout payload spelled. `cached_input_price` is the one exception
+/// and it is a representation gap rather than a value gap: it defaults to null
+/// upstream and TOML carries no null, so an entry that sets none stays without
+/// the key, exactly as `registry::MODEL_DEFAULTS` documents for every other
+/// model. `auto_compact_threshold` is filled by
+/// [`complete_routed_threshold`], after the injected copy has taken the global
+/// value the reference gives it.
+fn complete_model_definition(entry: &mut Table) {
+    // Unreachable in a passing suite: `registry_tests` parses the literal.
+    let Some(defaults) = serde_json::from_str::<JsonValue>(registry::MODEL_DEFAULTS)
+        .ok()
+        .and_then(|value| Value::try_from(value).ok())
+        .and_then(|value| value.as_table().cloned())
+    else {
+        return;
+    };
+    for (key, value) in &defaults {
+        entry.entry(key.clone()).or_insert_with(|| value.clone());
+    }
+}
+
+/// The compaction threshold the routed definition itself publishes, which is
+/// the shipped one rather than the operator's global value.
+///
+/// The reference splits the two: `_apply_global_auto_compact_threshold`
+/// rewrites the entries of `models`, and the copy `_inject_routed_model` put
+/// there is one of them, but `routed_model_config` is a field of the schema
+/// rather than an entry of the map, so it keeps the default `ModelConfig`
+/// declares. Measured against the pinned reference: a document setting
+/// `auto_compact_threshold = 50000` publishes 50000 on the injected model and
+/// 200000 on `routed_model_config`. Running after the propagation is what keeps
+/// the two apart, since a threshold written before the injection would travel
+/// into the map with the definition.
+fn complete_routed_threshold(effective: &mut Table) {
+    let Some(entry) = effective
+        .get_mut(ROUTED_MODEL_CONFIG_FIELD)
+        .and_then(Value::as_table_mut)
+    else {
+        return;
+    };
+    entry
+        .entry("auto_compact_threshold".to_owned())
+        .or_insert(Value::Integer(registry::DEFAULT_AUTO_COMPACT_THRESHOLD));
 }
 
 /// One JSON object read as reference `ModelConfig`, or `None` where the model
@@ -2287,7 +2376,8 @@ fn inject_routed_model(effective: &mut Table) {
 /// Reference `resolve_default_model_alias`: the routed alias when it names a
 /// configured model, the shipped default alias when that one is configured, and
 /// the first configured model otherwise.
-fn default_model_alias(effective: &Table) -> Option<&str> {
+#[must_use]
+pub fn default_model_alias(effective: &Table) -> Option<&str> {
     let models = effective.get(merge::MODELS_FIELD)?.as_table()?;
     let routed = effective
         .get(ROUTED_DEFAULT_MODEL_FIELD)

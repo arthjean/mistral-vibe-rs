@@ -22,6 +22,9 @@ fn compose_snapshot(documents: &[&str]) -> Result<ConfigSnapshot, ConfigError> {
         .next()
         .map(|document| document.parse::<Table>().expect("fixture TOML"))
         .unwrap_or_default();
+    // Lowest first is the order `load` composes: the defaults, the experiments
+    // assignment, the selected file, then the runtime overrides.
+    let experiments = layers.next();
     if let Some(document) = layers.next() {
         fs::write(home.join("config.toml"), document).expect("user fixture");
     }
@@ -32,7 +35,7 @@ fn compose_snapshot(documents: &[&str]) -> Result<ConfigSnapshot, ConfigError> {
         },
         defaults,
     );
-    if let Some(document) = layers.next() {
+    if let Some(document) = experiments {
         config.experiments = document.parse().expect("fixture TOML");
     }
     if let Some(document) = layers.next() {
