@@ -27,15 +27,16 @@ use vibe_app_server::client::{
     ClientError, HeadlessService, LiveTurnDriver, ProgrammaticTeleportEvent, ProgrammaticTurn,
     ProgrammaticUpdate, PublicTurnStopReason, TurnDriver, programmatic_update_channel,
 };
+use vibe_app_server::experiments::SessionExperiments;
 use vibe_app_server::release3::Release3Service;
 use vibe_app_server::server::AppServer;
 use vibe_core::auth::KeyringStore;
 use vibe_core::mcp::SamplingHandler;
 use vibe_core::observability::{self, init_file_logging};
 use vibe_core::telemetry::{
-    ClientTelemetry, LaunchContext, ReqwestTelemetryTransport, TelemetryClient, TelemetryConfig,
-    TelemetryConfigGetter, TelemetryContext, TelemetryEventObserver, TelemetryRecord,
-    detect_terminal_emulator,
+    ClientTelemetry, ExperimentExposures, LaunchContext, ReqwestTelemetryTransport,
+    TelemetryClient, TelemetryConfig, TelemetryConfigGetter, TelemetryContext,
+    TelemetryEventObserver, TelemetryRecord, detect_terminal_emulator,
 };
 use vibe_core::tracing::{TracingGuard, TracingSetup, setup_tracing};
 use vibe_core::{engine::EventObserver, events::EventEnvelope};
@@ -172,6 +173,15 @@ pub async fn run(
             .map(|working_directory| {
                 session_census(&census_service, &working_directory, arguments.trust)
             });
+        // Reference builds the manager with the loop and starts the lookup as a
+        // detached task once the session exists, so the programmatic path
+        // reports the same enrollment an interactive one does.
+        let experiments = Arc::new(SessionExperiments::new(
+            &census_service,
+            cli_credentials(&arguments),
+            Some(cli_launch_context()),
+            telemetry.exposures(),
+        ));
         let result = execute_with_server(
             arguments,
             driver,
@@ -179,6 +189,7 @@ pub async fn run(
             Some(SessionTelemetry {
                 observer: telemetry.clone(),
                 census,
+                experiments: Some(experiments),
             }),
             stdout,
             stderr,
@@ -210,10 +221,12 @@ where
 }
 
 /// What the programmatic path reports about the session it opens: the observer
-/// every event goes to, and the census `vibe.new_session` carries.
+/// every event goes to, the census `vibe.new_session` carries, and the
+/// enrollment whose confirmed exposures every one of them reports.
 struct SessionTelemetry {
     observer: Arc<CliTelemetryObserver>,
     census: Option<vibe_core::telemetry::records::NewSession>,
+    experiments: Option<Arc<SessionExperiments>>,
 }
 
 async fn execute_with_server<D>(
@@ -254,6 +267,9 @@ where
     // agent loop raises both once its initialization settles, whichever
     // entrypoint launched it.
     if let Some(telemetry) = telemetry.as_ref() {
+        if let Some(experiments) = telemetry.experiments.as_ref() {
+            experiments.start(&session_id);
+        }
         if let Some(census) = telemetry.census.clone() {
             let _ = telemetry
                 .observer
@@ -387,6 +403,14 @@ where
         }
         Err(error) => Err(error),
     };
+    // Reference `aclose` cancels the experiments task before it closes
+    // anything else, so a shutdown never waits on a lookup that is still going.
+    if let Some(experiments) = telemetry
+        .as_ref()
+        .and_then(|telemetry| telemetry.experiments.as_ref())
+    {
+        experiments.close().await;
+    }
     // Reference `emit_session_closed_telemetry`, raised before the session is
     // closed so the census still names it.
     if let Some(telemetry) = telemetry.as_ref() {
@@ -679,9 +703,18 @@ pub(crate) fn since_process_start_ms() -> u64 {
 
 pub(crate) struct CliTelemetryObserver {
     events: TelemetryEventObserver<ReqwestTelemetryTransport>,
+    /// The exposures every census reads, shared with the session that resolves
+    /// them. Reference builds its client with a getter closed over the
+    /// experiment manager; this is the same reading, through a handle.
+    exposures: ExperimentExposures,
 }
 
 impl CliTelemetryObserver {
+    /// The handle a resolved rollout publishes its confirmed exposures into.
+    pub(crate) fn exposures(&self) -> ExperimentExposures {
+        self.exposures.clone()
+    }
+
     /// Queues best-effort telemetry for the rating prompt. Delivery errors
     /// follow the same intentionally silent policy as engine telemetry, the
     /// gate is re-read on the send, and all queued work is joined by
@@ -751,17 +784,33 @@ impl ClientTelemetry for CliTelemetryObserver {
 
 /// What this binary reports about itself on every event. Reference
 /// `_build_cli_launch_context`.
-fn cli_telemetry_context() -> TelemetryContext {
+pub(crate) fn cli_launch_context() -> LaunchContext {
+    LaunchContext {
+        agent_entrypoint: "cli".to_owned(),
+        agent_version: env!("CARGO_PKG_VERSION").to_owned(),
+        client_name: "vibe_cli".to_owned(),
+        client_version: env!("CARGO_PKG_VERSION").to_owned(),
+        terminal_emulator: Some(detect_terminal_emulator().to_owned()),
+    }
+}
+
+fn cli_telemetry_context(exposures: ExperimentExposures) -> TelemetryContext {
     TelemetryContext {
-        launch: Some(LaunchContext {
-            agent_entrypoint: "cli".to_owned(),
-            agent_version: env!("CARGO_PKG_VERSION").to_owned(),
-            client_name: "vibe_cli".to_owned(),
-            client_version: env!("CARGO_PKG_VERSION").to_owned(),
-            terminal_emulator: Some(detect_terminal_emulator().to_owned()),
-        }),
+        launch: Some(cli_launch_context()),
+        experiments: exposures,
         ..TelemetryContext::default()
     }
+}
+
+/// How a variable becomes a credential for everything this binary resolves off
+/// a provider: the same lookup telemetry uses, as the handle a detached task
+/// can carry.
+pub(crate) fn cli_credentials(arguments: &Arguments) -> vibe_app_server::experiments::Credentials {
+    let resolve = telemetry_credentials(
+        bootstrap::dotenv_values(arguments).environment(),
+        KeyringStore::native(),
+    );
+    Arc::new(resolve)
 }
 
 /// How the variable a Mistral provider names becomes a credential.
@@ -865,11 +914,13 @@ pub(crate) fn telemetry_observer(
     });
     let transport = ReqwestTelemetryTransport::try_new()
         .map_err(|error| CliError::Telemetry(error.to_string()))?;
+    let exposures = ExperimentExposures::default();
     Ok(Arc::new(CliTelemetryObserver {
         events: TelemetryEventObserver::new(
             TelemetryClient::new(config, transport),
-            cli_telemetry_context(),
+            cli_telemetry_context(exposures.clone()),
         ),
+        exposures,
     }))
 }
 
@@ -1076,13 +1127,38 @@ mod tests {
     /// vocabulary.
     #[test]
     fn the_launch_context_reports_the_cli_entrypoint() {
-        let context = cli_telemetry_context();
+        let context = cli_telemetry_context(ExperimentExposures::default());
         let launch = context.launch.expect("the CLI declares a launch context");
         assert_eq!(launch.agent_entrypoint, "cli");
         assert_eq!(launch.client_name, "vibe_cli");
         assert_eq!(launch.agent_version, env!("CARGO_PKG_VERSION"));
         assert_eq!(launch.client_version, env!("CARGO_PKG_VERSION"));
         assert!(launch.terminal_emulator.is_some());
+    }
+
+    /// The census reads the exposures through the handle rather than through a
+    /// value taken at construction, which is what lets a rollout resolved after
+    /// the client is built reach the next event. Reference builds its client
+    /// with a getter closed over the experiment manager for the same reason.
+    #[test]
+    fn a_rollout_resolved_after_the_client_reaches_the_next_event() {
+        let exposures = ExperimentExposures::default();
+        let context = cli_telemetry_context(exposures.clone());
+        assert!(
+            !context
+                .base_metadata(None)
+                .properties()
+                .contains_key("experiments"),
+            "an unenrolled session reports no field at all"
+        );
+        exposures.publish(BTreeMap::from([(
+            "vibe_cli_system_prompt".to_owned(),
+            "lean".to_owned(),
+        )]));
+        assert_eq!(
+            context.base_metadata(None).properties()["experiments"],
+            serde_json::json!({"vibe_cli_system_prompt": "lean"})
+        );
     }
 
     #[tokio::test]

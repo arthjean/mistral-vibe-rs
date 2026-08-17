@@ -33,6 +33,10 @@ pub(super) struct RuntimeSkill {
 
 pub(super) struct InteractiveRuntime {
     pub(super) service: HeadlessService<LiveTurnDriver>,
+    /// This session's enrollment, held so the lookup it detached can be
+    /// cancelled before the session closes. Reference `AgentLoop` holds its
+    /// experiments task for the same reason.
+    pub(super) experiments: Option<Arc<vibe_app_server::experiments::SessionExperiments>>,
     /// The configuration service this process already runs on.
     ///
     /// `ConfigReadResponse` publishes a narrow view and declares no room for the
@@ -320,6 +324,7 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
         })
         .expect("session starts");
     InteractiveRuntime {
+        experiments: None,
         service,
         release3: Release3Service::default(),
         session_id,

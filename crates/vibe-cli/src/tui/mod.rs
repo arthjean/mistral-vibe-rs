@@ -70,6 +70,7 @@ use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use serde_json::{Value, json};
 use vibe_app_server::client::{HeadlessService, LiveTurnDriver, PublicDispatch};
+use vibe_app_server::experiments::SessionExperiments;
 use vibe_app_server::release3::Release3Service;
 
 use self::callback::{drain_callback_requests, sync_active_callbacks, sync_callback_presentation};
@@ -806,6 +807,12 @@ pub async fn run_interactive(
     let summary = runtime.as_mut().map(session_exit_summary);
     let (close_result, shutdown_result) = if let Some(mut runtime) = runtime {
         let session_id = runtime.session_id.clone();
+        // Reference `aclose` cancels the experiments task before it closes
+        // anything else, so a session that quits mid-lookup never waits on the
+        // request the lookup is holding.
+        if let Some(experiments) = runtime.experiments.take() {
+            experiments.close().await;
+        }
         // Reference `emit_session_closed_telemetry`, raised before the session
         // is closed so the census still names it.
         if let Some(telemetry) = runtime.telemetry.as_ref() {
@@ -1480,6 +1487,17 @@ fn start_runtime(
     ))?;
     let session_init_duration_ms =
         u64::try_from(session_start.elapsed().as_millis()).unwrap_or(u64::MAX);
+    // Reference `start_initialize_experiments`: the lookup is detached the
+    // moment the session exists, so nothing between here and the first frame
+    // waits on a rollout service. A resumed or forked session hydrates from
+    // what its metadata already carries and issues no request at all.
+    let experiments = Arc::new(SessionExperiments::new(
+        &configuration,
+        crate::cli_credentials(arguments),
+        Some(crate::cli_launch_context()),
+        telemetry.exposures(),
+    ));
+    experiments.start(&session_id);
     // The audio surface is resolved from the configuration this session
     // publishes, not from the LLM endpoint: the transcription model, its wire
     // values, the provider's endpoint and the variable its credential is read
@@ -1513,6 +1531,7 @@ fn start_runtime(
     let safety = active_agent_safety(&mut service, &session_id, &agent_name);
     Ok(InteractiveRuntime {
         service,
+        experiments: Some(experiments),
         release3: configuration,
         session_id,
         model: session.intent.model.unwrap_or(preferences.model),
