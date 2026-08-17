@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- Publish an editor session's command catalog after the response that
+  announced the session, not before it. The reference sends it from a task the
+  session spawns, so a client learns a session exists before it is told what
+  that session can run; this port queued it during dispatch, and the writer
+  being ordered meant the editor saw it first. `session/new`, `session/load`
+  and `session/fork` are all affected.
+
+- Report the session's real context window on a usage update rather than a
+  fixed 200,000. The size an editor renders now comes from what the session
+  publishes, as the reference reads it, so a model that declares another
+  window no longer shows a context bar measured against the wrong total.
+
+- Tell the two session conflicts apart. A session that already has a prompt or
+  a command running and a session identity a second lifecycle operation is
+  claiming were one error, and the first rendered as a sentence nested inside
+  another one. A load whose reservation is taken over by a concurrent shutdown
+  now reports that conflict instead of claiming the adapter was never
+  initialized.
+
+- Describe the ACP client tools the agent can call with the arguments those
+  methods actually take: `terminal/create` declares its arguments, environment,
+  working directory and output limit, and `fs/read_text_file` its line and
+  limit. Every tool previously advertised its parameters as a flat set of
+  required strings.
+
+- Stop the throwaway service a `session/load`, `session/fork` or
+  `session/list` opens even when the work fails. A refused load left its
+  service running for the life of the process.
+
 - Resolve a session's rollout once, off the startup path. With
   `enable_telemetry` and `experiments.enable` both on, a Mistral provider
   present and its variable resolving, a detached lookup posts nine attributes
