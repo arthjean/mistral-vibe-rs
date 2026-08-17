@@ -18,6 +18,7 @@ pub mod config;
 pub mod continuity;
 pub mod engine;
 pub mod events;
+pub mod experiments;
 #[cfg(test)]
 mod experiments_parity_tests;
 pub mod extensions;
