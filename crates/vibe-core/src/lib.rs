@@ -22,6 +22,7 @@ pub mod experiments;
 #[cfg(test)]
 mod experiments_parity_tests;
 pub mod extensions;
+pub mod identity;
 pub mod images;
 pub mod integrations;
 pub mod matching;
