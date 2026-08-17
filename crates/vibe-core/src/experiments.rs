@@ -21,6 +21,7 @@ mod client;
 mod json;
 mod manager;
 mod models;
+mod session;
 
 pub use client::{
     EvalFailure, EvalFuture, EvalHttpResponse, EvalPayload, EvalRequest, EvalTransport,
@@ -31,6 +32,11 @@ pub use manager::{BUCKETING_KEY_LENGTH, ExperimentManager, hash_api_key};
 pub use models::{
     EvalResponse, ExperimentAttributes, FeatureDefinition, FeatureRule, TrackData,
     TrackedExperiment, TrackedExperimentResult,
+};
+pub use session::{
+    CredentialSource, EXPERIMENT_IDENTITY_TIMEOUT, ExperimentStateSink, build_attributes,
+    experiments_allowed, hydrate_experiments_from_session, initialize_experiments,
+    mistral_provider_and_api_key,
 };
 
 /// The transport the unit tests and the parity replay stand one call before a
@@ -48,6 +54,8 @@ mod json_tests;
 mod manager_tests;
 #[cfg(test)]
 mod models_tests;
+#[cfg(test)]
+mod session_tests;
 
 /// The eval path, under whichever host the configuration names.
 ///

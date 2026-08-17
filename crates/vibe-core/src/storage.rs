@@ -369,6 +369,15 @@ impl SessionStore {
         self.write_metadata(metadata)
     }
 
+    /// One session's metadata, without reading its messages.
+    ///
+    /// What a caller updating a single metadata field reads first, so a rollout
+    /// persisted into `experiments` never pays for a transcript it does not
+    /// look at.
+    pub fn metadata(&self, selector: &str) -> Result<SessionMetadata, StorageError> {
+        self.resolve(selector)
+    }
+
     pub fn load(&self, selector: &str) -> Result<HydratedSession, StorageError> {
         let mut metadata = self.resolve(selector)?;
         let messages = self.read_messages(&metadata)?;

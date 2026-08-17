@@ -77,6 +77,13 @@ const USER_AGENT_PRODUCT: &str = "Mistral-Vibe";
 const USER_AGENT_MISTRAL_PREFIX: &str = "mistral-client-python/";
 /// The version the user agent and the `version` census field report.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The version this build reports about itself, which is what an event census
+/// and an experiment attribute both carry. Reference `vibe.__version__`.
+#[must_use]
+pub const fn version() -> &'static str {
+    VERSION
+}
 const MAX_SAFE_LABEL_BYTES: usize = 128;
 
 /// Reference `get_user_agent`.

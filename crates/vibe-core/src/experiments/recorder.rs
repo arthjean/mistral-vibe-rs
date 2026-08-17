@@ -121,3 +121,36 @@ impl EvalTransport for RecordingTransport {
         Box::pin(std::future::ready(()))
     }
 }
+
+/// A sink that stands where a session's own record of itself stands: it keeps
+/// what would have been persisted and counts how often.
+#[derive(Debug, Default)]
+pub struct RecordingSink {
+    persisted: Mutex<Vec<super::models::EvalResponse>>,
+}
+
+impl RecordingSink {
+    pub fn count(&self) -> usize {
+        self.persisted
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
+    }
+
+    pub fn last(&self) -> Option<super::models::EvalResponse> {
+        self.persisted
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .last()
+            .cloned()
+    }
+}
+
+impl super::session::ExperimentStateSink for RecordingSink {
+    fn persist(&self, state: &super::models::EvalResponse) {
+        self.persisted
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(state.clone());
+    }
+}
