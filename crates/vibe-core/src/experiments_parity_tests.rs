@@ -35,8 +35,13 @@ use std::sync::Arc;
 
 use serde_json::{Map, Value};
 use tokio::runtime::Runtime;
+use toml::Table;
 
 use crate::config::registry::default_document;
+use crate::config::{
+    ConfigPaths, ConfigTarget, EXPERIMENTS_LAYER_NAME, ExperimentsLayer, LayeredConfig,
+    configured_fields, default_model_alias,
+};
 use crate::experiments::recorder::{Outcome, RecordingTransport};
 use crate::experiments::{
     BUCKETING_KEY_LENGTH, EVAL_PATH_TEMPLATE, EVAL_REQUEST_TIMEOUT, EvalPayload,
@@ -44,6 +49,7 @@ use crate::experiments::{
     RemoteEvalClient, build_eval_url, hash_api_key,
 };
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::prompt::PromptResolver;
 use crate::telemetry::platform_id;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/experiments/corpus.json";
@@ -70,16 +76,19 @@ const FAMILIES: &[Family] = &[
         name: "constants",
         inputs: &[],
         answers: &["value"],
+        toml_document: false,
     },
     Family {
         name: "bucketingKey",
         inputs: &["variable"],
         answers: &["bucketingKey", "length", "stable", "hexadecimal"],
+        toml_document: false,
     },
     Family {
         name: "evalUrl",
         inputs: &["apiHost", "clientKey"],
         answers: &["url"],
+        toml_document: false,
     },
     Family {
         name: "evalRequest",
@@ -98,6 +107,7 @@ const FAMILIES: &[Family] = &[
             "returnedState",
             "requests",
         ],
+        toml_document: false,
     },
     Family {
         name: "evalFailures",
@@ -111,36 +121,43 @@ const FAMILIES: &[Family] = &[
             "configVariants",
             "logs",
         ],
+        toml_document: false,
     },
     Family {
         name: "featureResolution",
         inputs: &["definition"],
         answers: &["resolved"],
+        toml_document: false,
     },
     Family {
         name: "variantResolution",
         inputs: &["response"],
         answers: &["knownFeatures", "variants", "variantsOrNone"],
+        toml_document: false,
     },
     Family {
         name: "configVariants",
         inputs: &["response"],
         answers: &["assignments", "configVariants"],
+        toml_document: false,
     },
     Family {
         name: "variantLabels",
         inputs: &["definition"],
         answers: &["assignments", "reported"],
+        toml_document: false,
     },
     Family {
         name: "configMapping",
         inputs: &["variants"],
         answers: &["data", "hasFingerprint"],
+        toml_document: false,
     },
     Family {
         name: "layerPrecedence",
         inputs: &["user", "project", "environment", "overrides", "variants"],
         answers: &["effective"],
+        toml_document: true,
     },
     Family {
         name: "sessionGates",
@@ -153,11 +170,13 @@ const FAMILIES: &[Family] = &[
             "persisted",
             "organizationId",
         ],
+        toml_document: false,
     },
     Family {
         name: "attributes",
         inputs: &["document", "context"],
         answers: &["attributes", "payloadKeys", "credentialVariable"],
+        toml_document: false,
     },
 ];
 
@@ -184,25 +203,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "attributes/*",
         "OPEN: US-012 builds the nine attributes from a launch context",
     ),
-    // -- EP-004: the GrowthBook configuration layer -------------------------
-    (
-        "constants/value/layerName",
-        "OPEN: US-009 names the layer that turns a variant into a configuration value",
-    ),
-    (
-        "constants/value/configuredFields",
-        "OPEN: US-009 maps the three experiments onto the four configuration fields",
-    ),
-    (
-        "configMapping/*",
-        "OPEN: US-009 ports the three mappers, the empty-snapshot branches and the read-only \
-         refusal",
-    ),
-    (
-        "layerPrecedence/*",
-        "OPEN: US-009 fills the layer and US-010 reseats it below the selected TOML, where the \
-         reference puts it; the layer socket exists here but nothing maps a variant into it",
-    ),
 ];
 
 /// One family's shape: which case fields the capture authored and which ones
@@ -211,6 +211,15 @@ struct Family {
     name: &'static str,
     inputs: &'static [&'static str],
     answers: &'static [&'static str],
+    /// Whether this family's answers are read out of a TOML document, where a
+    /// reference `None` is an absent key rather than an explicit null.
+    ///
+    /// TOML carries no null, so a reference field validated to `None` has no
+    /// counterpart here and the expectation drops it before the comparison.
+    /// Same normalization as `config/surface_parity_tests.rs`, which reads the
+    /// merged document the same way. A key this port fills where the reference
+    /// answered null still diverges, because the answer keeps it.
+    toml_document: bool,
 }
 
 fn repo_root() -> PathBuf {
@@ -451,6 +460,8 @@ fn port_case(family: &str, case: &Case<'_>, runtime: &Runtime) -> Option<Map<Str
         "variantResolution" => Some(variant_resolution_answer(case)),
         "configVariants" => Some(config_variants_answer(case)),
         "variantLabels" => Some(variant_labels_answer(case)),
+        "configMapping" => Some(config_mapping_answer(case)),
+        "layerPrecedence" => Some(layer_precedence_answer(case)),
         _ => None,
     }
 }
@@ -496,6 +507,15 @@ fn constants_answer(case: &str) -> Option<Map<String, Value>> {
         "evalPathTemplate" => Value::String(EVAL_PATH_TEMPLATE.to_owned()),
         "evalTimeoutSeconds" => timeout_seconds(),
         "bucketingKeyLength" => Value::from(BUCKETING_KEY_LENGTH),
+        "layerName" => Value::String(EXPERIMENTS_LAYER_NAME.to_owned()),
+        "configuredFields" => by_experiment(|name| {
+            Value::Array(
+                configured_fields(name)
+                    .iter()
+                    .map(|field| Value::String((*field).to_owned()))
+                    .collect(),
+            )
+        }),
         "payloadKeys" => {
             let payload =
                 serde_json::to_value(EvalPayload::new(oracle_attributes("every-attribute")))
@@ -983,9 +1003,243 @@ fn variant_labels_answer(case: &Case<'_>) -> Map<String, Value> {
     answers
 }
 
+// -- configMapping and layerPrecedence ------------------------------------
+
+/// The prompt resolution the mapping is measured over.
+///
+/// The reference mapper calls `load_system_prompt`, which answers from a
+/// bundled prompt file or from one of the custom prompt directories, and drops
+/// the field when it raises. What the *mapping* does with that answer is what
+/// this family measures, so the replay hands this port's own
+/// [`PromptResolver`] over a directory seeded with the reference's five bundled
+/// identifiers. Which identifiers a shipped installation carries is a separate
+/// question this family does not decide: US-012 hands the session's own
+/// resolver to the same parameter.
+struct OraclePrompts {
+    root: tempfile::TempDir,
+    resolver: PromptResolver,
+}
+
+impl OraclePrompts {
+    fn seeded() -> Self {
+        let root = tempfile::tempdir().expect("a prompt directory");
+        let mut builtins = BTreeMap::new();
+        for identifier in ["cli", "explore", "tests", "lean", "minimal"] {
+            let path = root.path().join(format!("{identifier}.md"));
+            fs::write(&path, "seeded system prompt").expect("a seeded prompt file");
+            builtins.insert(identifier.to_owned(), path);
+        }
+        let resolver = PromptResolver::new(Vec::new(), Vec::new(), builtins, false);
+        Self { root, resolver }
+    }
+
+    fn resolves(&self) -> impl Fn(&str) -> bool + '_ {
+        // The directory has to outlive the predicate, which is what borrowing
+        // it here spells out.
+        let _ = &self.root;
+        |prompt_id: &str| self.resolver.resolve(prompt_id).is_ok()
+    }
+}
+
+/// The configuration variants one case is driven over.
+fn case_variants(case: &Case<'_>) -> BTreeMap<String, String> {
+    case.object
+        .get("variants")
+        .and_then(Value::as_object)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|(key, value)| {
+                    value.as_str().map(|text| (key.clone(), text.to_owned()))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn config_mapping_answer(case: &Case<'_>) -> Map<String, Value> {
+    let mut answers = Map::new();
+    if case.id == "persisting-is-refused" {
+        // The reference refuses a write to the layer by raising from
+        // `GrowthbookLayer._save_to_store`. Here the refusal is structural:
+        // every write is addressed to a [`ConfigTarget`], and the match below
+        // is exhaustive over the three this port declares, none of which names
+        // the experiments layer, so the attempt has no method to reach. The
+        // corpus records the reference's exception name and this stands for it,
+        // the same way `setup_auth_parity_tests` maps a typed refusal onto the
+        // exception the reference raises.
+        let refusal = ConfigTarget::User;
+        let addressable = match refusal {
+            ConfigTarget::User | ConfigTarget::Project | ConfigTarget::Ephemeral => false,
+        };
+        answers.insert(
+            "data".to_owned(),
+            Value::Object(
+                [(
+                    "refusal".to_owned(),
+                    if addressable {
+                        Value::Null
+                    } else {
+                        Value::String("NotImplementedError".to_owned())
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            ),
+        );
+        answers.insert("hasFingerprint".to_owned(), Value::Null);
+        return answers;
+    }
+    let prompts = OraclePrompts::seeded();
+    let layer = ExperimentsLayer::from_variants(&case_variants(case), &prompts.resolves());
+    answers.insert(
+        "data".to_owned(),
+        serde_json::to_value(layer.values()).unwrap_or(Value::Null),
+    );
+    answers.insert(
+        "hasFingerprint".to_owned(),
+        Value::Bool(layer.fingerprint().is_some()),
+    );
+    answers
+}
+
+/// The providers and models every precedence case is loaded over, spelled the
+/// way `PRECEDENCE_CASES` in `scripts/parity/experiments.py` spells them. A
+/// case's own lines are prepended, because a bare key written after a table
+/// would land inside it.
+const ORACLE_USER_DOCUMENT: &str = r#"
+[[providers]]
+name = "mistral"
+api_base = "https://api.mistral.ai/v1"
+api_key_env_var = "ORACLE_MISTRAL_KEY"
+backend = "mistral"
+
+[[models]]
+name = "oracle-model"
+provider = "mistral"
+alias = "oracle"
+"#;
+
+/// One case input as the TOML table it composes, or an empty one.
+fn case_table(case: &Case<'_>, field: &str) -> Table {
+    case.object
+        .get(field)
+        .and_then(Value::as_object)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|(key, value)| {
+                    Table::try_from(Value::Object(
+                        [(key.clone(), value.clone())].into_iter().collect(),
+                    ))
+                    .ok()
+                })
+                .fold(Table::new(), |mut merged, entry| {
+                    merged.extend(entry);
+                    merged
+                })
+        })
+        .unwrap_or_default()
+}
+
+fn layer_precedence_answer(case: &Case<'_>) -> Map<String, Value> {
+    let temporary = tempfile::tempdir().expect("a precedence scratch directory");
+    let home = temporary.path().join("home/.vibe");
+    let working = temporary.path().join("project");
+    fs::create_dir_all(&home).expect("the home directory");
+    fs::create_dir_all(working.join(".vibe")).expect("the project directory");
+    fs::write(
+        home.join("config.toml"),
+        format!(
+            "{}{ORACLE_USER_DOCUMENT}",
+            case.input_str("user").unwrap_or_default()
+        ),
+    )
+    .expect("the user document writes");
+    if let Some(project) = case.input_str("project") {
+        fs::write(working.join(".vibe/config.toml"), project).expect("the project document writes");
+    }
+    let environment = case
+        .object
+        .get("environment")
+        .and_then(Value::as_object)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|(key, value)| {
+                    value.as_str().map(|text| (key.clone(), text.to_owned()))
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let prompts = OraclePrompts::seeded();
+    let snapshot = LayeredConfig::new(
+        ConfigPaths {
+            vibe_home: home,
+            working_directory: working,
+        },
+        default_document(),
+    )
+    .with_project_trusted(true)
+    .with_environment(environment)
+    .with_runtime_overrides(case_table(case, "overrides"))
+    .with_experiment_variants(&case_variants(case), &prompts.resolves())
+    .load()
+    .unwrap_or_else(|error| panic!("the {} case composes: {error}", case.id));
+
+    // The fields a case reads are the ones its expectation names, so a case
+    // covering one field does not answer for five.
+    let expected = case
+        .object
+        .get("effective")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let effective = expected
+        .keys()
+        .map(|field| {
+            let value = match field.as_str() {
+                "resolvedDefaultAlias" => default_model_alias(&snapshot.effective)
+                    .map_or(Value::Null, |alias| Value::String(alias.to_owned())),
+                "activeModelAlias" => snapshot
+                    .active_model_alias()
+                    .map_or(Value::Null, |alias| Value::String(alias.to_owned())),
+                name => snapshot
+                    .effective
+                    .get(name)
+                    .and_then(|value| serde_json::to_value(value).ok())
+                    .unwrap_or(Value::Null),
+            };
+            (field.clone(), value)
+        })
+        .collect::<Map<_, _>>();
+    answered("effective", Value::Object(effective))
+}
+
 // --------------------------------------------------------------------------
 // The replay
 // --------------------------------------------------------------------------
+
+/// One expectation with every null a TOML document cannot hold dropped.
+///
+/// The reference dumps a field it validated to `None` as an explicit null, and
+/// TOML carries none, so the key is simply absent here. Dropping it from the
+/// expectation is the same normalization `config/surface_parity_tests.rs`
+/// applies to the merged document; a key this port fills where the reference
+/// answered null still diverges, because the answer keeps it.
+fn without_reference_nulls(value: &Value) -> Value {
+    match value {
+        Value::Object(entries) => Value::Object(
+            entries
+                .iter()
+                .filter(|(_, value)| !value.is_null())
+                .map(|(key, value)| (key.clone(), without_reference_nulls(value)))
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.iter().map(without_reference_nulls).collect()),
+        other => other.clone(),
+    }
+}
 
 /// Replays one family, comparing every answer field of every case.
 fn run_family(
@@ -1050,6 +1304,11 @@ fn run_family(
                 continue;
             };
             let actual = answers.as_ref().and_then(|answers| answers.get(*field));
+            let expected = if family.toml_document {
+                &without_reference_nulls(expected)
+            } else {
+                expected
+            };
             report.check(family.name, field, identifier, expected, actual);
         }
     }
@@ -1131,6 +1390,37 @@ fn the_ledger_reports_an_unrecorded_divergence_and_a_stale_entry() {
     assert!(unrecorded.is_empty(), "the ledger names it: {unrecorded:?}");
     assert!(stale.is_empty(), "it still diverges: {stale:?}");
     assert!(absent.divergences[0].ends_with("port absent"));
+}
+
+/// The one tolerance the comparison carries, proven in both directions: a
+/// reference null compares equal to an absent key, and a key this port fills
+/// where the reference answered null still diverges.
+///
+/// Only `layerPrecedence` reads answers out of a TOML document, and only
+/// `routed_model_config` exercises the tolerance there: `cached_input_price`
+/// defaults to null upstream and TOML carries no null, so the key is absent
+/// rather than empty. Every other field of that definition is compared for
+/// equality.
+#[test]
+fn a_reference_null_compares_equal_to_the_absent_key_toml_leaves() {
+    let reference = serde_json::json!({"a": 1, "cached_input_price": null});
+    assert_eq!(
+        without_reference_nulls(&reference),
+        serde_json::json!({"a": 1})
+    );
+
+    let mut report = Report::default();
+    report.check(
+        "layerPrecedence",
+        "effective",
+        "filled",
+        &without_reference_nulls(&reference),
+        Some(&serde_json::json!({"a": 1, "cached_input_price": 0.5})),
+    );
+    assert_eq!(
+        report.conformant, 0,
+        "a value where the reference answered null is still a divergence"
+    );
 }
 
 #[test]
