@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use vibe_app_server::client::{HeadlessService, SessionOptions, TurnDriver};
+use vibe_app_server::experiments::SessionExperiments;
 
 use crate::protocol::{AcpError, AcpSessionInfo};
 
@@ -164,6 +165,10 @@ where
     pub(crate) service: tokio::sync::Mutex<HeadlessService<D>>,
     pub(crate) session_id: String,
     pub(crate) cwd: String,
+    /// This session's enrollment, held so the lookup it detached is cancelled
+    /// before the session stops. Reference `AgentLoop` holds its experiments
+    /// task for the same reason.
+    pub(crate) experiments: Option<Arc<SessionExperiments>>,
     active: Mutex<ActivePhase>,
     cancel_requested: AtomicBool,
     cancel_notify: tokio::sync::Notify,
@@ -195,7 +200,19 @@ where
             )),
             user_message_anchors: Mutex::new(BTreeMap::new()),
             next_id: AtomicU64::new(1),
+            experiments: None,
         })
+    }
+
+    /// Attaches the enrollment this session resolves, and starts the lookup.
+    ///
+    /// Reference `start_initialize_experiments` detaches the lookup as soon as
+    /// the session exists, so an editor session reports the same enrollment a
+    /// terminal one does without waiting for it.
+    pub(crate) fn resolving_experiments(mut self, experiments: Arc<SessionExperiments>) -> Self {
+        experiments.start(&self.session_id);
+        self.experiments = Some(experiments);
+        self
     }
 
     pub(crate) fn settings(&self) -> Result<SessionSettings, AcpError> {

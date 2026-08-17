@@ -183,6 +183,7 @@ where
             server_writer,
             driver,
             StdioOptions {
+                experiments: None,
                 session_root,
                 credential_environment: "MISTRAL_API_KEY".to_owned(),
                 auth_environment,

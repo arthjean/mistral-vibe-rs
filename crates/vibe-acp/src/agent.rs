@@ -15,7 +15,9 @@ use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
 use vibe_core::config::DotenvValues;
 use vibe_core::observability::{LogLevel, log};
-use vibe_core::telemetry::{ClientTelemetry, NoClientTelemetry};
+use vibe_core::telemetry::{
+    ClientTelemetry, ExperimentExposures, LaunchContext, NoClientTelemetry,
+};
 use vibe_protocol::{
     CallbackKind, ClientCapabilities, ClientEntrypoint, ClientInfo, TerminalEmulator,
 };
@@ -40,6 +42,8 @@ use crate::protocol::{
     AcpPromptCapabilities, AcpSession, AcpSessionInfo, AcpSessionList, AcpSessionUpdate,
     AcpTelemetryNotification,
 };
+use vibe_app_server::experiments::{Credentials, SessionExperiments};
+
 use crate::session::{
     AcpHarness, ActivePhase, SessionSettings, Thinking, acp_session_info, decode_session_cursor,
     encode_session_cursor, ensure_matching_cwd, metadata_session_id, require_absolute_cwd,
@@ -74,6 +78,19 @@ where
     /// app server is built over the same sink, so an editor-side event and a
     /// turn's own travel through one client, as they do upstream.
     telemetry: Arc<dyn ClientTelemetry>,
+    /// What every session of this process needs to resolve its enrollment, or
+    /// [`None`] for an adapter that publishes no telemetry and therefore has no
+    /// census to fill.
+    experiments: Option<AcpExperiments>,
+}
+
+/// The three things a session's enrollment is built from, installed once for
+/// the process.
+#[derive(Clone)]
+pub struct AcpExperiments {
+    pub exposures: ExperimentExposures,
+    pub credentials: Credentials,
+    pub launch: LaunchContext,
 }
 
 impl<D> AcpAgent<D>
@@ -94,6 +111,7 @@ where
             production_cloud: false,
             release4: Mutex::new(None),
             telemetry: Arc::new(NoClientTelemetry),
+            experiments: None,
         })
     }
 
@@ -103,6 +121,41 @@ where
     pub fn with_client_telemetry(mut self, telemetry: Arc<dyn ClientTelemetry>) -> Self {
         self.telemetry = telemetry;
         self
+    }
+
+    /// Installs what every session of this process resolves its enrollment
+    /// with. An adapter that installs none runs on the declared defaults and
+    /// reports no exposure, which is what a process without telemetry does.
+    #[must_use]
+    pub fn with_experiments(mut self, experiments: AcpExperiments) -> Self {
+        self.experiments = Some(experiments);
+        self
+    }
+
+    /// The enrollment one session resolves, or [`None`] when this process
+    /// resolves none.
+    fn session_experiments(&self, service: &HeadlessService<D>) -> Option<Arc<SessionExperiments>> {
+        let experiments = self.experiments.as_ref()?;
+        Some(Arc::new(SessionExperiments::new(
+            &service.release3_service(),
+            Arc::clone(&experiments.credentials),
+            Some(experiments.launch.clone()),
+            experiments.exposures.clone(),
+        )))
+    }
+
+    /// One adopted harness, with the enrollment this process resolves attached.
+    fn adopt(
+        &self,
+        service: HeadlessService<D>,
+        session_id: &str,
+    ) -> Result<AcpHarness<D>, AcpError> {
+        let experiments = self.session_experiments(&service);
+        let harness = AcpHarness::adopt(service, session_id)?;
+        Ok(match experiments {
+            Some(experiments) => harness.resolving_experiments(experiments),
+            None => harness,
+        })
     }
 
     #[must_use]
@@ -824,7 +877,7 @@ where
                 "{operation} session `{session_id}` was attached as `{attached_id}`"
             )));
         }
-        Ok(Arc::new(AcpHarness::adopt(service, session_id)?))
+        Ok(Arc::new(self.adopt(service, session_id)?))
     }
 
     fn publish_session(
@@ -832,7 +885,7 @@ where
         service: HeadlessService<D>,
         session_id: &str,
     ) -> Result<AcpSession, AcpError> {
-        let harness = Arc::new(AcpHarness::adopt(service, session_id)?);
+        let harness = Arc::new(self.adopt(service, session_id)?);
         let settings = harness.settings()?;
         self.lock_state()?
             .insert_active(session_id.to_owned(), harness);
@@ -982,6 +1035,11 @@ async fn stop_session<D>(
 where
     D: TurnDriver,
 {
+    // Reference `aclose` cancels the experiments task before it closes
+    // anything else, so a stopping session never waits on a lookup in flight.
+    if let Some(experiments) = harness.experiments.as_ref() {
+        experiments.close().await;
+    }
     if let Some(turn_id) = harness.running_turn_id()? {
         service.interrupt(&harness.session_id, &turn_id)?;
     }

@@ -12,14 +12,15 @@ use tokio::io::{AsyncBufRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 use vibe_acp::{
-    AcpAgent, AcpAuthEnvironment, AcpClientFuture, AcpClientPort, AcpError, AcpForkSession,
-    AcpInitializeRequest, AcpListSessions, AcpLoadSession, AcpNewSession, AcpSessionUpdate,
-    ProductionAuthEnvironment, default_vibe_home,
+    AcpAgent, AcpAuthEnvironment, AcpClientFuture, AcpClientPort, AcpError, AcpExperiments,
+    AcpForkSession, AcpInitializeRequest, AcpListSessions, AcpLoadSession, AcpNewSession,
+    AcpSessionUpdate, ProductionAuthEnvironment, default_vibe_home,
 };
 use vibe_app_server::client::{
     CompactionDriverFuture, DriverError, DriverFuture, EventObserver, LiveDriverConfig,
     LiveTurnDriver, TurnDriver, TurnReservation,
 };
+use vibe_app_server::experiments::Credentials;
 use vibe_app_server::release3::{Release3Paths, Release3Service};
 use vibe_app_server::transport::{MAX_FRAME_BYTES, read_bounded_frame};
 use vibe_core::auth::KeyringStore;
@@ -27,8 +28,8 @@ use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
 use vibe_core::observability::{LogLevel, init_file_logging, log};
 use vibe_core::telemetry::{
-    LaunchContext, ReqwestTelemetryTransport, TelemetryClient, TelemetryConfig,
-    TelemetryConfigGetter, TelemetryContext, TelemetryEventObserver,
+    ExperimentExposures, LaunchContext, ReqwestTelemetryTransport, TelemetryClient,
+    TelemetryConfig, TelemetryConfigGetter, TelemetryContext, TelemetryEventObserver,
 };
 use vibe_core::tracing::{TracingGuard, TracingSetup, setup_tracing};
 
@@ -331,7 +332,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
     // One client carries the editor session's events: the turn's own, through
     // the driver, and the ones an editor records, through the app server.
-    let telemetry = acp_telemetry_observer(&vibe_home, &dotenv);
+    // The exposures are created before the client so a rollout resolved by any
+    // session of this process reaches the census of every event it sends.
+    let exposures = ExperimentExposures::default();
+    let telemetry = acp_telemetry_observer(&vibe_home, &dotenv, exposures.clone());
+    let experiments = telemetry.as_ref().map(|_| AcpExperiments {
+        exposures,
+        credentials: acp_credentials(&vibe_home),
+        launch: acp_launch_context(),
+    });
     let driver = DeferredTurnDriver::new({
         let vibe_home = vibe_home.clone();
         let telemetry = telemetry.clone();
@@ -356,24 +365,38 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             auth_environment: Arc::new(ProductionAuthEnvironment::new(vibe_home)),
             production_cloud: true,
             telemetry,
+            experiments,
         },
     )
     .await
+}
+
+/// How a variable becomes a credential for this process: the same resolution
+/// every provider read goes through, as the handle a detached lookup carries.
+fn acp_credentials(vibe_home: &Path) -> Credentials {
+    let environment = DotenvValues::global(vibe_home).environment();
+    let store = KeyringStore::native();
+    Arc::new(move |name: &str| vibe_core::auth::resolve_api_key(name, &environment, &store))
 }
 
 /// What this binary reports about itself on every event. Reference
 /// `build_launch_context` at [acp/entrypoint.py:82-87], whose entrypoint is
 /// `acp` and whose client is `vibe_acp` with no terminal emulator, since an
 /// editor session is attached to none.
-fn acp_telemetry_context() -> TelemetryContext {
+fn acp_launch_context() -> LaunchContext {
+    LaunchContext {
+        agent_entrypoint: "acp".to_owned(),
+        agent_version: env!("CARGO_PKG_VERSION").to_owned(),
+        client_name: "vibe_acp".to_owned(),
+        client_version: env!("CARGO_PKG_VERSION").to_owned(),
+        terminal_emulator: None,
+    }
+}
+
+fn acp_telemetry_context(exposures: ExperimentExposures) -> TelemetryContext {
     TelemetryContext {
-        launch: Some(LaunchContext {
-            agent_entrypoint: "acp".to_owned(),
-            agent_version: env!("CARGO_PKG_VERSION").to_owned(),
-            client_name: "vibe_acp".to_owned(),
-            client_version: env!("CARGO_PKG_VERSION").to_owned(),
-            terminal_emulator: None,
-        }),
+        launch: Some(acp_launch_context()),
+        experiments: exposures,
         ..TelemetryContext::default()
     }
 }
@@ -389,6 +412,7 @@ fn acp_telemetry_context() -> TelemetryContext {
 fn acp_telemetry_observer(
     vibe_home: &Path,
     dotenv: &DotenvValues,
+    exposures: ExperimentExposures,
 ) -> Option<Arc<TelemetryEventObserver<ReqwestTelemetryTransport>>> {
     let service = Release3Service::new(
         Release3Paths {
@@ -413,7 +437,7 @@ fn acp_telemetry_observer(
     let transport = ReqwestTelemetryTransport::try_new().ok()?;
     Some(Arc::new(TelemetryEventObserver::new(
         TelemetryClient::new(config, transport),
-        acp_telemetry_context(),
+        acp_telemetry_context(exposures),
     )))
 }
 
@@ -475,6 +499,7 @@ struct StdioOptions {
     auth_environment: Arc<dyn AcpAuthEnvironment>,
     production_cloud: bool,
     telemetry: Option<Arc<TelemetryEventObserver<ReqwestTelemetryTransport>>>,
+    experiments: Option<AcpExperiments>,
 }
 
 async fn run_stdio<R, W, D>(
@@ -494,6 +519,7 @@ where
         auth_environment,
         production_cloud,
         telemetry,
+        experiments,
     } = options;
     let (writer_tx, writer_rx) = mpsc::channel(WRITER_QUEUE_CAPACITY);
     let writer_task = tokio::spawn(writer_loop(writer, writer_rx));
@@ -501,6 +527,9 @@ where
     let mut agent = AcpAgent::new(driver)?;
     if let Some(telemetry) = telemetry.clone() {
         agent = agent.with_client_telemetry(telemetry);
+    }
+    if let Some(experiments) = experiments {
+        agent = agent.with_experiments(experiments);
     }
     if let Some(session_root) = session_root {
         agent = agent.with_session_root(session_root);

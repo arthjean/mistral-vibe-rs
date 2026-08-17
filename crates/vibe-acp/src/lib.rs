@@ -17,7 +17,7 @@ mod tests;
 
 pub const ADAPTER_NAME: &str = "vibe-acp";
 
-pub use agent::AcpAgent;
+pub use agent::{AcpAgent, AcpExperiments};
 pub use auth::{
     AcpAuthEnvironment, AuthAttemptFuture, AuthKeyFuture, ProductionAuthEnvironment,
     default_vibe_home,
