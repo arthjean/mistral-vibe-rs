@@ -33,6 +33,13 @@ use crate::policy::PermissionMode;
 
 /// The `tools` table an operator writes settings into, and the key every
 /// resolved document is addressed under.
+mod lists;
+
+pub use lists::{
+    SHELL_READ_ONLY_POSIX, SHELL_READ_ONLY_WINDOWS, shell_allowlist, shell_denylist,
+    shell_denylist_standalone, shell_read_only_commands,
+};
+
 pub const TOOL_SETTINGS_KEY: &str = "tools";
 
 /// The configuration field selecting the managed shell family, reference
@@ -225,137 +232,6 @@ const GREP_EXCLUDE_PATTERNS: &[&str] = &[
 /// agent is refused by a large share of the pages an operator asks for.
 const FETCH_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) \
      Chrome/120.0.0.0 Safari/537.36";
-
-/// Reference `_get_default_allowlist`: the seven commands both branches share.
-const SHELL_ALLOWLIST_COMMON: [&str; 7] = [
-    "cd",
-    "echo",
-    "git diff",
-    "git log",
-    "git status",
-    "tree",
-    "whoami",
-];
-
-/// Reference `_READ_ONLY_COMMANDS_POSIX`, which `default_read_only_commands`
-/// publishes on a POSIX host.
-///
-/// It is the read-only half of the allowlist, and the shell policy's
-/// path-inspecting set is built on top of it: reference `_PATH_COMMANDS` is
-/// documented as a superset of exactly this list, so a command that can be
-/// auto-allowed has its operands checked before the grant.
-pub const SHELL_READ_ONLY_POSIX: [&str; 37] = [
-    "basename",
-    "cat",
-    "comm",
-    "cut",
-    "date",
-    "diff",
-    "dirname",
-    "du",
-    "file",
-    "find",
-    "fmt",
-    "fold",
-    "grep",
-    "head",
-    "join",
-    "less",
-    "ls",
-    "md5sum",
-    "more",
-    "nl",
-    "od",
-    "paste",
-    "pwd",
-    "readlink",
-    "sha1sum",
-    "sha256sum",
-    "shasum",
-    "sort",
-    "stat",
-    "sum",
-    "tac",
-    "tail",
-    "tr",
-    "uname",
-    "uniq",
-    "wc",
-    "which",
-];
-
-/// Reference `_READ_ONLY_COMMANDS_WINDOWS`.
-pub const SHELL_READ_ONLY_WINDOWS: [&str; 6] = ["dir", "findstr", "more", "type", "ver", "where"];
-
-/// Reference `_get_default_denylist`.
-const SHELL_DENYLIST_POSIX: [&str; 14] = [
-    "gdb", "pdb", "passwd", "nano", "vim", "vi", "emacs", "bash -i", "sh -i", "zsh -i", "fish -i",
-    "dash -i", "screen", "tmux",
-];
-
-const SHELL_DENYLIST_WINDOWS: [&str; 7] = [
-    "gdb",
-    "pdb",
-    "passwd",
-    "cmd /k",
-    "powershell -NoExit",
-    "pwsh -NoExit",
-    "notepad",
-];
-
-/// Reference `_get_default_denylist_standalone`.
-const SHELL_DENYLIST_STANDALONE_POSIX: [&str; 11] = [
-    "python", "python3", "ipython", "bash", "sh", "nohup", "vi", "vim", "emacs", "nano", "su",
-];
-
-const SHELL_DENYLIST_STANDALONE_WINDOWS: [&str; 7] = [
-    "python",
-    "python3",
-    "ipython",
-    "cmd",
-    "powershell",
-    "pwsh",
-    "notepad",
-];
-
-/// Reference `default_read_only_commands`, the branch `posix_shell` selects.
-#[must_use]
-pub fn shell_read_only_commands(posix_shell: bool) -> &'static [&'static str] {
-    if posix_shell {
-        &SHELL_READ_ONLY_POSIX
-    } else {
-        &SHELL_READ_ONLY_WINDOWS
-    }
-}
-
-/// Reference `_get_default_allowlist`: the shared seven, then the read-only
-/// commands of the branch.
-#[must_use]
-pub fn shell_allowlist(posix_shell: bool) -> Vec<&'static str> {
-    SHELL_ALLOWLIST_COMMON
-        .iter()
-        .copied()
-        .chain(shell_read_only_commands(posix_shell).iter().copied())
-        .collect()
-}
-
-#[must_use]
-pub fn shell_denylist(posix_shell: bool) -> &'static [&'static str] {
-    if posix_shell {
-        &SHELL_DENYLIST_POSIX
-    } else {
-        &SHELL_DENYLIST_WINDOWS
-    }
-}
-
-#[must_use]
-pub fn shell_denylist_standalone(posix_shell: bool) -> &'static [&'static str] {
-    if posix_shell {
-        &SHELL_DENYLIST_STANDALONE_POSIX
-    } else {
-        &SHELL_DENYLIST_STANDALONE_WINDOWS
-    }
-}
 
 /// One shell family's declaration: the reference publishes the same config
 /// model for `bash`, `git_bash` and `powershell`.
