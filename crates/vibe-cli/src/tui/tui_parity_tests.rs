@@ -1,27 +1,27 @@
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
-use std::path::Path;
-use vibe_cli::tui::attachments::PromptDraft;
-use vibe_cli::tui::chat_input::InputMode;
-use vibe_cli::tui::clipboard::{SystemClipboard, SystemClipboardPort, osc52_sequence};
-use vibe_cli::tui::commands::{
+use crate::tui::attachments::PromptDraft;
+use crate::tui::chat_input::InputMode;
+use crate::tui::clipboard::{SystemClipboard, SystemClipboardPort, osc52_sequence};
+use crate::tui::commands::{
     CommandContext, CommandId, command_aliases, command_aliases_in, parse_command, parse_command_in,
 };
-use vibe_cli::tui::completion::CompletionEngine;
-use vibe_cli::tui::input::PromptEditor;
-use vibe_cli::tui::interaction::{
+use crate::tui::completion::CompletionEngine;
+use crate::tui::input::PromptEditor;
+use crate::tui::interaction::{
     ConfigLayerTarget, IntegrationKind, IntegrationTarget, Overlay, OverlayAction, OverlayItem,
     OverlayKind, PromptQueue, QuitConfirmation, RemoteProjectAction,
 };
-use vibe_cli::tui::pickers::{
+use crate::tui::pickers::{
     config_overlay, config_target_overlay, mcp_detail_overlay, mcp_overlay, proxy_overlay,
     remote_projects_overlay, rewind_targets, sessions_overlay,
 };
-use vibe_cli::tui::render::{BannerContext, TokenState, UiContext, draw};
-use vibe_cli::tui::rewind::{RewindAction, RewindState};
-use vibe_cli::tui::setup::{DetectedTheme, Theme, resolve_theme};
-use vibe_cli::tui::state::TuiState;
-use vibe_cli::tui::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind};
+use crate::tui::render::{BannerContext, TokenState, UiContext, draw};
+use crate::tui::rewind::{RewindAction, RewindState};
+use crate::tui::setup::{DetectedTheme, Theme, resolve_theme};
+use crate::tui::state::TuiState;
+use crate::tui::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind};
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use std::path::Path;
 
 #[test]
 fn official_textual_commands_are_all_registered_with_their_aliases() {
@@ -238,10 +238,10 @@ fn picker_overlay_is_rendered_above_the_transcript_with_keyboard_help() {
                     cwd: Path::new("/workspace"),
                     agent_name: " default ",
                     secret_input: false,
-                    safety: vibe_cli::tui::chat_input::Safety::Neutral,
+                    safety: crate::tui::chat_input::Safety::Neutral,
                     switching: false,
                     feedback_active: false,
-                    voice_phase: vibe_cli::tui::chat_input::VoicePhase::Disabled,
+                    voice_phase: crate::tui::chat_input::VoicePhase::Disabled,
                     voice_indicator: 0,
                     banner: BannerContext {
                         version: env!("CARGO_PKG_VERSION"),
@@ -324,10 +324,10 @@ fn assistant_markdown_is_rendered_semantically_instead_of_literally() {
                     cwd: Path::new("/workspace"),
                     agent_name: " default ",
                     secret_input: false,
-                    safety: vibe_cli::tui::chat_input::Safety::Neutral,
+                    safety: crate::tui::chat_input::Safety::Neutral,
                     switching: false,
                     feedback_active: false,
-                    voice_phase: vibe_cli::tui::chat_input::VoicePhase::Disabled,
+                    voice_phase: crate::tui::chat_input::VoicePhase::Disabled,
                     voice_indicator: 0,
                     banner: BannerContext {
                         version: env!("CARGO_PKG_VERSION"),
@@ -678,10 +678,10 @@ fn overlay_rendering_survives_a_tiny_terminal_and_wide_unicode_labels() {
                     cwd: Path::new("/w"),
                     agent_name: "default",
                     secret_input: false,
-                    safety: vibe_cli::tui::chat_input::Safety::Neutral,
+                    safety: crate::tui::chat_input::Safety::Neutral,
                     switching: false,
                     feedback_active: false,
-                    voice_phase: vibe_cli::tui::chat_input::VoicePhase::Disabled,
+                    voice_phase: crate::tui::chat_input::VoicePhase::Disabled,
                     voice_indicator: 0,
                     banner: BannerContext {
                         version: env!("CARGO_PKG_VERSION"),

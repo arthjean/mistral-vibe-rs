@@ -19,12 +19,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+use crate::tui::attachments::{PromptDraft, normalize_pasted_text, prepare_submission};
+use crate::tui::chat_input::{ChatInputState, InputEffect, InputEvent, Safety};
+use crate::tui::commands::CommandContext;
+use crate::tui::completion::CompletionRequest;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
-use vibe_cli::tui::attachments::{PromptDraft, normalize_pasted_text, prepare_submission};
-use vibe_cli::tui::chat_input::{ChatInputState, InputEffect, InputEvent, Safety};
-use vibe_cli::tui::commands::CommandContext;
-use vibe_cli::tui::completion::CompletionRequest;
 
 const SCHEMA_VERSION: u32 = 1;
 const MAX_EFFECT_ROUNDS: usize = 8;

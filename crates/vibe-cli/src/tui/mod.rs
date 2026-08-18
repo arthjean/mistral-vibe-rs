@@ -2,6 +2,8 @@ pub mod attachments;
 pub mod attention;
 mod callback;
 pub mod chat_input;
+#[cfg(test)]
+mod chat_input_parity_tests;
 pub mod clipboard;
 mod clipboard_images;
 mod cloud_workflow;
@@ -55,6 +57,8 @@ pub mod terminal;
 pub mod themes;
 pub mod transcript;
 pub mod transcript_view;
+#[cfg(test)]
+mod tui_parity_tests;
 mod turn;
 pub mod updates;
 mod voice;
