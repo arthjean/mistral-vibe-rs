@@ -337,6 +337,18 @@ fn decode_arguments(arguments: &str) -> Value {
 /// The reference input models forbid surplus fields, so the projection copies
 /// what the variant declares and drops the rest instead of forwarding an object
 /// a conforming client would reject.
+/// The spellings a call or a result names a file under.
+///
+/// Reference argument models are snake_case and the wire projection is
+/// camelCase, so a value read back from either side answers to both, and a tool
+/// that names the field `path` answers to that too. Naming the list once is
+/// what keeps two readers of the same field from accepting different spellings.
+const FILE_PATH_KEYS: &[&str] = &["file_path", "filePath", "path"];
+
+/// The same, for a result the edit tool wrote: its `EditResult` publishes the
+/// path under `file`, which is the spelling read first.
+const EDITED_FILE_PATH_KEYS: &[&str] = &["file", "file_path", "filePath", "path"];
+
 fn project_input(kind: ToolEffectKind, arguments: &Value) -> Value {
     match kind {
         ToolEffectKind::Tool => match arguments {
@@ -350,7 +362,7 @@ fn project_input(kind: ToolEffectKind, arguments: &Value) -> Value {
             "command": string_argument(arguments, &["command", "cmd"]),
         }),
         ToolEffectKind::FileEdit => json!({
-            "filePath": string_argument(arguments, &["file_path", "filePath", "path"]),
+            "filePath": string_argument(arguments, FILE_PATH_KEYS),
             "oldString": string_argument(arguments, &["old_string", "oldString"]),
             "newString": string_argument(arguments, &["new_string", "newString"]),
             "replaceAll": bool_argument(arguments, &["replace_all", "replaceAll"]),
@@ -361,7 +373,7 @@ fn project_input(kind: ToolEffectKind, arguments: &Value) -> Value {
             "maxMatches": number_argument(arguments, &["max_matches", "maxMatches"]),
         }),
         ToolEffectKind::FileRead => json!({
-            "filePath": string_argument(arguments, &["file_path", "filePath", "path"]),
+            "filePath": string_argument(arguments, FILE_PATH_KEYS),
             "offset": number_argument(arguments, &["offset", "startLine", "start_line"]),
             "limit": number_argument(arguments, &["limit", "maxLines", "max_lines"])
                 .unwrap_or(DEFAULT_READ_LIMIT),
@@ -374,7 +386,7 @@ fn project_input(kind: ToolEffectKind, arguments: &Value) -> Value {
                 .map(|todos| todos.iter().map(TodoEffectItem::from_argument).collect::<Vec<_>>()),
         }),
         ToolEffectKind::FileWrite => json!({
-            "filePath": string_argument(arguments, &["file_path", "filePath", "path"]),
+            "filePath": string_argument(arguments, FILE_PATH_KEYS),
             "content": string_argument(arguments, &["content", "text"]),
         }),
         ToolEffectKind::UserQuestion => json!({
@@ -439,7 +451,7 @@ fn call_summary(kind: ToolEffectKind, tool_name: &str, arguments: &Value) -> (St
             (format!("bash: {command}"), command)
         }
         ToolEffectKind::FileRead => {
-            let mut message = string_argument(arguments, &["file_path", "filePath", "path"]);
+            let mut message = string_argument(arguments, FILE_PATH_KEYS);
             let mut extras = Vec::new();
             if let Some(offset) = number_argument(arguments, &["offset", "startLine", "start_line"])
                 && offset > 0
@@ -455,14 +467,11 @@ fn call_summary(kind: ToolEffectKind, tool_name: &str, arguments: &Value) -> (St
             (format!("Reading {message}"), message)
         }
         ToolEffectKind::FileWrite => {
-            let path = string_argument(arguments, &["file_path", "filePath", "path"]);
+            let path = string_argument(arguments, FILE_PATH_KEYS);
             (format!("Writing {path}"), path)
         }
         ToolEffectKind::FileEdit => {
-            let name = file_name(&string_argument(
-                arguments,
-                &["file_path", "filePath", "path"],
-            ));
+            let name = file_name(&string_argument(arguments, FILE_PATH_KEYS));
             (format!("Editing {name}"), name)
         }
         ToolEffectKind::FileSearch => {
@@ -683,7 +692,7 @@ fn completed_header(
         ToolEffectKind::FileRead => {
             let lines = read_line_count(output);
             let word = if lines == 1 { "line" } else { "lines" };
-            let name = file_name(&string_argument(output, &["file_path", "filePath", "path"]));
+            let name = file_name(&string_argument(output, FILE_PATH_KEYS));
             (
                 "Read".to_owned(),
                 format!("{lines} {word} from {name}"),
@@ -696,15 +705,12 @@ fn completed_header(
         }
         ToolEffectKind::FileWrite => (
             "Created".to_owned(),
-            file_name(&string_argument(output, &["file_path", "filePath", "path"])),
+            file_name(&string_argument(output, FILE_PATH_KEYS)),
             String::new(),
         ),
         ToolEffectKind::FileEdit => (
             "Edited".to_owned(),
-            file_name(&string_argument(
-                output,
-                &["file", "file_path", "filePath", "path"],
-            )),
+            file_name(&string_argument(output, EDITED_FILE_PATH_KEYS)),
             String::new(),
         ),
         ToolEffectKind::FileSearch => {
