@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Mark the active theme as current in the `/theme` picker when no theme has
+  been persisted. The picker and the cancel path read the preference through
+  two copies of the same accessor that disagreed on the default, so the
+  catalog's automatic entry was annotated on one path and on neither the other.
+
 - Keep the plan-mode directive and the agent profile's prompt on every cycle of
   a persisted session. The transcript was hydrated after the preamble had been
   composed and replaced it wholesale, so the model was told the workspace was

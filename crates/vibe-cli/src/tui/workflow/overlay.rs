@@ -12,7 +12,7 @@ use super::super::state::TuiState;
 use super::super::switching::{self, SwitchRequest};
 use super::super::{InteractiveRuntime, call_runtime, persist_user_setting, update_theme};
 use super::config::{
-    apply_thinking, config_field_schema, configured_value, persist_config_setting,
+    apply_thinking, config_field_schema, configured_value, persist_config_setting, persisted_theme,
     selected_config_target,
 };
 use super::mcp::{McpEffect, reduce_auth_action};
@@ -57,10 +57,7 @@ pub(super) async fn select_overlay_item(
                 mark_config_special(state, "thinking");
             }
             "theme" => {
-                let current = configured_value(runtime, "theme")
-                    .and_then(|value| value.as_str().map(ToOwned::to_owned))
-                    .unwrap_or_else(|| "system".to_owned());
-                state.overlay = Some(theme_overlay(&current));
+                state.overlay = Some(theme_overlay(&persisted_theme(runtime)));
                 mark_config_special(state, "theme");
             }
             key => {

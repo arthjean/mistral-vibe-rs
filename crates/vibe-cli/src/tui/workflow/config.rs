@@ -328,6 +328,17 @@ pub(super) fn persist_config_setting(
     persist_setting(runtime, target, path, value, remove, state)
 }
 
+/// The theme the operator persisted, or the automatic entry the catalog opens
+/// with when none is.
+///
+/// The picker highlights this name and cancelling restores it, so the two
+/// paths read the same value rather than defaulting differently.
+pub(super) fn persisted_theme(runtime: &mut InteractiveRuntime) -> String {
+    configured_value(runtime, "theme")
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .unwrap_or_else(|| crate::tui::themes::AUTO_THEME.to_owned())
+}
+
 pub(super) fn configured_value(runtime: &mut InteractiveRuntime, key: &str) -> Option<Value> {
     let surface = Value::Object(
         runtime

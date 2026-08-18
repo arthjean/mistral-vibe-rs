@@ -39,8 +39,8 @@ use super::{
 };
 pub(in crate::tui) use config::apply_render_preferences;
 use config::{
-    configured_value, reset_config_value, reset_config_value_at, selected_config_target,
-    set_config_value, update_proxy_value,
+    configured_value, persisted_theme, reset_config_value, reset_config_value_at,
+    selected_config_target, set_config_value, update_proxy_value,
 };
 pub(in crate::tui) use mcp::{McpEffect, McpPendingOperation, apply_pending_operation};
 pub(super) use mcp::{SystemUrlOpener, UrlOpenerPort, execute_mcp_effect};
@@ -194,10 +194,7 @@ pub(super) async fn dispatch_command(
             CommandAction::Handled
         }
         CommandId::Theme => {
-            let current = configured_value(runtime, "theme")
-                .and_then(|value| value.as_str().map(ToOwned::to_owned))
-                .unwrap_or_else(|| "system".to_owned());
-            state.overlay = Some(theme_overlay(&current));
+            state.overlay = Some(theme_overlay(&persisted_theme(runtime)));
             CommandAction::Handled
         }
         CommandId::Resume => {
@@ -380,10 +377,7 @@ pub(super) async fn handle_overlay_key(
             if kind == OverlayKind::Theme
                 && let Some(runtime) = runtime.as_mut()
             {
-                let persisted = configured_value(runtime, "theme")
-                    .and_then(|value| value.as_str().map(ToOwned::to_owned))
-                    .unwrap_or_else(|| crate::tui::themes::AUTO_THEME.to_owned());
-                crate::tui::preview_theme(&persisted, theme);
+                crate::tui::preview_theme(&persisted_theme(runtime), theme);
             }
             state.overlay = None;
         }
