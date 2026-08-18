@@ -103,8 +103,12 @@ fn a_session_log_directory_needing_an_unresolvable_home_fails_naming_the_field()
             Value::String("~/logs".to_owned()),
         )])),
     );
-    let error = resolve_session_log_dir(&mut effective, Path::new("/home/user/.vibe"), None)
-        .expect_err("an unresolvable home fails the load");
+    let error = super::effective::resolve_session_log_dir(
+        &mut effective,
+        Path::new("/home/user/.vibe"),
+        None,
+    )
+    .expect_err("an unresolvable home fails the load");
     assert!(
         error.to_string().contains("session_logging.save_dir"),
         "{error}"

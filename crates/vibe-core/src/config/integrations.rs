@@ -216,3 +216,286 @@ impl IntegrationCollection {
         }
     }
 }
+
+// --------------------------------------------------------------------------
+// Persistence
+// --------------------------------------------------------------------------
+
+/// Reading and writing the two collections against the file writes land in.
+///
+/// These sit here rather than on the store's own module because every one of
+/// them is expressed in the vocabulary [`IntegrationCollection`] declares: the
+/// identity an entry is keyed by, the enablement pair it carries, and the array
+/// it lives in. The store contributes the layering and the transaction; this
+/// contributes what an entry means.
+impl super::LayeredConfig {
+    pub fn preflight_mcp_add(&self, config: &McpServerConfig) -> Result<(), ConfigError> {
+        let snapshot = self.load()?;
+        preflight_mcp_add(&snapshot.effective, config)
+    }
+
+    pub fn persist_mcp_add(&self, config: &McpServerConfig) -> Result<ConfigSnapshot, ConfigError> {
+        let snapshot = self.load()?;
+        preflight_mcp_add(&snapshot.effective, config)?;
+        let collection = IntegrationCollection::McpServers;
+        let target = snapshot.selected_target;
+        // Rejects a target whose `mcp_servers` is not a list before the upsert
+        // decides to append to it.
+        config_array_for_target(&snapshot, target, collection)?;
+        let mutation = patch::resolve_upsert(
+            snapshot
+                .target_values
+                .get(&target)
+                .and_then(|values| values.get(collection.key())),
+            &JsonPointer::from_segments([collection.key()]),
+            "name",
+            mcp_server_table(config)?,
+        );
+        self.batch_write(&[ConfigWrite {
+            target,
+            expected_fingerprint: snapshot.fingerprints.get(&target).cloned().flatten(),
+            mutations: vec![mutation],
+        }])
+    }
+
+    /// Drops the entry named `name` from the file writes land in.
+    ///
+    /// A name no entry carries is reported as not removed rather than raised:
+    /// asking twice is not an error, and the second answer says so.
+    pub fn persist_mcp_remove(&self, name: &str) -> Result<mcp::McpRemoval, ConfigError> {
+        let name = mcp::normalize_mcp_server_name(name);
+        if name.is_empty() {
+            return Err(ConfigError::InvalidMcp(
+                "MCP server name must contain letters or numbers".to_owned(),
+            ));
+        }
+        let snapshot = self.load()?;
+        let collection = IntegrationCollection::McpServers;
+        let target = snapshot.selected_target;
+        let entries = config_array_for_target(&snapshot, target, collection)?;
+        let retained = entries
+            .iter()
+            .filter(|entry| {
+                entry
+                    .as_table()
+                    .and_then(|entry| collection.identity(entry))
+                    .map(mcp::normalize_mcp_server_name)
+                    .as_deref()
+                    != Some(name.as_str())
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if retained.len() == entries.len() {
+            return Ok(mcp::McpRemoval {
+                name,
+                removed: false,
+            });
+        }
+        self.replace_array_cas(
+            target,
+            snapshot.fingerprints.get(&target).cloned().flatten(),
+            collection.key(),
+            retained,
+        )?;
+        Ok(mcp::McpRemoval {
+            name,
+            removed: true,
+        })
+    }
+
+    pub fn persist_mcp_state(
+        &self,
+        alias: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        self.persist_integration_state(
+            IntegrationCollection::McpServers,
+            alias,
+            enabled,
+            disabled_tools,
+        )
+    }
+
+    pub fn persist_mcp_state_cas(
+        &self,
+        alias: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+        target: ConfigTarget,
+        expected_fingerprint: Option<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        self.persist_integration_state_cas(
+            IntegrationCollection::McpServers,
+            alias,
+            enabled,
+            disabled_tools,
+            target,
+            expected_fingerprint,
+        )
+    }
+
+    /// Persists enablement against the target the snapshot selected.
+    fn persist_integration_state(
+        &self,
+        collection: IntegrationCollection,
+        name: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        let snapshot = self.load()?;
+        let target = snapshot.selected_target;
+        let expected_fingerprint = snapshot.fingerprints.get(&target).cloned().flatten();
+        let entries =
+            integration_entries(&snapshot, collection, name, enabled, disabled_tools, target)?;
+        self.replace_array_cas(target, expected_fingerprint, collection.key(), entries)
+    }
+
+    /// Persists enablement for one entry, failing if the target changed.
+    fn persist_integration_state_cas(
+        &self,
+        collection: IntegrationCollection,
+        name: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+        target: ConfigTarget,
+        expected_fingerprint: Option<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        let snapshot = self.load()?;
+        let entries =
+            integration_entries(&snapshot, collection, name, enabled, disabled_tools, target)?;
+        self.replace_array_cas(target, expected_fingerprint, collection.key(), entries)
+    }
+
+    pub fn connector_preferences(
+        &self,
+    ) -> Result<BTreeMap<String, IntegrationPreference>, ConfigError> {
+        let snapshot = self.load()?;
+        let entries = config_array(&snapshot.effective, IntegrationCollection::Connectors)?;
+        let collection = IntegrationCollection::Connectors;
+        let mut preferences = BTreeMap::new();
+        for entry in entries {
+            let entry = entry.as_table().ok_or_else(|| {
+                ConfigError::InvalidIntegration("each connectors entry must be a table".to_owned())
+            })?;
+            let name = collection
+                .identity(entry)
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| {
+                    ConfigError::InvalidIntegration(
+                        "connector field `name` must be a non-empty string".to_owned(),
+                    )
+                })?;
+            if preferences
+                .insert(name.to_owned(), collection.preference(entry)?)
+                .is_some()
+            {
+                return Err(ConfigError::InvalidIntegration(format!(
+                    "connector `{name}` appears more than once"
+                )));
+            }
+        }
+        Ok(preferences)
+    }
+
+    pub fn persist_connector_state(
+        &self,
+        name: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        self.persist_integration_state(
+            IntegrationCollection::Connectors,
+            name,
+            enabled,
+            disabled_tools,
+        )
+    }
+
+    pub fn persist_connector_state_cas(
+        &self,
+        name: &str,
+        enabled: bool,
+        disabled_tools: &BTreeSet<String>,
+        target: ConfigTarget,
+        expected_fingerprint: Option<String>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        self.persist_integration_state_cas(
+            IntegrationCollection::Connectors,
+            name,
+            enabled,
+            disabled_tools,
+            target,
+            expected_fingerprint,
+        )
+    }
+
+    fn replace_array_cas(
+        &self,
+        target: ConfigTarget,
+        expected_fingerprint: Option<String>,
+        key: &str,
+        entries: Vec<Value>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        self.batch_write(&[ConfigWrite {
+            target,
+            expected_fingerprint,
+            mutations: vec![ConfigMutation::set([key], Value::Array(entries))],
+        }])
+    }
+}
+
+/// The `collection` array `target` should hold once `name` carries `enabled`
+/// and `disabled_tools`.
+///
+/// Read from one snapshot rather than one per caller: the fingerprint a write
+/// is guarded by and the entries it writes describe the same read, so a file
+/// edited between the two cannot be written over with a stale array.
+///
+/// The entry is created in the target when it is only present in another layer,
+/// so disabling a default-provided server writes an explicit record.
+fn integration_entries(
+    snapshot: &ConfigSnapshot,
+    collection: IntegrationCollection,
+    name: &str,
+    enabled: bool,
+    disabled_tools: &BTreeSet<String>,
+    target: ConfigTarget,
+) -> Result<Vec<Value>, ConfigError> {
+    if collection == IntegrationCollection::McpServers
+        && !config_array(&snapshot.effective, collection)?
+            .iter()
+            .filter_map(Value::as_table)
+            .any(|entry| collection.identity_key(entry).as_deref() == Some(name))
+    {
+        return Err(collection.invalid(&format!("unknown MCP server `{name}`")));
+    }
+    let mut entries = config_array_for_target(snapshot, target, collection)?;
+    let position = entries
+        .iter()
+        .position(|entry| {
+            entry
+                .as_table()
+                .and_then(|entry| collection.identity_key(entry))
+                .as_deref()
+                == Some(name)
+        })
+        .unwrap_or_else(|| {
+            let mut entry = Table::new();
+            entry.insert("name".to_owned(), Value::String(name.to_owned()));
+            entries.push(Value::Table(entry));
+            entries.len().saturating_sub(1)
+        });
+    let entry = entries
+        .get_mut(position)
+        .and_then(Value::as_table_mut)
+        .ok_or_else(|| {
+            collection.invalid(&format!("{} entry must be a table", collection.key()))
+        })?;
+    entry.insert("disabled".to_owned(), Value::Boolean(!enabled));
+    entry.insert(
+        "disabled_tools".to_owned(),
+        Value::Array(disabled_tools.iter().cloned().map(Value::String).collect()),
+    );
+    Ok(entries)
+}

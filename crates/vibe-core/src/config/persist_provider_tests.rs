@@ -26,7 +26,7 @@ fn store(user: &str) -> (LayeredConfig, PathBuf, tempfile::TempDir) {
 
 fn effective_mistral(config: &LayeredConfig) -> Table {
     let snapshot = config.load().expect("the configuration loads");
-    provider_entry(snapshot.effective.get("providers"), "mistral")
+    super::providers::provider_entry(snapshot.effective.get("providers"), "mistral")
         .expect("the shipped mistral provider resolves")
         .clone()
 }
