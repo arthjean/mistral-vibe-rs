@@ -158,8 +158,8 @@ impl Release3Service {
         params: &BTreeMap<String, Value>,
     ) -> Result<Release3Dispatch, Release3Error> {
         let offset = usize_param(params, "offset", 0, 0, usize::MAX)?;
-        let limit = usize_param(params, "limit", 50, 0, usize::MAX)?;
-        let cwd = params.get("cwd").and_then(Value::as_str);
+        let limit = usize_param(params, "limit", 50, SESSION_PAGE_MIN, SESSION_PAGE_MAX)?;
+        let cwd = optional_string(params, "cwd")?;
         // The legacy migration still runs before the page is read, so a store
         // written by an older layout is listed; what it moved is not published,
         // because `SessionListResponse` declares the page and nothing else.
@@ -181,7 +181,7 @@ impl Release3Service {
             .history(
                 session_id,
                 usize_param(params, "offset", 0, 0, usize::MAX)?,
-                usize_param(params, "limit", 100, 0, usize::MAX)?,
+                usize_param(params, "limit", 100, SESSION_PAGE_MIN, SESSION_PAGE_MAX)?,
             )
             .map_err(storage_error)?;
         Ok(Release3Dispatch::result([(
@@ -209,7 +209,7 @@ impl Release3Service {
             .store
             .resume(
                 required_string(params, "sessionId")?,
-                swallowed_string(params, "systemPrompt").unwrap_or_default(),
+                optional_string(params, "systemPrompt")?.unwrap_or_default(),
                 config_map(params.get("config"))?,
             )
             .map_err(storage_error)?;
@@ -226,13 +226,15 @@ impl Release3Service {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<Release3Dispatch, Release3Error> {
-        let cwd = swallowed_string(params, "cwd")
-            .unwrap_or_else(|| self.paths.working_directory.to_string_lossy().into_owned());
+        let cwd = match optional_string(params, "cwd")? {
+            Some(cwd) => cwd.to_owned(),
+            None => self.paths.working_directory.to_string_lossy().into_owned(),
+        };
         let hydrated = self
             .store
             .continue_session(
                 &cwd,
-                swallowed_string(params, "systemPrompt").unwrap_or_default(),
+                optional_string(params, "systemPrompt")?.unwrap_or_default(),
                 config_map(params.get("config"))?,
             )
             .map_err(storage_error)?;
@@ -251,19 +253,20 @@ impl Release3Service {
     ) -> Result<Release3Dispatch, Release3Error> {
         let source = required_string(params, "sessionId")?;
         let keep_messages = fork_keep_messages(params)?;
-        let new_id = swallowed_string(params, "newSessionId").unwrap_or_else(|| {
-            format!(
+        let new_id = match optional_string(params, "newSessionId")? {
+            Some(new_id) => new_id.to_owned(),
+            None => format!(
                 "session-{}-{}",
                 now_millis(),
                 self.next_session.fetch_add(1, Ordering::Relaxed)
-            )
-        });
+            ),
+        };
         let mut hydrated = self
             .store
             .fork(
                 source,
                 &new_id,
-                &swallowed_string(params, "systemPrompt").unwrap_or_default(),
+                optional_string(params, "systemPrompt")?.unwrap_or_default(),
                 config_map(params.get("config"))?,
                 now_millis(),
             )
@@ -620,11 +623,4 @@ pub(super) fn statistics_map(
     value: Option<&Value>,
 ) -> Result<BTreeMap<String, Value>, Release3Error> {
     config_map(value)
-}
-
-pub(super) fn swallowed_string(values: &BTreeMap<String, Value>, key: &str) -> Option<String> {
-    crate::params::optional_string(values, key)
-        .ok()
-        .flatten()
-        .map(ToOwned::to_owned)
 }

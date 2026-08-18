@@ -21,6 +21,59 @@ fn service() -> (tempfile::TempDir, Release3Service) {
     (temporary, service)
 }
 
+/// A parameter of the wrong type is named rather than replaced by a
+/// default.
+///
+/// These readers used to run through a local `optional_string` that dropped
+/// the rejection, so `cwd: 42` silently continued the wrong session and
+/// `newSessionId: 42` silently forked under a generated identifier. Every
+/// optional reader now reports what the parameter object holds.
+#[test]
+fn a_malformed_optional_parameter_is_refused_rather_than_defaulted() {
+    let (_temporary, service) = service();
+    for (method, params) in [
+        ("session/continue", json!({"cwd": 42})),
+        (
+            "session/fork",
+            json!({"sessionId": "source", "newSessionId": 42}),
+        ),
+        (
+            "session/resume",
+            json!({"sessionId": "source", "systemPrompt": 42}),
+        ),
+        ("session/list", json!({"cwd": 42})),
+    ] {
+        let params: BTreeMap<String, Value> =
+            serde_json::from_value(params).expect("parameter object");
+        let error = service
+            .dispatch(method, &params)
+            .expect_err("a malformed parameter is refused");
+        assert!(
+            matches!(error, Release3Error::InvalidParams(ref message) if message.contains("must be a string")),
+            "{method}: {error}"
+        );
+    }
+}
+
+/// A page outside what the store accepts is a parameter problem, so it is
+/// answered as one instead of surfacing as a storage conflict.
+#[test]
+fn a_page_outside_the_store_bounds_is_refused_as_a_parameter() {
+    let (_temporary, service) = service();
+    for method in ["session/list", "history/list"] {
+        let params: BTreeMap<String, Value> =
+            serde_json::from_value(json!({"sessionId": "source", "limit": 100_000}))
+                .expect("parameter object");
+        let error = service
+            .dispatch(method, &params)
+            .expect_err("an out-of-range page is refused");
+        assert!(
+            matches!(error, Release3Error::InvalidParams(ref message) if message.contains("limit")),
+            "{method}: {error}"
+        );
+    }
+}
+
 /// The Discovered layer reaches a client through the method it reads the
 /// configuration by, carrying the settings every declared tool publishes,
 /// and a file the operator owns still wins over them.

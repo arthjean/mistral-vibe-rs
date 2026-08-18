@@ -24,7 +24,7 @@ mod sessions;
 
 use crate::builtin_agents;
 use crate::host::now_millis;
-use crate::params::{self, required_string, usize_param};
+use crate::params::{self, optional_string, required_string, usize_param};
 use crate::vocabulary::{AccountActionKind, AccountStatus, AgentSafety};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -60,6 +60,14 @@ const MISTRAL_KEY: &str = "MISTRAL_API_KEY";
 /// The levels `config/thinking/write` accepts, as the wire literal declares
 /// them.
 const THINKING_LEVELS: [&str; 5] = ["off", "low", "medium", "high", "max"];
+
+/// The page a session or history listing may ask for.
+///
+/// [`SessionStore::list`] and [`SessionStore::history`] refuse anything outside
+/// this range, so the dispatchers refuse it first and answer `invalid_params`
+/// rather than letting a storage conflict name a parameter problem.
+const SESSION_PAGE_MIN: usize = 1;
+const SESSION_PAGE_MAX: usize = 500;
 
 pub const RELEASE3_METHODS: &[&str] = &[
     "agents/install",
