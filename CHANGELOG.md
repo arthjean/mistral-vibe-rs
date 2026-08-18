@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Name the envelope and the offending field when an inbound frame is rejected.
+  Every rejection reported only that no envelope variant matched, so a missing
+  `message`, an unknown error code, a stray field and a non-object `result`
+  were indistinguishable. Since a rejected frame carries no answerable `id` and
+  the connection is closed instead, that message was the only record of the
+  cause, and it named none of them.
+
 - Keep the `data` key on an error frame that carries no detail. The reference
   dumps its error payload without a null filter, so `"data": null` is on the
   wire whether or not a detail exists. This port dropped the key, which made

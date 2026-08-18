@@ -113,3 +113,64 @@ fn outbound_frames_always_carry_params() {
         frame
     );
 }
+
+#[test]
+fn a_rejection_names_the_envelope_and_the_offending_field() {
+    // An untagged rejection says only that no variant matched, and the caller
+    // answers a rejection by closing the connection. These assert that the one
+    // message it gets to log identifies the frame and the cause.
+    let cases: [(&[u8], &str, &str); 5] = [
+        (
+            br#"{"jsonrpc":"2.0","id":1,"error":{"code":"not_found"}}"#,
+            "error response",
+            "missing field `message`",
+        ),
+        (
+            br#"{"jsonrpc":"2.0","id":1,"error":{"code":"nope","message":"x"}}"#,
+            "error response",
+            "unknown variant `nope`",
+        ),
+        (
+            br#"{"jsonrpc":"2.0","id":1,"method":"turn/start","params":{},"extra":1}"#,
+            "request",
+            "unknown field `extra`",
+        ),
+        (
+            br#"{"jsonrpc":"2.0","method":"turn/started"}"#,
+            "notification",
+            "missing field `params`",
+        ),
+        (
+            br#"{"jsonrpc":"2.0","id":1,"result":[]}"#,
+            "success response",
+            "invalid type",
+        ),
+    ];
+    for (frame, expected_kind, expected_cause) in cases {
+        let error = decode_frame(frame).expect_err("invalid frame");
+        let ProtocolValidationError::Malformed { kind, .. } = &error else {
+            unreachable!("{} produced {error:?}", String::from_utf8_lossy(frame));
+        };
+        assert_eq!(*kind, expected_kind, "{}", String::from_utf8_lossy(frame));
+        assert!(
+            error.to_string().contains(expected_cause),
+            "`{error}` does not name `{expected_cause}`"
+        );
+    }
+}
+
+#[test]
+fn frames_with_no_envelope_shape_are_named_as_such() {
+    assert!(matches!(
+        decode_frame(br#"{"jsonrpc":"2.0","id":1}"#).expect_err("no shape"),
+        ProtocolValidationError::UnknownShape
+    ));
+    assert!(matches!(
+        decode_frame(br#"[1,2,3]"#).expect_err("not an object"),
+        ProtocolValidationError::NotAnObject(_)
+    ));
+    assert!(matches!(
+        decode_frame(b"not json").expect_err("not json"),
+        ProtocolValidationError::NotAnObject(_)
+    ));
+}

@@ -3,8 +3,9 @@
 
 use std::collections::BTreeMap;
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use thiserror::Error;
 
 use crate::ProtocolError;
@@ -100,10 +101,21 @@ pub enum Envelope {
 /// Why an inbound frame could not be turned into an [`Envelope`].
 #[derive(Debug, Error)]
 pub enum ProtocolValidationError {
-    /// The bytes are not a valid frame. Untagged decoding cannot report which
-    /// variant was intended, so the message names the whole envelope.
-    #[error("invalid JSON frame: {0}")]
-    Json(#[from] serde_json::Error),
+    /// The bytes are not a JSON object, so no envelope shape can apply.
+    #[error("frame is not a JSON object: {0}")]
+    NotAnObject(#[source] serde_json::Error),
+    /// The object carries none of the keys an envelope is recognized by.
+    #[error("frame declares none of `method`, `result` or `error`")]
+    UnknownShape,
+    /// The keys select one envelope, which then refused the frame.
+    #[error("invalid {kind} frame: {source}")]
+    Malformed {
+        /// Which envelope the frame's keys selected.
+        kind: &'static str,
+        /// What that envelope rejected.
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
 /// Decodes an inbound frame.
@@ -111,7 +123,44 @@ pub enum ProtocolValidationError {
 /// A frame that fails here carries no usable `id`, so the protocol has no way
 /// to answer it: callers close the connection instead of replying.
 pub fn decode_frame(bytes: &[u8]) -> Result<Envelope, ProtocolValidationError> {
-    Ok(serde_json::from_slice(bytes)?)
+    serde_json::from_slice(bytes).map_err(|untagged| explain(bytes, untagged))
+}
+
+/// Names the envelope a rejected frame meant, and why that one refused it.
+///
+/// [`Envelope`] is untagged, so its own rejection names the whole enum and
+/// nothing else: a missing `message`, an unknown error code and a stray field
+/// all read identically. Since the caller answers a rejection by closing the
+/// connection, that message is the only record of what went wrong, so the
+/// failure path pays for a second pass the happy path never sees.
+fn explain(bytes: &[u8], untagged: serde_json::Error) -> ProtocolValidationError {
+    let object = match serde_json::from_slice::<Map<String, Value>>(bytes) {
+        Ok(object) => object,
+        Err(source) => return ProtocolValidationError::NotAnObject(source),
+    };
+    let (kind, refusal) = if object.contains_key("error") {
+        ("error response", refusal_of::<ErrorResponse>(bytes))
+    } else if object.contains_key("result") {
+        ("success response", refusal_of::<SuccessResponse>(bytes))
+    } else if !object.contains_key("method") {
+        return ProtocolValidationError::UnknownShape;
+    } else if object.contains_key("id") {
+        ("request", refusal_of::<ServerRequest>(bytes))
+    } else {
+        ("notification", refusal_of::<Notification>(bytes))
+    };
+    ProtocolValidationError::Malformed {
+        kind,
+        // `kind` names the only variant those keys allow, so the untagged
+        // rejection above means this one rejected the frame too. Falling back
+        // to that rejection keeps the function total either way.
+        source: refusal.unwrap_or(untagged),
+    }
+}
+
+/// Why `T` refused `bytes`, or `None` when it accepted them.
+fn refusal_of<T: DeserializeOwned>(bytes: &[u8]) -> Option<serde_json::Error> {
+    serde_json::from_slice::<T>(bytes).err()
 }
 
 /// Serializes an outbound frame.
