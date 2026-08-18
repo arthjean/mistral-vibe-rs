@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use super::fuzzy::fuzzy_match_score;
 use super::{CompletionCandidate, CompletionKind};
 use crate::tui::input::InputError;
+use vibe_core::matching::pattern_matches;
 
 mod watch;
 
@@ -721,127 +722,8 @@ impl IgnoreRule {
         } else {
             rel
         };
-        glob_matches(&self.pattern, target)
+        pattern_matches(&self.pattern, target)
     }
-}
-
-fn glob_matches(pattern: &str, value: &str) -> bool {
-    fn visit(
-        pattern: &[char],
-        value: &[char],
-        pattern_index: usize,
-        value_index: usize,
-        memo: &mut BTreeMap<(usize, usize), bool>,
-    ) -> bool {
-        if let Some(result) = memo.get(&(pattern_index, value_index)) {
-            return *result;
-        }
-        let result = match pattern.get(pattern_index) {
-            None => value_index == value.len(),
-            Some('*') => {
-                visit(
-                    pattern,
-                    value,
-                    pattern_index.saturating_add(1),
-                    value_index,
-                    memo,
-                ) || value_index < value.len()
-                    && visit(
-                        pattern,
-                        value,
-                        pattern_index,
-                        value_index.saturating_add(1),
-                        memo,
-                    )
-            }
-            Some('?') => {
-                value_index < value.len()
-                    && visit(
-                        pattern,
-                        value,
-                        pattern_index.saturating_add(1),
-                        value_index.saturating_add(1),
-                        memo,
-                    )
-            }
-            Some('[') => {
-                if let Some((end, matches)) =
-                    glob_character_class(pattern, pattern_index, value.get(value_index).copied())
-                {
-                    matches
-                        && visit(
-                            pattern,
-                            value,
-                            end.saturating_add(1),
-                            value_index.saturating_add(1),
-                            memo,
-                        )
-                } else {
-                    value.get(value_index) == Some(&'[')
-                        && visit(
-                            pattern,
-                            value,
-                            pattern_index.saturating_add(1),
-                            value_index.saturating_add(1),
-                            memo,
-                        )
-                }
-            }
-            Some(character) => {
-                value.get(value_index) == Some(character)
-                    && visit(
-                        pattern,
-                        value,
-                        pattern_index.saturating_add(1),
-                        value_index.saturating_add(1),
-                        memo,
-                    )
-            }
-        };
-        memo.insert((pattern_index, value_index), result);
-        result
-    }
-
-    visit(
-        &pattern.chars().collect::<Vec<_>>(),
-        &value.chars().collect::<Vec<_>>(),
-        0,
-        0,
-        &mut BTreeMap::new(),
-    )
-}
-
-fn glob_character_class(
-    pattern: &[char],
-    open: usize,
-    value: Option<char>,
-) -> Option<(usize, bool)> {
-    let mut cursor = open.saturating_add(1);
-    let negated = pattern.get(cursor) == Some(&'!');
-    if negated {
-        cursor = cursor.saturating_add(1);
-    }
-    let content_start = cursor;
-    if pattern.get(cursor) == Some(&']') {
-        cursor = cursor.saturating_add(1);
-    }
-    let close = (cursor..pattern.len()).find(|index| pattern[*index] == ']')?;
-    if close == content_start {
-        return None;
-    }
-    let value = value?;
-    let mut matched = false;
-    let mut index = content_start;
-    while index < close {
-        if index.saturating_add(2) < close && pattern[index.saturating_add(1)] == '-' {
-            matched |= pattern[index] <= value && value <= pattern[index.saturating_add(2)];
-            index = index.saturating_add(3);
-        } else {
-            matched |= pattern[index] == value;
-            index = index.saturating_add(1);
-        }
-    }
-    Some((close, matched != negated))
 }
 
 fn mention_candidate(path: String, is_directory: bool) -> CompletionCandidate {
