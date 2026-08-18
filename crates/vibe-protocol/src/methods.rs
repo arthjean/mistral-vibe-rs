@@ -127,8 +127,7 @@ pub fn is_server_method(method: &str) -> bool {
 }
 
 /// Reports whether `method` is one of this port's local extensions.
-#[must_use]
-pub fn is_local_extension_method(method: &str) -> bool {
+pub(crate) fn is_local_extension_method(method: &str) -> bool {
     LOCAL_EXTENSION_METHODS.binary_search(&method).is_ok()
 }
 

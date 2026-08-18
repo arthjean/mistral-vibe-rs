@@ -34,6 +34,5 @@ pub use handshake::{
     TerminalEmulator, TransportKind,
 };
 pub use methods::{
-    LOCAL_EXTENSION_METHODS, SERVER_METHODS, is_dispatchable_method, is_local_extension_method,
-    is_server_method,
+    LOCAL_EXTENSION_METHODS, SERVER_METHODS, is_dispatchable_method, is_server_method,
 };
