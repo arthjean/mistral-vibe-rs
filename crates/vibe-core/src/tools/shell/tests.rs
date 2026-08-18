@@ -9,12 +9,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tempfile::{TempDir, tempdir};
 
+use super::specs::CONTROL_KEYS;
 use super::*;
 use crate::matching::NameFilter;
+use crate::platform::Platform;
+use crate::policy::{ApprovalAgent, PermissionStore};
 use crate::policy::{
     ApprovalDecision, ApprovalFuture, ApprovalRequest, TrustDecision, TrustRootKind,
 };
 use crate::process::{ClientToolIo, ClientToolRequest};
+use crate::shell::{ShellCommandLists, ShellFlavor};
+use crate::tools::ToolHandlerFuture;
 
 /// Answers every approval the same way and records what it was asked to
 /// approve: the tool, and the label of every requirement the call carried.
@@ -1092,7 +1097,7 @@ async fn a_dropped_output_chunk_is_reported_to_the_model() {
         .get(&session)
         .expect("session")
         .clone();
-    append_chunks(&managed, &[], true);
+    super::session::append_chunks(&managed, &[], true);
 
     let polled = harness
         .call("bash_output", json!({"session_id": session}))
@@ -1190,12 +1195,13 @@ fn the_shell_lists_follow_the_family_rather_than_the_host() {
 fn every_advertised_control_key_resolves_to_bytes() {
     let counted = AtomicUsize::new(0);
     for (name, sequence) in CONTROL_KEYS {
-        let bytes = stdin_bytes(&json!({"control": [name]})).expect("a known control key");
+        let bytes = super::session_tools::stdin_bytes(&json!({"control": [name]}))
+            .expect("a known control key");
         assert_eq!(bytes, sequence);
         counted.fetch_add(1, Ordering::Relaxed);
     }
     assert_eq!(counted.load(Ordering::Relaxed), CONTROL_KEYS.len());
-    assert!(stdin_bytes(&json!({"control": ["ctrl_shift_q"]})).is_err());
+    assert!(super::session_tools::stdin_bytes(&json!({"control": ["ctrl_shift_q"]})).is_err());
 }
 
 // --------------------------------------------------------------------------
@@ -1426,19 +1432,19 @@ fn the_legacy_windows_variant_publishes_the_reference_override_set() {
 #[test]
 fn the_argument_form_follows_the_resolved_executable() {
     assert_eq!(
-        windows_shell_arguments(Path::new(r"C:\Program Files\PowerShell\7\pwsh.exe")),
+        super::host::windows_shell_arguments(Path::new(r"C:\Program Files\PowerShell\7\pwsh.exe")),
         ["-NoLogo", "-NoProfile", "-Command"]
     );
     assert_eq!(
-        windows_shell_arguments(Path::new(r"C:\Windows\System32\powershell.EXE")),
+        super::host::windows_shell_arguments(Path::new(r"C:\Windows\System32\powershell.EXE")),
         ["-NoLogo", "-NoProfile", "-Command"]
     );
     assert_eq!(
-        windows_shell_arguments(Path::new(r"C:\Program Files\Git\bin\bash.exe")),
+        super::host::windows_shell_arguments(Path::new(r"C:\Program Files\Git\bin\bash.exe")),
         ["-c"]
     );
     assert!(
-        windows_shell_arguments(Path::new(r"C:\Windows\System32\cmd.exe")).is_empty(),
+        super::host::windows_shell_arguments(Path::new(r"C:\Windows\System32\cmd.exe")).is_empty(),
         "the reference passes the command straight to anything it does not know"
     );
 }
@@ -1499,18 +1505,24 @@ fn the_windows_shell_search_skips_the_wsl_launcher_and_keeps_the_reference_order
     std::fs::write(seven.join("pwsh.exe"), b"pwsh").expect("pwsh");
 
     let directories = [system32.clone(), git.clone(), seven.clone()];
-    assert_eq!(find_git_bash(&directories), Some(git.join("bash.exe")));
-    assert_eq!(find_powershell(&directories), Some(seven.join("pwsh.exe")));
     assert_eq!(
-        find_git_bash(std::slice::from_ref(&system32)),
+        super::host::find_git_bash(&directories),
+        Some(git.join("bash.exe"))
+    );
+    assert_eq!(
+        super::host::find_powershell(&directories),
+        Some(seven.join("pwsh.exe"))
+    );
+    assert_eq!(
+        super::host::find_git_bash(std::slice::from_ref(&system32)),
         None,
         "the WSL launcher is not a Git Bash"
     );
     assert_eq!(
-        find_powershell(std::slice::from_ref(&system32)),
+        super::host::find_powershell(std::slice::from_ref(&system32)),
         Some(system32.join("powershell.exe"))
     );
-    assert!(is_wsl_launcher(Path::new(
+    assert!(super::host::is_wsl_launcher(Path::new(
         r"C:\Users\a\AppData\Local\Microsoft\WindowsApps\bash.exe"
     )));
 }
@@ -1660,22 +1672,31 @@ async fn a_cancelled_windows_family_turn_leaves_no_orphaned_process_group() {
 fn utf16_console_output_is_decoded_rather_than_interleaved_with_nuls() {
     let marked_le = [b"\xff\xfe".as_slice(), &encode_utf16("hi", true)].concat();
     let marked_be = [b"\xfe\xff".as_slice(), &encode_utf16("hi", false)].concat();
-    assert_eq!(decode_output(&marked_le), "hi");
-    assert_eq!(decode_output(&marked_be), "hi");
+    assert_eq!(super::decode::decode_output(&marked_le), "hi");
+    assert_eq!(super::decode::decode_output(&marked_be), "hi");
     assert_eq!(
-        decode_output(&encode_utf16("Directory: C:\\", true)),
+        super::decode::decode_output(&encode_utf16("Directory: C:\\", true)),
         "Directory: C:\\"
     );
     assert_eq!(
-        decode_output(&encode_utf16("Directory: C:\\", false)),
+        super::decode::decode_output(&encode_utf16("Directory: C:\\", false)),
         "Directory: C:\\"
     );
-    assert_eq!(decode_output("plain ascii".as_bytes()), "plain ascii");
-    assert_eq!(decode_output("héllo ✓".as_bytes()), "héllo ✓");
-    assert_eq!(decode_output(b"\xef\xbb\xbfmarked utf-8"), "marked utf-8");
+    assert_eq!(
+        super::decode::decode_output("plain ascii".as_bytes()),
+        "plain ascii"
+    );
+    assert_eq!(
+        super::decode::decode_output("héllo ✓".as_bytes()),
+        "héllo ✓"
+    );
+    assert_eq!(
+        super::decode::decode_output(b"\xef\xbb\xbfmarked utf-8"),
+        "marked utf-8"
+    );
     // Binary output has NULs on both parities, so it is not mistaken for text.
-    assert_eq!(decode_output(&[0, 0, 0, 0, 1, 2]).len(), 6);
-    assert!(!decode_output(&marked_le).contains('\0'));
+    assert_eq!(super::decode::decode_output(&[0, 0, 0, 0, 1, 2]).len(), 6);
+    assert!(!super::decode::decode_output(&marked_le).contains('\0'));
 }
 
 fn encode_utf16(text: &str, little_endian: bool) -> Vec<u8> {
@@ -1719,7 +1740,7 @@ async fn a_command_writing_utf16_reaches_the_model_as_text() {
 /// the file as inside the workspace rather than outside it.
 #[test]
 fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
-    let inside = analyze(
+    let inside = super::policy::analyze(
         ShellFlavor::GitBash,
         Platform::Windows,
         Path::new(r"C:\work"),
@@ -1740,7 +1761,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
     // Without the translation the same operand is a root-relative Windows path
     // and lands nowhere near the workspace, which is what the family flavor
     // exists to prevent.
-    let untranslated = analyze(
+    let untranslated = super::policy::analyze(
         ShellFlavor::PowerShell,
         Platform::Windows,
         Path::new(r"C:\work"),
@@ -1757,7 +1778,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         untranslated.rationale
     );
 
-    let outside = analyze(
+    let outside = super::policy::analyze(
         ShellFlavor::GitBash,
         Platform::Windows,
         Path::new(r"C:\work"),
@@ -2045,7 +2066,7 @@ async fn a_chatty_session_reports_its_dropped_output() {
             .await
             .expect("the poll answers");
         if polled.typed_result["status"] != "running" {
-            let size = log_size(
+            let size = super::session_tools::log_size(
                 &harness
                     .shell()
                     .sessions_directory()
