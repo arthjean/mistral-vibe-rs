@@ -1285,20 +1285,12 @@ impl LayeredConfig {
         let snapshot = self.load()?;
         let target = snapshot.selected_target;
         let expected_fingerprint = snapshot.fingerprints.get(&target).cloned().flatten();
-        self.persist_integration_state_cas(
-            collection,
-            name,
-            enabled,
-            disabled_tools,
-            target,
-            expected_fingerprint,
-        )
+        let entries =
+            integration_entries(&snapshot, collection, name, enabled, disabled_tools, target)?;
+        self.replace_array_cas(target, expected_fingerprint, collection.key(), entries)
     }
 
     /// Persists enablement for one entry, failing if the target changed.
-    ///
-    /// The entry is created in the target when it is only present in another
-    /// layer, so disabling a default-provided server writes an explicit record.
     fn persist_integration_state_cas(
         &self,
         collection: IntegrationCollection,
@@ -1309,41 +1301,8 @@ impl LayeredConfig {
         expected_fingerprint: Option<String>,
     ) -> Result<ConfigSnapshot, ConfigError> {
         let snapshot = self.load()?;
-        if collection == IntegrationCollection::McpServers
-            && !config_array(&snapshot.effective, collection)?
-                .iter()
-                .filter_map(Value::as_table)
-                .any(|entry| collection.identity_key(entry).as_deref() == Some(name))
-        {
-            return Err(collection.invalid(&format!("unknown MCP server `{name}`")));
-        }
-        let mut entries = config_array_for_target(&snapshot, target, collection)?;
-        let position = entries
-            .iter()
-            .position(|entry| {
-                entry
-                    .as_table()
-                    .and_then(|entry| collection.identity_key(entry))
-                    .as_deref()
-                    == Some(name)
-            })
-            .unwrap_or_else(|| {
-                let mut entry = Table::new();
-                entry.insert("name".to_owned(), Value::String(name.to_owned()));
-                entries.push(Value::Table(entry));
-                entries.len().saturating_sub(1)
-            });
-        let entry = entries
-            .get_mut(position)
-            .and_then(Value::as_table_mut)
-            .ok_or_else(|| {
-                collection.invalid(&format!("{} entry must be a table", collection.key()))
-            })?;
-        entry.insert("disabled".to_owned(), Value::Boolean(!enabled));
-        entry.insert(
-            "disabled_tools".to_owned(),
-            Value::Array(disabled_tools.iter().cloned().map(Value::String).collect()),
-        );
+        let entries =
+            integration_entries(&snapshot, collection, name, enabled, disabled_tools, target)?;
         self.replace_array_cas(target, expected_fingerprint, collection.key(), entries)
     }
 
@@ -1623,6 +1582,61 @@ mod registry_tests;
 mod surface_parity_tests;
 #[cfg(test)]
 mod view_tests;
+
+/// The `collection` array `target` should hold once `name` carries `enabled`
+/// and `disabled_tools`.
+///
+/// Read from one snapshot rather than one per caller: the fingerprint a write
+/// is guarded by and the entries it writes describe the same read, so a file
+/// edited between the two cannot be written over with a stale array.
+///
+/// The entry is created in the target when it is only present in another layer,
+/// so disabling a default-provided server writes an explicit record.
+fn integration_entries(
+    snapshot: &ConfigSnapshot,
+    collection: IntegrationCollection,
+    name: &str,
+    enabled: bool,
+    disabled_tools: &BTreeSet<String>,
+    target: ConfigTarget,
+) -> Result<Vec<Value>, ConfigError> {
+    if collection == IntegrationCollection::McpServers
+        && !config_array(&snapshot.effective, collection)?
+            .iter()
+            .filter_map(Value::as_table)
+            .any(|entry| collection.identity_key(entry).as_deref() == Some(name))
+    {
+        return Err(collection.invalid(&format!("unknown MCP server `{name}`")));
+    }
+    let mut entries = config_array_for_target(snapshot, target, collection)?;
+    let position = entries
+        .iter()
+        .position(|entry| {
+            entry
+                .as_table()
+                .and_then(|entry| collection.identity_key(entry))
+                .as_deref()
+                == Some(name)
+        })
+        .unwrap_or_else(|| {
+            let mut entry = Table::new();
+            entry.insert("name".to_owned(), Value::String(name.to_owned()));
+            entries.push(Value::Table(entry));
+            entries.len().saturating_sub(1)
+        });
+    let entry = entries
+        .get_mut(position)
+        .and_then(Value::as_table_mut)
+        .ok_or_else(|| {
+            collection.invalid(&format!("{} entry must be a table", collection.key()))
+        })?;
+    entry.insert("disabled".to_owned(), Value::Boolean(!enabled));
+    entry.insert(
+        "disabled_tools".to_owned(),
+        Value::Array(disabled_tools.iter().cloned().map(Value::String).collect()),
+    );
+    Ok(entries)
+}
 
 struct PreparedWrite {
     destination: PathBuf,
