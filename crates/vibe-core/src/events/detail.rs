@@ -646,7 +646,11 @@ impl EffectResultDisplay {
             .filter_map(Value::as_str)
             .map(str::to_owned)
             .collect::<Vec<_>>();
-        let (verb, message, suffix) = completed_header(kind, call, output);
+        let Header {
+            verb,
+            message,
+            suffix,
+        } = completed_header(kind, call, output);
         if kind == ToolEffectKind::UserQuestion
             && output
                 .get("cancelled")
@@ -671,65 +675,76 @@ impl EffectResultDisplay {
     }
 }
 
-fn completed_header(
-    kind: ToolEffectKind,
-    call: &EffectCallDisplay,
-    output: &Value,
-) -> (String, String, String) {
+/// The three strings a settled effect's header is built from, named so a caller
+/// cannot transpose them.
+struct Header {
+    /// What the tool did, in the past tense a client renders.
+    verb: String,
+    /// What it did it to.
+    message: String,
+    /// The parenthetical a truncated or capped result carries, empty otherwise.
+    suffix: String,
+}
+
+impl Header {
+    fn new(verb: impl Into<String>, message: impl Into<String>, suffix: impl Into<String>) -> Self {
+        Self {
+            verb: verb.into(),
+            message: message.into(),
+            suffix: suffix.into(),
+        }
+    }
+}
+
+/// The header a settled call publishes, per effect kind.
+///
+/// Reference builds each one from the tool's own typed result, so the shape a
+/// client renders is one table rather than a widget per tool.
+fn completed_header(kind: ToolEffectKind, call: &EffectCallDisplay, output: &Value) -> Header {
+    /// The parenthetical a capped or clipped result carries.
+    const TRUNCATED: &str = "(truncated)";
+    let truncated = |clipped: bool| if clipped { TRUNCATED } else { "" };
+
     match kind {
         ToolEffectKind::Shell => {
             let command = string_argument(output, &["command"]);
-            (
-                "Ran".to_owned(),
-                if command.is_empty() {
-                    call.subject().to_owned()
-                } else {
-                    command
-                },
-                String::new(),
-            )
+            let subject = if command.is_empty() {
+                call.subject().to_owned()
+            } else {
+                command
+            };
+            Header::new("Ran", subject, "")
         }
         ToolEffectKind::FileRead => {
             let lines = read_line_count(output);
             let word = if lines == 1 { "line" } else { "lines" };
             let name = file_name(&string_argument(output, FILE_PATH_KEYS));
-            (
-                "Read".to_owned(),
+            Header::new(
+                "Read",
                 format!("{lines} {word} from {name}"),
-                if read_was_truncated(output, lines) {
-                    "(truncated)".to_owned()
-                } else {
-                    String::new()
-                },
+                truncated(read_was_truncated(output, lines)),
             )
         }
-        ToolEffectKind::FileWrite => (
-            "Created".to_owned(),
+        ToolEffectKind::FileWrite => Header::new(
+            "Created",
             file_name(&string_argument(output, FILE_PATH_KEYS)),
-            String::new(),
+            "",
         ),
-        ToolEffectKind::FileEdit => (
-            "Edited".to_owned(),
+        ToolEffectKind::FileEdit => Header::new(
+            "Edited",
             file_name(&string_argument(output, EDITED_FILE_PATH_KEYS)),
-            String::new(),
+            "",
         ),
         ToolEffectKind::FileSearch => {
             let count = search_match_count(output);
             let word = if count == 1 { "match" } else { "matches" };
             let pattern = string_argument(output, &["pattern"]);
-            (
-                "Searched".to_owned(),
-                if pattern.is_empty() {
-                    format!("({count} {word})")
-                } else {
-                    format!("{pattern} ({count} {word})")
-                },
-                if truncated_flag(output) {
-                    "(truncated)".to_owned()
-                } else {
-                    String::new()
-                },
-            )
+            let subject = if pattern.is_empty() {
+                format!("({count} {word})")
+            } else {
+                format!("{pattern} ({count} {word})")
+            };
+            Header::new("Searched", subject, truncated(truncated_flag(output)))
         }
         ToolEffectKind::Todo => {
             let verb = string_argument(output, &["verb"]);
@@ -743,34 +758,27 @@ fn completed_header(
                         .and_then(Value::as_array)
                         .map_or(0, Vec::len) as u64
                 });
-            (
-                if verb.is_empty() {
-                    "Updated".to_owned()
-                } else {
-                    verb
-                },
-                format!("{count} todos"),
-                String::new(),
-            )
+            let verb = if verb.is_empty() {
+                "Updated".to_owned()
+            } else {
+                verb
+            };
+            Header::new(verb, format!("{count} todos"), "")
         }
-        ToolEffectKind::UserQuestion => (
-            "Answered".to_owned(),
-            answered_message(output),
-            String::new(),
-        ),
+        ToolEffectKind::UserQuestion => Header::new("Answered", answered_message(output), ""),
         ToolEffectKind::WebSearch => {
             let sources = output
                 .get("sources")
                 .and_then(Value::as_array)
                 .map_or(0, Vec::len);
             let plural = if sources == 1 { "" } else { "s" };
-            (
-                "Searched".to_owned(),
+            Header::new(
+                "Searched",
                 format!(
                     "'{}' ({sources} source{plural})",
                     string_argument(output, &["query"])
                 ),
-                String::new(),
+                "",
             )
         }
         ToolEffectKind::WebFetch => {
@@ -779,32 +787,20 @@ fn completed_header(
                 .and_then(Value::as_str)
                 .map_or(0, str::len);
             let content_type = string_argument(output, &["content_type", "contentType"]);
-            (
-                "Fetched".to_owned(),
+            Header::new(
+                "Fetched",
                 format!(
                     "{} ({} chars, {})",
                     string_argument(output, &["url"]),
                     grouped_thousands(content_length),
                     content_type.split(';').next().unwrap_or_default()
                 ),
-                if truncated_flag(output) {
-                    "(truncated)".to_owned()
-                } else {
-                    String::new()
-                },
+                truncated(truncated_flag(output)),
             )
         }
-        ToolEffectKind::Skill => (
-            "Loaded".to_owned(),
-            call.subject().to_owned(),
-            String::new(),
-        ),
-        ToolEffectKind::Subagent => (
-            "Completed".to_owned(),
-            call.subject().to_owned(),
-            String::new(),
-        ),
-        ToolEffectKind::Tool => ("Ran".to_owned(), call.subject().to_owned(), String::new()),
+        ToolEffectKind::Skill => Header::new("Loaded", call.subject(), ""),
+        ToolEffectKind::Subagent => Header::new("Completed", call.subject(), ""),
+        ToolEffectKind::Tool => Header::new("Ran", call.subject(), ""),
     }
 }
 
