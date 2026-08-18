@@ -494,14 +494,14 @@ async fn an_absent_output_device_is_reported_once_and_settles_the_turn() {
     state.narrator = NarratorManager::new(true, true);
     state.narrator.on_turn_start("write the parser");
     state.narrator.on_turn_end().expect("a summary");
-    crate::tui::apply_speech_event(
+    crate::tui::narration::apply_speech_event(
         SpeechEvent::Finished {
             generation: 1,
             error: Some(error.clone()),
         },
         &mut state,
     );
-    crate::tui::apply_speech_event(
+    crate::tui::narration::apply_speech_event(
         SpeechEvent::Finished {
             generation: 2,
             error: Some(error),
@@ -621,7 +621,10 @@ async fn the_speak_effect_reaches_the_transport_and_drives_the_state_machine() {
         next_event(&mut runtime.speech).await,
         SpeechEvent::PlaybackStarted { generation }
     );
-    crate::tui::apply_speech_event(SpeechEvent::PlaybackStarted { generation }, &mut state);
+    crate::tui::narration::apply_speech_event(
+        SpeechEvent::PlaybackStarted { generation },
+        &mut state,
+    );
     assert_eq!(state.narrator.state(), NarratorState::Speaking);
     assert_eq!(client.spoken(), vec![FIXTURE_SUMMARY.to_owned()]);
 
@@ -633,7 +636,7 @@ async fn the_speak_effect_reaches_the_transport_and_drives_the_state_machine() {
             error: None,
         }
     );
-    crate::tui::apply_speech_event(finished, &mut state);
+    crate::tui::narration::apply_speech_event(finished, &mut state);
     assert_eq!(state.narrator.state(), NarratorState::Idle);
     assert_eq!(
         state.diagnostics().count(),
@@ -653,13 +656,16 @@ fn a_late_answer_from_a_superseded_generation_is_discarded() {
     state.narrator.on_turn_start("second");
     state.narrator.on_turn_end().expect("a second summary");
 
-    crate::tui::apply_speech_event(SpeechEvent::PlaybackStarted { generation: 1 }, &mut state);
+    crate::tui::narration::apply_speech_event(
+        SpeechEvent::PlaybackStarted { generation: 1 },
+        &mut state,
+    );
     assert_eq!(
         state.narrator.state(),
         NarratorState::Summarizing,
         "a stale playback never enters the speaking state"
     );
-    crate::tui::apply_speech_event(
+    crate::tui::narration::apply_speech_event(
         SpeechEvent::Finished {
             generation: 1,
             error: None,

@@ -323,7 +323,7 @@ async fn the_recorder_drains_every_event_without_touching_the_transcript() {
         .voice
         .apply_effects(&[InputEffect::RecordingStartRequested], 1);
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    crate::tui::record_audio_telemetry(&mut runtime);
+    crate::tui::narration::record_audio_telemetry(&mut runtime);
 
     assert!(
         runtime.voice.take_telemetry().is_empty(),

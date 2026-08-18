@@ -805,8 +805,8 @@ mod tests {
     /// US-011: `resolvedProjectId` is answered for a saved link alone, so the
     /// run it starts reports that source, and a service that refuses the link
     /// with a 403 is what reports it as cleared.
-    #[test]
-    fn a_saved_link_teleport_reports_its_source_and_clears_a_refused_link() {
+    #[tokio::test]
+    async fn a_saved_link_teleport_reports_its_source_and_clears_a_refused_link() {
         let mut runtime = interactive_test_runtime("teleport-saved-link");
         let mut state = TuiState::new("teleport-saved-link");
 
@@ -846,8 +846,8 @@ mod tests {
 
     /// US-011: a teleport the service refused answers the request rather than
     /// reporting progress, and the refusal still closes the run.
-    #[test]
-    fn a_refused_teleport_request_closes_the_run() {
+    #[tokio::test]
+    async fn a_refused_teleport_request_closes_the_run() {
         let mut runtime = interactive_test_runtime("teleport-refused");
         let mut state = TuiState::new("teleport-refused");
         apply_open_result(

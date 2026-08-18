@@ -60,8 +60,9 @@ pub(super) struct InteractiveRuntime {
     pub(super) config_target: Option<interaction::ConfigLayerTarget>,
     pub(super) remote_project_overlay: Option<Overlay>,
     pub(super) remote_project_draft: Option<interaction::RemoteProjectDraft>,
-    pub(super) ui_operation_sender:
-        Option<tokio::sync::mpsc::UnboundedSender<UiOperationCompletion>>,
+    /// Where a scheduled interactive call answers. Opened before the session
+    /// exists, so no code path has to cope with a runtime that cannot schedule.
+    pub(super) ui_operation_sender: tokio::sync::mpsc::UnboundedSender<UiOperationCompletion>,
     pub(super) ui_operation_generation: u64,
     pub(super) active_ui_operation: Option<u64>,
     pub(super) skills: BTreeMap<String, RuntimeSkill>,
@@ -125,10 +126,7 @@ pub(super) fn schedule_ui_call(
         state.push_diagnostic("An interactive operation is already in progress");
         return false;
     }
-    let Some(sender) = runtime.ui_operation_sender.clone() else {
-        state.push_diagnostic("Interactive operation channel is unavailable");
-        return false;
-    };
+    let sender = runtime.ui_operation_sender.clone();
     let Some(params) = params.as_object_mut() else {
         state.push_diagnostic("Interactive operation parameters must be an object");
         return false;
@@ -176,10 +174,7 @@ where
         state.push_diagnostic("An interactive operation is already in progress");
         return false;
     }
-    let Some(sender) = runtime.ui_operation_sender.clone() else {
-        state.push_diagnostic("Interactive operation channel is unavailable");
-        return false;
-    };
+    let sender = runtime.ui_operation_sender.clone();
     runtime.ui_operation_generation = runtime.ui_operation_generation.saturating_add(1);
     let generation = runtime.ui_operation_generation;
     runtime.active_ui_operation = Some(generation);
@@ -379,7 +374,9 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
         config_target: None,
         remote_project_overlay: None,
         remote_project_draft: None,
-        ui_operation_sender: None,
+        // A fixture that never observes a completion drops the receiver, which
+        // is what makes the send a no-op; one that does replaces the sender.
+        ui_operation_sender: tokio::sync::mpsc::unbounded_channel().0,
         ui_operation_generation: 0,
         active_ui_operation: None,
         skills: BTreeMap::new(),
@@ -433,7 +430,7 @@ mod tests {
     async fn ui_operations_are_mutually_exclusive_and_session_scoped() {
         let mut runtime = interactive_test_runtime("ui-operation-session");
         let (operation_sender, mut operation_receiver) = tokio::sync::mpsc::unbounded_channel();
-        runtime.ui_operation_sender = Some(operation_sender);
+        runtime.ui_operation_sender = operation_sender;
         let mut state = TuiState::new("ui-operation-session");
         let rejected_work_ran = Arc::new(AtomicBool::new(false));
 

@@ -346,7 +346,7 @@ mod tests {
                 server,
             ));
             let (operation_sender, mut operation_receiver) = tokio::sync::mpsc::unbounded_channel();
-            runtime.as_mut().expect("runtime").ui_operation_sender = Some(operation_sender);
+            runtime.as_mut().expect("runtime").ui_operation_sender = operation_sender;
             let mut mounted = MountedStartup::new(Some(PostMountAction::Teleport(prompt.clone())));
             let mut active = None;
             let mut state = TuiState::new("startup-teleport");
