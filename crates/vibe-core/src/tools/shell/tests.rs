@@ -2278,6 +2278,75 @@ async fn a_session_left_by_a_previous_process_is_listed_as_orphaned() {
     assert!(refused.to_string().contains(&session), "{refused}");
 }
 
+/// A session that finished before its process died keeps the status its own
+/// manifest recorded, on every tool that describes it.
+///
+/// Reference `read_output`, `inspect_session` and `list_sessions` all answer
+/// from one `SessionInfo`, and `_info_from_manifest` validates the manifest
+/// verbatim, so nothing on the orphan path overwrites a settled status with
+/// `orphaned`. Only [`SessionShell::load_orphaned_manifests`] rewrites one, and
+/// only when the manifest still claims the process is running.
+#[tokio::test]
+async fn a_settled_orphan_keeps_the_status_its_manifest_recorded() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "printf built").await;
+    let sessions_directory = harness.shell().sessions_directory();
+    // The previous process settled the session before it died, which is what a
+    // build that finished into a client that then exited leaves behind.
+    let manifest_path = sessions_directory.join(format!("{session}.json"));
+    let mut manifest: Value =
+        serde_json::from_slice(&std::fs::read(&manifest_path).expect("the manifest is written"))
+            .expect("the manifest is JSON");
+    manifest["status"] = Value::String("completed".to_owned());
+    manifest["exitCode"] = Value::from(0);
+    std::fs::write(
+        &manifest_path,
+        serde_json::to_vec_pretty(&manifest).expect("the manifest re-encodes"),
+    )
+    .expect("the settled manifest is written");
+    std::fs::write(
+        sessions_directory.join(format!("{session}.log")),
+        b"built\n",
+    )
+    .expect("the previous process left a log");
+
+    let restarted = reopened(&harness).await;
+    for (tool, arguments, pointer) in [
+        (
+            "bash_output",
+            json!({"session_id": session, "wait_seconds": 0}),
+            "/status",
+        ),
+        (
+            "bash_sessions",
+            json!({"action": "inspect", "session_id": session}),
+            "/session/status",
+        ),
+    ] {
+        let answered = invoke(&restarted, tool, arguments)
+            .await
+            .expect("the settled orphan answers");
+        assert_eq!(
+            answered.typed_result.pointer(pointer),
+            Some(&Value::String("completed".to_owned())),
+            "{tool} rewrote a settled status: {answered:?}"
+        );
+    }
+
+    let listed = invoke(&restarted, "bash_sessions", json!({"action": "list"}))
+        .await
+        .expect("the sessions list answers");
+    let entry = listed.typed_result["sessions"]
+        .as_array()
+        .expect("sessions")
+        .iter()
+        .find(|entry| entry["sessionId"] == session.as_str())
+        .cloned()
+        .expect("the settled orphan is listed");
+    assert_eq!(entry["status"], "completed", "{entry}");
+    assert_eq!(entry["exitCode"], 0, "{entry}");
+}
+
 /// A manifest that cannot be read is skipped, and the sessions beside it still
 /// load.
 #[tokio::test]

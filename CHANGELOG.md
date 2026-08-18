@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Report an orphaned shell session under the status its own manifest recorded.
+  `<family>_output` forced `orphaned` on every session a previous process left
+  behind, so a build that finished cleanly before the client exited was
+  reported as orphaned by that tool while `<family>_sessions` listed it as
+  completed. Both now answer from the same value, as the reference does.
+
 - Honor a hook that never reads its stdin. The invocation is written to the
   hook's standard input, and a hook that exits without consuming it closes the
   read end, so the write returns a broken pipe. That was reported as a hook

@@ -1984,13 +1984,13 @@ async fn run_managed_command(
         settings.max_output_bytes,
     )
     .await?;
+    // One window and one handle for every exit of this call: the inline budget
+    // is read once so the four answers below cannot drift apart.
+    let limit = byte_limit(arguments, output, settings.max_inline_bytes);
+    let handle = SessionHandle::Live(session.clone());
     let background = arguments["background"].as_bool().unwrap_or(false);
     if background {
-        return managed_output(
-            &session,
-            0,
-            byte_limit(arguments, output, settings.max_inline_bytes),
-        );
+        return session_output(&handle, 0, limit);
     }
     let hard_timeout =
         arguments["hard_timeout"].as_bool().unwrap_or(false) || arguments["timeout"].is_u64();
@@ -2003,29 +2003,17 @@ async fn run_managed_command(
         if !hard_timeout {
             // A soft timeout leaves the session running: the model polls it
             // with the family's output tool instead of losing the work.
-            return managed_output(
-                &session,
-                0,
-                byte_limit(arguments, output, settings.max_inline_bytes),
-            );
+            return session_output(&handle, 0, limit);
         }
         kill_managed_session(shell, &session, SessionStatus::TimedOut).await?;
-        let rendered = managed_output(
-            &session,
-            0,
-            byte_limit(arguments, output, settings.max_inline_bytes),
-        )?;
+        let rendered = session_output(&handle, 0, limit)?;
         return Err(ToolError::Execution(format!(
             "the command timed out after {timeout}s and its process group was terminated: \
              `{command}`\nsession_id: {}\noutput:\n{}",
             session.id, rendered.model_text
         )));
     }
-    let rendered = managed_output(
-        &session,
-        0,
-        byte_limit(arguments, output, settings.max_inline_bytes),
-    )?;
+    let rendered = session_output(&handle, 0, limit)?;
     let status = rendered.typed_result["exitCode"].as_i64().unwrap_or(0);
     if status != 0 {
         return Err(ToolError::Execution(format!(
@@ -2277,6 +2265,44 @@ enum SessionHandle {
     Orphaned(Value),
 }
 
+impl SessionHandle {
+    /// The manifest shape both sides publish.
+    ///
+    /// Reference `read_output`, `inspect_session`, `info` and `list_sessions`
+    /// all answer with one `SessionInfo`, built from the live session by
+    /// `_session_info_locked` and from the manifest by `_info_from_manifest`,
+    /// which validates it verbatim. So an orphan reports the status its own
+    /// process last recorded rather than one this side invents, and every tool
+    /// that describes a session reads the same value.
+    fn info(&self) -> Value {
+        match self {
+            Self::Live(session) => session.info(),
+            Self::Orphaned(manifest) => manifest.clone(),
+        }
+    }
+
+    /// The log the session wrote, which outlives the process that wrote it.
+    fn log_path(&self) -> PathBuf {
+        match self {
+            Self::Live(session) => session.log_path.clone(),
+            Self::Orphaned(manifest) => PathBuf::from(
+                manifest
+                    .get("outputPath")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+            ),
+        }
+    }
+
+    /// Whether more bytes are still coming, which is what decides a cut
+    /// character is held back. An orphan's terminal is gone, and
+    /// [`SessionShell::load_orphaned_manifests`] already rewrote any manifest
+    /// that still said `running`, so it never answers `true`.
+    fn is_running(&self) -> bool {
+        matches!(self, Self::Live(session) if session.is_running())
+    }
+}
+
 async fn session_handle(
     shell: &SessionShell,
     session_id: &str,
@@ -2320,14 +2346,28 @@ async fn managed_session(
 }
 
 /// Reads one session's log from `cursor` and reports where the next read starts.
-fn managed_output(
-    session: &ManagedSession,
+///
+/// A live session and one a previous process left behind answer the same keys,
+/// read off the same [`SessionHandle::info`], so the two cannot drift apart.
+fn session_output(
+    handle: &SessionHandle,
     cursor: u64,
     limit: usize,
 ) -> Result<ToolExecutionOutput, ToolError> {
+    let info = handle.info();
+    let log_path = handle.log_path();
     let (output, next_cursor, truncated) =
-        read_file_window(&session.log_path, cursor, limit, session.is_running())?;
-    let (status, exit_code, dropped) = session.snapshot();
+        read_file_window(&log_path, cursor, limit, handle.is_running())?;
+    let field = |key: &str| info.get(key).cloned().unwrap_or(Value::Null);
+    let command = info
+        .get("command")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let dropped = info
+        .get("backpressureDropped")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let mut model_text = output.clone();
     if truncated {
         model_text.push_str(&format!("\n[output truncated at {limit} bytes]"));
@@ -2336,16 +2376,16 @@ fn managed_output(
         model_text.push_str("\n[output was dropped while the session outran its buffer]");
     }
     Ok(ToolExecutionOutput::new(model_text)
-        .displayed_as(json!({"kind": "shell", "command": session.command}))
+        .displayed_as(json!({"kind": "shell", "command": command}))
         .typed(json!({
-            "sessionId": session.id,
-            "command": session.command,
-            "status": status.as_str(),
-            "exitCode": exit_code,
+            "sessionId": field("sessionId"),
+            "command": command,
+            "status": field("status"),
+            "exitCode": field("exitCode"),
             "output": output,
             "nextCursor": next_cursor,
             "truncated": truncated,
-            "outputPath": session.log_path.to_string_lossy(),
+            "outputPath": log_path.to_string_lossy(),
             "backpressureDropped": dropped,
         })))
 }
@@ -2481,64 +2521,26 @@ async fn run_output(
     // Reference `read_output` answers an orphan from its manifest and its log,
     // which is what makes a build a previous process left running readable
     // rather than lost.
-    let session = match session_handle(&shell, &session_id).await? {
-        SessionHandle::Live(session) => session,
-        SessionHandle::Orphaned(manifest) => return orphan_output(&manifest, cursor, limit),
-    };
-    let wait = arguments["wait_seconds"]
-        .as_f64()
-        .unwrap_or(0.0)
-        .clamp(0.0, limits.max_poll_seconds);
-    let deadline = Instant::now() + Duration::from_secs_f64(wait);
-    // Reference `read_output` waits for the session to exit, for a full window
-    // to accumulate, or for the deadline. Returning on the first byte instead
-    // would answer a poll of an interactive session with the echo of what was
-    // just written to it rather than with what the program then said.
-    while Instant::now() < deadline
-        && session.is_running()
-        && log_size(&session.log_path).saturating_sub(cursor) < limit as u64
-    {
-        tokio::time::sleep(PUMP_INTERVAL).await;
+    let handle = session_handle(&shell, &session_id).await?;
+    if let SessionHandle::Live(session) = &handle {
+        let wait = arguments["wait_seconds"]
+            .as_f64()
+            .unwrap_or(0.0)
+            .clamp(0.0, limits.max_poll_seconds);
+        let deadline = Instant::now() + Duration::from_secs_f64(wait);
+        // Reference `read_output` waits for the session to exit, for a full
+        // window to accumulate, or for the deadline. Returning on the first
+        // byte instead would answer a poll of an interactive session with the
+        // echo of what was just written to it rather than with what the program
+        // then said.
+        while Instant::now() < deadline
+            && session.is_running()
+            && log_size(&session.log_path).saturating_sub(cursor) < limit as u64
+        {
+            tokio::time::sleep(PUMP_INTERVAL).await;
+        }
     }
-    managed_output(&session, cursor, limit)
-}
-
-/// What an orphaned session answers with: its manifest and whatever its log
-/// still holds.
-fn orphan_output(
-    manifest: &Value,
-    cursor: u64,
-    limit: usize,
-) -> Result<ToolExecutionOutput, ToolError> {
-    let log_path = PathBuf::from(
-        manifest
-            .get("outputPath")
-            .and_then(Value::as_str)
-            .unwrap_or_default(),
-    );
-    let (output, next_cursor, truncated) = read_file_window(&log_path, cursor, limit, false)?;
-    let command = manifest
-        .get("command")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    let mut model_text = output.clone();
-    if truncated {
-        model_text.push_str(&format!("\n[output truncated at {limit} bytes]"));
-    }
-    Ok(ToolExecutionOutput::new(model_text)
-        .displayed_as(json!({"kind": "shell", "command": command}))
-        .typed(json!({
-            "sessionId": manifest.get("sessionId").cloned().unwrap_or(Value::Null),
-            "command": command,
-            "status": SessionStatus::Orphaned.as_str(),
-            "exitCode": manifest.get("exitCode").cloned().unwrap_or(Value::Null),
-            "output": output,
-            "nextCursor": next_cursor,
-            "truncated": truncated,
-            "outputPath": log_path.to_string_lossy(),
-            "backpressureDropped": false,
-        })))
+    session_output(&handle, cursor, limit)
 }
 
 fn log_size(path: &Path) -> u64 {
@@ -2671,29 +2673,15 @@ async fn run_sessions(
             // Reference `inspect_session` positions the window at the end of
             // the log rather than at its start: an inspection reports what a
             // session is doing now, not how it began.
-            let (info, log_path, running) =
-                match required_handle(&shell, &arguments, "inspect").await? {
-                    SessionHandle::Live(session) => (
-                        session.info(),
-                        session.log_path.clone(),
-                        session.is_running(),
-                    ),
-                    SessionHandle::Orphaned(manifest) => {
-                        let log_path = PathBuf::from(
-                            manifest
-                                .get("outputPath")
-                                .and_then(Value::as_str)
-                                .unwrap_or_default(),
-                        );
-                        (manifest, log_path, false)
-                    }
-                };
+            let handle = required_handle(&shell, &arguments, "inspect").await?;
+            let info = handle.info();
+            let log_path = handle.log_path();
             let cursor = skip_utf8_continuation_prefix(
                 &log_path,
                 log_size(&log_path).saturating_sub(limit as u64),
             );
             let (output, next_cursor, truncated) =
-                read_file_window(&log_path, cursor, limit, running)?;
+                read_file_window(&log_path, cursor, limit, handle.is_running())?;
             let command = info
                 .get("command")
                 .and_then(Value::as_str)
