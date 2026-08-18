@@ -4,8 +4,9 @@ use super::super::chat_input::ChatInputState;
 use super::super::controls::ControlState;
 use super::super::interaction::{ConfigLayerTarget, OverlayAction, OverlayKind};
 use super::super::pickers::{
-    VOICE_MODEL_FIELDS, config_choice_overlay, config_target_overlay,
-    remote_project_create_overlay, theme_overlay, thinking_overlay,
+    ACTIVE_MODEL_FIELD, CONFIG_TARGET_ROW, THEME_FIELD, THINKING_FIELD, VOICE_MODEL_FIELDS,
+    config_choice_overlay, config_target_overlay, remote_project_create_overlay, theme_overlay,
+    thinking_overlay,
 };
 use super::super::setup::ResolvedTheme;
 use super::super::state::TuiState;
@@ -40,7 +41,7 @@ pub(super) async fn select_overlay_item(
     };
     match kind {
         OverlayKind::Config => match item.id.as_str() {
-            "config-target" => {
+            CONFIG_TARGET_ROW => {
                 let current = runtime.config_target.unwrap_or_else(|| {
                     ConfigLayerTarget::from_selected_target(
                         selected_config_target(runtime).as_deref(),
@@ -48,17 +49,17 @@ pub(super) async fn select_overlay_item(
                 });
                 state.overlay = Some(config_target_overlay(current));
             }
-            "active_model" => {
+            ACTIVE_MODEL_FIELD => {
                 show_model(runtime, state);
-                mark_config_special(state, "active_model");
+                mark_config_special(state, ACTIVE_MODEL_FIELD);
             }
-            "thinking" => {
+            THINKING_FIELD => {
                 state.overlay = Some(thinking_overlay(&runtime.thinking));
-                mark_config_special(state, "thinking");
+                mark_config_special(state, THINKING_FIELD);
             }
-            "theme" => {
+            THEME_FIELD => {
                 state.overlay = Some(theme_overlay(&persisted_theme(runtime)));
-                mark_config_special(state, "theme");
+                mark_config_special(state, THEME_FIELD);
             }
             key => {
                 let Some(schema) = config_field_schema(runtime, key, state) else {
@@ -121,7 +122,7 @@ pub(super) async fn select_overlay_item(
             show_config(runtime, state);
         }
         OverlayKind::Model => {
-            let (model, target) = config_special_value(runtime, &item.action, "active_model")
+            let (model, target) = config_special_value(runtime, &item.action, ACTIVE_MODEL_FIELD)
                 .map_or((item.id, None), |(value, target)| (value, Some(target)));
             switching::request(
                 runtime,

@@ -3,7 +3,7 @@ use url::Url;
 
 use super::super::interaction::{
     Overlay, OverlayAction, OverlayItem, OverlayKind, RemoteProjectAction, RemoteProjectDraft,
-    TeleportPushAction,
+    RemoteProjectField, TeleportPushAction,
 };
 
 #[must_use]
@@ -56,15 +56,15 @@ pub fn remote_project_create_overlay(draft: &RemoteProjectDraft) -> Overlay {
         OverlayKind::RemoteProjectCreate,
         "Create Vibe Code Web project",
         vec![
-            OverlayItem::new("remote-project:create:name", "Name", &draft.name, false),
+            OverlayItem::new(RemoteProjectField::Name.id(), "Name", &draft.name, false),
             OverlayItem::new(
-                "remote-project:create:branch",
+                RemoteProjectField::DefaultBranch.id(),
                 "Default branch",
                 &draft.default_branch,
                 false,
             ),
             OverlayItem::new(
-                "remote-project:create:submit",
+                RemoteProjectField::Submit.id(),
                 "Create project",
                 "Validate these values before creating the remote project",
                 draft.name.trim().is_empty() || draft.default_branch.trim().is_empty(),

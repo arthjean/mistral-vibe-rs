@@ -1,11 +1,12 @@
 use std::path::Path;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyEvent;
 use serde_json::{Value, json};
 use vibe_core::telemetry::records::TelemetryCommandKind;
 use vibe_core::workspace::WARNING_TAG;
 
 mod config;
+mod keys;
 mod mcp;
 mod overlay;
 mod runtime;
@@ -26,10 +27,7 @@ use super::pickers::{
     thinking_overlay, voice_model_overlay, voice_overlay,
 };
 use super::rewind::{RewindEffect, RewindState, reduce_key as reduce_rewind_key};
-use super::session_picker::{
-    SessionDeleteState, SessionPickerEffect, reduce_key as reduce_session_picker_key,
-};
-use super::setup::ResolvedTheme;
+use super::session_picker::SessionDeleteState;
 use super::state::{EntryStatus, TranscriptKind, TuiState};
 use super::switching::{self, SwitchRequest};
 use super::{
@@ -42,12 +40,16 @@ use config::{
     configured_value, persisted_theme, reset_config_value, reset_config_value_at,
     selected_config_target, set_config_value, update_proxy_value,
 };
+pub(in crate::tui) use keys::handle_overlay_key;
+// The form reducer runs through `handle_overlay_key` in production; its own
+// tests drive it directly.
+#[cfg(test)]
+pub(in crate::tui) use keys::handle_remote_project_create_key;
+use mcp::handle_mcp;
 pub(in crate::tui) use mcp::{McpEffect, McpPendingOperation, apply_pending_operation};
 pub(super) use mcp::{SystemUrlOpener, UrlOpenerPort, execute_mcp_effect};
-use mcp::{handle_mcp, refresh_selected_mcp, set_selected_mcp};
 #[cfg(test)]
 pub(in crate::tui) use mcp::{reduce_auth_action, valid_auth_url};
-use overlay::select_overlay_item;
 pub(in crate::tui) use runtime::handle_runtime_command;
 
 /// How much of the saved transcript the rewind picker lists.
@@ -308,249 +310,6 @@ fn apply_config_command(
         }
     }
     sync_voice_preference(runtime, composer);
-}
-
-pub(super) async fn handle_overlay_key(
-    key: KeyEvent,
-    runtime: &mut Option<InteractiveRuntime>,
-    state: &mut TuiState,
-    controls: &mut ControlState,
-    composer: &mut ChatInputState,
-    theme: &mut ResolvedTheme,
-) -> OverlayKeyResult {
-    if state.rewind.is_some() {
-        handle_rewind_key(key, runtime, state, controls, composer);
-        return OverlayKeyResult::Handled;
-    }
-    let Some(kind) = state.overlay.as_ref().map(|overlay| overlay.kind) else {
-        return OverlayKeyResult::Unhandled;
-    };
-    if kind == OverlayKind::RemoteProjectCreate {
-        return handle_remote_project_create_key(key, runtime, state);
-    }
-    if kind == OverlayKind::Sessions {
-        let current_session_id = runtime
-            .as_ref()
-            .map_or("", |runtime| runtime.session_id.as_str());
-        let Some(overlay) = state.overlay.as_mut() else {
-            return OverlayKeyResult::Unhandled;
-        };
-        let effect =
-            reduce_session_picker_key(overlay, &mut state.session_delete, current_session_id, key);
-        match effect {
-            SessionPickerEffect::None => {}
-            SessionPickerEffect::Close => state.overlay = None,
-            SessionPickerEffect::Resume(session_id) => {
-                if let Some(runtime) = runtime.as_mut() {
-                    resume_selected_session(runtime, state, controls, &session_id);
-                }
-            }
-            SessionPickerEffect::Delete(session_id) => {
-                delete_selected_session(runtime, state, &session_id);
-            }
-        }
-        return OverlayKeyResult::Handled;
-    }
-    match key.code {
-        KeyCode::Esc => {
-            if kind == OverlayKind::TeleportApproval {
-                let action = state.overlay.as_ref().and_then(|overlay| {
-                    overlay.items.iter().find_map(|item| match &item.action {
-                        super::interaction::OverlayAction::TeleportPush(action) => {
-                            Some(TeleportPushAction {
-                                operation_id: action.operation_id.clone(),
-                                approved: false,
-                            })
-                        }
-                        _ => None,
-                    })
-                });
-                return action.map_or(OverlayKeyResult::Handled, |action| {
-                    OverlayKeyResult::Effect(OverlayEffect::TeleportPush(action))
-                });
-            }
-            if let Some(effect) = remote_project_escape_effect(kind) {
-                return OverlayKeyResult::Effect(effect);
-            }
-            // Reference `ThemePickerApp.Cancelled`: cancelling restores the
-            // persisted theme, discarding every preview.
-            if kind == OverlayKind::Theme
-                && let Some(runtime) = runtime.as_mut()
-            {
-                crate::tui::preview_theme(&persisted_theme(runtime), theme);
-            }
-            state.overlay = None;
-        }
-        KeyCode::Up | KeyCode::Char('k') if key.modifiers.is_empty() => {
-            if let Some(overlay) = state.overlay.as_mut() {
-                overlay.move_selection(-1);
-            }
-            preview_selected_theme(kind, state, theme);
-        }
-        KeyCode::Down | KeyCode::Char('j') if key.modifiers.is_empty() => {
-            if let Some(overlay) = state.overlay.as_mut() {
-                overlay.move_selection(1);
-            }
-            preview_selected_theme(kind, state, theme);
-        }
-        KeyCode::Backspace if kind == OverlayKind::McpDetail && key.modifiers.is_empty() => {
-            return OverlayKeyResult::Effect(OverlayEffect::Mcp(McpEffect::Show { filter: None }));
-        }
-        KeyCode::Backspace if key.modifiers.is_empty() => {
-            if let Some(overlay) = state.overlay.as_mut() {
-                overlay.pop_query();
-            }
-            preview_selected_theme(kind, state, theme);
-        }
-        KeyCode::Char('r')
-            if matches!(kind, OverlayKind::Mcp | OverlayKind::McpDetail)
-                && key.modifiers.contains(KeyModifiers::CONTROL) =>
-        {
-            if let Some(effect) = refresh_selected_mcp(state) {
-                return OverlayKeyResult::Effect(OverlayEffect::Mcp(effect));
-            }
-        }
-        KeyCode::Char('d')
-            if matches!(kind, OverlayKind::Mcp | OverlayKind::McpDetail)
-                && key.modifiers.is_empty() =>
-        {
-            if let Some(effect) = set_selected_mcp(state, false) {
-                return OverlayKeyResult::Effect(OverlayEffect::Mcp(effect));
-            }
-        }
-        KeyCode::Char('e')
-            if matches!(kind, OverlayKind::Mcp | OverlayKind::McpDetail)
-                && key.modifiers.is_empty() =>
-        {
-            if let Some(effect) = set_selected_mcp(state, true) {
-                return OverlayKeyResult::Effect(OverlayEffect::Mcp(effect));
-            }
-        }
-        KeyCode::Char('r')
-            if kind == OverlayKind::Config && key.modifiers.contains(KeyModifiers::CONTROL) =>
-        {
-            reset_selected_config(runtime, state);
-        }
-        KeyCode::Enter | KeyCode::Char(' ')
-            if key.modifiers.is_empty()
-                && !matches!(
-                    kind,
-                    OverlayKind::Help
-                        | OverlayKind::Debug
-                        | OverlayKind::Status
-                        | OverlayKind::DataRetention
-                ) =>
-        {
-            if let Some(effect) =
-                select_overlay_item(runtime, state, controls, composer, theme).await
-            {
-                return OverlayKeyResult::Effect(effect);
-            }
-        }
-        KeyCode::Char(character) if key.modifiers.is_empty() => {
-            if let Some(overlay) = state.overlay.as_mut() {
-                overlay.push_query(character);
-            }
-            preview_selected_theme(kind, state, theme);
-        }
-        _ => {}
-    }
-    OverlayKeyResult::Handled
-}
-
-/// Reference `on_option_list_option_highlighted`: the highlighted theme previews
-/// immediately, without touching the configuration.
-fn preview_selected_theme(kind: OverlayKind, state: &TuiState, theme: &mut ResolvedTheme) {
-    if kind != OverlayKind::Theme {
-        return;
-    }
-    if let Some(selected) = state
-        .overlay
-        .as_ref()
-        .and_then(super::interaction::Overlay::selected_item)
-    {
-        crate::tui::preview_theme(&selected.id, theme);
-    }
-}
-
-pub(super) fn handle_remote_project_create_key(
-    key: KeyEvent,
-    runtime: &mut Option<InteractiveRuntime>,
-    state: &mut TuiState,
-) -> OverlayKeyResult {
-    let Some(runtime) = runtime.as_mut() else {
-        state.overlay = None;
-        return OverlayKeyResult::Handled;
-    };
-    let Some(mut draft) = runtime.remote_project_draft.clone() else {
-        state.push_diagnostic("Remote project draft is unavailable");
-        state.overlay.clone_from(&runtime.remote_project_overlay);
-        return OverlayKeyResult::Handled;
-    };
-    let selected = state
-        .overlay
-        .as_ref()
-        .and_then(|overlay| overlay.selected_item())
-        .map(|item| item.id.as_str())
-        .unwrap_or_default();
-    match key.code {
-        KeyCode::Esc => {
-            runtime.remote_project_draft = None;
-            state.overlay.clone_from(&runtime.remote_project_overlay);
-            return OverlayKeyResult::Handled;
-        }
-        KeyCode::Up | KeyCode::BackTab => {
-            if let Some(overlay) = state.overlay.as_mut() {
-                overlay.move_selection(-1);
-            }
-            return OverlayKeyResult::Handled;
-        }
-        KeyCode::Down | KeyCode::Tab => {
-            if let Some(overlay) = state.overlay.as_mut() {
-                overlay.move_selection(1);
-            }
-            return OverlayKeyResult::Handled;
-        }
-        KeyCode::Enter if selected == "remote-project:create:submit" => {
-            let action = RemoteProjectAction::Create {
-                name: draft.name.trim().to_owned(),
-                default_branch: draft.default_branch.trim().to_owned(),
-            };
-            return OverlayKeyResult::Effect(OverlayEffect::RemoteProject(action));
-        }
-        KeyCode::Enter => {
-            if let Some(overlay) = state.overlay.as_mut() {
-                overlay.move_selection(1);
-            }
-            return OverlayKeyResult::Handled;
-        }
-        KeyCode::Backspace if key.modifiers.is_empty() => match selected {
-            "remote-project:create:name" => {
-                draft.name.pop();
-            }
-            "remote-project:create:branch" => {
-                draft.default_branch.pop();
-            }
-            _ => return OverlayKeyResult::Handled,
-        },
-        KeyCode::Char(character) if key.modifiers.is_empty() => match selected {
-            "remote-project:create:name" => draft.name.push(character),
-            "remote-project:create:branch" => draft.default_branch.push(character),
-            _ => return OverlayKeyResult::Handled,
-        },
-        _ => return OverlayKeyResult::Handled,
-    }
-    let selected_id = selected.to_owned();
-    let mut overlay = super::pickers::remote_project_create_overlay(&draft);
-    overlay.select_by_id(&selected_id);
-    runtime.remote_project_draft = Some(draft);
-    state.overlay = Some(overlay);
-    OverlayKeyResult::Handled
-}
-
-fn remote_project_escape_effect(kind: OverlayKind) -> Option<OverlayEffect> {
-    (kind == OverlayKind::RemoteProjects)
-        .then_some(OverlayEffect::RemoteProject(RemoteProjectAction::Cancel))
 }
 
 pub(super) fn cycle_agent(
@@ -1155,18 +914,4 @@ fn accept_rewind(
 
 fn map_value(map: std::collections::BTreeMap<String, Value>) -> Value {
     Value::Object(map.into_iter().collect())
-}
-
-#[cfg(test)]
-mod overlay_effect_tests {
-    use super::*;
-
-    #[test]
-    fn remote_project_escape_emits_cancellation() {
-        assert_eq!(
-            remote_project_escape_effect(OverlayKind::RemoteProjects),
-            Some(OverlayEffect::RemoteProject(RemoteProjectAction::Cancel))
-        );
-        assert_eq!(remote_project_escape_effect(OverlayKind::Mcp), None);
-    }
 }

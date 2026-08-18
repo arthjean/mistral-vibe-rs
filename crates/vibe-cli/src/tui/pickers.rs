@@ -14,10 +14,19 @@ use super::commands::{COMMANDS, CommandContext, command_available_in};
 use super::interaction::{ConfigLayerTarget, Overlay, OverlayAction, OverlayItem, OverlayKind};
 use super::rewind::RewindTarget;
 
+/// The configuration rows the panel edits through a picker of their own rather
+/// than through the generic value editor, plus the synthetic row that chooses
+/// which layer a write lands in. The panel builds them and the selection
+/// handler routes them, so both name them here.
+pub const CONFIG_TARGET_ROW: &str = "config-target";
+pub const ACTIVE_MODEL_FIELD: &str = "active_model";
+pub const THINKING_FIELD: &str = "thinking";
+pub const THEME_FIELD: &str = "theme";
+
 const POPULAR_CONFIG_FIELDS: &[&str] = &[
-    "active_model",
-    "thinking",
-    "theme",
+    ACTIVE_MODEL_FIELD,
+    THINKING_FIELD,
+    THEME_FIELD,
     "notifications",
     "voice_mode_enabled",
     "narrator_enabled",
@@ -122,7 +131,7 @@ pub fn config_overlay(snapshot: &Value, schema: &Value) -> Overlay {
     );
     let mut items = Vec::with_capacity(popular.len() + advanced.len() + 3);
     items.push(OverlayItem::new(
-        "config-target",
+        CONFIG_TARGET_ROW,
         "Save changes to",
         format!("{} configuration layer", target.as_str()),
         false,

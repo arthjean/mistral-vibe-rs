@@ -109,6 +109,45 @@ pub enum RemoteProjectAction {
     Cancel,
 }
 
+/// The rows the remote-project form is made of.
+///
+/// The reducer edits the draft field a row names, so a row added here has to be
+/// given an edit rather than silently swallowing every keystroke typed on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteProjectField {
+    Name,
+    DefaultBranch,
+    Submit,
+}
+
+impl RemoteProjectField {
+    /// The overlay item id this row is addressed by.
+    #[must_use]
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Name => "remote-project:create:name",
+            Self::DefaultBranch => "remote-project:create:branch",
+            Self::Submit => "remote-project:create:submit",
+        }
+    }
+
+    #[must_use]
+    pub fn from_id(id: &str) -> Option<Self> {
+        [Self::Name, Self::DefaultBranch, Self::Submit]
+            .into_iter()
+            .find(|field| field.id() == id)
+    }
+
+    /// The draft text this row edits, or `None` for a row that is a button.
+    pub const fn edited(self, draft: &mut RemoteProjectDraft) -> Option<&mut String> {
+        match self {
+            Self::Name => Some(&mut draft.name),
+            Self::DefaultBranch => Some(&mut draft.default_branch),
+            Self::Submit => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteProjectDraft {
     pub name: String,

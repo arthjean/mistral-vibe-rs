@@ -760,6 +760,7 @@ mod tests {
     use super::super::state::TuiState;
     use super::super::{interaction, pickers, workflow};
     use super::*;
+    use crate::tui::interaction::RemoteProjectField;
 
     #[test]
     fn teleport_terminal_detection_is_notification_driven() {
@@ -917,7 +918,7 @@ mod tests {
         runtime.remote_project_draft = Some(draft.clone());
         let mut state = TuiState::new("remote-project-create");
         let mut create_overlay = pickers::remote_project_create_overlay(&draft);
-        create_overlay.select_by_id("remote-project:create:submit");
+        create_overlay.select_by_id(RemoteProjectField::Submit.id());
         state.overlay = Some(create_overlay);
         let mut submitting_runtime = Some(runtime);
 
