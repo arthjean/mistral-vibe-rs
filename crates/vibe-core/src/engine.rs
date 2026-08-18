@@ -614,11 +614,15 @@ pub struct TurnOutcome {
     pub stop_reason: TurnStopReason,
 }
 
-pub struct ConversationEngine<P, T = NoTools, C = RejectCompaction, S = NoopTranscriptSink> {
-    provider: P,
-    tools: T,
-    compactor: C,
-    sink: S,
+/// What a turn runs under, independently of who provides, tools, compacts or
+/// persists it.
+///
+/// The four collaborators are type parameters, so swapping one rebuilds the
+/// engine's type. Keeping everything that is *not* a collaborator in one value
+/// means [`ConversationEngine::with_tools`], [`ConversationEngine::with_compactor`]
+/// and [`ConversationEngine::with_sink`] carry it across in one move, and a new
+/// setting is declared once instead of in three rebuild sites.
+struct TurnSettings {
     limits: EngineLimits,
     baseline: SessionStats,
     observer: Arc<dyn EventObserver>,
@@ -635,6 +639,28 @@ pub struct ConversationEngine<P, T = NoTools, C = RejectCompaction, S = NoopTran
     agent_profile: String,
 }
 
+impl Default for TurnSettings {
+    fn default() -> Self {
+        Self {
+            limits: EngineLimits::default(),
+            baseline: SessionStats::default(),
+            observer: Arc::new(NoopEventObserver),
+            middleware: Vec::new(),
+            compaction: CompactionSettings::default(),
+            invoked_skills: None,
+            agent_profile: DEFAULT_AGENT_PROFILE.to_owned(),
+        }
+    }
+}
+
+pub struct ConversationEngine<P, T = NoTools, C = RejectCompaction, S = NoopTranscriptSink> {
+    provider: P,
+    tools: T,
+    compactor: C,
+    sink: S,
+    settings: TurnSettings,
+}
+
 impl<P> ConversationEngine<P> {
     #[must_use]
     pub fn new(provider: P) -> Self {
@@ -643,13 +669,7 @@ impl<P> ConversationEngine<P> {
             tools: NoTools,
             compactor: RejectCompaction,
             sink: NoopTranscriptSink,
-            limits: EngineLimits::default(),
-            baseline: SessionStats::default(),
-            observer: Arc::new(NoopEventObserver),
-            middleware: Vec::new(),
-            compaction: CompactionSettings::default(),
-            invoked_skills: None,
-            agent_profile: DEFAULT_AGENT_PROFILE.to_owned(),
+            settings: TurnSettings::default(),
         }
     }
 }
@@ -662,13 +682,7 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             tools,
             compactor: self.compactor,
             sink: self.sink,
-            limits: self.limits,
-            baseline: self.baseline,
-            observer: self.observer,
-            middleware: self.middleware,
-            compaction: self.compaction,
-            invoked_skills: self.invoked_skills,
-            agent_profile: self.agent_profile,
+            settings: self.settings,
         }
     }
 
@@ -679,13 +693,7 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             tools: self.tools,
             compactor,
             sink: self.sink,
-            limits: self.limits,
-            baseline: self.baseline,
-            observer: self.observer,
-            middleware: self.middleware,
-            compaction: self.compaction,
-            invoked_skills: self.invoked_skills,
-            agent_profile: self.agent_profile,
+            settings: self.settings,
         }
     }
 
@@ -696,44 +704,38 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
             tools: self.tools,
             compactor: self.compactor,
             sink,
-            limits: self.limits,
-            baseline: self.baseline,
-            observer: self.observer,
-            middleware: self.middleware,
-            compaction: self.compaction,
-            invoked_skills: self.invoked_skills,
-            agent_profile: self.agent_profile,
+            settings: self.settings,
         }
     }
 
     #[must_use]
     pub fn with_limits(mut self, limits: EngineLimits) -> Self {
-        self.limits = limits;
+        self.settings.limits = limits;
         self
     }
 
     /// Registers one conversation policy after the budget policies.
     #[must_use]
     pub fn with_middleware(mut self, middleware: Arc<dyn ConversationMiddleware>) -> Self {
-        self.middleware.push(middleware);
+        self.settings.middleware.push(middleware);
         self
     }
 
     #[must_use]
     pub fn with_compaction_settings(mut self, compaction: CompactionSettings) -> Self {
-        self.compaction = compaction;
+        self.settings.compaction = compaction;
         self
     }
 
     #[must_use]
     pub fn with_baseline(mut self, baseline: SessionStats) -> Self {
-        self.baseline = baseline;
+        self.settings.baseline = baseline;
         self
     }
 
     #[must_use]
     pub fn with_observer(mut self, observer: Arc<dyn EventObserver>) -> Self {
-        self.observer = observer;
+        self.settings.observer = observer;
         self
     }
 
@@ -742,7 +744,7 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
         mut self,
         resolver: Arc<dyn crate::skills::InvokedSkillResolver>,
     ) -> Self {
-        self.invoked_skills = Some(resolver);
+        self.settings.invoked_skills = Some(resolver);
         self
     }
 
@@ -750,7 +752,7 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
     /// the reference's default profile.
     #[must_use]
     pub fn with_agent_profile(mut self, profile: impl Into<String>) -> Self {
-        self.agent_profile = profile.into();
+        self.settings.agent_profile = profile.into();
         self
     }
 }
@@ -820,10 +822,13 @@ where
         cancellation: CancellationToken,
         controls: TurnControlHandle,
     ) -> Result<TurnOutcome, EngineError> {
-        let mut recorder =
-            TurnRecorder::new(self.observer.as_ref(), session_id, input.turn_id.as_deref());
+        let mut recorder = TurnRecorder::new(
+            self.settings.observer.as_ref(),
+            session_id,
+            input.turn_id.as_deref(),
+        );
         let mut messages = input.messages.clone();
-        let mut ledger = TurnLedger::new(&self.baseline, &self.limits);
+        let mut ledger = TurnLedger::new(&self.settings.baseline, &self.settings.limits);
         let mut checkpoints = 0_u32;
         // Reference `_reactive_recovery_used`, reset at the top of every run:
         // an overflow is recovered from at most once per user turn, so a
@@ -834,14 +839,14 @@ where
         // they are part of the full pipeline, and once mid-cycle, where a
         // reached limit must not leave a tool call unanswered. Both readings
         // come from the same middlewares, so there is one budget authority.
-        let budget = MiddlewarePipeline::from_limits(&self.limits);
+        let budget = MiddlewarePipeline::from_limits(&self.settings.limits);
         let mut pipeline = budget.clone();
         // Automatic compaction is registered after the budget policies and
         // before anything a caller added, which is the reference's order in
         // `_setup_middleware`: a cycle that reaches a limit and the threshold at
         // once stops instead of compacting.
         pipeline.add(Arc::new(AutoCompactMiddleware));
-        for middleware in &self.middleware {
+        for middleware in &self.settings.middleware {
             pipeline.add(Arc::clone(middleware));
         }
         pipeline.reset(ResetReason::Stop);
@@ -882,7 +887,7 @@ where
                 messages: &messages,
                 stats: &ledger.session_stats(),
                 price_micros: ledger.price_micros,
-                compaction: &self.compaction,
+                compaction: &self.settings.compaction,
             });
             match policy.action {
                 // A policy that stops without naming a public status ends the
@@ -934,7 +939,9 @@ where
                     // Reference `_should_self_heal`: one recovery per turn, and
                     // none at all in strict mode, where the operator asked for
                     // the overflow rather than for a silent repair.
-                    if reactive_recovery_used || self.compaction.raise_on_compaction_failure {
+                    if reactive_recovery_used
+                        || self.settings.compaction.raise_on_compaction_failure
+                    {
                         recorder.emit(EngineEvent::Lifecycle {
                             state: LifecycleState::Failed,
                             message: Some(ProviderError::ContextOverflow.to_string()),
@@ -977,7 +984,7 @@ where
                 }
             };
 
-            ledger.record_completion(&completion.usage, &self.limits);
+            ledger.record_completion(&completion.usage, &self.settings.limits);
             recorder.emit(EngineEvent::Stats {
                 context_tokens: ledger.context_tokens,
                 input_tokens: ledger.usage.input_tokens,
@@ -999,7 +1006,7 @@ where
                 }
                 break reason;
             }
-            if completion.text.len() > self.limits.max_response_bytes {
+            if completion.text.len() > self.settings.limits.max_response_bytes {
                 break TurnStopReason::ResponseLength;
             }
             messages.push(assistant_message);
@@ -1064,7 +1071,7 @@ where
             messages,
             stats: &ledger.session_stats(),
             price_micros: ledger.price_micros,
-            compaction: &self.compaction,
+            compaction: &self.settings.compaction,
         });
         match result.action {
             MiddlewareAction::Stop => result.stop_reason,
@@ -1083,7 +1090,7 @@ where
         messages: &mut Vec<ModelMessage>,
         content: &str,
     ) -> Result<(), EngineError> {
-        let Some(resolver) = &self.invoked_skills else {
+        let Some(resolver) = &self.settings.invoked_skills else {
             return Ok(());
         };
         let Some(invoked) = resolver.resolve(content) else {
@@ -1209,7 +1216,7 @@ where
             .unwrap_or_default();
         recorder.emit(EngineEvent::RequestSent {
             model,
-            agent_profile: self.agent_profile.clone(),
+            agent_profile: self.settings.agent_profile.clone(),
             nb_context_chars: input
                 .messages
                 .iter()
@@ -1397,7 +1404,7 @@ where
     ) -> Result<Option<()>, EngineError> {
         let context_tokens = ledger.context_tokens;
         let compaction_id = new_compaction_id();
-        let threshold = self.compaction.auto_compact_threshold;
+        let threshold = self.settings.compaction.auto_compact_threshold;
         let old_session_id = recorder.state().session_id.clone();
         recorder.emit(EngineEvent::CompactionStarted {
             compaction_id: compaction_id.clone(),
@@ -1423,12 +1430,12 @@ where
             Err(failure) => {
                 // A failed compaction still made the calls it made, and the
                 // transcript it read is left exactly as it was.
-                ledger.record_compaction(&failure.usage, &self.limits, false);
+                ledger.record_compaction(&failure.usage, &self.settings.limits, false);
                 recorder.emit(outcome(CompactionStatus::Failure, failure.reason))?;
                 return Err(EngineError::Compaction(failure.message));
             }
         };
-        ledger.record_compaction(&compaction.usage, &self.limits, true);
+        ledger.record_compaction(&compaction.usage, &self.settings.limits, true);
         let summary_length = u64::try_from(compaction.summary.chars().count()).unwrap_or(u64::MAX);
         let new_session_id = compaction.new_session_id;
         // The completed event precedes the handoff because the handoff is what
