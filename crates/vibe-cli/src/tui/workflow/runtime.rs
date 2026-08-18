@@ -170,7 +170,9 @@ fn handle_loop_command(arguments: &str, runtime: &mut InteractiveRuntime, state:
                     .ok_or("Scheduled-loop response omitted its list")
                     .and_then(|loops| format_loop_list(loops, unix_seconds()))
                 {
-                    Ok(message) => push_local_notice(state, &message, EntryStatus::Completed),
+                    Ok(message) => {
+                        push_local_notice(state, &message, EntryStatus::Completed);
+                    }
                     Err(message) => state.push_diagnostic(message),
                 }
             }
@@ -198,7 +200,9 @@ fn handle_loop_command(arguments: &str, runtime: &mut InteractiveRuntime, state:
                         .and_then(format_cancelled_loop)
                 };
                 match message {
-                    Ok(message) => push_local_notice(state, &message, EntryStatus::Completed),
+                    Ok(message) => {
+                        push_local_notice(state, &message, EntryStatus::Completed);
+                    }
                     Err(message) => state.push_diagnostic(message),
                 }
             }
@@ -219,7 +223,9 @@ fn handle_loop_command(arguments: &str, runtime: &mut InteractiveRuntime, state:
                     .ok_or("Scheduled-loop create response omitted the loop")
                     .and_then(format_created_loop)
                 {
-                    Ok(message) => push_local_notice(state, &message, EntryStatus::Completed),
+                    Ok(message) => {
+                        push_local_notice(state, &message, EntryStatus::Completed);
+                    }
                     Err(message) => state.push_diagnostic(message),
                 }
             }

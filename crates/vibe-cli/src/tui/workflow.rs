@@ -15,7 +15,7 @@ mod runtime;
 mod audio_surface_tests;
 
 use super::chat_input::ChatInputState;
-use super::clipboard::{SystemClipboard, SystemClipboardPort};
+use super::clipboard::copy_and_report;
 use super::commands::{CommandId, parse_command_in};
 use super::controls::ControlState;
 use super::debug_console::{DebugConsole, PAGE_SIZE as DEBUG_PAGE_SIZE};
@@ -614,21 +614,10 @@ fn sync_voice_preference(runtime: &mut InteractiveRuntime, composer: &mut ChatIn
     // configuration as it stands, so an edited active model, provider or
     // credential variable takes effect on the next recording rather than at the
     // next process start.
-    if let Some(view) = published_config_view(runtime) {
+    if let Some(view) = runtime.published_config() {
         runtime.voice.resync(&view);
     }
     composer.set_voice_enabled(enabled);
-}
-
-/// The `ConfigView` this session publishes, which is what the audio surface is
-/// resolved from.
-pub(super) fn published_config_view(runtime: &mut InteractiveRuntime) -> Option<Value> {
-    runtime
-        .service
-        .public_call("config/read", json!({"sessionId": runtime.session_id}))
-        .ok()?
-        .get("config")
-        .cloned()
 }
 
 fn reset_selected_config(runtime: &mut Option<InteractiveRuntime>, state: &mut TuiState) {
@@ -740,7 +729,7 @@ pub(super) fn show_rewind(runtime: &mut InteractiveRuntime, state: &mut TuiState
 
 fn show_voice(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
     if let Some(fields) = config::published_fields(runtime, state) {
-        let view = published_config_view(runtime).unwrap_or(Value::Null);
+        let view = runtime.published_config().unwrap_or(Value::Null);
         state.overlay = Some(voice_overlay(&fields, &view));
     }
 }
@@ -765,7 +754,7 @@ fn show_voice_model(runtime: &mut InteractiveRuntime, state: &mut TuiState, fiel
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_owned();
-    let view = published_config_view(runtime).unwrap_or(Value::Null);
+    let view = runtime.published_config().unwrap_or(Value::Null);
     let aliases = audio_model_aliases(&view, list, &current);
     if aliases.is_empty() {
         state.push_diagnostic(format!(
@@ -968,14 +957,7 @@ fn copy_last_agent_message(state: &mut TuiState) {
         state.push_diagnostic("No agent message available to copy");
         return;
     };
-    match SystemClipboard.copy_text(&content) {
-        Ok(()) => push_local_notice(
-            state,
-            "Last agent message copied to clipboard",
-            EntryStatus::Completed,
-        ),
-        Err(_) => state.push_diagnostic("Failed to copy: clipboard not available"),
-    }
+    copy_and_report(state, "Last agent message", &content);
 }
 
 fn resume_selected_session(
@@ -1034,14 +1016,16 @@ fn delete_selected_session(
                 EntryStatus::Completed,
             );
         }
-        Some(_) => push_local_notice(
-            state,
-            &format!(
-                "Deleted session `{}`.",
-                session_id.chars().take(8).collect::<String>()
-            ),
-            EntryStatus::Completed,
-        ),
+        Some(_) => {
+            push_local_notice(
+                state,
+                &format!(
+                    "Deleted session `{}`.",
+                    session_id.chars().take(8).collect::<String>()
+                ),
+                EntryStatus::Completed,
+            );
+        }
         None => {}
     }
 }

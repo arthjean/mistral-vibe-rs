@@ -977,12 +977,8 @@ pub(in crate::tui) fn record_narrator_telemetry(
     runtime: &InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    let records = state.narrator.take_telemetry();
-    let Some(telemetry) = runtime.telemetry.as_ref() else {
-        return;
-    };
-    for record in &records {
-        let _ = telemetry.enqueue(record, Some(runtime.session_id.as_str()));
+    for record in &state.narrator.take_telemetry() {
+        runtime.report(record);
     }
 }
 
@@ -1010,8 +1006,11 @@ fn announce_release_notes(arguments: &Arguments, working_directory: &Path, state
     if let Some(content) = updates::whats_new_content() {
         push_local_notice(state, content, EntryStatus::Completed);
     }
-    let seen =
-        vibe_core::updates::mark_version_as_seen(cache.as_ref(), version, vibe_core::clock::now_seconds_signed());
+    let seen = vibe_core::updates::mark_version_as_seen(
+        cache.as_ref(),
+        version,
+        vibe_core::clock::now_seconds_signed(),
+    );
     if store.store(&seen).is_err() {
         state.push_diagnostic("Release notes could not be marked as seen");
     }
@@ -1038,26 +1037,17 @@ fn call_runtime(
 }
 
 fn configured_theme(runtime: Option<&mut InteractiveRuntime>) -> Option<Theme> {
-    let runtime = runtime?;
-    let result = runtime
-        .service
-        .public_call("config/read", json!({"sessionId": runtime.session_id}))
-        .ok()?;
-    result
-        .get("config")
-        .and_then(|config| config.get("theme"))
+    runtime?
+        .published_config()?
+        .get("theme")
         .and_then(Value::as_str)
-        .and_then(parse_theme)
-}
-
-fn parse_theme(value: &str) -> Option<Theme> {
-    themes::theme_polarity(value)
+        .and_then(themes::theme_polarity)
 }
 
 /// Reference `ThemePreviewed`: a highlighted theme applies before acceptance and
 /// is never persisted.
 pub(in crate::tui) fn preview_theme(value: &str, theme: &mut ResolvedTheme) {
-    if let Some(preference) = parse_theme(value) {
+    if let Some(preference) = themes::theme_polarity(value) {
         *theme = resolve_theme(
             preference,
             EnvironmentThemeDetector.detect(),
@@ -1073,7 +1063,7 @@ fn update_theme(
     state: &mut TuiState,
     theme: &mut ResolvedTheme,
 ) {
-    let Some(preference) = parse_theme(value) else {
+    let Some(preference) = themes::theme_polarity(value) else {
         state.push_diagnostic(format!(
             "Usage: /theme <{}>",
             themes::accepted_theme_values().join("|")
@@ -1103,12 +1093,8 @@ fn update_theme(
 /// telemetry is best effort on both sides, and a diagnostic here would put an
 /// audio event in the transcript.
 pub(in crate::tui) fn record_audio_telemetry(runtime: &mut InteractiveRuntime) {
-    let records = runtime.voice.take_telemetry();
-    let Some(telemetry) = runtime.telemetry.as_ref() else {
-        return;
-    };
-    for record in &records {
-        let _ = telemetry.enqueue(record, Some(runtime.session_id.as_str()));
+    for record in &runtime.voice.take_telemetry() {
+        runtime.report(record);
     }
 }
 
@@ -1169,7 +1155,9 @@ fn apply_public_notifications(
                 }
             }
             match teleport_event_message(notification.params.get("event")) {
-                Ok((message, status)) => push_local_notice(state, &message, status),
+                Ok((message, status)) => {
+                    push_local_notice(state, &message, status);
+                }
                 Err(message) => state.push_diagnostic(message),
             }
         } else {
@@ -1229,9 +1217,7 @@ fn record_teleport_progress(event: Option<&Value>, runtime: &mut InteractiveRunt
     };
     runtime.teleport_telemetry = None;
     runtime.project_picker = None;
-    if let Some(telemetry) = runtime.telemetry.as_ref() {
-        let _ = telemetry.enqueue(&record, Some(runtime.session_id.as_str()));
-    }
+    runtime.report(&record);
 }
 
 /// Reference `record_service_error`'s two arguments, read off the failure event
@@ -1407,14 +1393,7 @@ async fn settle_transcript_pointer(state: &mut TuiState, column: u16, row: u16) 
 /// reports; the text itself never leaves the process.
 fn copy_transcript_selection(state: &mut TuiState) -> Option<String> {
     let selection = state.transcript_view.selected_text()?;
-    match clipboard::SystemClipboardPort::copy_text(&clipboard::SystemClipboard, &selection) {
-        Ok(()) => push_local_notice(
-            state,
-            "Selection copied to clipboard",
-            EntryStatus::Completed,
-        ),
-        Err(_) => state.push_diagnostic("Failed to copy: clipboard not available"),
-    }
+    clipboard::copy_and_report(state, "Selection", &selection);
     Some(selection)
 }
 
@@ -1490,11 +1469,8 @@ fn start_runtime(
     // publishes, not from the LLM endpoint: the transcription model, its wire
     // values, the provider's endpoint and the variable its credential is read
     // from all come from the same view a settings screen renders.
-    let published_config = service
-        .public_call("config/read", json!({"sessionId": session_id}))
-        .ok()
-        .and_then(|result| result.get("config").cloned())
-        .unwrap_or(Value::Null);
+    let published_config =
+        runtime::published_config_view(&mut service, &session_id).unwrap_or(Value::Null);
     let voice_enabled = published_config
         .get("voiceModeEnabled")
         .and_then(Value::as_bool)
@@ -1566,41 +1542,25 @@ fn report_session_opened(
     working_directory: &Path,
     arguments: &Arguments,
 ) {
-    let Some(telemetry) = runtime.telemetry.as_ref() else {
-        return;
-    };
-    let session = Some(runtime.session_id.as_str());
-    let _ = telemetry.enqueue(
-        &TelemetryRecord::NewSession(crate::session_census(
-            &runtime.release3,
-            working_directory,
-            arguments.trust,
-        )),
-        session,
-    );
-    let _ = telemetry.enqueue(
-        &TelemetryRecord::Ready {
-            init_duration_ms: crate::since_process_start_ms(),
-        },
-        session,
-    );
+    runtime.report(&TelemetryRecord::NewSession(crate::session_census(
+        &runtime.release3,
+        working_directory,
+        arguments.trust,
+    )));
+    runtime.report(&TelemetryRecord::Ready {
+        init_duration_ms: crate::since_process_start_ms(),
+    });
 }
 
 /// Reference `_send_startup_telemetry_once`: the three durations, once per
 /// process, taken where the first frame has just been drawn.
 fn report_startup(runtime: &InteractiveRuntime) {
-    let Some(telemetry) = runtime.telemetry.as_ref() else {
-        return;
-    };
     let elapsed = crate::since_process_start_ms();
-    let _ = telemetry.enqueue(
-        &TelemetryRecord::Startup(Startup {
-            first_frame_duration_ms: Some(elapsed),
-            agent_ready_duration_ms: Some(elapsed),
-            session_init_duration_ms: runtime.session_init_duration_ms,
-        }),
-        Some(runtime.session_id.as_str()),
-    );
+    runtime.report(&TelemetryRecord::Startup(Startup {
+        first_frame_duration_ms: Some(elapsed),
+        agent_ready_duration_ms: Some(elapsed),
+        session_init_duration_ms: runtime.session_init_duration_ms,
+    }));
 }
 
 /// Reference `_handle_command` and `_send_skill_telemetry`: one event, whose
@@ -1610,48 +1570,29 @@ pub(in crate::tui) fn report_slash_command(
     command_line: &str,
     kind: TelemetryCommandKind,
 ) {
-    let Some(telemetry) = runtime.telemetry.as_ref() else {
-        return;
-    };
     let Some(command) = command_line.split_whitespace().next() else {
         return;
     };
-    let _ = telemetry.enqueue(
-        &TelemetryRecord::SlashCommandUsed {
-            command: command.to_owned(),
-            kind,
-        },
-        Some(runtime.session_id.as_str()),
-    );
+    runtime.report(&TelemetryRecord::SlashCommandUsed {
+        command: command.to_owned(),
+        kind,
+    });
 }
 
 /// Reference `action_toggle_voice_mode`.
 pub(in crate::tui) fn report_voice_mode_toggled(runtime: &InteractiveRuntime, enabled: bool) {
-    let Some(telemetry) = runtime.telemetry.as_ref() else {
-        return;
-    };
-    let _ = telemetry.enqueue(
-        &TelemetryRecord::VoiceModeToggled { enabled },
-        Some(runtime.session_id.as_str()),
-    );
+    runtime.report(&TelemetryRecord::VoiceModeToggled { enabled });
 }
 
 /// Reference `send_user_copied_text`, which the pinned reference publishes on
 /// its client without a live call site. The copy shortcut is where this port
 /// raises it, and the text itself never travels: only its length does.
 pub(in crate::tui) fn report_copied_text(runtime: Option<&InteractiveRuntime>, copied: &str) {
-    let Some(runtime) = runtime else {
-        return;
-    };
-    let Some(telemetry) = runtime.telemetry.as_ref() else {
-        return;
-    };
-    let _ = telemetry.enqueue(
-        &TelemetryRecord::UserCopiedText {
+    if let Some(runtime) = runtime {
+        runtime.report(&TelemetryRecord::UserCopiedText {
             text_length: copied.chars().count() as u64,
-        },
-        Some(runtime.session_id.as_str()),
-    );
+        });
+    }
 }
 
 /// Reference `vibe.user_cancelled_action`, raised at the three sites the
@@ -1661,18 +1602,11 @@ pub(in crate::tui) fn report_cancelled_action(
     runtime: Option<&InteractiveRuntime>,
     action: CancelledAction,
 ) {
-    let Some(runtime) = runtime else {
-        return;
-    };
-    let Some(telemetry) = runtime.telemetry.as_ref() else {
-        return;
-    };
-    let _ = telemetry.enqueue(
-        &TelemetryRecord::UserCancelledAction {
+    if let Some(runtime) = runtime {
+        runtime.report(&TelemetryRecord::UserCancelledAction {
             action: action.label().to_owned(),
-        },
-        Some(runtime.session_id.as_str()),
-    );
+        });
+    }
 }
 
 /// The three actions the reference names.
@@ -1946,20 +1880,17 @@ fn stop_narration(runtime: &mut Option<InteractiveRuntime>, state: &mut TuiState
 
 /// Reference `_track_narrator_event`: the narrator follows the canonical stream,
 /// and a streamed assistant entry contributes only its new text.
-fn append_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) -> String {
-    let entry = TranscriptEntry {
+/// Appends a notice this client wrote itself and answers the transcript id it
+/// was filed under, which is what a later settlement addresses it by.
+fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) -> String {
+    state.append_local(TranscriptEntry {
         id: String::new(),
         revision: 1,
         kind: TranscriptKind::Notice,
         text: message.to_owned(),
         status,
         details: json!({"source": "tui"}),
-    };
-    state.append_local(entry)
-}
-
-fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) {
-    append_local_notice(state, message, status);
+    })
 }
 
 #[cfg(test)]

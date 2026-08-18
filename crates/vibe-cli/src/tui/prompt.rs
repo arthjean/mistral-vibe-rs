@@ -209,21 +209,15 @@ fn report_mentions(runtime: &InteractiveRuntime, stats: &MentionStats, message_i
     if stats.count == 0 {
         return;
     }
-    let Some(telemetry) = runtime.telemetry.as_ref() else {
-        return;
-    };
-    let _ = telemetry.enqueue(
-        &TelemetryRecord::AtMentionInserted(AtMentionInserted {
-            nb_mentions: stats.count as u64,
-            context_types: counts(&stats.context_types),
-            // Reference `stats.file_extensions or None`: no file mention
-            // reports null rather than an empty object.
-            file_extensions: (!stats.file_extensions.is_empty())
-                .then(|| counts(&stats.file_extensions)),
-            message_id,
-        }),
-        Some(runtime.session_id.as_str()),
-    );
+    runtime.report(&TelemetryRecord::AtMentionInserted(AtMentionInserted {
+        nb_mentions: stats.count as u64,
+        context_types: counts(&stats.context_types),
+        // Reference `stats.file_extensions or None`: no file mention
+        // reports null rather than an empty object.
+        file_extensions: (!stats.file_extensions.is_empty())
+            .then(|| counts(&stats.file_extensions)),
+        message_id,
+    }));
 }
 
 fn counts(source: &BTreeMap<String, usize>) -> BTreeMap<String, u64> {

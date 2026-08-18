@@ -308,7 +308,8 @@ fn resolved_speech_model(runtime: &mut InteractiveRuntime) -> String {
 }
 
 fn view_string(runtime: &mut InteractiveRuntime, pointer: &str) -> String {
-    super::published_config_view(runtime)
+    runtime
+        .published_config()
         .as_ref()
         .and_then(|view| view.pointer(pointer))
         .and_then(Value::as_str)

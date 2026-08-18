@@ -391,7 +391,7 @@ pub(in crate::tui) fn apply_render_preferences(
     // credential variable reaches the next turn. `tts_client is not None` is
     // what gates the speaking state, so a configuration that resolves to no
     // client keeps the turn silent instead of failing it.
-    if let Some(view) = super::published_config_view(runtime) {
+    if let Some(view) = runtime.published_config() {
         runtime.speech.resync(&view);
     }
     let speech_available = narrator_enabled && runtime.speech.available();

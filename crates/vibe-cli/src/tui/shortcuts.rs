@@ -15,7 +15,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 
 use super::chat_input::{ChatInputState, InputEffect, InputEvent, VoicePhase};
-use super::clipboard::{SystemClipboard, SystemClipboardPort};
+use super::clipboard::copy_and_report;
 use super::clipboard_images::ClipboardImageManager;
 use super::composer::{
     apply_effects as apply_composer_effects, apply_event as apply_composer_event,
@@ -29,7 +29,7 @@ use super::prompt::PromptContext;
 use super::remote_project_workflow::{handle_project_action, handle_teleport_push_response};
 use super::setup::ResolvedTheme;
 use super::shell::interrupt_shell;
-use super::state::{EntryStatus, TuiState};
+use super::state::TuiState;
 use super::submission::restore_draft;
 use super::terminal::{CrosstermOps, TerminalGuard};
 use super::workflow::{
@@ -39,9 +39,8 @@ use super::workflow::{
 use super::{
     ActiveTurn, Arguments, CliError, InteractiveRuntime, callback, copy_transcript_selection,
     emit_attention, exit, feedback, interaction, is_exit_command, page_older_debug_logs,
-    page_older_history, push_local_notice, render, request_active_turn_interrupt,
-    settle_transcript_pointer, stop_narration, submission, suspend_session, teleport_available,
-    unix_millis,
+    page_older_history, render, request_active_turn_interrupt, settle_transcript_pointer,
+    stop_narration, submission, suspend_session, teleport_available, unix_millis,
 };
 
 /// Everything a terminal event may read or mutate.
@@ -638,14 +637,7 @@ fn take_submission(key: KeyEvent, context: &mut KeyContext<'_>) -> Option<String
 
 pub(super) fn copy_prompt_selection(editor: &PromptEditor, state: &mut TuiState) -> Option<String> {
     let selection = editor.selected_text()?;
-    match SystemClipboard.copy_text(&selection) {
-        Ok(()) => push_local_notice(
-            state,
-            "Selection copied to clipboard",
-            EntryStatus::Completed,
-        ),
-        Err(_) => state.push_diagnostic("Failed to copy: clipboard not available"),
-    }
+    copy_and_report(state, "Selection", &selection);
     Some(selection)
 }
 

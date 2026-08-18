@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use super::state::{EntryStatus, TuiState};
-use super::{CliError, InteractiveRuntime, append_local_notice};
+use super::{CliError, InteractiveRuntime, push_local_notice};
 
 const SHELL_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -115,7 +115,7 @@ pub(super) async fn start_shell(
         return Ok(true);
     }
     state.waiting = true;
-    let transcript_id = append_local_notice(
+    let transcript_id = push_local_notice(
         state,
         &format!("Running shell command: `{command}`"),
         EntryStatus::Streaming,
@@ -338,7 +338,7 @@ mod tests {
     #[test]
     fn shell_chunks_patch_one_entry_and_late_output_cannot_revive_cancellation() {
         let mut state = TuiState::new("session");
-        let transcript_id = append_local_notice(
+        let transcript_id = push_local_notice(
             &mut state,
             "Running shell command: `printf test`",
             EntryStatus::Streaming,
@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn running_or_unreadable_shell_state_keeps_the_single_owner() {
         let mut state = TuiState::new("session");
-        let transcript_id = append_local_notice(
+        let transcript_id = push_local_notice(
             &mut state,
             "Running shell command: `test`",
             EntryStatus::Streaming,
@@ -415,7 +415,7 @@ mod tests {
     fn terminal_shell_state_releases_the_owner() {
         let mut state = TuiState::new("session");
         state.waiting = true;
-        let transcript_id = append_local_notice(
+        let transcript_id = push_local_notice(
             &mut state,
             "Running shell command: `true`",
             EntryStatus::Streaming,

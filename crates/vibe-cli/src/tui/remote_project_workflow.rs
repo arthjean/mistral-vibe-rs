@@ -559,11 +559,8 @@ fn report_teleport_start_failure(
     };
     runtime.teleport_telemetry = None;
     runtime.project_picker = None;
-    let Some(record) = record else {
-        return;
-    };
-    if let Some(telemetry) = runtime.telemetry.as_ref() {
-        let _ = telemetry.enqueue(&record, Some(runtime.session_id.as_str()));
+    if let Some(record) = record {
+        runtime.report(&record);
     }
 }
 
@@ -574,13 +571,7 @@ fn report_remote_project(
     outcome: RemoteProjectOutcome,
     picker: ProjectPicker,
 ) {
-    let Some(telemetry) = runtime.telemetry.as_ref() else {
-        return;
-    };
-    let _ = telemetry.enqueue(
-        &TelemetryRecord::RemoteProjectConfigured { outcome, picker },
-        Some(runtime.session_id.as_str()),
-    );
+    runtime.report(&TelemetryRecord::RemoteProjectConfigured { outcome, picker });
 }
 
 fn apply_open_result(
@@ -717,10 +708,7 @@ fn begin_teleport(
         TeleportFailureStage::Ineligible,
         runtime.project_picker,
     ));
-    let operation_id = format!(
-        "teleport-{}",
-        vibe_core::clock::now_millis()
-    );
+    let operation_id = format!("teleport-{}", vibe_core::clock::now_millis());
     schedule_project_call(
         runtime,
         "vibeCode/teleport/start",

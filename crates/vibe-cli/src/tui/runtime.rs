@@ -12,6 +12,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use vibe_app_server::client::{HeadlessService, LiveTurnDriver, PublicDispatch};
 use vibe_app_server::release3::Release3Service;
+use vibe_core::telemetry::TelemetryRecord;
 use vibe_core::telemetry::records::{ProjectPicker, TeleportTracker};
 
 use super::chat_input::Safety;
@@ -96,6 +97,21 @@ pub(super) struct UiOperationCompletion {
     pub(super) generation: u64,
     pub(super) operation: UiOperation,
     pub(super) result: Result<PublicDispatch, String>,
+}
+
+/// The `ConfigView` a session publishes.
+///
+/// Every screen that renders a preference reads it here, so a caller never
+/// re-spells the request or the field the response wraps it in.
+pub(super) fn published_config_view(
+    service: &mut HeadlessService<LiveTurnDriver>,
+    session_id: &str,
+) -> Option<Value> {
+    service
+        .public_call("config/read", json!({"sessionId": session_id}))
+        .ok()?
+        .get("config")
+        .cloned()
 }
 
 pub(super) fn schedule_ui_call(
@@ -212,6 +228,23 @@ pub(super) fn apply_ui_operation_completion(
 }
 
 impl InteractiveRuntime {
+    /// Sends one telemetry record under this session.
+    ///
+    /// Telemetry is best effort on both sides, so a session that enabled none
+    /// and a delivery that failed are the same thing here: nothing is reported
+    /// to the operator, because a census failure is not news about their turn.
+    pub(super) fn report(&self, record: &TelemetryRecord) {
+        if let Some(telemetry) = self.telemetry.as_ref() {
+            let _ = telemetry.enqueue(record, Some(self.session_id.as_str()));
+        }
+    }
+
+    /// The `ConfigView` this session publishes.
+    pub(super) fn published_config(&mut self) -> Option<Value> {
+        let session_id = self.session_id.clone();
+        published_config_view(&mut self.service, &session_id)
+    }
+
     pub(super) fn image_model(&self) -> ImageModel<'_> {
         self.image_models.get(&self.model)
     }

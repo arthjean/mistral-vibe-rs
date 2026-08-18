@@ -10,6 +10,24 @@ use std::time::{Duration, Instant};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use thiserror::Error;
+
+use super::state::{EntryStatus, TuiState};
+/// Copies `text` and reports the outcome once, the way every copy shortcut
+/// reports it: a notice naming what was copied, or the single refusal a
+/// terminal without a clipboard produces.
+pub(in crate::tui) fn copy_and_report(state: &mut TuiState, subject: &str, text: &str) {
+    match SystemClipboardPort::copy_text(&SystemClipboard, text) {
+        Ok(()) => {
+            crate::tui::push_local_notice(
+                state,
+                &format!("{subject} copied to clipboard"),
+                EntryStatus::Completed,
+            );
+        }
+        Err(_) => state.push_diagnostic("Failed to copy: clipboard not available"),
+    }
+}
+
 #[cfg(test)]
 use vibe_core::images::MAX_IMAGE_BYTES;
 use vibe_core::images::{ImageDigest, validate_image_size};
