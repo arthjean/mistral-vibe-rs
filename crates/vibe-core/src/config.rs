@@ -16,6 +16,7 @@ use crate::mcp::{
     DEFAULT_MCP_STARTUP_TIMEOUT_MS, DEFAULT_MCP_TOOL_TIMEOUT_MS, McpServerConfig,
     McpTransportConfig,
 };
+use crate::redaction::{REDACTED, is_sensitive_key, redact_table, redact_value};
 use crate::text::hex_encode;
 
 pub mod dotenv;
@@ -234,7 +235,7 @@ impl ConfigSnapshot {
             .get(key)
             .map(|value| {
                 if is_sensitive_key(key) {
-                    JsonValue::String("[redacted]".to_owned())
+                    JsonValue::String(REDACTED.to_owned())
                 } else {
                     redact_value(value)
                 }
@@ -2796,48 +2797,6 @@ fn is_proxy_key(key: &str) -> bool {
         key.to_ascii_lowercase().as_str(),
         "proxy" | "http_proxy" | "https_proxy" | "proxy_url"
     )
-}
-
-fn redact_table(table: &Table) -> JsonValue {
-    let mut object = serde_json::Map::new();
-    for (key, value) in table {
-        let redacted = if is_sensitive_key(key) {
-            JsonValue::String("[redacted]".to_owned())
-        } else {
-            redact_value(value)
-        };
-        object.insert(key.clone(), redacted);
-    }
-    JsonValue::Object(object)
-}
-
-fn redact_value(value: &Value) -> JsonValue {
-    match value {
-        Value::String(value) => JsonValue::String(value.clone()),
-        Value::Integer(value) => JsonValue::from(*value),
-        Value::Float(value) => JsonValue::from(*value),
-        Value::Boolean(value) => JsonValue::from(*value),
-        Value::Datetime(value) => JsonValue::String(value.to_string()),
-        Value::Array(values) => JsonValue::Array(values.iter().map(redact_value).collect()),
-        Value::Table(values) => redact_table(values),
-    }
-}
-
-fn is_sensitive_key(key: &str) -> bool {
-    let normalized = key
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .flat_map(char::to_lowercase)
-        .collect::<String>();
-    normalized.contains("password")
-        || normalized.contains("secret")
-        || normalized.contains("token")
-        || normalized.contains("apikey")
-        || normalized.contains("authorization")
-        || normalized.contains("credential")
-        || normalized.contains("privatekey")
-        || normalized.contains("accesskey")
-        || normalized.contains("proxy")
 }
 
 /// The advisory lock every configuration read and write is serialized behind.

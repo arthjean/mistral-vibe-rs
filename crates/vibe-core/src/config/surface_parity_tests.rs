@@ -784,7 +784,7 @@ fn difference(
 
 fn render(key: &str, value: &JsonValue) -> String {
     if is_sensitive_key(key) {
-        return "[redacted]".to_owned();
+        return crate::redaction::REDACTED.to_owned();
     }
     redacted(value).to_string()
 }
@@ -800,7 +800,7 @@ fn redacted(value: &JsonValue) -> JsonValue {
                 .iter()
                 .map(|(key, value)| {
                     let value = if is_sensitive_key(key) {
-                        JsonValue::from("[redacted]")
+                        JsonValue::from(crate::redaction::REDACTED)
                     } else {
                         redacted(value)
                     };

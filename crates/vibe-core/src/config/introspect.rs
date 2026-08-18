@@ -10,7 +10,8 @@ use serde_json::Value as JsonValue;
 
 use super::patch::JsonPointer;
 use super::registry::{self, FieldDefault};
-use super::{ConfigLayerKind, ConfigSnapshot, ConfigTarget, is_sensitive_key, redact_value};
+use super::{ConfigLayerKind, ConfigSnapshot, ConfigTarget};
+use crate::redaction::{REDACTED, is_sensitive_key, redact_value};
 
 /// Reference `HIDDEN_SETTINGS`: the fields a runtime fills rather than an
 /// operator, which no settings screen offers an editor for. Per-tool settings
@@ -113,7 +114,7 @@ fn layer_values(
 
 fn redacted(name: &str, value: &toml::Value) -> JsonValue {
     if is_sensitive_key(name) {
-        JsonValue::String("[redacted]".to_owned())
+        JsonValue::String(REDACTED.to_owned())
     } else {
         redact_value(value)
     }
