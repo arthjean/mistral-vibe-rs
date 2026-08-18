@@ -794,10 +794,7 @@ where
         controls: TurnControlHandle,
     ) -> Result<TurnOutcome, EngineError> {
         let session_id = session_id.into();
-        let model = input
-            .model_override
-            .clone()
-            .or_else(|| self.provider.model().map(ToOwned::to_owned));
+        let model = self.resolved_model(&input);
         agent_span(
             AgentSpan {
                 model: model.as_deref(),
@@ -1052,6 +1049,19 @@ where
         })
     }
 
+    /// The model this request addresses.
+    ///
+    /// A turn's own override wins, and the provider answers for the session's
+    /// active model otherwise. The trace span, the request event and the model
+    /// call span all report this one answer, so a client never sees three
+    /// spellings of the same request.
+    fn resolved_model(&self, input: &ProviderInput) -> Option<String> {
+        input
+            .model_override
+            .clone()
+            .or_else(|| self.provider.model().map(ToOwned::to_owned))
+    }
+
     /// Reports the limit that ends the turn, if any is already reached.
     ///
     /// The answer comes from the budget middlewares rather than from a second
@@ -1209,11 +1219,7 @@ where
         prompt: &str,
         message_id: Option<String>,
     ) -> Result<(), EngineError> {
-        let model = input
-            .model_override
-            .clone()
-            .or_else(|| self.provider.model().map(ToOwned::to_owned))
-            .unwrap_or_default();
+        let model = self.resolved_model(input).unwrap_or_default();
         recorder.emit(EngineEvent::RequestSent {
             model,
             agent_profile: self.settings.agent_profile.clone(),
@@ -1251,11 +1257,7 @@ where
                 api_style: String::new(),
                 endpoint: String::new(),
             });
-        let model = input
-            .model_override
-            .clone()
-            .or_else(|| self.provider.model().map(ToOwned::to_owned))
-            .unwrap_or_default();
+        let model = self.resolved_model(input).unwrap_or_default();
         let outcome = model_call_span(
             ModelCallSpan {
                 provider_name: &descriptor.provider_name,
