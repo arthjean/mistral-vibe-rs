@@ -681,15 +681,18 @@ impl ProjectionReducer {
             });
         }
 
-        let mut next = self.state.clone();
+        // Reduced in place rather than into a copy: every arm of
+        // [`reduce_event`] answers its refusals before it touches the state, so
+        // a rejected event leaves the projection exactly as it was without the
+        // whole history being cloned once per event. `a_rejected_event_leaves_
+        // the_projection_untouched` holds that invariant.
         reduce_event(
-            &mut next,
+            &mut self.state,
             envelope.event_id,
             envelope.emitted_at,
             &envelope.event,
         )?;
-        next.watermark = envelope.event_id;
-        self.state = next;
+        self.state.watermark = envelope.event_id;
         Ok(ApplyOutcome::Applied)
     }
 
@@ -779,6 +782,12 @@ fn compaction_handoff_details(
     })
 }
 
+/// Folds one event into the projection.
+///
+/// Every arm answers its refusals first: no arm may mutate `state` and then
+/// fail. [`ProjectionReducer::apply`] reduces in place and relies on that, so
+/// an arm that grows a check after a mutation silently makes a rejected event
+/// leave debris behind.
 fn reduce_event(
     state: &mut ProjectionSnapshot,
     event_id: u64,
@@ -1468,6 +1477,169 @@ mod tests {
             event_id: id,
             event,
         }
+    }
+
+    /// A projection that refuses an event is byte-identical to the one before
+    /// it, for every refusal [`reduce_event`] can raise.
+    ///
+    /// [`ProjectionReducer::apply`] reduces in place, so this is the invariant
+    /// that keeps a rejected event from leaving a half-applied entry behind. An
+    /// arm that grows a check after a mutation fails here.
+    #[test]
+    fn a_rejected_event_leaves_the_projection_untouched() {
+        let mut reducer = ProjectionReducer::new("session-1");
+        // A refused event never advances the watermark, so the next one reuses
+        // its identifier: the sequence has no gap for the reducer to reject
+        // before it reaches the arm under test.
+        let mut next_id = 1_u64;
+        let mut apply = |reducer: &mut ProjectionReducer, projected: EngineEvent| {
+            let outcome = reducer.apply(&event(next_id, projected));
+            if outcome.is_ok() {
+                next_id += 1;
+            }
+            outcome
+        };
+
+        // Every refusal an idle projection can raise, before anything is
+        // projected at all: the empty state must survive them.
+        let idle = reducer.state().clone();
+        for refused in [
+            EngineEvent::UserSteer {
+                content: "steering a turn that never started".to_owned(),
+            },
+            EngineEvent::ModelText {
+                text: "text with no turn".to_owned(),
+            },
+            EngineEvent::Title {
+                title: "a title with no turn".to_owned(),
+            },
+        ] {
+            let error = apply(&mut reducer, refused).expect_err("an idle turn refuses this");
+            assert!(
+                matches!(error, ProjectionError::IllegalTransition { .. }),
+                "{error:?}"
+            );
+            assert_eq!(reducer.state(), &idle, "a refusal projected something");
+        }
+
+        apply(
+            &mut reducer,
+            EngineEvent::UserMessage {
+                content: "start".to_owned(),
+            },
+        )
+        .expect("the turn starts");
+        apply(
+            &mut reducer,
+            EngineEvent::ToolCall {
+                call_id: "call-1".to_owned(),
+                name: "bash".to_owned(),
+                arguments: "{}".to_owned(),
+            },
+        )
+        .expect("the tool call projects");
+        let running = reducer.state().clone();
+
+        // A stream and a result naming a call the projection never saw, and a
+        // handoff leaving a session this projection is not on.
+        let stream = apply(
+            &mut reducer,
+            EngineEvent::ToolStream {
+                call_id: "call-unknown".to_owned(),
+                chunk: "orphan chunk".to_owned(),
+            },
+        )
+        .expect_err("a stream without its call is refused");
+        assert!(
+            matches!(stream, ProjectionError::IllegalTransition { .. }),
+            "{stream:?}"
+        );
+        assert_eq!(reducer.state(), &running);
+
+        let result = apply(
+            &mut reducer,
+            EngineEvent::ToolResult {
+                call_id: "call-unknown".to_owned(),
+                content: "orphan result".to_owned(),
+                typed_result: Value::Null,
+                display: Value::Null,
+                duration_ms: 1,
+                is_error: false,
+                cancelled: false,
+            },
+        )
+        .expect_err("a result without its call is refused");
+        assert!(
+            matches!(result, ProjectionError::IllegalTransition { .. }),
+            "{result:?}"
+        );
+        assert_eq!(reducer.state(), &running);
+
+        let handoff = apply(
+            &mut reducer,
+            EngineEvent::SessionHandoff {
+                from_session_id: "session-elsewhere".to_owned(),
+                to_session_id: "session-2".to_owned(),
+                cause: SessionHandoffCause::Compaction,
+            },
+        )
+        .expect_err("a handoff from another session is refused");
+        assert!(
+            matches!(handoff, ProjectionError::InvalidHandoff { .. }),
+            "{handoff:?}"
+        );
+        assert_eq!(
+            reducer.state(),
+            &running,
+            "a refused handoff rebound the session"
+        );
+
+        // A callback answered under an identifier no open callback carries.
+        apply(
+            &mut reducer,
+            EngineEvent::CallbackRequested {
+                callback_id: "callback-1".to_owned(),
+                kind: CallbackKind::Approval,
+                prompt: "may I".to_owned(),
+            },
+        )
+        .expect("the callback opens");
+        let waiting = reducer.state().clone();
+        let pending = apply(
+            &mut reducer,
+            EngineEvent::CallbackResolved {
+                callback_id: "callback-unknown".to_owned(),
+                accepted: true,
+                value: None,
+            },
+        )
+        .expect_err("an unknown callback is refused");
+        assert!(
+            matches!(pending, ProjectionError::CallbackNotPending(_)),
+            "{pending:?}"
+        );
+        assert_eq!(reducer.state(), &waiting);
+
+        // The turn still runs to completion afterward, so no refusal left the
+        // projection in a state the next event cannot build on.
+        apply(
+            &mut reducer,
+            EngineEvent::CallbackResolved {
+                callback_id: "callback-1".to_owned(),
+                accepted: true,
+                value: None,
+            },
+        )
+        .expect("the open callback resolves");
+        apply(
+            &mut reducer,
+            EngineEvent::Lifecycle {
+                state: LifecycleState::Completed,
+                message: None,
+            },
+        )
+        .expect("the turn completes");
+        assert_eq!(reducer.state().lifecycle, LifecycleState::Completed);
     }
 
     #[test]
