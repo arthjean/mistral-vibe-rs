@@ -6,11 +6,14 @@
 
 use std::time::Duration;
 
-use serde_json::{Value, json};
+use serde_json::Value;
+#[cfg(test)]
+use serde_json::json;
 use tokio::task::JoinHandle;
 use vibe_app_server::client::{
     DriverError, HeadlessService, InterruptOutcome, LiveTurnDriver, ProgrammaticUpdate,
-    PublicTurnOutcome, TurnDriver, TurnErrorCode, TurnReservation, turn_error_code,
+    PublicNoticeLevel, PublicTurnOutcome, TurnDriver, TurnErrorCode, TurnReservation,
+    turn_error_code,
 };
 
 use super::callback::{
@@ -19,7 +22,7 @@ use super::callback::{
 use super::chat_input::ChatInputState;
 use super::controls::ControlState;
 use super::state::{
-    ApplyResult, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiState,
+    ApplyResult, EntrySource, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiState,
 };
 use super::{
     CliError, InteractiveRuntime, apply_narrator_effect, attention, diagnostics, feedback,
@@ -419,23 +422,18 @@ pub(super) fn report_turn_failure(state: &mut TuiState, error: &DriverError) {
         diagnostics::Severity::Warning | diagnostics::Severity::Error => EntryStatus::Failed,
     };
     let level = match classified.severity {
-        diagnostics::Severity::Notice => "info",
-        diagnostics::Severity::Warning => "warning",
-        diagnostics::Severity::Error => "error",
+        diagnostics::Severity::Notice => PublicNoticeLevel::Info,
+        diagnostics::Severity::Warning => PublicNoticeLevel::Warning,
+        diagnostics::Severity::Error => PublicNoticeLevel::Error,
     };
-    let entry = TranscriptEntry {
+    state.append_local(TranscriptEntry {
         id: String::new(),
         revision: 1,
         kind: TranscriptKind::Notice,
         text: classified.message,
         status,
-        details: json!({
-            "type": "notice",
-            "level": level,
-            "detail": {"kind": "turn_failed", "class": classified.class.label()},
-        }),
-    };
-    state.append_local(entry);
+        source: EntrySource::notice(level),
+    });
 }
 
 fn settle_cancelled_reservation(
@@ -546,7 +544,18 @@ mod tests {
             )),
         );
         assert_eq!(state.entries.len(), 2, "a distinct failure stays visible");
-        assert_eq!(state.entries[1].details["detail"]["class"], "transport");
+        let transport = &state.entries[1];
+        assert!(transport.text.contains("reset"));
+        assert!(
+            matches!(
+                transport.source,
+                EntrySource::Notice {
+                    level: PublicNoticeLevel::Error,
+                    ..
+                }
+            ),
+            "a transport failure reads as an error"
+        );
 
         // The next turn starts from a clean slate, so a repeat is real news.
         state.waiting = true;

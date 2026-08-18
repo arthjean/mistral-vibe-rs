@@ -25,7 +25,7 @@ use super::session_picker::{
 };
 use super::setup::{DetectedTheme, Theme, resolve_theme};
 use super::shell::{ActiveShell, ShellRead, apply_shell_read};
-use super::state::{EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
+use super::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
 use super::{ActiveTurn, InteractiveRuntime};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -701,7 +701,7 @@ fn shell_entry(text: String) -> TranscriptEntry {
         kind: TranscriptKind::Effect,
         text,
         status: EntryStatus::Streaming,
-        details: Value::Null,
+        source: EntrySource::Restored,
     }
 }
 

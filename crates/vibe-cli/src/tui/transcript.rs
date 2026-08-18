@@ -8,9 +8,12 @@
 //! cancelled, or skipped effect can never be presented as a success.
 
 use serde_json::Value;
-use vibe_app_server::client::{EffectCallDisplay, EffectResultDisplay, ToolEffectKind};
+use vibe_app_server::client::{
+    EffectDetail, EffectResultDisplay, HookNotice, HookSeverity, NoticeDetail, PublicEffectState,
+    PublicHistoryEntry, PublicNoticeLevel, ToolEffectKind,
+};
 
-use super::state::{EntryStatus, TranscriptEntry, TranscriptKind};
+use super::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind};
 
 /// The kind the app server published with the effect. Its verbs, subject and
 /// status text arrive on the entry; what stays here is how the terminal lays
@@ -40,18 +43,16 @@ impl EffectLayout for EffectKind {
     }
 }
 
-/// The kind an entry's published detail names, falling back to the tool name
-/// for an entry written before the detail carried one.
-fn effect_kind(detail: &Value, tool_name: &str) -> EffectKind {
-    detail
-        .get("kind")
-        .and_then(Value::as_str)
-        .and_then(|kind| {
-            EffectKind::ALL
-                .into_iter()
-                .find(|candidate| candidate.label() == kind)
-        })
-        .unwrap_or_else(|| EffectKind::from_tool_name(tool_name))
+/// The published effect an entry projects, when the entry is one and its
+/// canonical form was restored with it.
+///
+/// An entry replayed from saved history carries no canonical effect, which is
+/// what [`restored_effect_region`] presents instead.
+fn published_effect(entry: &TranscriptEntry) -> Option<(&EffectDetail, &PublicEffectState)> {
+    match entry.source.server()? {
+        PublicHistoryEntry::Effect { detail, state, .. } => Some((detail, state)),
+        _ => None,
+    }
 }
 
 /// Reference `IndicatorState` plus the in-flight spinner it replaces.
@@ -107,22 +108,8 @@ impl BodyLine {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NoticeLevel {
-    Info,
-    Warning,
-    Error,
-}
-
-impl NoticeLevel {
-    fn parse(value: Option<&str>) -> Self {
-        match value {
-            Some("warning") => Self::Warning,
-            Some("error") => Self::Error,
-            _ => Self::Info,
-        }
-    }
-}
+/// How a notice reads, which is the level the server publishes.
+pub type NoticeLevel = PublicNoticeLevel;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EffectRegion {
@@ -188,14 +175,11 @@ pub fn region(entry: &TranscriptEntry) -> Region {
             }
         }
         TranscriptKind::Checkpoint => {
-            if entry.details.get("kind").and_then(Value::as_str) == Some("compaction") {
-                Region::Compaction {
-                    message: entry.text.clone(),
-                }
+            let message = entry.text.clone();
+            if checkpoint_kind(entry) == Some(COMPACTION_CHECKPOINT) {
+                Region::Compaction { message }
             } else {
-                Region::Checkpoint {
-                    message: entry.text.clone(),
-                }
+                Region::Checkpoint { message }
             }
         }
         TranscriptKind::Notice => notice_region(entry),
@@ -228,52 +212,83 @@ pub fn keeps_tool_group(entry: &TranscriptEntry) -> bool {
     // discriminants directly instead of projecting the whole region.
     match entry.kind {
         TranscriptKind::Reasoning => true,
-        TranscriptKind::Effect => effect_kind(
-            entry.details.get("detail").unwrap_or(&Value::Null),
-            entry
-                .details
-                .pointer("/detail/toolName")
-                .and_then(Value::as_str)
-                .unwrap_or_default(),
-        )
-        .joins_tool_group(),
-        TranscriptKind::Notice => entry
-            .details
-            .pointer("/detail/kind")
-            .and_then(Value::as_str)
-            .is_some_and(|kind| kind.starts_with("hook")),
+        TranscriptKind::Effect => published_effect(entry)
+            .map_or(EffectKind::Tool, |(detail, _)| detail.kind)
+            .joins_tool_group(),
+        TranscriptKind::Notice => matches!(notice_detail(entry), Some(detail) if is_hook(detail)),
         _ => false,
     }
 }
 
+/// The checkpoint kind the server published, which is what tells a compaction
+/// from every other checkpoint.
+fn checkpoint_kind(entry: &TranscriptEntry) -> Option<&str> {
+    match entry.source.server()? {
+        PublicHistoryEntry::Checkpoint { kind, .. } => Some(kind),
+        _ => None,
+    }
+}
+
+/// Reference `CompactionCheckpoint`.
+const COMPACTION_CHECKPOINT: &str = "compaction";
+
+/// Why the server wrote this notice, when the server wrote it at all.
+fn notice_detail(entry: &TranscriptEntry) -> Option<&NoticeDetail> {
+    match entry.source.server()? {
+        PublicHistoryEntry::Notice { detail, .. } => Some(detail),
+        _ => None,
+    }
+}
+
+/// The hook run a notice reports, in the four shapes a hook is reported under.
+const fn hook_notice(detail: &NoticeDetail) -> Option<&HookNotice> {
+    match detail {
+        NoticeDetail::HookRunStarted(hook)
+        | NoticeDetail::HookRunCompleted(hook)
+        | NoticeDetail::HookStarted(hook)
+        | NoticeDetail::HookCompleted(hook) => Some(hook),
+        _ => None,
+    }
+}
+
+const fn is_hook(detail: &NoticeDetail) -> bool {
+    hook_notice(detail).is_some()
+}
+
 fn notice_region(entry: &TranscriptEntry) -> Region {
-    let detail = entry.details.get("detail").unwrap_or(&Value::Null);
-    let kind = detail
-        .get("kind")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    match kind {
-        "hook_completed" | "hook_started" | "hook_run_started" | "hook_run_completed" => {
-            let name = detail
-                .get("hookName")
-                .and_then(Value::as_str)
-                .unwrap_or("hook");
-            let content = detail
-                .get("content")
-                .and_then(Value::as_str)
-                .unwrap_or(entry.text.as_str());
-            Region::Hook {
-                icon: hook_icon(detail.get("status").and_then(Value::as_str)),
-                line: format!("[{name}] {content}"),
-            }
-        }
-        "scheduled_loop_fired" => Region::Command {
+    match notice_detail(entry) {
+        Some(NoticeDetail::ScheduledLoopFired { .. }) => Region::Command {
             message: entry.text.clone(),
         },
-        _ => Region::Notice {
-            level: NoticeLevel::parse(entry.details.get("level").and_then(Value::as_str)),
-            message: entry.text.clone(),
+        Some(detail) => match hook_notice(detail) {
+            Some(hook) => Region::Hook {
+                icon: hook_icon(hook.status),
+                line: format!(
+                    "[{}] {}",
+                    hook.hook_name.as_deref().unwrap_or("hook"),
+                    hook.content.as_deref().unwrap_or(entry.text.as_str())
+                ),
+            },
+            None => plain_notice(entry),
         },
+        None => plain_notice(entry),
+    }
+}
+
+/// A notice with nothing to present beyond its own text: the level it was
+/// written at is the level the server published, or the one this client chose.
+fn plain_notice(entry: &TranscriptEntry) -> Region {
+    let level = match &entry.source {
+        EntrySource::Server(published) => match published.as_ref() {
+            PublicHistoryEntry::Notice { level, .. } => *level,
+            _ => NoticeLevel::Info,
+        },
+        EntrySource::Notice { level, .. } => *level,
+        EntrySource::Restored => NoticeLevel::Info,
+    };
+    Region::Notice {
+        level,
+        message: entry.text.clone(),
     }
 }
 
@@ -303,44 +318,31 @@ fn restored_effect_region(entry: &TranscriptEntry) -> EffectRegion {
 }
 
 /// Reference `_HOOK_SEVERITY_ICONS`, defaulting to the warning icon.
-fn hook_icon(severity: Option<&str>) -> &'static str {
+const fn hook_icon(severity: Option<HookSeverity>) -> &'static str {
     match severity {
-        Some("ok") => "✓",
-        Some("error") => "✗",
-        _ => "⚠",
+        Some(HookSeverity::Ok) => "✓",
+        Some(HookSeverity::Error) => "✗",
+        Some(HookSeverity::Warning) | None => "⚠",
     }
 }
 
 fn effect_region(entry: &TranscriptEntry) -> EffectRegion {
-    // An entry restored from saved history carries no canonical effect state:
-    // its own settled status and text are then the only truth about it.
-    let Some(state) = entry.details.get("state") else {
+    // An entry restored from saved history carries no canonical effect: its own
+    // settled status and text are then the only truth about it.
+    let Some((detail, state)) = published_effect(entry) else {
         return restored_effect_region(entry);
     };
-    let detail = entry.details.get("detail").unwrap_or(&Value::Null);
-    let tool_name = detail
-        .get("toolName")
-        .and_then(Value::as_str)
-        .unwrap_or(entry.text.lines().next().unwrap_or_default());
-    let kind = effect_kind(detail, tool_name);
+    let status = EntryStatus::of_effect(state);
     // The call and result displays are published with the entry, so the header
     // a reference client renders and the one this terminal renders are the same
     // strings rather than two derivations of the same arguments.
-    let call = detail
-        .get("display")
-        .and_then(|display| serde_json::from_value::<EffectCallDisplay>(display.clone()).ok())
-        .unwrap_or_default();
-    let status = effect_status(state);
-    let settled = state
-        .get("display")
-        .and_then(|display| serde_json::from_value::<EffectResultDisplay>(display.clone()).ok())
-        .filter(|_| status.is_terminal());
-    let (verb, message, suffix) = settled.as_ref().map_or_else(
+    let settled = settled_display(state);
+    let (verb, message, suffix) = settled.map_or_else(
         || {
             (
-                call.verb.clone(),
-                call.subject().to_owned(),
-                call.suffix.clone(),
+                detail.display.verb.clone(),
+                detail.display.subject().to_owned(),
+                detail.display.suffix.clone(),
             )
         },
         |display| {
@@ -352,43 +354,46 @@ fn effect_region(entry: &TranscriptEntry) -> EffectRegion {
         },
     );
     EffectRegion {
-        kind,
+        kind: detail.kind,
         status,
-        indicator: indicator(status, settled.as_ref()),
+        indicator: indicator(status, settled),
         verb,
         message,
         suffix,
-        collapsed_by_default: kind.collapses(),
-        stream: running_stream(state, status),
-        body: effect_body(kind, state, status, settled.as_ref()),
+        collapsed_by_default: detail.kind.collapses(),
+        stream: running_stream(state),
+        body: effect_body(detail.kind, state, settled),
+    }
+}
+
+/// The result display a settled effect published. A cancellation that produced
+/// no result is the one settled state the reference lets publish none.
+const fn settled_display(state: &PublicEffectState) -> Option<&EffectResultDisplay> {
+    match state {
+        PublicEffectState::Completed { display, .. }
+        | PublicEffectState::Failed { display, .. }
+        | PublicEffectState::Skipped { display, .. } => Some(display),
+        PublicEffectState::Cancelled { display, .. } => display.as_ref(),
+        PublicEffectState::Pending
+        | PublicEffectState::Running { .. }
+        | PublicEffectState::Blocked { .. } => None,
     }
 }
 
 /// Reference `ToolCallMessage.set_stream_message`: streaming output is only
 /// shown while the effect is still running.
-fn running_stream(state: &Value, status: EntryStatus) -> Option<String> {
-    if status.is_terminal() {
-        return None;
-    }
-    let output = state
-        .get("outputText")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .trim_end_matches('\n');
-    let last = output.lines().next_back().unwrap_or_default();
+fn running_stream(state: &PublicEffectState) -> Option<String> {
+    let output_text = match state {
+        PublicEffectState::Running { output_text }
+        | PublicEffectState::Blocked { output_text, .. } => output_text.as_str(),
+        _ => return None,
+    };
+    let last = output_text
+        .trim_end_matches('\n')
+        .lines()
+        .next_back()
+        .unwrap_or_default();
     (!last.is_empty()).then(|| format!("→ {last}"))
-}
-
-fn effect_status(state: &Value) -> EntryStatus {
-    match state.get("status").and_then(Value::as_str) {
-        Some("pending") => EntryStatus::Pending,
-        Some("blocked") => EntryStatus::Blocked,
-        Some("completed") => EntryStatus::Completed,
-        Some("failed") => EntryStatus::Failed,
-        Some("cancelled") => EntryStatus::Cancelled,
-        Some("skipped") => EntryStatus::Skipped,
-        _ => EntryStatus::Streaming,
-    }
 }
 
 fn indicator(status: EntryStatus, settled: Option<&EffectResultDisplay>) -> Indicator {
@@ -408,50 +413,44 @@ fn indicator(status: EntryStatus, settled: Option<&EffectResultDisplay>) -> Indi
 
 fn effect_body(
     kind: EffectKind,
-    state: &Value,
-    status: EntryStatus,
+    state: &PublicEffectState,
     settled: Option<&EffectResultDisplay>,
 ) -> Vec<BodyLine> {
-    match status {
-        EntryStatus::Pending | EntryStatus::Streaming | EntryStatus::Blocked => Vec::new(),
-        EntryStatus::Failed => {
-            let message = state
-                .pointer("/error/message")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown failure");
-            vec![BodyLine::styled(
-                format!("Error: {message}"),
-                BodyStyle::Error,
-            )]
-        }
-        EntryStatus::Cancelled | EntryStatus::Skipped => {
-            let reason = state
-                .get("reason")
-                .and_then(Value::as_str)
-                .unwrap_or("no reason given");
+    match state {
+        PublicEffectState::Pending
+        | PublicEffectState::Running { .. }
+        | PublicEffectState::Blocked { .. } => Vec::new(),
+        PublicEffectState::Failed { error, .. } => vec![BodyLine::styled(
+            format!("Error: {}", error.message),
+            BodyStyle::Error,
+        )],
+        PublicEffectState::Cancelled { reason, .. } | PublicEffectState::Skipped { reason, .. } => {
             vec![BodyLine::styled(
                 format!("Skipped: {reason}"),
                 BodyStyle::Muted,
             )]
         }
-        EntryStatus::Completed => {
+        PublicEffectState::Completed {
+            output,
+            output_text,
+            ..
+        } => {
             let mut lines = settled
                 .into_iter()
                 .flat_map(|display| display.warnings.iter())
                 .map(|warning| BodyLine::styled(format!("⚠ {warning}"), BodyStyle::Warning))
                 .collect::<Vec<_>>();
-            lines.extend(completed_body(kind, state));
+            lines.extend(completed_body(kind, output, output_text));
             lines
         }
     }
 }
 
-fn completed_body(kind: EffectKind, state: &Value) -> Vec<BodyLine> {
-    let output = state.get("output").unwrap_or(&Value::Null);
-    let output_text = state
-        .get("outputText")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
+/// The settled output an effect produced, laid out the way its kind declares.
+///
+/// The output itself stays a [`Value`]: its shape is the tool's own, and the
+/// wire contract publishes it as one.
+fn completed_body(kind: EffectKind, output: &Value, output_text: &str) -> Vec<BodyLine> {
     match kind {
         EffectKind::Shell => {
             let mut parts = Vec::new();
@@ -740,13 +739,17 @@ mod tests {
     use std::sync::Arc;
 
     use serde_json::json;
-    use vibe_app_server::client::EffectDetail;
+    use vibe_app_server::client::{PublicEntryGenerationStatus, PublicEntryMetadata};
 
     use super::*;
 
     /// An entry in the shape the app server publishes: a typed detail carrying
     /// the call display, and a settled state carrying the result display the
     /// projection computed for it.
+    ///
+    /// `state` is written in its wire form so a fixture reads like the payload
+    /// a client receives, and is deserialized back into the published union
+    /// here, which is what the projection under test consumes.
     fn effect(tool: &str, arguments: Value, mut state: Value) -> TranscriptEntry {
         let detail = EffectDetail::for_call(tool, &arguments);
         if let Some(object) = state.as_object_mut() {
@@ -769,18 +772,31 @@ mod tests {
                 object.insert("display".to_owned(), json!(display));
             }
         }
-        TranscriptEntry {
-            id: "effect".to_owned(),
-            revision: 1,
-            kind: TranscriptKind::Effect,
-            text: tool.to_owned(),
-            status: EntryStatus::Streaming,
-            details: json!({
-                "type": "effect",
-                "detail": detail,
-                "state": state,
-            }),
+        published(PublicHistoryEntry::Effect {
+            metadata: metadata("effect"),
+            title: tool.to_owned(),
+            detail: Box::new(detail),
+            state: serde_json::from_value(state).expect("the fixture is a published effect state"),
+            tool_call_id: String::new(),
+        })
+    }
+
+    fn metadata(id: &str) -> PublicEntryMetadata {
+        PublicEntryMetadata {
+            id: id.to_owned(),
+            session_id: "session".to_owned(),
+            turn_id: None,
+            created_at: 1,
+            updated_at: 1,
+            generation_status: PublicEntryGenerationStatus::Completed,
+            related_entry_id: None,
         }
+    }
+
+    /// Projects a published entry exactly the way the session does, so a
+    /// fixture and a live entry reach the region under test the same way.
+    fn published(entry: PublicHistoryEntry) -> TranscriptEntry {
+        crate::tui::hydration::history_entry(entry)
     }
 
     fn effect_of(entry: &TranscriptEntry) -> EffectRegion {
@@ -1121,13 +1137,16 @@ mod tests {
 
     #[test]
     fn notices_split_into_hook_loop_and_severity_regions() {
-        let notice = |detail: Value, level: &str| TranscriptEntry {
-            id: "notice".to_owned(),
-            revision: 1,
-            kind: TranscriptKind::Notice,
-            text: "message body".to_owned(),
-            status: EntryStatus::Completed,
-            details: json!({"type": "notice", "level": level, "detail": detail}),
+        let notice = |detail: Value, level: &str| {
+            crate::tui::hydration::published_fixture(
+                "notice",
+                json!({
+                    "type": "notice",
+                    "level": level,
+                    "message": "message body",
+                    "detail": detail,
+                }),
+            )
         };
         assert_eq!(
             region(&notice(
@@ -1140,13 +1159,18 @@ mod tests {
             }
         );
         assert_eq!(
-            region(&notice(json!({"kind": "scheduled_loop_fired"}), "info")),
+            region(&notice(
+                json!({"kind": "scheduled_loop_fired", "loopId": "loop-1"}),
+                "info"
+            )),
             Region::Command {
                 message: "message body".to_owned()
             }
         );
+        // Every notice with no presentation of its own reads at the level the
+        // server published it at.
         assert_eq!(
-            region(&notice(json!({"kind": "turn_failed"}), "error")),
+            region(&notice(json!({"kind": "plan_review_ended"}), "error")),
             Region::Notice {
                 level: NoticeLevel::Error,
                 message: "message body".to_owned()
@@ -1168,18 +1192,20 @@ mod tests {
         );
         assert_eq!(unknown.body[0].text, "ok: true");
 
-        let malformed = TranscriptEntry {
+        // An effect entry with no canonical state behind it is presented from
+        // its own text, and never invents a settled outcome.
+        let restored = TranscriptEntry {
             id: "effect".to_owned(),
             revision: 1,
             kind: TranscriptKind::Effect,
             text: "broken".to_owned(),
             status: EntryStatus::Streaming,
-            details: Value::Null,
+            source: EntrySource::Restored,
         };
-        let malformed = effect_of(&malformed);
-        assert_eq!(malformed.status, EntryStatus::Streaming);
-        assert_eq!(malformed.indicator, Indicator::Running);
-        assert_eq!(malformed.kind, EffectKind::Tool);
+        let restored = effect_of(&restored);
+        assert_eq!(restored.status, EntryStatus::Streaming);
+        assert_eq!(restored.indicator, Indicator::Running);
+        assert_eq!(restored.kind, EffectKind::Tool);
     }
 
     #[test]
@@ -1190,7 +1216,7 @@ mod tests {
             kind: TranscriptKind::Effect,
             text: "Tool call-7\nexit status 1".to_owned(),
             status: EntryStatus::Failed,
-            details: json!({"source": "history/list"}),
+            source: EntrySource::Restored,
         };
         let restored = effect_of(&restored);
         assert_eq!(restored.status, EntryStatus::Failed);

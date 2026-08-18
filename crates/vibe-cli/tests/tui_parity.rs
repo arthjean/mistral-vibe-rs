@@ -21,7 +21,7 @@ use vibe_cli::tui::render::{BannerContext, TokenState, UiContext, draw};
 use vibe_cli::tui::rewind::{RewindAction, RewindState};
 use vibe_cli::tui::setup::{DetectedTheme, Theme, resolve_theme};
 use vibe_cli::tui::state::TuiState;
-use vibe_cli::tui::state::{EntryStatus, TranscriptEntry, TranscriptKind};
+use vibe_cli::tui::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind};
 
 #[test]
 fn official_textual_commands_are_all_registered_with_their_aliases() {
@@ -306,7 +306,7 @@ fn assistant_markdown_is_rendered_semantically_instead_of_literally() {
         kind: TranscriptKind::AssistantMessage,
         text: "# Result\n\n- first\n- second\n\n`cargo test`".to_owned(),
         status: EntryStatus::Completed,
-        details: serde_json::Value::Null,
+        source: EntrySource::Restored,
     });
     let backend = TestBackend::new(80, 24);
     let mut terminal = Terminal::new(backend).expect("terminal");

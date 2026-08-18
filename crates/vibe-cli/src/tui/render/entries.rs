@@ -293,13 +293,10 @@ fn append_terminal_status(
     entry: &TranscriptEntry,
     theme: ResolvedTheme,
 ) {
+    // An effect carries its failure inside its own region; every other entry
+    // settles under a bare label, which is all the canonical entry publishes.
     let status = match entry.status {
-        EntryStatus::Failed => entry
-            .details
-            .get("error")
-            .and_then(|value| value.as_str())
-            .map_or_else(|| "failed".to_owned(), |error| format!("failed: {error}")),
-        EntryStatus::Cancelled | EntryStatus::Skipped => entry.status.label().to_owned(),
+        EntryStatus::Failed | EntryStatus::Cancelled | EntryStatus::Skipped => entry.status.label(),
         EntryStatus::Pending
         | EntryStatus::Streaming
         | EntryStatus::Blocked
@@ -307,6 +304,6 @@ fn append_terminal_status(
     };
     lines.push(Line::from(vec![
         Span::raw("  "),
-        Span::styled(format!("({})", sanitize_inline(&status)), theme.error()),
+        Span::styled(format!("({})", sanitize_inline(status)), theme.error()),
     ]));
 }

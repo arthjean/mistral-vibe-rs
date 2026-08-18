@@ -11,8 +11,9 @@ use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
 use crate::tui::diagnostics::{
     Activity, classify, debug_log_line, log_level_color, safe_link_spans,
 };
+use crate::tui::hydration::published_fixture;
 use crate::tui::render::{TokenState, format_context_progress};
-use crate::tui::state::{EntryStatus, TranscriptEntry, TranscriptKind};
+use crate::tui::state::TranscriptEntry;
 use crate::tui::transcript::{EffectLayout, EffectRegion, Region, region};
 
 #[derive(Debug, Deserialize)]
@@ -223,14 +224,10 @@ fn apply(event: Event) -> String {
 }
 
 fn notice_entry(text: &str, detail: Value, level: &str) -> TranscriptEntry {
-    TranscriptEntry {
-        id: "notice".to_owned(),
-        revision: 1,
-        kind: TranscriptKind::Notice,
-        text: text.to_owned(),
-        status: EntryStatus::Completed,
-        details: json!({"type": "notice", "level": level, "detail": detail}),
-    }
+    published_fixture(
+        "notice",
+        json!({"type": "notice", "level": level, "message": text, "detail": detail}),
+    )
 }
 
 fn observe_effect(tool: &str, arguments: &Value, outcome: &Outcome) -> String {
@@ -238,18 +235,15 @@ fn observe_effect(tool: &str, arguments: &Value, outcome: &Outcome) -> String {
     // the entry, so the observation renders exactly the strings a reference
     // client would receive rather than deriving its own from the arguments.
     let detail = EffectDetail::for_call(tool, arguments);
-    let entry = TranscriptEntry {
-        id: "effect".to_owned(),
-        revision: 1,
-        kind: TranscriptKind::Effect,
-        text: tool.to_owned(),
-        status: EntryStatus::Streaming,
-        details: json!({
+    let entry = published_fixture(
+        "effect",
+        json!({
             "type": "effect",
+            "title": tool,
             "detail": detail,
             "state": effect_state(&detail, outcome),
         }),
-    };
+    );
     let effect = match region(&entry) {
         Region::Effect(effect) => effect,
         other => panic!("expected an effect region, got {other:?}"),

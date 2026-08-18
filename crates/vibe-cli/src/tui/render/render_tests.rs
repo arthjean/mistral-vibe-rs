@@ -1,17 +1,19 @@
 //! Frame-level rendering tests: the banner, the transcript regions, the
 //! overlays, the composer and the terminal-safety guards, all painted through
 //! a `TestBackend` so a regression shows up as a changed frame.
+
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 use serde_json::json;
-use vibe_app_server::client::EffectDetail;
+use vibe_app_server::client::{EffectDetail, PublicNoticeLevel};
 
 use super::*;
 use crate::tui::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName};
+use crate::tui::hydration::published_fixture as published;
 use crate::tui::rewind::{RewindState, RewindTarget};
 use crate::tui::setup::Theme;
-use crate::tui::state::{EntryStatus, TranscriptEntry, TranscriptKind};
+use crate::tui::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind};
 
 fn theme(colors_enabled: bool) -> ResolvedTheme {
     ResolvedTheme {
@@ -172,33 +174,27 @@ fn rewind_overlay_preserves_target_actions_and_help_at_fixed_widths() {
     }
 }
 
+/// A message entry, which every region test needs and none of them varies.
+fn message(id: &str, role: &str, text: &str) -> TranscriptEntry {
+    published(
+        id,
+        json!({"type": "message", "role": role, "content": [{"type": "text", "text": text}]}),
+    )
+}
+
 #[test]
 fn every_semantic_region_renders_at_the_reference_widths() {
     let entries = vec![
-        TranscriptEntry {
-            id: "user".to_owned(),
-            revision: 1,
-            kind: TranscriptKind::UserMessage,
-            text: "deploy the service".to_owned(),
-            status: EntryStatus::Completed,
-            details: serde_json::Value::Null,
-        },
-        TranscriptEntry {
-            id: "reasoning".to_owned(),
-            revision: 1,
-            kind: TranscriptKind::Reasoning,
-            text: "weighing options".to_owned(),
-            status: EntryStatus::Completed,
-            details: serde_json::Value::Null,
-        },
-        TranscriptEntry {
-            id: "shell".to_owned(),
-            revision: 1,
-            kind: TranscriptKind::Effect,
-            text: "bash".to_owned(),
-            status: EntryStatus::Completed,
-            details: json!({
+        message("user", "user", "deploy the service"),
+        published(
+            "reasoning",
+            json!({"type": "reasoning", "text": "weighing options"}),
+        ),
+        published(
+            "shell",
+            json!({
                 "type": "effect",
+                "title": "bash",
                 "detail": EffectDetail::for_call("bash", &json!({"command": "cargo test"})),
                 "state": {
                     "status": "completed",
@@ -206,15 +202,12 @@ fn every_semantic_region_renders_at_the_reference_widths() {
                     "display": {"success": true, "verb": "Ran", "message": "cargo test"},
                 },
             }),
-        },
-        TranscriptEntry {
-            id: "edit".to_owned(),
-            revision: 1,
-            kind: TranscriptKind::Effect,
-            text: "edit".to_owned(),
-            status: EntryStatus::Completed,
-            details: json!({
+        ),
+        published(
+            "edit",
+            json!({
                 "type": "effect",
+                "title": "edit",
                 "detail": EffectDetail::for_call("edit", &json!({"file_path": "src/lib.rs"})),
                 "state": {
                     "status": "completed",
@@ -222,35 +215,30 @@ fn every_semantic_region_renders_at_the_reference_widths() {
                     "display": {"success": true, "verb": "Edited", "message": "lib.rs"},
                 },
             }),
-        },
-        TranscriptEntry {
-            id: "hook".to_owned(),
-            revision: 1,
-            kind: TranscriptKind::Notice,
-            text: "reformatted".to_owned(),
-            status: EntryStatus::Completed,
-            details: json!({
+        ),
+        published(
+            "hook",
+            json!({
                 "type": "notice",
                 "level": "info",
-                "detail": {"kind": "hook_completed", "hookName": "format", "content": "reformatted", "status": "ok"},
+                "message": "reformatted",
+                "detail": {
+                    "kind": "hook_completed",
+                    "hookName": "format",
+                    "content": "reformatted",
+                    "status": "ok",
+                },
             }),
-        },
-        TranscriptEntry {
-            id: "compaction".to_owned(),
-            revision: 1,
-            kind: TranscriptKind::Checkpoint,
-            text: "summarized 40 messages".to_owned(),
-            status: EntryStatus::Completed,
-            details: json!({"type": "checkpoint", "kind": "compaction"}),
-        },
-        TranscriptEntry {
-            id: "assistant".to_owned(),
-            revision: 1,
-            kind: TranscriptKind::AssistantMessage,
-            text: "done".to_owned(),
-            status: EntryStatus::Completed,
-            details: serde_json::Value::Null,
-        },
+        ),
+        published(
+            "compaction",
+            json!({
+                "type": "checkpoint",
+                "kind": "compaction",
+                "message": "summarized 40 messages",
+            }),
+        ),
+        message("assistant", "assistant", "done"),
     ];
     for width in [40, 80, 120] {
         let mut state = TuiState::new("session");
@@ -299,14 +287,9 @@ fn every_semantic_region_renders_at_the_reference_widths() {
 fn a_keyboard_selection_is_visible_and_survives_a_streaming_repaint() {
     let mut state = TuiState::new("session");
     state.ready = true;
-    state.entries.push(TranscriptEntry {
-        id: "assistant".to_owned(),
-        revision: 1,
-        kind: TranscriptKind::AssistantMessage,
-        text: "deployed".to_owned(),
-        status: EntryStatus::Streaming,
-        details: serde_json::Value::Null,
-    });
+    let mut streaming = message("assistant", "assistant", "deployed");
+    streaming.status = EntryStatus::Streaming;
+    state.entries.push(streaming);
     let editor = PromptEditor::default();
     let mut terminal = Terminal::new(TestBackend::new(40, 12)).expect("test terminal");
     terminal
@@ -341,14 +324,11 @@ fn failed_effects_render_the_error_indicator_and_never_a_success_header() {
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut state = TuiState::new("session");
     state.ready = true;
-    state.entries.push(TranscriptEntry {
-        id: "effect".to_owned(),
-        revision: 1,
-        kind: TranscriptKind::Effect,
-        text: "edit".to_owned(),
-        status: EntryStatus::Failed,
-        details: json!({
+    state.entries.push(published(
+        "effect",
+        json!({
             "type": "effect",
+            "title": "edit",
             "detail": EffectDetail::for_call("edit", &json!({"path": "src/lib.rs"})),
             "state": {
                 "status": "failed",
@@ -357,7 +337,7 @@ fn failed_effects_render_the_error_indicator_and_never_a_success_header() {
                 "display": {"success": false, "verb": "Edited", "message": "lib.rs"},
             },
         }),
-    });
+    ));
     let editor = PromptEditor::default();
     terminal
         .draw(|frame| draw_test(frame, &mut state, &editor, false))
@@ -382,7 +362,7 @@ fn notices_follow_the_upstream_user_command_message_contract() {
         kind: TranscriptKind::Notice,
         text: "scheduled loop fired".to_owned(),
         status: EntryStatus::Completed,
-        details: serde_json::Value::Null,
+        source: EntrySource::notice(PublicNoticeLevel::Info),
     };
     let lines = semantic_lines(&entry, 40, theme(false), true);
     assert_eq!(lines[0].to_string(), "  ⎣ scheduled loop fired");
@@ -391,14 +371,7 @@ fn notices_follow_the_upstream_user_command_message_contract() {
 
 #[test]
 fn user_messages_follow_the_upstream_prompt_and_separator_contract() {
-    let entry = TranscriptEntry {
-        id: "user".to_owned(),
-        revision: 1,
-        kind: TranscriptKind::UserMessage,
-        text: "/help".to_owned(),
-        status: EntryStatus::Completed,
-        details: serde_json::Value::Null,
-    };
+    let entry = message("user", "user", "/help");
     let lines = semantic_lines(&entry, 24, theme(false), true);
     assert_eq!(lines[0].to_string(), "/ help");
     assert_eq!(lines.len(), 1);
@@ -413,19 +386,13 @@ fn user_messages_follow_the_upstream_prompt_and_separator_contract() {
 
 #[test]
 fn messages_wrap_without_losing_status_or_content() {
-    let entry = TranscriptEntry {
-        id: "assistant".to_owned(),
-        revision: 1,
-        kind: TranscriptKind::AssistantMessage,
-        text: "abcdefghijkl".to_owned(),
-        status: EntryStatus::Failed,
-        details: json!({"error": "network"}),
-    };
+    let mut entry = message("assistant", "assistant", "abcdefghijkl");
+    entry.status = EntryStatus::Failed;
     let lines = semantic_lines(&entry, 7, theme(false), true);
     assert_eq!(lines[0].to_string(), "  abcde");
     assert_eq!(lines[1].to_string(), "  fghij");
     assert_eq!(lines[2].to_string(), "  kl");
-    assert_eq!(lines[3].to_string(), "  (failed: network)");
+    assert_eq!(lines[3].to_string(), "  (failed)");
 }
 
 #[test]
@@ -877,11 +844,10 @@ fn tall_entry_scrolls_by_semantic_lines() {
     let backend = TestBackend::new(32, 12);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut state = TuiState::new("session");
-    state.entries.push(TranscriptEntry {
-        id: "tall".to_owned(),
-        revision: 1,
-        kind: TranscriptKind::AssistantMessage,
-        text: [
+    state.entries.push(message(
+        "tall",
+        "assistant",
+        &[
             "line-one",
             "line-two",
             "line-three",
@@ -891,9 +857,7 @@ fn tall_entry_scrolls_by_semantic_lines() {
             "line-seven",
         ]
         .join("\n"),
-        status: EntryStatus::Completed,
-        details: serde_json::Value::Null,
-    });
+    ));
 
     terminal
         .draw(|frame| draw_test(frame, &mut state, &PromptEditor::default(), false))

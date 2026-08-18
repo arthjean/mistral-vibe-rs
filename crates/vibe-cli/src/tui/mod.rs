@@ -102,7 +102,9 @@ use self::setup::{
     Theme, resolve_theme,
 };
 use self::shell::{finish_shell, interrupt_shell};
-use self::state::{EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiState};
+use self::state::{
+    EntrySource, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiState,
+};
 use self::terminal::{CrosstermOps, TerminalGuard};
 use self::turn::{
     ActiveTurn, CancellationPhase, drain_updates, finish_active, request_active_turn_interrupt,
@@ -112,6 +114,7 @@ use self::voice::{SpeechEvent, SpeechManager, VoiceManager};
 use crate::{
     Arguments, CliError, CliTelemetryObserver, bootstrap, telemetry_observer, validate_arguments,
 };
+use vibe_app_server::client::PublicNoticeLevel;
 use vibe_core::clock::{now_millis as unix_millis, now_seconds as unix_seconds};
 use vibe_core::telemetry::TelemetryRecord;
 use vibe_core::telemetry::records::{Startup, TelemetryCommandKind, TeleportProgress};
@@ -1889,7 +1892,7 @@ fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) -
         kind: TranscriptKind::Notice,
         text: message.to_owned(),
         status,
-        details: json!({"source": "tui"}),
+        source: EntrySource::notice(PublicNoticeLevel::Info),
     })
 }
 

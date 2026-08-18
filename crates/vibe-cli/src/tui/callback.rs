@@ -5,14 +5,20 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use serde_json::{Value, json};
-use vibe_app_server::client::{PublicCallbackState, PublicHistoryEntry};
+use vibe_app_server::client::{
+    ApprovalDecisionType, CallbackDetail, EffectDetail, NoticeDetail, PublicCallbackState,
+    PublicHistoryEntry, UserQuestionRequest,
+};
+use vibe_core::policy::PermissionRequirement;
 
 use super::controls::{
     CallbackChoice, CallbackEffect, CallbackInput, CallbackInputOutcome, CallbackOption,
     CallbackQuestion, CallbackRequest, ControlState, PendingCallback,
 };
 use super::input::SystemExternalEditor;
-use super::state::{EntryStatus, PlanReviewState, TranscriptEntry, TranscriptKind, TuiState};
+use super::state::{
+    EntrySource, EntryStatus, PlanReviewState, TranscriptEntry, TranscriptKind, TuiState,
+};
 use super::terminal::{CrosstermOps, TerminalGuard};
 use super::{
     ActiveTurn, CliError, InteractiveRuntime, push_local_notice, request_active_turn_interrupt,
@@ -469,26 +475,17 @@ pub(super) fn plan_reviews(state: &TuiState) -> BTreeMap<String, PathBuf> {
     state
         .entries
         .iter()
-        .filter(|entry| entry.kind == TranscriptKind::Notice)
-        .filter(|entry| {
-            entry
-                .details
-                .pointer("/detail/kind")
-                .and_then(Value::as_str)
-                == Some("plan_review_started")
-        })
         .filter_map(|entry| {
-            let related = entry
-                .details
-                .get("relatedEntryId")
-                .and_then(Value::as_str)?
-                .to_owned();
-            let path = entry
-                .details
-                .pointer("/detail/filePath")
-                .and_then(Value::as_str)
-                .filter(|path| !path.is_empty())?;
-            Some((related, PathBuf::from(path)))
+            let PublicHistoryEntry::Notice {
+                metadata,
+                detail: NoticeDetail::PlanReviewStarted { file_path },
+                ..
+            } = entry.source.server()?
+            else {
+                return None;
+            };
+            let related = metadata.related_entry_id.clone()?;
+            (!file_path.is_empty()).then(|| (related, PathBuf::from(file_path)))
         })
         .collect()
 }
@@ -507,9 +504,8 @@ pub(super) fn pending_callback_from_entry(
     else {
         return Ok(None);
     };
-    // The helpers below read the published wire form, which is what a reference
-    // client sees, so the typed union is rendered back to it once here.
-    let detail = &serde_json::to_value(detail).map_err(|error| error.to_string())?;
+    // The limit is on what the callback would occupy on the wire, so it is
+    // measured on the wire form rather than on the in-memory one.
     if serde_json::to_vec(detail)
         .map_err(|error| error.to_string())?
         .len()
@@ -522,25 +518,27 @@ pub(super) fn pending_callback_from_entry(
         .turn_id
         .clone()
         .ok_or_else(|| "active callback omitted its turn ID".to_owned())?;
-    match detail.get("kind").and_then(Value::as_str) {
-        Some("approval") => Ok(Some(PendingCallback {
-            callback_id: callback_id.clone(),
-            session_id: metadata.session_id.clone(),
-            turn_id,
-            prompt: title.clone(),
-            request: CallbackRequest::Approval {
-                options: approval_options(detail)?,
-                effect: callback_effect(detail)?,
+    let (prompt, request) = match detail {
+        CallbackDetail::Approval {
+            effect,
+            required_permissions,
+            choices,
+            ..
+        } => (
+            title.clone(),
+            CallbackRequest::Approval {
+                options: approval_options(choices)?,
+                effect: callback_effect(effect, required_permissions)?,
             },
-        })),
-        Some("user_input") => {
-            let questions = callback_questions(detail)?;
-            let footer_note = detail
-                .pointer("/request/footerNote")
-                .and_then(Value::as_str)
+        ),
+        CallbackDetail::UserInput { request, .. } => {
+            let questions = callback_questions(request)?;
+            let footer_note = request
+                .footer_note
+                .as_deref()
                 .filter(|footer| !footer.is_empty())
                 .map(ToOwned::to_owned);
-            let prompt = callback_prompt(title, &questions, detail);
+            let prompt = callback_prompt(title, &questions, footer_note.as_deref());
             let request = match plan_review {
                 Some(plan_path) => CallbackRequest::PlanReview {
                     questions,
@@ -552,88 +550,61 @@ pub(super) fn pending_callback_from_entry(
                     footer_note,
                 },
             };
-            Ok(Some(PendingCallback {
-                callback_id: callback_id.clone(),
-                session_id: metadata.session_id.clone(),
-                turn_id,
-                prompt,
-                request,
-            }))
+            (prompt, request)
         }
-        Some(other) => Err(format!("unsupported callback kind `{other}`")),
-        None => Err("callback detail omitted its kind".to_owned()),
-    }
+    };
+    Ok(Some(PendingCallback {
+        callback_id: callback_id.clone(),
+        session_id: metadata.session_id.clone(),
+        turn_id,
+        prompt,
+        request,
+    }))
 }
 
-fn callback_effect(detail: &Value) -> Result<CallbackEffect, String> {
-    let effect = detail
-        .get("effect")
-        .and_then(Value::as_object)
-        .ok_or_else(|| "approval callback omitted its effect".to_owned())?;
-    let tool_name = effect
-        .get("toolName")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "approval callback omitted its tool name".to_owned())?;
-    required_callback_text(tool_name, "approval tool name")?;
-    let summary = effect
-        .get("display")
-        .and_then(|display| display.get("summary"))
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    bounded_callback_text(summary, "approval summary")?;
-    let raw_content = effect
-        .get("display")
-        .and_then(|display| display.get("content"))
-        .filter(|value| !value.is_null())
-        .or_else(|| effect.get("input").filter(|value| !value.is_null()));
-    let content = raw_content
-        .map(|value| callback_effect_content(tool_name, value))
-        .unwrap_or_default();
+fn callback_effect(
+    effect: &EffectDetail,
+    required_permissions: &[PermissionRequirement],
+) -> Result<CallbackEffect, String> {
+    required_callback_text(&effect.tool_name, "approval tool name")?;
+    bounded_callback_text(&effect.display.summary, "approval summary")?;
+    let content = effect
+        .display
+        .content
+        .as_deref()
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| callback_effect_content(&effect.tool_name, &effect.input));
     bounded_callback_text(&content, "approval effect content")?;
     // US-105: each entry is the reference `RequiredPermission` model. The
     // terminal renders its label, which is the one field written to be read by
     // a person; the two patterns are what a client with a richer prompt shows.
-    let permissions = detail
-        .get("requiredPermissions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
+    let permissions = required_permissions
+        .iter()
         .map(|permission| {
-            let label = permission
-                .get("label")
-                .and_then(Value::as_str)
-                .ok_or_else(|| "approval permission must carry a label".to_owned())?;
-            required_callback_text(label, "approval permission")?;
-            Ok(label.to_owned())
+            required_callback_text(&permission.label, "approval permission")?;
+            Ok(permission.label.clone())
         })
         .collect::<Result<Vec<_>, String>>()?;
     Ok(CallbackEffect {
-        tool_name: tool_name.to_owned(),
-        summary: summary.to_owned(),
+        tool_name: effect.tool_name.clone(),
+        summary: effect.display.summary.clone(),
         content,
         permissions,
     })
 }
 
+/// How an approval renders the call it is asking about, for the tools whose
+/// arguments read better as a command line than as JSON.
 fn callback_effect_content(tool_name: &str, value: &Value) -> String {
-    match tool_name {
-        "shell" | "bash" if value.get("command").and_then(Value::as_str).is_some() => {
-            format!("$ {}", value["command"].as_str().unwrap_or_default())
+    let field = |key: &str| value.get(key).and_then(Value::as_str);
+    match (tool_name, field("command"), field("file_path")) {
+        ("shell" | "bash", Some(command), _) => format!("$ {command}"),
+        ("read_file", _, Some(path)) => format!("Read {path}"),
+        ("write_file", _, Some(path)) => {
+            format!("Write {path}\n{}", field("content").unwrap_or_default())
         }
-        "read_file" if value.get("file_path").and_then(Value::as_str).is_some() => {
-            format!("Read {}", value["file_path"].as_str().unwrap_or_default())
-        }
-        "write_file" if value.get("file_path").and_then(Value::as_str).is_some() => format!(
-            "Write {}\n{}",
-            value["file_path"].as_str().unwrap_or_default(),
-            value
-                .get("content")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-        ),
-        "edit" if value.get("file_path").and_then(Value::as_str).is_some() => format!(
-            "Edit {}\n{}",
-            value["file_path"].as_str().unwrap_or_default(),
+        ("edit", _, Some(path)) => format!(
+            "Edit {path}\n{}",
             serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
         ),
         _ => match value {
@@ -643,97 +614,75 @@ fn callback_effect_content(tool_name: &str, value: &Value) -> String {
     }
 }
 
-fn approval_options(detail: &Value) -> Result<Vec<CallbackOption>, String> {
-    let choices = detail
-        .get("choices")
-        .and_then(Value::as_array)
-        .ok_or_else(|| "approval callback omitted its choices".to_owned())?;
+/// The decisions the operator may pick from, labeled the way the reference
+/// labels them. `cancel_turn` is offered through the interrupt shortcut rather
+/// than as a list entry, so it never appears here.
+fn approval_options(choices: &[ApprovalDecisionType]) -> Result<Vec<CallbackOption>, String> {
     if choices.is_empty() || choices.len() > MAX_CALLBACK_OPTIONS {
         return Err("approval callback has an invalid choice count".to_owned());
     }
-    choices
+    Ok(choices
         .iter()
-        .filter(|choice| choice.as_str() != Some("cancel_turn"))
-        .map(|choice| {
-            let id = choice
-                .as_str()
-                .ok_or_else(|| "approval choice must be a string".to_owned())?;
-            let (label, description) = match id {
-                "approve" => ("Allow once", "Approve this invocation"),
-                "approve_for_session" => (
+        .filter_map(|choice| {
+            let (id, label, description) = match choice {
+                ApprovalDecisionType::Approve => {
+                    ("approve", "Allow once", "Approve this invocation")
+                }
+                ApprovalDecisionType::ApproveForSession => (
+                    "approve_for_session",
                     "Allow for session",
                     "Approve matching requests for this session",
                 ),
-                "approve_permanently" => ("Always allow", "Persist approval for matching requests"),
-                "deny" => ("Deny", "Reject this invocation"),
-                _ => return Err(format!("unsupported approval decision `{id}`")),
+                ApprovalDecisionType::ApprovePermanently => (
+                    "approve_permanently",
+                    "Always allow",
+                    "Persist approval for matching requests",
+                ),
+                ApprovalDecisionType::Deny => ("deny", "Deny", "Reject this invocation"),
+                ApprovalDecisionType::CancelTurn => return None,
             };
-            Ok(CallbackOption {
+            Some(CallbackOption {
                 id: id.to_owned(),
                 label: label.to_owned(),
                 description: description.to_owned(),
             })
         })
-        .collect()
+        .collect())
 }
 
-fn callback_questions(detail: &Value) -> Result<Vec<CallbackQuestion>, String> {
-    let questions = detail
-        .pointer("/request/questions")
-        .and_then(Value::as_array)
-        .ok_or_else(|| "user-input callback omitted its questions".to_owned())?;
-    if questions.is_empty() || questions.len() > MAX_CALLBACK_QUESTIONS {
+fn callback_questions(request: &UserQuestionRequest) -> Result<Vec<CallbackQuestion>, String> {
+    if request.questions.is_empty() || request.questions.len() > MAX_CALLBACK_QUESTIONS {
         return Err("user-input callback has an invalid question count".to_owned());
     }
-    questions
+    request
+        .questions
         .iter()
         .enumerate()
         .map(|(question_index, question)| {
-            let question_text = question
-                .get("question")
-                .and_then(Value::as_str)
-                .ok_or_else(|| "callback question omitted its text".to_owned())?;
-            required_callback_text(question_text, "callback question")?;
-            let header = question
-                .get("header")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            bounded_callback_text(header, "callback question header")?;
-            let raw_options = question
-                .get("options")
-                .and_then(Value::as_array)
-                .ok_or_else(|| "callback question omitted its options".to_owned())?;
-            if raw_options.len() < 2 || raw_options.len() > MAX_CALLBACK_OPTIONS {
+            required_callback_text(&question.question, "callback question")?;
+            bounded_callback_text(&question.header, "callback question header")?;
+            if question.options.is_empty() || question.options.len() > MAX_CALLBACK_OPTIONS {
                 return Err("callback question has an invalid option count".to_owned());
             }
-            let options = raw_options
+            let options = question
+                .options
                 .iter()
                 .enumerate()
                 .map(|(option_index, option)| {
-                    let label = option
-                        .get("label")
-                        .and_then(Value::as_str)
-                        .ok_or_else(|| "callback option omitted its label".to_owned())?;
-                    let description = option
-                        .get("description")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default();
-                    required_callback_text(label, "callback option label")?;
-                    bounded_callback_text(description, "callback option description")?;
-                    let id = option
-                        .get("id")
-                        .and_then(Value::as_str)
-                        .map(ToOwned::to_owned)
-                        .unwrap_or_else(|| {
-                            plan_option_id(label).map_or_else(
-                                || format!("q{question_index}-o{option_index}"),
-                                ToOwned::to_owned,
-                            )
-                        });
+                    required_callback_text(&option.label, "callback option label")?;
+                    bounded_callback_text(&option.description, "callback option description")?;
+                    // The published choice carries no identity, so the plan
+                    // review's four fixed answers keep the ids the session
+                    // settles a plan decision by, and every other option is
+                    // addressed by its position.
+                    let id = plan_option_id(&option.label).map_or_else(
+                        || format!("q{question_index}-o{option_index}"),
+                        ToOwned::to_owned,
+                    );
                     Ok(CallbackOption {
                         id,
-                        label: label.to_owned(),
-                        description: description.to_owned(),
+                        label: option.label.clone(),
+                        description: option.description.clone(),
                     })
                 })
                 .collect::<Result<Vec<_>, String>>()?;
@@ -745,23 +694,21 @@ fn callback_questions(detail: &Value) -> Result<Vec<CallbackQuestion>, String> {
                 return Err("callback question contains duplicate option IDs".to_owned());
             }
             Ok(CallbackQuestion {
-                header: header.to_owned(),
-                question: question_text.to_owned(),
+                header: question.header.clone(),
+                question: question.question.clone(),
                 options,
-                allows_free_text: !question
-                    .get("hideOther")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false),
-                multi_select: question
-                    .get("multiSelect")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false),
+                allows_free_text: !question.hide_other,
+                multi_select: question.multi_select,
             })
         })
         .collect()
 }
 
-fn callback_prompt(title: &str, questions: &[CallbackQuestion], detail: &Value) -> String {
+fn callback_prompt(
+    title: &str,
+    questions: &[CallbackQuestion],
+    footer_note: Option<&str>,
+) -> String {
     let mut prompt = title.to_owned();
     for (index, question) in questions.iter().enumerate() {
         prompt.push_str(&format!(
@@ -790,11 +737,7 @@ fn callback_prompt(title: &str, questions: &[CallbackQuestion], detail: &Value) 
             prompt.push_str("\n   Other: enter free text");
         }
     }
-    if let Some(footer) = detail
-        .pointer("/request/footerNote")
-        .and_then(Value::as_str)
-        .filter(|footer| !footer.is_empty())
-    {
+    if let Some(footer) = footer_note.filter(|footer| !footer.is_empty()) {
         prompt.push('\n');
         prompt.push_str(footer);
     }
@@ -874,10 +817,7 @@ fn append_callback_notice(
         kind: TranscriptKind::Notice,
         text: message.to_owned(),
         status: EntryStatus::Streaming,
-        details: json!({
-            "source": "tui",
-            "callbackId": pending.callback_id,
-        }),
+        source: EntrySource::tracking(&pending.callback_id),
     })
 }
 
@@ -887,7 +827,7 @@ fn settle_callback_notice(state: &mut TuiState, callback_id: &str, status: Entry
         .iter()
         .filter(|entry| {
             entry.status == EntryStatus::Streaming
-                && entry.details.get("callbackId").and_then(Value::as_str) == Some(callback_id)
+                && entry.source.tracked_callback() == Some(callback_id)
         })
         .map(|entry| (entry.id.clone(), entry.text.clone()))
         .collect::<Vec<_>>();
@@ -904,7 +844,7 @@ pub(super) fn fail_inactive_callback_notices(
         .entries
         .iter()
         .filter_map(|entry| {
-            let callback_id = entry.details.get("callbackId").and_then(Value::as_str)?;
+            let callback_id = entry.source.tracked_callback()?;
             (entry.status == EntryStatus::Streaming && active_callback_id != Some(callback_id))
                 .then(|| callback_id.to_owned())
         })
@@ -928,7 +868,7 @@ fn settle_open_callback_notices(state: &mut TuiState, status: EntryStatus) {
         .iter()
         .filter_map(|entry| {
             (entry.status == EntryStatus::Streaming)
-                .then(|| entry.details.get("callbackId").and_then(Value::as_str))
+                .then(|| entry.source.tracked_callback())
                 .flatten()
                 .map(ToOwned::to_owned)
         })
@@ -1040,19 +980,25 @@ mod tests {
         let mut state = TuiState::new("session");
         assert!(plan_reviews(&state).is_empty());
 
-        state.entries.push(TranscriptEntry {
-            id: "notice:callback-1:plan-review".to_owned(),
-            revision: 1,
-            kind: TranscriptKind::Notice,
-            text: "Review plan".to_owned(),
-            status: EntryStatus::Completed,
-            details: json!({
-                "type": "notice",
-                "level": "info",
-                "relatedEntryId": "callback:callback-1",
-                "detail": {"kind": "plan_review_started", "filePath": "/tmp/plan.md"},
-            }),
-        });
+        state.entries.push(crate::tui::hydration::history_entry(
+            PublicHistoryEntry::Notice {
+                metadata: vibe_app_server::client::PublicEntryMetadata {
+                    id: "notice:callback-1:plan-review".to_owned(),
+                    session_id: "session".to_owned(),
+                    turn_id: None,
+                    created_at: 1,
+                    updated_at: 1,
+                    generation_status:
+                        vibe_app_server::client::PublicEntryGenerationStatus::Completed,
+                    related_entry_id: Some("callback:callback-1".to_owned()),
+                },
+                level: vibe_app_server::client::PublicNoticeLevel::Info,
+                message: "Review plan".to_owned(),
+                detail: NoticeDetail::PlanReviewStarted {
+                    file_path: "/tmp/plan.md".to_owned(),
+                },
+            },
+        ));
 
         let reviews = plan_reviews(&state);
         assert_eq!(
@@ -1071,7 +1017,7 @@ mod tests {
             kind: TranscriptKind::Notice,
             text: "approval pending".to_owned(),
             status: EntryStatus::Streaming,
-            details: json!({"callbackId": "callback"}),
+            source: EntrySource::tracking("callback"),
         });
 
         fail_inactive_callback_notices(&mut state, None);

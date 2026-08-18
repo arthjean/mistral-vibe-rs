@@ -10,13 +10,16 @@ use std::path::Path;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
-use vibe_app_server::client::{PublicContentBlock, PublicHistoryEntry, PublicMessageRole};
+use vibe_app_server::client::{
+    PublicCallbackState, PublicContentBlock, PublicEffectState, PublicHistoryEntry,
+    PublicMessageRole,
+};
 
 use super::callback::sync_active_callbacks;
 use super::controls::ControlState;
 use super::runtime::InteractiveRuntime;
 use super::state::{
-    EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiSnapshot, TuiState,
+    EntrySource, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiSnapshot, TuiState,
 };
 use super::{Arguments, CliError, INITIAL_HISTORY_LIMIT, sync_runtime_intent};
 
@@ -271,7 +274,7 @@ pub(super) fn transcript_entries_from_history(
                 kind,
                 text,
                 status,
-                details: json!({"source": "history/list"}),
+                source: EntrySource::Restored,
             })
         })
         .collect()
@@ -381,84 +384,127 @@ pub(super) fn resync_current_projection(runtime: &mut InteractiveRuntime, state:
     }
 }
 
+/// Projects one canonical entry onto the transcript.
+///
+/// The entry itself is kept, not a JSON rendering of it: `kind`, `text` and
+/// `status` are the only three facts the frame needs eagerly, and every other
+/// projection reads the typed source through [`super::transcript`].
 pub(super) fn history_entry(entry: PublicHistoryEntry) -> TranscriptEntry {
     let metadata = entry.metadata().clone();
-    let completed = entry.is_completed();
-    let details = serde_json::to_value(&entry).unwrap_or(Value::Null);
-    let (kind, text) = match entry {
-        PublicHistoryEntry::Message { role, content, .. } => {
-            let kind = match role {
-                PublicMessageRole::User => TranscriptKind::UserMessage,
-                PublicMessageRole::Assistant => TranscriptKind::AssistantMessage,
-                PublicMessageRole::System => TranscriptKind::Notice,
-            };
-            (kind, content_text(&content))
-        }
-        PublicHistoryEntry::Reasoning { text, summary, .. } => {
-            let text = if text.is_empty() {
-                summary.join("\n")
-            } else {
-                text
-            };
-            (TranscriptKind::Reasoning, text)
-        }
-        // `details` keeps the canonical entry verbatim: the semantic
-        // presentation is derived from it by `tui::transcript`, so nothing is
-        // flattened or duplicated here.
-        PublicHistoryEntry::Effect { title, state, .. } => {
-            let output = serde_json::to_value(state)
-                .ok()
-                .and_then(|encoded| {
-                    encoded
-                        .get("outputText")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned)
-                })
-                .unwrap_or_default();
-            (
-                TranscriptKind::Effect,
-                if output.is_empty() {
-                    title
-                } else {
-                    format!("{title}\n{output}")
-                },
-            )
-        }
-        PublicHistoryEntry::Callback { title, detail, .. } => (
-            TranscriptKind::Callback,
-            format!(
-                "{title}\n{}",
-                serde_json::to_value(&detail).unwrap_or(Value::Null)
-            ),
-        ),
-        PublicHistoryEntry::Checkpoint { kind, message, .. } => (
-            TranscriptKind::Checkpoint,
-            message.unwrap_or_else(|| format!("Checkpoint: {kind}")),
-        ),
-        PublicHistoryEntry::Notice { message, .. } => (TranscriptKind::Notice, message),
-    };
-    // The nested effect or callback state is authoritative: a completed
-    // generation whose effect failed, was cancelled, or was skipped must never
-    // settle as a success.
-    let nested_status = details.pointer("/state/status").and_then(Value::as_str);
-    let status = match nested_status {
-        Some("failed") => EntryStatus::Failed,
-        Some("cancelled") | Some("expired") => EntryStatus::Cancelled,
-        Some("skipped") => EntryStatus::Skipped,
-        Some("pending") => EntryStatus::Pending,
-        Some("blocked") => EntryStatus::Blocked,
-        Some("running") => EntryStatus::Streaming,
-        _ if completed => EntryStatus::Completed,
-        _ => EntryStatus::Streaming,
-    };
+    let kind = entry_kind(&entry);
+    let text = entry_text(&entry);
+    let status = entry_status(&entry);
     TranscriptEntry {
         id: metadata.id,
         revision: metadata.updated_at.max(1),
         kind,
         text,
         status,
-        details,
+        source: EntrySource::Server(Box::new(entry)),
     }
+}
+
+fn entry_kind(entry: &PublicHistoryEntry) -> TranscriptKind {
+    match entry {
+        PublicHistoryEntry::Message {
+            role: PublicMessageRole::User,
+            ..
+        } => TranscriptKind::UserMessage,
+        PublicHistoryEntry::Message {
+            role: PublicMessageRole::Assistant,
+            ..
+        } => TranscriptKind::AssistantMessage,
+        PublicHistoryEntry::Message {
+            role: PublicMessageRole::System,
+            ..
+        }
+        | PublicHistoryEntry::Notice { .. } => TranscriptKind::Notice,
+        PublicHistoryEntry::Reasoning { .. } => TranscriptKind::Reasoning,
+        PublicHistoryEntry::Effect { .. } => TranscriptKind::Effect,
+        PublicHistoryEntry::Callback { .. } => TranscriptKind::Callback,
+        PublicHistoryEntry::Checkpoint { .. } => TranscriptKind::Checkpoint,
+    }
+}
+
+/// The plain text a search, a copy and a fallback render read off the entry.
+fn entry_text(entry: &PublicHistoryEntry) -> String {
+    match entry {
+        PublicHistoryEntry::Message { content, .. } => content_text(content),
+        PublicHistoryEntry::Reasoning { text, summary, .. } => {
+            if text.is_empty() {
+                summary.join("\n")
+            } else {
+                text.clone()
+            }
+        }
+        PublicHistoryEntry::Effect { title, state, .. } => match effect_output_text(state) {
+            "" => title.clone(),
+            output => format!("{title}\n{output}"),
+        },
+        PublicHistoryEntry::Callback { title, detail, .. } => format!(
+            "{title}\n{}",
+            serde_json::to_value(detail).unwrap_or(Value::Null)
+        ),
+        PublicHistoryEntry::Checkpoint { kind, message, .. } => message
+            .clone()
+            .unwrap_or_else(|| format!("Checkpoint: {kind}")),
+        PublicHistoryEntry::Notice { message, .. } => message.clone(),
+    }
+}
+
+/// The nested effect or callback state is authoritative: a completed generation
+/// whose effect failed, was cancelled, or was skipped must never settle as a
+/// success.
+fn entry_status(entry: &PublicHistoryEntry) -> EntryStatus {
+    let nested = match entry {
+        PublicHistoryEntry::Effect { state, .. } => Some(EntryStatus::of_effect(state)),
+        PublicHistoryEntry::Callback { state, .. } => match state {
+            PublicCallbackState::Cancelled { .. } | PublicCallbackState::Expired { .. } => {
+                Some(EntryStatus::Cancelled)
+            }
+            PublicCallbackState::Open | PublicCallbackState::Answered { .. } => None,
+        },
+        _ => None,
+    };
+    nested.unwrap_or(if entry.is_completed() {
+        EntryStatus::Completed
+    } else {
+        EntryStatus::Streaming
+    })
+}
+
+/// The streamed output an effect has produced so far, in every state that
+/// carries one.
+fn effect_output_text(state: &PublicEffectState) -> &str {
+    match state {
+        PublicEffectState::Running { output_text }
+        | PublicEffectState::Blocked { output_text, .. }
+        | PublicEffectState::Completed { output_text, .. }
+        | PublicEffectState::Failed { output_text, .. }
+        | PublicEffectState::Cancelled { output_text, .. } => output_text,
+        PublicEffectState::Pending | PublicEffectState::Skipped { .. } => "",
+    }
+}
+
+/// Projects a fixture written in the wire form a client receives.
+///
+/// Tests name only the fields the projection under test reads; the metadata
+/// every variant carries is filled in here. A fixture the server could not
+/// publish fails to deserialize rather than reaching the projection, so a
+/// corpus can never assert on a payload that does not exist.
+#[cfg(test)]
+pub(in crate::tui) fn published_fixture(id: &str, mut entry: Value) -> TranscriptEntry {
+    let object = entry
+        .as_object_mut()
+        .expect("a published entry is an object");
+    object.insert("id".to_owned(), json!(id));
+    object.insert("sessionId".to_owned(), json!("session"));
+    object.insert("createdAt".to_owned(), json!(1));
+    object.insert("updatedAt".to_owned(), json!(1));
+    object
+        .entry("generationStatus")
+        .or_insert_with(|| json!("completed"));
+    history_entry(serde_json::from_value(entry).expect("the fixture is a published history entry"))
 }
 
 pub(super) fn content_text(content: &[PublicContentBlock]) -> String {

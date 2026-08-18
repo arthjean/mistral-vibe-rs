@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{mpsc, watch};
 
@@ -15,6 +14,7 @@ use super::narrator::NarratorManager;
 use super::rewind::RewindState;
 use super::session_picker::SessionDeleteState;
 use super::transcript_view::TranscriptView;
+use vibe_app_server::client::{PublicEffectState, PublicHistoryEntry, PublicNoticeLevel};
 
 const MAX_DIAGNOSTICS: usize = 100;
 
@@ -31,6 +31,22 @@ pub enum EntryStatus {
 }
 
 impl EntryStatus {
+    /// How a published effect settles on the transcript. The effect's own state
+    /// is authoritative: a completed generation whose effect failed, was
+    /// cancelled, or was skipped must never settle as a success.
+    #[must_use]
+    pub const fn of_effect(state: &PublicEffectState) -> Self {
+        match state {
+            PublicEffectState::Pending => Self::Pending,
+            PublicEffectState::Running { .. } => Self::Streaming,
+            PublicEffectState::Blocked { .. } => Self::Blocked,
+            PublicEffectState::Completed { .. } => Self::Completed,
+            PublicEffectState::Failed { .. } => Self::Failed,
+            PublicEffectState::Cancelled { .. } => Self::Cancelled,
+            PublicEffectState::Skipped { .. } => Self::Skipped,
+        }
+    }
+
     #[must_use]
     pub fn is_terminal(self) -> bool {
         matches!(
@@ -67,20 +83,77 @@ pub enum TranscriptKind {
     Plan,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+/// Where a transcript entry came from.
+///
+/// A server entry keeps the canonical [`PublicHistoryEntry`] it arrived as, so
+/// every semantic projection reads its typed fields rather than re-parsing a
+/// JSON rendering of them. The other two variants name the only entries that
+/// have no canonical form: what a saved conversation was replayed from, and
+/// what this client wrote itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EntrySource {
+    Server(Box<PublicHistoryEntry>),
+    /// Replayed from saved history, which records the text and nothing else.
+    Restored,
+    /// A notice this client wrote itself.
+    Notice {
+        /// How the notice reads, which is what the renderer colors it by.
+        level: PublicNoticeLevel,
+        /// The callback whose lifetime this notice tracks, when it tracks one.
+        /// Settling that callback is what settles the notice.
+        callback_id: Option<String>,
+    },
+}
+
+impl EntrySource {
+    /// A notice reporting a condition rather than progress.
+    #[must_use]
+    pub const fn notice(level: PublicNoticeLevel) -> Self {
+        Self::Notice {
+            level,
+            callback_id: None,
+        }
+    }
+
+    /// A notice whose lifetime follows `callback_id`.
+    #[must_use]
+    pub fn tracking(callback_id: impl Into<String>) -> Self {
+        Self::Notice {
+            level: PublicNoticeLevel::Info,
+            callback_id: Some(callback_id.into()),
+        }
+    }
+
+    /// The canonical entry this projects, when the server published one.
+    #[must_use]
+    pub fn server(&self) -> Option<&PublicHistoryEntry> {
+        match self {
+            Self::Server(entry) => Some(entry),
+            Self::Restored | Self::Notice { .. } => None,
+        }
+    }
+
+    /// The callback whose lifetime a locally written notice tracks.
+    #[must_use]
+    pub fn tracked_callback(&self) -> Option<&str> {
+        match self {
+            Self::Notice { callback_id, .. } => callback_id.as_deref(),
+            Self::Server(_) | Self::Restored => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranscriptEntry {
     pub id: String,
     pub revision: u64,
     pub kind: TranscriptKind,
     pub text: String,
     pub status: EntryStatus,
-    #[serde(default)]
-    pub details: Value,
+    pub source: EntrySource,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TuiSnapshot {
     pub session_id: String,
     pub event_id: u64,
@@ -639,7 +712,6 @@ pub enum MailboxError {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
 
     use super::super::diagnostics;
     use super::*;
@@ -651,7 +723,7 @@ mod tests {
             kind: TranscriptKind::AssistantMessage,
             text: text.to_owned(),
             status,
-            details: Value::Null,
+            source: EntrySource::Restored,
         }
     }
 
@@ -965,18 +1037,18 @@ mod tests {
     fn activity_reports_the_running_effect_and_clears_the_moment_work_settles() {
         let mut state = TuiState::new("session");
         state.waiting = true;
-        state.entries.push(TranscriptEntry {
-            id: "effect".to_owned(),
-            revision: 1,
-            kind: TranscriptKind::Effect,
-            text: "read".to_owned(),
-            status: EntryStatus::Streaming,
-            details: json!({
+        state.entries.push(crate::tui::hydration::published_fixture(
+            "effect",
+            serde_json::json!({
                 "type": "effect",
-                "detail": {"toolName": "read_file", "arguments": {"file_path": "a.rs"}},
+                "title": "read",
+                "detail": vibe_app_server::client::EffectDetail::for_call(
+                    "read_file",
+                    &serde_json::json!({"file_path": "a.rs"}),
+                ),
                 "state": {"status": "running", "outputText": ""},
             }),
-        });
+        ));
         state.sync_activity(1_000);
         let activity = state.activity.clone().expect("an active turn reports work");
         assert_eq!(activity.status, "Reading file");
