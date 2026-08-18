@@ -2840,30 +2840,23 @@ fn is_sensitive_key(key: &str) -> bool {
         || normalized.contains("proxy")
 }
 
-struct ConfigFileLock {
-    file: File,
-}
+/// The advisory lock every configuration read and write is serialized behind.
+///
+/// The guard itself is [`atomic_file::FileLock`]; what this adds is the
+/// configuration's own error vocabulary and the knowledge of where the lock
+/// file lives.
+struct ConfigFileLock(
+    /// Held for its `Drop`, which is what releases the lock.
+    #[expect(dead_code, reason = "the guard's whole job is its drop")]
+    atomic_file::FileLock,
+);
 
 impl ConfigFileLock {
     fn acquire(vibe_home: &Path) -> Result<Self, ConfigError> {
-        use fs2::FileExt as _;
-
         let path = vibe_home.join(LOCK_FILE);
-        let file = atomic_file::open_private_lock(&path).map_err(|source| ConfigError::Io {
-            path: path.clone(),
-            source,
-        })?;
-        file.lock_exclusive().map_err(|source| ConfigError::Io {
-            path: path.clone(),
-            source,
-        })?;
-        Ok(Self { file })
-    }
-}
-
-impl Drop for ConfigFileLock {
-    fn drop(&mut self) {
-        let _ = fs2::FileExt::unlock(&self.file);
+        atomic_file::FileLock::acquire(&path)
+            .map(Self)
+            .map_err(|source| ConfigError::Io { path, source })
     }
 }
 

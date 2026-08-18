@@ -1404,53 +1404,39 @@ enum MigrationOutcome {
     Skipped,
 }
 
-/// An advisory exclusive lock released when the guard is dropped.
-struct FileLock {
-    file: File,
-}
+/// The advisory lock this store serializes its durable writes behind, with the
+/// store's own error vocabulary in front of [`atomic_file::FileLock`].
+struct FileLock(
+    /// Held for its `Drop`, which is what releases the lock.
+    #[expect(dead_code, reason = "the guard's whole job is its drop")]
+    atomic_file::FileLock,
+);
 
 impl FileLock {
     /// Blocks until the lock is available.
     fn acquire(path: &Path) -> Result<Self, StorageError> {
-        use fs2::FileExt as _;
-
-        let file = Self::open(path)?;
-        file.lock_exclusive().map_err(|source| StorageError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
-        Ok(Self { file })
+        atomic_file::FileLock::acquire(path)
+            .map(Self)
+            .map_err(|source| StorageError::Io {
+                path: path.to_path_buf(),
+                source,
+            })
     }
 
-    /// Fails with `busy` rather than waiting when another holder owns the lock.
+    /// Answers `busy` rather than waiting when another holder owns the lock.
     fn try_acquire(path: &Path, busy: StorageError) -> Result<Self, StorageError> {
-        use fs2::FileExt as _;
-
-        let file = Self::open(path)?;
-        file.try_lock_exclusive().map_err(|source| {
-            if source.kind() == std::io::ErrorKind::WouldBlock {
-                busy
-            } else {
-                StorageError::Io {
-                    path: path.to_path_buf(),
-                    source,
+        atomic_file::FileLock::try_acquire(path)
+            .map(Self)
+            .map_err(|source| {
+                if source.kind() == std::io::ErrorKind::WouldBlock {
+                    busy
+                } else {
+                    StorageError::Io {
+                        path: path.to_path_buf(),
+                        source,
+                    }
                 }
-            }
-        })?;
-        Ok(Self { file })
-    }
-
-    fn open(path: &Path) -> Result<File, StorageError> {
-        atomic_file::open_private_lock(path).map_err(|source| StorageError::Io {
-            path: path.to_path_buf(),
-            source,
-        })
-    }
-}
-
-impl Drop for FileLock {
-    fn drop(&mut self) {
-        let _ = fs2::FileExt::unlock(&self.file);
+            })
     }
 }
 

@@ -39,6 +39,48 @@ pub(crate) fn open_private_lock(path: &Path) -> std::io::Result<File> {
     options.open(path)
 }
 
+/// An advisory exclusive lock on `path`, released when the value is dropped.
+///
+/// Two subsystems serialize their durable writes this way (the session store
+/// and the configuration store), and both need the same three things: a private
+/// lock file, an exclusive hold, and a release that survives an early return.
+/// Owning the guard here is what keeps the second one from being a slightly
+/// different copy of the first.
+///
+/// Errors surface as [`std::io::Error`] so each caller maps them into its own
+/// error type; a caller that wants to distinguish "already held" reads
+/// [`std::io::ErrorKind::WouldBlock`] off [`FileLock::try_acquire`].
+pub(crate) struct FileLock {
+    file: File,
+}
+
+impl FileLock {
+    /// Blocks until the lock is available.
+    pub(crate) fn acquire(path: &Path) -> std::io::Result<Self> {
+        use fs2::FileExt as _;
+
+        let file = open_private_lock(path)?;
+        file.lock_exclusive()?;
+        Ok(Self { file })
+    }
+
+    /// Fails with [`std::io::ErrorKind::WouldBlock`] rather than waiting when
+    /// another holder owns the lock.
+    pub(crate) fn try_acquire(path: &Path) -> std::io::Result<Self> {
+        use fs2::FileExt as _;
+
+        let file = open_private_lock(path)?;
+        file.try_lock_exclusive()?;
+        Ok(Self { file })
+    }
+}
+
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        let _ = fs2::FileExt::unlock(&self.file);
+    }
+}
+
 /// Creates `path` and every missing parent, restricted to the current user.
 pub(crate) fn ensure_private_directory(path: &Path) -> std::io::Result<()> {
     fs::create_dir_all(path)?;
