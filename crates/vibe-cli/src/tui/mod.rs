@@ -57,6 +57,7 @@ mod workflow;
 
 use std::collections::BTreeMap;
 use std::future::Future;
+use std::ops::ControlFlow;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -98,8 +99,7 @@ use self::runtime::{
     teleport_available,
 };
 use self::setup::{
-    EnvironmentThemeDetector, PersistedCredentialStore, ResolvedTheme, TerminalThemeDetector,
-    Theme, resolve_theme,
+    EnvironmentThemeDetector, ResolvedTheme, TerminalThemeDetector, Theme, resolve_theme,
 };
 use self::shell::{finish_shell, interrupt_shell};
 use self::state::{
@@ -111,9 +111,7 @@ use self::turn::{
     settle_unstarted_reservation, start_active_turn,
 };
 use self::voice::{SpeechEvent, SpeechManager, VoiceManager};
-use crate::{
-    Arguments, CliError, CliTelemetryObserver, bootstrap, telemetry_observer, validate_arguments,
-};
+use crate::{Arguments, CliError, CliTelemetryObserver, bootstrap, telemetry_observer};
 use vibe_app_server::client::PublicNoticeLevel;
 use vibe_core::clock::{now_millis as unix_millis, now_seconds as unix_seconds};
 use vibe_core::telemetry::TelemetryRecord;
@@ -134,6 +132,19 @@ pub struct InteractiveExit {
     /// is how a cancelled onboarding exits 0 and an unusable key variable
     /// exits 1, as the reference's `run_onboarding` callers do.
     pub exit_code: Option<u8>,
+}
+
+impl InteractiveExit {
+    /// A launch a pre-session gate refused: nothing opened, so nothing settles
+    /// beyond the exit code the gate decided.
+    const fn aborted(exit_code: Option<u8>) -> Self {
+        Self {
+            session_started: false,
+            initialization_error: None,
+            summary: None,
+            exit_code,
+        }
+    }
 }
 
 const MAX_FATAL_INPUT_DRAIN: usize = 256;
@@ -186,115 +197,16 @@ where
 pub async fn run_interactive(
     invocation: startup::InteractiveInvocation,
 ) -> Result<InteractiveExit, CliError> {
-    let startup::InteractiveInvocation {
-        mut arguments,
+    let startup::ReadyStartup {
+        arguments,
+        working_directory,
+        release3,
+        credential: initial_credential,
         post_mount_action,
-        ..
-    } = invocation;
-    validate_arguments(&arguments)?;
-    let working_directory = match &arguments.workdir {
-        Some(path) => path.clone(),
-        None => std::env::current_dir().map_err(CliError::CurrentDirectory)?,
+    } = match startup::preflight(invocation).await? {
+        ControlFlow::Break(exit_code) => return Ok(InteractiveExit::aborted(exit_code)),
+        ControlFlow::Continue(ready) => ready,
     };
-    let startup_host = startup::startup_host(&arguments, &working_directory);
-    let trust = startup::resolve_workspace_trust(&mut arguments, &startup_host)?;
-    if trust.cancelled {
-        return Ok(InteractiveExit {
-            session_started: false,
-            initialization_error: None,
-            summary: None,
-            exit_code: None,
-        });
-    }
-    if !startup::resolve_location_safety(trust.dangerous_warning.as_deref())? {
-        return Ok(InteractiveExit {
-            session_started: false,
-            initialization_error: None,
-            summary: None,
-            exit_code: None,
-        });
-    }
-    match startup::resolve_bare_resume(&arguments, &startup_host)? {
-        startup::ResumeResolution::Unchanged => {}
-        startup::ResumeResolution::StartNew => arguments.resume = None,
-        startup::ResumeResolution::Resume(session_id) => {
-            arguments.resume = Some(session_id);
-            arguments.continue_session = false;
-        }
-        startup::ResumeResolution::Abort => {
-            return Ok(InteractiveExit {
-                session_started: false,
-                initialization_error: None,
-                summary: None,
-                exit_code: None,
-            });
-        }
-    }
-    let vibe_home = startup::vibe_home_directory(&arguments, &working_directory);
-    let credential_store =
-        PersistedCredentialStore::new(vibe_core::config::global_env_file(&vibe_home));
-    // The process environment first, then `{vibe_home}/.env`, then the
-    // keyring under the shared service names: a key the operator keeps in
-    // the dotenv file is as usable here as an exported one, and a keyring
-    // that cannot be reached reads as absent, as the reference reads it.
-    let resolve_credential = |store: &PersistedCredentialStore| {
-        vibe_core::config::DotenvValues::global(&vibe_home)
-            .variable(&arguments.credential_environment)
-            .filter(|credential| !credential.is_empty())
-            .or_else(|| store.resolve(&arguments.credential_environment))
-    };
-    let mut initial_credential = resolve_credential(&credential_store);
-    // Reference `run_cli` and `load_config_orchestrator_or_exit`: `--setup`
-    // always runs the onboarding screens and exits afterward, and an
-    // interactive launch with no resolvable credential runs them and then
-    // continues into the session it can now start.
-    if arguments.setup || initial_credential.is_none() {
-        match onboarding::run_onboarding(
-            &arguments,
-            &working_directory,
-            &vibe_home,
-            &credential_store,
-        )
-        .await?
-        {
-            onboarding::OnboardingConclusion::Exit(code) => {
-                return Ok(InteractiveExit {
-                    session_started: false,
-                    initialization_error: None,
-                    summary: None,
-                    exit_code: Some(code),
-                });
-            }
-            onboarding::OnboardingConclusion::Continue if arguments.setup => {
-                return Ok(InteractiveExit {
-                    session_started: false,
-                    initialization_error: None,
-                    summary: None,
-                    exit_code: None,
-                });
-            }
-            onboarding::OnboardingConclusion::Continue => {
-                initial_credential = resolve_credential(&credential_store);
-            }
-        }
-    }
-    let release3 = startup_host
-        .into_release3(arguments.trust)
-        .map_err(startup::StartupError::from)?;
-    if !startup::resolve_startup_update_prompt(
-        &arguments,
-        &working_directory,
-        &release3,
-        env!("CARGO_PKG_VERSION"),
-        &mut std::io::stdout().lock(),
-    )? {
-        return Ok(InteractiveExit {
-            session_started: false,
-            initialization_error: None,
-            summary: None,
-            exit_code: None,
-        });
-    }
     let update_checks_enabled = startup::update_checks_enabled(&release3);
     let fallback_banner = banner_metrics_from_release3(&release3, &arguments, &working_directory);
     let mut runtime = match initial_credential {

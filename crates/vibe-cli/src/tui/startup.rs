@@ -1,6 +1,7 @@
 mod dialog;
 mod invocation;
 mod mounted;
+mod preflight;
 mod session;
 mod trust;
 mod update;
@@ -19,6 +20,7 @@ pub use invocation::{
     ProgrammaticInvocation,
 };
 pub(super) use mounted::{MountedStartup, complete_mounted_startup};
+pub(super) use preflight::{ReadyStartup, preflight};
 pub use session::{ResumeResolution, resolve_bare_resume};
 pub use trust::{
     TrustResolution, dangerous_directory_warning, resolve_location_safety, resolve_workspace_trust,
