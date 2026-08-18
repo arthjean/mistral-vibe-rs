@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Honor a hook that never reads its stdin. The invocation is written to the
+  hook's standard input, and a hook that exits without consuming it closes the
+  read end, so the write returns a broken pipe. That was reported as a hook
+  failure, which made such a hook succeed or fail depending on how loaded the
+  machine was: its rewrite of the tool's arguments was silently discarded on a
+  busy host. The reference swallows a broken pipe there and reads the hook's
+  answer off its stdout and exit status, and so does this port now.
+
 - Mark the active theme as current in the `/theme` picker when no theme has
   been persisted. The picker and the cancel path read the preference through
   two copies of the same accessor that disagreed on the default, so the

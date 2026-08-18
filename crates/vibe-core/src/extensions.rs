@@ -1147,21 +1147,30 @@ async fn execute_hook(
         .ok_or_else(|| ExtensionError::HookProtocol("stderr pipe is unavailable".to_owned()))?;
     let stdout_task = tokio::spawn(drain_bounded(stdout, MAX_HOOK_OUTPUT_BYTES));
     let stderr_task = tokio::spawn(drain_bounded(stderr, MAX_HOOK_OUTPUT_BYTES));
-    child_stdin
-        .write_all(&stdin)
-        .await
-        .map_err(|source| ExtensionError::Process {
-            program: hook.program.clone(),
-            source,
-        })?;
-    child_stdin
-        .write_all(b"\n")
-        .await
-        .map_err(|source| ExtensionError::Process {
-            program: hook.program.clone(),
-            source,
-        })?;
+    // A hook is under no obligation to read its stdin, and one that does not
+    // may well have exited before this write lands, which closes the read end
+    // and breaks the pipe. Reference `_run_process` swallows `BrokenPipeError`
+    // and `ConnectionResetError` around the whole write for exactly that
+    // reason: the hook's own output and exit status are what answer for it.
+    // Treating the broken pipe as a failure instead makes such a hook fail or
+    // succeed depending on how loaded the machine is.
+    let written = async {
+        child_stdin.write_all(&stdin).await?;
+        child_stdin.write_all(b"\n").await
+    }
+    .await;
     drop(child_stdin);
+    if let Err(source) = written
+        && !matches!(
+            source.kind(),
+            io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset
+        )
+    {
+        return Err(ExtensionError::Process {
+            program: hook.program.clone(),
+            source,
+        });
+    }
     let status = match timeout(Duration::from_millis(hook.timeout_ms), child.wait()).await {
         Ok(result) => result.map_err(|source| ExtensionError::Process {
             program: hook.program.clone(),
@@ -2084,6 +2093,64 @@ mod tests {
         assert_eq!(result.invocation.payload, json!({"rewritten": true}));
         assert_eq!(result.invocation.output_text, "base\nextra");
         assert_eq!(result.notices.len(), 2);
+        assert!(result.denied.is_none());
+    }
+
+    /// A hook that closes its stdin without reading it is still honored.
+    ///
+    /// Reference `_run_process` swallows `BrokenPipeError` and
+    /// `ConnectionResetError` around the stdin write, because a hook answers
+    /// through its stdout and its exit status and is under no obligation to
+    /// consume the invocation. The payload here is deliberately larger than a
+    /// pipe buffer, so the write cannot quietly fit into a buffer nobody reads:
+    /// it reaches the closed read end every time, on every machine.
+    ///
+    /// POSIX only: the case is built on `exec 0<&-`, and the behavior under
+    /// test is the parent's, not the shell's.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_hook_that_never_reads_its_stdin_is_still_honored() {
+        let temporary = tempfile::tempdir().expect("temporary root");
+        let manager = HookManager::new(
+            vec![HookSpec {
+                name: "deaf".to_owned(),
+                kind: HookKind::PreTool,
+                program: PathBuf::from("/bin/sh"),
+                args: vec![
+                    "-c".to_owned(),
+                    "exec 0<&-; printf '%s' \
+                     '{\"decision\":\"allow\",\"hook_specific_output\":{\"tool_input\":{\"rewritten\":true}}}'"
+                        .to_owned(),
+                ],
+                matcher: Some("*".to_owned()),
+                timeout_ms: 30_000,
+                retries: 0,
+                strict: false,
+                source: ExtensionSource::User,
+            }],
+            temporary.path().to_path_buf(),
+        );
+        let result = manager
+            .run(HookInvocation {
+                kind: HookKind::PreTool,
+                session_id: "session".to_owned(),
+                parent_session_id: None,
+                tool_name: Some("read_file".to_owned()),
+                tool_call_id: Some("call".to_owned()),
+                payload: json!({"old": true}),
+                // Past any platform's pipe buffer, so the write has to reach
+                // the read end the hook already closed.
+                output_text: "x".repeat(256 * 1024),
+            })
+            .await
+            .expect("the hook chain completes");
+        assert_eq!(
+            result.invocation.payload,
+            json!({"rewritten": true}),
+            "a broken stdin pipe swallowed the hook's rewrite: {:?}",
+            result.notices
+        );
+        assert!(result.notices.is_empty(), "{:?}", result.notices);
         assert!(result.denied.is_none());
     }
 
