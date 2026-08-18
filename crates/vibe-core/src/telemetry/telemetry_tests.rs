@@ -16,6 +16,7 @@ use super::records::{
 use super::*;
 use crate::compaction::{CompactionFailureReason, CompactionStatus};
 use crate::events::LifecycleState;
+use crate::events::{EngineEvent, EventEnvelope};
 
 #[derive(Default)]
 struct RecordingTransport {
