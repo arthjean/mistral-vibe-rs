@@ -138,3 +138,81 @@ async fn a_failing_provider_fails_the_sampling_request() {
         "{failure}"
     );
 }
+
+/// The preamble a turn runs under survives the transcript it resumes.
+///
+/// The store strips every system entry and reinserts only the process
+/// prompt, so a plan-mode directive composed before the hydration used to
+/// reach the model on the session's first cycle and on no other. Both
+/// cycles are asserted here, because only the second one regresses.
+#[tokio::test]
+async fn plan_mode_states_its_directive_on_every_cycle_of_a_persisted_session() {
+    let temporary = tempfile::tempdir().expect("temporary sessions");
+    let session_root = temporary.path().join("vibe-home").join("sessions");
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let driver = LiveTurnDriver::from_provider_for_tests(
+        Arc::new(RecordingProvider {
+            seen: Arc::clone(&seen),
+        }),
+        "current system",
+    )
+    .with_session_root_for_tests(Some(session_root));
+    let reservation = |turn_id: &str| TurnReservation {
+        session_id: "planning".to_owned(),
+        turn_id: turn_id.to_owned(),
+        prompt: "keep planning".to_owned(),
+        input: vec![PublicContentBlock::Text {
+            text: "keep planning".to_owned(),
+        }],
+        prepared_images: None,
+        client_user_message_id: None,
+        auto_title: None,
+        user_display_content: None,
+        mention_stats: None,
+        working_directory: "/workspace".to_owned(),
+        compaction: CompactionSettings::default(),
+        intent: SessionIntent {
+            mode: Some("plan".to_owned()),
+            ..SessionIntent::default()
+        },
+        tools: ToolRegistry::default(),
+    };
+    let states_plan_mode = |label: &str| {
+        let seen = seen.lock().expect("seen messages");
+        assert!(
+            seen.iter().any(|message| matches!(
+                message,
+                ModelMessage::System { content } if content.contains("Plan mode is active")
+            )),
+            "{label} carries the plan directive: {seen:?}"
+        );
+        assert_eq!(
+            seen.iter()
+                .filter(|message| matches!(
+                    message,
+                    ModelMessage::System { content } if content == "current system"
+                ))
+                .count(),
+            1,
+            "{label} carries the process prompt exactly once: {seen:?}"
+        );
+    };
+
+    driver
+        .run(&reservation("turn-1"))
+        .await
+        .expect("the first cycle completes");
+    states_plan_mode("the first cycle");
+
+    driver
+        .run(&reservation("turn-2"))
+        .await
+        .expect("the second cycle completes");
+    states_plan_mode("the resumed cycle");
+    assert!(
+            seen.lock().expect("seen messages").iter().any(|message| {
+                matches!(message, ModelMessage::Assistant { content, .. } if content == "resumed answer")
+            }),
+            "the resumed cycle reads the transcript the first one persisted"
+        );
+}

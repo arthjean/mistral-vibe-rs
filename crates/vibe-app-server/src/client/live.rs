@@ -438,7 +438,16 @@ impl LiveTurnDriver {
         }
         let mut messages = self.system_preamble(reservation).await?;
         if let Some(transcript) = &transcript {
-            messages = transcript.messages.clone();
+            // `SessionStore::resume` strips every system entry and reinserts a
+            // single one carrying this process's prompt, which the preamble
+            // already opens with. Dropping them keeps one copy rather than two.
+            messages.extend(
+                transcript
+                    .messages
+                    .iter()
+                    .filter(|message| !matches!(message, ModelMessage::System { .. }))
+                    .cloned(),
+            );
         }
         let pending_context = self
             .pending_context
