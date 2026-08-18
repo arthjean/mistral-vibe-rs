@@ -5,7 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Padding, Paragraph};
 use unicode_width::UnicodeWidthStr;
 
-use super::{base_style, muted_style, truncate_width};
+use super::truncate_width;
 use crate::tui::completion::{CompletionEngine, CompletionView};
 use crate::tui::setup::ResolvedTheme;
 
@@ -55,16 +55,17 @@ pub(super) fn draw(
         .into_iter()
         .map(|row| {
             let label_style = if row.selected {
-                base_style(theme)
+                theme
+                    .base()
                     .add_modifier(Modifier::BOLD)
                     .add_modifier(Modifier::REVERSED)
             } else {
-                base_style(theme).add_modifier(Modifier::BOLD)
+                theme.base().add_modifier(Modifier::BOLD)
             };
             let description_style = if row.selected {
-                base_style(theme).add_modifier(Modifier::ITALIC)
+                theme.base().add_modifier(Modifier::ITALIC)
             } else {
-                muted_style(theme)
+                theme.muted()
             };
             if has_descriptions {
                 Line::from(vec![
@@ -82,7 +83,7 @@ pub(super) fn draw(
             Block::default()
                 .borders(Borders::ALL)
                 .padding(Padding::horizontal(1))
-                .border_style(muted_style(theme)),
+                .border_style(theme.muted()),
         ),
         area,
     );

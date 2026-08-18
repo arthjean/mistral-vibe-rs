@@ -9,14 +9,14 @@ pub(super) fn draw_rewind(frame: &mut Frame<'_>, rewind: &RewindState, theme: Re
     let mut lines = Vec::new();
     lines.push(Line::styled(
         format!("Message {position} of {count}"),
-        muted_style(theme),
+        theme.muted(),
     ));
     lines.push(Line::styled(
         truncate_width(
             &sanitize_inline(target.message.lines().next().unwrap_or_default()),
             inner_width,
         ),
-        base_style(theme).add_modifier(Modifier::BOLD),
+        theme.base().add_modifier(Modifier::BOLD),
     ));
     lines.push(Line::default());
     for (index, action) in rewind.actions().iter().enumerate() {
@@ -27,9 +27,9 @@ pub(super) fn draw_rewind(frame: &mut Frame<'_>, rewind: &RewindState, theme: Re
             RewindAction::EditOnly => "Edit message from here",
         };
         let style = if selected {
-            secondary_style(theme).add_modifier(Modifier::BOLD)
+            theme.secondary().add_modifier(Modifier::BOLD)
         } else {
-            base_style(theme)
+            theme.base()
         };
         lines.push(Line::styled(
             format!(
@@ -43,17 +43,17 @@ pub(super) fn draw_rewind(frame: &mut Frame<'_>, rewind: &RewindState, theme: Re
     if !target.has_file_changes {
         lines.push(Line::styled(
             "No file changes need restoration at this point.",
-            muted_style(theme),
+            theme.muted(),
         ));
     }
     if let Some(error) = rewind.error() {
         lines.push(Line::default());
-        lines.push(Line::styled(error.to_owned(), warning_style(theme)));
+        lines.push(Line::styled(error.to_owned(), theme.warning()));
     }
     lines.push(Line::default());
     lines.push(Line::styled(
         "←/Esc previous  → next  Shift+↑↓ scroll  ↑↓ choose  Enter accept  q cancel",
-        muted_style(theme),
+        theme.muted(),
     ));
     let visual_rows = lines
         .iter()
@@ -81,7 +81,7 @@ pub(super) fn draw_rewind(frame: &mut Frame<'_>, rewind: &RewindState, theme: Re
                     .borders(Borders::ALL)
                     .title(" Edit an earlier message ")
                     .padding(Padding::horizontal(1))
-                    .style(base_style(theme)),
+                    .style(theme.base()),
             )
             .wrap(Wrap { trim: false }),
         area,

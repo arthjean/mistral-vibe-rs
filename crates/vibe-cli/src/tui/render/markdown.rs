@@ -3,10 +3,7 @@ use ratatui::text::{Line, Span};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use super::{
-    RenderLimits, base_style, muted_style, sanitize_terminal, secondary_style,
-    wrapped_terminal_lines,
-};
+use super::{RenderLimits, sanitize_terminal, wrapped_terminal_lines};
 use crate::tui::setup::ResolvedTheme;
 
 pub(super) fn markdown_lines(
@@ -21,7 +18,7 @@ pub(super) fn markdown_lines(
         let trimmed = raw.trim_start();
         if let Some(language) = trimmed.strip_prefix("```") {
             if fenced {
-                output.push(Line::styled("  └─", muted_style(theme)));
+                output.push(Line::styled("  └─", theme.muted()));
             } else {
                 let label = language.trim();
                 output.push(Line::styled(
@@ -30,7 +27,7 @@ pub(super) fn markdown_lines(
                     } else {
                         format!("  ┌─ {label}")
                     },
-                    muted_style(theme),
+                    theme.muted(),
                 ));
             }
             fenced = !fenced;
@@ -61,22 +58,14 @@ pub(super) fn markdown_lines(
                 heading,
                 "  ",
                 width,
-                secondary_style(theme).add_modifier(Modifier::BOLD),
+                theme.secondary().add_modifier(Modifier::BOLD),
                 theme,
                 true,
             );
             continue;
         }
         if let Some(item) = markdown_bullet(trimmed) {
-            push_markdown_wrapped(
-                &mut output,
-                item,
-                "  • ",
-                width,
-                base_style(theme),
-                theme,
-                true,
-            );
+            push_markdown_wrapped(&mut output, item, "  • ", width, theme.base(), theme, true);
             continue;
         }
         if let Some(quote) = trimmed.strip_prefix('>') {
@@ -85,7 +74,7 @@ pub(super) fn markdown_lines(
                 quote.trim_start(),
                 "  │ ",
                 width,
-                muted_style(theme).add_modifier(Modifier::ITALIC),
+                theme.muted().add_modifier(Modifier::ITALIC),
                 theme,
                 true,
             );
@@ -98,15 +87,7 @@ pub(super) fn markdown_lines(
                 .map(str::trim)
                 .collect::<Vec<_>>()
                 .join(" │ ");
-            push_markdown_wrapped(
-                &mut output,
-                &cells,
-                "  ",
-                width,
-                base_style(theme),
-                theme,
-                true,
-            );
+            push_markdown_wrapped(&mut output, &cells, "  ", width, theme.base(), theme, true);
             continue;
         }
         if trimmed
@@ -116,22 +97,14 @@ pub(super) fn markdown_lines(
         {
             output.push(Line::styled(
                 format!("  {}", "─".repeat(width.saturating_sub(2))),
-                muted_style(theme),
+                theme.muted(),
             ));
             continue;
         }
-        push_markdown_wrapped(
-            &mut output,
-            raw,
-            "  ",
-            width,
-            base_style(theme),
-            theme,
-            true,
-        );
+        push_markdown_wrapped(&mut output, raw, "  ", width, theme.base(), theme, true);
     }
     if fenced {
-        output.push(Line::styled("  └─", muted_style(theme)));
+        output.push(Line::styled("  └─", theme.muted()));
     }
     if output.is_empty() {
         output.push(Line::raw("  "));
@@ -249,10 +222,10 @@ fn inline_markdown_spans(input: &str, style: Style, theme: ResolvedTheme) -> Vec
                 let target = &after[..end];
                 spans.push(Span::styled(
                     label.to_owned(),
-                    secondary_style(theme).add_modifier(Modifier::UNDERLINED),
+                    theme.secondary().add_modifier(Modifier::UNDERLINED),
                 ));
                 if target != label {
-                    spans.push(Span::styled(format!(" ({target})"), muted_style(theme)));
+                    spans.push(Span::styled(format!(" ({target})"), theme.muted()));
                 }
                 rest = &after[end + 1..];
                 continue;
