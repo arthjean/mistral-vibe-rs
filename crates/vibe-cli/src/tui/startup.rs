@@ -25,8 +25,8 @@ pub use trust::{
 };
 pub use update::resolve_startup_update_prompt;
 pub use update::{
-    production_update_gateway, refresh_update_cache, run_check_upgrade, unix_seconds,
-    update_cache_store, update_checks_enabled,
+    production_update_gateway, refresh_update_cache, run_check_upgrade, update_cache_store,
+    update_checks_enabled,
 };
 pub use worktree::{CleanupOutcome, LaunchWorkspace, PreparedWorktree, WorktreeCleanupState};
 

@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::json;
@@ -108,12 +108,7 @@ pub(super) async fn start_shell(
         state.push_diagnostic("No command provided after '!'");
         return Ok(true);
     }
-    let operation_id = format!(
-        "manual-shell-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_nanos())
-    );
+    let operation_id = format!("manual-shell-{}", vibe_core::clock::now_nanos());
     let params = shell_params(&runtime.session_id, &operation_id, command);
     if let Err(error) = runtime.service.public_call_async("shell/run", params).await {
         state.push_diagnostic(error.to_string());

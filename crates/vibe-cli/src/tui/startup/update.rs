@@ -3,7 +3,6 @@
 
 use std::io::Write;
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use vibe_app_server::release3::Release3Service;
 use vibe_core::updates::{
@@ -37,15 +36,6 @@ pub fn update_cache_store(arguments: &Arguments, working_directory: &Path) -> Up
     UpdateCacheStore::new(&vibe_home_directory(arguments, working_directory))
 }
 
-#[must_use]
-pub fn unix_seconds() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .ok()
-        .and_then(|elapsed| i64::try_from(elapsed.as_secs()).ok())
-        .unwrap_or_default()
-}
-
 /// Reference `_run_check_upgrade`: report the result and exit without a session.
 ///
 /// Returns `true` when the reference exits non-zero.
@@ -67,8 +57,14 @@ pub async fn run_check_upgrade(
             return Ok(true);
         }
     };
-    let result =
-        get_update_if_available(&gateway, &store, current_version, unix_seconds(), true).await;
+    let result = get_update_if_available(
+        &gateway,
+        &store,
+        current_version,
+        vibe_core::clock::now_seconds_signed(),
+        true,
+    )
+    .await;
     match classify_check_upgrade(result, current_version) {
         CheckUpgradeOutcome::UpToDate { message } => {
             report(output, &message)?;
@@ -154,7 +150,14 @@ pub async fn refresh_update_cache(
     store: &UpdateCacheStore,
     current_version: &str,
 ) {
-    let _ = get_update_if_available(gateway, store, current_version, unix_seconds(), false).await;
+    let _ = get_update_if_available(
+        gateway,
+        store,
+        current_version,
+        vibe_core::clock::now_seconds_signed(),
+        false,
+    )
+    .await;
 }
 
 #[must_use]

@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use tokio::task::JoinHandle;
 
@@ -140,9 +139,7 @@ fn persist_entry(path: &Path, entry: &str) -> Result<(), String> {
 
 fn write_entries(path: &Path, entries: &[String]) -> Result<(), String> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_nanos());
+    let stamp = vibe_core::clock::now_nanos();
     let name = path
         .file_name()
         .and_then(|name| name.to_str())

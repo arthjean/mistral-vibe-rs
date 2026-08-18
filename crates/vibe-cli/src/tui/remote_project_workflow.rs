@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 use vibe_app_server::client::PublicDispatch;
@@ -720,9 +719,7 @@ fn begin_teleport(
     ));
     let operation_id = format!(
         "teleport-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_millis())
+        vibe_core::clock::now_millis()
     );
     schedule_project_call(
         runtime,

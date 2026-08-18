@@ -13,6 +13,7 @@ pub mod auth;
 pub mod bootstrap;
 pub mod checkpoints;
 mod child;
+pub mod clock;
 pub mod compaction;
 pub mod config;
 pub mod continuity;

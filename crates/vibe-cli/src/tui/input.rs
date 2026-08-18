@@ -4,7 +4,6 @@ use std::fs::OpenOptions;
 use std::ops::Range;
 use std::process::Command;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
@@ -919,10 +918,7 @@ impl SystemExternalEditor {
 impl ExternalEditorPort for SystemExternalEditor {
     fn edit(&mut self, initial: &str) -> Result<String, String> {
         let command = self.command_parts()?;
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|error| error.to_string())?
-            .as_nanos();
+        let stamp = vibe_core::clock::now_nanos();
         let path = std::env::temp_dir().join(format!(
             "mistral-vibe-rs-editor-{}-{stamp}.md",
             std::process::id()

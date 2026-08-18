@@ -6,7 +6,6 @@ use std::process::ExitStatus;
 use std::process::{Command, Stdio};
 #[cfg(any(target_os = "macos", test))]
 use std::time::{Duration, Instant};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -384,9 +383,7 @@ fn write_clipboard_image(bytes: &[u8]) -> Result<PathBuf, ClipboardError> {
 
 fn write_clipboard_image_in(directory: &Path, bytes: &[u8]) -> Result<PathBuf, ClipboardError> {
     ensure_private_directory(directory)?;
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_nanos());
+    let stamp = vibe_core::clock::now_nanos();
     for suffix in 0..1_000 {
         let name = if suffix == 0 {
             format!("clipboard-{stamp}.png")
@@ -419,9 +416,7 @@ fn write_clipboard_image_in(directory: &Path, bytes: &[u8]) -> Result<PathBuf, C
 
 #[cfg(target_os = "macos")]
 fn create_private_capture_directory(prefix: &str) -> Result<PathBuf, ClipboardError> {
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_nanos());
+    let stamp = vibe_core::clock::now_nanos();
     for suffix in 0..1_000 {
         let directory =
             std::env::temp_dir().join(format!("{prefix}-{}-{stamp}-{suffix}", std::process::id()));

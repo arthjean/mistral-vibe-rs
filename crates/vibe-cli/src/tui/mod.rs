@@ -60,7 +60,7 @@ use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use crossterm::event::{Event, EventStream, KeyEventKind};
 #[cfg(test)]
@@ -112,6 +112,7 @@ use self::voice::{SpeechEvent, SpeechManager, VoiceManager};
 use crate::{
     Arguments, CliError, CliTelemetryObserver, bootstrap, telemetry_observer, validate_arguments,
 };
+use vibe_core::clock::{now_millis as unix_millis, now_seconds as unix_seconds};
 use vibe_core::telemetry::TelemetryRecord;
 use vibe_core::telemetry::records::{Startup, TelemetryCommandKind, TeleportProgress};
 
@@ -1010,7 +1011,7 @@ fn announce_release_notes(arguments: &Arguments, working_directory: &Path, state
         push_local_notice(state, content, EntryStatus::Completed);
     }
     let seen =
-        vibe_core::updates::mark_version_as_seen(cache.as_ref(), version, startup::unix_seconds());
+        vibe_core::updates::mark_version_as_seen(cache.as_ref(), version, vibe_core::clock::now_seconds_signed());
     if store.store(&seen).is_err() {
         state.push_diagnostic("Release notes could not be marked as seen");
     }
@@ -1366,19 +1367,6 @@ fn parse_safety(value: &str) -> Safety {
 
 fn compact_json(value: &Value) -> String {
     serde_json::to_string(value).unwrap_or_else(|_| "null".to_owned())
-}
-
-fn unix_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs())
-}
-
-fn unix_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
-        .unwrap_or_default()
 }
 
 fn is_exit_command(command: &str) -> bool {
