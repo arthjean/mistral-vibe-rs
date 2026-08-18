@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 
-use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -138,7 +137,7 @@ pub const LOCAL_EXTENSION_METHODS: [&str; 4] = [
 ];
 
 /// Correlates a request with its response.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RequestId {
     /// Numeric identifier.
@@ -148,7 +147,7 @@ pub enum RequestId {
 }
 
 /// Closed set of failure codes carried by [`ProtocolError`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProtocolErrorCode {
     /// The frame is well-formed JSON but violates the lifecycle contract.
@@ -178,7 +177,7 @@ pub enum ProtocolErrorCode {
 }
 
 /// Error payload of an [`ErrorResponse`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProtocolError {
     /// Machine-readable failure class.
@@ -191,7 +190,7 @@ pub struct ProtocolError {
 }
 
 /// One reason a request was rejected, pointing at the value that caused it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InvalidParamsIssue {
     /// Field names and array indices leading to the offending value, outermost
@@ -202,7 +201,7 @@ pub struct InvalidParamsIssue {
 }
 
 /// One step of an [`InvalidParamsIssue`] path: a field name or an array index.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum PathSegment {
     /// Object key.
@@ -212,7 +211,7 @@ pub enum PathSegment {
 }
 
 /// Structured detail carried by an `invalid_params` [`ProtocolError`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct InvalidParamsData {
     /// How many issues `issues` carries.
@@ -222,7 +221,7 @@ pub struct InvalidParamsData {
 }
 
 /// A message that expects no response.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Notification {
     /// Always `2.0`.
@@ -235,7 +234,7 @@ pub struct Notification {
 }
 
 /// A message that expects a [`SuccessResponse`] or an [`ErrorResponse`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ServerRequest {
     /// Always `2.0`.
@@ -250,7 +249,7 @@ pub struct ServerRequest {
 }
 
 /// Successful answer to a [`ServerRequest`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SuccessResponse {
     /// Always `2.0`.
@@ -263,7 +262,7 @@ pub struct SuccessResponse {
 }
 
 /// Failed answer to a [`ServerRequest`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ErrorResponse {
     /// Always `2.0`.
@@ -275,7 +274,7 @@ pub struct ErrorResponse {
 }
 
 /// The only JSON-RPC version this protocol speaks.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum JsonRpcVersion {
     /// Serializes as `"2.0"`.
     #[default]
@@ -286,7 +285,7 @@ pub enum JsonRpcVersion {
 /// Any frame that can cross the transport, in either direction.
 ///
 /// Variants are discriminated by the fields each one denies, not by ordering.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Envelope {
     /// See [`Notification`].
@@ -350,23 +349,8 @@ pub fn is_dispatchable_method(method: &str) -> bool {
     is_server_method(method) || is_local_extension_method(method)
 }
 
-/// JSON Schema description of the wire contract, for external client
-/// generators.
-#[must_use]
-pub fn protocol_schema() -> Value {
-    serde_json::json!({
-        "protocolVersion": ProtocolVersion::V1,
-        "serverMethods": &SERVER_METHODS[..],
-        "envelope": schema_for!(Envelope),
-        "initializeParams": schema_for!(InitializeParams),
-        "initializeResponse": schema_for!(InitializeResponse),
-        "sessionMcpServer": schema_for!(SessionMcpServer),
-        "protocolError": schema_for!(ProtocolError),
-    })
-}
-
 /// How the client process was launched.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ClientEntrypoint {
     /// Not reported by the client.
@@ -381,7 +365,7 @@ pub enum ClientEntrypoint {
 }
 
 /// Terminal the client is attached to, when it can be identified.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalEmulator {
     /// Not reported, or not recognized.
@@ -414,7 +398,7 @@ pub enum TerminalEmulator {
 }
 
 /// Identity the client declares during `initialize`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ClientInfo {
     /// Program name.
@@ -433,7 +417,7 @@ pub struct ClientInfo {
 }
 
 /// Kinds of server-initiated callback a client can answer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CallbackKind {
     /// Approve or deny a tool effect.
@@ -445,7 +429,7 @@ pub enum CallbackKind {
 }
 
 /// Tools the server may delegate to the client process.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientToolCapability {
     /// Read files through the client.
     #[serde(rename = "filesystem/read")]
@@ -459,7 +443,7 @@ pub enum ClientToolCapability {
 }
 
 /// What the client can handle, declared during `initialize`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ClientCapabilities {
     /// Callback kinds the client answers. The server refuses to raise a
@@ -479,7 +463,7 @@ pub struct ClientCapabilities {
 }
 
 /// Parameters of the `initialize` request.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct InitializeParams {
     /// Who is connecting.
@@ -490,7 +474,7 @@ pub struct InitializeParams {
 }
 
 /// Identity the server reports during `initialize`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ServerInfo {
     /// Program name.
@@ -500,7 +484,7 @@ pub struct ServerInfo {
 }
 
 /// How a connection is carried.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TransportKind {
     /// Client and server share a process.
@@ -510,7 +494,7 @@ pub enum TransportKind {
 }
 
 /// What the server offers, reported during `initialize`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ServerCapabilities {
     /// Methods this build actually routes, a subset of [`SERVER_METHODS`].
@@ -525,7 +509,7 @@ pub struct ServerCapabilities {
 }
 
 /// Result of the `initialize` request.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct InitializeResponse {
     /// Who answered.
@@ -537,43 +521,12 @@ pub struct InitializeResponse {
 }
 
 /// The only contract version this crate describes.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProtocolVersion {
     /// Serializes as `"1"`.
     #[default]
     #[serde(rename = "1")]
     V1,
-}
-
-/// MCP server a session can attach, keyed by its transport.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "transport", rename_all = "kebab-case")]
-pub enum SessionMcpServer {
-    /// Remote server reached over streamable HTTP.
-    StreamableHttp {
-        /// Display name.
-        name: String,
-        /// Endpoint URL.
-        url: String,
-        /// Extra headers sent with every call.
-        #[serde(default)]
-        headers: BTreeMap<String, String>,
-    },
-    /// Local server spawned as a child process.
-    Stdio {
-        /// Display name.
-        name: String,
-        /// Executable to spawn.
-        command: String,
-        /// Arguments passed to `command`.
-        #[serde(default)]
-        args: Vec<String>,
-        /// Environment overrides for the child.
-        #[serde(default)]
-        env: BTreeMap<String, String>,
-        /// Working directory for the child.
-        cwd: Option<String>,
-    },
 }
 
 #[cfg(test)]
@@ -696,32 +649,6 @@ mod tests {
     }
 
     #[test]
-    fn session_mcp_servers_round_trip_by_transport() {
-        let stdio = json!({
-            "transport": "stdio",
-            "name": "local",
-            "command": "server",
-            "args": ["--flag"],
-            "env": {"KEY": "value"},
-            "cwd": null
-        });
-        let parsed = serde_json::from_value::<SessionMcpServer>(stdio.clone()).expect("stdio");
-        assert!(matches!(parsed, SessionMcpServer::Stdio { .. }));
-        assert_eq!(serde_json::to_value(&parsed).expect("re-encode"), stdio);
-
-        let http = json!({
-            "transport": "streamable-http",
-            "name": "remote",
-            "url": "https://example.test/mcp",
-            "headers": {}
-        });
-        assert!(matches!(
-            serde_json::from_value::<SessionMcpServer>(http).expect("http"),
-            SessionMcpServer::StreamableHttp { .. }
-        ));
-    }
-
-    #[test]
     fn method_inventory_is_sorted_and_unique() {
         assert!(
             SERVER_METHODS.is_sorted_by(|left, right| left < right),
@@ -799,16 +726,6 @@ mod tests {
                 "errorCount": 1,
                 "issues": [{"path": ["input", 2, "text"], "message": "invalid type: integer"}]
             })
-        );
-    }
-
-    #[test]
-    fn schema_reports_the_declared_version_and_methods() {
-        let schema = protocol_schema();
-        assert_eq!(schema["protocolVersion"], json!("1"));
-        assert_eq!(
-            schema["serverMethods"].as_array().map(Vec::len),
-            Some(SERVER_METHODS.len())
         );
     }
 }
