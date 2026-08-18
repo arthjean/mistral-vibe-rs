@@ -21,13 +21,11 @@ pub(super) fn success_bytes(id: RequestId, result: BTreeMap<String, Value>) -> V
 }
 
 pub(super) fn error_batch(id: RequestId, code: ProtocolErrorCode, message: &str) -> DispatchBatch {
-    // Every `invalid_params` carries structured detail, wherever the rejection
-    // was raised: the dispatchers check most parameters by hand rather than
-    // through a deserializer, and a client reads the same shape from all of
-    // them.
-    if code == ProtocolErrorCode::InvalidParams {
-        return invalid_params_batch(id, ParamsRejection::at_root(message.to_owned()));
-    }
+    ProtocolFault::new(code, message).into_batch(id)
+}
+
+/// Frames a refusal under a code that carries no structured detail.
+fn plain_error_batch(id: RequestId, code: ProtocolErrorCode, message: &str) -> DispatchBatch {
     let frame = Envelope::Error(ErrorResponse {
         jsonrpc: JsonRpcVersion::V2,
         id,
@@ -131,67 +129,158 @@ pub(super) fn signal_frames(
     frames
 }
 
-pub(super) fn resource_error_batch(id: RequestId, error: ResourceError) -> DispatchBatch {
-    match error {
-        ResourceError::MethodNotFound(message) => {
-            error_batch(id, ProtocolErrorCode::MethodNotFound, &message)
+/// A refusal already resolved to the code and the message it answers with.
+///
+/// Every domain a dispatcher calls into raises its own error type, and the
+/// boundary answers all of them in the same three shapes. Converting once, here,
+/// is what lets a dispatcher propagate with `?` rather than match at every call,
+/// and what keeps the mapping of a domain variant to a protocol code stated
+/// once rather than once per site that can raise it.
+pub(crate) enum ProtocolFault {
+    /// A parameter rejection, which is the only refusal carrying structured
+    /// detail: a client reads `errorCount` and `issues` on all of them.
+    InvalidParams(ParamsRejection),
+    Other {
+        code: ProtocolErrorCode,
+        message: String,
+    },
+}
+
+impl ProtocolFault {
+    /// A refusal a dispatcher raised by hand, under the code it names.
+    pub(crate) fn new(code: ProtocolErrorCode, message: impl Into<String>) -> Self {
+        let message = message.into();
+        // Every `invalid_params` carries structured detail, wherever the
+        // rejection was raised: the dispatchers check most parameters by hand
+        // rather than through a deserializer, and a client reads the same shape
+        // from all of them.
+        if code == ProtocolErrorCode::InvalidParams {
+            return Self::InvalidParams(ParamsRejection::at_root(message));
         }
-        ResourceError::InvalidParams(message) => {
-            error_batch(id, ProtocolErrorCode::InvalidParams, &message)
-        }
-        ResourceError::NotFound(message) => error_batch(id, ProtocolErrorCode::NotFound, &message),
-        ResourceError::Conflict(message) | ResourceError::Unavailable(message) => {
-            error_batch(id, ProtocolErrorCode::Conflict, &message)
+        Self::Other { code, message }
+    }
+
+    pub(crate) fn invalid_params(message: impl Into<String>) -> Self {
+        Self::InvalidParams(ParamsRejection::at_root(message.into()))
+    }
+
+    pub(crate) fn internal(message: impl Into<String>) -> Self {
+        Self::Other {
+            code: ProtocolErrorCode::InternalError,
+            message: message.into(),
         }
     }
+
+    pub(crate) fn into_batch(self, id: RequestId) -> DispatchBatch {
+        match self {
+            Self::InvalidParams(rejection) => invalid_params_batch(id, rejection),
+            Self::Other { code, message } => plain_error_batch(id, code, &message),
+        }
+    }
+}
+
+impl From<ParamsRejection> for ProtocolFault {
+    fn from(rejection: ParamsRejection) -> Self {
+        Self::InvalidParams(rejection)
+    }
+}
+
+impl From<ResourceError> for ProtocolFault {
+    fn from(error: ResourceError) -> Self {
+        match error {
+            ResourceError::MethodNotFound(message) => {
+                Self::new(ProtocolErrorCode::MethodNotFound, message)
+            }
+            ResourceError::InvalidParams(message) => Self::invalid_params(message),
+            ResourceError::NotFound(message) => Self::new(ProtocolErrorCode::NotFound, message),
+            ResourceError::Conflict(message) | ResourceError::Unavailable(message) => {
+                Self::new(ProtocolErrorCode::Conflict, message)
+            }
+        }
+    }
+}
+
+impl From<Release3Error> for ProtocolFault {
+    fn from(error: Release3Error) -> Self {
+        match error {
+            Release3Error::MethodNotFound(message) => {
+                Self::new(ProtocolErrorCode::MethodNotFound, message)
+            }
+            Release3Error::InvalidParams(message) => Self::invalid_params(message),
+            Release3Error::NotFound(message) => Self::new(ProtocolErrorCode::NotFound, message),
+            Release3Error::Config(message)
+            | Release3Error::Storage(message)
+            | Release3Error::Extension(message)
+            | Release3Error::Prompt(message) => Self::new(ProtocolErrorCode::Conflict, message),
+            Release3Error::StatePoisoned | Release3Error::Json(_) => {
+                Self::internal(error.to_string())
+            }
+        }
+    }
+}
+
+impl From<Release4Error> for ProtocolFault {
+    fn from(error: Release4Error) -> Self {
+        match error {
+            Release4Error::MethodNotFound(message) => {
+                Self::new(ProtocolErrorCode::MethodNotFound, message)
+            }
+            Release4Error::InvalidParams(message) => Self::invalid_params(message),
+            Release4Error::NotFound(message) => Self::new(ProtocolErrorCode::NotFound, message),
+            Release4Error::Conflict(message) => Self::new(ProtocolErrorCode::Conflict, message),
+            Release4Error::Cloud(crate::release4::CloudError::Unauthorized(message)) => {
+                Self::new(ProtocolErrorCode::Unauthorized, message)
+            }
+            Release4Error::Cloud(error) => {
+                Self::new(ProtocolErrorCode::Conflict, error.to_string())
+            }
+            Release4Error::VibeCode(_)
+            | Release4Error::Persistence(_)
+            | Release4Error::PersistenceState(_)
+            | Release4Error::ProjectLinkPersistence(_)
+            | Release4Error::ProjectLinkPersistenceState(_)
+            | Release4Error::BackgroundTask
+            | Release4Error::StatePoisoned
+            | Release4Error::Json(_) => Self::internal(error.to_string()),
+        }
+    }
+}
+
+/// Every server-side failure is internal by the time it reaches the wire: the
+/// refusals a client can act on are raised by the domains above, which carry
+/// their own codes.
+impl From<ServerError> for ProtocolFault {
+    fn from(error: ServerError) -> Self {
+        Self::internal(error.to_string())
+    }
+}
+
+/// The refusal a method answers a session it cannot resolve with.
+///
+/// The wording is the caller's: the boundary spells this two ways and a client
+/// matches on the message it already receives.
+pub(super) fn session_missing(message: &'static str) -> ProtocolFault {
+    ProtocolFault::new(ProtocolErrorCode::NotFound, message)
+}
+
+/// Answers `outcome`, converting a refusal into the frame it publishes.
+pub(super) fn answered(
+    id: RequestId,
+    outcome: Result<DispatchBatch, ProtocolFault>,
+) -> DispatchBatch {
+    outcome.unwrap_or_else(|fault| fault.into_batch(id))
+}
+
+pub(super) fn resource_error_batch(id: RequestId, error: ResourceError) -> DispatchBatch {
+    ProtocolFault::from(error).into_batch(id)
 }
 
 pub(super) fn release3_error_batch(id: RequestId, error: Release3Error) -> DispatchBatch {
-    match error {
-        Release3Error::MethodNotFound(message) => {
-            error_batch(id, ProtocolErrorCode::MethodNotFound, &message)
-        }
-        Release3Error::InvalidParams(message) => {
-            error_batch(id, ProtocolErrorCode::InvalidParams, &message)
-        }
-        Release3Error::NotFound(message) => error_batch(id, ProtocolErrorCode::NotFound, &message),
-        Release3Error::Config(message)
-        | Release3Error::Storage(message)
-        | Release3Error::Extension(message)
-        | Release3Error::Prompt(message) => error_batch(id, ProtocolErrorCode::Conflict, &message),
-        Release3Error::StatePoisoned | Release3Error::Json(_) => {
-            error_batch(id, ProtocolErrorCode::InternalError, &error.to_string())
-        }
-    }
+    ProtocolFault::from(error).into_batch(id)
 }
 
 pub(super) fn release4_error_batch(id: RequestId, error: Release4Error) -> DispatchBatch {
-    match error {
-        Release4Error::MethodNotFound(message) => {
-            error_batch(id, ProtocolErrorCode::MethodNotFound, &message)
-        }
-        Release4Error::InvalidParams(message) => {
-            error_batch(id, ProtocolErrorCode::InvalidParams, &message)
-        }
-        Release4Error::NotFound(message) => error_batch(id, ProtocolErrorCode::NotFound, &message),
-        Release4Error::Conflict(message) => error_batch(id, ProtocolErrorCode::Conflict, &message),
-        Release4Error::Cloud(crate::release4::CloudError::Unauthorized(message)) => {
-            error_batch(id, ProtocolErrorCode::Unauthorized, &message)
-        }
-        Release4Error::Cloud(error) => {
-            error_batch(id, ProtocolErrorCode::Conflict, &error.to_string())
-        }
-        Release4Error::VibeCode(_)
-        | Release4Error::Persistence(_)
-        | Release4Error::PersistenceState(_)
-        | Release4Error::ProjectLinkPersistence(_)
-        | Release4Error::ProjectLinkPersistenceState(_)
-        | Release4Error::BackgroundTask
-        | Release4Error::StatePoisoned
-        | Release4Error::Json(_) => {
-            error_batch(id, ProtocolErrorCode::InternalError, &error.to_string())
-        }
-    }
+    ProtocolFault::from(error).into_batch(id)
 }
 
 pub(super) fn release4_dispatch_batch(id: RequestId, dispatch: Release4Dispatch) -> DispatchBatch {
@@ -210,7 +299,7 @@ pub(super) fn release4_dispatch_batch(id: RequestId, dispatch: Release4Dispatch)
 }
 
 pub(super) fn internal_error_batch(id: RequestId, error: &ServerError) -> DispatchBatch {
-    error_batch(id, ProtocolErrorCode::InternalError, &error.to_string())
+    ProtocolFault::internal(error.to_string()).into_batch(id)
 }
 
 pub(super) fn encode_notification(method: &str, params: BTreeMap<String, Value>) -> Vec<u8> {
