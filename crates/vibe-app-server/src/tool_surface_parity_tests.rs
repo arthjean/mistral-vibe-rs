@@ -40,7 +40,8 @@ use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 use vibe_core::platform::Platform;
 use vibe_core::tools::shell::{HostShells, ShellRollout, ShellTools};
 
-use crate::client::{InteractiveSessionToolFactory, task_spec};
+use crate::client::interactive::InteractiveSessionToolFactory;
+use crate::client::live::delegation::task_spec;
 use crate::server::SessionToolFactory;
 
 use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
