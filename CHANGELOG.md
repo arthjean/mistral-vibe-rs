@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Keep the `data` key on an error frame that carries no detail. The reference
+  dumps its error payload without a null filter, so `"data": null` is on the
+  wire whether or not a detail exists. This port dropped the key, which made
+  every detail-free error frame one key shorter than the reference's.
+
 - Refuse a request or a notification that omits `params`. The reference
   declares the field on both inbound shapes without a default, so a frame that
   leaves it out fails validation there. This port read an absent `params` as an

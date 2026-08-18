@@ -63,7 +63,7 @@ fn malformed_envelopes_are_rejected() {
 }
 
 #[test]
-fn null_error_data_stays_off_the_wire() {
+fn error_frames_carry_the_null_data_key() {
     let frame = Envelope::Error(ErrorResponse {
         jsonrpc: JsonRpcVersion::V2,
         id: RequestId::Integer(1),
@@ -75,7 +75,7 @@ fn null_error_data_stays_off_the_wire() {
     });
     assert_eq!(
         encode_frame(&frame),
-        br#"{"jsonrpc":"2.0","id":1,"error":{"code":"not_found","message":"gone"}}"#
+        br#"{"jsonrpc":"2.0","id":1,"error":{"code":"not_found","message":"gone","data":null}}"#
     );
     assert_eq!(
         decode_frame(&encode_frame(&frame)).expect("round trip"),

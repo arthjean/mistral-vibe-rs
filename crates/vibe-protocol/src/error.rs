@@ -41,8 +41,13 @@ pub struct ProtocolError {
     pub code: ProtocolErrorCode,
     /// Human-readable explanation.
     pub message: String,
-    /// Optional structured detail; omitted from the wire when null.
-    #[serde(default, skip_serializing_if = "Value::is_null")]
+    /// Optional structured detail.
+    ///
+    /// The reference models this as a nullable value with no serialization
+    /// filter, so a detail-free error puts `"data": null` on the wire rather
+    /// than dropping the key. Measured against `ProtocolError.model_dump` in
+    /// `vibe/app_server/protocol.py`.
+    #[serde(default)]
     pub data: Value,
 }
 
@@ -71,7 +76,9 @@ pub struct InvalidParamsIssue {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct InvalidParamsData {
-    /// How many issues `issues` carries.
+    /// How many issues `issues` carries. The reference reports the validator's
+    /// own count alongside the list, so the field is part of the contract
+    /// rather than a cache of `issues.len()`.
     pub error_count: usize,
     /// Every issue found, in the order they were detected.
     pub issues: Vec<InvalidParamsIssue>,

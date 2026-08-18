@@ -737,8 +737,10 @@ fn invalid_params_names_the_offending_value() {
         "the issue carries a message"
     );
 
-    // A rejection that is not a deserialization failure has no path to
-    // point at, so `data` stays off the wire rather than serializing null.
+    // A rejection that is not a deserialization failure has no path to point
+    // at, so `data` is null. The key is still on the wire: the reference dumps
+    // its error payload without a null filter, so a detail-free error frame
+    // there has the same three keys as one that carries a detail.
     let batch = connection.dispatch(&request(
         4,
         "turn/start",
@@ -751,9 +753,10 @@ fn invalid_params_names_the_offending_value() {
     };
     assert_ne!(error.code, ProtocolErrorCode::InvalidParams);
     let encoded = serde_json::to_value(&error).expect("error encodes");
-    assert!(
-        encoded.get("data").is_none(),
-        "a non-deserialization rejection carries no data: {encoded}"
+    assert_eq!(
+        encoded.get("data"),
+        Some(&Value::Null),
+        "a non-deserialization rejection carries a null data key: {encoded}"
     );
 }
 
