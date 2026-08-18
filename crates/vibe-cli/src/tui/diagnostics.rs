@@ -201,8 +201,7 @@ pub fn driver_error_code(error: &vibe_app_server::client::DriverError) -> Option
         DriverError::StatePoisoned
         | DriverError::UnsupportedControl(_)
         | DriverError::ImageAttachment(_)
-        | DriverError::Compaction(_)
-        | DriverError::InvalidSystemTime => None,
+        | DriverError::Compaction(_) => None,
     }
 }
 

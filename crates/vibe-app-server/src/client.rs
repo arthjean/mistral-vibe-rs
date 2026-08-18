@@ -667,8 +667,6 @@ pub enum DriverError {
     Compaction(String),
     #[error("tool registry failed: {0}")]
     Tool(String),
-    #[error("system clock precedes UNIX epoch")]
-    InvalidSystemTime,
     #[error(transparent)]
     Transport(vibe_core::provider::TransportError),
     #[error(transparent)]
@@ -762,7 +760,6 @@ pub fn turn_error_code(error: &DriverError) -> TurnErrorCode {
         | DriverError::UnsupportedControl(_)
         | DriverError::Observation(_)
         | DriverError::Tool(_)
-        | DriverError::InvalidSystemTime
         | DriverError::Storage(_)
         | DriverError::Engine(_) => TurnErrorCode::InternalError,
     }
