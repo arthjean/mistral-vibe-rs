@@ -2963,11 +2963,7 @@ async fn is_running_log(shell: &SessionShell, path: &Path) -> bool {
 }
 
 async fn refuse_live_session_log(shell: &SessionShell, path: &Path) -> Result<(), ToolError> {
-    let sessions = shell.managed.lock().await;
-    if sessions
-        .values()
-        .any(|session| session.log_path == path && session.is_running())
-    {
+    if is_running_log(shell, path).await {
         return Err(ToolError::Execution(format!(
             "a live session log cannot be written; use {} or wait for the session to exit",
             shell.family.tool_name("stdin")
