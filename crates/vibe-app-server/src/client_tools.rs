@@ -25,10 +25,7 @@ use vibe_core::process::{
     ClientToolCapability, ClientToolIo, ClientToolPort, ClientToolRequest, ToolIoError,
     ToolIoFuture,
 };
-use vibe_protocol::{
-    ClientToolCapability as WireCapability, Envelope, JsonRpcVersion, RequestId, ServerRequest,
-    encode_frame,
-};
+use vibe_protocol::{Envelope, JsonRpcVersion, RequestId, ServerRequest, encode_frame};
 
 /// What one connection lets its server delegate, and where the delegation goes.
 #[derive(Default)]
@@ -59,16 +56,8 @@ pub struct ClientToolBridge {
 impl ClientToolBridge {
     /// Records what the handshake declared. Called on every `initialize`, so a
     /// reconnection that declares less is honored immediately.
-    pub fn declare(&self, capabilities: &[WireCapability]) {
-        let declared = capabilities
-            .iter()
-            .map(|capability| match capability {
-                WireCapability::FilesystemRead => ClientToolCapability::FilesystemRead,
-                WireCapability::FilesystemWrite => ClientToolCapability::FilesystemWrite,
-                WireCapability::Terminal => ClientToolCapability::Terminal,
-            })
-            .collect();
-        self.lock().capabilities = declared;
+    pub fn declare(&self, capabilities: &[ClientToolCapability]) {
+        self.lock().capabilities = capabilities.iter().copied().collect();
     }
 
     /// Claims the write side of the connection, which is what a delegated

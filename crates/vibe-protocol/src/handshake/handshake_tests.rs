@@ -49,3 +49,17 @@ fn the_handshake_accepts_every_reference_capability_field() {
         .is_err()
     );
 }
+
+#[test]
+fn client_tool_capabilities_serialize_as_their_reference_method_prefix() {
+    for (capability, declaration) in [
+        (ClientToolCapability::FilesystemRead, "filesystem/read"),
+        (ClientToolCapability::FilesystemWrite, "filesystem/write"),
+        (ClientToolCapability::Terminal, "terminal"),
+    ] {
+        assert_eq!(
+            serde_json::to_value(capability).expect("capability encodes"),
+            json!(declaration)
+        );
+    }
+}

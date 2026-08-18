@@ -22,30 +22,26 @@ pub trait AcpClientPort: Send + Sync {
     fn request<'a>(&'a self, method: &'a str, params: Value) -> AcpClientFuture<'a>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ClientCapability {
-    FilesystemRead,
-    FilesystemWrite,
-    Terminal,
-}
+/// Every capability the handshake can declare, in the order they are reported.
+const CLIENT_TOOL_CAPABILITIES: [ClientToolCapability; 3] = [
+    ClientToolCapability::FilesystemRead,
+    ClientToolCapability::FilesystemWrite,
+    ClientToolCapability::Terminal,
+];
 
-impl ClientCapability {
-    const ALL: [Self; 3] = [Self::FilesystemRead, Self::FilesystemWrite, Self::Terminal];
-
-    pub(crate) const fn enabled(self, capabilities: &AcpClientCapabilities) -> bool {
-        match self {
-            Self::FilesystemRead => capabilities.fs.read_text_file,
-            Self::FilesystemWrite => capabilities.fs.write_text_file,
-            Self::Terminal => capabilities.terminal,
-        }
-    }
-
-    const fn declaration(self) -> ClientToolCapability {
-        match self {
-            Self::FilesystemRead => ClientToolCapability::FilesystemRead,
-            Self::FilesystemWrite => ClientToolCapability::FilesystemWrite,
-            Self::Terminal => ClientToolCapability::Terminal,
-        }
+/// Whether the connected editor hosts `capability`.
+///
+/// This is the only place the ACP capability shape is read as a wire
+/// capability, so the vocabulary the app-server gates on stays the vocabulary
+/// the handshake published rather than a local retyping of it.
+pub(crate) const fn capability_enabled(
+    capability: ClientToolCapability,
+    capabilities: &AcpClientCapabilities,
+) -> bool {
+    match capability {
+        ClientToolCapability::FilesystemRead => capabilities.fs.read_text_file,
+        ClientToolCapability::FilesystemWrite => capabilities.fs.write_text_file,
+        ClientToolCapability::Terminal => capabilities.terminal,
     }
 }
 
@@ -99,15 +95,15 @@ impl ClientTool {
         }
     }
 
-    pub(crate) const fn capability(self) -> ClientCapability {
+    pub(crate) const fn capability(self) -> ClientToolCapability {
         match self {
-            Self::ReadTextFile => ClientCapability::FilesystemRead,
-            Self::WriteTextFile => ClientCapability::FilesystemWrite,
+            Self::ReadTextFile => ClientToolCapability::FilesystemRead,
+            Self::WriteTextFile => ClientToolCapability::FilesystemWrite,
             Self::TerminalCreate
             | Self::TerminalOutput
             | Self::TerminalWaitForExit
             | Self::TerminalKill
-            | Self::TerminalRelease => ClientCapability::Terminal,
+            | Self::TerminalRelease => ClientToolCapability::Terminal,
         }
     }
 
@@ -194,10 +190,9 @@ pub(crate) fn client_tool_for_method(method: &str) -> Option<ClientTool> {
 pub(crate) fn declared_client_tools(
     capabilities: &AcpClientCapabilities,
 ) -> Vec<ClientToolCapability> {
-    ClientCapability::ALL
+    CLIENT_TOOL_CAPABILITIES
         .into_iter()
-        .filter(|capability| capability.enabled(capabilities))
-        .map(ClientCapability::declaration)
+        .filter(|capability| capability_enabled(*capability, capabilities))
         .collect()
 }
 
@@ -211,7 +206,7 @@ impl SessionToolFactory for AcpClientToolFactory {
     fn register(&self, session_id: &str, tools: &ToolRegistry) -> Result<(), String> {
         for tool in ClientTool::ALL
             .into_iter()
-            .filter(|tool| tool.capability().enabled(&self.capabilities))
+            .filter(|tool| capability_enabled(tool.capability(), &self.capabilities))
         {
             tools
                 .register(
@@ -291,7 +286,7 @@ pub(crate) fn require_client_method(
 ) -> Result<(), AcpError> {
     let tool = client_tool_for_method(method)
         .ok_or_else(|| AcpError::UnsupportedClientFlow(method.to_owned()))?;
-    if tool.capability().enabled(capabilities) {
+    if capability_enabled(tool.capability(), capabilities) {
         Ok(())
     } else {
         Err(AcpError::UnsupportedClientFlow(format!(

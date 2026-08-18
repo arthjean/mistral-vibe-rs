@@ -53,24 +53,13 @@ pub enum ToolIoError {
     Request(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ClientToolCapability {
-    FilesystemRead,
-    FilesystemWrite,
-    Terminal,
-}
-
-impl ClientToolCapability {
-    /// The name a client declares this capability under during `initialize`.
-    #[must_use]
-    pub const fn declaration(self) -> &'static str {
-        match self {
-            Self::FilesystemRead => "filesystem/read",
-            Self::FilesystemWrite => "filesystem/write",
-            Self::Terminal => "terminal",
-        }
-    }
-}
+/// What a client declared it hosts, re-exported from the wire contract that
+/// publishes it.
+///
+/// Gating delegation on the same enum the handshake carries is what keeps the
+/// two from drifting: a capability cannot be added to one vocabulary without
+/// appearing in the other.
+pub use vibe_protocol::ClientToolCapability;
 
 /// One server-to-client tool request, serialized as the method name the
 /// reference routes and the parameter object it validates.

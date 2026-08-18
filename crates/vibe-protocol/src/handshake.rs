@@ -82,7 +82,11 @@ pub enum CallbackKind {
 }
 
 /// Tools the server may delegate to the client process.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// This is the single spelling of the capability, on the wire and in the engine
+/// that gates on it: the serialized name is the reference method prefix, so a
+/// port that reads one reads the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ClientToolCapability {
     /// Read files through the client.
     #[serde(rename = "filesystem/read")]

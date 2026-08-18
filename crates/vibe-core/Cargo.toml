@@ -36,6 +36,10 @@ toml.workspace = true
 tree-sitter.workspace = true
 tree-sitter-bash.workspace = true
 url.workspace = true
+# The client-tool capability is one vocabulary, declared once on the wire and
+# read here to gate delegation. Same layer, and `vibe-protocol` depends on no
+# workspace crate, so the graph stays acyclic.
+vibe-protocol = { path = "../vibe-protocol" }
 
 [target.'cfg(unix)'.dependencies]
 nix.workspace = true
@@ -45,10 +49,6 @@ command-group.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-# The telemetry parity replay compares the entrypoint and terminal vocabularies
-# against the enums that publish them. Same layer, and `vibe-protocol` depends on
-# no workspace crate, so the graph stays acyclic.
-vibe-protocol = { path = "../vibe-protocol" }
 
 [lints]
 workspace = true
