@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Keep the plan-mode directive and the agent profile's prompt on every cycle of
+  a persisted session. The transcript was hydrated after the preamble had been
+  composed and replaced it wholesale, so the model was told the workspace was
+  read-only on the session's first cycle and on no other. Both prompts now
+  survive a resume.
+
+- Report a malformed optional parameter instead of substituting a default for
+  it. `session/continue` with a non-string `cwd` silently continued the
+  server's own directory, `session/fork` with a non-string `newSessionId`
+  silently generated one, and a non-string `systemPrompt` silently became
+  empty. All three now answer `invalid_params`, as the other dispatchers
+  already did.
+
+- Refuse a `session/list` or `history/list` page outside the range the session
+  store accepts, as `invalid_params` naming the parameter, rather than letting
+  it surface as a storage conflict.
+
 - Publish an editor session's command catalog after the response that
   announced the session, not before it. The reference sends it from a task the
   session spawns, so a client learns a session exists before it is told what
