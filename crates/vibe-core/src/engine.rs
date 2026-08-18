@@ -1994,12 +1994,9 @@ mod tests {
                     "second" => self.release_second.notified().await,
                     _ => return Err("unexpected tool".to_owned()),
                 }
-                Ok(ToolExecutionOutput {
-                    typed_result: json!({"tool": name}),
-                    model_text: format!("{name}-result"),
-                    display: json!({"summary": name}),
-                    chunks: Vec::new(),
-                })
+                Ok(ToolExecutionOutput::new(format!("{name}-result"))
+                    .displayed_as(json!({"summary": name}))
+                    .typed(json!({"tool": name})))
             })
         }
 
@@ -3907,21 +3904,15 @@ mod tests {
             let marker = crate::skills::skill_content_marker("probe");
             Some(crate::skills::InvokedSkill {
                 name: "probe".to_owned(),
-                loaded: ToolExecutionOutput {
-                    model_text: format!(
+                loaded: ToolExecutionOutput::new(format!(
                         "name: probe\ncontent: {marker}\nDo the probing.\n</skill_content>\nskill_dir: None"
-                    ),
-                    typed_result: json!({"name": "probe"}),
-                    display: json!({"kind": "skill", "name": "probe"}),
-                    chunks: Vec::new(),
-                },
-                already_loaded: ToolExecutionOutput {
-                    model_text: "name: probe\ncontent: already loaded; reuse those instructions\nskill_dir: None"
-                        .to_owned(),
-                    typed_result: json!({"name": "probe"}),
-                    display: json!({"kind": "skill", "name": "probe"}),
-                    chunks: Vec::new(),
-                },
+                    ))
+                            .displayed_as(json!({"kind": "skill", "name": "probe"}))
+                            .typed(json!({"name": "probe"})),
+                already_loaded: ToolExecutionOutput::new("name: probe\ncontent: already loaded; reuse those instructions\nskill_dir: None"
+                        .to_owned())
+                                    .displayed_as(json!({"kind": "skill", "name": "probe"}))
+                                    .typed(json!({"name": "probe"})),
             })
         }
     }

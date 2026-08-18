@@ -1054,20 +1054,19 @@ impl WorkspaceTools {
                         }
                         None => result.model_text(),
                     };
-                    Ok(ToolExecutionOutput {
-                        display: json!({
+                    Ok(ToolExecutionOutput::new(model_text)
+                        .displayed_as(json!({
                             "kind": "read",
                             "path": result.file_path,
                             "discovered": discovered
                                 .iter()
                                 .map(|(directory, _)| directory.clone())
                                 .collect::<Vec<_>>(),
-                        }),
-                        typed_result: serde_json::to_value(&result)
-                            .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
-                        model_text,
-                        chunks: Vec::new(),
-                    })
+                        }))
+                        .typed(
+                            serde_json::to_value(&result)
+                                .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
+                        ))
                 })
             },
         );
@@ -1112,12 +1111,9 @@ impl WorkspaceTools {
                             reference_text::boolean(outcome.was_truncated).to_owned(),
                         ),
                     ]);
-                    Ok(ToolExecutionOutput {
-                        typed_result: result,
-                        model_text,
-                        display: json!({"kind": "search", "matches": outcome.match_count}),
-                        chunks: Vec::new(),
-                    })
+                    Ok(ToolExecutionOutput::new(model_text)
+                        .displayed_as(json!({"kind": "search", "matches": outcome.match_count}))
+                        .typed(result))
                 })
             },
         );
@@ -1185,17 +1181,16 @@ impl WorkspaceTools {
                         old_string: old_text,
                         new_string: new_text,
                     };
-                    Ok(ToolExecutionOutput {
-                        typed_result: serde_json::to_value(&result)
-                            .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
-                        model_text: result.model_text(),
-                        display: json!({
+                    Ok(ToolExecutionOutput::new(result.model_text())
+                        .displayed_as(json!({
                             "kind": "diff",
                             "path": result.file,
                             "diff": mutation.diff,
-                        }),
-                        chunks: Vec::new(),
-                    })
+                        }))
+                        .typed(
+                            serde_json::to_value(&result)
+                                .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
+                        ))
                 })
             },
         );
@@ -1265,17 +1260,16 @@ impl WorkspaceTools {
                             bytes_written: content.len(),
                             content,
                         };
-                        Ok(ToolExecutionOutput {
-                            model_text: result.model_text(),
-                            display: json!({
+                        Ok(ToolExecutionOutput::new(result.model_text())
+                            .displayed_as(json!({
                                 "kind": "write",
                                 "path": result.file_path,
                                 "diff": mutation.diff,
-                            }),
-                            typed_result: serde_json::to_value(&result)
-                                .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
-                            chunks: Vec::new(),
-                        })
+                            }))
+                            .typed(
+                                serde_json::to_value(&result)
+                                    .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
+                            ))
                     })
                 },
             );

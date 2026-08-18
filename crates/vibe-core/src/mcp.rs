@@ -870,15 +870,14 @@ fn decode_tool_result(result: Value) -> Result<ToolExecutionOutput, McpError> {
             crate::integrations::redact(&model_text)
         }));
     }
-    Ok(ToolExecutionOutput {
-        typed_result: result
-            .get("structuredContent")
-            .cloned()
-            .unwrap_or_else(|| json!({"content": content})),
-        model_text,
-        display: json!({"kind": "mcp", "isError": false}),
-        chunks: Vec::new(),
-    })
+    Ok(ToolExecutionOutput::new(model_text)
+        .displayed_as(json!({"kind": "mcp", "isError": false}))
+        .typed(
+            result
+                .get("structuredContent")
+                .cloned()
+                .unwrap_or_else(|| json!({"content": content})),
+        ))
 }
 
 async fn write_message(state: &mut StdioMcpState, message: &Value) -> Result<(), McpError> {
@@ -1421,12 +1420,8 @@ mod tests {
                 } else {
                     format!("{name} completed")
                 };
-                Ok(ToolExecutionOutput {
-                    typed_result: json!({"tool": name, "arguments": arguments}),
-                    model_text,
-                    display: Value::Null,
-                    chunks: Vec::new(),
-                })
+                Ok(ToolExecutionOutput::new(model_text)
+                    .typed(json!({"tool": name, "arguments": arguments})))
             })
         }
 

@@ -169,6 +169,10 @@ pub struct ToolExecutionOutput {
 }
 
 impl ToolExecutionOutput {
+    /// A result whose whole content is what the model reads.
+    ///
+    /// The typed result is the same string, because a tool that answers in
+    /// prose has no structure to publish beside it.
     #[must_use]
     pub fn text(text: impl Into<String>) -> Self {
         let text = text.into();
@@ -178,6 +182,36 @@ impl ToolExecutionOutput {
             display: Value::Null,
             chunks: Vec::new(),
         }
+    }
+
+    /// A result carrying `model_text`, with nothing typed or displayed yet.
+    ///
+    /// The two optional halves are added by [`Self::displayed_as`] and
+    /// [`Self::typed`]. Every tool composes its output through these rather
+    /// than through a struct literal, so a field added to the output reaches
+    /// every tool at once instead of at thirty call sites.
+    #[must_use]
+    pub fn new(model_text: impl Into<String>) -> Self {
+        Self {
+            typed_result: Value::Null,
+            model_text: model_text.into(),
+            display: Value::Null,
+            chunks: Vec::new(),
+        }
+    }
+
+    /// The same result, with what a client renders for it.
+    #[must_use]
+    pub fn displayed_as(mut self, display: Value) -> Self {
+        self.display = display;
+        self
+    }
+
+    /// The same result, with the structure a caller reads instead of the prose.
+    #[must_use]
+    pub fn typed(mut self, typed_result: Value) -> Self {
+        self.typed_result = typed_result;
+        self
     }
 }
 
@@ -1358,14 +1392,9 @@ mod tests {
         Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let arguments = invocation.arguments.clone();
-                Box::pin(async move {
-                    Ok(ToolExecutionOutput {
-                        typed_result: arguments,
-                        model_text: String::new(),
-                        display: Value::Null,
-                        chunks: Vec::new(),
-                    })
-                })
+                Box::pin(
+                    async move { Ok(ToolExecutionOutput::new(String::new()).typed(arguments)) },
+                )
             },
         )
     }
@@ -1800,12 +1829,7 @@ mod tests {
         let invalid_result: Arc<dyn ToolHandler> = Arc::new(
             |_invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 Box::pin(async {
-                    Ok(ToolExecutionOutput {
-                        typed_result: json!({"content": 7}),
-                        model_text: "invalid".to_owned(),
-                        display: Value::Null,
-                        chunks: Vec::new(),
-                    })
+                    Ok(ToolExecutionOutput::new("invalid".to_owned()).typed(json!({"content": 7})))
                 })
             },
         );

@@ -460,24 +460,21 @@ fn run_todo(
         .iter()
         .map(TodoItem::rendered_fields)
         .collect::<Vec<_>>();
-    Ok(ToolExecutionOutput {
-        model_text: reference_text::joined(&[
-            ("verb", verb.to_owned()),
-            ("todos", reference_text::dictionary_list(&rendered)),
-            ("total_count", total.to_string()),
-            ("message", message.clone()),
-        ]),
-        display: json!({"kind": "todo", "count": total}),
-        // The transcript renders the todo widget from the typed result, so the
-        // items travel there rather than in the display metadata.
-        typed_result: json!({
-            "verb": verb,
-            "todos": items,
-            "total_count": total,
-            "message": message,
-        }),
-        chunks: Vec::new(),
-    })
+    Ok(ToolExecutionOutput::new(reference_text::joined(&[
+        ("verb", verb.to_owned()),
+        ("todos", reference_text::dictionary_list(&rendered)),
+        ("total_count", total.to_string()),
+        ("message", message.clone()),
+    ]))
+    .displayed_as(json!({"kind": "todo", "count": total}))
+    // The transcript renders the todo widget from the typed result, so the
+    // items travel there rather than in the display metadata.
+    .typed(json!({
+        "verb": verb,
+        "todos": items,
+        "total_count": total,
+        "message": message,
+    })))
 }
 
 fn parse_todo_items(value: &Value) -> Result<Vec<TodoItem>, ToolError> {
@@ -620,23 +617,20 @@ fn skill_output(
         render_skill(skill, directory)
     };
     let directory_field = directory.map(|path| path.to_string_lossy().replace('\\', "/"));
-    ToolExecutionOutput {
-        model_text: reference_text::joined(&[
-            ("name", skill.name.clone()),
-            ("content", content.clone()),
-            (
-                "skill_dir",
-                reference_text::optional(directory_field.clone()),
-            ),
-        ]),
-        display: json!({"kind": "skill", "name": skill.name}),
-        typed_result: json!({
-            "name": skill.name,
-            "content": content,
-            "skill_dir": directory_field,
-        }),
-        chunks: Vec::new(),
-    }
+    ToolExecutionOutput::new(reference_text::joined(&[
+        ("name", skill.name.clone()),
+        ("content", content.clone()),
+        (
+            "skill_dir",
+            reference_text::optional(directory_field.clone()),
+        ),
+    ]))
+    .displayed_as(json!({"kind": "skill", "name": skill.name}))
+    .typed(json!({
+        "name": skill.name,
+        "content": content,
+        "skill_dir": directory_field,
+    }))
 }
 
 /// Resolves a slash invocation against the same catalog and loaded ledger the
@@ -918,17 +912,14 @@ async fn run_web_fetch(
     } else {
         text
     };
-    Ok(ToolExecutionOutput {
-        model_text: content.clone(),
-        display: json!({"kind": "webFetch", "url": url.as_str()}),
-        typed_result: json!({
+    Ok(ToolExecutionOutput::new(content.clone())
+        .displayed_as(json!({"kind": "webFetch", "url": url.as_str()}))
+        .typed(json!({
             "url": url.as_str(),
             "content": content,
             "contentType": content_type,
             "wasTruncated": truncated,
-        }),
-        chunks: Vec::new(),
-    })
+        })))
 }
 
 /// Strips markup so an HTML page reaches the model as prose.
@@ -1151,12 +1142,9 @@ async fn run_web_search(
             "the web search response carries no text".to_owned(),
         ));
     }
-    Ok(ToolExecutionOutput {
-        model_text: answer.clone(),
-        display: json!({"kind": "webSearch", "query": query}),
-        typed_result: json!({"query": query, "answer": answer, "sources": sources}),
-        chunks: Vec::new(),
-    })
+    Ok(ToolExecutionOutput::new(answer.clone())
+        .displayed_as(json!({"kind": "webSearch", "query": query}))
+        .typed(json!({"query": query, "answer": answer, "sources": sources})))
 }
 
 /// The request metadata reference `build_request_metadata` attaches, with the

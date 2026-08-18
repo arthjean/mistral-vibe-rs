@@ -1691,18 +1691,15 @@ fn command_output(
     if truncated {
         model_text.push_str(&format!("\n[output truncated at {limit} bytes]"));
     }
-    Ok(ToolExecutionOutput {
-        model_text,
-        display: json!({"kind": "shell", "command": command}),
-        typed_result: json!({
+    Ok(ToolExecutionOutput::new(model_text)
+        .displayed_as(json!({"kind": "shell", "command": command}))
+        .typed(json!({
             "command": command,
             "stdout": stdout,
             "stderr": stderr,
             "returncode": status,
             "truncated": truncated,
-        }),
-        chunks: Vec::new(),
-    })
+        })))
 }
 
 fn process_spec(
@@ -2338,10 +2335,9 @@ fn managed_output(
     if dropped {
         model_text.push_str("\n[output was dropped while the session outran its buffer]");
     }
-    Ok(ToolExecutionOutput {
-        model_text,
-        display: json!({"kind": "shell", "command": session.command}),
-        typed_result: json!({
+    Ok(ToolExecutionOutput::new(model_text)
+        .displayed_as(json!({"kind": "shell", "command": session.command}))
+        .typed(json!({
             "sessionId": session.id,
             "command": session.command,
             "status": status.as_str(),
@@ -2351,9 +2347,7 @@ fn managed_output(
             "truncated": truncated,
             "outputPath": session.log_path.to_string_lossy(),
             "backpressureDropped": dropped,
-        }),
-        chunks: Vec::new(),
-    })
+        })))
 }
 
 /// Reads at most `limit` bytes of `path` starting at `cursor`.
@@ -2532,10 +2526,9 @@ fn orphan_output(
     if truncated {
         model_text.push_str(&format!("\n[output truncated at {limit} bytes]"));
     }
-    Ok(ToolExecutionOutput {
-        model_text,
-        display: json!({"kind": "shell", "command": command}),
-        typed_result: json!({
+    Ok(ToolExecutionOutput::new(model_text)
+        .displayed_as(json!({"kind": "shell", "command": command}))
+        .typed(json!({
             "sessionId": manifest.get("sessionId").cloned().unwrap_or(Value::Null),
             "command": command,
             "status": SessionStatus::Orphaned.as_str(),
@@ -2545,9 +2538,7 @@ fn orphan_output(
             "truncated": truncated,
             "outputPath": log_path.to_string_lossy(),
             "backpressureDropped": false,
-        }),
-        chunks: Vec::new(),
-    })
+        })))
 }
 
 fn log_size(path: &Path) -> u64 {
@@ -2579,16 +2570,16 @@ async fn run_stdin(
         .write(&session.terminal_id, &bytes)
         .await
         .map_err(process_error)?;
-    Ok(ToolExecutionOutput {
-        model_text: format!("Wrote {} bytes to session {session_id}", bytes.len()),
-        display: json!({"kind": "shell", "command": session.command}),
-        typed_result: json!({
-            "sessionId": session_id,
-            "bytesWritten": bytes.len(),
-            "status": session.snapshot().0.as_str(),
-        }),
-        chunks: Vec::new(),
-    })
+    Ok(ToolExecutionOutput::new(format!(
+        "Wrote {} bytes to session {session_id}",
+        bytes.len()
+    ))
+    .displayed_as(json!({"kind": "shell", "command": session.command}))
+    .typed(json!({
+        "sessionId": session_id,
+        "bytesWritten": bytes.len(),
+        "status": session.snapshot().0.as_str(),
+    })))
 }
 
 /// The bytes one stdin call writes.
@@ -2665,15 +2656,16 @@ async fn run_sessions(
                     .cmp(&created_at(right))
                     .then_with(|| session_id_of(left).cmp(&session_id_of(right)))
             });
-            Ok(ToolExecutionOutput {
-                model_text: format!("{} {} sessions", infos.len(), shell.family.name()),
-                display: json!({
-                    "kind": "shell",
-                    "command": shell.family.tool_name("sessions list"),
-                }),
-                typed_result: json!({"action": "list", "sessions": infos}),
-                chunks: Vec::new(),
-            })
+            Ok(ToolExecutionOutput::new(format!(
+                "{} {} sessions",
+                infos.len(),
+                shell.family.name()
+            ))
+            .displayed_as(json!({
+                "kind": "shell",
+                "command": shell.family.tool_name("sessions list"),
+            }))
+            .typed(json!({"action": "list", "sessions": infos})))
         }
         "inspect" => {
             // Reference `inspect_session` positions the window at the end of
@@ -2707,18 +2699,15 @@ async fn run_sessions(
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_owned();
-            Ok(ToolExecutionOutput {
-                model_text: output.clone(),
-                display: json!({"kind": "shell", "command": command}),
-                typed_result: json!({
+            Ok(ToolExecutionOutput::new(output.clone())
+                .displayed_as(json!({"kind": "shell", "command": command}))
+                .typed(json!({
                     "action": "inspect",
                     "session": info,
                     "output": output,
                     "nextCursor": next_cursor,
                     "truncated": truncated,
-                }),
-                chunks: Vec::new(),
-            })
+                })))
         }
         "kill" => {
             // A session is owned by the Vibe session, not by the turn that
@@ -2727,12 +2716,11 @@ async fn run_sessions(
             let session = required_session(&shell, &arguments, "kill").await?;
             kill_managed_session(&shell, &session, SessionStatus::Killed).await?;
             shell.managed.lock().await.remove(&session.id);
-            Ok(ToolExecutionOutput {
-                model_text: format!("Killed session {}", session.id),
-                display: json!({"kind": "shell", "command": session.command}),
-                typed_result: json!({"action": "kill", "session": session.info()}),
-                chunks: Vec::new(),
-            })
+            Ok(
+                ToolExecutionOutput::new(format!("Killed session {}", session.id))
+                    .displayed_as(json!({"kind": "shell", "command": session.command}))
+                    .typed(json!({"action": "kill", "session": session.info()})),
+            )
         }
         "reset" => {
             let sessions = shell
@@ -2769,15 +2757,16 @@ async fn run_sessions(
                     orphaned.clear();
                 }
             }
-            Ok(ToolExecutionOutput {
-                model_text: format!("Stopped {} {} sessions", killed.len(), shell.family.name()),
-                display: json!({
-                    "kind": "shell",
-                    "command": shell.family.tool_name("sessions reset"),
-                }),
-                typed_result: json!({"action": "reset", "sessions": killed}),
-                chunks: Vec::new(),
-            })
+            Ok(ToolExecutionOutput::new(format!(
+                "Stopped {} {} sessions",
+                killed.len(),
+                shell.family.name()
+            ))
+            .displayed_as(json!({
+                "kind": "shell",
+                "command": shell.family.tool_name("sessions reset"),
+            }))
+            .typed(json!({"action": "reset", "sessions": killed})))
         }
         other => Err(ToolError::Execution(format!(
             "unknown {} action `{other}`; use `list`, `inspect`, `kill` or `reset`",
@@ -2842,21 +2831,18 @@ async fn run_log_file(
             let running = is_running_log(&shell, &path).await;
             let (content, next_cursor, truncated) =
                 read_file_window(&path, offset, limit, running)?;
-            Ok(ToolExecutionOutput {
-                model_text: content.clone(),
-                display: json!({
+            Ok(ToolExecutionOutput::new(content.clone())
+                .displayed_as(json!({
                     "kind": "shell",
                     "command": shell.family.tool_name("log_file read"),
-                }),
-                typed_result: json!({
+                }))
+                .typed(json!({
                     "action": "read",
                     "path": path.to_string_lossy(),
                     "content": content,
                     "nextCursor": next_cursor,
                     "truncated": truncated,
-                }),
-                chunks: Vec::new(),
-            })
+                })))
         }
         "write" | "append" => {
             refuse_live_session_log(&shell, &path).await?;
@@ -2881,19 +2867,20 @@ async fn run_log_file(
             file.write_all(content.as_bytes()).map_err(|error| {
                 ToolError::Execution(format!("`{}` cannot be written: {error}", path.display()))
             })?;
-            Ok(ToolExecutionOutput {
-                model_text: format!("Wrote {} bytes to {}", content.len(), path.display()),
-                display: json!({
-                    "kind": "shell",
-                    "command": shell.family.tool_name(&format!("log_file {action}")),
-                }),
-                typed_result: json!({
-                    "action": action,
-                    "path": path.to_string_lossy(),
-                    "bytesWritten": content.len(),
-                }),
-                chunks: Vec::new(),
-            })
+            Ok(ToolExecutionOutput::new(format!(
+                "Wrote {} bytes to {}",
+                content.len(),
+                path.display()
+            ))
+            .displayed_as(json!({
+                "kind": "shell",
+                "command": shell.family.tool_name(&format!("log_file {action}")),
+            }))
+            .typed(json!({
+                "action": action,
+                "path": path.to_string_lossy(),
+                "bytesWritten": content.len(),
+            })))
         }
         other => Err(ToolError::Execution(format!(
             "unknown {} action `{other}`; use `read`, `write` or `append`",

@@ -269,14 +269,7 @@ fn echo_handler() -> Arc<dyn ToolHandler> {
     Arc::new(
         move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
             let arguments = invocation.arguments.clone();
-            Box::pin(async move {
-                Ok(ToolExecutionOutput {
-                    typed_result: arguments,
-                    model_text: String::new(),
-                    display: Value::Null,
-                    chunks: Vec::new(),
-                })
-            })
+            Box::pin(async move { Ok(ToolExecutionOutput::new(String::new()).typed(arguments)) })
         },
     )
 }
