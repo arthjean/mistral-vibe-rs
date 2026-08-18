@@ -13,16 +13,24 @@ use crate::atomic_file::{self, AtomicWriteError, create_private_file, write_atom
 use crate::events::ModelMessage;
 use crate::text::hex_encode;
 
-const METADATA_FILE: &str = "meta.json";
-const MESSAGES_FILE: &str = "messages.jsonl";
-const LAST_SESSION_DIRECTORY: &str = ".last_session";
-const HANDOFF_JOURNAL_PREFIX: &str = ".handoff-transaction-";
-const HANDOFF_LOCK_PREFIX: &str = ".handoff-lock-";
-const MIGRATION_LOCK_FILE: &str = ".migration.lock";
-const MIGRATION_SUFFIX: &str = ".legacy.bak";
-const CURRENT_FORMAT_VERSION: u32 = 2;
-const MAX_MESSAGE_RECORD_BYTES: usize = 8 * 1024 * 1024;
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+mod canonical_json;
+mod handoff;
+mod migration;
+mod time;
+
+use canonical_json::python_canonical_json;
+use time::{format_compact_timestamp, format_iso_timestamp, timestamp_sort_key};
+
+pub(super) const METADATA_FILE: &str = "meta.json";
+pub(super) const MESSAGES_FILE: &str = "messages.jsonl";
+pub(super) const LAST_SESSION_DIRECTORY: &str = ".last_session";
+pub(super) const HANDOFF_JOURNAL_PREFIX: &str = ".handoff-transaction-";
+pub(super) const HANDOFF_LOCK_PREFIX: &str = ".handoff-lock-";
+pub(super) const MIGRATION_LOCK_FILE: &str = ".migration.lock";
+pub(super) const MIGRATION_SUFFIX: &str = ".legacy.bak";
+pub(super) const CURRENT_FORMAT_VERSION: u32 = 2;
+pub(super) const MAX_MESSAGE_RECORD_BYTES: usize = 8 * 1024 * 1024;
+pub(super) static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionMetadata {
@@ -113,14 +121,14 @@ pub struct MigrationReport {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct HandoffJournal {
+pub(super) struct HandoffJournal {
     session_id: String,
     staging_directory: String,
     destination_directory: String,
 }
 
 /// What a handoff writes onto the session it publishes, beyond the messages.
-struct HandoffPlan {
+pub(super) struct HandoffPlan {
     current_config: BTreeMap<String, Value>,
     config_overlay: BTreeMap<String, Value>,
     /// The reference's `keep_parent`: whether the session being replaced is
@@ -602,219 +610,6 @@ impl SessionStore {
         )
     }
 
-    /// Publishes `messages` under `new_id`, continuing `parent`.
-    ///
-    /// `retain_parent` is the reference's `keep_parent`: a compaction records
-    /// the session it came from, so the two read as one conversation, and a
-    /// clearing records nothing, because what it continues was discarded
-    /// (`vibe/core/agent_loop/_loop.py:2665`). Everything else the new session
-    /// inherits is the same either way.
-    pub fn handoff_messages(
-        &self,
-        parent: &SessionMetadata,
-        new_id: &str,
-        messages: &[ModelMessage],
-        now_ms: u64,
-        retain_parent: bool,
-    ) -> Result<SessionMetadata, StorageError> {
-        self.publish_handoff(
-            parent,
-            new_id,
-            messages.to_vec(),
-            HandoffPlan {
-                current_config: parent.config.clone(),
-                config_overlay: BTreeMap::new(),
-                retain_parent,
-            },
-            now_ms,
-        )
-        .map(|hydrated| hydrated.metadata)
-    }
-
-    fn publish_handoff(
-        &self,
-        parent: &SessionMetadata,
-        new_id: &str,
-        messages: Vec<ModelMessage>,
-        plan: HandoffPlan,
-        now_ms: u64,
-    ) -> Result<HydratedSession, StorageError> {
-        let HandoffPlan {
-            current_config,
-            config_overlay,
-            retain_parent,
-        } = plan;
-        validate_session_id(new_id)?;
-        ensure_private_directory(&self.root)?;
-        let _handoff_lock = self.acquire_handoff_lock(true)?;
-        let journal_path = self.handoff_journal_path();
-        if let Some(journal_path) = &journal_path
-            && self
-                .recover_handoff_locked(journal_path)?
-                .as_deref()
-                .is_some_and(|recovered_id| recovered_id == new_id)
-        {
-            let mut recovered = self.load(new_id)?;
-            recovered.current_config = current_config;
-            return Ok(recovered);
-        }
-        let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let staging_directory = format!(".handoff-{sequence}-{new_id}");
-        let staging_path = self.root.join(&staging_directory);
-        let destination_directory = session_directory_name(now_ms, new_id);
-        let destination = self.root.join(&destination_directory);
-        let mut journal_written = false;
-        let result = (|| {
-            let mut child = self.initialize_session(
-                &staging_directory,
-                new_id,
-                &parent.working_directory,
-                retain_parent.then(|| parent.id.clone()),
-                now_ms,
-            )?;
-            child.statistics = parent.statistics.clone();
-            child.experiment_state = parent.experiment_state.clone();
-            child.config = current_config.clone();
-            child.config.extend(config_overlay);
-            child.agent_profile = parent.agent_profile.clone();
-            child.tools_available = parent.tools_available.clone();
-            self.replace_messages(&mut child, &messages, now_ms)?;
-            sync_directory(&self.root)?;
-            if let Some(journal_path) = &journal_path {
-                self.write_handoff_journal(
-                    journal_path,
-                    &HandoffJournal {
-                        session_id: new_id.to_owned(),
-                        staging_directory: staging_directory.clone(),
-                        destination_directory: destination_directory.clone(),
-                    },
-                )?;
-                journal_written = true;
-            }
-            fs::rename(&staging_path, &destination).map_err(|source| StorageError::Io {
-                path: destination.clone(),
-                source,
-            })?;
-            sync_directory(&self.root)?;
-            child.directory.clone_from(&destination_directory);
-            self.write_pointer(new_id)?;
-            if let Some(journal_path) = &journal_path {
-                self.remove_handoff_journal(journal_path)?;
-            }
-            Ok(HydratedSession {
-                metadata: child,
-                messages,
-                current_config,
-            })
-        })();
-        if result.is_err() && !journal_written && staging_path.exists() {
-            let _ = fs::remove_dir_all(staging_path);
-        }
-        result
-    }
-
-    fn acquire_handoff_lock(&self, create_root: bool) -> Result<Option<FileLock>, StorageError> {
-        let Some(pointer_key) = &self.pointer_key else {
-            return Ok(None);
-        };
-        if !create_root && !self.root.exists() {
-            return Ok(None);
-        }
-        let pointer_directory = self.root.join(LAST_SESSION_DIRECTORY);
-        ensure_private_directory(&pointer_directory)?;
-        FileLock::acquire(&pointer_directory.join(format!("{HANDOFF_LOCK_PREFIX}{pointer_key}")))
-            .map(Some)
-    }
-
-    fn handoff_journal_path(&self) -> Option<PathBuf> {
-        self.pointer_key.as_ref().map(|pointer_key| {
-            self.root
-                .join(LAST_SESSION_DIRECTORY)
-                .join(format!("{HANDOFF_JOURNAL_PREFIX}{pointer_key}.json"))
-        })
-    }
-
-    fn write_handoff_journal(
-        &self,
-        path: &Path,
-        journal: &HandoffJournal,
-    ) -> Result<(), StorageError> {
-        let mut encoded = serde_json::to_vec_pretty(journal).map_err(StorageError::Json)?;
-        encoded.push(b'\n');
-        write_atomically(path, "handoff-journal", &encoded).map_err(StorageError::from)
-    }
-
-    fn recover_handoff_locked(&self, path: &Path) -> Result<Option<String>, StorageError> {
-        let encoded = match fs::read(path) {
-            Ok(encoded) => encoded,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(source) => {
-                return Err(StorageError::Io {
-                    path: path.to_path_buf(),
-                    source,
-                });
-            }
-        };
-        let journal: HandoffJournal = serde_json::from_slice(&encoded)
-            .map_err(|_| StorageError::InvalidHandoffJournal(path.to_path_buf()))?;
-        validate_session_id(&journal.session_id)?;
-        if !is_safe_handoff_component(&journal.staging_directory, ".handoff-")
-            || !is_safe_handoff_component(&journal.destination_directory, "session_")
-        {
-            return Err(StorageError::InvalidHandoffJournal(path.to_path_buf()));
-        }
-        let staging_path = self.root.join(&journal.staging_directory);
-        let destination = self.root.join(&journal.destination_directory);
-        match (staging_path.exists(), destination.exists()) {
-            (true, false) => {
-                self.validate_handoff_directory(&journal.staging_directory, &journal.session_id)?;
-                fs::rename(&staging_path, &destination).map_err(|source| StorageError::Io {
-                    path: destination.clone(),
-                    source,
-                })?;
-                sync_directory(&self.root)?;
-            }
-            (false, true) => {}
-            _ => return Err(StorageError::InvalidHandoffJournal(path.to_path_buf())),
-        }
-        self.validate_handoff_directory(&journal.destination_directory, &journal.session_id)?;
-        self.write_pointer(&journal.session_id)?;
-        self.remove_handoff_journal(path)?;
-        Ok(Some(journal.session_id))
-    }
-
-    fn validate_handoff_directory(
-        &self,
-        directory: &str,
-        session_id: &str,
-    ) -> Result<(), StorageError> {
-        let metadata = self.read_metadata_from_directory(directory)?;
-        if metadata.id != session_id {
-            return Err(StorageError::InvalidHandoffJournal(
-                self.handoff_journal_path()
-                    .unwrap_or_else(|| self.root.clone()),
-            ));
-        }
-        self.read_messages(&metadata)?;
-        Ok(())
-    }
-
-    fn remove_handoff_journal(&self, path: &Path) -> Result<(), StorageError> {
-        match fs::remove_file(path) {
-            Ok(()) => {
-                if let Some(parent) = path.parent() {
-                    sync_directory(parent)?;
-                }
-                Ok(())
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(source) => Err(StorageError::Io {
-                path: path.to_path_buf(),
-                source,
-            }),
-        }
-    }
-
     pub fn rewind(
         &self,
         selector: &str,
@@ -1213,136 +1008,6 @@ impl SessionStore {
         }
     }
 
-    fn recover_migration_directories(&self) -> Result<(), StorageError> {
-        let entries = fs::read_dir(&self.root).map_err(|source| StorageError::Io {
-            path: self.root.clone(),
-            source,
-        })?;
-        for entry in entries {
-            let entry = entry.map_err(|source| StorageError::Io {
-                path: self.root.clone(),
-                source,
-            })?;
-            if entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(".migrating-")
-            {
-                fs::remove_dir_all(entry.path()).map_err(|source| StorageError::Io {
-                    path: entry.path(),
-                    source,
-                })?;
-            }
-        }
-        Ok(())
-    }
-
-    fn migrate_legacy_file(&self, path: &Path) -> Result<MigrationOutcome, StorageError> {
-        let bytes = fs::read(path).map_err(|source| StorageError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
-        let legacy: LegacySession =
-            serde_json::from_slice(&bytes).map_err(|source| StorageError::CorruptLegacy {
-                path: path.to_path_buf(),
-                source,
-            })?;
-        validate_session_id(&legacy.session_id)?;
-        if self
-            .valid_metadata()?
-            .iter()
-            .any(|metadata| metadata.id == legacy.session_id)
-        {
-            return Ok(MigrationOutcome::Skipped);
-        }
-        let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let directory = session_directory_name(legacy.created_at_ms, &legacy.session_id);
-        let staging = self
-            .root
-            .join(format!(".migrating-{sequence}-{}", legacy.session_id));
-        create_private_directory(&staging)?;
-        let working_directory = legacy.working_directory.unwrap_or_else(|| ".".to_owned());
-        let mut environment = BTreeMap::new();
-        environment.insert(
-            "working_directory".to_owned(),
-            Some(working_directory.clone()),
-        );
-        let mut metadata = SessionMetadata {
-            format_version: CURRENT_FORMAT_VERSION,
-            id: legacy.session_id.clone(),
-            directory: staging
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or_default()
-                .to_owned(),
-            start_time: format_iso_timestamp(legacy.created_at_ms),
-            end_time: Some(format_iso_timestamp(legacy.updated_at_ms)),
-            git_commit: None,
-            git_branch: None,
-            environment,
-            username: "unknown".to_owned(),
-            child_sessions: Vec::new(),
-            loops: Vec::new(),
-            title: legacy.title,
-            title_source: "legacy".to_owned(),
-            experiment_state: legacy.experiments,
-            message_count: 0,
-            last_message_fingerprint: None,
-            statistics: legacy.statistics,
-            tools_available: Vec::new(),
-            config: legacy.config,
-            agent_profile: None,
-            system_prompt: None,
-            created_at_ms: legacy.created_at_ms,
-            updated_at_ms: legacy.updated_at_ms,
-            working_directory,
-            parent_session_id: legacy.parent_session_id,
-        };
-        create_private_file(&staging.join(MESSAGES_FILE)).map_err(|source| StorageError::Io {
-            path: staging.join(MESSAGES_FILE),
-            source,
-        })?;
-        for message in &legacy.messages {
-            self.append_message_to_path(&staging.join(MESSAGES_FILE), &mut metadata, message)?;
-        }
-        let metadata_path = staging.join(METADATA_FILE);
-        let mut encoded = serde_json::to_vec_pretty(&metadata).map_err(StorageError::Json)?;
-        encoded.push(b'\n');
-        let mut metadata_file =
-            create_private_file(&metadata_path).map_err(|source| StorageError::Io {
-                path: metadata_path.clone(),
-                source,
-            })?;
-        metadata_file
-            .write_all(&encoded)
-            .and_then(|()| metadata_file.sync_all())
-            .map_err(|source| StorageError::Io {
-                path: metadata_path,
-                source,
-            })?;
-        sync_directory(&staging)?;
-        let destination = self.root.join(&directory);
-        fs::rename(&staging, &destination).map_err(|source| StorageError::Io {
-            path: destination.clone(),
-            source,
-        })?;
-        sync_directory(&self.root)?;
-        let backup = path.with_extension(
-            path.extension()
-                .and_then(|extension| extension.to_str())
-                .map_or_else(
-                    || "legacy.bak".to_owned(),
-                    |extension| format!("{extension}{MIGRATION_SUFFIX}"),
-                ),
-        );
-        fs::rename(path, &backup).map_err(|source| StorageError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
-        sync_directory(&self.root)?;
-        Ok(MigrationOutcome::Migrated)
-    }
-
     fn append_message_to_path(
         &self,
         path: &Path,
@@ -1377,7 +1042,7 @@ impl SessionStore {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct LegacySession {
+pub(super) struct LegacySession {
     session_id: String,
     #[serde(default)]
     working_directory: Option<String>,
@@ -1399,14 +1064,14 @@ struct LegacySession {
     updated_at_ms: u64,
 }
 
-enum MigrationOutcome {
+pub(super) enum MigrationOutcome {
     Migrated,
     Skipped,
 }
 
 /// The advisory lock this store serializes its durable writes behind, with the
 /// store's own error vocabulary in front of [`atomic_file::FileLock`].
-struct FileLock(
+pub(super) struct FileLock(
     /// Held for its `Drop`, which is what releases the lock.
     #[expect(dead_code, reason = "the guard's whole job is its drop")]
     atomic_file::FileLock,
@@ -1440,21 +1105,21 @@ impl FileLock {
     }
 }
 
-fn ensure_private_directory(path: &Path) -> Result<(), StorageError> {
+pub(super) fn ensure_private_directory(path: &Path) -> Result<(), StorageError> {
     atomic_file::ensure_private_directory(path).map_err(|source| StorageError::Io {
         path: path.to_path_buf(),
         source,
     })
 }
 
-fn create_private_directory(path: &Path) -> Result<(), StorageError> {
+pub(super) fn create_private_directory(path: &Path) -> Result<(), StorageError> {
     atomic_file::create_private_directory(path).map_err(|source| StorageError::Io {
         path: path.to_path_buf(),
         source,
     })
 }
 
-fn sync_directory(path: &Path) -> Result<(), StorageError> {
+pub(super) fn sync_directory(path: &Path) -> Result<(), StorageError> {
     atomic_file::sync_directory(path).map_err(|source| StorageError::Io {
         path: path.to_path_buf(),
         source,
@@ -1531,7 +1196,7 @@ impl From<AtomicWriteError> for StorageError {
     }
 }
 
-fn validate_session_id(id: &str) -> Result<(), StorageError> {
+pub(super) fn validate_session_id(id: &str) -> Result<(), StorageError> {
     let valid = !id.is_empty()
         && id.len() <= 128
         && id
@@ -1544,17 +1209,17 @@ fn validate_session_id(id: &str) -> Result<(), StorageError> {
     }
 }
 
-const fn current_format_version() -> u32 {
+pub(super) const fn current_format_version() -> u32 {
     CURRENT_FORMAT_VERSION
 }
 
-fn is_internal_directory(directory: &str) -> bool {
+pub(super) fn is_internal_directory(directory: &str) -> bool {
     directory.starts_with(".deleting-")
         || directory.starts_with(".migrating-")
         || directory.starts_with(".handoff-")
 }
 
-fn is_safe_handoff_component(component: &str, prefix: &str) -> bool {
+pub(super) fn is_safe_handoff_component(component: &str, prefix: &str) -> bool {
     component.starts_with(prefix)
         && !component.contains('/')
         && !component.contains('\\')
@@ -1562,7 +1227,7 @@ fn is_safe_handoff_component(component: &str, prefix: &str) -> bool {
         && component != ".."
 }
 
-fn session_directory_name(now_ms: u64, id: &str) -> String {
+pub(super) fn session_directory_name(now_ms: u64, id: &str) -> String {
     format!(
         "session_{}_{}",
         format_compact_timestamp(now_ms),
@@ -1570,83 +1235,19 @@ fn session_directory_name(now_ms: u64, id: &str) -> String {
     )
 }
 
-fn directory_id(id: &str) -> String {
+pub(super) fn directory_id(id: &str) -> String {
     let digest = Sha256::digest(id.as_bytes());
     hex_encode(digest.get(..16).unwrap_or(&digest))
 }
 
-fn message_fingerprint(message: &ModelMessage) -> Result<String, StorageError> {
+pub(super) fn message_fingerprint(message: &ModelMessage) -> Result<String, StorageError> {
     let value = serde_json::to_value(message).map_err(StorageError::Json)?;
     Ok(hex_encode(&Sha256::digest(
         python_canonical_json(&value).as_bytes(),
     )))
 }
 
-fn python_canonical_json(value: &Value) -> String {
-    match value {
-        Value::Null => "null".to_owned(),
-        Value::Bool(value) => value.to_string(),
-        Value::Number(value) => value.to_string(),
-        Value::String(value) => python_json_string(value),
-        Value::Array(values) => format!(
-            "[{}]",
-            values
-                .iter()
-                .map(python_canonical_json)
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        Value::Object(values) => {
-            let mut entries: Vec<_> = values.iter().collect();
-            entries.sort_by_key(|(key, _)| *key);
-            format!(
-                "{{{}}}",
-                entries
-                    .into_iter()
-                    .map(|(key, value)| {
-                        format!(
-                            "{}: {}",
-                            python_json_string(key),
-                            python_canonical_json(value)
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        }
-    }
-}
-
-fn python_json_string(value: &str) -> String {
-    let mut encoded = String::from("\"");
-    for character in value.chars() {
-        match character {
-            '"' => encoded.push_str("\\\""),
-            '\\' => encoded.push_str("\\\\"),
-            '\u{0008}' => encoded.push_str("\\b"),
-            '\u{000C}' => encoded.push_str("\\f"),
-            '\n' => encoded.push_str("\\n"),
-            '\r' => encoded.push_str("\\r"),
-            '\t' => encoded.push_str("\\t"),
-            character if character <= '\u{001F}' => {
-                use std::fmt::Write as _;
-                let _ = write!(encoded, "\\u{:04x}", u32::from(character));
-            }
-            character if character.is_ascii() => encoded.push(character),
-            character => {
-                use std::fmt::Write as _;
-                let mut units = [0_u16; 2];
-                for unit in character.encode_utf16(&mut units) {
-                    let _ = write!(encoded, "\\u{unit:04x}");
-                }
-            }
-        }
-    }
-    encoded.push('"');
-    encoded
-}
-
-fn default_title_source() -> String {
+pub(super) fn default_title_source() -> String {
     "auto".to_owned()
 }
 
@@ -1694,62 +1295,6 @@ fn sanitize_pointer_key(raw: &str) -> String {
     } else {
         sanitized.to_owned()
     }
-}
-
-fn format_iso_timestamp(milliseconds: u64) -> String {
-    let (year, month, day, hour, minute, second, millis) = timestamp_parts(milliseconds);
-    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}000+00:00")
-}
-
-fn format_compact_timestamp(milliseconds: u64) -> String {
-    let (year, month, day, hour, minute, second, _) = timestamp_parts(milliseconds);
-    format!("{year:04}{month:02}{day:02}_{hour:02}{minute:02}{second:02}")
-}
-
-fn timestamp_sort_key(value: &str) -> Option<u64> {
-    let digits: String = value
-        .chars()
-        .filter(char::is_ascii_digit)
-        .take(17)
-        .collect();
-    (digits.len() == 17)
-        .then(|| digits.parse::<u64>().ok())
-        .flatten()
-}
-
-fn timestamp_parts(milliseconds: u64) -> (i64, u64, u64, u64, u64, u64, u64) {
-    let seconds = milliseconds / 1_000;
-    let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
-    let seconds_of_day = seconds % 86_400;
-    let (year, month, day) = civil_from_days(days);
-    (
-        year,
-        month,
-        day,
-        seconds_of_day / 3_600,
-        (seconds_of_day % 3_600) / 60,
-        seconds_of_day % 60,
-        milliseconds % 1_000,
-    )
-}
-
-fn civil_from_days(days_since_epoch: i64) -> (i64, u64, u64) {
-    let days = days_since_epoch.saturating_add(719_468);
-    let era = if days >= 0 { days } else { days - 146_096 } / 146_097;
-    let day_of_era = days - era * 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let mut year = year_of_era + era * 400;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_prime = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
-    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
-    year += i64::from(month <= 2);
-    (
-        year,
-        u64::try_from(month).unwrap_or_default(),
-        u64::try_from(day).unwrap_or_default(),
-    )
 }
 
 #[cfg(test)]
