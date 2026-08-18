@@ -802,38 +802,24 @@ fn reduce_event(
                 "user_message",
             )?;
             state.lifecycle = LifecycleState::Running;
-            state.history.push(PublicHistoryEntry::Message {
-                metadata: entry_metadata(
-                    state,
-                    event_id,
-                    emitted_at,
-                    PublicEntryGenerationStatus::Completed,
-                ),
-                role: PublicMessageRole::User,
-                content: vec![PublicContentBlock::Text {
-                    text: content.clone(),
-                }],
-                source: Some(PublicMessageSource::TurnStart),
-                user_display_content: None,
-            });
+            state.history.push(user_message(
+                state,
+                event_id,
+                emitted_at,
+                content,
+                PublicMessageSource::TurnStart,
+            ));
         }
         EngineEvent::UserSteer { content } => {
             require_lifecycle(state, &[LifecycleState::Running], "user_steer")?;
             complete_streaming_entries(state, emitted_at);
-            state.history.push(PublicHistoryEntry::Message {
-                metadata: entry_metadata(
-                    state,
-                    event_id,
-                    emitted_at,
-                    PublicEntryGenerationStatus::Completed,
-                ),
-                role: PublicMessageRole::User,
-                content: vec![PublicContentBlock::Text {
-                    text: content.clone(),
-                }],
-                source: Some(PublicMessageSource::TurnSteer),
-                user_display_content: None,
-            });
+            state.history.push(user_message(
+                state,
+                event_id,
+                emitted_at,
+                content,
+                PublicMessageSource::TurnSteer,
+            ));
         }
         EngineEvent::ContextInjected {
             content,
@@ -842,20 +828,13 @@ fn reduce_event(
             require_active(state, "context_injected")?;
             complete_streaming_entries(state, emitted_at);
             let entry = if *as_message {
-                PublicHistoryEntry::Message {
-                    metadata: entry_metadata(
-                        state,
-                        event_id,
-                        emitted_at,
-                        PublicEntryGenerationStatus::Completed,
-                    ),
-                    role: PublicMessageRole::User,
-                    content: vec![PublicContentBlock::Text {
-                        text: content.clone(),
-                    }],
-                    source: Some(PublicMessageSource::Harness),
-                    user_display_content: None,
-                }
+                user_message(
+                    state,
+                    event_id,
+                    emitted_at,
+                    content,
+                    PublicMessageSource::Harness,
+                )
             } else {
                 PublicHistoryEntry::Checkpoint {
                     metadata: entry_metadata(
@@ -954,18 +933,7 @@ fn reduce_event(
         }
         EngineEvent::ToolStream { call_id, chunk } => {
             require_active(state, "tool_stream")?;
-            let entry = state
-                .history
-                .iter_mut()
-                .rev()
-                .find(|entry| {
-                    matches!(entry, PublicHistoryEntry::Effect { tool_call_id, .. }
-                        if tool_call_id == call_id)
-                })
-                .ok_or(ProjectionError::IllegalTransition {
-                    from: state.lifecycle,
-                    event: "tool_stream_without_call",
-                })?;
+            let entry = effect_entry(state, call_id, "tool_stream_without_call")?;
             if let PublicHistoryEntry::Effect {
                 metadata,
                 state: PublicEffectState::Running { output_text },
@@ -986,18 +954,7 @@ fn reduce_event(
             cancelled,
         } => {
             require_active(state, "tool_result")?;
-            let entry = state
-                .history
-                .iter_mut()
-                .rev()
-                .find(|entry| {
-                    matches!(entry, PublicHistoryEntry::Effect { tool_call_id, .. }
-                        if tool_call_id == call_id)
-                })
-                .ok_or(ProjectionError::IllegalTransition {
-                    from: state.lifecycle,
-                    event: "tool_result_without_call",
-                })?;
+            let entry = effect_entry(state, call_id, "tool_result_without_call")?;
             if let PublicHistoryEntry::Effect {
                 metadata,
                 detail,
@@ -1304,6 +1261,59 @@ fn reduce_event(
         }
     }
     Ok(())
+}
+
+/// A completed user turn, however it reached the transcript.
+///
+/// The operator's own message, a steer landing mid-turn and a harness injection
+/// published as a message are the same entry under three sources, so the shape
+/// a client renders is declared once.
+fn user_message(
+    state: &ProjectionSnapshot,
+    event_id: u64,
+    emitted_at: u64,
+    content: &str,
+    source: PublicMessageSource,
+) -> PublicHistoryEntry {
+    PublicHistoryEntry::Message {
+        metadata: entry_metadata(
+            state,
+            event_id,
+            emitted_at,
+            PublicEntryGenerationStatus::Completed,
+        ),
+        role: PublicMessageRole::User,
+        content: vec![PublicContentBlock::Text {
+            text: content.to_owned(),
+        }],
+        source: Some(source),
+        user_display_content: None,
+    }
+}
+
+/// The effect entry answering `call_id`, or the refusal a stream or a result
+/// arriving without its call raises.
+///
+/// The most recent match wins: a call id the model reused names the effect it
+/// most recently opened, which is the one still running.
+fn effect_entry<'a>(
+    state: &'a mut ProjectionSnapshot,
+    call_id: &str,
+    event: &'static str,
+) -> Result<&'a mut PublicHistoryEntry, ProjectionError> {
+    let lifecycle = state.lifecycle;
+    state
+        .history
+        .iter_mut()
+        .rev()
+        .find(|entry| {
+            matches!(entry, PublicHistoryEntry::Effect { tool_call_id, .. }
+                if tool_call_id == call_id)
+        })
+        .ok_or(ProjectionError::IllegalTransition {
+            from: lifecycle,
+            event,
+        })
 }
 
 /// The session a subagent ran in, as its delegation result names it.
