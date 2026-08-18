@@ -168,7 +168,7 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
         transcript
     });
 
-    let startup_deadline = Instant::now() + Duration::from_secs(2);
+    let startup_deadline = Instant::now() + STEP;
     let mut startup = Vec::new();
     while !startup
         .windows(b"\x1b[?1049h".len())
@@ -186,7 +186,7 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
     }
     master.write_all(b"/help\r").expect("help command writes");
     master.flush().expect("edited prompt flushes");
-    let help_deadline = Instant::now() + Duration::from_secs(2);
+    let help_deadline = Instant::now() + STEP;
     let mut help_output = Vec::new();
     while !help_output
         .windows(b"Help".len())
@@ -219,7 +219,7 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
     std::thread::sleep(Duration::from_millis(150));
     master.write_all(b"!pwd\r").expect("shell command writes");
     master.flush().expect("shell command flushes");
-    let shell_deadline = Instant::now() + Duration::from_secs(3);
+    let shell_deadline = Instant::now() + STEP;
     let mut shell_output = Vec::new();
     while !shell_output
         .windows(b"###".len())
@@ -251,7 +251,7 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
         .write_all(b"/exitt\x7f\r")
         .expect("edited exit command writes");
     master.flush().expect("edited prompt flushes");
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + STEP;
     // The shell output streams into the transcript before the shell is
     // reaped, so a submission racing the final poll is rejected as busy and
     // restored into the composer as a draft; a later Enter resubmits it.
@@ -332,6 +332,14 @@ struct PtyProcess {
     receiver: Receiver<Vec<u8>>,
     reader: JoinHandle<Vec<u8>>,
 }
+
+/// How long one step of a PTY exchange may take before the test gives up.
+///
+/// These are deadlines, not sleeps: a step the client answers immediately costs
+/// nothing, so the budget is set for the slowest machine that runs this suite
+/// rather than for the fastest one. Every wait shares it, so the suite's
+/// tolerance for a loaded machine is one decision instead of thirty.
+const STEP: Duration = Duration::from_secs(20);
 
 impl PtyProcess {
     fn spawn(working_directory: &Path, vibe_home: &Path, arguments: &[&str]) -> Self {
@@ -560,9 +568,9 @@ fn sigint_after_mount_restores_terminal() {
     std::fs::create_dir_all(&workspace).expect("workspace");
     std::fs::create_dir_all(&home).expect("home");
     let mut process = PtyProcess::spawn(&workspace, &home, &["--trust"]);
-    process.wait_for(b"default", Duration::from_secs(3));
+    process.wait_for(b"default", STEP);
     process.interrupt();
-    let (status, transcript) = process.wait(Duration::from_secs(3));
+    let (status, transcript) = process.wait(STEP);
 
     assert!(status.success(), "SIGINT shutdown exited with {status}");
     for (sequence, capability) in [
@@ -589,10 +597,10 @@ fn trust_abort_restores_terminal_without_starting_session_discovery() {
     std::fs::create_dir_all(&home).expect("home");
     std::fs::write(workspace.join("AGENTS.md"), "fixture\n").expect("trust-sensitive fixture");
     let mut process = PtyProcess::spawn(&workspace, &home, &[]);
-    process.wait_for(b"Trust", Duration::from_secs(3));
+    process.wait_for(b"Trust", STEP);
     assert!(!home.join(".vibe/sessions").exists());
     process.write(b"\x03");
-    let (status, transcript) = process.wait(Duration::from_secs(3));
+    let (status, transcript) = process.wait(STEP);
 
     assert!(status.success(), "trust cancellation exited with {status}");
     assert!(!home.join(".vibe/sessions").exists());
@@ -613,10 +621,10 @@ fn trust_abort_restores_terminal_without_starting_session_discovery() {
 fn sensitive_location_abort_precedes_session_discovery_and_restores_terminal() {
     let home = tempfile::tempdir().expect("sensitive home");
     let mut process = PtyProcess::spawn(home.path(), home.path(), &[]);
-    process.wait_for(b"WARNING:", Duration::from_secs(3));
+    process.wait_for(b"WARNING:", STEP);
     assert!(!home.path().join(".vibe/sessions").exists());
     process.write(b"\x03");
-    let (status, transcript) = process.wait(Duration::from_secs(3));
+    let (status, transcript) = process.wait(STEP);
 
     assert!(
         status.success(),
@@ -648,12 +656,8 @@ fn positional_prompt_mounts_the_tui_before_dispatch() {
             "hello from startup",
         ],
     );
-    let mounted = process
-        .wait_for(b"\x1b[?1049h", Duration::from_secs(5))
-        .len();
-    let rendered = process
-        .wait_for_visible("hello from startup", Duration::from_secs(5))
-        .len();
+    let mounted = process.wait_for(b"\x1b[?1049h", STEP).len();
+    let rendered = process.wait_for_visible("hello from startup", STEP).len();
     process.kill();
     assert!(
         mounted <= rendered,
@@ -669,16 +673,14 @@ fn piped_prompt_mounts_before_dispatch_and_keeps_the_tty_interactive() {
     std::fs::create_dir_all(&workspace).expect("workspace");
     std::fs::create_dir_all(&home).expect("home");
     let mut process = PtyProcess::spawn_piped_prompt(&workspace, &home, "hello from piped stdin");
-    let mounted = process
-        .wait_for(b"\x1b[?1049h", Duration::from_secs(5))
-        .len();
+    let mounted = process.wait_for(b"\x1b[?1049h", STEP).len();
     let rendered = process
-        .wait_for_visible("hello from piped stdin", Duration::from_secs(5))
+        .wait_for_visible("hello from piped stdin", STEP)
         .len();
     assert!(mounted <= rendered, "piped prompt preceded TUI mount");
 
     process.write(b"\x04\x04");
-    let (status, transcript) = process.wait(Duration::from_secs(3));
+    let (status, transcript) = process.wait(STEP);
     assert!(status.success(), "piped TUI exited with {status}");
     assert!(
         transcript
@@ -703,9 +705,9 @@ fn bare_resume_opens_the_directory_scoped_picker_before_starting_new() {
         &home,
         &["--trust", "--resume", "--api-base", "http://127.0.0.1:9"],
     );
-    process.wait_for(b"Resume", Duration::from_secs(3));
+    process.wait_for(b"Resume", STEP);
     process.write(b"\x1b");
-    process.wait_for(b"\x1b[?1049h", Duration::from_secs(3));
+    process.wait_for(b"\x1b[?1049h", STEP);
     let transcript = process.kill();
 
     assert!(
@@ -739,14 +741,14 @@ fn bare_resume_deletes_only_after_confirmation_and_final_delete_starts_new() {
         &home,
         &["--trust", "--resume", "--api-base", "http://127.0.0.1:9"],
     );
-    process.wait_for(b"Resume", Duration::from_secs(3));
+    process.wait_for(b"Resume", STEP);
 
     process.write(b"d");
-    process.wait_for(b"Press d aga", Duration::from_secs(3));
+    process.wait_for(b"Press d aga", STEP);
     assert!(store.load("saved-session").is_ok());
 
     process.write(b"d");
-    process.wait_for(b"default", Duration::from_secs(3));
+    process.wait_for(b"default", STEP);
     assert!(store.load("saved-session").is_err());
     let transcript = process.kill();
     assert!(
@@ -789,7 +791,7 @@ fn direct_resume_and_continue_hydrate_the_requested_saved_session() {
         };
         seed_session(&home, &workspace, id, marker, 10);
         let mut process = PtyProcess::spawn(&workspace, &home, &arguments);
-        process.wait_for(marker.as_bytes(), Duration::from_secs(4));
+        process.wait_for(marker.as_bytes(), STEP);
         let transcript = process.kill();
         assert!(
             transcript
@@ -813,7 +815,7 @@ fn missing_direct_resume_fails_without_opening_another_session() {
         &home,
         &["--trust", "--resume", "missing-session"],
     );
-    let (status, transcript) = process.wait(Duration::from_secs(3));
+    let (status, transcript) = process.wait(STEP);
     assert!(!status.success());
     assert!(
         transcript
@@ -845,7 +847,7 @@ command = "/must-not-run"
     )
     .expect("project MCP config");
     let mut process = PtyProcess::spawn(&workspace, &home, &["--trust"]);
-    let output = process.wait_for(b"must-not-run", Duration::from_secs(5));
+    let output = process.wait_for(b"must-not-run", STEP);
     assert!(
         output
             .windows(b"\x1b[?1049h".len())
@@ -853,7 +855,7 @@ command = "/must-not-run"
         "MCP failure appeared before TUI mount"
     );
     process.write(b"/exit\r");
-    let (status, _) = process.wait(Duration::from_secs(3));
+    let (status, _) = process.wait(STEP);
     assert!(status.success(), "recoverable MCP failure blocked exit");
 }
 
@@ -869,13 +871,13 @@ fn ctrl_z_suspends_the_session_and_resumes_a_restored_terminal() {
         &home,
         &["--trust", "--api-base", "http://127.0.0.1:9"],
     );
-    process.wait_for(b"\x1b[?1049h", Duration::from_secs(5));
+    process.wait_for(b"\x1b[?1049h", STEP);
     process.write(b"\x1a");
     // The reference restores the terminal, prints the resume hint, and only
     // then stops, so both observations precede the stop.
     let suspended = process.wait_for(
         b"Mistral Vibe has been suspended. Run fg to bring Mistral Vibe back.",
-        Duration::from_secs(5),
+        STEP,
     );
     assert!(
         suspended
@@ -888,7 +890,7 @@ fn ctrl_z_suspends_the_session_and_resumes_a_restored_terminal() {
     process.resume();
     std::thread::sleep(Duration::from_millis(200));
     process.write(b"\x04\x04");
-    let (status, transcript) = process.wait(Duration::from_secs(10));
+    let (status, transcript) = process.wait(STEP);
 
     assert!(status.success(), "suspended session exited with {status}");
     for (sequence, expected, label) in [
@@ -923,11 +925,11 @@ fn confirmed_exit_prints_the_reference_session_summary() {
         &home,
         &["--trust", "--api-base", "http://127.0.0.1:9"],
     );
-    process.wait_for(b"\x1b[?1049h", Duration::from_secs(5));
+    process.wait_for(b"\x1b[?1049h", STEP);
     process.write(b"\x04");
-    process.wait_for_visible("Press Ctrl+D again to quit", Duration::from_secs(5));
+    process.wait_for_visible("Press Ctrl+D again to quit", STEP);
     process.write(b"\x04");
-    let (status, transcript) = process.wait(Duration::from_secs(5));
+    let (status, transcript) = process.wait(STEP);
 
     assert!(status.success(), "confirmed exit failed with {status}");
     let text = String::from_utf8_lossy(&transcript);
@@ -957,12 +959,12 @@ fn focus_events_restore_the_reference_terminal_title() {
         &home,
         &["--trust", "--api-base", "http://127.0.0.1:9"],
     );
-    process.wait_for(b"\x1b[?1049h", Duration::from_secs(5));
+    process.wait_for(b"\x1b[?1049h", STEP);
     // Reference `on_app_blur` records focus silently; `on_app_focus` restores
     // the default title, which is the observable half of the contract.
     process.write(b"\x1b[O");
     process.write(b"\x1b[I");
-    process.wait_for(b"\x1b]0;Vibe\x07", Duration::from_secs(5));
+    process.wait_for(b"\x1b]0;Vibe\x07", STEP);
     let transcript = process.kill();
     assert!(
         transcript
@@ -981,7 +983,7 @@ fn check_upgrade_reports_the_reference_failure_without_starting_a_session() {
     std::fs::create_dir_all(&workspace).expect("workspace");
     std::fs::create_dir_all(&home).expect("home");
     let process = PtyProcess::spawn(&workspace, &home, &["--check-upgrade"]);
-    let (status, transcript) = process.wait(Duration::from_secs(10));
+    let (status, transcript) = process.wait(STEP);
 
     let text = String::from_utf8_lossy(&transcript);
     assert!(
@@ -1010,16 +1012,16 @@ fn setup_shows_the_trust_dialog_then_the_onboarding_screens_and_a_cancel_exits_c
     std::fs::write(workspace.join("AGENTS.md"), "# workspace instructions\n")
         .expect("workspace instructions");
     let mut process = PtyProcess::spawn(&workspace, &home, &["--setup"]);
-    process.wait_for(b"\x1b[?1049h", Duration::from_secs(5));
+    process.wait_for(b"\x1b[?1049h", STEP);
     // With trust undecided, the pre-session dialog now precedes the setup
     // screens instead of being skipped by `--setup`.
-    process.wait_for_visible("Trust", Duration::from_secs(5));
+    process.wait_for_visible("Trust", STEP);
     process.write(b"\r");
     // The welcome text types progressively; its prefix appearing proves the
     // screen sequence mounted in place of the retired chat-transcript setup.
-    process.wait_for_visible("Welcome", Duration::from_secs(5));
+    process.wait_for_visible("Welcome", STEP);
     process.write(b"\x1b");
-    let (status, transcript) = process.wait(Duration::from_secs(3));
+    let (status, transcript) = process.wait(STEP);
     assert!(
         status.success(),
         "cancelled onboarding exited with {status}"
