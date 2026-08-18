@@ -23,15 +23,7 @@ fn each_envelope_variant_is_decoded_unambiguously() {
             "notification",
         ),
         (
-            json!({"jsonrpc": "2.0", "method": "turn/started"}),
-            "notification",
-        ),
-        (
             json!({"jsonrpc": "2.0", "id": 1, "method": "turn/start", "params": {}}),
-            "request",
-        ),
-        (
-            json!({"jsonrpc": "2.0", "id": 1, "method": "turn/start"}),
             "request",
         ),
         (json!({"jsonrpc": "2.0", "id": 1, "result": {}}), "success"),
@@ -84,6 +76,37 @@ fn null_error_data_stays_off_the_wire() {
     assert_eq!(
         encode_frame(&frame),
         br#"{"jsonrpc":"2.0","id":1,"error":{"code":"not_found","message":"gone"}}"#
+    );
+    assert_eq!(
+        decode_frame(&encode_frame(&frame)).expect("round trip"),
+        frame
+    );
+}
+
+#[test]
+fn an_absent_params_key_is_refused() {
+    // The reference declares `params` without a default on both inbound
+    // shapes, so a frame that omits it fails validation there. Reading it as
+    // empty here would let a client through that upstream turns away.
+    for value in [
+        json!({"jsonrpc": "2.0", "method": "turn/started"}),
+        json!({"jsonrpc": "2.0", "id": 1, "method": "turn/start"}),
+    ] {
+        let encoded = serde_json::to_vec(&value).expect("JSON fixture");
+        assert!(decode_frame(&encoded).is_err(), "accepted {value}");
+    }
+}
+
+#[test]
+fn outbound_frames_always_carry_params() {
+    let frame = Envelope::Notification(Notification {
+        jsonrpc: JsonRpcVersion::V2,
+        method: "turn/started".to_owned(),
+        params: BTreeMap::new(),
+    });
+    assert_eq!(
+        encode_frame(&frame),
+        br#"{"jsonrpc":"2.0","method":"turn/started","params":{}}"#
     );
     assert_eq!(
         decode_frame(&encode_frame(&frame)).expect("round trip"),

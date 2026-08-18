@@ -36,8 +36,9 @@ pub struct Notification {
     pub jsonrpc: JsonRpcVersion,
     /// Notification name.
     pub method: String,
-    /// Payload; absent on the wire is equivalent to empty, per JSON-RPC 2.0.
-    #[serde(default)]
+    /// Payload. Required: the reference declares it without a default, so an
+    /// absent `params` is refused rather than read as empty. Measured against
+    /// `validate_json_rpc_envelope` in `vibe/app_server/protocol.py`.
     pub params: BTreeMap<String, Value>,
 }
 
@@ -51,8 +52,7 @@ pub struct ServerRequest {
     pub id: RequestId,
     /// One of [`SERVER_METHODS`](crate::SERVER_METHODS), or a lifecycle method.
     pub method: String,
-    /// Payload; absent on the wire is equivalent to empty, per JSON-RPC 2.0.
-    #[serde(default)]
+    /// Payload. Required, for the reason [`Notification::params`] states.
     pub params: BTreeMap<String, Value>,
 }
 

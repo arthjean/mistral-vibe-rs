@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Refuse a request or a notification that omits `params`. The reference
+  declares the field on both inbound shapes without a default, so a frame that
+  leaves it out fails validation there. This port read an absent `params` as an
+  empty one, which let a client through that upstream turns away, and left the
+  two implementations disagreeing on which frames are well formed.
+
 - Report an orphaned shell session under the status its own manifest recorded.
   `<family>_output` forced `orphaned` on every session a previous process left
   behind, so a build that finished cleanly before the client exited was
