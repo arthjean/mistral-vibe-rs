@@ -1131,17 +1131,99 @@ fn control_key_names() -> Vec<&'static str> {
 // Policy
 // --------------------------------------------------------------------------
 
-/// Resolves one call's arguments to the analysis its command runs under.
-type ShellAnalyzer = Arc<dyn Fn(&Value) -> Result<ShellAnalysis, ToolError> + Send + Sync>;
+/// Everything one command variant reads to decide what a call may do.
+///
+/// The routing guard and the permission resolver both need the same answer:
+/// the analysis of the command text, the overrides the text cannot see, and the
+/// requirements those compose into. Holding it once means the two readings are
+/// the same function rather than two copies to keep in step.
+struct ShellCallPolicy {
+    flavor: ShellFlavor,
+    platform: Platform,
+    /// The directory a call runs in unless it overrides one.
+    root: PathBuf,
+    /// The session's own scratchpad, whose paths raise no requirement.
+    scratchpad: Option<PathBuf>,
+    /// The `tools.<family>` settings, re-read per call so a raised limit or an
+    /// edited list applies to the next command.
+    config: ToolConfigResolver,
+    tool: String,
+    /// Whether this variant publishes `cwd`, `shell` and `env`. Reference
+    /// `GitBashArgs` and `WindowsShellArgs` carry them on the legacy variant
+    /// too, so the Windows families answer for them whichever variant is
+    /// selected.
+    overrides: bool,
+}
 
-/// Runs [`analyze_shell`] and routes the call by what it decides.
+impl ShellCallPolicy {
+    /// What the command runs under, with the overrides the command text cannot
+    /// see already folded in.
+    ///
+    /// An override decides where the command runs, what interprets it and what
+    /// it inherits, none of which an analysis of the text can see. So a call
+    /// carrying one stops being allowed outright and reaches the operator
+    /// instead.
+    fn analysis(&self, arguments: &Value) -> Result<ShellAnalysis, ToolError> {
+        let command = command_argument(arguments)?;
+        let settings: ShellCommandConfig = self.config.view(&self.tool);
+        let mut analysis = analyze(
+            self.flavor,
+            self.platform,
+            &self.root,
+            self.scratchpad.clone(),
+            &command,
+            &ShellCommandLists::from_config(&settings),
+        );
+        if self.overrides && !override_requirements(arguments, &self.root).is_empty() {
+            analysis.mode = analysis.mode.min(PermissionMode::Ask);
+            analysis.rationale.push(
+                "the call overrides the working directory, the shell or the environment".to_owned(),
+            );
+        }
+        Ok(analysis)
+    }
+
+    /// What the operator is asked to approve, derived from the same analysis
+    /// the routing read.
+    fn context(&self, arguments: &Value) -> Result<PermissionContext, ToolError> {
+        let analysis = self.analysis(arguments)?;
+        // The analysis already composed what the operator answers: one
+        // requirement per session pattern, one per directory the call leaves
+        // the workspace for, and one per `find` that runs a program. Rebuilding
+        // them here would be a second vocabulary to keep in step with the first.
+        let mut requirements = analysis.requirements;
+        if requirements.is_empty() {
+            // An analysis that composed none still needs something to approve,
+            // which is the whole command under its own pattern.
+            requirements.push(PermissionRequirement::command(&command_argument(
+                arguments,
+            )?));
+        }
+        if self.overrides {
+            requirements.extend(override_requirements(arguments, &self.root));
+        }
+        let mut context = PermissionContext::asking(requirements);
+        // A `cwd` override is a directory the call reaches, so it travels on
+        // the context and is positioned against the trust roots the way a file
+        // tool's path is. A root the operator revoked refuses the call rather
+        // than becoming one more thing an approval reopens.
+        if self.overrides
+            && let Some(directory) = string_argument(arguments, "cwd")
+        {
+            context.paths.push(PathBuf::from(directory));
+        }
+        Ok(context)
+    }
+}
+
+/// Runs the call's [`ShellCallPolicy`] and routes by what it decides.
 ///
 /// The reference resolves a command to `ALWAYS`, `ASK` or `NEVER` before it
 /// runs; this reproduces that split on top of the workspace's own analyzer. An
 /// `Always` command executes directly, an `Ask` command goes through the
 /// permission store, and a `Never` command is refused before a process exists.
 struct ShellPolicyGuard {
-    analysis: ShellAnalyzer,
+    policy: Arc<ShellCallPolicy>,
     guarded: Arc<PolicyGuardedTool>,
     inner: Arc<dyn ToolHandler>,
 }
@@ -1153,7 +1235,7 @@ impl ToolHandler for ShellPolicyGuard {
         output: ToolOutputSink,
     ) -> ToolHandlerFuture<'a> {
         Box::pin(async move {
-            let analysis = (self.analysis)(&invocation.arguments)?;
+            let analysis = self.policy.analysis(&invocation.arguments)?;
             match analysis.mode {
                 PermissionMode::Always => self.inner.invoke(invocation, output).await,
                 PermissionMode::Ask => self.guarded.invoke(invocation, output).await,
@@ -1209,90 +1291,25 @@ fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
         managed,
         client_io,
     );
-    // Reference `GitBashArgs` and `WindowsShellArgs` publish `cwd`, `shell` and
-    // `env` on the legacy variant too, so the Windows families answer for them
-    // whichever variant is selected.
-    let overrides = managed || family != ShellFamily::Bash;
-    let requirement_root = working_directory.clone();
-    let requirement_flavor = shell_config.flavor;
-    let requirement_config = tool_config.clone();
-    let requirement_tool = family.name().to_owned();
-    let requirement_scratchpad = scratchpad.clone();
+    let call_policy = Arc::new(ShellCallPolicy {
+        flavor: shell_config.flavor,
+        platform,
+        root: working_directory,
+        scratchpad,
+        config: tool_config,
+        tool: family.name().to_owned(),
+        overrides: managed || family != ShellFamily::Bash,
+    });
+    let resolver = call_policy.clone();
     let guarded = Arc::new(PolicyGuardedTool::new(
         family.name(),
         policy,
         approval,
-        Arc::new(move |invocation: &ToolInvocation| {
-            let command = command_argument(&invocation.arguments)?;
-            let settings: ShellCommandConfig = requirement_config.view(&requirement_tool);
-            let lists = ShellCommandLists::from_config(&settings);
-            let analysis = analyze(
-                requirement_flavor,
-                platform,
-                &requirement_root,
-                requirement_scratchpad.clone(),
-                &command,
-                &lists,
-            );
-            // The analysis already composed what the operator answers: one
-            // requirement per session pattern, one per directory the call
-            // leaves the workspace for, and one per `find` that runs a program.
-            // Rebuilding them here would be a second vocabulary to keep in step
-            // with the first.
-            let mut requirements = analysis.requirements;
-            if requirements.is_empty() {
-                // An analysis that composed none still needs something to
-                // approve, which is the whole command under its own pattern.
-                requirements.push(PermissionRequirement::command(&command));
-            }
-            if overrides {
-                requirements.extend(override_requirements(
-                    &invocation.arguments,
-                    &requirement_root,
-                ));
-            }
-            let mut context = PermissionContext::asking(requirements);
-            // A `cwd` override is a directory the call reaches, so it travels
-            // on the context and is positioned against the trust roots the way
-            // a file tool's path is. A root the operator revoked refuses the
-            // call rather than becoming one more thing an approval reopens.
-            if overrides && let Some(directory) = string_argument(&invocation.arguments, "cwd") {
-                context.paths.push(PathBuf::from(directory));
-            }
-            Ok(context)
-        }),
+        Arc::new(move |invocation: &ToolInvocation| resolver.context(&invocation.arguments)),
         inner.clone(),
     ));
-    let analysis_root = working_directory;
-    let analysis_flavor = shell_config.flavor;
-    let analysis_config = tool_config;
-    let analysis_tool = family.name().to_owned();
-    let analysis_scratchpad = scratchpad;
     Arc::new(ShellPolicyGuard {
-        analysis: Arc::new(move |arguments: &Value| {
-            let command = command_argument(arguments)?;
-            let settings: ShellCommandConfig = analysis_config.view(&analysis_tool);
-            let mut analysis = analyze(
-                analysis_flavor,
-                platform,
-                &analysis_root,
-                analysis_scratchpad.clone(),
-                &command,
-                &ShellCommandLists::from_config(&settings),
-            );
-            // The command text is not all that runs: an override decides where
-            // it runs, what interprets it and what it inherits, none of which
-            // the analysis of the text can see. So a call carrying one stops
-            // being allowed outright and reaches the operator instead.
-            if overrides && !override_requirements(arguments, &analysis_root).is_empty() {
-                analysis.mode = analysis.mode.min(PermissionMode::Ask);
-                analysis.rationale.push(
-                    "the call overrides the working directory, the shell or the environment"
-                        .to_owned(),
-                );
-            }
-            Ok(analysis)
-        }),
+        policy: call_policy,
         guarded,
         inner,
     })
