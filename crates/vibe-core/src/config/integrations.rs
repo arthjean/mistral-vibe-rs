@@ -166,6 +166,49 @@ impl IntegrationCollection {
         })
     }
 
+    /// How this collection names a field in a diagnostic.
+    const fn field_label(self) -> &'static str {
+        match self {
+            Self::McpServers => "MCP server field",
+            Self::Connectors => "connector field",
+        }
+    }
+
+    /// The enablement one entry declares.
+    ///
+    /// `disabled` and `disabled_tools` are the pair this collection's doc names
+    /// as shared, so both collections read them here rather than each spelling
+    /// out the same two shapes with its own error vocabulary.
+    pub(super) fn preference(
+        self,
+        entry: &Table,
+    ) -> Result<super::IntegrationPreference, ConfigError> {
+        let label = self.field_label();
+        let enabled = match entry.get("disabled") {
+            None => true,
+            Some(Value::Boolean(disabled)) => !disabled,
+            Some(_) => return Err(self.invalid(&format!("{label} `disabled` must be a boolean"))),
+        };
+        let disabled_tools = match entry.get("disabled_tools") {
+            None => BTreeSet::new(),
+            Some(Value::Array(values)) => values
+                .iter()
+                .map(|value| {
+                    value.as_str().map(str::to_owned).ok_or_else(|| {
+                        self.invalid(&format!("{label} `disabled_tools` must contain strings"))
+                    })
+                })
+                .collect::<Result<_, _>>()?,
+            Some(_) => {
+                return Err(self.invalid(&format!("{label} `disabled_tools` must be an array")));
+            }
+        };
+        Ok(super::IntegrationPreference {
+            enabled,
+            disabled_tools,
+        })
+    }
+
     pub(super) fn invalid(self, message: &str) -> ConfigError {
         match self {
             Self::McpServers => ConfigError::InvalidMcp(message.to_owned()),

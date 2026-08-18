@@ -1311,56 +1311,22 @@ impl LayeredConfig {
     ) -> Result<BTreeMap<String, IntegrationPreference>, ConfigError> {
         let snapshot = self.load()?;
         let entries = config_array(&snapshot.effective, IntegrationCollection::Connectors)?;
+        let collection = IntegrationCollection::Connectors;
         let mut preferences = BTreeMap::new();
         for entry in entries {
             let entry = entry.as_table().ok_or_else(|| {
                 ConfigError::InvalidIntegration("each connectors entry must be a table".to_owned())
             })?;
-            let name = entry
-                .get("name")
-                .or_else(|| entry.get("id"))
-                .and_then(Value::as_str)
+            let name = collection
+                .identity(entry)
                 .filter(|name| !name.is_empty())
                 .ok_or_else(|| {
                     ConfigError::InvalidIntegration(
                         "connector field `name` must be a non-empty string".to_owned(),
                     )
                 })?;
-            let enabled = match entry.get("disabled") {
-                None => true,
-                Some(Value::Boolean(disabled)) => !disabled,
-                Some(_) => {
-                    return Err(ConfigError::InvalidIntegration(
-                        "connector field `disabled` must be a boolean".to_owned(),
-                    ));
-                }
-            };
-            let disabled_tools = match entry.get("disabled_tools") {
-                None => BTreeSet::new(),
-                Some(Value::Array(values)) => values
-                    .iter()
-                    .map(|value| {
-                        value.as_str().map(str::to_owned).ok_or_else(|| {
-                            ConfigError::InvalidIntegration(
-                                "connector field `disabled_tools` must contain strings".to_owned(),
-                            )
-                        })
-                    })
-                    .collect::<Result<_, _>>()?,
-                Some(_) => {
-                    return Err(ConfigError::InvalidIntegration(
-                        "connector field `disabled_tools` must be an array".to_owned(),
-                    ));
-                }
-            };
             if preferences
-                .insert(
-                    name.to_owned(),
-                    IntegrationPreference {
-                        enabled,
-                        disabled_tools,
-                    },
-                )
+                .insert(name.to_owned(), collection.preference(entry)?)
                 .is_some()
             {
                 return Err(ConfigError::InvalidIntegration(format!(

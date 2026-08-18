@@ -279,13 +279,14 @@ pub(super) fn decode_mcp_server(
             ));
         }
     };
+    let preference = IntegrationCollection::McpServers.preference(table)?;
     Ok(McpServerConfig {
         alias,
         transport,
-        enabled: !optional_mcp_bool(table, "disabled")?.unwrap_or(false),
-        disabled_tools: optional_mcp_strings(table, "disabled_tools")?
-            .into_iter()
-            .collect(),
+        // The enablement pair is the shape MCP servers and connectors share, so
+        // it is read through the collection that owns it.
+        enabled: preference.enabled,
+        disabled_tools: preference.disabled_tools,
         startup_timeout_ms: optional_mcp_timeout(
             table,
             "startup_timeout_sec",
