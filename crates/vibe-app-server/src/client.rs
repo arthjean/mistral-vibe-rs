@@ -35,9 +35,11 @@ pub use vibe_core::engine::TurnOutcome as PublicTurnOutcome;
 pub use vibe_core::engine::TurnStopReason as PublicTurnStopReason;
 pub use vibe_core::events::CallbackKind as PublicCallbackKind;
 pub use vibe_core::events::{
-    CallbackDetail, CallbackOutput, EffectCallDisplay, EffectDetail, EffectResultDisplay,
-    NoticeDetail, PublicCallbackState, PublicContentBlock, PublicEffectState, PublicError,
-    PublicHistoryEntry, PublicMessageRole, ToolEffectKind, TurnErrorCode,
+    ApprovalDecisionType, CallbackDetail, CallbackOutput, EffectCallDisplay, EffectDetail,
+    EffectResultDisplay, HookNotice, HookSeverity, NoticeDetail, PublicCallbackState,
+    PublicContentBlock, PublicEffectState, PublicEntryGenerationStatus, PublicEntryMetadata,
+    PublicError, PublicHistoryEntry, PublicMessageRole, PublicNoticeLevel, ToolEffectKind,
+    TurnErrorCode, UserQuestionRequest,
 };
 
 pub type DriverFuture<'a> =
