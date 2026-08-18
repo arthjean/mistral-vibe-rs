@@ -55,15 +55,10 @@ pub fn run(arguments: &[String], output: &mut dyn Write) -> Result<(), String> {
 /// command that never opened the workspace holds no trust decision, so the
 /// removal lands in the user file exactly as `vibe mcp remove` does upstream.
 fn store(working_directory: &Path) -> vibe_core::config::LayeredConfig {
-    let vibe_home = std::env::var_os("VIBE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .map(|home| home.join(".vibe"))
-        })
-        .unwrap_or_else(|| working_directory.join(".vibe"));
-    Release3Service::for_runtime_session_root(vibe_home.join("sessions"), working_directory)
+    // The same roots an interactive launch resolves, so a one-shot removal
+    // writes through the file the session would have written through.
+    let paths = crate::tui::startup::release3_paths_for(None, working_directory);
+    Release3Service::for_runtime_session_root(paths.session_root, working_directory)
         .layered_config()
 }
 

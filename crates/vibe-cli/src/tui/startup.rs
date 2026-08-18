@@ -58,12 +58,25 @@ pub(super) fn startup_host(arguments: &Arguments, working_directory: &Path) -> S
 }
 
 #[must_use]
-pub(super) fn release3_paths(arguments: &Arguments, working_directory: &Path) -> Release3Paths {
-    let vibe_home = vibe_home_directory(arguments, working_directory);
+pub(crate) fn release3_paths(arguments: &Arguments, working_directory: &Path) -> Release3Paths {
+    release3_paths_for(arguments.session_root.as_deref(), working_directory)
+}
+
+/// The runtime paths a launch resolves, from the session root it named.
+///
+/// Every entry point resolves them here: the interactive launch, the one-shot
+/// commands, and the log directory `/log` prints. A launch that names no
+/// session root falls back to `VIBE_HOME`, then to the user's home, then to the
+/// workspace, which is the order the reference reads them in.
+#[must_use]
+pub(crate) fn release3_paths_for(
+    session_root: Option<&Path>,
+    working_directory: &Path,
+) -> Release3Paths {
+    let vibe_home = vibe_home_for(session_root, working_directory);
     Release3Paths {
-        session_root: arguments
-            .session_root
-            .clone()
+        session_root: session_root
+            .map(Path::to_path_buf)
             .unwrap_or_else(|| vibe_home.join("sessions")),
         vibe_home,
         working_directory: working_directory.to_path_buf(),
@@ -72,9 +85,11 @@ pub(super) fn release3_paths(arguments: &Arguments, working_directory: &Path) ->
 
 #[must_use]
 pub(crate) fn vibe_home_directory(arguments: &Arguments, working_directory: &Path) -> PathBuf {
-    arguments
-        .session_root
-        .as_deref()
+    vibe_home_for(arguments.session_root.as_deref(), working_directory)
+}
+
+fn vibe_home_for(session_root: Option<&Path>, working_directory: &Path) -> PathBuf {
+    session_root
         .and_then(Path::parent)
         .map(Path::to_path_buf)
         .or_else(|| std::env::var_os("VIBE_HOME").map(PathBuf::from))

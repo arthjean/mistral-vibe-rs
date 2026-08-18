@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde_json::{Value, json};
@@ -936,21 +936,11 @@ fn show_log_path(
     working_directory: &Path,
     state: &mut TuiState,
 ) {
-    let session_root = arguments
+    // The same roots the session itself was opened under, so the directory
+    // named here is the one the session is actually writing to.
+    let path = super::startup::release3_paths(arguments, working_directory)
         .session_root
-        .clone()
-        .or_else(|| {
-            std::env::var_os("VIBE_HOME")
-                .map(PathBuf::from)
-                .map(|p| p.join("sessions"))
-        })
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .map(|home| home.join(".vibe/sessions"))
-        })
-        .unwrap_or_else(|| working_directory.join(".vibe/sessions"));
-    let path = session_root.join(&runtime.session_id);
+        .join(&runtime.session_id);
     if path.is_dir() {
         push_local_notice(
             state,
