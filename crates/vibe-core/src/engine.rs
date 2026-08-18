@@ -324,6 +324,32 @@ impl TranscriptSink for NoopTranscriptSink {
     }
 }
 
+/// A sink a caller may or may not have, persisting through the one it has.
+///
+/// [`ConversationEngine::with_sink`] moves the sink into the engine's type, so a
+/// caller that persists only sometimes would otherwise have to build the whole
+/// engine twice, once per branch, and keep the two chains in step by hand. This
+/// makes "no transcript" a value rather than a second type.
+impl<S: TranscriptSink> TranscriptSink for Option<S> {
+    fn persist<'a>(
+        &'a self,
+        messages: &'a [ModelMessage],
+        snapshot: &'a ProjectionSnapshot,
+    ) -> PersistenceFuture<'a> {
+        match self {
+            Some(sink) => sink.persist(messages, snapshot),
+            None => Box::pin(async { Ok(()) }),
+        }
+    }
+
+    fn persist_stats<'a>(&'a self, stats: &'a SessionStats) -> PersistenceFuture<'a> {
+        match self {
+            Some(sink) => sink.persist_stats(stats),
+            None => Box::pin(async { Ok(()) }),
+        }
+    }
+}
+
 pub struct SessionTranscriptSink {
     store: SessionStore,
     metadata: Mutex<SessionMetadata>,
