@@ -174,3 +174,36 @@ fn frames_with_no_envelope_shape_are_named_as_such() {
         ProtocolValidationError::NotAnObject(_)
     ));
 }
+
+#[test]
+fn exactly_one_envelope_claims_each_valid_frame() {
+    // `Envelope` is untagged, so the variant a frame decodes to is whichever
+    // one serde tries first that accepts it. That is only safe while no two
+    // variants accept the same frame, an invariant `deny_unknown_fields` holds
+    // up and nothing else does: relaxing it on one struct would silently make
+    // the declaration order above load-bearing. Counting claimants here fails
+    // the moment that happens, rather than at the next reordering.
+    let frames: [&[u8]; 4] = [
+        br#"{"jsonrpc":"2.0","method":"turn/started","params":{}}"#,
+        br#"{"jsonrpc":"2.0","id":1,"method":"turn/start","params":{}}"#,
+        br#"{"jsonrpc":"2.0","id":1,"result":{}}"#,
+        br#"{"jsonrpc":"2.0","id":1,"error":{"code":"not_found","message":"gone"}}"#,
+    ];
+    for frame in frames {
+        let claimants = [
+            refusal_of::<Notification>(frame).is_none(),
+            refusal_of::<ServerRequest>(frame).is_none(),
+            refusal_of::<SuccessResponse>(frame).is_none(),
+            refusal_of::<ErrorResponse>(frame).is_none(),
+        ]
+        .into_iter()
+        .filter(|claimed| *claimed)
+        .count();
+        assert_eq!(
+            claimants,
+            1,
+            "{} is claimed by {claimants} envelopes",
+            String::from_utf8_lossy(frame)
+        );
+    }
+}

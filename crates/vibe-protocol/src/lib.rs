@@ -8,8 +8,10 @@
 //!
 //! Envelopes are deliberately stricter than JSON-RPC 2.0: every struct denies
 //! unknown fields, which is what lets [`Envelope`] discriminate its variants
-//! while staying untagged. Relaxing `deny_unknown_fields` on any of them makes
-//! the declaration order of [`Envelope`] silently load-bearing.
+//! while staying untagged. Relaxing `deny_unknown_fields` on any of them would
+//! make the declaration order of [`Envelope`] load-bearing, so
+//! `exactly_one_envelope_claims_each_valid_frame` counts the variants that
+//! accept each shape rather than leaving the invariant to this paragraph.
 
 #![warn(missing_docs)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
