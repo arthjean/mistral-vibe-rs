@@ -283,126 +283,21 @@ where
         );
     }
     let mut close_session_id = session_id.clone();
-    let turn_result: Result<ProgrammaticTurn, CliError> = if arguments.teleport {
-        service
-            .teleport(
-                &session_id,
-                &working_directory.to_string_lossy(),
-                &prompt,
-                true,
-            )
-            .await
-            .map_err(|error| CliError::Teleport(error.to_string()))
-            .and_then(|teleport_events| {
-                let history = service
-                    .session(&session_id)
-                    .map_err(CliError::Client)?
-                    .snapshot
-                    .map(|snapshot| snapshot.history)
-                    .unwrap_or_default();
-                Ok(ProgrammaticTurn {
-                    session_id: session_id.clone(),
-                    turn_id: String::new(),
-                    final_assistant: String::new(),
-                    history,
-                    events: Vec::new(),
-                    usage: vibe_app_server::client::PublicUsage {
-                        input_tokens: 0,
-                        output_tokens: 0,
-                        price_micros: 0,
-                    },
-                    context_tokens: 0,
-                    steps: 0,
-                    checkpoints: 0,
-                    stop_reason: PublicTurnStopReason::Complete,
-                    teleport_events,
-                })
-            })
-    } else if arguments.output == OutputMode::Streaming {
-        let (observer, mut updates) = programmatic_update_channel(&session_id);
-        let prompt_future = service.prompt_observed(&session_id, &prompt, observer);
-        tokio::pin!(prompt_future);
-        let mut result = loop {
-            tokio::select! {
-                result = &mut prompt_future => break result.map_err(CliError::Client),
-                update = updates.recv() => {
-                    let Some(ProgrammaticUpdate::HistoryEntry { entry, .. }) = update else {
-                        continue;
-                    };
-                    if let Err(error) = write_json_line(stdout, &entry)
-                        .and_then(|()| stdout.flush().map_err(CliError::Stdout))
-                    {
-                        break Err(error);
-                    }
-                }
-            }
-        };
-        if result.is_ok() {
-            // Every queued update is consumed: stopping at the first non-entry
-            // update would truncate the stream the turn already produced.
-            while let Ok(update) = updates.try_recv() {
-                let ProgrammaticUpdate::HistoryEntry { entry, .. } = update else {
-                    continue;
-                };
-                if let Err(error) = write_json_line(stdout, &entry) {
-                    result = Err(error);
-                    break;
-                }
-            }
-        }
-        result
-    } else {
-        service
-            .prompt(&session_id, &prompt)
-            .await
-            .map_err(CliError::Client)
-    };
-    let execution = match turn_result {
-        Ok(turn) => {
+    let execution = run_execution(
+        &arguments,
+        &mut service,
+        &session_id,
+        &prompt,
+        &working_directory,
+        stdout,
+    )
+    .await
+    .and_then(|outcome| {
+        if let Execution::Turn(turn) = &outcome {
             close_session_id.clone_from(&turn.session_id);
-            let teleport_url =
-                write_teleport_events(arguments.output, &turn.teleport_events, stdout);
-            match (turn.stop_reason.clone(), teleport_url) {
-                (_, Err(error)) => Err(error),
-                (PublicTurnStopReason::Complete, Ok(teleport_url)) => {
-                    if arguments.output == OutputMode::Streaming {
-                        Ok(())
-                    } else {
-                        write_turn(
-                            arguments.output,
-                            &turn,
-                            teleport_url.as_deref(),
-                            stdout,
-                            stderr,
-                        )
-                    }
-                }
-                (
-                    PublicTurnStopReason::MaxSteps
-                    | PublicTurnStopReason::TokenLimit
-                    | PublicTurnStopReason::PriceLimit,
-                    Ok(_),
-                ) => Err(CliError::Limit(if !turn.final_assistant.is_empty() {
-                    turn.final_assistant
-                } else {
-                    "The configured conversation limit was reached".to_owned()
-                })),
-                (PublicTurnStopReason::ResponseLength, Ok(_)) => Err(CliError::TurnFailed(
-                    "The model's response exceeded the maximum output token limit.".to_owned(),
-                )),
-                (PublicTurnStopReason::Refusal, Ok(_)) => Err(CliError::TurnFailed(
-                    "Provider refused the request".to_owned(),
-                )),
-                (PublicTurnStopReason::Cancelled, Ok(_)) => {
-                    Err(CliError::TurnFailed("Turn cancelled".to_owned()))
-                }
-                (PublicTurnStopReason::Failed, Ok(_)) => {
-                    Err(CliError::TurnFailed("Turn failed".to_owned()))
-                }
-            }
         }
-        Err(error) => Err(error),
-    };
+        report_execution(arguments.output, outcome, stdout, stderr)
+    });
     // Reference `aclose` cancels the experiments task before it closes
     // anything else, so a shutdown never waits on a lookup that is still going.
     if let Some(experiments) = telemetry
@@ -424,6 +319,150 @@ where
     close_result?;
     shutdown_result?;
     Ok(())
+}
+
+/// What a programmatic launch produced.
+///
+/// A Teleport is not a turn: it produces a run of published events and the
+/// history the session ended on, and none of a turn's usage, stop reason or
+/// step count. Naming the two outcomes separately is what keeps the reporting
+/// below from reading a turn's fields off a run that never had any.
+enum Execution {
+    Turn(Box<ProgrammaticTurn>),
+    Teleport {
+        events: Vec<ProgrammaticTeleportEvent>,
+        history: Vec<vibe_core::events::PublicHistoryEntry>,
+    },
+}
+
+/// Runs the launch the arguments asked for.
+async fn run_execution<D>(
+    arguments: &Arguments,
+    service: &mut HeadlessService<D>,
+    session_id: &str,
+    prompt: &str,
+    working_directory: &Path,
+    stdout: &mut impl Write,
+) -> Result<Execution, CliError>
+where
+    D: TurnDriver,
+{
+    if arguments.teleport {
+        let events = service
+            .teleport(
+                session_id,
+                &working_directory.to_string_lossy(),
+                prompt,
+                true,
+            )
+            .await
+            .map_err(|error| CliError::Teleport(error.to_string()))?;
+        let history = service
+            .session(session_id)
+            .map_err(CliError::Client)?
+            .snapshot
+            .map(|snapshot| snapshot.history)
+            .unwrap_or_default();
+        return Ok(Execution::Teleport { events, history });
+    }
+    if arguments.output != OutputMode::Streaming {
+        return service
+            .prompt(session_id, prompt)
+            .await
+            .map(|turn| Execution::Turn(Box::new(turn)))
+            .map_err(CliError::Client);
+    }
+    stream_turn(service, session_id, prompt, stdout)
+        .await
+        .map(|turn| Execution::Turn(Box::new(turn)))
+}
+
+/// Streams each history entry as the turn produces it, then answers the turn.
+async fn stream_turn<D>(
+    service: &mut HeadlessService<D>,
+    session_id: &str,
+    prompt: &str,
+    stdout: &mut impl Write,
+) -> Result<ProgrammaticTurn, CliError>
+where
+    D: TurnDriver,
+{
+    let (observer, mut updates) = programmatic_update_channel(session_id);
+    let prompt_future = service.prompt_observed(session_id, prompt, observer);
+    tokio::pin!(prompt_future);
+    let mut result = loop {
+        tokio::select! {
+            result = &mut prompt_future => break result.map_err(CliError::Client),
+            update = updates.recv() => {
+                let Some(ProgrammaticUpdate::HistoryEntry { entry, .. }) = update else {
+                    continue;
+                };
+                if let Err(error) = write_json_line(stdout, &entry)
+                    .and_then(|()| stdout.flush().map_err(CliError::Stdout))
+                {
+                    break Err(error);
+                }
+            }
+        }
+    };
+    if result.is_ok() {
+        // Every queued update is consumed: stopping at the first non-entry
+        // update would truncate the stream the turn already produced.
+        while let Ok(update) = updates.try_recv() {
+            let ProgrammaticUpdate::HistoryEntry { entry, .. } = update else {
+                continue;
+            };
+            if let Err(error) = write_json_line(stdout, &entry) {
+                result = Err(error);
+                break;
+            }
+        }
+    }
+    result
+}
+
+/// Writes what the launch produced, and answers the failure a limit, a refusal
+/// or a cancellation makes of it.
+fn report_execution(
+    mode: OutputMode,
+    execution: Execution,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+) -> Result<(), CliError> {
+    match execution {
+        Execution::Teleport { events, history } => {
+            let url = write_teleport_events(mode, &events, stdout)?;
+            write_teleport_result(mode, url.as_deref(), &history, stdout, stderr)
+        }
+        Execution::Turn(turn) => match turn.stop_reason {
+            PublicTurnStopReason::Complete => {
+                if mode == OutputMode::Streaming {
+                    Ok(())
+                } else {
+                    write_turn(mode, &turn, stdout, stderr)
+                }
+            }
+            PublicTurnStopReason::MaxSteps
+            | PublicTurnStopReason::TokenLimit
+            | PublicTurnStopReason::PriceLimit => {
+                Err(CliError::Limit(if turn.final_assistant.is_empty() {
+                    "The configured conversation limit was reached".to_owned()
+                } else {
+                    turn.final_assistant
+                }))
+            }
+            PublicTurnStopReason::ResponseLength => Err(CliError::TurnFailed(
+                "The model's response exceeded the maximum output token limit.".to_owned(),
+            )),
+            PublicTurnStopReason::Refusal => Err(CliError::TurnFailed(
+                "Provider refused the request".to_owned(),
+            )),
+            PublicTurnStopReason::Cancelled => {
+                Err(CliError::TurnFailed("Turn cancelled".to_owned()))
+            }
+            PublicTurnStopReason::Failed => Err(CliError::TurnFailed("Turn failed".to_owned())),
+        },
+    }
 }
 
 fn production_server(
@@ -484,40 +523,54 @@ fn price_per_million_micros(price: f64) -> Result<u64, CliError> {
     Ok((price * 1_000_000.0).round() as u64)
 }
 
+/// Writes a completed turn: its final message in text mode, its history in
+/// JSON, and nothing in streaming mode, where each entry was already written.
 fn write_turn(
     mode: OutputMode,
     turn: &ProgrammaticTurn,
-    teleport_url: Option<&str>,
     stdout: &mut impl Write,
     stderr: &mut impl Write,
 ) -> Result<(), CliError> {
     match mode {
         OutputMode::Text => {
-            writeln!(
-                stdout,
-                "{}",
-                teleport_url.unwrap_or(turn.final_assistant.as_str())
-            )
-            .map_err(CliError::Stdout)?;
+            writeln!(stdout, "{}", turn.final_assistant).map_err(CliError::Stdout)?;
         }
         OutputMode::Json => {
-            if let Some(url) = teleport_url {
-                serde_json::to_writer_pretty(
-                    &mut *stdout,
-                    &serde_json::json!({
-                        "history": &turn.history,
-                        "teleportUrl": url,
-                    }),
-                )
-                .map_err(CliError::Json)?;
-            } else {
-                serde_json::to_writer_pretty(&mut *stdout, &turn.history)
-                    .map_err(CliError::Json)?;
-            }
+            serde_json::to_writer_pretty(&mut *stdout, &turn.history).map_err(CliError::Json)?;
             stdout.write_all(b"\n").map_err(CliError::Stdout)?;
         }
         OutputMode::Streaming => {}
     }
+    flush(stdout, stderr)
+}
+
+/// Writes what a Teleport run ended on: the URL it published in text mode, and
+/// the history beside it in JSON.
+fn write_teleport_result(
+    mode: OutputMode,
+    url: Option<&str>,
+    history: &[vibe_core::events::PublicHistoryEntry],
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+) -> Result<(), CliError> {
+    match mode {
+        OutputMode::Text => {
+            writeln!(stdout, "{}", url.unwrap_or_default()).map_err(CliError::Stdout)?;
+        }
+        OutputMode::Json => {
+            let payload = match url {
+                Some(url) => serde_json::json!({"history": history, "teleportUrl": url}),
+                None => serde_json::json!(history),
+            };
+            serde_json::to_writer_pretty(&mut *stdout, &payload).map_err(CliError::Json)?;
+            stdout.write_all(b"\n").map_err(CliError::Stdout)?;
+        }
+        OutputMode::Streaming => {}
+    }
+    flush(stdout, stderr)
+}
+
+fn flush(stdout: &mut impl Write, stderr: &mut impl Write) -> Result<(), CliError> {
     stdout.flush().map_err(CliError::Stdout)?;
     stderr.flush().map_err(CliError::Stderr)
 }
@@ -1251,29 +1304,12 @@ mod tests {
             "Preparing workspace...\n"
         );
 
-        let turn = ProgrammaticTurn {
-            session_id: "session-1".to_owned(),
-            turn_id: "turn-1".to_owned(),
-            final_assistant: String::new(),
-            history: Vec::new(),
-            events: Vec::new(),
-            usage: vibe_app_server::client::PublicUsage {
-                input_tokens: 0,
-                output_tokens: 0,
-                price_micros: 0,
-            },
-            context_tokens: 0,
-            steps: 0,
-            checkpoints: 0,
-            stop_reason: PublicTurnStopReason::Complete,
-            teleport_events: events,
-        };
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
-        write_turn(
+        write_teleport_result(
             OutputMode::Json,
-            &turn,
             url.as_deref(),
+            &[],
             &mut stdout,
             &mut stderr,
         )
