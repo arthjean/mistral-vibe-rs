@@ -141,9 +141,10 @@ fn apply(event: Event) -> String {
         }
         Event::Proxy { settings } => overlay_observation("proxy", &proxy_overlay(&settings)),
         Event::ProxyMutation { initial, changes } => {
-            let temporary = tempfile::tempdir().expect("EP-009 proxy oracle directory");
+            let temporary =
+                tempfile::tempdir().expect("configuration-integrations proxy oracle directory");
             let path = temporary.path().join(".env");
-            fs::write(&path, initial).expect("EP-009 proxy oracle fixture");
+            fs::write(&path, initial).expect("configuration-integrations proxy oracle fixture");
             let changes = changes
                 .into_iter()
                 .map(|(key, value)| {
@@ -160,7 +161,8 @@ fn apply(event: Event) -> String {
             } else {
                 "error"
             };
-            let persisted = fs::read_to_string(path).expect("EP-009 proxy oracle result");
+            let persisted =
+                fs::read_to_string(path).expect("configuration-integrations proxy oracle result");
             format!(
                 "proxy-fs|{status}|{}",
                 serde_json::to_string(&persisted).expect("serialize proxy filesystem delta")
@@ -327,7 +329,9 @@ fn effect_observation(effect: McpEffect) -> String {
         | McpEffect::SetEnabled { .. }
         | McpEffect::Status
         | McpEffect::Add { .. } => {
-            panic!("EP-009 authentication fixtures must reduce to an authentication effect")
+            panic!(
+                "configuration-integrations authentication fixtures must reduce to an authentication effect"
+            )
         }
     };
     format!("{observation}|calls={}", calls.join(","))
@@ -370,9 +374,9 @@ fn overlay_observation(label: &str, overlay: &Overlay) -> String {
 #[test]
 fn corpus_replays_presentations_and_typed_auth_effects() {
     let corpus: Corpus = serde_json::from_str(include_str!(
-        "../../../tests/runtime-parity/configuration-integrations-ep009.json"
+        "../../../tests/runtime-parity/configuration-integrations.json"
     ))
-    .expect("strict EP-009 corpus");
+    .expect("strict configuration-integrations corpus");
     assert_eq!(corpus.schema_version, 5);
     assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
     assert_eq!(corpus.oracle.engine, "python-textual-capture");
@@ -454,7 +458,10 @@ fn corpus_replays_presentations_and_typed_auth_effects() {
 
 fn assert_python_oracle_probe(probe: &OracleProbe) -> Option<BTreeMap<String, Vec<String>>> {
     let (observed, traces) = run_python_oracle(probe)?;
-    assert_eq!(observed, probe.expected, "Python EP-009 oracle drifted");
+    assert_eq!(
+        observed, probe.expected,
+        "Python configuration-integrations oracle drifted"
+    );
     Some(traces)
 }
 
@@ -470,48 +477,49 @@ fn run_python_oracle(probe: &OracleProbe) -> Option<(Value, BTreeMap<String, Vec
         .arg(script)
         .current_dir(&oracle_root)
         .output()
-        .expect("execute the pinned Python EP-009 oracle");
+        .expect("execute the pinned Python configuration-integrations oracle");
     assert!(
         output.status.success(),
-        "Python EP-009 oracle failed: {}",
+        "Python configuration-integrations oracle failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let mut observed: Value =
-        serde_json::from_slice(&output.stdout).expect("strict Python EP-009 observation");
+    let mut observed: Value = serde_json::from_slice(&output.stdout)
+        .expect("strict Python configuration-integrations observation");
     let trace_expected = observed
         .as_object_mut()
         .and_then(|observed| observed.remove("traceExpected"))
-        .expect("Python EP-009 oracle emitted every trace");
+        .expect("Python configuration-integrations oracle emitted every trace");
     Some((
         observed,
-        serde_json::from_value(trace_expected).expect("strict Python EP-009 trace observations"),
+        serde_json::from_value(trace_expected)
+            .expect("strict Python configuration-integrations trace observations"),
     ))
 }
 
 /// Rewrites the checked-in corpus from the current runtime and the pinned
 /// reference. Declared divergences are preserved: only a human can justify one.
 #[test]
-#[ignore = "maintenance: regenerates the EP-009 corpus"]
+#[ignore = "maintenance: regenerates the configuration-integrations corpus"]
 fn regenerate_corpus() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/runtime-parity")
-        .join("configuration-integrations-ep009.json");
+        .join("configuration-integrations.json");
     let mut corpus: Value = serde_json::from_str(
-        &fs::read_to_string(&path).expect("read the checked-in EP-009 corpus"),
+        &fs::read_to_string(&path).expect("read the checked-in configuration-integrations corpus"),
     )
-    .expect("strict EP-009 corpus");
-    let probe: OracleProbe =
-        serde_json::from_value(corpus["oracleProbe"].clone()).expect("strict EP-009 oracle probe");
+    .expect("strict configuration-integrations corpus");
+    let probe: OracleProbe = serde_json::from_value(corpus["oracleProbe"].clone())
+        .expect("strict configuration-integrations oracle probe");
     let (observed, captured) =
         run_python_oracle(&probe).expect("the pinned Python oracle checkout must be available");
     corpus["oracleProbe"]["expected"] = observed;
     for trace in corpus["traces"]
         .as_array_mut()
-        .expect("EP-009 corpus traces")
+        .expect("configuration-integrations corpus traces")
     {
         let id = trace["id"].as_str().expect("trace id").to_owned();
-        let events: Vec<Event> =
-            serde_json::from_value(trace["events"].clone()).expect("strict EP-009 events");
+        let events: Vec<Event> = serde_json::from_value(trace["events"].clone())
+            .expect("strict configuration-integrations events");
         trace["expected"] = Value::from(events.into_iter().map(apply).collect::<Vec<_>>());
         trace["reference"] = Value::from(
             captured
@@ -524,10 +532,11 @@ fn regenerate_corpus() {
         &path,
         format!(
             "{}\n",
-            serde_json::to_string_pretty(&corpus).expect("serialize the EP-009 corpus")
+            serde_json::to_string_pretty(&corpus)
+                .expect("serialize the configuration-integrations corpus")
         ),
     )
-    .expect("write the EP-009 corpus");
+    .expect("write the configuration-integrations corpus");
 }
 
 #[test]
@@ -668,7 +677,7 @@ fn overlays_preserve_typed_actions_and_render_at_fixed_widths() {
                         },
                     );
                 })
-                .expect("EP-009 overlay renders");
+                .expect("configuration-integrations overlay renders");
             let rendered = terminal
                 .backend()
                 .buffer()

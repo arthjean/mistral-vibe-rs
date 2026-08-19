@@ -108,7 +108,7 @@
         "teleport"
       ]
     },
-    "script": "ep009-python-oracle.py"
+    "script": "configuration-integrations-oracle.py"
   },
   "reference": {
     "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",

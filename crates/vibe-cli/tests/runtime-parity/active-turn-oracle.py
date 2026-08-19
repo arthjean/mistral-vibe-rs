@@ -1,4 +1,4 @@
-"""Pinned Python oracle for EP-007: active-turn callbacks, queue and shell.
+"""Pinned Python oracle for active-turn callbacks, queue and shell.
 
 Every observation is measured from reference code. The approval and question
 widgets are mounted in a Textual harness and driven through their real key
@@ -8,7 +8,7 @@ Nothing here restates a rule the reference implements.
 
 Usage::
 
-    .venv/bin/python ep007-python-oracle.py --reference /path/to/reference
+    .venv/bin/python active-turn-oracle.py --reference /path/to/reference
 """
 
 from __future__ import annotations
@@ -528,7 +528,7 @@ def main() -> int:
     parser.add_argument("--reference", type=Path, default=Path("/home/arthur/dev/mistral-vibe"))
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     parser.add_argument("--output", type=Path, default=None)
-    parser.add_argument("--workdir", type=Path, default=Path("/tmp/ep007-oracle"))
+    parser.add_argument("--workdir", type=Path, default=Path("/tmp/active-turn-oracle"))
     arguments = parser.parse_args()
 
     commit = resolve_reference(arguments.reference, arguments.expected_commit)

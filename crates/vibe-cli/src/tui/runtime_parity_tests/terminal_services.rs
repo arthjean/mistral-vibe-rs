@@ -570,9 +570,9 @@ fn observe_update_check(
 #[test]
 fn corpus_replays_update_attention_narration_and_exit_behavior() {
     let corpus: Corpus = serde_json::from_str(include_str!(
-        "../../../tests/runtime-parity/terminal-services-ep011.json"
+        "../../../tests/runtime-parity/terminal-services.json"
     ))
-    .expect("strict EP-011 corpus");
+    .expect("strict terminal-services corpus");
     assert_eq!(corpus.schema_version, 1);
     assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
     assert_eq!(corpus.oracle.engine, "python-reference-capture");
@@ -661,7 +661,10 @@ fn corpus_replays_update_attention_narration_and_exit_behavior() {
 
 fn assert_python_oracle_probe(probe: &OracleProbe) -> Option<BTreeMap<String, Vec<String>>> {
     let (observed, traces) = run_python_oracle(probe)?;
-    assert_eq!(observed, probe.expected, "Python EP-011 oracle drifted");
+    assert_eq!(
+        observed, probe.expected,
+        "Python terminal-services oracle drifted"
+    );
     assert_terminal_service_contracts(&observed);
     Some(traces)
 }
@@ -738,48 +741,49 @@ fn run_python_oracle(probe: &OracleProbe) -> Option<(Value, BTreeMap<String, Vec
         .arg(script)
         .current_dir(&oracle_root)
         .output()
-        .expect("execute the pinned Python EP-011 oracle");
+        .expect("execute the pinned Python terminal-services oracle");
     assert!(
         output.status.success(),
-        "Python EP-011 oracle failed: {}",
+        "Python terminal-services oracle failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let mut observed: Value =
-        serde_json::from_slice(&output.stdout).expect("strict Python EP-011 observation");
+    let mut observed: Value = serde_json::from_slice(&output.stdout)
+        .expect("strict Python terminal-services observation");
     let trace_expected = observed
         .as_object_mut()
         .and_then(|observed| observed.remove("traceExpected"))
-        .expect("Python EP-011 oracle emitted every trace");
+        .expect("Python terminal-services oracle emitted every trace");
     Some((
         observed,
-        serde_json::from_value(trace_expected).expect("strict Python EP-011 trace observations"),
+        serde_json::from_value(trace_expected)
+            .expect("strict Python terminal-services trace observations"),
     ))
 }
 
 /// Rewrites the checked-in corpus from the current runtime and the pinned
 /// reference. Declared divergences are preserved: only a human can justify one.
 #[test]
-#[ignore = "maintenance: regenerates the EP-011 corpus"]
+#[ignore = "maintenance: regenerates the terminal-services corpus"]
 fn regenerate_corpus() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/runtime-parity")
-        .join("terminal-services-ep011.json");
+        .join("terminal-services.json");
     let mut corpus: Value = serde_json::from_str(
-        &fs::read_to_string(&path).expect("read the checked-in EP-011 corpus"),
+        &fs::read_to_string(&path).expect("read the checked-in terminal-services corpus"),
     )
-    .expect("strict EP-011 corpus");
-    let probe: OracleProbe =
-        serde_json::from_value(corpus["oracleProbe"].clone()).expect("strict EP-011 oracle probe");
+    .expect("strict terminal-services corpus");
+    let probe: OracleProbe = serde_json::from_value(corpus["oracleProbe"].clone())
+        .expect("strict terminal-services oracle probe");
     let (observed, captured) =
         run_python_oracle(&probe).expect("the pinned Python oracle checkout must be available");
     corpus["oracleProbe"]["expected"] = observed;
     for trace in corpus["traces"]
         .as_array_mut()
-        .expect("EP-011 corpus traces")
+        .expect("terminal-services corpus traces")
     {
         let id = trace["id"].as_str().expect("trace id").to_owned();
-        let events: Vec<Event> =
-            serde_json::from_value(trace["events"].clone()).expect("strict EP-011 events");
+        let events: Vec<Event> = serde_json::from_value(trace["events"].clone())
+            .expect("strict terminal-services events");
         let mut replay = Replay::default();
         trace["expected"] = Value::from(
             events
@@ -798,13 +802,13 @@ fn regenerate_corpus() {
         &path,
         format!(
             "{}\n",
-            serde_json::to_string_pretty(&corpus).expect("serialize the EP-011 corpus")
+            serde_json::to_string_pretty(&corpus).expect("serialize the terminal-services corpus")
         ),
     )
-    .expect("write the EP-011 corpus");
+    .expect("write the terminal-services corpus");
 }
 
-/// The reference surfaces EP-011 adds to the frame: the theme catalog, the quit
+/// The reference surfaces terminal-services adds to the frame: the theme catalog, the quit
 /// prompt in the path display, and the narrator status.
 #[test]
 fn terminal_service_surfaces_render_at_reference_widths() {
@@ -878,7 +882,7 @@ fn terminal_service_surfaces_render_at_reference_widths() {
                         },
                     );
                 })
-                .expect("EP-011 surface renders");
+                .expect("terminal-services surface renders");
             let rendered = terminal
                 .backend()
                 .buffer()

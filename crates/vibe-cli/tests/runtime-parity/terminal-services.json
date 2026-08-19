@@ -66,7 +66,7 @@
       },
       "usageLine": "Total tokens used this session: input=1,234 output=567 (total=1,801)"
     },
-    "script": "ep011-python-oracle.py"
+    "script": "terminal-services-oracle.py"
   },
   "reference": {
     "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",

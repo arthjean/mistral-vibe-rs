@@ -58,9 +58,9 @@ fn pinned_python_oracle() -> Option<(PathBuf, PathBuf)> {
     Some((root, interpreter))
 }
 
-mod ep009;
-mod ep010;
-mod ep011;
+mod configuration_integrations;
+mod semantic_transcript;
+mod terminal_services;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -90,27 +90,27 @@ struct Trace {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Ep008Corpus {
+struct SessionManagementCorpus {
     schema_version: u32,
     reference: Reference,
-    traces: Vec<Ep008Trace>,
+    traces: Vec<SessionManagementTrace>,
     unavailable: Vec<Value>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Ep008Trace {
+struct SessionManagementTrace {
     id: String,
     story: String,
-    events: Vec<Ep008Event>,
+    events: Vec<SessionManagementEvent>,
     expected: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-enum Ep008Event {
+enum SessionManagementEvent {
     OpenRewind {
-        targets: Vec<Ep008Target>,
+        targets: Vec<SessionManagementTarget>,
     },
     RewindPrevious,
     RewindNext,
@@ -134,14 +134,14 @@ enum Ep008Event {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Ep008Target {
+struct SessionManagementTarget {
     message_index: usize,
     message: String,
     has_file_changes: bool,
 }
 
 #[derive(Default)]
-struct Ep008Replay {
+struct SessionManagementReplay {
     rewind: Option<RewindState>,
     delete: Option<SessionDeleteState>,
     sessions: Option<Overlay>,
@@ -150,10 +150,10 @@ struct Ep008Replay {
     delete_calls: usize,
 }
 
-impl Ep008Replay {
-    fn apply(&mut self, event: Ep008Event) -> String {
+impl SessionManagementReplay {
+    fn apply(&mut self, event: SessionManagementEvent) -> String {
         match event {
-            Ep008Event::OpenRewind { targets } => {
+            SessionManagementEvent::OpenRewind { targets } => {
                 self.rewind = RewindState::new(
                     targets
                         .into_iter()
@@ -169,26 +169,26 @@ impl Ep008Replay {
                 );
                 self.observe_rewind("open")
             }
-            Ep008Event::RewindPrevious => {
+            SessionManagementEvent::RewindPrevious => {
                 self.reduce_rewind(KeyCode::Left);
                 self.observe_rewind("previous")
             }
-            Ep008Event::RewindNext => {
+            SessionManagementEvent::RewindNext => {
                 self.reduce_rewind(KeyCode::Right);
                 self.observe_rewind("next")
             }
-            Ep008Event::RewindActionDown => {
+            SessionManagementEvent::RewindActionDown => {
                 self.reduce_rewind(KeyCode::Down);
                 self.observe_rewind("action")
             }
-            Ep008Event::RewindAccept => match self.reduce_rewind(KeyCode::Enter) {
+            SessionManagementEvent::RewindAccept => match self.reduce_rewind(KeyCode::Enter) {
                 RewindEffect::Accept {
                     entry_id,
                     restore_files,
                 } => format!("rewind:dispatch:{entry_id}:{restore_files}"),
                 effect => panic!("unexpected rewind effect: {effect:?}"),
             },
-            Ep008Event::RewindFailure => {
+            SessionManagementEvent::RewindFailure => {
                 let rewind = self.rewind.as_mut().expect("rewind is open");
                 rewind.set_error("Rewind failed: injected failure");
                 format!(
@@ -197,12 +197,12 @@ impl Ep008Replay {
                     self.rewind.as_ref().and_then(RewindState::error).is_some()
                 )
             }
-            Ep008Event::RewindCancel => {
+            SessionManagementEvent::RewindCancel => {
                 assert_eq!(self.reduce_rewind(KeyCode::Char('q')), RewindEffect::Cancel);
                 self.rewind = None;
                 "rewind:cancelled".to_owned()
             }
-            Ep008Event::OpenSessions { sessions, current } => {
+            SessionManagementEvent::OpenSessions { sessions, current } => {
                 let count = sessions.len();
                 self.sessions = Some(Overlay::new(
                     OverlayKind::Sessions,
@@ -219,7 +219,7 @@ impl Ep008Replay {
                 self.dispatched_delete = None;
                 format!("sessions:open:{count}")
             }
-            Ep008Event::SelectSession { session_id } => {
+            SessionManagementEvent::SelectSession { session_id } => {
                 let overlay = self.sessions.as_mut().expect("sessions are open");
                 for _ in 0..overlay.items.len() {
                     if overlay
@@ -243,7 +243,7 @@ impl Ep008Replay {
                 );
                 format!("sessions:selected:{session_id}")
             }
-            Ep008Event::DeleteRequest { session_id } => {
+            SessionManagementEvent::DeleteRequest { session_id } => {
                 let overlay = self.sessions.as_mut().expect("sessions are open");
                 assert_eq!(
                     overlay.selected_item().map(|item| item.id.as_str()),
@@ -271,7 +271,7 @@ impl Ep008Replay {
                     effect => panic!("unexpected session effect: {effect:?}"),
                 }
             }
-            Ep008Event::DeleteFailure => {
+            SessionManagementEvent::DeleteFailure => {
                 let session_id = self
                     .dispatched_delete
                     .take()
@@ -283,7 +283,7 @@ impl Ep008Replay {
                 self.delete = Some(SessionDeleteState::failure(session_id, "injected failure"));
                 format!("delete:failure:retained={retained}")
             }
-            Ep008Event::DeleteSuccess => {
+            SessionManagementEvent::DeleteSuccess => {
                 let session_id = self
                     .dispatched_delete
                     .take()
@@ -706,11 +706,10 @@ fn shell_entry(text: String) -> TranscriptEntry {
 }
 
 #[tokio::test]
-async fn ep007_corpus_replays_every_event_against_runtime_reducers() {
-    let corpus: Corpus = serde_json::from_str(include_str!(
-        "../../tests/runtime-parity/active-turn-ep007.json"
-    ))
-    .expect("strict EP-007 corpus");
+async fn active_turn_corpus_replays_every_event_against_runtime_reducers() {
+    let corpus: Corpus =
+        serde_json::from_str(include_str!("../../tests/runtime-parity/active-turn.json"))
+            .expect("strict active-turn corpus");
     assert_eq!(corpus.schema_version, 2);
     assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
     assert!(!corpus.reference.version.is_empty());
@@ -737,11 +736,11 @@ async fn ep007_corpus_replays_every_event_against_runtime_reducers() {
 }
 
 #[test]
-fn ep008_corpus_replays_rewind_and_delete_state_machines() {
-    let corpus: Ep008Corpus = serde_json::from_str(include_str!(
-        "../../tests/runtime-parity/session-management-ep008.json"
+fn session_management_corpus_replays_rewind_and_delete_state_machines() {
+    let corpus: SessionManagementCorpus = serde_json::from_str(include_str!(
+        "../../tests/runtime-parity/session-management.json"
     ))
-    .expect("strict EP-008 corpus");
+    .expect("strict session-management corpus");
     assert_eq!(corpus.schema_version, 2);
     assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
     assert!(!corpus.reference.version.is_empty());
@@ -755,7 +754,7 @@ fn ep008_corpus_replays_rewind_and_delete_state_machines() {
         BTreeSet::from(["US-030"])
     );
     // US-029 left the replayable set when the reference moved to a two-step
-    // rewind at v2.23.3, measured by `tests/runtime-parity/ep008-python-oracle.py`.
+    // rewind at v2.23.3, measured by `tests/runtime-parity/session-management-oracle.py`.
     // A dropped trace stays visible: it names the story it covered and why the
     // corpus carries no expectation for it.
     for entry in &corpus.unavailable {
@@ -772,7 +771,7 @@ fn ep008_corpus_replays_rewind_and_delete_state_machines() {
 
     for trace in corpus.traces {
         assert!(!trace.id.is_empty());
-        let mut replay = Ep008Replay::default();
+        let mut replay = SessionManagementReplay::default();
         let actual = trace
             .events
             .into_iter()

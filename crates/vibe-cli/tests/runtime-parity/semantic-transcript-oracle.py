@@ -1,4 +1,4 @@
-"""Pinned Python oracle for EP-010: semantic transcript and observability.
+"""Pinned Python oracle for semantic transcript and observability.
 
 Every observation is composed from the reference itself: the tool presentation
 adapters build the call and result displays, the pinned transcript widgets turn
@@ -454,7 +454,7 @@ HANDLERS = {
 
 def main() -> None:
     corpus = json.loads(
-        (Path(__file__).parent / "semantic-transcript-ep010.json").read_text()
+        (Path(__file__).parent / "semantic-transcript.json").read_text()
     )
     trace_expected: dict[str, list[str]] = {}
     for trace in corpus["traces"]:

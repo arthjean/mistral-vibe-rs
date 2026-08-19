@@ -626,7 +626,12 @@ fn strip_unmodeled_state(state: &mut Value) {
     }
 }
 
-fn is_ep002_story(trace: &Map<String, Value>) -> bool {
+/// Whether a trace's render is compared on the composer projection alone.
+///
+/// The external-editor and prompt-history traces drive the composer through a
+/// round trip that leaves the rest of the frame free to differ, so only the
+/// four composer fields are held to the reference for them.
+fn compares_composer_render_only(trace: &Map<String, Value>) -> bool {
     matches!(
         trace.get("story").and_then(Value::as_str),
         Some("US-004" | "US-005" | "US-006" | "US-007")
@@ -964,7 +969,7 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
             if let Some(expected_render) = observation.get("render") {
                 let mut actual_render = serde_json::to_value(replay.state.observe_render())
                     .map_err(|error| format!("render observation does not serialize: {error}"))?;
-                let mut expected_render = if is_ep002_story(object) {
+                let mut expected_render = if compares_composer_render_only(object) {
                     actual_render = composer_render_projection(&actual_render);
                     composer_render_projection(expected_render)
                 } else {

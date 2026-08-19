@@ -644,7 +644,7 @@ def observe_event(event: dict) -> str:
 
 def main() -> None:
     corpus = json.loads(
-        Path(__file__).with_name("configuration-integrations-ep009.json").read_text()
+        Path(__file__).with_name("configuration-integrations.json").read_text()
     )
     mcp = parse_mcp_add_args(
         "https://mcp.example/rpc --name github --scope repo --scope read"

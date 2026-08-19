@@ -110,7 +110,7 @@
     {
       "id": "rewind-navigation-conditional-actions-and-retry",
       "story": "US-029",
-      "reason": "The reference replaced the one-step rewind with a two-step flow at v2.23.3: ep008-python-oracle.py measures Enter on the action step advancing to a persistence step (rewind:step:target=4:actions=2:selected=inplace) and only a second Enter confirming, as RewindConfirmed(restore_files, inplace). The Rust port still implements the superseded single Enter dispatch, so this trace has no conformant expectation to replay until the port adopts the persistence step."
+      "reason": "The reference replaced the one-step rewind with a two-step flow at v2.23.3: session-management-oracle.py measures Enter on the action step advancing to a persistence step (rewind:step:target=4:actions=2:selected=inplace) and only a second Enter confirming, as RewindConfirmed(restore_files, inplace). The Rust port still implements the superseded single Enter dispatch, so this trace has no conformant expectation to replay until the port adopts the persistence step."
     }
   ]
 }

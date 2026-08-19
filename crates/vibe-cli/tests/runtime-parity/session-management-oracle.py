@@ -1,4 +1,4 @@
-"""Pinned Python oracle for EP-008: rewind and session deletion.
+"""Pinned Python oracle for rewind and session deletion.
 
 Both widgets are mounted headlessly and driven through their real key actions,
 so the observations are what the reference does rather than what the port
@@ -8,7 +8,7 @@ dispatches the rewind.
 
 Usage::
 
-    .venv/bin/python ep008-python-oracle.py --reference /path/to/reference
+    .venv/bin/python session-management-oracle.py --reference /path/to/reference
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Pinned Python oracle for EP-011: terminal services and lifecycle.
+"""Pinned Python oracle for terminal services and lifecycle.
 
 Every observation comes from the reference itself: update discovery runs the
 pinned `get_update_if_available` against an in-memory repository, notifications
@@ -492,7 +492,7 @@ async def replay_trace(trace: dict) -> list[str]:
 
 def main() -> None:
     corpus = json.loads(
-        (Path(__file__).parent / "terminal-services-ep011.json").read_text()
+        (Path(__file__).parent / "terminal-services.json").read_text()
     )
     trace_expected: dict[str, list[str]] = {}
     for trace in corpus["traces"]:

@@ -1,4 +1,4 @@
-"""Capture the EP-006 startup routing the pinned Python reference performs.
+"""Capture the startup routing the pinned Python reference performs.
 
 The corpus records, for one set of command-line arguments, which mode the
 reference enters and what it does once the UI is mounted. Both are measured by
@@ -14,7 +14,7 @@ running reference code rather than by restating the rule it implements:
 
 Usage::
 
-    .venv/bin/python ep006-python-oracle.py --reference /path/to/reference
+    .venv/bin/python startup-oracle.py --reference /path/to/reference
 """
 
 from __future__ import annotations
