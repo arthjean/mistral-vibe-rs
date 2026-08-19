@@ -1,0 +1,194 @@
+{
+  "prd": {
+    "file": "tasks/prd-slash-command-parity.md",
+    "title": "Slash Commands at Full Parity",
+    "created_at": "2026-08-20",
+    "status": "IN_PROGRESS"
+  },
+  "epics": [
+    {
+      "id": "EP-069",
+      "title": "An oracle over the command registry",
+      "status": "DONE",
+      "priority": "P0",
+      "stories_total": 2,
+      "stories_done": 2
+    },
+    {
+      "id": "EP-070",
+      "title": "The help surface the reference publishes",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 2,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-071",
+      "title": "What a submitted command line does",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-072",
+      "title": "The completer's edges",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 2,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-073",
+      "title": "Restate row 2 from what now measures it",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 1,
+      "stories_done": 0
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-229",
+      "title": "Capture the command registry from the pinned reference",
+      "epic": "EP-069",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [],
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
+    },
+    {
+      "id": "US-230",
+      "title": "Replay the registry corpus with an audited ledger",
+      "epic": "EP-069",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-229"
+      ],
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
+    },
+    {
+      "id": "US-231",
+      "title": "Answer /help with a Markdown transcript message",
+      "epic": "EP-070",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-230"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-232",
+      "title": "Retire the help overlay and reconcile the shortcut inventory",
+      "epic": "EP-070",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-231"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-233",
+      "title": "Echo the submitted command line into the transcript",
+      "epic": "EP-071",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-230"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-234",
+      "title": "Report the registry key, once, only when the command runs",
+      "epic": "EP-071",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-230"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-235",
+      "title": "Give the two refusals their two reasons",
+      "epic": "EP-071",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "XS",
+      "blocked_by": [
+        "US-233"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-236",
+      "title": "Strip one slash, and complete from any cursor offset",
+      "epic": "EP-072",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "S",
+      "blocked_by": [
+        "US-230"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-237",
+      "title": "Cover the slash edges in the chat-input corpus",
+      "epic": "EP-072",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-236"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-238",
+      "title": "Remeasure and restate parity row 2",
+      "epic": "EP-073",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-230",
+        "US-232",
+        "US-234",
+        "US-235",
+        "US-237"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    }
+  ]
+}
