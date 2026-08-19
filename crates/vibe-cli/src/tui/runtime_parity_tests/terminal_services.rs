@@ -6,7 +6,7 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::Value;
 use vibe_core::updates::{
-    CachePlan, UpdateAvailability, UpdateCache, UpdateError, UpdateGatewayCause,
+    CachePlan, UpdateAvailability, UpdateCache, UpdateCacheStore, UpdateError, UpdateGatewayCause,
     UpdateGatewayError, Version, plan_update_check, resolve_fetch, select_latest_version,
     status_cause,
 };
@@ -109,6 +109,39 @@ enum Event {
         #[serde(rename = "currentVersion")]
         current_version: String,
         cache: Option<CachePayload>,
+    },
+    /// Reference `FileSystemUpdateCacheRepository.get` over a temporary vibe
+    /// home seeded with the two files it reads. `serde(flatten)` would disable
+    /// this enum's `deny_unknown_fields`, so both variants spell the disk out.
+    UpdateCacheLoad {
+        /// `cache.toml` before the call, absent when the file does not exist.
+        #[serde(default)]
+        document: Option<String>,
+        /// The pre-TOML `update_cache.json`, held verbatim so a payload no
+        /// parser accepts can be seeded too.
+        #[serde(default)]
+        legacy: Option<String>,
+        /// Comment bytes appended to the document, which is how a file past
+        /// this port's ceiling is described without committing one.
+        #[serde(default, rename = "padBytes")]
+        pad_bytes: usize,
+        /// Creates `cache.toml` as a directory, which fails every write on
+        /// both sides without depending on file permissions.
+        #[serde(default, rename = "blockWrite")]
+        block_write: bool,
+    },
+    /// Reference `FileSystemUpdateCacheRepository.set` over the same seeded
+    /// home, observed through the document the write leaves behind.
+    UpdateCacheStore {
+        #[serde(default)]
+        document: Option<String>,
+        #[serde(default)]
+        legacy: Option<String>,
+        #[serde(default, rename = "padBytes")]
+        pad_bytes: usize,
+        #[serde(default, rename = "blockWrite")]
+        block_write: bool,
+        cache: CachePayload,
     },
     VersionOrder {
         left: String,
@@ -361,6 +394,50 @@ impl Replay {
                     encode_cache(cache.as_ref())
                 )
             }
+            Event::UpdateCacheLoad {
+                document,
+                legacy,
+                pad_bytes,
+                block_write,
+            } => {
+                let home = seed_cache_home(&CacheDisk {
+                    document,
+                    legacy,
+                    pad_bytes,
+                    block_write,
+                });
+                let store = UpdateCacheStore::new(home.path());
+                let cache = store.load();
+                format!(
+                    "cachestore|load|{}|doc={}",
+                    encode_cache(cache.as_ref()),
+                    encode_document(store.path())
+                )
+            }
+            Event::UpdateCacheStore {
+                document,
+                legacy,
+                pad_bytes,
+                block_write,
+                cache,
+            } => {
+                let home = seed_cache_home(&CacheDisk {
+                    document,
+                    legacy,
+                    pad_bytes,
+                    block_write,
+                });
+                let store = UpdateCacheStore::new(home.path());
+                let outcome = match store.store(&UpdateCache::from(&cache)) {
+                    Ok(()) => "ok".to_owned(),
+                    Err(UpdateError::CacheWrite) => "error|cache_write".to_owned(),
+                    Err(UpdateError::Gateway(message)) => format!("error|{message}"),
+                };
+                format!(
+                    "cachestore|store|{outcome}|doc={}",
+                    encode_document(store.path())
+                )
+            }
             Event::VersionOrder { left, right } => {
                 match (Version::parse(&left), Version::parse(&right)) {
                     (Some(left), Some(right)) => {
@@ -535,6 +612,90 @@ impl Replay {
     }
 }
 
+/// What the cache files hold before the call under observation.
+struct CacheDisk {
+    document: Option<String>,
+    legacy: Option<String>,
+    pad_bytes: usize,
+    block_write: bool,
+}
+
+/// Writes one event's files into a fresh vibe home, which both sides seed the
+/// same way so only the store under measurement can explain a difference.
+fn seed_cache_home(disk: &CacheDisk) -> tempfile::TempDir {
+    let home = tempfile::tempdir().expect("temporary vibe home");
+    let path = home.path().join("cache.toml");
+    if disk.block_write {
+        fs::create_dir(&path).expect("seed cache.toml as a directory");
+    } else if let Some(document) = &disk.document {
+        fs::write(&path, pad_document(document, disk.pad_bytes)).expect("seed cache.toml");
+    }
+    if let Some(legacy) = &disk.legacy {
+        fs::write(home.path().join("update_cache.json"), legacy).expect("seed update_cache.json");
+    }
+    home
+}
+
+/// Appends a comment long enough to carry the document past a byte ceiling,
+/// which keeps a multi-megabyte fixture out of the corpus.
+fn pad_document(document: &str, pad_bytes: usize) -> String {
+    if pad_bytes == 0 {
+        return document.to_owned();
+    }
+    format!("{document}\n# {}\n", "p".repeat(pad_bytes))
+}
+
+/// One cache document as a normalized observation: every leaf as a sorted
+/// dotted path and a typed value, so the two TOML writers can be compared
+/// without comparing their formatting.
+fn encode_document(path: &Path) -> String {
+    let Ok(text) = fs::read_to_string(path) else {
+        return "absent".to_owned();
+    };
+    let Ok(document) = text.parse::<toml::Table>() else {
+        return "invalid".to_owned();
+    };
+    let mut entries = Vec::new();
+    flatten_document("", &document, &mut entries);
+    entries.sort();
+    if entries.is_empty() {
+        "empty".to_owned()
+    } else {
+        entries.join("⏎")
+    }
+}
+
+fn flatten_document(prefix: &str, table: &toml::Table, entries: &mut Vec<String>) {
+    for (key, value) in table {
+        let path = if prefix.is_empty() {
+            key.clone()
+        } else {
+            format!("{prefix}.{key}")
+        };
+        match value {
+            toml::Value::Table(nested) if !nested.is_empty() => {
+                flatten_document(&path, nested, entries);
+            }
+            value => entries.push(format!("{path}={}", encode_document_value(value))),
+        }
+    }
+}
+
+fn encode_document_value(value: &toml::Value) -> String {
+    match value {
+        toml::Value::String(text) => format!("s:{}", Value::from(text.as_str())),
+        toml::Value::Integer(number) => format!("i:{number}"),
+        toml::Value::Float(number) => format!("f:{number}"),
+        toml::Value::Boolean(flag) => format!("b:{flag}"),
+        toml::Value::Datetime(stamp) => format!("d:{stamp}"),
+        toml::Value::Array(items) => format!(
+            "a:{}",
+            serde_json::to_string(items).expect("a TOML array encodes as JSON")
+        ),
+        toml::Value::Table(_) => "t:{}".to_owned(),
+    }
+}
+
 /// Reference `get_update_if_available` over an in-memory repository.
 fn observe_update_check(
     current_version: &str,
@@ -579,7 +740,7 @@ fn corpus_replays_update_attention_narration_and_exit_behavior() {
     assert_eq!(corpus.oracle.commit, REFERENCE_COMMIT);
     assert_eq!(corpus.oracle.deterministic_runs, 10);
     assert!(!corpus.reference.version.is_empty());
-    assert_eq!(corpus.reference.source_files.len(), 12);
+    assert_eq!(corpus.reference.source_files.len(), 14);
     for entry in &corpus.unavailable {
         assert!(
             !entry.dimension.is_empty() && !entry.reason.is_empty(),
@@ -592,7 +753,7 @@ fn corpus_replays_update_attention_narration_and_exit_behavior() {
             .iter()
             .map(|trace| trace.story.as_str())
             .collect::<BTreeSet<_>>(),
-        BTreeSet::from(["US-037", "US-038", "US-039"])
+        BTreeSet::from(["US-037", "US-038", "US-039", "US-225"])
     );
     let python_expected = assert_python_oracle_probe(&corpus.oracle_probe);
 

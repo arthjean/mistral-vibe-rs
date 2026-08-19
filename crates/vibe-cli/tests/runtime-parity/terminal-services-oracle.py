@@ -1,7 +1,9 @@
 """Pinned Python oracle for terminal services and lifecycle.
 
 Every observation comes from the reference itself: update discovery runs the
-pinned `get_update_if_available` against an in-memory repository, notifications
+pinned `get_update_if_available` against an in-memory repository, the on-disk
+cache runs the pinned `FileSystemUpdateCacheRepository` over a temporary
+directory, notifications
 run the pinned `TextualNotificationAdapter`, narration drives the pinned
 `NarratorManager`, and the exit contract calls the reference formatters. Nothing
 here reimplements Rust behavior.
@@ -17,6 +19,8 @@ import json
 from pathlib import Path
 import re
 import sys
+import tempfile
+import tomllib
 from contextlib import redirect_stdout
 
 import httpx
@@ -42,6 +46,9 @@ from vibe.cli.update_notifier import (
     UpdateCache,
     UpdateGatewayCause,
     UpdateGatewayError,
+)
+from vibe.cli.update_notifier.adapters.filesystem_update_cache_repository import (
+    FileSystemUpdateCacheRepository,
 )
 from vibe.cli.update_notifier.adapters.pypi_update_gateway import PyPIUpdateGateway
 from vibe.cli.update_notifier.update import (
@@ -164,6 +171,87 @@ async def observe_whats_new(event: dict) -> str:
 
     shown = await run()
     return f"whatsnew|{shown}|cache={encode_cache(repository.cache)}"
+
+
+def pad_document(document: str, pad_bytes: int) -> str:
+    """Appends a comment long enough to carry the document past a byte ceiling."""
+    if not pad_bytes:
+        return document
+    return f"{document}\n# {'p' * pad_bytes}\n"
+
+
+def seed_cache_home(base: Path, event: dict) -> None:
+    cache_path = base / "cache.toml"
+    if event.get("blockWrite"):
+        cache_path.mkdir()
+    elif event.get("document") is not None:
+        cache_path.write_text(pad_document(event["document"], event.get("padBytes", 0)))
+    if event.get("legacy") is not None:
+        (base / "update_cache.json").write_text(event["legacy"])
+
+
+def encode_document_value(value) -> str:
+    if isinstance(value, bool):
+        return f"b:{str(value).lower()}"
+    if isinstance(value, int):
+        return f"i:{value}"
+    if isinstance(value, float):
+        return f"f:{value}"
+    if isinstance(value, str):
+        return "s:" + json.dumps(value, ensure_ascii=False)
+    if isinstance(value, list):
+        return "a:" + json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    if isinstance(value, dict):
+        return "t:{}"
+    return f"d:{value.isoformat()}"
+
+
+def flatten_document(table: dict, prefix: str, entries: list[str]) -> None:
+    for key, value in table.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict) and value:
+            flatten_document(value, path, entries)
+        else:
+            entries.append(f"{path}={encode_document_value(value)}")
+
+
+def encode_document(path: Path) -> str:
+    """One cache document as sorted dotted paths and typed values."""
+    try:
+        with path.open("rb") as handle:
+            document = tomllib.load(handle)
+    except OSError:
+        return "absent"
+    except tomllib.TOMLDecodeError:
+        return "invalid"
+    entries: list[str] = []
+    flatten_document(document, "", entries)
+    return "⏎".join(sorted(entries)) if entries else "empty"
+
+
+async def observe_update_cache_load(event: dict) -> str:
+    with tempfile.TemporaryDirectory() as directory:
+        base = Path(directory)
+        seed_cache_home(base, event)
+        repository = FileSystemUpdateCacheRepository(base)
+        try:
+            observed = encode_cache(await repository.get())
+        except Exception as error:
+            observed = f"raised|{type(error).__name__}"
+        return f"cachestore|load|{observed}|doc={encode_document(base / 'cache.toml')}"
+
+
+async def observe_update_cache_store(event: dict) -> str:
+    with tempfile.TemporaryDirectory() as directory:
+        base = Path(directory)
+        seed_cache_home(base, event)
+        repository = FileSystemUpdateCacheRepository(base)
+        try:
+            await repository.set(decode_cache(event["cache"]))
+            observed = "ok"
+        except Exception as error:
+            observed = f"raised|{type(error).__name__}"
+        return f"cachestore|store|{observed}|doc={encode_document(base / 'cache.toml')}"
 
 
 def observe_version_order(event: dict) -> str:
@@ -454,6 +542,8 @@ ASYNC_HANDLERS = {
     "update_check": observe_update_check,
     "pending_update": observe_pending_update,
     "whats_new": observe_whats_new,
+    "update_cache_load": observe_update_cache_load,
+    "update_cache_store": observe_update_cache_store,
     "pypi": observe_pypi,
 }
 

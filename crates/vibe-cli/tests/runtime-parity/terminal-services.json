@@ -81,8 +81,10 @@
       "vibe/cli/textual_ui/widgets/theme_picker.py",
       "vibe/cli/update_notifier/update.py",
       "vibe/cli/update_notifier/whats_new.py",
+      "vibe/cli/update_notifier/adapters/filesystem_update_cache_repository.py",
       "vibe/cli/update_notifier/adapters/pypi_update_gateway.py",
-      "vibe/setup/update_prompt/update_prompt_dialog.py"
+      "vibe/setup/update_prompt/update_prompt_dialog.py",
+      "vibe/utils/cache_store.py"
     ],
     "version": "2.24.0"
   },
@@ -530,6 +532,252 @@
         "dialog|A new Vibe release is available|2.23.1 → 2.24.0|Update now|Cancel upgrade"
       ],
       "story": "US-037"
+    },
+    {
+      "events": [
+        {
+          "kind": "update_cache_load"
+        },
+        {
+          "kind": "update_cache_load",
+          "legacy": "{\"latest_version\": \"2.24.0\", \"stored_at_timestamp\": 1700000000, \"seen_whats_new_version\": \"2.23.0\", \"dismissed_version\": \"2.24.0\"}"
+        },
+        {
+          "kind": "update_cache_load",
+          "legacy": "{\"latest_version\": \"2.24.0\", \"stored_at_timestamp\": 1700000000, \"seen_whats_new_version\": null, \"dismissed_version\": null}"
+        },
+        {
+          "document": "[update_cache]\n",
+          "kind": "update_cache_load",
+          "legacy": "{\"latest_version\": \"2.24.0\", \"stored_at_timestamp\": 1700000000, \"seen_whats_new_version\": \"2.23.0\", \"dismissed_version\": \"2.24.0\"}"
+        },
+        {
+          "document": "update_cache = 7\n\n[other]\nkept = true\n",
+          "kind": "update_cache_load",
+          "legacy": "{\"latest_version\": \"2.24.0\", \"stored_at_timestamp\": 1700000000}"
+        },
+        {
+          "document": "[update_cache]\nlatest_version = \"3.0.0\"\nstored_at_timestamp = 42\n",
+          "kind": "update_cache_load",
+          "legacy": "{\"latest_version\": \"2.24.0\", \"stored_at_timestamp\": 1700000000, \"seen_whats_new_version\": \"2.23.0\", \"dismissed_version\": \"2.24.0\"}"
+        },
+        {
+          "kind": "update_cache_load",
+          "legacy": "{\"stored_at_timestamp\": 1700000000}"
+        },
+        {
+          "kind": "update_cache_load",
+          "legacy": "{\"latest_version\": 7, \"stored_at_timestamp\": \"1700000000\"}"
+        },
+        {
+          "kind": "update_cache_load",
+          "legacy": "{not json"
+        },
+        {
+          "kind": "update_cache_load",
+          "legacy": "null"
+        }
+      ],
+      "expected": [
+        "cachestore|load|none|doc=absent",
+        "cachestore|load|2.24.0|1700000000|2.23.0|2.24.0|doc=update_cache.dismissed_version=s:\"2.24.0\"⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.seen_whats_new_version=s:\"2.23.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|2.24.0|1700000000|-|-|doc=update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|2.24.0|1700000000|2.23.0|2.24.0|doc=update_cache.dismissed_version=s:\"2.24.0\"⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.seen_whats_new_version=s:\"2.23.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|2.24.0|1700000000|-|-|doc=other.kept=b:true⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|3.0.0|42|-|-|doc=update_cache.latest_version=s:\"3.0.0\"⏎update_cache.stored_at_timestamp=i:42",
+        "cachestore|load|none|doc=update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|none|doc=update_cache.latest_version=i:7⏎update_cache.stored_at_timestamp=s:\"1700000000\"",
+        "cachestore|load|none|doc=absent",
+        "cachestore|load|none|doc=absent"
+      ],
+      "id": "update-cache-migration",
+      "reference": [
+        "cachestore|load|none|doc=absent",
+        "cachestore|load|2.24.0|1700000000|2.23.0|2.24.0|doc=update_cache.dismissed_version=s:\"2.24.0\"⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.seen_whats_new_version=s:\"2.23.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|2.24.0|1700000000|-|-|doc=update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|2.24.0|1700000000|2.23.0|2.24.0|doc=update_cache.dismissed_version=s:\"2.24.0\"⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.seen_whats_new_version=s:\"2.23.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|2.24.0|1700000000|-|-|doc=other.kept=b:true⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|3.0.0|42|-|-|doc=update_cache.latest_version=s:\"3.0.0\"⏎update_cache.stored_at_timestamp=i:42",
+        "cachestore|load|none|doc=update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|none|doc=update_cache.latest_version=i:7⏎update_cache.stored_at_timestamp=s:\"1700000000\"",
+        "cachestore|load|none|doc=absent",
+        "cachestore|load|none|doc=absent"
+      ],
+      "story": "US-225"
+    },
+    {
+      "events": [
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 1700000000
+          },
+          "kind": "update_cache_store"
+        },
+        {
+          "cache": {
+            "dismissedVersion": "2.24.0",
+            "latestVersion": "2.24.0",
+            "seenWhatsNewVersion": "2.23.0",
+            "storedAtTimestamp": 1700000000
+          },
+          "kind": "update_cache_store"
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 1700000000
+          },
+          "document": "[update_cache]\nlatest_version = \"1.0.0\"\nstored_at_timestamp = 1\nunmodeled = \"keep me\"\n",
+          "kind": "update_cache_store"
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 1700000000
+          },
+          "document": "[update_cache]\nlatest_version = \"1.0.0\"\nstored_at_timestamp = 1\ndismissed_version = \"1.0.0\"\n",
+          "kind": "update_cache_store"
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 1700000000
+          },
+          "document": "[other]\nkept = true\n\n[update_cache]\nlatest_version = \"1.0.0\"\nstored_at_timestamp = 1\n",
+          "kind": "update_cache_store"
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 1700000000
+          },
+          "document": "update_cache = \"corrupt\"\n\n[other]\nkept = true\n",
+          "kind": "update_cache_store"
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 1700000000
+          },
+          "document": "not = toml = at all\n",
+          "kind": "update_cache_store"
+        },
+        {
+          "document": "[update_cache]\nlatest_version = \"2.24.0\"\nstored_at_timestamp = 1700000000\nunmodeled = \"x\"\n\n[other]\nkept = true\n",
+          "kind": "update_cache_load"
+        },
+        {
+          "document": "[update_cache]\nlatest_version = 7\nstored_at_timestamp = 1700000000\n",
+          "kind": "update_cache_load"
+        }
+      ],
+      "expected": [
+        "cachestore|store|ok|doc=update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=update_cache.dismissed_version=s:\"2.24.0\"⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.seen_whats_new_version=s:\"2.23.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000⏎update_cache.unmodeled=s:\"keep me\"",
+        "cachestore|store|ok|doc=update_cache.dismissed_version=s:\"1.0.0\"⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=other.kept=b:true⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=other.kept=b:true⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|2.24.0|1700000000|-|-|doc=other.kept=b:true⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000⏎update_cache.unmodeled=s:\"x\"",
+        "cachestore|load|none|doc=update_cache.latest_version=i:7⏎update_cache.stored_at_timestamp=i:1700000000"
+      ],
+      "id": "update-cache-merge",
+      "reference": [
+        "cachestore|store|ok|doc=update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=update_cache.dismissed_version=s:\"2.24.0\"⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.seen_whats_new_version=s:\"2.23.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000⏎update_cache.unmodeled=s:\"keep me\"",
+        "cachestore|store|ok|doc=update_cache.dismissed_version=s:\"1.0.0\"⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=other.kept=b:true⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=other.kept=b:true⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|load|2.24.0|1700000000|-|-|doc=other.kept=b:true⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000⏎update_cache.unmodeled=s:\"x\"",
+        "cachestore|load|none|doc=update_cache.latest_version=i:7⏎update_cache.stored_at_timestamp=i:1700000000"
+      ],
+      "story": "US-225"
+    },
+    {
+      "divergences": [
+        {
+          "event": 0,
+          "reason": "The reference hands a legacy payload that is not an object straight to `_parse` and raises `AttributeError` out of `get`. This port reads a JSON list as no cache, which is the absence every caller already handles."
+        },
+        {
+          "event": 1,
+          "reason": "Same guard for a legacy payload holding a bare JSON string: the reference raises and this port answers that no cache is recorded."
+        },
+        {
+          "event": 2,
+          "reason": "Same guard for a legacy payload holding a bare JSON number: the reference raises and this port answers that no cache is recorded."
+        },
+        {
+          "event": 3,
+          "reason": "The reference parses a cache file of any size. This port refuses one past its one-megabyte ceiling, so a file something else appended to reads as absent instead of being parsed into memory."
+        },
+        {
+          "event": 4,
+          "reason": "Past that same ceiling the document is unreadable to this port, so the write starts from an empty document and the unrelated table it cannot see is not carried forward."
+        },
+        {
+          "event": 5,
+          "reason": "The reference logs the failed write and returns, reporting a success it did not achieve. This port returns the cache-write error so the caller can say so."
+        }
+      ],
+      "events": [
+        {
+          "kind": "update_cache_load",
+          "legacy": "[]"
+        },
+        {
+          "kind": "update_cache_load",
+          "legacy": "\"2.24.0\""
+        },
+        {
+          "kind": "update_cache_load",
+          "legacy": "7"
+        },
+        {
+          "document": "[update_cache]\nlatest_version = \"2.24.0\"\nstored_at_timestamp = 1700000000\n",
+          "kind": "update_cache_load",
+          "padBytes": 1100000
+        },
+        {
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 1700000000
+          },
+          "document": "[other]\nkept = true\n\n[update_cache]\nlatest_version = \"1.0.0\"\nstored_at_timestamp = 1\n",
+          "kind": "update_cache_store",
+          "padBytes": 1100000
+        },
+        {
+          "blockWrite": true,
+          "cache": {
+            "latestVersion": "2.24.0",
+            "storedAtTimestamp": 1700000000
+          },
+          "kind": "update_cache_store"
+        }
+      ],
+      "expected": [
+        "cachestore|load|none|doc=absent",
+        "cachestore|load|none|doc=absent",
+        "cachestore|load|none|doc=absent",
+        "cachestore|load|none|doc=update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|error|cache_write|doc=absent"
+      ],
+      "id": "update-cache-faults",
+      "reference": [
+        "cachestore|load|raised|AttributeError|doc=absent",
+        "cachestore|load|raised|AttributeError|doc=absent",
+        "cachestore|load|raised|AttributeError|doc=absent",
+        "cachestore|load|2.24.0|1700000000|-|-|doc=update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=other.kept=b:true⏎update_cache.latest_version=s:\"2.24.0\"⏎update_cache.stored_at_timestamp=i:1700000000",
+        "cachestore|store|ok|doc=absent"
+      ],
+      "story": "US-225"
     },
     {
       "events": [
