@@ -551,3 +551,107 @@ fn the_installer_verification_refuses_on_the_words_the_installer_throws() {
         );
     }
 }
+
+/// Every binary a release archive carries. The reference publishes a third
+/// console script, `vibe-app-server`, from a PyPI channel this port does not
+/// use, and its own CI never builds `vibe-app-server.spec`. That absence is a
+/// recorded divergence in `docs/parity.md`, and this constant is what fails if
+/// it ever closes without the ledger moving with it.
+const PUBLISHED_BINARIES: [&str; 2] = ["vibe", "vibe-acp"];
+
+/// The console script the reference declares and never packages.
+const UNPUBLISHED_REFERENCE_BINARY: &str = "vibe-app-server";
+
+/// The binaries `scripts/ci/package-release.sh` copies into the archive.
+fn packaged_binaries() -> BTreeSet<String> {
+    let script = read("scripts/ci/package-release.sh");
+    script
+        .lines()
+        .filter_map(|line| {
+            let staged = line
+                .trim()
+                .strip_prefix("cp \"${binary_directory}/")?
+                .split("${binary_suffix}\"")
+                .next()?;
+            (!staged.is_empty()).then(|| staged.to_owned())
+        })
+        .collect()
+}
+
+/// Every `[[bin]]` a workspace crate publishes, excluding the fixture binaries
+/// that only exist behind a test feature.
+fn published_bin_targets() -> BTreeSet<String> {
+    let mut targets = BTreeSet::new();
+    let crates = repo_root().join("crates");
+    let entries = fs::read_dir(&crates).expect("the workspace holds a crates directory");
+    for entry in entries {
+        let manifest_path = entry
+            .expect("a crates entry is readable")
+            .path()
+            .join("Cargo.toml");
+        let Ok(text) = fs::read_to_string(&manifest_path) else {
+            continue;
+        };
+        let manifest: toml::Table = toml::from_str(&text)
+            .unwrap_or_else(|error| panic!("{} is valid TOML: {error}", manifest_path.display()));
+        let Some(bins) = manifest.get("bin").and_then(toml::Value::as_array) else {
+            continue;
+        };
+        for bin in bins {
+            if bin.get("required-features").is_some() {
+                continue;
+            }
+            let name = bin
+                .get("name")
+                .and_then(toml::Value::as_str)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{} declares a [[bin]] with no name",
+                        manifest_path.display()
+                    )
+                });
+            targets.insert(name.to_owned());
+        }
+    }
+    targets
+}
+
+#[test]
+fn the_release_publishes_exactly_the_two_binaries_the_ledger_records() {
+    // `docs/parity.md` records the absent standalone `vibe-app-server` command
+    // as an accepted divergence. A divergence nothing measures is a claim, so
+    // the packaged set, the declared targets and both installers are held to
+    // the same two names here.
+    let expected: BTreeSet<String> = PUBLISHED_BINARIES
+        .iter()
+        .map(|name| (*name).to_owned())
+        .collect();
+
+    assert_eq!(
+        packaged_binaries(),
+        expected,
+        "scripts/ci/package-release.sh packages a binary set the accepted-divergence table does \
+         not describe; move the ledger entry in docs/parity.md in the same change"
+    );
+    assert_eq!(
+        published_bin_targets(),
+        expected,
+        "the workspace declares a publishable [[bin]] the accepted-divergence table does not \
+         describe; move the ledger entry in docs/parity.md in the same change"
+    );
+
+    for installer in INSTALLERS {
+        let text = read(installer);
+        for binary in PUBLISHED_BINARIES {
+            assert!(
+                text.contains(binary),
+                "{installer} installs no {binary}, so the archive carries a binary no user receives"
+            );
+        }
+        assert!(
+            !text.contains(UNPUBLISHED_REFERENCE_BINARY),
+            "{installer} names {UNPUBLISHED_REFERENCE_BINARY}, which closes the divergence \
+             docs/parity.md records as accepted"
+        );
+    }
+}
