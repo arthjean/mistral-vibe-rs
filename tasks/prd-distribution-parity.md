@@ -472,6 +472,21 @@ Cover the two surfaces that ship to users and that no gate reads today.
 **Definition of Done:** `install.ps1` runs green in CI on Windows, and the
 committed completion files cannot drift from the flags clap declares.
 
+US-226 was reviewed on 2026-08-19 and left at `IN_REVIEW`. The job, the
+verification script and the tests that bind their shapes are committed and
+asserted, and `scripts/ci/verify-install-ps1.ps1` was driven green through all
+four paths under PowerShell 7 against an archive `scripts/ci/package-release.sh`
+had just packaged, which proves the installer's transaction logic. What is not
+proven is the Windows leg: the job has never run on a `windows-2022` runner, so
+the Windows build, the MSYS path handling `package-release.sh` relies on, and
+the job's wall clock are asserted rather than observed. That observation arrives
+with the first push and needs no further change.
+
+US-228 therefore does not wait on it, and no longer lists US-226 among its
+blockers. The scorecard states what the repository holds: row 1 may credit the
+installer coverage as committed and asserted on Windows, and must not claim a
+green Windows run until one exists.
+
 #### US-226: Exercise install.ps1 on Windows in CI
 **Description:** As a person installing on Windows, I want the PowerShell installer to be tested on Windows, so that a change to it fails before it reaches me.
 

@@ -33,10 +33,10 @@
     {
       "id": "EP-067",
       "title": "Installer and completion assurance",
-      "status": "TODO",
+      "status": "IN_REVIEW",
       "priority": "P1",
       "stories_total": 2,
-      "stories_done": 0
+      "stories_done": 1
     },
     {
       "id": "EP-068",
@@ -182,27 +182,27 @@
       "id": "US-226",
       "title": "Exercise install.ps1 on Windows in CI",
       "epic": "EP-067",
-      "status": "TODO",
+      "status": "IN_REVIEW",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-217"
       ],
-      "started_at": null,
+      "started_at": "2026-08-19",
       "completed_at": null,
-      "reviewed_at": null
+      "reviewed_at": "2026-08-19"
     },
     {
       "id": "US-227",
       "title": "Hold the shell completions to clap's declared flags",
       "epic": "EP-067",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P2",
       "size": "M",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-19",
+      "completed_at": "2026-08-19",
+      "reviewed_at": "2026-08-19"
     },
     {
       "id": "US-228",
@@ -214,8 +214,7 @@
       "blocked_by": [
         "US-219",
         "US-222",
-        "US-225",
-        "US-226"
+        "US-225"
       ],
       "started_at": null,
       "completed_at": null,
