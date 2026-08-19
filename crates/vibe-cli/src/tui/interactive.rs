@@ -457,15 +457,12 @@ pub async fn run_interactive(
     announce_release_notes(&arguments, &working_directory, &mut state);
     // Reference `_schedule_update_notification`: refresh the cache for the next
     // startup without rendering anything or blocking input.
-    let update_check = update_checks_enabled
-        .then(startup::production_update_gateway)
-        .flatten()
-        .map(|gateway| {
-            let store = startup::update_cache_store(&arguments, &working_directory);
-            tokio::spawn(async move {
-                startup::refresh_update_cache(&gateway, &store, env!("CARGO_PKG_VERSION")).await;
-            })
-        });
+    let update_check = startup::scheduled_update_gateway(update_checks_enabled).map(|gateway| {
+        let store = startup::update_cache_store(&arguments, &working_directory);
+        tokio::spawn(async move {
+            startup::refresh_update_cache(&gateway, &store, env!("CARGO_PKG_VERSION")).await;
+        })
+    });
     let mut controls = ControlState::new(session_id);
     if let Some(runtime) = runtime.as_mut() {
         sync_active_callbacks(runtime, &mut state, &mut controls);

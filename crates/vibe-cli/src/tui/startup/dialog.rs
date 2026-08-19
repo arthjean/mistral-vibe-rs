@@ -13,9 +13,7 @@ use vibe_app_server::startup::{
 
 use super::super::session_picker::{SessionDeleteDecision, SessionDeleteState};
 use super::super::terminal::{CrosstermOps, TerminalGuard};
-use super::super::updates::{
-    UPDATE_DIALOG_TITLE, UpdateChoice, UpdatePromptMode, UpdatePromptResult, version_line,
-};
+use super::super::updates::{UPDATE_DIALOG_TITLE, UpdateChoice, UpdatePromptMode, version_line};
 use super::StartupError;
 use super::session::ResumeResolution;
 
@@ -46,11 +44,16 @@ pub(super) fn run_location_warning_dialog(warning: &str) -> Result<bool, Startup
     ))
 }
 
+/// The choice the operator made, or `None` when the dialog was aborted.
+///
+/// The reference dialog installs the update itself and answers with an
+/// `UpdatePromptResult`; this loop is synchronous, so it answers with the
+/// choice and the caller runs the upgrade.
 pub(super) fn run_update_dialog(
     current_version: &str,
     latest_version: &str,
     mode: UpdatePromptMode,
-) -> Result<UpdatePromptResult, StartupError> {
+) -> Result<Option<UpdateChoice>, StartupError> {
     let mut dialog = StartupDialog::Update {
         current_version,
         latest_version,
@@ -58,14 +61,12 @@ pub(super) fn run_update_dialog(
         selected: 0,
     };
     Ok(match run_dialog(&mut dialog, None)? {
-        DialogResult::Update(UpdateChoice::Update) => UpdatePromptResult::UpdateUnavailable,
-        DialogResult::Update(UpdateChoice::Continue) | DialogResult::Continue => {
-            UpdatePromptResult::Continue
-        }
+        DialogResult::Update(choice) => Some(choice),
+        DialogResult::Continue => Some(UpdateChoice::Continue),
         DialogResult::Abort
         | DialogResult::StartNew
         | DialogResult::Resume(_)
-        | DialogResult::Trust(_) => UpdatePromptResult::Quit,
+        | DialogResult::Trust(_) => None,
     })
 }
 

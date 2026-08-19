@@ -4,7 +4,7 @@
 //! Discovery itself lives in `vibe_core::updates`; this module owns only what the
 //! operator sees and the order in which the reference asks.
 
-use vibe_core::updates::{UpdateAvailability, UpdateError};
+use vibe_core::updates::{UpdateAvailability, UpdateError, UpgradeOutcome};
 
 /// Reference `UpdatePromptMode`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,15 +59,32 @@ pub fn check_failed_message(reason: &str) -> String {
 pub const CACHE_WRITE_FAILED_MESSAGE: &str =
     "✗ Update check failed while writing the update cache.";
 
-/// Reference `_show_update_prompt` UPDATE_FAILED branch.
+/// Reference `_show_update_prompt` UPDATE_FAILED branch, naming the manual
+/// path this port actually publishes: the reference names its package managers,
+/// and this port is installed by the installers that live in
+/// [`crate::distribution::REPOSITORY_URL`].
 #[must_use]
 pub fn update_failed_message(current_version: &str) -> String {
     format!(
-        "Vibe could not update automatically.\n  Update manually with your package manager (for \
-         example uv tool upgrade mistral-vibe), or keep using the current version \
-         ({current_version}) for now."
+        "Vibe could not update automatically.\n  Update manually by rerunning the installer from \
+         {}, or keep using the current version ({current_version}) for now.",
+        crate::distribution::REPOSITORY_URL
     )
 }
+
+/// Reference `_show_update_prompt` UPDATED branch.
+#[must_use]
+pub fn updated_message(previous_version: &str, latest_version: &str) -> String {
+    format!(
+        "\u{2714} Vibe was updated from {previous_version} to {latest_version}.\n  Run vibe to \
+         start using the new version."
+    )
+}
+
+/// What the operator sees while the upgrade commands run. The reference shows
+/// an updating dialog instead; this port has already restored the terminal by
+/// then, so it names the cancellation key rather than owning the screen.
+pub const UPDATING_MESSAGE: &str = "Updating Vibe. Press Ctrl+C to cancel.";
 
 /// Reference `_check_and_show_whats_new` content source.
 #[must_use]
@@ -114,18 +131,43 @@ pub fn classify_check_upgrade(
     }
 }
 
-/// What the operator chose in the update dialog.
+/// Reference `UpdatePromptResult`: how the update prompt ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpdatePromptResult {
     /// Keep the installed version. Startup dismisses the offered version.
     Continue,
-    /// Automatic installation is a declared non-goal, so the reference
-    /// `UPDATE_FAILED` guidance is printed instead of running an installer.
-    /// This is why the reference's fourth value, `UPDATED`, has no counterpart
-    /// here: nothing in this build can report an installed update. The
-    /// divergence is recorded in `docs/parity.md`.
-    UpdateUnavailable,
+    /// An upgrade command exited zero, so the binary on disk is the new one.
+    Updated,
+    /// Every upgrade command failed, so the installed version is unchanged.
+    UpdateFailed,
     Quit,
+}
+
+impl UpdatePromptResult {
+    /// Reference `UpdatePromptApp`: `on_update_prompt_dialog_update_finished`
+    /// answers with the two outcomes the upgrade itself produced, and
+    /// `action_quit_prompt` cancels the running upgrade and answers `QUIT`, so
+    /// an interrupted upgrade closes the prompt rather than dismissing the
+    /// release and starting a session.
+    #[must_use]
+    pub const fn from_upgrade(outcome: UpgradeOutcome) -> Self {
+        match outcome {
+            UpgradeOutcome::Succeeded => Self::Updated,
+            UpgradeOutcome::Failed => Self::UpdateFailed,
+            UpgradeOutcome::Cancelled => Self::Quit,
+        }
+    }
+
+    /// Reference `_show_update_prompt`: an update that ran and failed is the
+    /// only non-zero exit, and only `Continue` lets a session start.
+    #[must_use]
+    pub const fn exit_code(self) -> Option<u8> {
+        match self {
+            Self::Continue => None,
+            Self::Updated | Self::Quit => Some(0),
+            Self::UpdateFailed => Some(1),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -191,6 +233,41 @@ mod tests {
             "Update now"
         );
         assert_eq!(version_line("2.23.1", "2.24.0"), "2.23.1 → 2.24.0");
+    }
+
+    #[test]
+    fn the_prompt_publishes_four_outcomes_and_the_reference_exit_codes() {
+        // Reference `UpdatePromptResult`: continue, updated, update-failed and
+        // quit, with only a failed installation exiting non-zero and only
+        // `Continue` letting a session start.
+        assert_eq!(UpdatePromptResult::Continue.exit_code(), None);
+        assert_eq!(UpdatePromptResult::Updated.exit_code(), Some(0));
+        assert_eq!(UpdatePromptResult::UpdateFailed.exit_code(), Some(1));
+        assert_eq!(UpdatePromptResult::Quit.exit_code(), Some(0));
+        // Reference `UpdatePromptApp.action_quit_prompt`: cancelling a running
+        // upgrade cancels the task and exits the prompt with `QUIT`, which is
+        // neither a session start nor a dismissal of the offered release.
+        assert_eq!(
+            UpdatePromptResult::from_upgrade(UpgradeOutcome::Succeeded),
+            UpdatePromptResult::Updated
+        );
+        assert_eq!(
+            UpdatePromptResult::from_upgrade(UpgradeOutcome::Failed),
+            UpdatePromptResult::UpdateFailed
+        );
+        assert_eq!(
+            UpdatePromptResult::from_upgrade(UpgradeOutcome::Cancelled),
+            UpdatePromptResult::Quit
+        );
+        assert_eq!(
+            updated_message("2.23.1", "2.24.0"),
+            "\u{2714} Vibe was updated from 2.23.1 to 2.24.0.\n  Run vibe to start using the new \
+             version."
+        );
+        assert!(
+            update_failed_message("2.23.1").contains(crate::distribution::REPOSITORY_URL),
+            "the failed branch must name the manual path this port publishes"
+        );
     }
 
     #[test]

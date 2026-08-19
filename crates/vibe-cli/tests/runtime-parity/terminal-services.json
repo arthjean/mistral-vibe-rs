@@ -471,6 +471,12 @@
       "story": "US-037"
     },
     {
+      "divergences": [
+        {
+          "event": 3,
+          "reason": "The reference names the package managers it is installed through (uv, pipx, pip). This port is installed by the scripts in its own repository, so the manual path it names is that repository rather than a package manager it does not publish to."
+        }
+      ],
       "events": [
         {
           "currentVersion": "2.23.1",
@@ -510,7 +516,7 @@
         "output|Vibe is already up to date (2.23.1).",
         "output|✗ Update check failed: Network error while checking for updates.",
         "output|✗ Update check failed while writing the update cache.",
-        "output|Vibe could not update automatically.⏎  Update manually with your package manager (for example uv tool upgrade mistral-vibe), or keep using the current version (2.23.1) for now.",
+        "output|Vibe could not update automatically.⏎  Update manually by rerunning the installer from https://github.com/arthjean/mistral-vibe-rs, or keep using the current version (2.23.1) for now.",
         "dialog|A new Vibe release is available|2.23.1 → 2.24.0|Update now|Continue with current version",
         "dialog|A new Vibe release is available|2.23.1 → 2.24.0|Update now|Cancel upgrade"
       ],
@@ -932,10 +938,6 @@
     {
       "dimension": "stale summary delivery",
       "reason": "The reference cancels the summary task on cancellation instead of delivering a late result, so no reference trace can observe generation-based rejection. Rust reducer tests cover it directly."
-    },
-    {
-      "dimension": "automatic update installation",
-      "reason": "Installing updates is a declared PRD non-goal, so the `Update now` choice reports the reference UPDATE_FAILED guidance instead of running the reference update commands."
     },
     {
       "dimension": "theme color palettes",

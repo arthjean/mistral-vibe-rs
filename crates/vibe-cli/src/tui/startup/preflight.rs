@@ -69,14 +69,16 @@ pub(in crate::tui) async fn preflight(
     let workspace = startup_host
         .into_workspace(arguments.trust)
         .map_err(StartupError::from)?;
-    if !super::resolve_startup_update_prompt(
+    if let Some(exit_code) = super::resolve_startup_update_prompt(
         &arguments,
         &working_directory,
         &workspace,
         env!("CARGO_PKG_VERSION"),
         &mut std::io::stdout().lock(),
-    )? {
-        return Ok(ControlFlow::Break(None));
+    )
+    .await?
+    {
+        return Ok(ControlFlow::Break(Some(exit_code)));
     }
     Ok(ControlFlow::Continue(ReadyStartup {
         arguments,
