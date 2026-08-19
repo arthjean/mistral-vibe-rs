@@ -25,10 +25,10 @@
     {
       "id": "EP-066",
       "title": "The on-disk update cache is measured",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3
     },
     {
       "id": "EP-067",
@@ -143,40 +143,40 @@
       "id": "US-223",
       "title": "Migrate the legacy update_cache.json",
       "epic": "EP-066",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-19",
+      "completed_at": "2026-08-19",
+      "reviewed_at": "2026-08-19"
     },
     {
       "id": "US-224",
       "title": "Merge the cache section instead of replacing it",
       "epic": "EP-066",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-19",
+      "completed_at": "2026-08-19",
+      "reviewed_at": "2026-08-19"
     },
     {
       "id": "US-225",
       "title": "Update-cache traces measured against the reference",
       "epic": "EP-066",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-223",
         "US-224"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-19",
+      "completed_at": "2026-08-19",
+      "reviewed_at": "2026-08-19"
     },
     {
       "id": "US-226",
