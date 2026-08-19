@@ -1,0 +1,225 @@
+{
+  "prd": {
+    "file": "tasks/prd-distribution-parity.md",
+    "title": "Distribution, Updates and Installers at Full Parity",
+    "created_at": "2026-08-19",
+    "status": "IN_PROGRESS"
+  },
+  "epics": [
+    {
+      "id": "EP-064",
+      "title": "A release the installers can actually fetch",
+      "status": "DONE",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 3
+    },
+    {
+      "id": "EP-065",
+      "title": "The update path names the distribution it ships",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-066",
+      "title": "The on-disk update cache is measured",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-067",
+      "title": "Installer and completion assurance",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 2,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-068",
+      "title": "The scorecard states what it measured",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 1,
+      "stories_done": 0
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-216",
+      "title": "Bind the installers' release base to the declared repository",
+      "epic": "EP-064",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [],
+      "started_at": "2026-08-19",
+      "completed_at": "2026-08-19",
+      "reviewed_at": "2026-08-19"
+    },
+    {
+      "id": "US-217",
+      "title": "One aggregate SHA256SUMS across every packaged target",
+      "epic": "EP-064",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [],
+      "started_at": "2026-08-19",
+      "completed_at": "2026-08-19",
+      "reviewed_at": "2026-08-19"
+    },
+    {
+      "id": "US-218",
+      "title": "A tag-driven release workflow that publishes every target",
+      "epic": "EP-064",
+      "status": "CANCELLED",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-216",
+        "US-217"
+      ],
+      "started_at": "2026-08-19",
+      "completed_at": null,
+      "reviewed_at": "2026-08-19"
+    },
+    {
+      "id": "US-219",
+      "title": "One version literal, asserted everywhere else",
+      "epic": "EP-064",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [],
+      "started_at": "2026-08-19",
+      "completed_at": "2026-08-19",
+      "reviewed_at": "2026-08-19"
+    },
+    {
+      "id": "US-220",
+      "title": "Port the GitHub releases update gateway",
+      "epic": "EP-065",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-221",
+      "title": "Resolve the update gateway from the running distribution",
+      "epic": "EP-065",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-220"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-222",
+      "title": "The update action reports the reference's four outcomes",
+      "epic": "EP-065",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-221"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-223",
+      "title": "Migrate the legacy update_cache.json",
+      "epic": "EP-066",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-224",
+      "title": "Merge the cache section instead of replacing it",
+      "epic": "EP-066",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-225",
+      "title": "Update-cache traces measured against the reference",
+      "epic": "EP-066",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-223",
+        "US-224"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-226",
+      "title": "Exercise install.ps1 on Windows in CI",
+      "epic": "EP-067",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-217"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-227",
+      "title": "Hold the shell completions to clap's declared flags",
+      "epic": "EP-067",
+      "status": "TODO",
+      "priority": "P2",
+      "size": "M",
+      "blocked_by": [],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-228",
+      "title": "Record every remaining divergence and remeasure row 1",
+      "epic": "EP-068",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-219",
+        "US-222",
+        "US-225",
+        "US-226"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    }
+  ]
+}
