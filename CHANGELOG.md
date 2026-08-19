@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Measure the slash-command registry against the pinned reference instead of
+  against a hand-diffed list of names. `scripts/parity/commands.py` drives the
+  reference's own `CommandRegistry` and records its key and alias inventory, the
+  keys each availability context leaves standing, what fifty-seven submitted
+  lines resolve to, and the structure of the `/help` document.
+  `crates/vibe-cli/src/tui/commands_parity_tests.rs` replays that corpus as 395
+  comparisons behind a divergence ledger that fails both on a divergence no
+  entry names and on an entry whose divergence stopped reproducing, and
+  recaptures it live when the checkout sits on the pin. Every reference-authored
+  help line is recorded as a length and a SHA-256 and never as text.
+
 - Resolve a command alias the way the reference resolves it. Alias matching
   folded ASCII case only, so `/THINKING` spelled with the Kelvin sign U+212A
   resolved to `thinking` upstream and did not parse here. The head word is now

@@ -8,6 +8,8 @@ pub mod clipboard;
 mod clipboard_images;
 mod cloud_workflow;
 pub mod commands;
+#[cfg(test)]
+mod commands_parity_tests;
 pub mod completion;
 mod composer;
 mod composer_layout;
