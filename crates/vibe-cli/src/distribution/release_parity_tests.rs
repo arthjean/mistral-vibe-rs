@@ -355,6 +355,39 @@ fn the_release_workflow_collects_one_aggregate_manifest() {
 }
 
 #[test]
+fn the_upgrade_commands_rerun_an_installer_this_repository_publishes() {
+    // Reference `UPDATE_COMMANDS` reruns the package managers it publishes
+    // under. No package manager publishes this binary, so the upgrade reruns
+    // the installer that produced it, and that script must exist.
+    let repository = workspace_package("repository");
+    let commands = crate::distribution::upgrade_commands();
+    assert_eq!(
+        commands.len(),
+        1,
+        "one installer is published per platform, found {commands:?}"
+    );
+    let command = &commands[0];
+    let script = if cfg!(windows) {
+        "install.ps1"
+    } else {
+        "install.sh"
+    };
+    let slug = repository
+        .strip_prefix("https://github.com/")
+        .expect("the declared repository is a GitHub URL");
+    assert!(
+        command.contains(&format!(
+            "https://raw.githubusercontent.com/{slug}/main/scripts/{script}"
+        )),
+        "the upgrade command does not fetch the declared repository's {script}: {command}"
+    );
+    assert!(
+        repo_root().join("scripts").join(script).is_file(),
+        "the upgrade command fetches scripts/{script}, which this repository does not publish"
+    );
+}
+
+#[test]
 fn packaged_output_is_not_tracked() {
     let ignored = read(".gitignore");
     assert!(
