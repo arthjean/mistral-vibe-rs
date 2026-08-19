@@ -1611,14 +1611,25 @@ async fn a_windows_family_forces_its_reference_environment() {
     let output = harness
         .call(
             "git_bash",
-            json!({"command": "echo \"[${CI:-unset} $PAGER $LESS $DEBIAN_FRONTEND]\""}),
+            json!({"command": "echo \"[$PAGER $LESS $DEBIAN_FRONTEND]\""}),
         )
         .await
         .expect("the command runs");
     assert!(
-        output.model_text.contains("[unset cat -FX noninteractive]"),
+        output.model_text.contains("[cat -FX noninteractive]"),
         "{}",
         output.model_text
+    );
+    // The legacy switches are read off the composed set rather than echoed from
+    // the child, which inherits whatever the host already exports: a run under
+    // an automation that states `CI` itself would otherwise read as the legacy
+    // set having been applied.
+    let composed = ShellFamily::GitBash.environment(true);
+    assert!(
+        !composed
+            .iter()
+            .any(|(key, _)| matches!(key.as_str(), "CI" | "NONINTERACTIVE" | "NO_TTY")),
+        "a managed session declares none of the legacy interactivity switches: {composed:?}"
     );
 }
 
