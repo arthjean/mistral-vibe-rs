@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Resolve a command alias the way the reference resolves it. Alias matching
+  folded ASCII case only, so `/THINKING` spelled with the Kelvin sign U+212A
+  resolved to `thinking` upstream and did not parse here. The head word is now
+  lowercased the way the reference lowercases it, which the parse family of the
+  new corpus measures.
+
 - Offer the flags the binary actually accepts in every shell completion. The
   four committed completion files were written by hand and had drifted: none
   offered `--yolo`, the visible alias of `--auto-approve`, the zsh and fish

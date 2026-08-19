@@ -331,14 +331,20 @@ pub fn parse_command_in<'a>(input: &'a str, context: &CommandContext) -> Option<
     if !alias.starts_with('/') && !arguments.is_empty() {
         return None;
     }
+    // The reference resolves an alias through `user_input.lower()`, which is
+    // Unicode-aware: `/THIN\u{212A}ING`, spelled with the Kelvin sign, folds
+    // onto `/thinking` there. An ASCII-only fold left that input unparsed here,
+    // which the `parse` family of `crates/vibe-cli/tests/commands/corpus.json`
+    // measures. Every declared alias is lowercase, which the capture asserts, so
+    // lowercasing the head word once is the whole comparison.
+    let lowered = alias.to_lowercase();
     COMMANDS
         .iter()
         .filter(|command| command_available_in(command, context))
         .find_map(|command| {
             command
                 .aliases
-                .iter()
-                .any(|candidate| candidate.eq_ignore_ascii_case(alias))
+                .contains(&lowered.as_str())
                 .then_some(ParsedCommand {
                     id: command.id,
                     alias,
