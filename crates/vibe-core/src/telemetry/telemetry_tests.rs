@@ -579,8 +579,8 @@ fn the_request_census_adds_the_three_request_fields() {
     );
 }
 
-/// The experiments map is carried and stays absent while rank 16 is unshipped;
-/// a filled one is sent as the reference sends it.
+/// An unenrolled session resolves no exposure, and the key is dropped rather
+/// than sent as an empty object; a filled map is sent as the reference sends it.
 #[test]
 fn experiments_are_absent_rather_than_empty() {
     assert!(

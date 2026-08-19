@@ -350,9 +350,9 @@ pub struct TelemetryBaseMetadata {
     pub session_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_session_id: Option<String>,
-    /// Filled by the experiments manager upstream. Rank 16 of `docs/parity.md`
-    /// is unshipped here, so the field is carried and left absent rather than
-    /// fabricated; the accepted-divergence table records it.
+    /// Filled from the exposures the experiments manager resolved, as upstream
+    /// fills it. An unenrolled session resolves an empty map and the key is
+    /// dropped rather than sent empty, which is axis 32 of `docs/parity.md`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub experiments: Option<BTreeMap<String, String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
