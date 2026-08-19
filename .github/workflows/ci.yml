@@ -63,3 +63,50 @@ jobs:
       - name: App-server-surface conformance
         run: |
           cargo +stable test -p vibe-app-server --all-features app_server_surface_parity_tests -- --nocapture
+
+  # US-226: the PowerShell installer is the only delivery path no Linux job can
+  # execute, so it gets a runner of its own. The job packages a real
+  # `windows-x86_64` archive from binaries it just built and drives
+  # `scripts/install.ps1` through installation, both refusals, and removal.
+  windows-installer:
+    name: install.ps1 on Windows
+    runs-on: windows-2022
+    # The installer's contract is staging, verification and rollback, none of
+    # which reads an optimization level, so the job builds unoptimized and
+    # without debug info to stay well inside the twenty minutes it is allowed.
+    timeout-minutes: 20
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_NET_RETRY: "3"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Install Rust stable
+        run: rustup toolchain install stable --profile minimal
+      - name: Build the packaged binaries
+        run: cargo +stable build --locked -p vibe-cli -p vibe-acp --bins
+      # The version is read from the manifest that owns it rather than written
+      # here, so this workflow never becomes another copy of the literal.
+      - name: Package windows-x86_64
+        shell: bash
+        env:
+          VIBE_SKIP_BUILD: "true"
+          VIBE_RELEASE_BINARY_DIR: target/debug
+        run: |
+          version="$(awk '
+            /^\[/ { section = $0 }
+            section == "[workspace.package]" && /^version = / {
+              gsub(/^version = "|"$/, "")
+              print
+              exit
+            }' Cargo.toml)"
+          echo "RELEASE_VERSION=${version}" >> "${GITHUB_ENV}"
+          bash scripts/ci/package-release.sh windows-x86_64 "${version}"
+      - name: Verify install.ps1 end to end
+        shell: pwsh
+        run: |
+          ./scripts/ci/verify-install-ps1.ps1 `
+            -ReleaseDirectory (Join-Path $env:GITHUB_WORKSPACE "dist/release-assets") `
+            -Version $env:RELEASE_VERSION `
+            -InstallDirectory (Join-Path $env:RUNNER_TEMP "vibe-install") `
+            -CompletionDirectory (Join-Path $env:RUNNER_TEMP "vibe-completions")
