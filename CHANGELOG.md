@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Offer the flags the binary actually accepts in every shell completion. The
+  four committed completion files were written by hand and had drifted: none
+  offered `--yolo`, the visible alias of `--auto-approve`, the zsh and fish
+  files omitted `--enabled-tools`, `--disabled-tools` and `--worktree`, and the
+  fish file omitted `--help` while still offering `--telemetry`, which the CLI
+  stopped accepting when telemetry moved into the configuration file. They are
+  now held to the clap definition by a test that names each flag present in one
+  and absent from the other, so a new flag shipped without a completion update
+  fails the suite naming the flag and every file that omits it.
+
+- Exercise `scripts/install.ps1` on a Windows runner. The PowerShell installer
+  is the one delivery path no Linux job can execute, so CI now packages a real
+  `windows-x86_64` archive and drives the installer through a clean install,
+  the refusal of an interrupted upgrade, the refusal of an archive whose digest
+  the manifest does not name, and removal.
+
 - Keep the recorded update state across the pre-TOML layout and across the rest
   of `cache.toml`. An `update_cache.json` written by an older layout was ignored,
   so an upgrade re-announced release notes that had already been read and
