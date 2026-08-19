@@ -10,10 +10,14 @@ _arguments \
   '--add-dir[authorize an additional directory]:directory:_directories' \
   '--trust[trust the working directory]' \
   '--agent[select agent]:agent:' \
+  '--enabled-tools[enable a tool]:tool:' \
+  '--disabled-tools[disable a tool]:tool:' \
   '--max-turns[limit turns]:count:' \
   '--max-tokens[limit tokens]:count:' \
   '--max-price[limit price]:amount:' \
   '--auto-approve[approve tool requests]' \
+  '--yolo[approve tool requests]' \
   '--setup[run setup]' \
   '--check-upgrade[check for an update]' \
+  '--worktree[run inside a git worktree]:worktree:' \
   '--help[print help]'
