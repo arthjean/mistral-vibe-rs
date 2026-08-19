@@ -12,12 +12,29 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-22.04
+    # A hosted runner that stops making progress otherwise holds the job for
+    # hours and publishes no log at all, so the run is bounded well above the
+    # eight minutes a healthy one takes.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      # `apt-get update` on the hosted image intermittently stalls, either on an
+      # archive fetch or on the lock the image's own apt timer holds. Each
+      # attempt is bounded and retried, so a stall costs three minutes and lands
+      # in the log rather than hanging the job with nothing to read.
       - name: Install system dependencies
+        timeout-minutes: 12
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libasound2-dev
+          for attempt in 1 2 3; do
+            if sudo timeout 180 apt-get update \
+              -o Acquire::Retries=3 \
+              -o Acquire::http::Timeout=30; then
+              break
+            fi
+            echo "apt-get update stalled on attempt ${attempt}"
+            sleep 15
+          done
+          sudo timeout 300 apt-get install --no-install-recommends -y libasound2-dev
       - name: Install Rust stable
         run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
       - name: Quality gates
