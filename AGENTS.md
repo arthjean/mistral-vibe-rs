@@ -130,8 +130,10 @@ Tooling enforces the lint set; these are the parts it cannot enforce.
 - `[workspace.package] version` is the source of truth, but the string is also
   hand-written in `action.yml`, `.github/workflows/action.yml`,
   `scripts/install.sh`, `scripts/install.ps1`, and the heading of
-  `crates/vibe-cli/whats_new.md`. A bump updates all of them in one change;
-  nothing detects the drift.
+  `crates/vibe-cli/whats_new.md`. A bump updates all of them in one change, and
+  `every_hand_written_version_matches_the_workspace_manifest` in
+  `crates/vibe-cli/src/distribution/release_parity_tests.rs` fails both on a copy
+  that disagrees and on a carrier that stops carrying the version at all.
 - Commit with Conventional Commits and a crate scope: `fix(core):`,
   `refactor(app-server):`, `test(cli):`, `docs(protocol):`, `perf(acp):`, `ci:`.
   Imperative, lowercase, no trailing period.
