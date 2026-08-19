@@ -41,10 +41,10 @@
     {
       "id": "EP-068",
       "title": "The scorecard states what it measured",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 1,
-      "stories_done": 0
+      "stories_done": 1
     }
   ],
   "stories": [
@@ -208,7 +208,7 @@
       "id": "US-228",
       "title": "Record every remaining divergence and remeasure row 1",
       "epic": "EP-068",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
@@ -216,9 +216,9 @@
         "US-222",
         "US-225"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-19",
+      "completed_at": "2026-08-19",
+      "reviewed_at": "2026-08-19"
     }
   ]
 }
