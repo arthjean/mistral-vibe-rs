@@ -6,3 +6,4 @@ target/
 .vibe/
 __pycache__/
 *.py[cod]
+dist/
