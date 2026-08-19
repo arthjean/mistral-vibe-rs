@@ -52,7 +52,7 @@ try {
     New-Item -ItemType Directory -Force -Path $InstallDirectory, $completionDirectory | Out-Null
     $transaction = @()
     foreach ($executable in @("vibe.exe", "vibe-acp.exe")) {
-        $source = Join-Path $extracted "bin\$executable"
+        $source = Join-Path (Join-Path $extracted "bin") $executable
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
             throw "Release archive is missing $executable"
         }
@@ -71,7 +71,7 @@ try {
         }
     }
     foreach ($completion in @("vibe.bash", "_vibe", "vibe.fish", "vibe.ps1")) {
-        $source = Join-Path $extracted "completions\$completion"
+        $source = Join-Path (Join-Path $extracted "completions") $completion
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
             throw "Release archive is missing completion $completion"
         }
