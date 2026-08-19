@@ -1,0 +1,1324 @@
+{
+  "availability": [
+    {
+      "clipboardSupported": false,
+      "count": 25,
+      "excluded": [],
+      "id": "baseline",
+      "keys": [
+        "clear",
+        "compact",
+        "config",
+        "copy",
+        "data-retention",
+        "debug",
+        "exit",
+        "help",
+        "leanstall",
+        "log",
+        "loop",
+        "mcp",
+        "model",
+        "proxy-setup",
+        "reload",
+        "rename",
+        "resume",
+        "retry",
+        "rewind",
+        "status",
+        "theme",
+        "thinking",
+        "unleanstall",
+        "voice",
+        "whoami"
+      ],
+      "vibeCodeEnabled": false
+    },
+    {
+      "clipboardSupported": true,
+      "count": 26,
+      "excluded": [],
+      "id": "clipboard",
+      "keys": [
+        "clear",
+        "compact",
+        "config",
+        "copy",
+        "data-retention",
+        "debug",
+        "exit",
+        "help",
+        "leanstall",
+        "log",
+        "loop",
+        "mcp",
+        "model",
+        "paste-image",
+        "proxy-setup",
+        "reload",
+        "rename",
+        "resume",
+        "retry",
+        "rewind",
+        "status",
+        "theme",
+        "thinking",
+        "unleanstall",
+        "voice",
+        "whoami"
+      ],
+      "vibeCodeEnabled": false
+    },
+    {
+      "clipboardSupported": false,
+      "count": 27,
+      "excluded": [],
+      "id": "vibeCode",
+      "keys": [
+        "clear",
+        "compact",
+        "config",
+        "copy",
+        "data-retention",
+        "debug",
+        "exit",
+        "help",
+        "leanstall",
+        "log",
+        "loop",
+        "mcp",
+        "model",
+        "proxy-setup",
+        "reload",
+        "remote-project",
+        "rename",
+        "resume",
+        "retry",
+        "rewind",
+        "status",
+        "teleport",
+        "theme",
+        "thinking",
+        "unleanstall",
+        "voice",
+        "whoami"
+      ],
+      "vibeCodeEnabled": true
+    },
+    {
+      "clipboardSupported": true,
+      "count": 28,
+      "excluded": [],
+      "id": "full",
+      "keys": [
+        "clear",
+        "compact",
+        "config",
+        "copy",
+        "data-retention",
+        "debug",
+        "exit",
+        "help",
+        "leanstall",
+        "log",
+        "loop",
+        "mcp",
+        "model",
+        "paste-image",
+        "proxy-setup",
+        "reload",
+        "remote-project",
+        "rename",
+        "resume",
+        "retry",
+        "rewind",
+        "status",
+        "teleport",
+        "theme",
+        "thinking",
+        "unleanstall",
+        "voice",
+        "whoami"
+      ],
+      "vibeCodeEnabled": true
+    },
+    {
+      "clipboardSupported": true,
+      "count": 25,
+      "excluded": [
+        "help",
+        "mcp",
+        "theme"
+      ],
+      "id": "excluded",
+      "keys": [
+        "clear",
+        "compact",
+        "config",
+        "copy",
+        "data-retention",
+        "debug",
+        "exit",
+        "leanstall",
+        "log",
+        "loop",
+        "model",
+        "paste-image",
+        "proxy-setup",
+        "reload",
+        "remote-project",
+        "rename",
+        "resume",
+        "retry",
+        "rewind",
+        "status",
+        "teleport",
+        "thinking",
+        "unleanstall",
+        "voice",
+        "whoami"
+      ],
+      "vibeCodeEnabled": true
+    }
+  ],
+  "counts": [
+    {
+      "count": 28,
+      "id": "keys"
+    },
+    {
+      "count": 35,
+      "id": "aliases"
+    },
+    {
+      "count": 31,
+      "id": "slashAliases"
+    },
+    {
+      "count": 4,
+      "id": "bareAliases"
+    }
+  ],
+  "helpCommands": [
+    {
+      "aliases": [
+        "/clear",
+        "/new"
+      ],
+      "id": "clear",
+      "index": 0,
+      "line": 18
+    },
+    {
+      "aliases": [
+        "/compact"
+      ],
+      "id": "compact",
+      "index": 1,
+      "line": 19
+    },
+    {
+      "aliases": [
+        "/config"
+      ],
+      "id": "config",
+      "index": 2,
+      "line": 20
+    },
+    {
+      "aliases": [
+        "/copy"
+      ],
+      "id": "copy",
+      "index": 3,
+      "line": 21
+    },
+    {
+      "aliases": [
+        "/data-retention"
+      ],
+      "id": "data-retention",
+      "index": 4,
+      "line": 22
+    },
+    {
+      "aliases": [
+        "/debug"
+      ],
+      "id": "debug",
+      "index": 5,
+      "line": 23
+    },
+    {
+      "aliases": [
+        "/exit",
+        ":q",
+        ":quit",
+        "exit",
+        "quit"
+      ],
+      "id": "exit",
+      "index": 6,
+      "line": 24
+    },
+    {
+      "aliases": [
+        "/help"
+      ],
+      "id": "help",
+      "index": 7,
+      "line": 25
+    },
+    {
+      "aliases": [
+        "/leanstall"
+      ],
+      "id": "leanstall",
+      "index": 8,
+      "line": 26
+    },
+    {
+      "aliases": [
+        "/log"
+      ],
+      "id": "log",
+      "index": 9,
+      "line": 27
+    },
+    {
+      "aliases": [
+        "/loop"
+      ],
+      "id": "loop",
+      "index": 10,
+      "line": 28
+    },
+    {
+      "aliases": [
+        "/mcp",
+        "/connectors"
+      ],
+      "id": "mcp",
+      "index": 11,
+      "line": 29
+    },
+    {
+      "aliases": [
+        "/model"
+      ],
+      "id": "model",
+      "index": 12,
+      "line": 30
+    },
+    {
+      "aliases": [
+        "/paste-image"
+      ],
+      "id": "paste-image",
+      "index": 13,
+      "line": 31
+    },
+    {
+      "aliases": [
+        "/proxy-setup"
+      ],
+      "id": "proxy-setup",
+      "index": 14,
+      "line": 32
+    },
+    {
+      "aliases": [
+        "/reload"
+      ],
+      "id": "reload",
+      "index": 15,
+      "line": 33
+    },
+    {
+      "aliases": [
+        "/remote-project"
+      ],
+      "id": "remote-project",
+      "index": 16,
+      "line": 34
+    },
+    {
+      "aliases": [
+        "/rename"
+      ],
+      "id": "rename",
+      "index": 17,
+      "line": 35
+    },
+    {
+      "aliases": [
+        "/resume",
+        "/continue"
+      ],
+      "id": "resume",
+      "index": 18,
+      "line": 36
+    },
+    {
+      "aliases": [
+        "/retry"
+      ],
+      "id": "retry",
+      "index": 19,
+      "line": 37
+    },
+    {
+      "aliases": [
+        "/rewind"
+      ],
+      "id": "rewind",
+      "index": 20,
+      "line": 38
+    },
+    {
+      "aliases": [
+        "/status"
+      ],
+      "id": "status",
+      "index": 21,
+      "line": 39
+    },
+    {
+      "aliases": [
+        "/teleport"
+      ],
+      "id": "teleport",
+      "index": 22,
+      "line": 40
+    },
+    {
+      "aliases": [
+        "/theme"
+      ],
+      "id": "theme",
+      "index": 23,
+      "line": 41
+    },
+    {
+      "aliases": [
+        "/thinking"
+      ],
+      "id": "thinking",
+      "index": 24,
+      "line": 42
+    },
+    {
+      "aliases": [
+        "/unleanstall"
+      ],
+      "id": "unleanstall",
+      "index": 25,
+      "line": 43
+    },
+    {
+      "aliases": [
+        "/voice"
+      ],
+      "id": "voice",
+      "index": 26,
+      "line": 44
+    },
+    {
+      "aliases": [
+        "/whoami"
+      ],
+      "id": "whoami",
+      "index": 27,
+      "line": 45
+    }
+  ],
+  "helpDocument": [
+    {
+      "count": 46,
+      "id": "lineCount"
+    },
+    {
+      "count": 5,
+      "id": "blankLineCount"
+    },
+    {
+      "count": 3,
+      "id": "sectionCount"
+    },
+    {
+      "count": 28,
+      "id": "commandLineCount"
+    }
+  ],
+  "helpProse": [
+    {
+      "digest": "cfbfb8039bc97ccb5b260e705ebe66b22a34d5e19d709dda1a63104e76046165",
+      "id": "line-00",
+      "length": 22
+    },
+    {
+      "digest": "f7144303a76c2add10ae915074464618e4649e1418207045fdedb8fdffd35495",
+      "id": "line-02",
+      "length": 24
+    },
+    {
+      "digest": "482f1ed5b1c7bcf5925a203cda87533df061093e618c109727d7529fb03486fe",
+      "id": "line-03",
+      "length": 41
+    },
+    {
+      "digest": "df2ef5cff993ce608aa55b33911bedda9506ef05d795ce04879ffc4397954d26",
+      "id": "line-04",
+      "length": 43
+    },
+    {
+      "digest": "2f17abc22d765cd382db9604101ab109b5d5e687a75cc210892ae0812ddea725",
+      "id": "line-05",
+      "length": 48
+    },
+    {
+      "digest": "d32a4f1edcc48a12df41d935085c474ede127666d942acdaa47d016164345616",
+      "id": "line-06",
+      "length": 40
+    },
+    {
+      "digest": "40dcd72e4c15e020b070fcb48ae10e320dbda3e08607ee2f677523cb0fb3cf5b",
+      "id": "line-07",
+      "length": 34
+    },
+    {
+      "digest": "4adfe1967dd85e7127ff3a32ded03e3a3ac5205a6ccbad0f7671af325d7199cc",
+      "id": "line-08",
+      "length": 55
+    },
+    {
+      "digest": "4563071d0c010fff5771722588ef46f758852f2676ed658d8889aca8be51a5de",
+      "id": "line-09",
+      "length": 62
+    },
+    {
+      "digest": "05c48121c005f6b580965d37bf8ec1efa6dd420a2a942ef8f5ebf9e375cfd4ef",
+      "id": "line-11",
+      "length": 20
+    },
+    {
+      "digest": "2c13e29356e0151650d6487d3cbc13743fb6bbe8b64179f4ef72c9e705cac315",
+      "id": "line-13",
+      "length": 44
+    },
+    {
+      "digest": "46572d4769802502438fdd1ec3c7fb327b5b65799ff47dffd1bba30cec7b50ff",
+      "id": "line-14",
+      "length": 43
+    },
+    {
+      "digest": "a23cc7689bc18eae1024fa459f8df0dbe72c8288ccbb3029504dc716b7499902",
+      "id": "line-16",
+      "length": 12
+    },
+    {
+      "digest": "767094e24bc57696d20ffdd3619cdffa82b362974370f4e126ed8ba0500aaff2",
+      "id": "line-18",
+      "length": 46
+    },
+    {
+      "digest": "f032eefd5bb2e520a9bc892bfd6eab885c7a970c6be49a1c99afead22719d773",
+      "id": "line-19",
+      "length": 108
+    },
+    {
+      "digest": "213a2e12d6c9d05557aa600937feb766403cb7ccaa4a46b179472e65257ff012",
+      "id": "line-20",
+      "length": 33
+    },
+    {
+      "digest": "39664bf190d44c9728d75d05b4117147771a84f7436b90fd9e789a8970d7e5bf",
+      "id": "line-21",
+      "length": 55
+    },
+    {
+      "digest": "254afb6cb30a31a5edcaa6e8a355acc773da31fbb39fdcd8b378fb2d33dc88a9",
+      "id": "line-22",
+      "length": 52
+    },
+    {
+      "digest": "45c8c5ad0f0b4d84969dfd2711af86fa209732efcb6580fe269e33ccdbfd5c0d",
+      "id": "line-23",
+      "length": 32
+    },
+    {
+      "digest": "c566d93e0cf1a7f7f45ccfef237f330eccb128965d3f19999a76676dbfa9fd6d",
+      "id": "line-24",
+      "length": 62
+    },
+    {
+      "digest": "dab64f4edbbc0079c1e256b53a472b7a83eb2aca6d532fb7bb35b52b6a031e4b",
+      "id": "line-25",
+      "length": 28
+    },
+    {
+      "digest": "77a26b7f6b69e76c345a10df3086d48f41c291eeae721319cf6cbc73edc4cd96",
+      "id": "line-26",
+      "length": 52
+    },
+    {
+      "digest": "2d0a4f22b2be11139b3cbaf9ebb40430abc639e3bb61d1d5f0ae5e92de6e801f",
+      "id": "line-27",
+      "length": 51
+    },
+    {
+      "digest": "e2bb1b3c3ac51d0e549bab6ae541b7ca8c5a1691827db275bea75492c56935d4",
+      "id": "line-28",
+      "length": 113
+    },
+    {
+      "digest": "bc476a5a57f6b90c8572cd056629354bd7bf2a7bfa853d4cf1d99ae40f6621f8",
+      "id": "line-29",
+      "length": 194
+    },
+    {
+      "digest": "0b6f9dbd7d2c7a8ba800f6459fbe4c1d0ce6ca9f6509736e8da5c71d1abe9555",
+      "id": "line-30",
+      "length": 31
+    },
+    {
+      "digest": "0b9794e4860857880cf348642149334a7a28891f72331f06f57696b53a8df1bb",
+      "id": "line-31",
+      "length": 70
+    },
+    {
+      "digest": "518bdf8178a1eec44f961a00a3eab24a04f60ab412b5063036c87398f3eb1d13",
+      "id": "line-32",
+      "length": 62
+    },
+    {
+      "digest": "e67479e3ba55a3f385ee73d66d3598a995a1a2233f618735517eb7d3547425ad",
+      "id": "line-33",
+      "length": 75
+    },
+    {
+      "digest": "609b9fb679eeb3113d4329e59e3081d5ba5d996290743d10a39728a0cb7da8ad",
+      "id": "line-34",
+      "length": 73
+    },
+    {
+      "digest": "d2f3ba625bb4d116ee6c3847658340650ac56ed5e8e8cac50928a6ae8032ff5a",
+      "id": "line-35",
+      "length": 39
+    },
+    {
+      "digest": "8286663f78340889e92b08a505c32cdd3f3cf7cbcd55d17c6cf6efd6c4a3e963",
+      "id": "line-36",
+      "length": 66
+    },
+    {
+      "digest": "c90f0c5b2cde138cbefb20bc27b3fa45cb8a731c3340c2779b301238a29932b1",
+      "id": "line-37",
+      "length": 91
+    },
+    {
+      "digest": "f9c0a616004f4a8b9acaa1003454d41335d65f9fca11ca1d6bb6ce525746679c",
+      "id": "line-38",
+      "length": 62
+    },
+    {
+      "digest": "73e773d89345a95af0210f872c2eb05938303aa21e20d486f6479bbdb087d55b",
+      "id": "line-39",
+      "length": 37
+    },
+    {
+      "digest": "0652ed627c379ee1e473c621e72d0c975c69d670840e4aa48fef2caeb8dde460",
+      "id": "line-40",
+      "length": 48
+    },
+    {
+      "digest": "a815788b2275eae8b8c84561c928e1935b61fa27a8bc1a6e8896804d09eab007",
+      "id": "line-41",
+      "length": 24
+    },
+    {
+      "digest": "a04ca041b4d6ad7a517f87a04fe841b702ae1e4e9cdd5647ea871696d233c73d",
+      "id": "line-42",
+      "length": 36
+    },
+    {
+      "digest": "884a3db236e545c457c7010aa0e2cdd3267e132999d5af86672fa2af3027a6d8",
+      "id": "line-43",
+      "length": 44
+    },
+    {
+      "digest": "2046bc4384a7ceb402cb4eb5697deb4c756db9c5a62ecf664381448a2cb9b011",
+      "id": "line-44",
+      "length": 36
+    },
+    {
+      "digest": "b7dfd7fe469c0562ff5ebe506e1b8cedc0ccf8bef8e2897ed1c6bf4751336745",
+      "id": "line-45",
+      "length": 68
+    }
+  ],
+  "helpSections": [
+    {
+      "headingLine": 0,
+      "id": "keyboardShortcuts",
+      "index": 0,
+      "level": 3,
+      "lineCount": 8
+    },
+    {
+      "headingLine": 11,
+      "id": "specialFeatures",
+      "index": 1,
+      "level": 3,
+      "lineCount": 2
+    },
+    {
+      "headingLine": 16,
+      "id": "commands",
+      "index": 2,
+      "level": 3,
+      "lineCount": 28
+    }
+  ],
+  "inventory": [
+    {
+      "aliases": [
+        "/clear",
+        "/new"
+      ],
+      "id": "clear"
+    },
+    {
+      "aliases": [
+        "/compact"
+      ],
+      "id": "compact"
+    },
+    {
+      "aliases": [
+        "/config"
+      ],
+      "id": "config"
+    },
+    {
+      "aliases": [
+        "/copy"
+      ],
+      "id": "copy"
+    },
+    {
+      "aliases": [
+        "/data-retention"
+      ],
+      "id": "data-retention"
+    },
+    {
+      "aliases": [
+        "/debug"
+      ],
+      "id": "debug"
+    },
+    {
+      "aliases": [
+        "/exit",
+        ":q",
+        ":quit",
+        "exit",
+        "quit"
+      ],
+      "id": "exit"
+    },
+    {
+      "aliases": [
+        "/help"
+      ],
+      "id": "help"
+    },
+    {
+      "aliases": [
+        "/leanstall"
+      ],
+      "id": "leanstall"
+    },
+    {
+      "aliases": [
+        "/log"
+      ],
+      "id": "log"
+    },
+    {
+      "aliases": [
+        "/loop"
+      ],
+      "id": "loop"
+    },
+    {
+      "aliases": [
+        "/connectors",
+        "/mcp"
+      ],
+      "id": "mcp"
+    },
+    {
+      "aliases": [
+        "/model"
+      ],
+      "id": "model"
+    },
+    {
+      "aliases": [
+        "/paste-image"
+      ],
+      "id": "paste-image"
+    },
+    {
+      "aliases": [
+        "/proxy-setup"
+      ],
+      "id": "proxy-setup"
+    },
+    {
+      "aliases": [
+        "/reload"
+      ],
+      "id": "reload"
+    },
+    {
+      "aliases": [
+        "/remote-project"
+      ],
+      "id": "remote-project"
+    },
+    {
+      "aliases": [
+        "/rename"
+      ],
+      "id": "rename"
+    },
+    {
+      "aliases": [
+        "/continue",
+        "/resume"
+      ],
+      "id": "resume"
+    },
+    {
+      "aliases": [
+        "/retry"
+      ],
+      "id": "retry"
+    },
+    {
+      "aliases": [
+        "/rewind"
+      ],
+      "id": "rewind"
+    },
+    {
+      "aliases": [
+        "/status"
+      ],
+      "id": "status"
+    },
+    {
+      "aliases": [
+        "/teleport"
+      ],
+      "id": "teleport"
+    },
+    {
+      "aliases": [
+        "/theme"
+      ],
+      "id": "theme"
+    },
+    {
+      "aliases": [
+        "/thinking"
+      ],
+      "id": "thinking"
+    },
+    {
+      "aliases": [
+        "/unleanstall"
+      ],
+      "id": "unleanstall"
+    },
+    {
+      "aliases": [
+        "/voice"
+      ],
+      "id": "voice"
+    },
+    {
+      "aliases": [
+        "/whoami"
+      ],
+      "id": "whoami"
+    }
+  ],
+  "note": "Captured from the pinned reference by scripts/parity/commands.py. Registry keys, aliases, availability sets, parse results and document structure are observations. Every reference-authored help line is recorded as a length and a SHA-256 under helpProse and never as text, because NOTICE forbids shipping reference-authored prose; the replay in crates/vibe-cli/src/tui/commands_parity_tests.rs holds this port's own help lines permanently unequal to every digest here.",
+  "parse": [
+    {
+      "alias": "/help",
+      "arguments": "",
+      "context": "full",
+      "id": "help-slash",
+      "input": "/help",
+      "key": "help"
+    },
+    {
+      "alias": "/help",
+      "arguments": "",
+      "context": "full",
+      "id": "help-upper",
+      "input": "/HELP",
+      "key": "help"
+    },
+    {
+      "alias": "/help",
+      "arguments": "",
+      "context": "full",
+      "id": "help-mixed-case",
+      "input": "/HeLp",
+      "key": "help"
+    },
+    {
+      "alias": "/help",
+      "arguments": "",
+      "context": "full",
+      "id": "help-leading-spaces",
+      "input": "   /help",
+      "key": "help"
+    },
+    {
+      "alias": "/help",
+      "arguments": "",
+      "context": "full",
+      "id": "help-trailing-spaces",
+      "input": "/help   ",
+      "key": "help"
+    },
+    {
+      "alias": "/help",
+      "arguments": "",
+      "context": "full",
+      "id": "help-surrounding-spaces",
+      "input": "  /help  ",
+      "key": "help"
+    },
+    {
+      "alias": "/help",
+      "arguments": "",
+      "context": "full",
+      "id": "help-leading-tab",
+      "input": "\t/help",
+      "key": "help"
+    },
+    {
+      "alias": "/help",
+      "arguments": "",
+      "context": "full",
+      "id": "help-trailing-newline",
+      "input": "/help\n",
+      "key": "help"
+    },
+    {
+      "alias": "/mcp",
+      "arguments": "add server",
+      "context": "full",
+      "id": "mcp-with-arguments",
+      "input": "/mcp add server",
+      "key": "mcp"
+    },
+    {
+      "alias": "/mcp",
+      "arguments": "add     server",
+      "context": "full",
+      "id": "mcp-interior-whitespace-run",
+      "input": "/mcp    add     server",
+      "key": "mcp"
+    },
+    {
+      "alias": "/mcp",
+      "arguments": "add server",
+      "context": "full",
+      "id": "mcp-newline-separated-arguments",
+      "input": "/mcp\nadd server",
+      "key": "mcp"
+    },
+    {
+      "alias": "/mcp",
+      "arguments": "add",
+      "context": "full",
+      "id": "mcp-tab-separated-arguments",
+      "input": "/mcp\tadd",
+      "key": "mcp"
+    },
+    {
+      "alias": "/connectors",
+      "arguments": "",
+      "context": "full",
+      "id": "connectors-alias",
+      "input": "/connectors",
+      "key": "mcp"
+    },
+    {
+      "alias": "/connectors",
+      "arguments": "add https://example.test",
+      "context": "full",
+      "id": "connectors-alias-with-arguments",
+      "input": "/connectors add https://example.test",
+      "key": "mcp"
+    },
+    {
+      "alias": "/new",
+      "arguments": "",
+      "context": "full",
+      "id": "new-alias",
+      "input": "/new",
+      "key": "clear"
+    },
+    {
+      "alias": "/continue",
+      "arguments": "",
+      "context": "full",
+      "id": "continue-alias",
+      "input": "/continue",
+      "key": "resume"
+    },
+    {
+      "alias": "exit",
+      "arguments": "",
+      "context": "full",
+      "id": "exit-bare",
+      "input": "exit",
+      "key": "exit"
+    },
+    {
+      "alias": "quit",
+      "arguments": "",
+      "context": "full",
+      "id": "quit-bare",
+      "input": "quit",
+      "key": "exit"
+    },
+    {
+      "alias": ":q",
+      "arguments": "",
+      "context": "full",
+      "id": "colon-q-bare",
+      "input": ":q",
+      "key": "exit"
+    },
+    {
+      "alias": ":quit",
+      "arguments": "",
+      "context": "full",
+      "id": "colon-quit-bare",
+      "input": ":quit",
+      "key": "exit"
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "exit-bare-with-arguments",
+      "input": "exit now",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "quit-bare-with-arguments",
+      "input": "quit please stop",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "colon-q-bare-with-arguments",
+      "input": ":q now",
+      "key": null
+    },
+    {
+      "alias": "exit",
+      "arguments": "",
+      "context": "full",
+      "id": "exit-bare-uppercase",
+      "input": "EXIT",
+      "key": "exit"
+    },
+    {
+      "alias": "exit",
+      "arguments": "",
+      "context": "full",
+      "id": "exit-bare-surrounding-spaces",
+      "input": "  exit  ",
+      "key": "exit"
+    },
+    {
+      "alias": "/exit",
+      "arguments": "",
+      "context": "full",
+      "id": "exit-slash",
+      "input": "/exit",
+      "key": "exit"
+    },
+    {
+      "alias": "/exit",
+      "arguments": "now",
+      "context": "full",
+      "id": "exit-slash-with-arguments",
+      "input": "/exit now",
+      "key": "exit"
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "empty",
+      "input": "",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "spaces-only",
+      "input": "   ",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "tabs-only",
+      "input": "\t\t",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "newline-only",
+      "input": "\n",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "unknown-slash",
+      "input": "/nope",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "unknown-bare",
+      "input": "nope",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "unknown-slash-with-arguments",
+      "input": "/nope arg",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "double-slash",
+      "input": "//help",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "slash-only",
+      "input": "/",
+      "key": null
+    },
+    {
+      "alias": "/thinking",
+      "arguments": "",
+      "context": "full",
+      "id": "kelvin-sign-thinking",
+      "input": "/THIN\u212aING",
+      "key": "thinking"
+    },
+    {
+      "alias": "/compact",
+      "arguments": "\u212aelvin",
+      "context": "full",
+      "id": "kelvin-sign-in-arguments",
+      "input": "/compact \u212aelvin",
+      "key": "compact"
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "dotted-capital-i-thinking",
+      "input": "/TH\u0130NKING",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "full",
+      "id": "fullwidth-help",
+      "input": "/\uff28\uff25\uff2c\uff30",
+      "key": null
+    },
+    {
+      "alias": "/compact",
+      "arguments": "focus on the parser",
+      "context": "full",
+      "id": "compact-with-instructions",
+      "input": "/compact focus on the parser",
+      "key": "compact"
+    },
+    {
+      "alias": "/loop",
+      "arguments": "5m check the build",
+      "context": "full",
+      "id": "loop-with-arguments",
+      "input": "/loop 5m check the build",
+      "key": "loop"
+    },
+    {
+      "alias": "/rename",
+      "arguments": "\"My Session\"",
+      "context": "full",
+      "id": "rename-with-quoted-argument",
+      "input": "/rename \"My Session\"",
+      "key": "rename"
+    },
+    {
+      "alias": "/retry",
+      "arguments": "continue the response continue the response continue the response continue the response continue the response continue the response continue the response continue the response continue the response continue the response continue the response continue the response",
+      "context": "full",
+      "id": "retry-with-long-argument",
+      "input": "/retry continue the response continue the response continue the response continue the response continue the response continue the response continue the response continue the response continue the response continue the response continue the response continue the response ",
+      "key": "retry"
+    },
+    {
+      "alias": "/paste-image",
+      "arguments": "",
+      "context": "full",
+      "id": "paste-image-full",
+      "input": "/paste-image",
+      "key": "paste-image"
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "baseline",
+      "id": "paste-image-baseline",
+      "input": "/paste-image",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "vibeCode",
+      "id": "paste-image-vibe-code",
+      "input": "/paste-image",
+      "key": null
+    },
+    {
+      "alias": "/paste-image",
+      "arguments": "",
+      "context": "clipboard",
+      "id": "paste-image-clipboard",
+      "input": "/paste-image",
+      "key": "paste-image"
+    },
+    {
+      "alias": "/teleport",
+      "arguments": "",
+      "context": "full",
+      "id": "teleport-full",
+      "input": "/teleport",
+      "key": "teleport"
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "baseline",
+      "id": "teleport-baseline",
+      "input": "/teleport",
+      "key": null
+    },
+    {
+      "alias": "/teleport",
+      "arguments": "",
+      "context": "vibeCode",
+      "id": "teleport-vibe-code",
+      "input": "/teleport",
+      "key": "teleport"
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "baseline",
+      "id": "remote-project-baseline",
+      "input": "/remote-project",
+      "key": null
+    },
+    {
+      "alias": "/status",
+      "arguments": "",
+      "context": "baseline",
+      "id": "status-baseline",
+      "input": "/status",
+      "key": "status"
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "excluded",
+      "id": "help-excluded",
+      "input": "/help",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "excluded",
+      "id": "connectors-excluded",
+      "input": "/connectors",
+      "key": null
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "excluded",
+      "id": "theme-excluded",
+      "input": "/theme",
+      "key": null
+    },
+    {
+      "alias": "/status",
+      "arguments": "",
+      "context": "excluded",
+      "id": "status-excluded",
+      "input": "/status",
+      "key": "status"
+    }
+  ],
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "version": "2.24.0"
+  },
+  "schemaVersion": 1
+}
