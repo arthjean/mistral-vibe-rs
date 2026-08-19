@@ -19,7 +19,7 @@ if (-not [Environment]::Is64BitOperatingSystem) {
     throw "Only Windows x86_64 is supported"
 }
 
-$baseUrl = if ($env:VIBE_RELEASE_BASE_URL) { $env:VIBE_RELEASE_BASE_URL } else { "https://github.com/arthurjean/mistral-vibe-rs/releases/download/v$Version" }
+$baseUrl = if ($env:VIBE_RELEASE_BASE_URL) { $env:VIBE_RELEASE_BASE_URL } else { "https://github.com/arthjean/mistral-vibe-rs/releases/download/v$Version" }
 if (-not ($baseUrl.StartsWith("https://") -or $baseUrl.StartsWith("file://"))) {
     throw "Refusing non-HTTPS release source"
 }

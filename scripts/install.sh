@@ -2,7 +2,7 @@
 set -eu
 
 VERSION="${VIBE_VERSION:-2.23.1}"
-RELEASE_BASE_URL="${VIBE_RELEASE_BASE_URL:-https://github.com/arthurjean/mistral-vibe-rs/releases/download/v${VERSION}}"
+RELEASE_BASE_URL="${VIBE_RELEASE_BASE_URL:-https://github.com/arthjean/mistral-vibe-rs/releases/download/v${VERSION}}"
 INSTALL_DIRECTORY="${VIBE_INSTALL_DIR:-${XDG_BIN_HOME:-${HOME}/.local/bin}}"
 COMPLETION_DIRECTORY="${VIBE_COMPLETION_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/vibe/completions}"
 
