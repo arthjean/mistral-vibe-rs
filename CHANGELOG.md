@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Fetch releases from the repository that actually publishes them. Both
+  installers defaulted to a `github.com` owner no remote of this project uses,
+  so every install that did not override the base URL resolved a 404 rather
+  than an archive. The default is now bound to `[workspace.package] repository`
+  and a test fails when either script drifts from it.
+
+- Publish one `SHA256SUMS` covering every packaged target. Each packaging run
+  overwrote the aggregate manifest with its own single line, so whichever
+  matrix leg finished last decided which target a release could verify and the
+  other four were unverifiable. A run now merges its line into the manifest,
+  replacing only its own and sorting by archive name, which makes the result
+  independent of the order the targets are packaged in.
+
+- Release from a tag. Nothing built or uploaded the five published archives, so
+  a version bump produced no downloadable release at all. A tag push now
+  packages every target, refuses to continue when the tag disagrees with
+  `[workspace.package] version`, publishes only when every leg succeeded, and
+  then installs the result with the committed `install.sh` and no override. No
+  tag has been pushed: the workflow is dormant until the port's parity is proven
+  across the scorecard, so its shape is asserted by tests rather than by a run.
+
+- State the version once. The version string is hand-written in five files
+  besides the workspace manifest, and nothing detected the drift between them;
+  a test now reads the manifest and fails both when a copy disagrees and when a
+  file stops carrying the version at all.
+
 - Name the envelope and the offending field when an inbound frame is rejected.
   Every rejection reported only that no envelope variant matched, so a missing
   `message`, an unknown error code, a stray field and a non-object `result`
