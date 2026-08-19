@@ -13,6 +13,9 @@ if [[ "${target}" == windows-* ]]; then
     binary_suffix=".exe"
 fi
 
+# The workflow and the tests both package binaries that are already built, so
+# the build step and the directory the binaries are read from are separable.
+binary_directory="${VIBE_RELEASE_BINARY_DIR:-target/release}"
 if [[ "${VIBE_SKIP_BUILD:-false}" != "true" ]]; then
     cargo build --workspace --release --locked
 fi
@@ -26,8 +29,8 @@ cleanup() {
 }
 trap cleanup EXIT
 mkdir -p "${staging_directory}/bin" "${staging_directory}/completions" "${output_directory}"
-cp "target/release/vibe${binary_suffix}" "${staging_directory}/bin/"
-cp "target/release/vibe-acp${binary_suffix}" "${staging_directory}/bin/"
+cp "${binary_directory}/vibe${binary_suffix}" "${staging_directory}/bin/"
+cp "${binary_directory}/vibe-acp${binary_suffix}" "${staging_directory}/bin/"
 cp completions/vibe.bash completions/_vibe completions/vibe.fish completions/vibe.ps1 \
     "${staging_directory}/completions/"
 cp LICENSE NOTICE "${staging_directory}/"

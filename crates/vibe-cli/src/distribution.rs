@@ -295,3 +295,6 @@ mod tests {
         assert!(!directory.path().join("vibe.previous").exists());
     }
 }
+
+#[cfg(test)]
+mod release_parity_tests;
