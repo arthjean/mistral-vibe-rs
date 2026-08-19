@@ -24,7 +24,7 @@ const SCANNED_ROOTS: [&str; 2] = ["crates", "scripts"];
 const SCANNED_EXTENSIONS: [&str; 4] = ["rs", "py", "json", "toml"];
 
 /// Path prefixes that make a backticked token a repository path.
-const PATH_PREFIXES: [&str; 4] = ["crates/", "scripts/", "docs/", "tasks/"];
+const PATH_PREFIXES: [&str; 3] = ["crates/", "scripts/", "docs/"];
 /// Root files the table names directly.
 const ROOT_FILES: [&str; 2] = ["CHANGELOG.md", "NOTICE"];
 

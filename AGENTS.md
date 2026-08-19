@@ -7,7 +7,7 @@ semantics, and user-visible output. Internal design is free to differ where Rust
 offers a stronger one.
 
 Write every repository artifact in US English: code, comments, documentation,
-commit messages, and PRDs. `color`, `behavior`, `normalize`, `analyzer`,
+and commit messages. `color`, `behavior`, `normalize`, `analyzer`,
 `acknowledgment`, `modeled`, `afterward`. The exception is a spelling the
 reference or a dependency publishes, which is reproduced verbatim: `cancelled`
 is the value the Python reference emits for `TodoStatus`, the stop reason ACP
@@ -27,7 +27,7 @@ vendored, linked, or shipped. This binds every change:
 - Only names, JSON pointers, and normalized observations may be committed, as in
   `crates/vibe-app-server/tests/tool-surface/baseline.json` and
   `crates/vibe-cli/tests/runtime-parity/`.
-- Cite reference paths in PRDs and comments instead of quoting them.
+- Cite reference paths in comments and documentation instead of quoting them.
 
 ## The behavioral oracle
 
@@ -43,9 +43,9 @@ The checkout location is machine-dependent: `C:\dev\mistral-vibe` on Windows and
 path and read `VIBE_REFERENCE` as an override, with `--reference` winning over
 both, so every Rust parity test now honors the variable through
 `vibe_core::parity::reference_root`. A new parity test calls that function
-rather than spelling a path. Reference paths written in PRDs and comments use the
-Linux form as the canonical spelling; read them relative to whichever checkout is
-local.
+rather than spelling a path. Reference paths written in comments and
+documentation use the Linux form as the canonical spelling; read them relative
+to whichever checkout is local.
 
 - Read the reference before writing Rust that touches a public boundary. Open
   the owning module first, then implement. `vibe/cli/` is the terminal client,
@@ -124,14 +124,6 @@ Tooling enforces the lint set; these are the parts it cannot enforce.
 - Unit and differential tests live beside the code they cover as
   `#[cfg(test)] mod <name>_tests;` files under `src/`. `tests/` holds integration
   entry points, fixture binaries, and corpus files.
-
-## Planned work
-
-`tasks/prd-<slug>.md` holds a PRD and `tasks/prd-<slug>-status.json` its
-machine-readable state: epics `EP-NNN`, stories `US-NNN`, and the statuses
-`TODO`, `IN_PROGRESS`, `IN_REVIEW`, `DONE`. Update the status file in the same
-change as the code it tracks. Implementation hands off at `IN_REVIEW`; only a
-review pass sets `DONE`.
 
 ## Delivery
 

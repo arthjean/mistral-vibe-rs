@@ -685,7 +685,7 @@ impl Release3Service {
             "config/fields/read" => self.config_fields_read(),
             // Retained as a local alias over the same patch core so the callers
             // that predate `config/patch` keep working. Recorded as a
-            // divergence in `tasks/prd-config-parity.md`.
+            // divergence in `docs/parity.md`.
             "config/batchWrite" => self.config_batch_write(params),
             "config/thinking/write" => self.thinking_write(params),
             "config/proxy/write" => self.proxy_write(params),

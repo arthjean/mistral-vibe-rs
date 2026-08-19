@@ -3,12 +3,12 @@
 
 Textual and ratatui cannot render the same cells, so this capture never
 records output: it drives the real ``OnboardingApp`` through Textual's
-headless pilot and records what `tasks/prd-chat-input-observable-parity.md`
-calls observations: the installed screen set, the ordered transitions taken,
-the focus target per screen, the validation class per input state, the
-effects persisted and the terminating value. The sign-in service, the
-credential persistence and the config orchestrator are injected or patched to
-recorders, so a run touches no network, no keyring and no real ``VIBE_HOME``.
+headless pilot and records what the chat-input harness calls observations:
+the installed screen set, the ordered transitions taken, the focus target per
+screen, the validation class per input state, the effects persisted and the
+terminating value. The sign-in service, the credential persistence and the
+config orchestrator are injected or patched to recorders, so a run touches no
+network, no keyring and no real ``VIBE_HOME``.
 
 Four families come out, and are what the Rust replay compares:
 

@@ -1277,8 +1277,8 @@ fn write_skill(root: &Path, name: &str) {
 /// project file while the workspace is trusted and the user file otherwise
 /// (`crates/vibe-core/src/config.rs:585`), so no key concatenates across the
 /// two files and a user document is discarded whole once a trusted project
-/// ships its own. That is configuration layering, owned by
-/// `tasks/prd-config-parity.md`; US-166 records it as out of scope.
+/// ships its own. That is configuration layering rather than skill discovery,
+/// and out of scope for this test.
 #[test]
 fn skill_paths_is_read_from_the_merged_document() {
     let temporary = tempdir().expect("tempdir");

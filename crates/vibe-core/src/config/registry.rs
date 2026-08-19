@@ -1027,7 +1027,7 @@ pub static FIELDS: &[FieldSpec] = &[
     // a mapping onto a reference field: `thinking` is per-model upstream,
     // `notifications` is a tri-state where upstream carries a boolean, and the
     // remaining three name no reference field at all. The reasons are written
-    // out in the divergence table of `tasks/prd-config-parity.md`.
+    // out in the divergence table of `docs/parity.md`.
     FieldSpec::declared("thinking", FieldKind::Enum, REPLACE)
         .local()
         .choices(THINKING_VALUES)

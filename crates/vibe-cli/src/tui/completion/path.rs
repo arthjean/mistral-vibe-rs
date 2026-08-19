@@ -96,8 +96,8 @@ struct PathSearchContext<'a> {
 /// The reference's background rebuild executor, its per-root cancellation tasks
 /// and its `_target_root` bookkeeping are not reproduced: this port already
 /// rebuilds off the terminal event path, on the completion worker, so the
-/// executor has no observable consequence for any caller.
-/// `tasks/prd-autocompletion-voice-parity.md` records that as a non-goal.
+/// executor has no observable consequence for any caller. `docs/parity.md`
+/// records that as an accepted divergence.
 #[derive(Debug, Default)]
 pub(super) struct WorkspaceIndex {
     root: Option<PathBuf>,

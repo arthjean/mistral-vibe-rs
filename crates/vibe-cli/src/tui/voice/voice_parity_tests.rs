@@ -89,7 +89,7 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "constants/recordingModes/*",
         "ACCEPTED: the reference selects between a buffered and a streaming recorder, and this \
          port streams unconditionally, so it names no recording mode; \
-         tasks/prd-autocompletion-voice-parity.md records the streaming-only surface",
+         docs/parity.md records the streaming-only surface",
     ),
     (
         "transcriptionResolution/cause/*",

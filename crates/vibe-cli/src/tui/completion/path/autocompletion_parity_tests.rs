@@ -70,7 +70,7 @@ const DIVERGENCES: &[(&str, &str)] = &[(
     "constants/walkSkipDirNames",
     "ACCEPTED: `WALK_SKIP_DIR_NAMES` is exported by the reference and imported by nothing at the \
      pinned commit, so this port ships no derived constant with no consumer; \
-     tasks/prd-autocompletion-voice-parity.md records it as a non-goal",
+     docs/parity.md records it as a non-goal",
 )];
 
 // --------------------------------------------------------------------------

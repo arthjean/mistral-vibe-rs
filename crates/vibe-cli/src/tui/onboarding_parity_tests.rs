@@ -7,8 +7,7 @@
 //! transitions taken, the focus target per screen, the validation class per
 //! input state, the effects persisted and the terminating value. Textual and
 //! ratatui cannot render the same cells, so no rendered cell, SVG or styled
-//! text appears in the corpus; the precedent is
-//! `tasks/prd-chat-input-observable-parity.md`.
+//! text appears in the corpus; the precedent is the chat-input harness.
 //!
 //! The replay drives this port's [`super::onboarding::model::OnboardingModel`]
 //! through the same scripts: each corpus scenario maps to a drive that feeds
