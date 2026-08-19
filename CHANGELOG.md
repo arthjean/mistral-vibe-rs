@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Keep the recorded update state across the pre-TOML layout and across the rest
+  of `cache.toml`. An `update_cache.json` written by an older layout was ignored,
+  so an upgrade re-announced release notes that had already been read and
+  re-offered a version that had already been dismissed. That file is now read
+  once and migrated into the `[update_cache]` section, its null keys omitted.
+  Writing the section merges into what the file already holds instead of
+  replacing it, so a key this port does not model, an optional key the write
+  omits, and any unrelated table all survive. A file past one megabyte reads as
+  absent rather than being parsed into memory, and a failed write reports the
+  cache-write error while leaving the previous file intact.
+
 - Check for updates on the releases of the repository the binary was installed
   from. The update check read the PyPI project the Python reference publishes,
   so an installed binary compared itself against a version it could never
