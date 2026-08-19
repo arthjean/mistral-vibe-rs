@@ -1,0 +1,190 @@
+name: Release
+
+# A tag is the only trigger that publishes. `workflow_dispatch` rehearses the
+# whole path against an existing tag and stops before `gh release create`, so
+# the matrix, the aggregate manifest and the verification can be exercised
+# without an outward-facing action.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to rehearse against; nothing is published
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Tag and workspace version agree
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.declared.outputs.version }}
+      tag: ${{ steps.declared.outputs.tag }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      # Nothing else in the workflow spells the version out: it is read from the
+      # manifest that owns it, and a tag naming another one stops the run here,
+      # before any leg builds.
+      - name: Resolve the declared version
+        id: declared
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
+        run: |
+          tag="${TAG_INPUT:-${GITHUB_REF_NAME}}"
+          version="$(awk '
+            /^\[/ { section = $0 }
+            section == "[workspace.package]" && /^version = / {
+              gsub(/^version = "|"$/, "")
+              print
+              exit
+            }' Cargo.toml)"
+          if [ -z "${version}" ]; then
+            echo "::error::Cargo.toml declares no [workspace.package] version"
+            exit 1
+          fi
+          if [ "${tag}" != "v${version}" ]; then
+            echo "::error::tag ${tag} does not match [workspace.package] version ${version}"
+            exit 1
+          fi
+          {
+            echo "version=${version}"
+            echo "tag=${tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: Package ${{ matrix.target }}
+    needs: version
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      # Every leg reports on its own so a single unsupported target names itself
+      # instead of cancelling the evidence from the others.
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x86_64
+            runner: ubuntu-24.04
+          - target: linux-aarch64
+            runner: ubuntu-24.04-arm
+          - target: macos-x86_64
+            runner: macos-15-intel
+          - target: macos-aarch64
+            runner: macos-15
+          - target: windows-x86_64
+            runner: windows-2022
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Install system dependencies
+        if: startsWith(matrix.target, 'linux-')
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2 3; do
+            if sudo timeout 180 apt-get update \
+              -o Acquire::Retries=3 \
+              -o Acquire::http::Timeout=30; then
+              break
+            fi
+            echo "apt-get update stalled on attempt ${attempt}"
+            sleep 15
+          done
+          sudo timeout 300 apt-get install --no-install-recommends -y libasound2-dev
+      - name: Install Rust stable
+        run: rustup toolchain install stable --profile minimal
+      # `SOURCE_DATE_EPOCH` comes from the tagged commit rather than from the
+      # clock, which is what makes two runs of the same tag produce identical
+      # archive bytes.
+      - name: Package ${{ matrix.target }}
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+          RELEASE_TARGET: ${{ matrix.target }}
+        run: |
+          SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+          export SOURCE_DATE_EPOCH
+          bash scripts/ci/package-release.sh "${RELEASE_TARGET}" "${RELEASE_VERSION}"
+      # `actions/upload-artifact` rejects a duplicate artifact name with a 409,
+      # so each leg claims a name unique to its target and the collection job
+      # reassembles them with a wildcard.
+      - name: Upload ${{ matrix.target }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: artifacts-${{ matrix.target }}
+          path: dist/release-assets/mistral-vibe-rs-*
+          if-no-files-found: error
+
+  release:
+    name: Publish the release
+    needs: [version, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Collect every target's archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: artifacts-*
+          merge-multiple: true
+          path: dist/release-assets
+      # The checksum tool runs from inside the archive directory so every line
+      # records a bare filename, which is what `sha256sum -c` resolves against
+      # the directory a user verifies in.
+      - name: Build the aggregate checksum manifest
+        run: |
+          cd dist/release-assets
+          sha256sum mistral-vibe-rs-* > SHA256SUMS
+          sha256sum -c SHA256SUMS --ignore-missing
+          cat SHA256SUMS
+      - name: Publish the GitHub release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          gh release create "${RELEASE_TAG}" \
+            --title "${RELEASE_TAG}" \
+            --notes-file crates/vibe-cli/whats_new.md \
+            dist/release-assets/*
+
+  smoke:
+    name: Install ${{ matrix.target }} from the published release
+    needs: [version, release]
+    if: github.event_name == 'push'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x86_64
+            runner: ubuntu-24.04
+          - target: macos-aarch64
+            runner: macos-15
+    env:
+      VIBE_INSTALL_DIR: ${{ github.workspace }}/installed/bin
+      VIBE_COMPLETION_DIR: ${{ github.workspace }}/installed/completions
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      # No `VIBE_RELEASE_BASE_URL`: this resolves the committed default, which is
+      # the path a reader of the README actually takes.
+      - name: Install with the committed default release base
+        run: sh scripts/install.sh
+      - name: Verify the installed binaries
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          "${VIBE_INSTALL_DIR}/vibe" --version | grep -F "${RELEASE_VERSION}"
+          "${VIBE_INSTALL_DIR}/vibe-acp" --help > /dev/null
