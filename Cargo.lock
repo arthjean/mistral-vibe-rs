@@ -4187,7 +4187,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vibe-acp"
-version = "2.23.1"
+version = "2.24.0"
 dependencies = [
  "base64 0.23.0",
  "hex",
@@ -4205,7 +4205,7 @@ dependencies = [
 
 [[package]]
 name = "vibe-app-server"
-version = "2.23.1"
+version = "2.24.0"
 dependencies = [
  "base64 0.23.0",
  "command-group",
@@ -4230,7 +4230,7 @@ dependencies = [
 
 [[package]]
 name = "vibe-cli"
-version = "2.23.1"
+version = "2.24.0"
 dependencies = [
  "base64 0.23.0",
  "clap",
@@ -4261,7 +4261,7 @@ dependencies = [
 
 [[package]]
 name = "vibe-core"
-version = "2.23.1"
+version = "2.24.0"
 dependencies = [
  "base64 0.23.0",
  "cap-std",
@@ -4299,7 +4299,7 @@ dependencies = [
 
 [[package]]
 name = "vibe-protocol"
-version = "2.23.1"
+version = "2.24.0"
 dependencies = [
  "serde",
  "serde_json",

@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
       - name: Package local artifact
-        run: bash scripts/ci/package-release.sh linux-x86_64 2.23.1
+        run: bash scripts/ci/package-release.sh linux-x86_64 2.24.0
       - name: Run local action with string inputs
         id: vibe
         uses: ./
@@ -26,7 +26,7 @@ jobs:
           approvals: ask
           install_python: "true"
           python_version: "3.12"
-          version: "2.23.1"
+          version: "2.24.0"
           release_base_url: file://${{ github.workspace }}/dist/release-assets
       - name: Validate action output
         env:

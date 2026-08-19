@@ -1,5 +1,5 @@
 param(
-    [string]$Version = $(if ($env:VIBE_VERSION) { $env:VIBE_VERSION } else { "2.23.1" }),
+    [string]$Version = $(if ($env:VIBE_VERSION) { $env:VIBE_VERSION } else { "2.24.0" }),
     [string]$InstallDirectory = $(if ($env:VIBE_INSTALL_DIR) { $env:VIBE_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "MistralVibeRS\bin" }),
     [switch]$Uninstall
 )

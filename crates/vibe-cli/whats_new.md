@@ -1,4 +1,4 @@
-# What's new in v2.23.1
+# What's new in v2.24.0
 
 - **Runtime parity**: Trust, worktrees, callbacks, queues, rewind, and session deletion now follow the reference client end to end.
 - **Semantic transcript**: Tools, diffs, hooks, and notices render by meaning, and failed or cancelled work can no longer look completed.
