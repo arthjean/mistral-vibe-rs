@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Check for updates on the releases of the repository the binary was installed
+  from. The update check read the PyPI project the Python reference publishes,
+  so an installed binary compared itself against a version it could never
+  install and offered an upgrade to a different product. It now reads the
+  GitHub releases of `[package] repository`, honoring `GITHUB_TOKEN` when one is
+  exported and still honoring `VIBE_UPDATE_BASE_URL`.
+
+- Make `Update now` install. The prompt offered an update and then reported that
+  no update was available, because installing was not implemented. It now reruns
+  the installer this repository publishes and reports the reference's four
+  outcomes with its exit codes: continue starts the session, an installed
+  upgrade names both versions and exits 0, a failed upgrade names the manual
+  path and exits 1, and quitting exits 0. Ctrl+C during an upgrade terminates
+  the running command, kills it if it has not exited after two seconds, and
+  closes the prompt as a quit rather than starting a session on a release it
+  never installed.
+
 - Fetch releases from the repository that actually publishes them. Both
   installers defaulted to a `github.com` owner no remote of this project uses,
   so every install that did not override the base URL resolved a 404 rather
