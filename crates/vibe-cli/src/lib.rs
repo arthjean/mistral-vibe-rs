@@ -28,8 +28,8 @@ use vibe_app_server::client::{
     ProgrammaticUpdate, PublicTurnStopReason, TurnDriver, programmatic_update_channel,
 };
 use vibe_app_server::experiments::SessionExperiments;
-use vibe_app_server::release3::Release3Service;
 use vibe_app_server::server::AppServer;
+use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::auth::KeyringStore;
 use vibe_core::mcp::SamplingHandler;
 use vibe_core::observability::{self, init_file_logging};
@@ -145,24 +145,24 @@ pub async fn run(
         let config = bootstrap::live_driver_config(
             &arguments,
             &arguments.model,
-            Release3Service::default().compaction_prompts(),
+            WorkspaceService::default().compaction_prompts(),
         )?;
         let credential = bootstrap::credential(&arguments)?;
-        let release3 = Release3Service::default();
+        let workspace = WorkspaceService::default();
         // The programmatic entry point starts here, so this is where an older
         // configuration file is brought forward.
-        release3
+        workspace
             .migrate_configuration()
             .map_err(|error| CliError::Configuration(error.to_string()))?;
-        let telemetry = telemetry_observer(&arguments, &release3)?;
+        let telemetry = telemetry_observer(&arguments, &workspace)?;
         // The server takes ownership of the service, and the session census is
         // read off the same one.
-        let census_service = release3.clone();
+        let census_service = workspace.clone();
         let mut driver = LiveTurnDriver::from_credential(config, credential)?;
         driver = driver.with_event_observer(telemetry.clone());
         let server = production_server(
             &arguments,
-            release3,
+            workspace,
             Some(driver.sampling_handler(&arguments.model)),
         )?
         .using_client_telemetry(telemetry.clone());
@@ -467,15 +467,15 @@ fn report_execution(
 
 fn production_server(
     arguments: &Arguments,
-    release3: Release3Service,
+    workspace: WorkspaceService,
     sampling: Option<Arc<dyn SamplingHandler>>,
 ) -> Result<AppServer, CliError> {
     let credential = bootstrap::credential(arguments)?;
-    let server = bootstrap::resource_server(arguments, release3, credential.clone(), sampling)?;
+    let server = bootstrap::resource_server(arguments, workspace, credential.clone(), sampling)?;
     if !arguments.teleport {
         return Ok(server);
     }
-    Ok(server.using_release4_service(bootstrap::cloud_service(credential)?))
+    Ok(server.using_projects_service(bootstrap::cloud_service(credential)?))
 }
 
 fn validate_arguments(arguments: &Arguments) -> Result<(), CliError> {
@@ -695,21 +695,21 @@ pub(crate) fn arguments_for_test() -> Arguments {
 /// discovered skill, the MCP servers this session would connect and the models
 /// the merged configuration declares.
 pub(crate) fn session_census(
-    release3: &Release3Service,
+    workspace: &WorkspaceService,
     working_directory: &Path,
     trust: bool,
 ) -> vibe_core::telemetry::records::NewSession {
-    let nb_skills = release3
+    let nb_skills = workspace
         .dispatch("skills/list", &BTreeMap::new())
         .ok()
         .and_then(|dispatch| dispatch.result.get("skills").cloned())
         .as_ref()
         .and_then(Value::as_array)
         .map_or(0, Vec::len) as u64;
-    let nb_mcp_servers = release3
+    let nb_mcp_servers = workspace
         .mcp_servers_for_session(working_directory, trust, &[])
         .map_or(0, |servers| servers.len()) as u64;
-    let nb_models = release3
+    let nb_models = workspace
         .layered_config()
         .load()
         .ok()
@@ -914,7 +914,7 @@ pub fn install_tracing(arguments: &Arguments) -> Option<TracingGuard> {
         bootstrap::dotenv_values(arguments).environment(),
         KeyringStore::native(),
     );
-    let setup = match Release3Service::default().layered_config().load() {
+    let setup = match WorkspaceService::default().layered_config().load() {
         Ok(snapshot) => setup_tracing(&snapshot.effective, &credentials),
         Err(_) => TracingSetup::Disabled,
     };
@@ -954,9 +954,9 @@ fn report_degradation(message: &str) {
 /// rather than fail the run.
 pub(crate) fn telemetry_observer(
     arguments: &Arguments,
-    release3: &Release3Service,
+    workspace: &WorkspaceService,
 ) -> Result<Arc<CliTelemetryObserver>, CliError> {
-    let configuration = release3.layered_config();
+    let configuration = workspace.layered_config();
     let credentials = telemetry_credentials(
         bootstrap::dotenv_values(arguments).environment(),
         KeyringStore::native(),

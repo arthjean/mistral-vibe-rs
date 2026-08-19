@@ -8,8 +8,11 @@
 use super::config::config_map;
 use super::*;
 
-impl Release3Service {
-    pub(crate) fn message_count(&self, session_id: &str) -> Result<Option<usize>, Release3Error> {
+impl WorkspaceService {
+    pub(crate) fn message_count(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<usize>, WorkspaceServiceError> {
         match self.store.load(session_id) {
             Ok(hydrated) => Ok(Some(hydrated.messages.len())),
             Err(StorageError::SessionNotFound(_)) => Ok(None),
@@ -20,7 +23,7 @@ impl Release3Service {
     pub(crate) fn snapshot_session(
         &self,
         session_id: &str,
-    ) -> Result<HydratedSession, Release3Error> {
+    ) -> Result<HydratedSession, WorkspaceServiceError> {
         self.store.load(session_id).map_err(storage_error)
     }
 
@@ -34,7 +37,7 @@ impl Release3Service {
         &self,
         session_id: &str,
         entry_id: &str,
-    ) -> Result<usize, Release3Error> {
+    ) -> Result<usize, WorkspaceServiceError> {
         let hydrated = self.store.load(session_id).map_err(storage_error)?;
         rewind_entry_index(&hydrated.messages, entry_id)
     }
@@ -43,7 +46,7 @@ impl Release3Service {
         &self,
         source: HydratedSession,
         result_session_id: &str,
-    ) -> Result<(), Release3Error> {
+    ) -> Result<(), WorkspaceServiceError> {
         let mut failures = Vec::new();
         if result_session_id == source.metadata.id {
             let mut metadata = source.metadata.clone();
@@ -77,14 +80,14 @@ impl Release3Service {
         if failures.is_empty() {
             Ok(())
         } else {
-            Err(Release3Error::Storage(failures.join("; ")))
+            Err(WorkspaceServiceError::Storage(failures.join("; ")))
         }
     }
 
     pub(crate) fn rewind_after_workspace_restore(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         self.rewind_impl(params, true)
     }
 
@@ -92,7 +95,7 @@ impl Release3Service {
         &self,
         session_id: &str,
         settings: &BTreeMap<String, Value>,
-    ) -> Result<Option<HydratedSession>, Release3Error> {
+    ) -> Result<Option<HydratedSession>, WorkspaceServiceError> {
         if !self.persist_runtime_sessions {
             return Ok(None);
         }
@@ -105,7 +108,7 @@ impl Release3Service {
         hydrated.current_config = hydrated.metadata.config.clone();
         self.continuity
             .refresh(hydrated.clone())
-            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
         Ok(Some(hydrated))
     }
 
@@ -114,10 +117,10 @@ impl Release3Service {
         session_id: &str,
         working_directory: &str,
         now_ms: u64,
-    ) -> Result<HydratedSession, Release3Error> {
+    ) -> Result<HydratedSession, WorkspaceServiceError> {
         match self.store.load(session_id) {
             Ok(_) => {
-                return Err(Release3Error::Storage(format!(
+                return Err(WorkspaceServiceError::Storage(format!(
                     "session `{session_id}` already exists"
                 )));
             }
@@ -130,7 +133,7 @@ impl Release3Service {
         let hydrated = self.store.load(session_id).map_err(storage_error)?;
         self.continuity
             .refresh(hydrated.clone())
-            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
         Ok(hydrated)
     }
 
@@ -138,7 +141,7 @@ impl Release3Service {
         &self,
         session_id: &str,
         name: &str,
-    ) -> Result<Option<HydratedSession>, Release3Error> {
+    ) -> Result<Option<HydratedSession>, WorkspaceServiceError> {
         if !self.persist_runtime_sessions {
             return Ok(None);
         }
@@ -146,7 +149,11 @@ impl Release3Service {
             .map(|(_, hydrated)| Some(hydrated))
     }
 
-    pub fn close_saved_session(&self, session_id: &str, now_ms: u64) -> Result<(), Release3Error> {
+    pub fn close_saved_session(
+        &self,
+        session_id: &str,
+        now_ms: u64,
+    ) -> Result<(), WorkspaceServiceError> {
         match self.store.close(session_id, now_ms) {
             Ok(_) | Err(StorageError::SessionNotFound(_)) => Ok(()),
             Err(error) => Err(storage_error(error)),
@@ -156,7 +163,7 @@ impl Release3Service {
     pub(super) fn session_list(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let offset = usize_param(params, "offset", 0, 0, usize::MAX)?;
         let limit = usize_param(params, "limit", 50, SESSION_PAGE_MIN, SESSION_PAGE_MAX)?;
         let cwd = optional_string(params, "cwd")?;
@@ -165,7 +172,7 @@ impl Release3Service {
         // because `SessionListResponse` declares the page and nothing else.
         self.store.migrate_legacy().map_err(storage_error)?;
         let page = self.store.list(cwd, offset, limit).map_err(storage_error)?;
-        Ok(Release3Dispatch::result([(
+        Ok(WorkspaceDispatch::result([(
             "sessions",
             serde_json::to_value(page.sessions)?,
         )]))
@@ -174,7 +181,7 @@ impl Release3Service {
     pub(super) fn history_list(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let session_id = required_string(params, "sessionId")?;
         let history = self
             .store
@@ -184,7 +191,7 @@ impl Release3Service {
                 usize_param(params, "limit", 100, SESSION_PAGE_MIN, SESSION_PAGE_MAX)?,
             )
             .map_err(storage_error)?;
-        Ok(Release3Dispatch::result([(
+        Ok(WorkspaceDispatch::result([(
             "history",
             serde_json::to_value(history)?,
         )]))
@@ -193,7 +200,7 @@ impl Release3Service {
     pub(super) fn session_log(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let hydrated = self
             .store
             .load(required_string(params, "sessionId")?)
@@ -204,7 +211,7 @@ impl Release3Service {
     pub(super) fn resume(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let hydrated = self
             .store
             .resume(
@@ -215,7 +222,7 @@ impl Release3Service {
             .map_err(storage_error)?;
         self.continuity
             .refresh(hydrated.clone())
-            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
         Ok(hydrated_result(
             &hydrated,
             Some(runtime_attachment(&hydrated)),
@@ -225,7 +232,7 @@ impl Release3Service {
     pub(super) fn continue_session(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let cwd = match optional_string(params, "cwd")? {
             Some(cwd) => cwd.to_owned(),
             None => self.paths.working_directory.to_string_lossy().into_owned(),
@@ -240,7 +247,7 @@ impl Release3Service {
             .map_err(storage_error)?;
         self.continuity
             .refresh(hydrated.clone())
-            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
         Ok(hydrated_result(
             &hydrated,
             Some(runtime_attachment(&hydrated)),
@@ -250,7 +257,7 @@ impl Release3Service {
     pub(super) fn fork(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let source = required_string(params, "sessionId")?;
         let keep_messages = fork_keep_messages(params)?;
         let new_id = match optional_string(params, "newSessionId")? {
@@ -284,7 +291,7 @@ impl Release3Service {
         }
         self.continuity
             .refresh(hydrated.clone())
-            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
         Ok(hydrated_result(
             &hydrated,
             Some(runtime_attachment(&hydrated)),
@@ -294,7 +301,7 @@ impl Release3Service {
     pub(super) fn title_update(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let metadata = self
             .store
             .update_title(
@@ -303,7 +310,7 @@ impl Release3Service {
                 now_millis(),
             )
             .map_err(storage_error)?;
-        Ok(Release3Dispatch::result([(
+        Ok(WorkspaceDispatch::result([(
             "metadata",
             serde_json::to_value(metadata)?,
         )]))
@@ -312,7 +319,7 @@ impl Release3Service {
     pub(super) fn delete(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let session_id = required_string(params, "sessionId")?;
         let snapshot = match self.store.load(session_id) {
             Ok(snapshot) => Some(snapshot),
@@ -321,27 +328,27 @@ impl Release3Service {
         };
         self.continuity
             .remove(session_id)
-            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
         match self.store.delete(session_id) {
             Ok(()) | Err(StorageError::SessionNotFound(_)) => {}
             Err(error) => {
                 if let Some(snapshot) = snapshot
                     && let Err(rollback) = self.continuity.refresh(snapshot)
                 {
-                    return Err(Release3Error::Storage(format!(
+                    return Err(WorkspaceServiceError::Storage(format!(
                         "session delete failed ({error}); continuity rollback failed ({rollback})"
                     )));
                 }
                 return Err(storage_error(error));
             }
         }
-        Ok(Release3Dispatch::result([("deleted", json!(true))]))
+        Ok(WorkspaceDispatch::result([("deleted", json!(true))]))
     }
 
     pub(super) fn rewind(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         self.rewind_impl(params, false)
     }
 
@@ -349,20 +356,22 @@ impl Release3Service {
         &self,
         params: &BTreeMap<String, Value>,
         workspace_restore_handled: bool,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let session_id = required_string(params, "sessionId")?;
         let entry_id = required_string(params, "entryId")?;
         let restore_files = params
             .get("restoreFiles")
             .map(|value| {
                 value.as_bool().ok_or_else(|| {
-                    Release3Error::InvalidParams("restoreFiles must be a boolean".to_owned())
+                    WorkspaceServiceError::InvalidParams(
+                        "restoreFiles must be a boolean".to_owned(),
+                    )
                 })
             })
             .transpose()?
             .unwrap_or(false);
         if restore_files && !workspace_restore_handled {
-            return Err(Release3Error::InvalidParams(
+            return Err(WorkspaceServiceError::InvalidParams(
                 "this session has no restorable file checkpoint".to_owned(),
             ));
         }
@@ -370,7 +379,7 @@ impl Release3Service {
             .get("inplace")
             .map(|value| {
                 value.as_bool().ok_or_else(|| {
-                    Release3Error::InvalidParams("inplace must be a boolean".to_owned())
+                    WorkspaceServiceError::InvalidParams("inplace must be a boolean".to_owned())
                 })
             })
             .transpose()?
@@ -414,17 +423,17 @@ impl Release3Service {
         };
         if let Err(error) = self.continuity.refresh(hydrated.clone()) {
             if let Err(rollback) = self.rollback_rewind(source, &hydrated.metadata.id) {
-                return Err(Release3Error::Storage(format!(
+                return Err(WorkspaceServiceError::Storage(format!(
                     "continuity refresh failed ({error}); rewind rollback failed ({rollback})"
                 )));
             }
-            return Err(Release3Error::Storage(error.to_string()));
+            return Err(WorkspaceServiceError::Storage(error.to_string()));
         }
         // `SessionRewindResponse` declares five fields and this service can
         // answer three of them: `state` and `sessionLog` are composed from the
         // live session the attachment below rebinds, which only the server
         // holds. The two lists are placeholders the workspace restore replaces.
-        Ok(Release3Dispatch {
+        Ok(WorkspaceDispatch {
             result: [
                 ("message".to_owned(), json!(message)),
                 ("restoreErrors".to_owned(), json!([])),
@@ -445,12 +454,12 @@ impl Release3Service {
     pub(super) fn rewind_read(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let session_id = required_string(params, "sessionId")?;
         let entry_id = required_string(params, "entryId")?;
         let hydrated = self.store.load(session_id).map_err(storage_error)?;
         rewind_entry_index(&hydrated.messages, entry_id)?;
-        Ok(Release3Dispatch::result([
+        Ok(WorkspaceDispatch::result([
             ("hasFileChanges", json!(false)),
             ("paths", json!([])),
         ]))
@@ -459,7 +468,7 @@ impl Release3Service {
     pub(super) fn history_clear(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let hydrated = self
             .store
             .rewind(
@@ -471,7 +480,7 @@ impl Release3Service {
             .map_err(storage_error)?;
         self.continuity
             .refresh(hydrated.clone())
-            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
         Ok(hydrated_result(
             &hydrated,
             Some(runtime_attachment(&hydrated)),
@@ -482,7 +491,7 @@ impl Release3Service {
         &self,
         session_id: &str,
         name: &str,
-    ) -> Result<(AgentProfile, HydratedSession), Release3Error> {
+    ) -> Result<(AgentProfile, HydratedSession), WorkspaceServiceError> {
         let profile = self.agent_profile(name)?;
         let mut metadata = self.store.load(session_id).map_err(storage_error)?.metadata;
         metadata.agent_profile = Some(serde_json::to_value(&profile)?);
@@ -492,14 +501,14 @@ impl Release3Service {
         let hydrated = self.store.load(session_id).map_err(storage_error)?;
         self.continuity
             .refresh(hydrated.clone())
-            .map_err(|error| Release3Error::Storage(error.to_string()))?;
+            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
         Ok((profile, hydrated))
     }
 }
 
 pub(super) fn fork_keep_messages(
     params: &BTreeMap<String, Value>,
-) -> Result<Option<usize>, Release3Error> {
+) -> Result<Option<usize>, WorkspaceServiceError> {
     let explicit = params
         .get("keepMessages")
         .map(|value| {
@@ -507,7 +516,7 @@ pub(super) fn fork_keep_messages(
                 .as_u64()
                 .and_then(|value| usize::try_from(value).ok())
                 .ok_or_else(|| {
-                    Release3Error::InvalidParams(
+                    WorkspaceServiceError::InvalidParams(
                         "keepMessages must be a non-negative integer".to_owned(),
                     )
                 })
@@ -517,24 +526,24 @@ pub(super) fn fork_keep_messages(
         .get("messageId")
         .map(|value| {
             let message_id = value.as_str().ok_or_else(|| {
-                Release3Error::InvalidParams("messageId must be a string".to_owned())
+                WorkspaceServiceError::InvalidParams("messageId must be a string".to_owned())
             })?;
             let index = message_id
                 .strip_prefix("history-")
                 .and_then(|value| value.parse::<usize>().ok())
                 .ok_or_else(|| {
-                    Release3Error::InvalidParams(
+                    WorkspaceServiceError::InvalidParams(
                         "messageId must use the stable `history-N` form".to_owned(),
                     )
                 })?;
             index.checked_add(1).ok_or_else(|| {
-                Release3Error::InvalidParams("messageId index is too large".to_owned())
+                WorkspaceServiceError::InvalidParams("messageId index is too large".to_owned())
             })
         })
         .transpose()?;
     match (explicit, anchored) {
         (Some(explicit), Some(anchored)) if explicit != anchored => {
-            Err(Release3Error::InvalidParams(
+            Err(WorkspaceServiceError::InvalidParams(
                 "keepMessages and messageId identify different fork anchors".to_owned(),
             ))
         }
@@ -562,7 +571,7 @@ pub(crate) fn history_entry_id(index: usize, role: &str) -> String {
 pub(super) fn rewind_entry_index(
     messages: &[ModelMessage],
     entry_id: &str,
-) -> Result<usize, Release3Error> {
+) -> Result<usize, WorkspaceServiceError> {
     messages
         .iter()
         .enumerate()
@@ -572,15 +581,17 @@ pub(super) fn rewind_entry_index(
         })
         .map(|(index, _message)| index)
         .ok_or_else(|| {
-            Release3Error::NotFound(format!("Rewindable history entry not found: {entry_id}"))
+            WorkspaceServiceError::NotFound(format!(
+                "Rewindable history entry not found: {entry_id}"
+            ))
         })
 }
 
 pub(super) fn hydrated_result(
     hydrated: &HydratedSession,
     attachment: Option<RuntimeAttachment>,
-) -> Release3Dispatch {
-    Release3Dispatch {
+) -> WorkspaceDispatch {
+    WorkspaceDispatch {
         result: [
             ("metadata".to_owned(), json!(hydrated.metadata)),
             ("messages".to_owned(), json!(hydrated.messages)),
@@ -621,6 +632,6 @@ pub(super) fn runtime_attachment(hydrated: &HydratedSession) -> RuntimeAttachmen
 
 pub(super) fn statistics_map(
     value: Option<&Value>,
-) -> Result<BTreeMap<String, Value>, Release3Error> {
+) -> Result<BTreeMap<String, Value>, WorkspaceServiceError> {
     config_map(value)
 }

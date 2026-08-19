@@ -6,15 +6,15 @@
 
 use super::*;
 
-impl Release3Service {
+impl WorkspaceService {
     /// The two configuration views `ConfigReadResponse` declares.
     ///
     /// No agent overlay is applied to the published configuration here, so both
     /// views are the same document; the field stays on the wire because a
     /// client renders "changed from the base" from it.
-    pub(super) fn config_read(&self) -> Result<Release3Dispatch, Release3Error> {
+    pub(super) fn config_read(&self) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let view = self.config.load().map_err(config_error)?.config_view();
-        Ok(Release3Dispatch::result([
+        Ok(WorkspaceDispatch::result([
             ("config", view.clone()),
             ("baseConfig", view),
         ]))
@@ -26,7 +26,7 @@ impl Release3Service {
     /// This is not a wire shape: `ConfigReadResponse` publishes a narrower view
     /// and declares no room for the rest. It stays for the in-process readers
     /// that need the effective document, chiefly the settings screen.
-    pub fn config_document(&self) -> Result<Value, Release3Error> {
+    pub fn config_document(&self) -> Result<Value, WorkspaceServiceError> {
         Ok(self.config.load().map_err(config_error)?.public_view())
     }
 
@@ -46,11 +46,10 @@ impl Release3Service {
     pub(super) fn config_patch(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
-        let raw = params
-            .get("ops")
-            .and_then(Value::as_array)
-            .ok_or_else(|| Release3Error::InvalidParams("ops must be an array".to_owned()))?;
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
+        let raw = params.get("ops").and_then(Value::as_array).ok_or_else(|| {
+            WorkspaceServiceError::InvalidParams("ops must be an array".to_owned())
+        })?;
         let operations = raw
             .iter()
             .map(parse_config_patch_op)
@@ -62,14 +61,14 @@ impl Release3Service {
         let outcome = match self.config.apply_patch(&operations, reason) {
             Ok(outcome) => outcome,
             Err(vibe_core::config::ConfigError::PatchRejected(_)) => {
-                return Ok(Release3Dispatch::result([
+                return Ok(WorkspaceDispatch::result([
                     ("rejected", Value::Bool(true)),
                     ("failures", json!([])),
                 ]));
             }
             Err(error) => return Err(config_error(error)),
         };
-        Ok(Release3Dispatch::result([
+        Ok(WorkspaceDispatch::result([
             ("rejected", Value::Bool(false)),
             ("failures", json!(outcome.failures)),
         ]))
@@ -77,9 +76,9 @@ impl Release3Service {
 
     /// Describes every published field so a settings screen renders without
     /// hard-coding the surface. Reference `_config_fields_read`.
-    pub(super) fn config_fields_read(&self) -> Result<Release3Dispatch, Release3Error> {
+    pub(super) fn config_fields_read(&self) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let described = self.config.describe_fields().map_err(config_error)?;
-        Ok(Release3Dispatch::result([
+        Ok(WorkspaceDispatch::result([
             ("fields", json!(described.fields)),
             ("targets", json!(described.targets)),
         ]))
@@ -88,11 +87,13 @@ impl Release3Service {
     pub(super) fn config_batch_write(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let raw = params
             .get("writes")
             .and_then(Value::as_array)
-            .ok_or_else(|| Release3Error::InvalidParams("writes must be an array".to_owned()))?;
+            .ok_or_else(|| {
+                WorkspaceServiceError::InvalidParams("writes must be an array".to_owned())
+            })?;
         let mut writes = raw
             .iter()
             .map(parse_config_write)
@@ -109,7 +110,7 @@ impl Release3Service {
             }
         }
         let snapshot = self.config.batch_write(&writes).map_err(config_error)?;
-        Ok(Release3Dispatch::result([(
+        Ok(WorkspaceDispatch::result([(
             "snapshot",
             snapshot.public_view(),
         )]))
@@ -123,13 +124,13 @@ impl Release3Service {
     pub(super) fn thinking_write(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let level = params
             .get("level")
             .and_then(Value::as_str)
-            .ok_or_else(|| Release3Error::InvalidParams("level is required".to_owned()))?;
+            .ok_or_else(|| WorkspaceServiceError::InvalidParams("level is required".to_owned()))?;
         if !THINKING_LEVELS.contains(&level) {
-            return Err(Release3Error::InvalidParams(format!(
+            return Err(WorkspaceServiceError::InvalidParams(format!(
                 "level must be one of {}",
                 THINKING_LEVELS.join(", ")
             )));
@@ -156,14 +157,14 @@ impl Release3Service {
                 )],
             }])
             .map_err(config_error)?;
-        Ok(Release3Dispatch::result([] as [(&str, Value); 0]))
+        Ok(WorkspaceDispatch::result([] as [(&str, Value); 0]))
     }
 
-    pub(super) fn proxy_read(&self) -> Result<Release3Dispatch, Release3Error> {
+    pub(super) fn proxy_read(&self) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let values = ProxyEnvironmentStore::new(&self.paths.vibe_home)
             .read()
             .map_err(config_error)?;
-        Ok(Release3Dispatch::result([(
+        Ok(WorkspaceDispatch::result([(
             "settings",
             json!({
                 "values": ProxyKey::ALL.into_iter().map(|key| {
@@ -179,27 +180,29 @@ impl Release3Service {
     pub(super) fn proxy_write(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let changes = params
             .get("changes")
             .and_then(Value::as_object)
-            .ok_or_else(|| Release3Error::InvalidParams("changes must be an object".to_owned()))?;
+            .ok_or_else(|| {
+                WorkspaceServiceError::InvalidParams("changes must be an object".to_owned())
+            })?;
         let mut parsed = BTreeMap::new();
         for (key, value) in changes {
             let key = ProxyKey::try_from(key.as_str())
-                .map_err(|error| Release3Error::InvalidParams(error.to_string()))?;
+                .map_err(|error| WorkspaceServiceError::InvalidParams(error.to_string()))?;
             let value = match value {
                 Value::Null => None,
                 Value::String(value) if value.is_empty() => None,
                 Value::String(value) if !value.contains(['\n', '\r', '\0']) => Some(value.clone()),
                 Value::String(_) => {
-                    return Err(Release3Error::InvalidParams(format!(
+                    return Err(WorkspaceServiceError::InvalidParams(format!(
                         "proxy value for `{}` contains a forbidden control character",
                         key.as_str()
                     )));
                 }
                 _ => {
-                    return Err(Release3Error::InvalidParams(format!(
+                    return Err(WorkspaceServiceError::InvalidParams(format!(
                         "proxy value for `{}` must be a string or null",
                         key.as_str()
                     )));
@@ -212,22 +215,21 @@ impl Release3Service {
                 .write(&parsed)
                 .map_err(config_error)?;
         }
-        Ok(Release3Dispatch::result([] as [(&str, Value); 0]))
+        Ok(WorkspaceDispatch::result([] as [(&str, Value); 0]))
     }
 }
 
 /// Reads one `ConfigPatchOpWire`: a `set` or `remove` verb, a JSON Pointer, the
 /// value a `set` carries, and the file a client pinned the operation to.
-pub(super) fn parse_config_patch_op(value: &Value) -> Result<ConfigPatchOp, Release3Error> {
-    let object = value
-        .as_object()
-        .ok_or_else(|| Release3Error::InvalidParams("each op must be an object".to_owned()))?;
-    let raw_path = object
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| Release3Error::InvalidParams("op.path must be a string".to_owned()))?;
+pub(super) fn parse_config_patch_op(value: &Value) -> Result<ConfigPatchOp, WorkspaceServiceError> {
+    let object = value.as_object().ok_or_else(|| {
+        WorkspaceServiceError::InvalidParams("each op must be an object".to_owned())
+    })?;
+    let raw_path = object.get("path").and_then(Value::as_str).ok_or_else(|| {
+        WorkspaceServiceError::InvalidParams("op.path must be a string".to_owned())
+    })?;
     let pointer = JsonPointer::parse(raw_path)
-        .map_err(|error| Release3Error::InvalidParams(error.to_string()))?;
+        .map_err(|error| WorkspaceServiceError::InvalidParams(error.to_string()))?;
     let target = object
         .get("targetLayer")
         .and_then(Value::as_str)
@@ -238,12 +240,12 @@ pub(super) fn parse_config_patch_op(value: &Value) -> Result<ConfigPatchOp, Rele
             let raw = object.get("value").cloned().unwrap_or(Value::Null);
             PatchOperation::Set(
                 TomlValue::try_from(raw)
-                    .map_err(|error| Release3Error::InvalidParams(error.to_string()))?,
+                    .map_err(|error| WorkspaceServiceError::InvalidParams(error.to_string()))?,
             )
         }
         Some("remove") => PatchOperation::Remove,
         _ => {
-            return Err(Release3Error::InvalidParams(
+            return Err(WorkspaceServiceError::InvalidParams(
                 "op.op must be set or remove".to_owned(),
             ));
         }
@@ -254,15 +256,17 @@ pub(super) fn parse_config_patch_op(value: &Value) -> Result<ConfigPatchOp, Rele
     })
 }
 
-pub(super) fn parse_config_write(value: &Value) -> Result<ConfigWrite, Release3Error> {
-    let object = value
-        .as_object()
-        .ok_or_else(|| Release3Error::InvalidParams("write must be an object".to_owned()))?;
+pub(super) fn parse_config_write(value: &Value) -> Result<ConfigWrite, WorkspaceServiceError> {
+    let object = value.as_object().ok_or_else(|| {
+        WorkspaceServiceError::InvalidParams("write must be an object".to_owned())
+    })?;
     let target = parse_target(
         object
             .get("target")
             .and_then(Value::as_str)
-            .ok_or_else(|| Release3Error::InvalidParams("write.target is required".to_owned()))?,
+            .ok_or_else(|| {
+                WorkspaceServiceError::InvalidParams("write.target is required".to_owned())
+            })?,
     )?;
     let expected_fingerprint = object
         .get("expectedFingerprint")
@@ -271,22 +275,26 @@ pub(super) fn parse_config_write(value: &Value) -> Result<ConfigWrite, Release3E
     let mutations = object
         .get("mutations")
         .and_then(Value::as_array)
-        .ok_or_else(|| Release3Error::InvalidParams("write.mutations must be an array".to_owned()))?
+        .ok_or_else(|| {
+            WorkspaceServiceError::InvalidParams("write.mutations must be an array".to_owned())
+        })?
         .iter()
         .map(|mutation| {
             let mutation = mutation.as_object().ok_or_else(|| {
-                Release3Error::InvalidParams("mutation must be an object".to_owned())
+                WorkspaceServiceError::InvalidParams("mutation must be an object".to_owned())
             })?;
             let path = mutation
                 .get("path")
                 .and_then(Value::as_array)
                 .ok_or_else(|| {
-                    Release3Error::InvalidParams("mutation.path must be an array".to_owned())
+                    WorkspaceServiceError::InvalidParams(
+                        "mutation.path must be an array".to_owned(),
+                    )
                 })?
                 .iter()
                 .map(|part| {
                     part.as_str().map(ToOwned::to_owned).ok_or_else(|| {
-                        Release3Error::InvalidParams(
+                        WorkspaceServiceError::InvalidParams(
                             "mutation path parts must be strings".to_owned(),
                         )
                     })
@@ -297,14 +305,14 @@ pub(super) fn parse_config_write(value: &Value) -> Result<ConfigWrite, Release3E
                 .and_then(Value::as_bool)
                 .unwrap_or(false)
             {
-                Ok::<ConfigMutation, Release3Error>(ConfigMutation::remove(path))
+                Ok::<ConfigMutation, WorkspaceServiceError>(ConfigMutation::remove(path))
             } else {
                 let raw = mutation.get("value").cloned().ok_or_else(|| {
-                    Release3Error::InvalidParams("mutation.value is required".to_owned())
+                    WorkspaceServiceError::InvalidParams("mutation.value is required".to_owned())
                 })?;
                 let value = TomlValue::try_from(raw)
-                    .map_err(|error| Release3Error::InvalidParams(error.to_string()))?;
-                Ok::<ConfigMutation, Release3Error>(ConfigMutation::set(path, value))
+                    .map_err(|error| WorkspaceServiceError::InvalidParams(error.to_string()))?;
+                Ok::<ConfigMutation, WorkspaceServiceError>(ConfigMutation::set(path, value))
             }
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -315,21 +323,23 @@ pub(super) fn parse_config_write(value: &Value) -> Result<ConfigWrite, Release3E
     })
 }
 
-pub(super) fn parse_target(value: &str) -> Result<ConfigTarget, Release3Error> {
+pub(super) fn parse_target(value: &str) -> Result<ConfigTarget, WorkspaceServiceError> {
     match value {
         "user" => Ok(ConfigTarget::User),
         "project" => Ok(ConfigTarget::Project),
-        _ => Err(Release3Error::InvalidParams(
+        _ => Err(WorkspaceServiceError::InvalidParams(
             "target must be user or project".to_owned(),
         )),
     }
 }
 
-pub(super) fn config_map(value: Option<&Value>) -> Result<BTreeMap<String, Value>, Release3Error> {
+pub(super) fn config_map(
+    value: Option<&Value>,
+) -> Result<BTreeMap<String, Value>, WorkspaceServiceError> {
     value
         .cloned()
         .map(serde_json::from_value)
         .transpose()
-        .map_err(Release3Error::Json)
+        .map_err(WorkspaceServiceError::Json)
         .map(Option::unwrap_or_default)
 }

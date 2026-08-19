@@ -10,8 +10,8 @@ mod worktree;
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
-use vibe_app_server::release3::Release3Paths;
 use vibe_app_server::startup::{StartupHost, StartupHostError};
+use vibe_app_server::workspace::WorkspacePaths;
 
 use crate::Arguments;
 
@@ -56,12 +56,12 @@ pub enum StartupError {
 
 #[must_use]
 pub(super) fn startup_host(arguments: &Arguments, working_directory: &Path) -> StartupHost {
-    StartupHost::new(release3_paths(arguments, working_directory))
+    StartupHost::new(workspace_paths(arguments, working_directory))
 }
 
 #[must_use]
-pub(crate) fn release3_paths(arguments: &Arguments, working_directory: &Path) -> Release3Paths {
-    release3_paths_for(arguments.session_root.as_deref(), working_directory)
+pub(crate) fn workspace_paths(arguments: &Arguments, working_directory: &Path) -> WorkspacePaths {
+    workspace_paths_for(arguments.session_root.as_deref(), working_directory)
 }
 
 /// The runtime paths a launch resolves, from the session root it named.
@@ -71,12 +71,12 @@ pub(crate) fn release3_paths(arguments: &Arguments, working_directory: &Path) ->
 /// session root falls back to `VIBE_HOME`, then to the user's home, then to the
 /// workspace, which is the order the reference reads them in.
 #[must_use]
-pub(crate) fn release3_paths_for(
+pub(crate) fn workspace_paths_for(
     session_root: Option<&Path>,
     working_directory: &Path,
-) -> Release3Paths {
+) -> WorkspacePaths {
     let vibe_home = vibe_home_for(session_root, working_directory);
-    Release3Paths {
+    WorkspacePaths {
         session_root: session_root
             .map(Path::to_path_buf)
             .unwrap_or_else(|| vibe_home.join("sessions")),

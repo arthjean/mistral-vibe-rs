@@ -138,8 +138,8 @@ where
 
     /// The configuration and session service this session composes over.
     #[must_use]
-    pub fn release3_service(&self) -> crate::release3::Release3Service {
-        self.client.release3_service()
+    pub fn workspace_service(&self) -> crate::workspace::WorkspaceService {
+        self.client.workspace_service()
     }
 
     pub async fn initialize_pending_mcp(

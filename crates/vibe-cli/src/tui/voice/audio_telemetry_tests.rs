@@ -18,8 +18,8 @@ use tokio::task::JoinHandle;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
 
-use vibe_app_server::release3::{Release3Paths, Release3Service};
 use vibe_app_server::server::AppServer;
+use vibe_app_server::workspace::{WorkspacePaths, WorkspaceService};
 
 use crate::tui::chat_input::{InputEffect, InputEvent};
 use crate::tui::runtime::interactive_test_runtime_with_server;
@@ -302,8 +302,8 @@ async fn the_recorder_drains_every_event_without_touching_the_transcript() {
     let temporary = tempfile::tempdir().expect("a temporary vibe home");
     let vibe_home = temporary.path().join("vibe-home");
     fs::create_dir_all(&vibe_home).expect("the vibe home is created");
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             session_root: vibe_home.join("sessions"),
             working_directory: temporary.path().join("workspace"),
             vibe_home,
@@ -313,7 +313,7 @@ async fn the_recorder_drains_every_event_without_touching_the_transcript() {
     .expect("the configuration service builds");
     let mut runtime = interactive_test_runtime_with_server(
         "audio-telemetry",
-        AppServer::with_release3_service(service),
+        AppServer::with_workspace_service(service),
     );
     runtime.voice = manager();
 

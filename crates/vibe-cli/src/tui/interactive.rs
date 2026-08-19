@@ -37,7 +37,7 @@ use super::render::{BannerContext, TokenState, UiContext, draw};
 use super::runtime::{
     BannerMetrics, InteractiveRuntime, apply_ui_operation_completion, teleport_available,
 };
-use super::session::{banner_metrics_from_release3, start_runtime};
+use super::session::{banner_metrics_from_workspace, start_runtime};
 use super::setup::{EnvironmentThemeDetector, ResolvedTheme, TerminalThemeDetector, Theme};
 use super::shell::{finish_shell, interrupt_shell};
 use super::state::{EntryStatus, ServerEvent, TuiState};
@@ -404,15 +404,15 @@ pub async fn run_interactive(
     let startup::ReadyStartup {
         arguments,
         working_directory,
-        release3,
+        workspace,
         credential,
         post_mount_action,
     } = match startup::preflight(invocation).await? {
         ControlFlow::Break(exit_code) => return Ok(InteractiveExit::aborted(exit_code)),
         ControlFlow::Continue(ready) => ready,
     };
-    let update_checks_enabled = startup::update_checks_enabled(&release3);
-    let fallback_banner = banner_metrics_from_release3(&release3, &arguments, &working_directory);
+    let update_checks_enabled = startup::update_checks_enabled(&workspace);
+    let fallback_banner = banner_metrics_from_workspace(&workspace, &arguments, &working_directory);
     // The runtime schedules interactive calls through this channel from the
     // moment it exists, so it is opened before the session rather than patched
     // in afterward.
@@ -421,7 +421,7 @@ pub async fn run_interactive(
         Some(credential) => Some(start_runtime(
             &arguments,
             &working_directory,
-            release3,
+            workspace,
             credential,
             ui_operation_sender,
         )?),

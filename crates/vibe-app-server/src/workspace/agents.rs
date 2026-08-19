@@ -37,17 +37,17 @@ pub(super) struct PromptParams {
     supports_images: bool,
 }
 
-impl Release3Service {
-    pub(crate) fn agent_profile(&self, name: &str) -> Result<AgentProfile, Release3Error> {
+impl WorkspaceService {
+    pub(crate) fn agent_profile(&self, name: &str) -> Result<AgentProfile, WorkspaceServiceError> {
         if name == "lean" && !self.installed_agent_names()?.contains(name) {
-            return Err(Release3Error::InvalidParams(
+            return Err(WorkspaceServiceError::InvalidParams(
                 "agent `lean` must be installed with /leanstall first".to_owned(),
             ));
         }
         let profile = self.catalog().agents.remove(name).map_or_else(
             || {
                 if self.persist_runtime_sessions {
-                    Err(Release3Error::Extension(format!(
+                    Err(WorkspaceServiceError::Extension(format!(
                         "agent `{name}` was not found"
                     )))
                 } else {
@@ -66,21 +66,21 @@ impl Release3Service {
             Ok,
         )?;
         if profile.kind != AgentKind::Agent {
-            return Err(Release3Error::Extension(format!(
+            return Err(WorkspaceServiceError::Extension(format!(
                 "subagent `{name}` cannot be selected as the primary agent"
             )));
         }
         if let Some(prompt_id) = profile.runtime_settings().system_prompt_id
             && builtin_agents::system_prompt(&prompt_id).is_none()
         {
-            return Err(Release3Error::InvalidParams(format!(
+            return Err(WorkspaceServiceError::InvalidParams(format!(
                 "agent `{name}` references unsupported system prompt `{prompt_id}`"
             )));
         }
         Ok(profile)
     }
 
-    pub(crate) fn default_agent_name(&self) -> Result<String, Release3Error> {
+    pub(crate) fn default_agent_name(&self) -> Result<String, WorkspaceServiceError> {
         Ok(self
             .config
             .load()
@@ -98,7 +98,7 @@ impl Release3Service {
     /// replaces with the one the addressed session actually runs. It is always
     /// published: the field is required, and a client that cannot resolve it
     /// has no agent to render as selected.
-    pub(super) fn agents_list(&self) -> Result<Release3Dispatch, Release3Error> {
+    pub(super) fn agents_list(&self) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let profiles = self.available_agents()?;
         let active = self
             .default_agent_name()
@@ -111,7 +111,7 @@ impl Release3Service {
             })
             .or_else(|| profiles.first().cloned())
             .unwrap_or_else(builtin_agents::default_profile);
-        Ok(Release3Dispatch::result([
+        Ok(WorkspaceDispatch::result([
             ("active", agent_summary(&active)),
             (
                 "agents",
@@ -122,7 +122,7 @@ impl Release3Service {
 
     /// Every agent profile a session may run, with the uninstalled builtins
     /// filtered out.
-    pub(super) fn available_agents(&self) -> Result<Vec<AgentProfile>, Release3Error> {
+    pub(super) fn available_agents(&self) -> Result<Vec<AgentProfile>, WorkspaceServiceError> {
         let installed = self.installed_agent_names()?;
         Ok(self
             .catalog()
@@ -191,7 +191,7 @@ impl Release3Service {
     pub(super) fn agent_install(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         if let Some(name) = params.get("agentName").and_then(Value::as_str) {
             self.set_builtin_agent_installed(name, true)?;
             return self.agents_list();
@@ -199,9 +199,9 @@ impl Release3Service {
         let source = self.authorized_existing_path(Path::new(required_string(params, "path")?))?;
         self.agents
             .lock()
-            .map_err(|_| Release3Error::StatePoisoned)?
+            .map_err(|_| WorkspaceServiceError::StatePoisoned)?
             .install(&source)
-            .map_err(|error| Release3Error::Extension(error.to_string()))?;
+            .map_err(|error| WorkspaceServiceError::Extension(error.to_string()))?;
         // Both forms answer with the catalog the change produced, which is what
         // `AgentsListResponse` declares and what a client re-renders from.
         self.agents_list()
@@ -210,7 +210,7 @@ impl Release3Service {
     pub(super) fn agent_uninstall(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         if let Some(name) = params.get("agentName").and_then(Value::as_str) {
             self.set_builtin_agent_installed(name, false)?;
             let mut dispatch = self.agents_list()?;
@@ -238,9 +238,9 @@ impl Release3Service {
         }
         self.agents
             .lock()
-            .map_err(|_| Release3Error::StatePoisoned)?
+            .map_err(|_| WorkspaceServiceError::StatePoisoned)?
             .uninstall(required_string(params, "name")?)
-            .map_err(|error| Release3Error::Extension(error.to_string()))?;
+            .map_err(|error| WorkspaceServiceError::Extension(error.to_string()))?;
         self.agents_list()
     }
 
@@ -248,9 +248,9 @@ impl Release3Service {
         &self,
         name: &str,
         install: bool,
-    ) -> Result<(), Release3Error> {
+    ) -> Result<(), WorkspaceServiceError> {
         if name != "lean" {
-            return Err(Release3Error::InvalidParams(format!(
+            return Err(WorkspaceServiceError::InvalidParams(format!(
                 "unknown installable built-in agent `{name}`"
             )));
         }
@@ -287,7 +287,7 @@ impl Release3Service {
         Ok(())
     }
 
-    pub(super) fn installed_agent_names(&self) -> Result<BTreeSet<String>, Release3Error> {
+    pub(super) fn installed_agent_names(&self) -> Result<BTreeSet<String>, WorkspaceServiceError> {
         Ok(self
             .config
             .load()
@@ -305,11 +305,11 @@ impl Release3Service {
     pub(super) fn agent_update(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let session_id = required_string(params, "sessionId")?;
         let name = required_string(params, "name")?;
         let (profile, hydrated) = self.set_session_agent(session_id, name)?;
-        Ok(Release3Dispatch {
+        Ok(WorkspaceDispatch {
             result: [("agent".to_owned(), serde_json::to_value(profile)?)]
                 .into_iter()
                 .collect(),
@@ -322,9 +322,9 @@ impl Release3Service {
     /// The discovery issues the catalog also carries are published on
     /// `runtime/read` rather than here, which is where the reference reports
     /// them and the only shape this response accepts.
-    pub(super) fn skills_list(&self) -> Result<Release3Dispatch, Release3Error> {
+    pub(super) fn skills_list(&self) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let catalog = self.catalog();
-        Ok(Release3Dispatch::result([(
+        Ok(WorkspaceDispatch::result([(
             "skills",
             Value::Array(catalog.skills.values().map(skill_summary).collect()),
         )]))
@@ -333,11 +333,11 @@ impl Release3Service {
     pub(super) fn prompt_prepare(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let prompt: PromptParams = serde_json::from_value(Value::Object(
             params.clone().into_iter().collect::<Map<_, _>>(),
         ))
-        .map_err(|error| Release3Error::InvalidParams(error.to_string()))?;
+        .map_err(|error| WorkspaceServiceError::InvalidParams(error.to_string()))?;
         let additional_directories = prompt
             .add_directories
             .iter()
@@ -368,7 +368,7 @@ impl Release3Service {
                     self.project_trusted,
                 )
                 .resolve(prompt_id)
-                .map_err(|error| Release3Error::Prompt(error.to_string()))?
+                .map_err(|error| WorkspaceServiceError::Prompt(error.to_string()))?
                 .content
             }
             None => prompt.base,
@@ -403,31 +403,34 @@ impl Release3Service {
             additional_directories: additional_directories.clone(),
             user_instructions: loader
                 .user_document()
-                .map_err(|error| Release3Error::Prompt(error.to_string()))?,
+                .map_err(|error| WorkspaceServiceError::Prompt(error.to_string()))?,
             project_instructions: loader
                 .project_documents()
-                .map_err(|error| Release3Error::Prompt(error.to_string()))?,
+                .map_err(|error| WorkspaceServiceError::Prompt(error.to_string()))?,
         }
         .compose();
         let mut roots = vec![self.paths.working_directory.clone()];
         roots.extend(additional_directories);
         let prepared = prepare_user_resources(&prompt.resources, &roots, prompt.supports_images)
-            .map_err(|error| Release3Error::Prompt(error.to_string()))?;
-        Ok(Release3Dispatch::result([
+            .map_err(|error| WorkspaceServiceError::Prompt(error.to_string()))?;
+        Ok(WorkspaceDispatch::result([
             ("prompt", serde_json::to_value(composition)?),
             ("user", serde_json::to_value(prepared)?),
             ("issues", serde_json::to_value(catalog.issues)?),
         ]))
     }
 
-    pub(super) fn authorized_existing_path(&self, path: &Path) -> Result<PathBuf, Release3Error> {
+    pub(super) fn authorized_existing_path(
+        &self,
+        path: &Path,
+    ) -> Result<PathBuf, WorkspaceServiceError> {
         let candidate = if path.is_absolute() {
             path.to_path_buf()
         } else {
             self.paths.working_directory.join(path)
         };
         let canonical = fs::canonicalize(&candidate).map_err(|error| {
-            Release3Error::InvalidParams(format!(
+            WorkspaceServiceError::InvalidParams(format!(
                 "authorized path `{}` cannot be resolved: {error}",
                 candidate.display()
             ))
@@ -437,7 +440,7 @@ impl Release3Service {
             .iter()
             .any(|root| fs::canonicalize(root).is_ok_and(|allowed| canonical.starts_with(allowed)));
         if !authorized {
-            return Err(Release3Error::InvalidParams(format!(
+            return Err(WorkspaceServiceError::InvalidParams(format!(
                 "path `{}` is outside server-authorized workspace roots",
                 canonical.display()
             )));

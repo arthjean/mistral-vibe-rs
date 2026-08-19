@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::{
-    Release4Dispatch, Release4Error, Release4Notification, Release4Service, notification,
+    ProjectsDispatch, ProjectsNotification, ProjectsService, ProjectsServiceError, notification,
     optional_u64, persist_json_atomically, required_string,
 };
 use crate::host::{self, now_seconds};
@@ -48,7 +48,7 @@ pub struct LoopFire {
     pub loop_id: String,
     pub session_id: String,
     pub prompt: String,
-    pub notice: Release4Notification,
+    pub notice: ProjectsNotification,
 }
 
 pub(super) fn public_loop_value(scheduled: &ScheduledLoop) -> Value {
@@ -60,14 +60,18 @@ pub(super) fn public_loop_value(scheduled: &ScheduledLoop) -> Value {
     })
 }
 
-pub(super) fn parse_interval(value: &str) -> Result<u64, Release4Error> {
+pub(super) fn parse_interval(value: &str) -> Result<u64, ProjectsServiceError> {
     let mut normalized = value.trim().to_ascii_lowercase();
     let unit = normalized.pop().ok_or_else(|| {
-        Release4Error::InvalidParams("interval must use `<digits><s|m|h|d>` syntax".to_owned())
+        ProjectsServiceError::InvalidParams(
+            "interval must use `<digits><s|m|h|d>` syntax".to_owned(),
+        )
     })?;
     let digits = normalized;
     let amount = digits.parse::<u64>().map_err(|_| {
-        Release4Error::InvalidParams("interval must use `<digits><s|m|h|d>` syntax".to_owned())
+        ProjectsServiceError::InvalidParams(
+            "interval must use `<digits><s|m|h|d>` syntax".to_owned(),
+        )
     })?;
     let multiplier = match unit {
         's' => 1,
@@ -75,21 +79,23 @@ pub(super) fn parse_interval(value: &str) -> Result<u64, Release4Error> {
         'h' => 60 * 60,
         'd' => 24 * 60 * 60,
         _ => {
-            return Err(Release4Error::InvalidParams(
+            return Err(ProjectsServiceError::InvalidParams(
                 "interval must use `<digits><s|m|h|d>` syntax".to_owned(),
             ));
         }
     };
     amount.checked_mul(multiplier).ok_or_else(|| {
-        Release4Error::InvalidParams("interval exceeds the supported range".to_owned())
+        ProjectsServiceError::InvalidParams("interval exceeds the supported range".to_owned())
     })
 }
 
-pub(super) fn load_loops(path: &Path) -> Result<BTreeMap<String, ScheduledLoop>, Release4Error> {
+pub(super) fn load_loops(
+    path: &Path,
+) -> Result<BTreeMap<String, ScheduledLoop>, ProjectsServiceError> {
     match fs::read(path) {
-        Ok(contents) => serde_json::from_slice(&contents).map_err(Release4Error::Json),
+        Ok(contents) => serde_json::from_slice(&contents).map_err(ProjectsServiceError::Json),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
-        Err(error) => Err(Release4Error::Persistence(error)),
+        Err(error) => Err(ProjectsServiceError::Persistence(error)),
     }
 }
 
@@ -111,8 +117,8 @@ pub(super) fn default_loop_store() -> PathBuf {
     host::vibe_home().join("scheduled-loops.json")
 }
 
-impl Release4Service {
-    pub fn with_loop_store(mut self, path: PathBuf) -> Result<Self, Release4Error> {
+impl ProjectsService {
+    pub fn with_loop_store(mut self, path: PathBuf) -> Result<Self, ProjectsServiceError> {
         let mut loops = load_loops(&path)?;
         for scheduled in loops.values_mut() {
             if scheduled.state == LoopState::Running {
@@ -132,7 +138,7 @@ impl Release4Service {
         loop_id: &str,
         now_seconds: u64,
         session_idle: bool,
-    ) -> Result<LoopFire, Release4Error> {
+    ) -> Result<LoopFire, ProjectsServiceError> {
         self.fire_loop_owned(loop_id, None, now_seconds, session_idle)
     }
 
@@ -142,7 +148,7 @@ impl Release4Service {
         session_id: &str,
         now_seconds: u64,
         session_idle: bool,
-    ) -> Result<LoopFire, Release4Error> {
+    ) -> Result<LoopFire, ProjectsServiceError> {
         self.fire_loop_owned(loop_id, Some(session_id), now_seconds, session_idle)
     }
 
@@ -152,31 +158,31 @@ impl Release4Service {
         session_id: Option<&str>,
         now_seconds: u64,
         session_idle: bool,
-    ) -> Result<LoopFire, Release4Error> {
+    ) -> Result<LoopFire, ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         if !session_idle {
-            return Err(Release4Error::Conflict(
+            return Err(ProjectsServiceError::Conflict(
                 "scheduled loop cannot fire while its session has active work".to_owned(),
             ));
         }
         let mut loops = self.lock_loops()?;
         let before = loops.clone();
-        let scheduled = loops
-            .get_mut(loop_id)
-            .ok_or_else(|| Release4Error::NotFound(format!("loop `{loop_id}` was not found")))?;
+        let scheduled = loops.get_mut(loop_id).ok_or_else(|| {
+            ProjectsServiceError::NotFound(format!("loop `{loop_id}` was not found"))
+        })?;
         if session_id.is_some_and(|session_id| scheduled.session_id != session_id) {
-            return Err(Release4Error::NotFound(format!(
+            return Err(ProjectsServiceError::NotFound(format!(
                 "loop `{loop_id}` is not owned by session `{}`",
                 session_id.unwrap_or_default()
             )));
         }
         if scheduled.state == LoopState::Running {
-            return Err(Release4Error::Conflict(format!(
+            return Err(ProjectsServiceError::Conflict(format!(
                 "loop `{loop_id}` is already running"
             )));
         }
         if now_seconds < scheduled.next_fire_at {
-            return Err(Release4Error::Conflict(format!(
+            return Err(ProjectsServiceError::Conflict(format!(
                 "loop `{loop_id}` is not due"
             )));
         }
@@ -220,7 +226,7 @@ impl Release4Service {
         &self,
         session_id: &str,
         now_seconds: u64,
-    ) -> Result<Option<String>, Release4Error> {
+    ) -> Result<Option<String>, ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         let loops = self.lock_loops()?;
         Ok(loops
@@ -238,15 +244,15 @@ impl Release4Service {
         &self,
         loop_id: &str,
         _completed_at_seconds: u64,
-    ) -> Result<(), Release4Error> {
+    ) -> Result<(), ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         let mut loops = self.lock_loops()?;
         let before = loops.clone();
-        let scheduled = loops
-            .get_mut(loop_id)
-            .ok_or_else(|| Release4Error::NotFound(format!("loop `{loop_id}` was not found")))?;
+        let scheduled = loops.get_mut(loop_id).ok_or_else(|| {
+            ProjectsServiceError::NotFound(format!("loop `{loop_id}` was not found"))
+        })?;
         if scheduled.state != LoopState::Running {
-            return Err(Release4Error::Conflict(format!(
+            return Err(ProjectsServiceError::Conflict(format!(
                 "loop `{loop_id}` is not running"
             )));
         }
@@ -261,19 +267,19 @@ impl Release4Service {
     pub(super) fn loop_create(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         let session_id = required_string(params, "sessionId")?;
         let prompt = required_string(params, "prompt")?;
         if prompt.starts_with('/') {
-            return Err(Release4Error::InvalidParams(
+            return Err(ProjectsServiceError::InvalidParams(
                 "scheduled-loop prompts cannot start with `/`".to_owned(),
             ));
         }
         let interval_seconds = parse_interval(required_string(params, "interval")?)?;
         let now_seconds = optional_u64(params, "nowSeconds")?.unwrap_or_else(now_seconds);
         if interval_seconds < MIN_LOOP_INTERVAL_SECONDS {
-            return Err(Release4Error::InvalidParams(format!(
+            return Err(ProjectsServiceError::InvalidParams(format!(
                 "intervalSeconds must be at least {MIN_LOOP_INTERVAL_SECONDS}"
             )));
         }
@@ -284,7 +290,7 @@ impl Release4Service {
             .count()
             >= MAX_LOOPS_PER_SESSION
         {
-            return Err(Release4Error::Conflict(format!(
+            return Err(ProjectsServiceError::Conflict(format!(
                 "session `{session_id}` already owns {MAX_LOOPS_PER_SESSION} scheduled loops"
             )));
         }
@@ -306,7 +312,7 @@ impl Release4Service {
             *loops = before;
             return Err(error);
         }
-        Ok(Release4Dispatch::result([(
+        Ok(ProjectsDispatch::result([(
             "loop",
             public_loop_value(&scheduled),
         )]))
@@ -315,7 +321,7 @@ impl Release4Service {
     pub(super) fn loop_list(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         let session_id = required_string(params, "sessionId")?;
         let loops = self.lock_loops()?;
@@ -324,7 +330,7 @@ impl Release4Service {
             .filter(|scheduled| scheduled.session_id == session_id)
             .cloned()
             .collect::<Vec<_>>();
-        Ok(Release4Dispatch::result([(
+        Ok(ProjectsDispatch::result([(
             "loops",
             Value::Array(items.iter().map(public_loop_value).collect()),
         )]))
@@ -333,7 +339,7 @@ impl Release4Service {
     pub(super) fn loop_clear(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         let session_id = required_string(params, "sessionId")?;
         let mut loops = self.lock_loops()?;
@@ -347,39 +353,39 @@ impl Release4Service {
             *loops = before;
             return Err(error);
         }
-        Ok(Release4Dispatch::result([("count", json!(removed))]))
+        Ok(ProjectsDispatch::result([("count", json!(removed))]))
     }
 
     pub(super) fn loop_delete(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         let session_id = required_string(params, "sessionId")?;
         let loop_id = required_string(params, "loopId")?;
         let mut loops = self.lock_loops()?;
         let before = loops.clone();
-        let scheduled = loops
-            .get(loop_id)
-            .ok_or_else(|| Release4Error::NotFound(format!("loop `{loop_id}` was not found")))?;
+        let scheduled = loops.get(loop_id).ok_or_else(|| {
+            ProjectsServiceError::NotFound(format!("loop `{loop_id}` was not found"))
+        })?;
         if scheduled.session_id != session_id {
-            return Err(Release4Error::NotFound(format!(
+            return Err(ProjectsServiceError::NotFound(format!(
                 "loop `{loop_id}` is not owned by session `{session_id}`"
             )));
         }
         if scheduled.state == LoopState::Running {
-            return Err(Release4Error::Conflict(format!(
+            return Err(ProjectsServiceError::Conflict(format!(
                 "loop `{loop_id}` cannot be deleted while running"
             )));
         }
         let removed = loops
             .remove(loop_id)
-            .ok_or_else(|| Release4Error::NotFound(loop_id.to_owned()))?;
+            .ok_or_else(|| ProjectsServiceError::NotFound(loop_id.to_owned()))?;
         if let Err(error) = self.persist_loops(&loops) {
             *loops = before;
             return Err(error);
         }
-        Ok(Release4Dispatch::result([(
+        Ok(ProjectsDispatch::result([(
             "loop",
             public_loop_value(&removed),
         )]))
@@ -387,21 +393,24 @@ impl Release4Service {
 
     pub(super) fn lock_loops(
         &self,
-    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, ScheduledLoop>>, Release4Error> {
-        self.loops.lock().map_err(|_| Release4Error::StatePoisoned)
+    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, ScheduledLoop>>, ProjectsServiceError>
+    {
+        self.loops
+            .lock()
+            .map_err(|_| ProjectsServiceError::StatePoisoned)
     }
 
     pub(super) fn persist_loops(
         &self,
         loops: &BTreeMap<String, ScheduledLoop>,
-    ) -> Result<(), Release4Error> {
+    ) -> Result<(), ProjectsServiceError> {
         persist_json_atomically(&self.loop_store, loops, &NEXT_LOOP_TEMP_FILE)
-            .map_err(Release4Error::Persistence)
+            .map_err(ProjectsServiceError::Persistence)
     }
 
-    pub(super) fn ensure_loop_store_ready(&self) -> Result<(), Release4Error> {
+    pub(super) fn ensure_loop_store_ready(&self) -> Result<(), ProjectsServiceError> {
         self.loop_store_error.as_ref().map_or(Ok(()), |error| {
-            Err(Release4Error::PersistenceState(error.clone()))
+            Err(ProjectsServiceError::PersistenceState(error.clone()))
         })
     }
 }

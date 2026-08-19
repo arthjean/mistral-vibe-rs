@@ -201,9 +201,9 @@ impl AppServer {
         method: String,
         params: BTreeMap<String, Value>,
     ) -> DispatchBatch {
-        match self.release4.dispatch_deferred(&method, &params).await {
-            Ok(dispatch) => release4_dispatch_batch(request_id, dispatch),
-            Err(error) => release4_error_batch(request_id, error),
+        match self.projects.dispatch_deferred(&method, &params).await {
+            Ok(dispatch) => projects_dispatch_batch(request_id, dispatch),
+            Err(error) => projects_error_batch(request_id, error),
         }
     }
 
@@ -271,7 +271,7 @@ impl AppServer {
     /// publishes it, or `None` when the resource state cannot be read.
     ///
     /// Three owners contribute: the resource service holds the tool surface and
-    /// the integrations, the release3 service holds the configuration and the
+    /// the integrations, the workspace service holds the configuration and the
     /// catalogs, and the session itself holds its accounting. Composing here is
     /// what makes the answer live rather than a fixed payload, and it is the
     /// same composition the notification publishes.
@@ -288,7 +288,7 @@ impl AppServer {
             }
             Err(_) => (None, public_stats(None), 0),
         };
-        let projection = self.release3.runtime_projection(active_agent.as_deref());
+        let projection = self.workspace.runtime_projection(active_agent.as_deref());
         // Discovery issues and configuration diagnostics are the same fact to a
         // client: a file the session could not read cleanly.
         if let Some(Value::Array(issues)) = snapshot.get_mut("issues") {
@@ -312,7 +312,7 @@ impl AppServer {
     /// that reads images strips nothing, so the count is zero without walking
     /// the history.
     pub(crate) fn stripped_history_images(&self, session_id: &str) -> usize {
-        if self.release3.active_model_supports_images() {
+        if self.workspace.active_model_supports_images() {
             return 0;
         }
         let Ok(sessions) = self.lock_sessions() else {
@@ -358,7 +358,7 @@ impl AppServer {
     /// A session the store never persisted reports its configured switch and
     /// nothing else, which is what a client renders as "not being written".
     pub(crate) fn session_log_summary(&self, session_id: &str) -> Value {
-        let enabled = self.release3.session_logging_enabled();
+        let enabled = self.workspace.session_logging_enabled();
         let Ok(sessions) = self.lock_sessions() else {
             return json!({
                 "enabled": enabled,
@@ -406,7 +406,7 @@ impl AppServer {
             .map(|session| session.resource_generation))
     }
 
-    pub(super) fn attach_release3_runtime(
+    pub(super) fn attach_workspace_runtime(
         &self,
         attachment: &RuntimeAttachment,
         review_override: Option<Arc<ReviewManager>>,
@@ -423,7 +423,7 @@ impl AppServer {
             session.agent_summary = attachment
                 .agent_profile
                 .as_ref()
-                .map(crate::release3::agent_summary);
+                .map(crate::workspace::agent_summary);
             if review_override.is_some() {
                 session.review = review_override;
             }
@@ -433,13 +433,13 @@ impl AppServer {
             return self.refresh_session_workspace_tools(&session_id);
         }
         let policy = PermissionStore::default()
-            .with_tool_config(self.release3.tool_config())
-            .with_allowlist_persistence(self.release3.allowlist_persistence());
+            .with_tool_config(self.workspace.tool_config())
+            .with_allowlist_persistence(self.workspace.allowlist_persistence());
         let tools = ToolRegistry::default();
         // A resumed session runs under the same configuration a fresh one does,
         // so its two filter lists are read again here rather than left empty.
         let (enabled_tools, disabled_tools) = self
-            .release3
+            .workspace
             .tool_filters_for_session(
                 Path::new(&attachment.working_directory),
                 matches!(
@@ -491,9 +491,9 @@ impl AppServer {
         session.agent_summary = attachment
             .agent_profile
             .as_ref()
-            .map(crate::release3::agent_summary);
-        session.context_window = self.release3.context_window();
-        session.compaction = self.release3.compaction_settings();
+            .map(crate::workspace::agent_summary);
+        session.context_window = self.workspace.context_window();
+        session.compaction = self.workspace.compaction_settings();
         sessions.insert(session);
         self.open_session_resources(
             &mut sessions,
@@ -549,7 +549,7 @@ impl AppServer {
         self.builtin_tools
             .register(
                 session_id,
-                self.release3
+                self.workspace
                     .skill_discovery(Path::new(working_directory), intent.trusted),
                 tools,
                 &guard,
@@ -607,7 +607,7 @@ impl AppServer {
         Ok(())
     }
 
-    pub(super) fn refresh_release3_runtime(
+    pub(super) fn refresh_workspace_runtime(
         &self,
         attachment: &RuntimeAttachment,
         review_override: Option<Arc<ReviewManager>>,
@@ -627,7 +627,7 @@ impl AppServer {
         session.agent_summary = attachment
             .agent_profile
             .as_ref()
-            .map(crate::release3::agent_summary);
+            .map(crate::workspace::agent_summary);
         if review_override.is_some() {
             session.review = review_override;
         }

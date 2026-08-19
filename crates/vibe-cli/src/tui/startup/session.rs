@@ -38,7 +38,7 @@ pub fn resolve_bare_resume(
 
 #[cfg(test)]
 mod tests {
-    use vibe_app_server::release3::Release3Paths;
+    use vibe_app_server::workspace::WorkspacePaths;
 
     use super::*;
 
@@ -48,7 +48,7 @@ mod tests {
         let mut arguments = crate::arguments_for_test();
         arguments.workdir = Some(root.path().to_path_buf());
         arguments.resume = Some(String::new());
-        let host = StartupHost::new(Release3Paths {
+        let host = StartupHost::new(WorkspacePaths {
             vibe_home: root.path().join("vibe-home"),
             working_directory: root.path().to_path_buf(),
             session_root: root.path().join("vibe-home/sessions"),

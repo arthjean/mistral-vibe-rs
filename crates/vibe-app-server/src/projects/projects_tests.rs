@@ -4,7 +4,7 @@ use tempfile::tempdir;
 
 use super::git::encode_working_tree_diff;
 use super::git::git_tests::{committed_github_repository, run_test_git};
-use super::projects::project_view;
+use super::selection::project_view;
 use super::teleport::TeleportState;
 use super::*;
 
@@ -239,7 +239,7 @@ async fn dirty_only_teleport_starts_with_a_diff_and_never_pushes() {
     });
     let teleport = Arc::new(CapturingTeleport::default());
     let service =
-        Release4Service::with_backends(Arc::new(FixtureProjects), teleport.clone(), git.clone());
+        ProjectsService::with_backends(Arc::new(FixtureProjects), teleport.clone(), git.clone());
     let picker_id = open_picker(&service, "session-dirty").await;
     select_project(&service, "session-dirty", &picker_id, "page-first");
 
@@ -286,12 +286,12 @@ fn params(value: Value) -> BTreeMap<String, Value> {
         .collect()
 }
 
-fn fixture_service(git: Arc<FixtureGit>, teleport: Arc<FixtureTeleport>) -> Release4Service {
-    Release4Service::with_backends(Arc::new(FixtureProjects), teleport, git)
+fn fixture_service(git: Arc<FixtureGit>, teleport: Arc<FixtureTeleport>) -> ProjectsService {
+    ProjectsService::with_backends(Arc::new(FixtureProjects), teleport, git)
 }
 
-fn headless_service(cloud: Arc<HeadlessProjects>) -> Release4Service {
-    Release4Service::with_backends(
+fn headless_service(cloud: Arc<HeadlessProjects>) -> ProjectsService {
+    ProjectsService::with_backends(
         cloud,
         Arc::new(FixtureTeleport {
             fail: AtomicBool::new(false),
@@ -326,7 +326,7 @@ fn listed_project(project_id: &str, repo_urls: &[&str], is_read_only: bool) -> P
     }
 }
 
-async fn open_headless_project(service: &Release4Service, session_id: &str) -> Release4Dispatch {
+async fn open_headless_project(service: &ProjectsService, session_id: &str) -> ProjectsDispatch {
     service
         .dispatch_deferred(
             "vibeCode/projects/open",
@@ -340,7 +340,7 @@ async fn open_headless_project(service: &Release4Service, session_id: &str) -> R
         .expect("headless project opens")
 }
 
-async fn open_picker(service: &Release4Service, session_id: &str) -> String {
+async fn open_picker(service: &ProjectsService, session_id: &str) -> String {
     service
         .dispatch_deferred(
             "vibeCode/projects/open",
@@ -354,7 +354,7 @@ async fn open_picker(service: &Release4Service, session_id: &str) -> String {
         .to_owned()
 }
 
-fn select_project(service: &Release4Service, session_id: &str, picker_id: &str, project_id: &str) {
+fn select_project(service: &ProjectsService, session_id: &str, picker_id: &str, project_id: &str) {
     service
         .dispatch(
             "vibeCode/projects/select",
@@ -429,7 +429,7 @@ async fn session_rebind_transfers_project_teleport_and_loop_ownership() {
                 "projectId": "page-first"
             }))
         ),
-        Err(Release4Error::NotFound(_))
+        Err(ProjectsServiceError::NotFound(_))
     ));
     service
         .dispatch(
@@ -472,7 +472,7 @@ async fn session_rebind_transfers_project_teleport_and_loop_ownership() {
                 "projectId": "page-first"
             }))
         ),
-        Err(Release4Error::NotFound(_))
+        Err(ProjectsServiceError::NotFound(_))
     ));
     let durable = service
         .dispatch("loops/list", &params(json!({"sessionId": "session-new"})))
@@ -640,7 +640,7 @@ async fn project_selection_rejects_wrong_or_omitted_repository_metadata() {
                     "projectId": project_id,
                 })),
             ),
-            Err(Release4Error::InvalidParams(message))
+            Err(ProjectsServiceError::InvalidParams(message))
                 if message.contains("not linked")
         ));
     }
@@ -744,7 +744,7 @@ async fn headless_project_resolution_rejects_repeated_pagination_cursors() {
                 })),
             )
             .await,
-        Err(Release4Error::Conflict(message)) if message.contains("repeated a cursor")
+        Err(ProjectsServiceError::Conflict(message)) if message.contains("repeated a cursor")
     ));
 }
 
@@ -779,7 +779,7 @@ async fn projects_mutate_local_selection_only_after_cloud_success() {
                 "projectId": "read-only-first"
             }))
         ),
-        Err(Release4Error::InvalidParams(message))
+        Err(ProjectsServiceError::InvalidParams(message))
             if message.contains("read-only")
     ));
     let unchanged = service
@@ -841,7 +841,7 @@ async fn projects_mutate_local_selection_only_after_cloud_success() {
         .expect("unlink");
     assert_eq!(unlinked.result["view"]["context"]["savedLink"], Value::Null);
 
-    let unavailable = Release4Service::default();
+    let unavailable = ProjectsService::default();
     assert!(matches!(
         unavailable
             .dispatch_deferred(
@@ -849,7 +849,7 @@ async fn projects_mutate_local_selection_only_after_cloud_success() {
                 &params(json!({"sessionId": "session-2"}))
             )
             .await,
-        Err(Release4Error::Cloud(CloudError::Git(_)))
+        Err(ProjectsServiceError::Cloud(CloudError::Git(_)))
     ));
     assert!(matches!(
         unavailable.dispatch(
@@ -860,7 +860,7 @@ async fn projects_mutate_local_selection_only_after_cloud_success() {
                 "projectId": "project-beta"
             }))
         ),
-        Err(Release4Error::NotFound(_))
+        Err(ProjectsServiceError::NotFound(_))
     ));
 }
 
@@ -1032,7 +1032,7 @@ async fn project_links_use_canonical_root_and_clear_changed_remotes() {
     let teleport = Arc::new(FixtureTeleport {
         fail: AtomicBool::new(false),
     });
-    let service = Release4Service::with_backends(Arc::new(FixtureProjects), teleport, git)
+    let service = ProjectsService::with_backends(Arc::new(FixtureProjects), teleport, git)
         .with_project_link_store(link_store)
         .expect("project link store");
     let root_picker = service
@@ -1184,7 +1184,7 @@ async fn teleport_push_answer_is_idempotent_and_failures_are_actionable() {
                 }))
             )
             .await,
-        Err(Release4Error::Conflict(_))
+        Err(ProjectsServiceError::Conflict(_))
     ));
 
     teleport.fail.store(true, AtomicOrdering::Relaxed);
@@ -1250,7 +1250,7 @@ async fn teleport_requires_an_owned_selected_project_and_cancel_is_silent() {
             }))
         )
         .await,
-        Err(Release4Error::Conflict(message))
+        Err(ProjectsServiceError::Conflict(message))
             if message.contains("selected")
     ));
     select_project(&service, "session-1", &picker_id, "page-first");
@@ -1266,7 +1266,7 @@ async fn teleport_requires_an_owned_selected_project_and_cancel_is_silent() {
                 }))
             )
             .await,
-        Err(Release4Error::NotFound(_))
+        Err(ProjectsServiceError::NotFound(_))
     ));
     assert!(matches!(
         service
@@ -1280,7 +1280,7 @@ async fn teleport_requires_an_owned_selected_project_and_cancel_is_silent() {
                 }))
             )
             .await,
-        Err(Release4Error::NotFound(_))
+        Err(ProjectsServiceError::NotFound(_))
     ));
 
     let started = service
@@ -1356,7 +1356,7 @@ async fn teleport_cancel_rejects_irreversible_work() {
                     "operationId": "operation-irreversible"
                 })),
             ),
-            Err(Release4Error::Conflict(message))
+            Err(ProjectsServiceError::Conflict(message))
                 if message.contains("irreversible")
         ));
     }
@@ -1366,7 +1366,7 @@ async fn teleport_cancel_rejects_irreversible_work() {
 fn scheduled_loops_are_owned_persistent_and_retry_safe() {
     let temporary = tempdir().expect("temporary directory");
     let path = temporary.path().join("loops.json");
-    let service = Release4Service::default()
+    let service = ProjectsService::default()
         .with_loop_store(path.clone())
         .expect("loop store");
     let created = service
@@ -1392,22 +1392,22 @@ fn scheduled_loops_are_owned_persistent_and_retry_safe() {
     );
     assert!(matches!(
         service.fire_loop(&loop_id, 39, true),
-        Err(Release4Error::Conflict(_))
+        Err(ProjectsServiceError::Conflict(_))
     ));
     let fired = service.fire_loop(&loop_id, 40, true).expect("due loop");
     assert_eq!(fired.prompt, "review");
     assert!(matches!(
         service.fire_loop(&loop_id, 40, true),
-        Err(Release4Error::Conflict(_))
+        Err(ProjectsServiceError::Conflict(_))
     ));
     drop(service);
 
-    let reloaded = Release4Service::default()
+    let reloaded = ProjectsService::default()
         .with_loop_store(path)
         .expect("reload");
     assert!(matches!(
         reloaded.fire_loop(&loop_id, 40, true),
-        Err(Release4Error::Conflict(_))
+        Err(ProjectsServiceError::Conflict(_))
     ));
     reloaded
         .fire_loop(&loop_id, 70, true)
@@ -1425,7 +1425,7 @@ fn scheduled_loops_are_owned_persistent_and_retry_safe() {
             "loops/delete",
             &params(json!({"sessionId": "another", "loopId": loop_id}))
         ),
-        Err(Release4Error::NotFound(_))
+        Err(ProjectsServiceError::NotFound(_))
     ));
 }
 
@@ -1433,7 +1433,7 @@ fn scheduled_loops_are_owned_persistent_and_retry_safe() {
 fn session_removal_deletes_owned_loops_transactionally_and_durably() {
     let temporary = tempdir().expect("loop store");
     let loop_path = temporary.path().join("loops.json");
-    let mut service = Release4Service::default()
+    let mut service = ProjectsService::default()
         .with_loop_store(loop_path.clone())
         .expect("loop store");
     for (session_id, prompt) in [
@@ -1457,7 +1457,7 @@ fn session_removal_deletes_owned_loops_transactionally_and_durably() {
     service.loop_store = temporary.path().to_path_buf();
     assert!(matches!(
         service.remove_session("session-delete"),
-        Err(Release4Error::Persistence(_))
+        Err(ProjectsServiceError::Persistence(_))
     ));
     let unchanged = service
         .dispatch(
@@ -1475,7 +1475,7 @@ fn session_removal_deletes_owned_loops_transactionally_and_durably() {
         2
     );
     drop(service);
-    let reloaded = Release4Service::default()
+    let reloaded = ProjectsService::default()
         .with_loop_store(loop_path)
         .expect("reloaded loop store");
     let deleted = reloaded
@@ -1574,7 +1574,7 @@ async fn session_removal_token_restores_exact_transient_state_and_loops_durably(
     service.loop_store = blocking_path;
     assert!(matches!(
         service.restore_session(&removal),
-        Err(Release4Error::Persistence(_))
+        Err(ProjectsServiceError::Persistence(_))
     ));
     assert!(
         !service
@@ -1619,7 +1619,7 @@ async fn session_removal_token_restores_exact_transient_state_and_loops_durably(
     );
 
     drop(service);
-    let reloaded = Release4Service::default()
+    let reloaded = ProjectsService::default()
         .with_loop_store(loop_path)
         .expect("reloaded restored loops");
     let durable = reloaded

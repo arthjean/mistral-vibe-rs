@@ -4,7 +4,7 @@ use tempfile::tempdir;
 
 use super::*;
 
-pub(in crate::release4) fn run_test_git(working_directory: &Path, args: &[&str]) {
+pub(in crate::projects) fn run_test_git(working_directory: &Path, args: &[&str]) {
     let status = Command::new("git")
         .arg("-C")
         .arg(working_directory)
@@ -15,7 +15,7 @@ pub(in crate::release4) fn run_test_git(working_directory: &Path, args: &[&str])
     assert!(status.success(), "Git test command failed: {args:?}");
 }
 
-pub(in crate::release4) fn committed_github_repository() -> tempfile::TempDir {
+pub(in crate::projects) fn committed_github_repository() -> tempfile::TempDir {
     let repository = tempdir().expect("temporary Git repository");
     run_test_git(repository.path(), &["init", "--quiet"]);
     run_test_git(repository.path(), &["config", "user.name", "Vibe Test"]);

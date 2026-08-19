@@ -127,7 +127,7 @@ pub(super) fn teleport_event_message(
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use vibe_app_server::release3::Release3Service;
+    use vibe_app_server::workspace::WorkspaceService;
 
     use super::*;
     use crate::tui::runtime;
@@ -137,13 +137,13 @@ mod tests {
     #[test]
     fn a_teleport_run_reports_the_stage_it_reached() {
         let temporary = tempfile::tempdir().expect("temporary home");
-        let release3 = Release3Service::for_runtime_session_root(
+        let workspace = WorkspaceService::for_runtime_session_root(
             temporary.path().join(".vibe/sessions"),
             temporary.path().join("workspace"),
         );
         let mut runtime = runtime::interactive_test_runtime_with_server(
             "teleport-telemetry",
-            vibe_app_server::server::AppServer::with_release3_service(release3),
+            vibe_app_server::server::AppServer::with_workspace_service(workspace),
         );
         runtime.project_picker = Some(vibe_core::telemetry::records::ProjectPicker {
             shown: true,

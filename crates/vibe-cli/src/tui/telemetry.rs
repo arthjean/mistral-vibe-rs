@@ -18,7 +18,7 @@ pub(super) fn report_session_opened(
     arguments: &Arguments,
 ) {
     runtime.report(&TelemetryRecord::NewSession(crate::session_census(
-        &runtime.release3,
+        &runtime.workspace,
         working_directory,
         arguments.trust,
     )));

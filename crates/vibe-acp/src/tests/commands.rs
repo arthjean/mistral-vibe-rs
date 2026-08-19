@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use vibe_app_server::client::EchoTurnDriver;
-use vibe_app_server::release4::Release4Service;
+use vibe_app_server::projects::ProjectsService;
 
 use super::{
     CleanFixtureGit, FixtureProjectCloud, FixtureTeleportCloud, RecordingTurnDriver, prompt,
@@ -71,12 +71,12 @@ async fn teleport_command_streams_public_cloud_events_and_completion_url() {
     let temporary = tempfile::tempdir().expect("temporary workspace");
     let cwd = temporary.path().to_string_lossy().into_owned();
     let session_root = temporary.path().join("sessions");
-    let release4 = Release4Service::with_backends(
+    let projects = ProjectsService::with_backends(
         Arc::new(FixtureProjectCloud),
         Arc::new(FixtureTeleportCloud),
         Arc::new(CleanFixtureGit),
     );
-    let open = release4
+    let open = projects
         .dispatch_deferred(
             "vibeCode/projects/open",
             &serde_json::from_value(json!({
@@ -92,7 +92,7 @@ async fn teleport_command_streams_public_cloud_events_and_completion_url() {
         .as_str()
         .expect("picker ID")
         .to_owned();
-    release4
+    projects
         .dispatch(
             "vibeCode/projects/select",
             &serde_json::from_value(json!({
@@ -108,7 +108,7 @@ async fn teleport_command_streams_public_cloud_events_and_completion_url() {
         AcpAgent::new(EchoTurnDriver::new("answer").with_session_root(session_root.clone()))
             .expect("agent starts")
             .with_session_root(session_root)
-            .with_release4_service(release4);
+            .with_projects_service(projects);
     agent.initialize().expect("initialize");
     let session = start_session(&agent, &cwd);
     prompt(&agent, &session.session_id, "context to continue")

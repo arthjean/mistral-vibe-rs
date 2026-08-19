@@ -36,7 +36,7 @@ async fn thin_client_uses_only_serialized_app_server_contracts() {
 #[tokio::test]
 async fn public_calls_preserve_notifications_and_execute_resource_work() {
     let workspace = tempfile::tempdir().expect("workspace");
-    let release4 = Release4Service::with_backends(
+    let projects = ProjectsService::with_backends(
         Arc::new(ProgrammaticProjects),
         Arc::new(ProgrammaticTeleport),
         Arc::new(ProgrammaticGit),
@@ -45,7 +45,7 @@ async fn public_calls_preserve_notifications_and_execute_resource_work() {
     .expect("loop store");
     let mut service = HeadlessService::new_shared_with_server(
         Arc::new(EchoTurnDriver::new("unused")),
-        AppServer::with_release4_service(release4),
+        AppServer::with_projects_service(projects),
     )
     .expect("service starts");
     let mut session_options = options();

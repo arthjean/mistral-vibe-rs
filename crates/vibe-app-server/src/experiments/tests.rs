@@ -10,7 +10,7 @@ use tempfile::TempDir;
 use vibe_core::identity::{IdentityFuture, IdentityResolver, IdentityResult};
 use vibe_core::telemetry::ExperimentExposures;
 
-use crate::release3::{Release3Paths, Release3Service};
+use crate::workspace::{WorkspacePaths, WorkspaceService};
 
 use super::{Credentials, SessionExperiments};
 
@@ -79,14 +79,14 @@ impl IdentityResolver for CountingIdentity {
 }
 
 /// A service over a scratch home carrying `document`.
-fn service(root: &Path, document: &str) -> Release3Service {
+fn service(root: &Path, document: &str) -> WorkspaceService {
     let home = root.join("home/.vibe");
     let working = root.join("project");
     std::fs::create_dir_all(&home).expect("the home directory");
     std::fs::create_dir_all(&working).expect("the project directory");
     std::fs::write(home.join("config.toml"), document).expect("the document writes");
-    Release3Service::new(
-        Release3Paths {
+    WorkspaceService::new(
+        WorkspacePaths {
             session_root: home.join("sessions"),
             vibe_home: home,
             working_directory: working,
@@ -157,7 +157,7 @@ async fn resolve_over(
     root: &TempDir,
     document: &str,
     identity: Arc<dyn IdentityResolver>,
-) -> (Release3Service, ExperimentExposures, String) {
+) -> (WorkspaceService, ExperimentExposures, String) {
     let service = service(root.path(), document);
     let exposures = ExperimentExposures::default();
     let session = service

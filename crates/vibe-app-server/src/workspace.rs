@@ -1,15 +1,13 @@
-//! The methods the parity plan groups as release 3: configuration, saved
-//! sessions, agents, skills and workspace prompts.
+//! What a workspace holds outside a running turn: its configuration, its saved
+//! sessions and the agents, skills and prompts a session runs under.
 //!
-//! The name is a delivery scope from `docs/parity.md`, not a domain. What the
-//! module actually owns is stated by its parts: [`config`] answers the layered
-//! configuration document and the writes against it, [`sessions`] the saved
-//! transcript and everything a client does to one, and [`agents`] the profiles,
-//! skills and prompts a session runs under. [`Release3Service`] is the shared
-//! state all three read: the paths, the store, the configuration and the
-//! extension catalog.
+//! Each part owns one of those: [`config`] answers the layered configuration
+//! document and the writes against it, [`sessions`] the saved transcript and
+//! everything a client does to one, and [`agents`] the profiles, skills and
+//! prompts a session runs under. [`WorkspaceService`] is the state all three
+//! read: the paths, the store, the configuration and the extension catalog.
 //!
-//! `RELEASE3_METHODS` is the inventory the router advertises, and every method
+//! `WORKSPACE_METHODS` is the inventory the router advertises, and every method
 //! in it is answered by exactly one of the three parts.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -69,7 +67,7 @@ const THINKING_LEVELS: [&str; 5] = ["off", "low", "medium", "high", "max"];
 const SESSION_PAGE_MIN: usize = 1;
 const SESSION_PAGE_MAX: usize = 500;
 
-pub const RELEASE3_METHODS: &[&str] = &[
+pub const WORKSPACE_METHODS: &[&str] = &[
     "agents/install",
     "agents/list",
     "agents/uninstall",
@@ -99,7 +97,7 @@ pub const RELEASE3_METHODS: &[&str] = &[
 ];
 
 #[derive(Debug, Clone)]
-pub struct Release3Paths {
+pub struct WorkspacePaths {
     pub vibe_home: PathBuf,
     pub working_directory: PathBuf,
     pub session_root: PathBuf,
@@ -150,12 +148,12 @@ pub(crate) fn agent_summary(profile: &AgentProfile) -> Value {
 }
 
 #[derive(Debug, Clone)]
-pub struct Release3Dispatch {
+pub struct WorkspaceDispatch {
     pub result: BTreeMap<String, Value>,
     pub attachment: Option<RuntimeAttachment>,
 }
 
-impl Release3Dispatch {
+impl WorkspaceDispatch {
     fn result(entries: impl IntoIterator<Item = (impl Into<String>, Value)>) -> Self {
         Self {
             result: entries
@@ -168,8 +166,8 @@ impl Release3Dispatch {
 }
 
 #[derive(Clone)]
-pub struct Release3Service {
-    paths: Release3Paths,
+pub struct WorkspaceService {
+    paths: WorkspacePaths,
     defaults: Table,
     config: LayeredConfig,
     /// The per-tool configuration every session's tools read through, kept
@@ -240,12 +238,12 @@ fn tool_discovery(resolver: ToolConfigResolver) -> ConfigDiscovery {
     Arc::new(move || Ok(resolver.discovered_document()))
 }
 
-impl Default for Release3Service {
+impl Default for WorkspaceService {
     fn default() -> Self {
         let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let vibe_home = crate::host::vibe_home();
         Self::build(
-            Release3Paths {
+            WorkspacePaths {
                 session_root: vibe_home.join("sessions"),
                 vibe_home,
                 working_directory,
@@ -255,8 +253,11 @@ impl Default for Release3Service {
     }
 }
 
-impl Release3Service {
-    pub fn new(paths: Release3Paths, project_trusted: bool) -> Result<Self, Release3Error> {
+impl WorkspaceService {
+    pub fn new(
+        paths: WorkspacePaths,
+        project_trusted: bool,
+    ) -> Result<Self, WorkspaceServiceError> {
         Ok(Self::build(paths, project_trusted))
     }
 
@@ -267,7 +268,7 @@ impl Release3Service {
         &self.paths.vibe_home
     }
 
-    fn build(paths: Release3Paths, project_trusted: bool) -> Self {
+    fn build(paths: WorkspacePaths, project_trusted: bool) -> Self {
         // The Defaults layer is the shipped document at every construction
         // site: a service built without it composes a configuration the
         // reference could never produce.
@@ -426,7 +427,7 @@ impl Release3Service {
     /// The five compaction keys, read once for a session that is opening.
     ///
     /// A configuration that cannot be loaded compacts on nothing rather than on
-    /// a guess, which is the same answer [`Release3Service::context_window`]
+    /// a guess, which is the same answer [`WorkspaceService::context_window`]
     /// gives for the threshold it publishes.
     #[must_use]
     pub fn compaction_settings(&self) -> CompactionSettings {
@@ -460,7 +461,7 @@ impl Release3Service {
     ///
     /// The returned warnings name the files a migration could not write; they
     /// also reach every configuration snapshot afterward.
-    pub fn migrate_configuration(&self) -> Result<Vec<String>, Release3Error> {
+    pub fn migrate_configuration(&self) -> Result<Vec<String>, WorkspaceServiceError> {
         self.config.migrate_sources().map_err(config_error)
     }
 
@@ -481,7 +482,7 @@ impl Release3Service {
             .map(Path::to_path_buf)
             .unwrap_or_else(|| session_root.clone());
         Self::build(
-            Release3Paths {
+            WorkspacePaths {
                 vibe_home,
                 working_directory: working_directory.into(),
                 session_root,
@@ -628,14 +629,17 @@ impl Release3Service {
 
     /// The provider entry `name` resolves to in the effective configuration,
     /// which is what the setup flow starts from before persisting it back.
-    pub fn effective_provider(&self, name: &str) -> Result<Option<toml::Table>, Release3Error> {
+    pub fn effective_provider(
+        &self,
+        name: &str,
+    ) -> Result<Option<toml::Table>, WorkspaceServiceError> {
         self.config.effective_provider(name).map_err(config_error)
     }
 
     /// Upserts one provider entry keyed by name, answering whether a write
     /// happened: a provider identical to what the configuration already
     /// resolves is not written at all.
-    pub fn persist_provider(&self, provider: &toml::Table) -> Result<bool, Release3Error> {
+    pub fn persist_provider(&self, provider: &toml::Table) -> Result<bool, WorkspaceServiceError> {
         self.config
             .persist_provider(provider)
             .map(|written| written.is_some())
@@ -662,17 +666,17 @@ impl Release3Service {
         &self,
         method: &str,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         match method {
             // `load` always reads from disk, so reading and reloading are the
             // same operation. They answer differently: a read publishes the two
             // configuration views, a reload publishes the runtime the server
             // fills in around this dispatch.
             "config/read" => self.config_read(),
-            "config/reload" => Ok(Release3Dispatch::result([] as [(&str, Value); 0])),
+            "config/reload" => Ok(WorkspaceDispatch::result([] as [(&str, Value); 0])),
             // Reference `config_schema_response`: the version token lets a
             // client cache the surface instead of refetching it.
-            "config/schema" => Ok(Release3Dispatch::result([
+            "config/schema" => Ok(WorkspaceDispatch::result([
                 (
                     "configSchemaVersion",
                     Value::from(LayeredConfig::schema_version()),
@@ -707,7 +711,7 @@ impl Release3Service {
             "session/agent/update" => self.agent_update(params),
             "skills/list" => self.skills_list(),
             "workspace/prompt/prepare" => self.prompt_prepare(params),
-            _ => Err(Release3Error::MethodNotFound(method.to_owned())),
+            _ => Err(WorkspaceServiceError::MethodNotFound(method.to_owned())),
         }
     }
 
@@ -717,7 +721,7 @@ impl Release3Service {
         params: &BTreeMap<String, Value>,
         working_directory: PathBuf,
         project_trusted: bool,
-    ) -> Result<Release3Dispatch, Release3Error> {
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let mut scoped = self.clone();
         scoped.config = self
             .config
@@ -730,9 +734,9 @@ impl Release3Service {
         working_directory: &Path,
         project_trusted: bool,
         runtime_servers: &[Value],
-    ) -> Result<Vec<McpServerConfig>, Release3Error> {
+    ) -> Result<Vec<McpServerConfig>, WorkspaceServiceError> {
         if !project_trusted && !runtime_servers.is_empty() {
-            return Err(Release3Error::InvalidParams(
+            return Err(WorkspaceServiceError::InvalidParams(
                 "runtime MCP servers require a trusted workspace".to_owned(),
             ));
         }
@@ -741,7 +745,7 @@ impl Release3Service {
             runtime.insert(
                 "mcp_servers".to_owned(),
                 TomlValue::try_from(Value::Array(runtime_servers.to_vec()))
-                    .map_err(|error| Release3Error::InvalidParams(error.to_string()))?,
+                    .map_err(|error| WorkspaceServiceError::InvalidParams(error.to_string()))?,
             );
         }
         let snapshot = LayeredConfig::new(
@@ -771,7 +775,7 @@ impl Release3Service {
         &self,
         working_directory: &Path,
         project_trusted: bool,
-    ) -> Result<(Vec<String>, Vec<String>), Release3Error> {
+    ) -> Result<(Vec<String>, Vec<String>), WorkspaceServiceError> {
         let snapshot = self
             .config
             .clone()
@@ -782,29 +786,31 @@ impl Release3Service {
     }
 }
 
-fn config_error(error: vibe_core::config::ConfigError) -> Release3Error {
-    Release3Error::Config(error.to_string())
+fn config_error(error: vibe_core::config::ConfigError) -> WorkspaceServiceError {
+    WorkspaceServiceError::Config(error.to_string())
 }
 
-fn storage_error(error: vibe_core::storage::StorageError) -> Release3Error {
+fn storage_error(error: vibe_core::storage::StorageError) -> WorkspaceServiceError {
     let message = error.to_string();
     match error {
         vibe_core::storage::StorageError::NoSessions
         | vibe_core::storage::StorageError::SessionNotFound(_)
-        | vibe_core::storage::StorageError::AmbiguousSession(_) => Release3Error::NotFound(message),
-        _ => Release3Error::Storage(message),
+        | vibe_core::storage::StorageError::AmbiguousSession(_) => {
+            WorkspaceServiceError::NotFound(message)
+        }
+        _ => WorkspaceServiceError::Storage(message),
     }
 }
 
-impl From<params::ParamError> for Release3Error {
+impl From<params::ParamError> for WorkspaceServiceError {
     fn from(error: params::ParamError) -> Self {
         Self::InvalidParams(error.message())
     }
 }
 
 #[derive(Debug, Error)]
-pub enum Release3Error {
-    #[error("unknown release-3 method `{0}`")]
+pub enum WorkspaceServiceError {
+    #[error("unknown workspace method `{0}`")]
     MethodNotFound(String),
     #[error("invalid parameters: {0}")]
     InvalidParams(String),
@@ -818,11 +824,11 @@ pub enum Release3Error {
     Extension(String),
     #[error("prompt preparation failed: {0}")]
     Prompt(String),
-    #[error("release-3 state lock is poisoned")]
+    #[error("workspace state lock is poisoned")]
     StatePoisoned,
     #[error("JSON conversion failed: {0}")]
     Json(#[from] serde_json::Error),
 }
 
 #[cfg(test)]
-mod release3_tests;
+mod workspace_tests;

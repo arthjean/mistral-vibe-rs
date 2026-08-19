@@ -4,7 +4,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use vibe_app_server::release3::Release3Service;
+use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::updates::{
     PyPiUpdateGateway, UpdateCacheStore, UpdateGateway, dismiss_update, get_update_if_available,
     pending_update_from_cache,
@@ -99,11 +99,11 @@ pub async fn run_check_upgrade(
 pub fn resolve_startup_update_prompt(
     arguments: &Arguments,
     working_directory: &Path,
-    release3: &Release3Service,
+    workspace: &WorkspaceService,
     current_version: &str,
     output: &mut impl Write,
 ) -> Result<bool, StartupError> {
-    if !update_checks_enabled(release3) {
+    if !update_checks_enabled(workspace) {
         return Ok(true);
     }
     let store = update_cache_store(arguments, working_directory);
@@ -130,8 +130,8 @@ pub fn resolve_startup_update_prompt(
 /// Reference `config.enable_update_checks`, defaulting to the schema default when
 /// the configuration cannot be read.
 #[must_use]
-pub fn update_checks_enabled(release3: &Release3Service) -> bool {
-    release3
+pub fn update_checks_enabled(workspace: &WorkspaceService) -> bool {
+    workspace
         .config_document()
         .ok()
         .and_then(|document| {

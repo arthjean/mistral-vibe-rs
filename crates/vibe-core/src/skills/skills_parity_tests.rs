@@ -17,7 +17,7 @@
 //! parser, the schema and the whole model. `discovery` and `filtering` are
 //! compared for real since EP-048 landed the five roots, the configured paths
 //! and the two filter keys: the wiring reproduced here is
-//! `Release3Service::skill_discovery`, which resolves the roots through
+//! `WorkspaceService::skill_discovery`, which resolves the roots through
 //! `search_paths` and hands them plus the filters to `discover_extensions`.
 //! EP-049 seeded the builtin catalog, so both families now conform whole and
 //! the `builtins` block is compared for real: structure and vocabulary must
@@ -630,7 +630,7 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
         }
     }
 
-    // The production wiring, verbatim: `Release3Service::skill_discovery`
+    // The production wiring, verbatim: `WorkspaceService::skill_discovery`
     // resolves the roots through `search_paths` over the configured entries and
     // the project directories a trusted workspace contributes, then
     // `discover_extensions` seeds the builtin catalog ahead of the walk and

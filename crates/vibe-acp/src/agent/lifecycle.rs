@@ -87,7 +87,7 @@ where
                 }
                 let persisted_cwd = probe.session(&session_id)?.working_directory;
                 ensure_matching_cwd(&request.cwd, &persisted_cwd, "load")?;
-                Ok((session_id, SessionSettings::from_release3_result(&result)))
+                Ok((session_id, SessionSettings::from_workspace_result(&result)))
             })?;
 
         let service = self.new_service(&request.cwd, &request.additional_directories)?;
@@ -126,8 +126,8 @@ where
                 let source_cwd = probe.session(&source_id)?.working_directory;
                 ensure_matching_cwd(&request.cwd, &source_cwd, "fork")?;
                 let keep_messages = self.fork_keep_messages(probe, &source_id, &request)?;
-                let settings =
-                    live_settings.unwrap_or_else(|| SessionSettings::from_release3_result(&source));
+                let settings = live_settings
+                    .unwrap_or_else(|| SessionSettings::from_workspace_result(&source));
                 let mut fork_params = json!({
                     "sessionId": source_id,
                     "newSessionId": request.new_session_id,

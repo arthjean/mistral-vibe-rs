@@ -74,16 +74,16 @@ impl AppServer {
             return Ok(None);
         }
         let Some(loop_id) = self
-            .release4
+            .projects
             .next_due_loop_id(&canonical_session_id, now_seconds)
-            .map_err(|error| ServerError::Release4(error.to_string()))?
+            .map_err(|error| ServerError::Projects(error.to_string()))?
         else {
             return Ok(None);
         };
         let mut fire = self
-            .release4
+            .projects
             .fire_loop_for_session(&loop_id, &canonical_session_id, now_seconds, true)
-            .map_err(|error| ServerError::Release4(error.to_string()))?;
+            .map_err(|error| ServerError::Projects(error.to_string()))?;
         let mut sessions = self.lock_sessions()?;
         let session = sessions
             .get_mut(&canonical_session_id)
@@ -92,15 +92,15 @@ impl AppServer {
             || session.compaction_pending
             || session.status == SessionStatus::Closed
         {
-            self.release4
+            self.projects
                 .finish_loop_fire(&loop_id, now_seconds)
-                .map_err(|error| ServerError::Release4(error.to_string()))?;
+                .map_err(|error| ServerError::Projects(error.to_string()))?;
             return Ok(None);
         }
         let turn_sequence = self.next_turn.fetch_add(1, Ordering::Relaxed);
         let turn_id = format!("turn-{turn_sequence}");
         if let Some(review) = &session.review {
-            let message_index = review_message_index(&self.release3, session)?;
+            let message_index = review_message_index(&self.workspace, session)?;
             review
                 .begin_turn_at(&turn_id, message_index)
                 .map_err(|error| ServerError::Resource(error.to_string()))?;
@@ -165,11 +165,11 @@ impl AppServer {
         completed_at_seconds: u64,
     ) -> Result<(), ServerError> {
         match self
-            .release4
+            .projects
             .finish_loop_fire(loop_id, completed_at_seconds)
         {
-            Ok(()) | Err(Release4Error::Conflict(_)) => Ok(()),
-            Err(error) => Err(ServerError::Release4(error.to_string())),
+            Ok(()) | Err(ProjectsServiceError::Conflict(_)) => Ok(()),
+            Err(error) => Err(ServerError::Projects(error.to_string())),
         }
     }
 
@@ -236,9 +236,9 @@ impl AppServer {
         };
         let completed_at = now_millis();
         if let Some(loop_id) = &active_scheduled_loop {
-            self.release4
+            self.projects
                 .finish_loop_fire(loop_id, completed_at / 1_000)
-                .map_err(|error| ServerError::Release4(error.to_string()))?;
+                .map_err(|error| ServerError::Projects(error.to_string()))?;
         }
         if let Some(review) = &review {
             review
@@ -317,9 +317,9 @@ impl AppServer {
         let was_closed = session.status == SessionStatus::Closed;
         let started_at = session.active_turn_started_at.unwrap_or_default();
         if let Some(loop_id) = &session.active_scheduled_loop {
-            self.release4
+            self.projects
                 .finish_loop_fire(loop_id, now_millis() / 1_000)
-                .map_err(|error| ServerError::Release4(error.to_string()))?;
+                .map_err(|error| ServerError::Projects(error.to_string()))?;
         }
         if let Some(review) = &session.review {
             review
@@ -426,9 +426,9 @@ impl AppServer {
             session.id.clone()
         };
         sessions.rename(&source_key, new_session_id)?;
-        self.release4
+        self.projects
             .rebind_session(&previous_id, new_session_id)
-            .map_err(|error| ServerError::Release4(error.to_string()))?;
+            .map_err(|error| ServerError::Projects(error.to_string()))?;
         for entry in &mut snapshot.history {
             entry.rebind_session(new_session_id);
         }

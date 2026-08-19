@@ -40,7 +40,7 @@ impl ServerConnection {
         }
         let mut loop_notice = None;
         if let Some((loop_id, fired_at)) = scheduled {
-            let fire = self.server.release4.fire_loop_for_session(
+            let fire = self.server.projects.fire_loop_for_session(
                 &loop_id,
                 &session.id,
                 fired_at,
@@ -59,7 +59,7 @@ impl ServerConnection {
         let turn_sequence = self.server.next_turn.fetch_add(1, Ordering::Relaxed);
         let turn_id = format!("turn-{turn_sequence}");
         if let Some(review) = &session.review {
-            let message_index = review_message_index(&self.server.release3, session)?;
+            let message_index = review_message_index(&self.server.workspace, session)?;
             review
                 .begin_turn_at(&turn_id, message_index)
                 .map_err(|error| ProtocolFault::from(ServerError::Resource(error.to_string())))?;
@@ -244,7 +244,7 @@ impl ServerConnection {
         let completed_at = now_millis();
         if let Some(loop_id) = &session.active_scheduled_loop {
             self.server
-                .release4
+                .projects
                 .finish_loop_fire(loop_id, completed_at / 1_000)?;
         }
         if let Some(review) = &session.review {

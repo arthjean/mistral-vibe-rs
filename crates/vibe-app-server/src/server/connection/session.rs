@@ -54,7 +54,7 @@ impl ServerConnection {
     /// the `diagnostics/list` response, so a typo in frontmatter is a message
     /// naming the file rather than a skill that silently disappeared.
     pub(super) fn record_skill_diagnostics(&self) {
-        let issues = self.server.release3.skill_issues();
+        let issues = self.server.workspace.skill_issues();
         if issues.is_empty() {
             return;
         }
@@ -78,7 +78,7 @@ impl ServerConnection {
     fn start_session(&mut self, request: ServerRequest) -> Result<DispatchBatch, ProtocolFault> {
         let params = from_params::<SessionStartParams>(&request.params)?;
         let opening = self.open_session(&params)?;
-        let mcp_configs = self.server.release3.mcp_servers_for_session(
+        let mcp_configs = self.server.workspace.mcp_servers_for_session(
             Path::new(&opening.working_directory),
             params.trusted,
             &params.mcp_servers,
@@ -96,8 +96,8 @@ impl ServerConnection {
             intent,
         } = opening;
         let permission_store = PermissionStore::default()
-            .with_tool_config(self.server.release3.tool_config())
-            .with_allowlist_persistence(self.server.release3.allowlist_persistence());
+            .with_tool_config(self.server.workspace.tool_config())
+            .with_allowlist_persistence(self.server.workspace.allowlist_persistence());
         let tools = ToolRegistry::default();
         permission_store
             .try_replace_rules_with_rationale_prefix(
@@ -128,8 +128,8 @@ impl ServerConnection {
             .map_err(ProtocolFault::internal)?;
         self.record_tool_surface_diagnostics(&intent, &tools);
         self.record_skill_diagnostics();
-        if persisted.is_none() && self.server.release3.persists_runtime_sessions() {
-            persisted = Some(self.server.release3.create_runtime_session(
+        if persisted.is_none() && self.server.workspace.persists_runtime_sessions() {
+            persisted = Some(self.server.workspace.create_runtime_session(
                 &session_id,
                 &working_directory,
                 created_at,
@@ -138,7 +138,7 @@ impl ServerConnection {
         if should_persist_agent
             && let Some(hydrated) = self
                 .server
-                .release3
+                .workspace
                 .update_runtime_agent(&session_id, &agent_profile.name)?
         {
             persisted = Some(hydrated);
@@ -164,9 +164,9 @@ impl ServerConnection {
         session.snapshot = snapshot;
         session.aliases = aliases;
         session.persisted = persisted;
-        session.agent_summary = Some(crate::release3::agent_summary(&agent_profile));
-        session.context_window = self.server.release3.context_window();
-        session.compaction = self.server.release3.compaction_settings();
+        session.agent_summary = Some(crate::workspace::agent_summary(&agent_profile));
+        session.context_window = self.server.workspace.context_window();
+        session.compaction = self.server.workspace.compaction_settings();
         sessions.insert(session);
         self.server.open_session_resources(
             &mut sessions,
@@ -249,7 +249,7 @@ impl ServerConnection {
             .and_then(|attachment| attachment.agent.clone());
         let selected_agent = match params.agent.clone().or(attachment_agent) {
             Some(agent) => agent,
-            None => self.server.release3.default_agent_name()?,
+            None => self.server.workspace.default_agent_name()?,
         };
         // A client that named an agent overrides what the transcript recorded.
         // Otherwise the profile the session was saved under wins over a fresh
@@ -265,11 +265,11 @@ impl ServerConnection {
             .flatten();
         let agent_profile = match saved_profile {
             Some(profile) => profile,
-            None => self.server.release3.agent_profile(&selected_agent)?,
+            None => self.server.workspace.agent_profile(&selected_agent)?,
         };
         let (config_enabled_tools, config_disabled_tools) = self
             .server
-            .release3
+            .workspace
             .tool_filters_for_session(Path::new(&working_directory), params.trusted)?;
         // Reference `_session_config_overrides`: an `enabled_tools` the client
         // sent replaces the configured allowlist, while `disabled_tools`
@@ -352,7 +352,7 @@ impl ServerConnection {
         };
         Ok(self
             .server
-            .release3
+            .workspace
             .dispatch(
                 method,
                 &result_map([selector, ("systemPrompt", json!("")), ("config", json!({}))]),
@@ -416,12 +416,12 @@ impl ServerConnection {
         }
         let canonical_session_id = session.id.clone();
         self.server
-            .release3
+            .workspace
             .close_saved_session(&canonical_session_id, now_millis())?;
         self.server
-            .release4
+            .projects
             .close_transient_session(&canonical_session_id)
-            .map_err(|error| ProtocolFault::from(ServerError::Release4(error.to_string())))?;
+            .map_err(|error| ProtocolFault::from(ServerError::Projects(error.to_string())))?;
         let active_turn = session.active_turn.clone();
         session.status = SessionStatus::Closed;
         session.updated_at = now_millis();
@@ -519,7 +519,7 @@ impl ServerConnection {
         let approval_changed = params.auto_approve.is_some();
         let persisted = self
             .server
-            .release3
+            .workspace
             .update_runtime_settings(&canonical_session_id, &params.entries())?;
         let mut sessions = self.server.lock_sessions()?;
         let session = sessions

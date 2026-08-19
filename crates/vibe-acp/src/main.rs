@@ -13,7 +13,7 @@ use tokio::io::BufReader;
 use vibe_acp::{ProductionAuthEnvironment, default_vibe_home};
 use vibe_app_server::client::{LiveDriverConfig, LiveTurnDriver};
 use vibe_app_server::experiments::Credentials;
-use vibe_app_server::release3::{Release3Paths, Release3Service};
+use vibe_app_server::workspace::{WorkspacePaths, WorkspaceService};
 use vibe_core::auth::KeyringStore;
 use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
@@ -141,9 +141,9 @@ fn acp_launch_context() -> LaunchContext {
 /// document under `vibe_home`, resolved against the directory the editor
 /// launched the adapter from. Both the telemetry client and the span exporter
 /// read the same one.
-fn ambient_release3(vibe_home: &Path) -> Option<Release3Service> {
-    Release3Service::new(
-        Release3Paths {
+fn ambient_workspace(vibe_home: &Path) -> Option<WorkspaceService> {
+    WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: vibe_home.to_path_buf(),
             working_directory: std::env::current_dir().unwrap_or_else(|_| vibe_home.to_path_buf()),
             session_root: vibe_home.join("sessions"),
@@ -174,7 +174,7 @@ fn acp_telemetry_observer(
     dotenv: &DotenvValues,
     exposures: ExperimentExposures,
 ) -> Option<Arc<TelemetryEventObserver<ReqwestTelemetryTransport>>> {
-    let configuration = ambient_release3(vibe_home)?.layered_config();
+    let configuration = ambient_workspace(vibe_home)?.layered_config();
     let environment = dotenv.environment();
     let store = KeyringStore::native();
     // Reference `resolve_api_key`: the environment the dotenv load left behind
@@ -197,7 +197,7 @@ fn acp_telemetry_observer(
 /// ACP path too, and this port reads the same document the terminal client
 /// reads.
 fn install_tracing(vibe_home: &Path, dotenv: &DotenvValues) -> Option<TracingGuard> {
-    let snapshot = ambient_release3(vibe_home)?.layered_config().load().ok()?;
+    let snapshot = ambient_workspace(vibe_home)?.layered_config().load().ok()?;
     let credentials = |variable: &str| dotenv.variable(variable).filter(|value| !value.is_empty());
     match setup_tracing(&snapshot.effective, &credentials) {
         TracingSetup::Installed(guard) => Some(guard),

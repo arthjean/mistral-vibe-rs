@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use vibe_app_server::client::{
     DriverError, DriverFuture, EchoTurnDriver, TurnDriver, TurnReservation,
 };
-use vibe_app_server::release4::{
+use vibe_app_server::projects::{
     CloudError, GitProbe, GitSnapshot, Project, ProjectCloud, ProjectPage, ProjectRepository,
     TeleportCloud, TeleportStartFailure, TeleportStartRequest,
 };

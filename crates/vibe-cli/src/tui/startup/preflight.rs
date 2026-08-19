@@ -9,7 +9,7 @@
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 
-use vibe_app_server::release3::Release3Service;
+use vibe_app_server::workspace::WorkspaceService;
 
 use super::{InteractiveInvocation, ResumeResolution, StartupError};
 use crate::tui::onboarding::{self, OnboardingConclusion};
@@ -20,7 +20,7 @@ use crate::{Arguments, CliError, validate_arguments};
 pub(in crate::tui) struct ReadyStartup {
     pub(in crate::tui) arguments: Arguments,
     pub(in crate::tui) working_directory: PathBuf,
-    pub(in crate::tui) release3: Release3Service,
+    pub(in crate::tui) workspace: WorkspaceService,
     /// The credential the session starts under, or `None` when onboarding was
     /// declined and the client opens read-only.
     pub(in crate::tui) credential: Option<String>,
@@ -66,13 +66,13 @@ pub(in crate::tui) async fn preflight(
         ControlFlow::Break(exit_code) => return Ok(ControlFlow::Break(exit_code)),
         ControlFlow::Continue(credential) => credential,
     };
-    let release3 = startup_host
-        .into_release3(arguments.trust)
+    let workspace = startup_host
+        .into_workspace(arguments.trust)
         .map_err(StartupError::from)?;
     if !super::resolve_startup_update_prompt(
         &arguments,
         &working_directory,
-        &release3,
+        &workspace,
         env!("CARGO_PKG_VERSION"),
         &mut std::io::stdout().lock(),
     )? {
@@ -81,7 +81,7 @@ pub(in crate::tui) async fn preflight(
     Ok(ControlFlow::Continue(ReadyStartup {
         arguments,
         working_directory,
-        release3,
+        workspace,
         credential,
         post_mount_action,
     }))

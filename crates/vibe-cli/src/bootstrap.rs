@@ -9,12 +9,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use vibe_app_server::client::{DriverError, LiveDriverConfig, SessionOptions};
-use vibe_app_server::release3::Release3Service;
-use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
+use vibe_app_server::projects::{ProjectsService, VibeCodeCloudConfig};
 use vibe_app_server::resources::{
     CoreResourceBackend, MistralConnectorClient, production_mcp_adapters,
 };
 use vibe_app_server::server::{AppServer, WebSearchAccess};
+use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
 use vibe_core::mcp::SamplingHandler;
@@ -73,7 +73,7 @@ pub(crate) fn live_driver_config(
 /// that never touches the cloud.
 pub(crate) fn resource_server(
     arguments: &Arguments,
-    release3: Release3Service,
+    workspace: WorkspaceService,
     credential: String,
     sampling: Option<Arc<dyn SamplingHandler>>,
 ) -> Result<AppServer, CliError> {
@@ -87,7 +87,7 @@ pub(crate) fn resource_server(
     let (mcp_factory, mcp_auth) =
         production_mcp_adapters(sampling).map_err(|error| CliError::Terminal(error.to_string()))?;
     let resource_backend = CoreResourceBackend::default()
-        .with_config(release3.layered_config())
+        .with_config(workspace.layered_config())
         .with_mcp_factory(mcp_factory)
         .with_mcp_auth(mcp_auth)
         .with_connector_catalog(
@@ -98,7 +98,7 @@ pub(crate) fn resource_server(
         )
         .with_connector_auth(connector);
     Ok(AppServer::with_resource_backend(Arc::new(resource_backend))
-        .using_release3_service(release3)
+        .using_workspace_service(workspace)
         .using_web_search_access(Some(web_search_access(arguments, credential))))
 }
 
@@ -120,10 +120,10 @@ fn web_search_access(arguments: &Arguments, credential: String) -> WebSearchAcce
     }
 }
 
-pub(crate) fn cloud_service(credential: String) -> Result<Release4Service, CliError> {
+pub(crate) fn cloud_service(credential: String) -> Result<ProjectsService, CliError> {
     let config = VibeCodeCloudConfig::from_credential(credential)
         .map_err(|error| CliError::Teleport(error.to_string()))?;
-    Release4Service::production(config).map_err(|error| CliError::Teleport(error.to_string()))
+    ProjectsService::production(config).map_err(|error| CliError::Teleport(error.to_string()))
 }
 
 /// Session options for one run. `thinking` is derived from `reasoning_effort`

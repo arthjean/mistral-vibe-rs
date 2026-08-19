@@ -346,8 +346,8 @@ fn an_unloadable_skill_is_reported_on_diagnostics_list() {
     let broken = workspace.join(".vibe/skills/broken");
     std::fs::create_dir_all(&broken).expect("skill directory");
     std::fs::write(broken.join("SKILL.md"), "no frontmatter here\n").expect("skill fixture");
-    let release3 = Release3Service::new(
-        crate::release3::Release3Paths {
+    let workspace_service = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
             vibe_home: temporary.path().join("home"),
             working_directory: workspace.clone(),
             session_root: temporary.path().join("sessions"),
@@ -355,7 +355,7 @@ fn an_unloadable_skill_is_reported_on_diagnostics_list() {
         true,
     )
     .expect("service");
-    let server = AppServer::with_release3_service(release3);
+    let server = AppServer::with_workspace_service(workspace_service);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
 
@@ -516,16 +516,16 @@ fn a_session_carries_the_compaction_policy_its_configuration_declares() {
         ),
     )
     .expect("configuration fixture");
-    let release3 = Release3Service::new(
-        crate::release3::Release3Paths {
+    let workspace_service = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
             vibe_home: home,
             working_directory: temporary.path().join("workspace"),
             session_root: temporary.path().join("sessions"),
         },
         false,
     )
-    .expect("release-3 service");
-    let server = AppServer::with_release3_service(release3);
+    .expect("workspace service");
+    let server = AppServer::with_workspace_service(workspace_service);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
     start_session(&mut connection);
@@ -533,7 +533,7 @@ fn a_session_carries_the_compaction_policy_its_configuration_declares() {
     let session = server.session("session-1").expect("the session is open");
     assert_eq!(session.compaction.auto_compact_threshold, 30_000);
     assert_eq!(
-        server.release3.context_window(),
+        server.workspace.context_window(),
         30_000,
         "the published threshold and the policy read the same key"
     );
@@ -554,16 +554,16 @@ fn a_session_carries_the_compaction_policy_its_configuration_declares() {
 #[test]
 fn the_configuration_envelopes_are_the_reference_shapes() {
     let temporary = tempfile::tempdir().expect("temporary home");
-    let release3 = Release3Service::new(
-        crate::release3::Release3Paths {
+    let workspace_service = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
             vibe_home: temporary.path().join("home"),
             working_directory: temporary.path().join("workspace"),
             session_root: temporary.path().join("sessions"),
         },
         false,
     )
-    .expect("release-3 service");
-    let server = AppServer::with_release3_service(release3);
+    .expect("workspace service");
+    let server = AppServer::with_workspace_service(workspace_service);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
     start_session(&mut connection);
@@ -760,7 +760,7 @@ fn invalid_params_names_the_offending_value() {
     );
 }
 
-/// Most methods are answered by the resource, release3 and release4
+/// Most methods are answered by the resource, workspace and projects
 /// dispatchers, which check their parameters by hand rather than through a
 /// deserializer. A client reads the same structured detail from those as
 /// from the handful this module parses itself.

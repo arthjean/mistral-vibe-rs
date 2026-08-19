@@ -38,18 +38,18 @@ command = "/must-not-run"
 "#,
     )
     .expect("project MCP config");
-    let release3 = Release3Service::new(
-        Release3Paths {
+    let workspace_service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: temporary.path().join("home"),
             working_directory: workspace.clone(),
             session_root: temporary.path().join("sessions"),
         },
         true,
     )
-    .expect("release-3 service");
+    .expect("workspace service");
     let mut service = HeadlessService::new_shared_with_server(
         Arc::new(EchoTurnDriver::new("unused")),
-        AppServer::with_release3_service(release3),
+        AppServer::with_workspace_service(workspace_service),
     )
     .expect("service starts");
     let mut session_options = options();
@@ -79,18 +79,18 @@ async fn trust_transition_rebinds_session_scoped_project_config_writes() {
     let workspace = temporary.path().join("workspace");
     std::fs::create_dir_all(workspace.join(".vibe")).expect("project config directory");
     std::fs::write(workspace.join(".vibe/config.toml"), "").expect("project config fixture");
-    let release3 = Release3Service::new(
-        Release3Paths {
+    let workspace_service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: temporary.path().join("home"),
             working_directory: workspace.clone(),
             session_root: temporary.path().join("sessions"),
         },
         false,
     )
-    .expect("release-3 service");
+    .expect("workspace service");
     let mut service = HeadlessService::new_shared_with_server(
         Arc::new(EchoTurnDriver::new("unused")),
-        AppServer::with_release3_service(release3),
+        AppServer::with_workspace_service(workspace_service),
     )
     .expect("service starts");
     let mut session_options = options();

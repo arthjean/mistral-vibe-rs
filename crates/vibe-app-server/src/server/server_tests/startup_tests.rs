@@ -23,16 +23,16 @@ tool_timeout_sec = 2
 "#,
     )
     .expect("project MCP config");
-    let release3 = Release3Service::new(
-        crate::release3::Release3Paths {
+    let workspace = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
             vibe_home,
             working_directory: working_directory.clone(),
             session_root: temporary.path().join("sessions"),
         },
         true,
     )
-    .expect("release-3 service");
-    let server = AppServer::with_release3_service(release3);
+    .expect("workspace service");
+    let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
 
@@ -87,16 +87,16 @@ fn session_start_reads_the_configured_tool_filters_and_reports_a_broken_entry() 
              disabled_tools = [\"re:web_.*\", \"re:[\"]\n",
     )
     .expect("project tool filters");
-    let release3 = Release3Service::new(
-        crate::release3::Release3Paths {
+    let workspace = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
             vibe_home,
             working_directory: working_directory.clone(),
             session_root: temporary.path().join("sessions"),
         },
         true,
     )
-    .expect("release-3 service");
-    let server = AppServer::with_release3_service(release3);
+    .expect("workspace service");
+    let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
     connection.dispatch(&request(
@@ -184,16 +184,16 @@ fn a_client_that_asks_for_no_allowlist_keeps_the_configured_one() {
         "enabled_tools = [\"read_file\", \"serena_*\"]\n",
     )
     .expect("project tool filters");
-    let release3 = Release3Service::new(
-        crate::release3::Release3Paths {
+    let workspace = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
             vibe_home,
             working_directory: working_directory.clone(),
             session_root: temporary.path().join("sessions"),
         },
         true,
     )
-    .expect("release-3 service");
-    let server = AppServer::with_release3_service(release3);
+    .expect("workspace service");
+    let server = AppServer::with_workspace_service(workspace);
     let mut client =
         crate::client::InProcessClient::connect_with_server(server.clone()).expect("client");
     let session_id = client
@@ -259,16 +259,16 @@ fn an_attached_runtime_session_carries_the_configured_tool_filters() {
     vibe_core::storage::SessionStore::new(&session_root)
         .create("attached", &working_directory.to_string_lossy(), None, 1)
         .expect("persisted session");
-    let release3 = Release3Service::new(
-        crate::release3::Release3Paths {
+    let workspace = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
             vibe_home,
             working_directory: working_directory.clone(),
             session_root,
         },
         true,
     )
-    .expect("release-3 service");
-    let server = AppServer::with_release3_service(release3);
+    .expect("workspace service");
+    let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
     // Selecting an agent attaches the persisted session to this connection,
@@ -394,16 +394,16 @@ fn session_start_hydrates_bounded_public_resume_history() {
             .append_message(&mut metadata, &message, timestamp)
             .expect("message persists");
     }
-    let release3 = Release3Service::new(
-        crate::release3::Release3Paths {
+    let workspace = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
             vibe_home,
             working_directory,
             session_root,
         },
         false,
     )
-    .expect("release-3 service");
-    let server = AppServer::with_release3_service(release3);
+    .expect("workspace service");
+    let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
 

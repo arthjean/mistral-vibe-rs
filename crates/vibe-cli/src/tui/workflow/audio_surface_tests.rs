@@ -13,8 +13,8 @@ use std::path::Path;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-use vibe_app_server::release3::{Release3Paths, Release3Service};
 use vibe_app_server::server::AppServer;
+use vibe_app_server::workspace::{WorkspacePaths, WorkspaceService};
 
 use super::super::chat_input::ChatInputState;
 use super::super::controls::ControlState;
@@ -68,8 +68,8 @@ fn runtime_over(document: &str, trusted: bool) -> (TempDir, InteractiveRuntime) 
     let vibe_home = temporary.path().join("vibe-home");
     fs::create_dir_all(&vibe_home).expect("the vibe home is created");
     fs::write(vibe_home.join("config.toml"), document).expect("the seed configuration is written");
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             session_root: vibe_home.join("sessions"),
             working_directory: temporary.path().join("workspace"),
             vibe_home,
@@ -77,7 +77,7 @@ fn runtime_over(document: &str, trusted: bool) -> (TempDir, InteractiveRuntime) 
         trusted,
     )
     .expect("the configuration service builds");
-    let server = AppServer::with_release3_service(service);
+    let server = AppServer::with_workspace_service(service);
     let runtime = if trusted {
         interactive_test_runtime_with_server("audio-surface", server)
     } else {

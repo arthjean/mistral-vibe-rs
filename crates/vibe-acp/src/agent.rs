@@ -16,7 +16,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use vibe_app_server::client::TurnDriver;
 use vibe_app_server::experiments::Credentials;
-use vibe_app_server::release4::Release4Service;
+use vibe_app_server::projects::ProjectsService;
 use vibe_core::telemetry::{
     ClientTelemetry, ExperimentExposures, LaunchContext, NoClientTelemetry,
 };
@@ -49,7 +49,7 @@ where
     auth: AuthController,
     pub(in crate::agent) credential_environment: String,
     pub(in crate::agent) production_cloud: bool,
-    pub(in crate::agent) release4: Mutex<Option<Release4Service>>,
+    pub(in crate::agent) projects: Mutex<Option<ProjectsService>>,
     /// Where an event the editor records reaches the datalake. Every session's
     /// app server is built over the same sink, so an editor-side event and a
     /// turn's own travel through one client, as they do upstream.
@@ -85,7 +85,7 @@ where
             )),
             credential_environment: "MISTRAL_API_KEY".to_owned(),
             production_cloud: false,
-            release4: Mutex::new(None),
+            projects: Mutex::new(None),
             telemetry: Arc::new(NoClientTelemetry),
             experiments: None,
         })
@@ -147,9 +147,9 @@ where
     }
 
     #[must_use]
-    pub fn with_release4_service(mut self, service: Release4Service) -> Self {
+    pub fn with_projects_service(mut self, service: ProjectsService) -> Self {
         self.production_cloud = true;
-        self.release4 = Mutex::new(Some(service));
+        self.projects = Mutex::new(Some(service));
         self
     }
 

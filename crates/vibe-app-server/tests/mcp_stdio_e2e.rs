@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 use serde_json::json;
 use tempfile::tempdir;
 use vibe_app_server::client::{LiveTurnDriver, TurnDriver, TurnReservation};
-use vibe_app_server::release3::{Release3Paths, Release3Service};
 use vibe_app_server::resources::{CoreResourceBackend, ResourceBackend, ResourceSession};
 use vibe_app_server::server::SessionIntent;
+use vibe_app_server::workspace::{WorkspacePaths, WorkspaceService};
 use vibe_core::engine::{CompletionProvider, ProviderFuture};
 use vibe_core::events::{ModelMessage, ModelToolCall, PublicContentBlock};
 use vibe_core::middleware::CompactionSettings;
@@ -156,16 +156,16 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
         toml::to_string(&config).expect("typed config serializes"),
     )
     .expect("typed config persists");
-    let release3 = Release3Service::new(
-        Release3Paths {
+    let workspace = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: config_home,
             working_directory: temporary.path().to_path_buf(),
             session_root: temporary.path().join("sessions"),
         },
         true,
     )
-    .expect("release-3 config service");
-    let configs = release3
+    .expect("workspace config service");
+    let configs = workspace
         .mcp_servers_for_session(temporary.path(), true, &[])
         .expect("typed TOML MCP config");
     let dispatch = backend

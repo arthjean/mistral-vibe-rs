@@ -39,7 +39,7 @@ use vibe_core::prompt::PromptResolver;
 use vibe_core::storage::SessionStore;
 use vibe_core::telemetry::{ExperimentExposures, LaunchContext};
 
-use crate::release3::Release3Service;
+use crate::workspace::WorkspaceService;
 
 #[cfg(test)]
 mod tests;
@@ -79,7 +79,7 @@ impl SessionExperiments {
     /// produces a client that issues nothing.
     #[must_use]
     pub fn new(
-        service: &Release3Service,
+        service: &WorkspaceService,
         credentials: Credentials,
         launch: Option<LaunchContext>,
         exposures: ExperimentExposures,

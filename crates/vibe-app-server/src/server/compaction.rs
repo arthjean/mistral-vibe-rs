@@ -126,9 +126,9 @@ impl AppServer {
                 "Compaction produced an invalid session handoff",
             ));
         }
-        self.release4
+        self.projects
             .rebind_session(&previous_id, new_session_id)
-            .map_err(|error| ProtocolFault::from(ServerError::Release4(error.to_string())))?;
+            .map_err(|error| ProtocolFault::from(ServerError::Projects(error.to_string())))?;
         sessions.rename(source_key, new_session_id)?;
         sessions.alias(source_key, old_session_id);
         let session = sessions

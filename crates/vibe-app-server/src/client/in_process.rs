@@ -337,8 +337,8 @@ impl InProcessClient {
     /// The configuration and session service the server behind this client
     /// composes over.
     #[must_use]
-    pub fn release3_service(&self) -> crate::release3::Release3Service {
-        self.server.release3_service()
+    pub fn workspace_service(&self) -> crate::workspace::WorkspaceService {
+        self.server.workspace_service()
     }
 
     pub async fn configure_pending_mcp(&mut self, session_id: &str) -> Result<(), ClientError> {

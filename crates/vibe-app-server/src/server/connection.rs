@@ -379,8 +379,8 @@ impl ServerConnection {
             "session/context/inject" => self.context_inject(request),
             "callback/respond" => self.callback_respond(request),
             method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
-            method if RELEASE3_METHODS.contains(&method) => self.release3_request(request),
-            method if RELEASE4_METHODS.contains(&method) => self.release4_request(request),
+            method if WORKSPACE_METHODS.contains(&method) => self.workspace_request(request),
+            method if PROJECTS_METHODS.contains(&method) => self.projects_request(request),
             _ => error_batch(
                 request.id,
                 ProtocolErrorCode::MethodNotFound,
@@ -468,16 +468,16 @@ impl ServerConnection {
         success_batch(request.id, BTreeMap::new())
     }
 
-    fn release3_request(&mut self, request: ServerRequest) -> DispatchBatch {
+    fn workspace_request(&mut self, request: ServerRequest) -> DispatchBatch {
         session_management::dispatch(self, request)
     }
 
-    fn release4_request(&mut self, request: ServerRequest) -> DispatchBatch {
+    fn projects_request(&mut self, request: ServerRequest) -> DispatchBatch {
         let id = request.id.clone();
-        answered(id, self.dispatch_release4(request))
+        answered(id, self.dispatch_projects(request))
     }
 
-    fn dispatch_release4(
+    fn dispatch_projects(
         &mut self,
         mut request: ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
@@ -516,7 +516,7 @@ impl ServerConnection {
         }
         if self
             .server
-            .release4
+            .projects
             .requires_deferred_dispatch(&request.method)
         {
             return Ok(DispatchBatch {
@@ -531,9 +531,9 @@ impl ServerConnection {
         }
         let dispatch = self
             .server
-            .release4
+            .projects
             .dispatch(&request.method, &request.params)?;
-        Ok(release4_dispatch_batch(request.id, dispatch))
+        Ok(projects_dispatch_batch(request.id, dispatch))
     }
 
     fn resource_request(&mut self, request: ServerRequest) -> DispatchBatch {
@@ -687,7 +687,7 @@ impl ServerConnection {
                 };
                 result_map([("stats", stats), ("contextWindow", json!(context_window))])
             }
-            "account/read" => result_map([("account", self.server.release3.account_view())]),
+            "account/read" => result_map([("account", self.server.workspace.account_view())]),
             _ => return None,
         };
         Some(success_batch(request.id.clone(), result))
@@ -705,7 +705,7 @@ impl ServerConnection {
     /// off, which is the decision the reference delegates to the same key.
     fn record_telemetry(&mut self, request: ServerRequest) -> Result<DispatchBatch, ProtocolFault> {
         let params = from_params::<TelemetryRecordParams>(&request.params)?;
-        if self.server.release3.telemetry_enabled() {
+        if self.server.workspace.telemetry_enabled() {
             let properties = params
                 .properties
                 .keys()

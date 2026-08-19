@@ -91,9 +91,9 @@ pub(crate) struct SessionSettings {
 }
 
 impl SessionSettings {
-    /// Rebuilds settings from a persisted release-3 payload, where `thinking`
+    /// Rebuilds settings from a persisted workspace payload, where `thinking`
     /// may be a boolean paired with a separate effort or a level string.
-    pub(crate) fn from_release3_result(result: &BTreeMap<String, Value>) -> Self {
+    pub(crate) fn from_workspace_result(result: &BTreeMap<String, Value>) -> Self {
         let config = result
             .get("metadata")
             .and_then(|metadata| metadata.get("config"))

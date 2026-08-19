@@ -25,8 +25,8 @@ use crate::host::expand_home;
 
 use super::{
     CloudError, MAX_HEADLESS_PROJECT_PAGES, Project, ProjectLinkRoot, ProjectPage,
-    ProjectRootRejection, Release4Dispatch, Release4Error, Release4Service, SavedProjectLink,
-    is_project_linked_to_repo, normalize_repo_url, required_string,
+    ProjectRootRejection, ProjectsDispatch, ProjectsService, ProjectsServiceError,
+    SavedProjectLink, is_project_linked_to_repo, normalize_repo_url, required_string,
 };
 
 /// What a saved link looked like once the root it is keyed on was resolved.
@@ -39,15 +39,15 @@ struct Reconciliation {
     clear_failed: bool,
 }
 
-impl Release4Service {
+impl ProjectsService {
     /// The eight methods that resolve a repository root or reach Vibe Code, and
     /// so run off the caller's loop. `projectLinks/list` is answered inline by
-    /// [`Release4Service::project_links_list`].
+    /// [`ProjectsService::project_links_list`].
     pub(super) async fn project_links_deferred(
         &self,
         method: &str,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         match method {
             "projectLinks/resolveRoot" => self.project_links_resolve_root(params).await,
             "projectLinks/inspectRoot" => self.project_links_inspect_root(params).await,
@@ -57,14 +57,14 @@ impl Release4Service {
             "projectLinks/link" => self.project_links_link(params).await,
             "projectLinks/save" => self.project_links_save(params).await,
             "projectLinks/unlink" => self.project_links_unlink(params).await,
-            _ => Err(Release4Error::MethodNotFound(method.to_owned())),
+            _ => Err(ProjectsServiceError::MethodNotFound(method.to_owned())),
         }
     }
 
     /// Every saved link, grouped by the project it points at.
     ///
     /// Listing is local state, so it does not need a configured credential.
-    pub(super) fn project_links_list(&self) -> Result<Release4Dispatch, Release4Error> {
+    pub(super) fn project_links_list(&self) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let state = self.lock_projects()?;
         let mut grouped: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
         for (repo_root, link) in &state.linked_projects {
@@ -79,21 +79,21 @@ impl Release4Service {
                 json!({"projectId": project_id, "repoLocalPaths": repo_local_paths})
             })
             .collect::<Vec<_>>();
-        Ok(Release4Dispatch::result([("projects", json!(projects))]))
+        Ok(ProjectsDispatch::result([("projects", json!(projects))]))
     }
 
     async fn project_links_resolve_root(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let root_path = required_string(params, "rootPath")?.to_owned();
         Ok(match self.resolve_link_root(&root_path).await? {
-            Ok(root) => Release4Dispatch::result([
+            Ok(root) => ProjectsDispatch::result([
                 ("eligible", json!(true)),
                 ("rejectReason", Value::Null),
                 ("root", resolved_root(&root)),
             ]),
-            Err(rejection) => Release4Dispatch::result([
+            Err(rejection) => ProjectsDispatch::result([
                 ("eligible", json!(false)),
                 ("rejectReason", reject_reason(rejection)),
                 ("root", Value::Null),
@@ -104,12 +104,12 @@ impl Release4Service {
     async fn project_links_inspect_root(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let root_path = required_string(params, "rootPath")?.to_owned();
         let root = match self.resolve_link_root(&root_path).await? {
             Ok(root) => root,
             Err(rejection) => {
-                return Ok(Release4Dispatch::result([
+                return Ok(ProjectsDispatch::result([
                     ("eligible", json!(false)),
                     ("rejectReason", reject_reason(rejection)),
                     ("root", Value::Null),
@@ -122,7 +122,7 @@ impl Release4Service {
         // This is the one method with a field for a failed clear, so it reports
         // the failure instead of failing the request, as the reference does.
         let reconciled = self.reconcile_saved_link(&root, true)?;
-        Ok(Release4Dispatch::result([
+        Ok(ProjectsDispatch::result([
             ("eligible", json!(true)),
             ("rejectReason", Value::Null),
             ("root", inspected_root(&root)),
@@ -135,7 +135,7 @@ impl Release4Service {
     async fn project_links_picker_load(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let root_path = required_string(params, "rootPath")?.to_owned();
         let root = self.eligible_link_root(&root_path).await?;
         let page = self.project_links_page(None).await?;
@@ -150,7 +150,7 @@ impl Release4Service {
             page.next_cursor.as_deref(),
             true,
         );
-        Ok(Release4Dispatch::result([
+        Ok(ProjectsDispatch::result([
             ("root", resolved_root(&root)),
             ("savedLink", reconciled.summary),
             ("staleLinkCleared", json!(reconciled.cleared)),
@@ -161,7 +161,7 @@ impl Release4Service {
     async fn project_links_picker_load_more(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let root_path = required_string(params, "rootPath")?.to_owned();
         let requested_cursor = required_string(params, "cursor")?.to_owned();
         let root = self.eligible_link_root(&root_path).await?;
@@ -175,7 +175,7 @@ impl Release4Service {
         let mut cursor = Some(requested_cursor);
         while let Some(page_cursor) = cursor.take() {
             if seen.len() >= MAX_HEADLESS_PROJECT_PAGES || !seen.insert(page_cursor.clone()) {
-                return Err(Release4Error::Conflict(
+                return Err(ProjectsServiceError::Conflict(
                     "Vibe Code project pagination did not terminate safely".to_owned(),
                 ));
             }
@@ -204,7 +204,7 @@ impl Release4Service {
             next_cursor.as_deref(),
             false,
         );
-        Ok(Release4Dispatch::result([
+        Ok(ProjectsDispatch::result([
             ("candidates", candidates),
             (
                 "focusProjectId",
@@ -216,7 +216,7 @@ impl Release4Service {
     async fn project_links_create(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let root_path = required_string(params, "rootPath")?.to_owned();
         let name = required_string(params, "name")?.trim().to_owned();
         let default_branch = required_string(params, "defaultBranch")?.trim().to_owned();
@@ -232,7 +232,7 @@ impl Release4Service {
     async fn project_links_link(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let root_path = required_string(params, "rootPath")?.to_owned();
         let project_id = required_string(params, "projectId")?.to_owned();
         // The reference validates the target and then persists the project's
@@ -249,10 +249,12 @@ impl Release4Service {
             .into_iter()
             .find(|project| project.project_id == project_id)
             .ok_or_else(|| {
-                Release4Error::InvalidParams(format!("Unknown Vibe Code project: {project_id}"))
+                ProjectsServiceError::InvalidParams(format!(
+                    "Unknown Vibe Code project: {project_id}"
+                ))
             })?;
         if project.is_read_only || !is_project_linked_to_repo(&project, &root.repo_url) {
-            return Err(Release4Error::InvalidParams(
+            return Err(ProjectsServiceError::InvalidParams(
                 "The selected Vibe Code project is not available for this repository".to_owned(),
             ));
         }
@@ -263,7 +265,7 @@ impl Release4Service {
     async fn project_links_save(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let root_path = required_string(params, "rootPath")?.to_owned();
         let project_id = required_string(params, "projectId")?.to_owned();
         let project_name = required_string(params, "projectName")?.to_owned();
@@ -272,7 +274,7 @@ impl Release4Service {
             .to_owned();
         let root = self.eligible_link_root(&root_path).await?;
         if normalize_repo_url(&root.repo_url) != normalize_repo_url(&expected_repo_url) {
-            return Err(Release4Error::InvalidParams(
+            return Err(ProjectsServiceError::InvalidParams(
                 "The repository remote changed before the link could be saved.".to_owned(),
             ));
         }
@@ -283,7 +285,7 @@ impl Release4Service {
     async fn project_links_unlink(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let root_path = required_string(params, "rootPath")?.to_owned();
         match self.resolve_link_root(&root_path).await? {
             Ok(root) => self.remove_link(&root.repo_local_path)?,
@@ -292,7 +294,7 @@ impl Release4Service {
             // the path the caller chose, so the stranded link is still removable.
             Err(_) => self.remove_stale_link(&root_path)?,
         }
-        Ok(Release4Dispatch::result([("unlinked", json!(true))]))
+        Ok(ProjectsDispatch::result([("unlinked", json!(true))]))
     }
 
     /// Resolves `root_path` off the runtime thread, since the probe shells out
@@ -300,21 +302,24 @@ impl Release4Service {
     async fn resolve_link_root(
         &self,
         root_path: &str,
-    ) -> Result<Result<ProjectLinkRoot, ProjectRootRejection>, Release4Error> {
+    ) -> Result<Result<ProjectLinkRoot, ProjectRootRejection>, ProjectsServiceError> {
         let git = self.git.clone();
         let path = expand_home(Path::new(root_path));
         tokio::task::spawn_blocking(move || git.resolve_project_root(&path))
             .await
-            .map_err(|_| Release4Error::BackgroundTask)
+            .map_err(|_| ProjectsServiceError::BackgroundTask)
     }
 
     /// The resolved root, or the rejection reported as an invalid request,
     /// which is how the reference answers a mutation aimed at an unusable root.
-    async fn eligible_link_root(&self, root_path: &str) -> Result<ProjectLinkRoot, Release4Error> {
+    async fn eligible_link_root(
+        &self,
+        root_path: &str,
+    ) -> Result<ProjectLinkRoot, ProjectsServiceError> {
         self.resolve_link_root(root_path)
             .await?
             .map_err(|rejection| {
-                Release4Error::InvalidParams(format!(
+                ProjectsServiceError::InvalidParams(format!(
                     "`{root_path}` is not an eligible project root: {}",
                     rejection_word(rejection)
                 ))
@@ -326,7 +331,7 @@ impl Release4Service {
     async fn project_links_page(
         &self,
         cursor: Option<String>,
-    ) -> Result<ProjectPage, Release4Error> {
+    ) -> Result<ProjectPage, ProjectsServiceError> {
         self.project_list_cloud(cursor)
             .await
             .map_err(|error| self.classify_vibe_code(error))
@@ -335,15 +340,17 @@ impl Release4Service {
     /// Reports a rejected or absent credential as an authorization failure and
     /// every other Vibe Code failure as an internal one, which is the split the
     /// reference makes and what tells a client to sign in rather than retry.
-    fn classify_vibe_code(&self, error: Release4Error) -> Release4Error {
+    fn classify_vibe_code(&self, error: ProjectsServiceError) -> ProjectsServiceError {
         match error {
-            Release4Error::Cloud(CloudError::Unauthorized(message)) => {
-                Release4Error::Cloud(CloudError::Unauthorized(message))
+            ProjectsServiceError::Cloud(CloudError::Unauthorized(message)) => {
+                ProjectsServiceError::Cloud(CloudError::Unauthorized(message))
             }
-            Release4Error::Cloud(CloudError::Unavailable(message)) if !self.cloud_configured => {
-                Release4Error::Cloud(CloudError::Unauthorized(message))
+            ProjectsServiceError::Cloud(CloudError::Unavailable(message))
+                if !self.cloud_configured =>
+            {
+                ProjectsServiceError::Cloud(CloudError::Unauthorized(message))
             }
-            Release4Error::Cloud(error) => Release4Error::VibeCode(error.to_string()),
+            ProjectsServiceError::Cloud(error) => ProjectsServiceError::VibeCode(error.to_string()),
             other => other,
         }
     }
@@ -358,7 +365,7 @@ impl Release4Service {
         &self,
         root: &ProjectLinkRoot,
         tolerate_clear_failure: bool,
-    ) -> Result<Reconciliation, Release4Error> {
+    ) -> Result<Reconciliation, ProjectsServiceError> {
         let mut state = self.lock_projects()?;
         let Some(saved) = state.linked_projects.get(&root.repo_local_path).cloned() else {
             return Ok(Reconciliation {
@@ -402,7 +409,7 @@ impl Release4Service {
         root: &ProjectLinkRoot,
         project_id: &str,
         project_name: &str,
-    ) -> Result<SavedProjectLink, Release4Error> {
+    ) -> Result<SavedProjectLink, ProjectsServiceError> {
         let link = SavedProjectLink {
             repo_url: root.repo_url.clone(),
             project_id: project_id.to_owned(),
@@ -420,7 +427,7 @@ impl Release4Service {
         Ok(link)
     }
 
-    fn remove_link(&self, repo_root: &str) -> Result<(), Release4Error> {
+    fn remove_link(&self, repo_root: &str) -> Result<(), ProjectsServiceError> {
         let mut state = self.lock_projects()?;
         let before = state.clone();
         if state.linked_projects.remove(repo_root).is_none() {
@@ -436,7 +443,7 @@ impl Release4Service {
     /// Removes the link whose stored root contains the requested path, closest
     /// first, so a link saved against an ancestor of a nested directory is
     /// still removable once the checkout stops resolving.
-    fn remove_stale_link(&self, root_path: &str) -> Result<(), Release4Error> {
+    fn remove_stale_link(&self, root_path: &str) -> Result<(), ProjectsServiceError> {
         let requested = expand_home(Path::new(root_path));
         let requested = fs::canonicalize(&requested).unwrap_or(requested);
         let target = {
@@ -479,8 +486,8 @@ fn inspected_root(root: &ProjectLinkRoot) -> Value {
     value
 }
 
-fn link_response(root: &ProjectLinkRoot, link: &SavedProjectLink) -> Release4Dispatch {
-    Release4Dispatch::result([(
+fn link_response(root: &ProjectLinkRoot, link: &SavedProjectLink) -> ProjectsDispatch {
+    ProjectsDispatch::result([(
         "link",
         json!({
             "projectId": link.project_id,

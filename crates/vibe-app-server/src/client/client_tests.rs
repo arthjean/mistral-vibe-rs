@@ -4,12 +4,12 @@ pub use super::*;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use crate::release3::{Release3Paths, Release3Service};
-use crate::release4::{
+use crate::projects::{
     CloudError, GitProbe, GitSnapshot, Project, ProjectCloud, ProjectPage, ProjectRepository,
-    Release4Service, TeleportCloud, TeleportStartFailure, TeleportStartRequest,
+    ProjectsService, TeleportCloud, TeleportStartFailure, TeleportStartRequest,
 };
 use crate::server::SessionStatus;
+use crate::workspace::{WorkspacePaths, WorkspaceService};
 use vibe_core::compaction::CompactionFailureReason;
 use vibe_core::compaction::manager::PLACEHOLDER_SUMMARY;
 use vibe_core::events::ModelToolCall;

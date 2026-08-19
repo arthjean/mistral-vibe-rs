@@ -472,7 +472,7 @@ fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) -
 
 #[cfg(test)]
 mod tests {
-    use vibe_app_server::release3::Release3Service;
+    use vibe_app_server::workspace::WorkspaceService;
 
     use super::*;
 
@@ -485,12 +485,12 @@ mod tests {
         std::fs::create_dir_all(&workspace).expect("the workspace is created");
         std::fs::write(workspace.join("AGENTS.md"), "instructions")
             .expect("the instructions file is written");
-        let release3 = Release3Service::for_runtime_session_root(
+        let workspace_service = WorkspaceService::for_runtime_session_root(
             temporary.path().join(".vibe/sessions"),
             workspace.clone(),
         );
 
-        let census = crate::session_census(&release3, &workspace, true);
+        let census = crate::session_census(&workspace_service, &workspace, true);
 
         assert!(
             census.has_agents_md,

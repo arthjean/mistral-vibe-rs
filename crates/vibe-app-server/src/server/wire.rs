@@ -403,10 +403,10 @@ pub(crate) fn price_dollars_to_micros(price: f64) -> Option<u64> {
 }
 
 pub(crate) fn review_message_index(
-    release3: &Release3Service,
+    workspace: &WorkspaceService,
     session: &SessionRuntime,
 ) -> Result<usize, ServerError> {
-    release3
+    workspace
         .message_count(&session.id)
         .map_err(|error| ServerError::Resource(error.to_string()))
         .map(|message_count| {

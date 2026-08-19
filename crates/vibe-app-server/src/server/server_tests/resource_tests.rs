@@ -24,16 +24,16 @@ async fn the_managed_shell_family_is_selected_by_the_configuration_field() {
         if !document.is_empty() {
             std::fs::write(home.join("config.toml"), document).expect("configuration fixture");
         }
-        let release3 = Release3Service::new(
-            crate::release3::Release3Paths {
+        let workspace_service = WorkspaceService::new(
+            crate::workspace::WorkspacePaths {
                 vibe_home: home,
                 working_directory: workspace.clone(),
                 session_root: temporary.path().join("sessions"),
             },
             false,
         )
-        .expect("release-3 service");
-        let server = AppServer::with_release3_service(release3);
+        .expect("workspace service");
+        let server = AppServer::with_workspace_service(workspace_service);
         let mut connection = server.connect(TransportKind::InProcess);
         initialize(&mut connection);
         connection.dispatch(&request(
@@ -305,16 +305,16 @@ fn a_recorded_client_event_is_kept_only_while_telemetry_is_enabled() {
             format!("enable_telemetry = {enabled}\n"),
         )
         .expect("telemetry configuration");
-        let release3 = Release3Service::new(
-            crate::release3::Release3Paths {
+        let workspace_service = WorkspaceService::new(
+            crate::workspace::WorkspacePaths {
                 vibe_home,
                 working_directory: working_directory.clone(),
                 session_root: temporary.path().join("sessions"),
             },
             true,
         )
-        .expect("release-3 service");
-        let server = AppServer::with_release3_service(release3).logging_to(FileLog::new(
+        .expect("workspace service");
+        let server = AppServer::with_workspace_service(workspace_service).logging_to(FileLog::new(
             temporary.path().join("logs").join("vibe.log"),
             LogSettings {
                 level: LogLevel::Debug,
@@ -416,18 +416,18 @@ fn a_recorded_client_event_reaches_the_telemetry_client_unmodified() {
             format!("enable_telemetry = {enabled}\n"),
         )
         .expect("telemetry configuration");
-        let release3 = Release3Service::new(
-            crate::release3::Release3Paths {
+        let workspace_service = WorkspaceService::new(
+            crate::workspace::WorkspacePaths {
                 vibe_home,
                 working_directory: working_directory.clone(),
                 session_root: temporary.path().join("sessions"),
             },
             true,
         )
-        .expect("release-3 service");
+        .expect("workspace service");
         let telemetry = Arc::new(RecordingClientTelemetry::default());
-        let server =
-            AppServer::with_release3_service(release3).using_client_telemetry(telemetry.clone());
+        let server = AppServer::with_workspace_service(workspace_service)
+            .using_client_telemetry(telemetry.clone());
         let mut connection = server.connect(TransportKind::InProcess);
         initialize(&mut connection);
         connection.dispatch(&request(

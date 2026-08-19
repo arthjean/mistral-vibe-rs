@@ -38,13 +38,12 @@ pub(super) fn picker<'a>(
     state: &'a ProjectState,
     picker_id: &str,
     session_id: &str,
-) -> Result<&'a ProjectPicker, Release4Error> {
-    let picker = state
-        .pickers
-        .get(picker_id)
-        .ok_or_else(|| Release4Error::NotFound(format!("picker `{picker_id}` was not found")))?;
+) -> Result<&'a ProjectPicker, ProjectsServiceError> {
+    let picker = state.pickers.get(picker_id).ok_or_else(|| {
+        ProjectsServiceError::NotFound(format!("picker `{picker_id}` was not found"))
+    })?;
     if picker.session_id != session_id {
-        return Err(Release4Error::NotFound(format!(
+        return Err(ProjectsServiceError::NotFound(format!(
             "picker `{picker_id}` is not owned by session `{session_id}`"
         )));
     }
@@ -55,13 +54,12 @@ pub(super) fn picker_mut<'a>(
     state: &'a mut ProjectState,
     picker_id: &str,
     session_id: &str,
-) -> Result<&'a mut ProjectPicker, Release4Error> {
-    let picker = state
-        .pickers
-        .get_mut(picker_id)
-        .ok_or_else(|| Release4Error::NotFound(format!("picker `{picker_id}` was not found")))?;
+) -> Result<&'a mut ProjectPicker, ProjectsServiceError> {
+    let picker = state.pickers.get_mut(picker_id).ok_or_else(|| {
+        ProjectsServiceError::NotFound(format!("picker `{picker_id}` was not found"))
+    })?;
     if picker.session_id != session_id {
-        return Err(Release4Error::NotFound(format!(
+        return Err(ProjectsServiceError::NotFound(format!(
             "picker `{picker_id}` is not owned by session `{session_id}`"
         )));
     }
@@ -109,21 +107,21 @@ pub(super) fn project_view(picker: &ProjectPicker) -> Value {
 }
 
 pub(super) fn finish_headless_project_open(
-    opened: &mut Release4Dispatch,
-    action: Release4Dispatch,
-) -> Result<(), Release4Error> {
+    opened: &mut ProjectsDispatch,
+    action: ProjectsDispatch,
+) -> Result<(), ProjectsServiceError> {
     let project_id = action
         .result
         .get("project")
         .and_then(|project| project.get("projectId"))
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            Release4Error::Conflict(
+            ProjectsServiceError::Conflict(
                 "headless project resolution omitted the resolved project".to_owned(),
             )
         })?;
     let view = action.result.get("view").cloned().ok_or_else(|| {
-        Release4Error::Conflict(
+        ProjectsServiceError::Conflict(
             "headless project resolution omitted the project picker view".to_owned(),
         )
     })?;
@@ -134,12 +132,14 @@ pub(super) fn finish_headless_project_open(
     Ok(())
 }
 
-pub(super) fn headless_default_branch(branch: Option<String>) -> Result<String, Release4Error> {
+pub(super) fn headless_default_branch(
+    branch: Option<String>,
+) -> Result<String, ProjectsServiceError> {
     branch
         .map(|branch| branch.trim().to_owned())
         .filter(|branch| !branch.is_empty())
         .ok_or_else(|| {
-            Release4Error::Cloud(CloudError::Git(
+            ProjectsServiceError::Cloud(CloudError::Git(
                 "Teleport requires a checked-out branch before creating a Vibe Code project"
                     .to_owned(),
             ))
@@ -148,11 +148,11 @@ pub(super) fn headless_default_branch(branch: Option<String>) -> Result<String, 
 
 pub(super) fn project_picker_purpose(
     params: &BTreeMap<String, Value>,
-) -> Result<ProjectPickerPurpose, Release4Error> {
+) -> Result<ProjectPickerPurpose, ProjectsServiceError> {
     match optional_string(params, "purpose")? {
         None | Some("configure") => Ok(ProjectPickerPurpose::Configure),
         Some("teleport") => Ok(ProjectPickerPurpose::Teleport),
-        Some(purpose) => Err(Release4Error::InvalidParams(format!(
+        Some(purpose) => Err(ProjectsServiceError::InvalidParams(format!(
             "purpose must be `configure` or `teleport`, got `{purpose}`"
         ))),
     }
@@ -162,39 +162,41 @@ pub(super) const MAX_HEADLESS_PROJECT_PAGES: usize = 100;
 
 pub(super) const MAX_HEADLESS_PROJECTS: usize = PROJECT_PAGE_LIMIT * MAX_HEADLESS_PROJECT_PAGES;
 
-impl Release4Service {
+impl ProjectsService {
     pub(super) async fn project_list_cloud(
         &self,
         cursor: Option<String>,
-    ) -> Result<ProjectPage, Release4Error> {
+    ) -> Result<ProjectPage, ProjectsServiceError> {
         match self.project_cloud.clone() {
             ProjectCloudBackend::Sync(cloud) => tokio::task::spawn_blocking(move || {
-                cloud.list(cursor.as_deref()).map_err(Release4Error::Cloud)
+                cloud
+                    .list(cursor.as_deref())
+                    .map_err(ProjectsServiceError::Cloud)
             })
             .await
-            .map_err(|_| Release4Error::BackgroundTask)?,
+            .map_err(|_| ProjectsServiceError::BackgroundTask)?,
             ProjectCloudBackend::Async(cloud) => cloud
                 .list(cursor.as_deref())
                 .await
-                .map_err(Release4Error::Cloud),
+                .map_err(ProjectsServiceError::Cloud),
         }
     }
 
-    pub(super) async fn project_list_all(&self) -> Result<ProjectPage, Release4Error> {
+    pub(super) async fn project_list_all(&self) -> Result<ProjectPage, ProjectsServiceError> {
         let mut projects = Vec::new();
         let mut cursor = None;
         let mut seen_cursors = BTreeSet::new();
         let mut pages_loaded = 0_usize;
         loop {
             if pages_loaded >= MAX_HEADLESS_PROJECT_PAGES {
-                return Err(Release4Error::Conflict(format!(
+                return Err(ProjectsServiceError::Conflict(format!(
                     "Vibe Code project pagination exceeded {MAX_HEADLESS_PROJECT_PAGES} pages"
                 )));
             }
             let page = self.project_list_cloud(cursor).await?;
             pages_loaded += 1;
             if projects.len().saturating_add(page.projects.len()) > MAX_HEADLESS_PROJECTS {
-                return Err(Release4Error::Conflict(format!(
+                return Err(ProjectsServiceError::Conflict(format!(
                     "Vibe Code project pagination exceeded {MAX_HEADLESS_PROJECTS} projects"
                 )));
             }
@@ -206,7 +208,7 @@ impl Release4Service {
                 });
             };
             if !seen_cursors.insert(next_cursor.clone()) {
-                return Err(Release4Error::Conflict(
+                return Err(ProjectsServiceError::Conflict(
                     "Vibe Code project pagination repeated a cursor".to_owned(),
                 ));
             }
@@ -219,19 +221,19 @@ impl Release4Service {
         name: String,
         repo_url: String,
         default_branch: String,
-    ) -> Result<Project, Release4Error> {
+    ) -> Result<Project, ProjectsServiceError> {
         match self.project_cloud.clone() {
             ProjectCloudBackend::Sync(cloud) => tokio::task::spawn_blocking(move || {
                 cloud
                     .create(&name, &repo_url, &default_branch)
-                    .map_err(Release4Error::Cloud)
+                    .map_err(ProjectsServiceError::Cloud)
             })
             .await
-            .map_err(|_| Release4Error::BackgroundTask)?,
+            .map_err(|_| ProjectsServiceError::BackgroundTask)?,
             ProjectCloudBackend::Async(cloud) => cloud
                 .create(&name, &repo_url, &default_branch)
                 .await
-                .map_err(Release4Error::Cloud),
+                .map_err(ProjectsServiceError::Cloud),
         }
     }
 
@@ -240,7 +242,7 @@ impl Release4Service {
         session_id: String,
         git: ProjectGitSnapshot,
         page: ProjectPage,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let picker_id = self.next_operation_id("picker");
         let mut projects = page
             .projects
@@ -300,7 +302,7 @@ impl Release4Service {
         };
         let view = project_view(&picker);
         state.pickers.insert(picker_id.clone(), picker);
-        Ok(Release4Dispatch::result([
+        Ok(ProjectsDispatch::result([
             ("pickerId", json!(picker_id)),
             ("view", view),
             ("resolvedProjectId", json!(selected)),
@@ -310,7 +312,7 @@ impl Release4Service {
     pub(super) fn has_matching_saved_project_link(
         &self,
         git: &ProjectGitSnapshot,
-    ) -> Result<bool, Release4Error> {
+    ) -> Result<bool, ProjectsServiceError> {
         let state = self.lock_projects()?;
         Ok(state
             .linked_projects
@@ -323,10 +325,10 @@ impl Release4Service {
     pub(super) async fn finish_headless_project_open(
         &self,
         session_id: &str,
-        mut opened: Release4Dispatch,
+        mut opened: ProjectsDispatch,
         project_name: String,
         default_branch: Option<String>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         if opened
             .result
             .get("resolvedProjectId")
@@ -339,7 +341,7 @@ impl Release4Service {
             .get("pickerId")
             .and_then(Value::as_str)
             .ok_or_else(|| {
-                Release4Error::Conflict("project picker omitted its identifier".to_owned())
+                ProjectsServiceError::Conflict("project picker omitted its identifier".to_owned())
             })?
             .to_owned();
         let matched_project_id = self.single_headless_project_match(session_id, &picker_id)?;
@@ -367,7 +369,7 @@ impl Release4Service {
         &self,
         session_id: &str,
         picker_id: &str,
-    ) -> Result<Option<String>, Release4Error> {
+    ) -> Result<Option<String>, ProjectsServiceError> {
         let state = self.lock_projects()?;
         let picker = picker(&state, picker_id, session_id)?;
         let mut matches = picker.projects.values().filter(|project| {
@@ -382,7 +384,7 @@ impl Release4Service {
     pub(super) async fn project_open(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let session_id = required_string(params, "sessionId")?.to_owned();
         let purpose = project_picker_purpose(params)?;
         let working_directory = optional_string(params, "workingDirectory")?
@@ -394,8 +396,8 @@ impl Release4Service {
             tokio::task::spawn_blocking(move || git.inspect_project(&git_working_directory));
         let git = git_task
             .await
-            .map_err(|_| Release4Error::BackgroundTask)?
-            .map_err(Release4Error::Cloud)?;
+            .map_err(|_| ProjectsServiceError::BackgroundTask)?
+            .map_err(ProjectsServiceError::Cloud)?;
         if purpose == ProjectPickerPurpose::Configure {
             let page = self.project_list_cloud(None).await?;
             return self.install_project_picker(session_id, git, page);
@@ -418,7 +420,7 @@ impl Release4Service {
     pub(super) async fn project_create(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let session_id = required_string(params, "sessionId")?.to_owned();
         let picker_id = required_string(params, "pickerId")?.to_owned();
         let name = required_string(params, "name")?.to_owned();
@@ -435,7 +437,7 @@ impl Release4Service {
         let (repo_root, link, view) = {
             let picker = picker_mut(&mut state, &picker_id, &session_id)?;
             if picker.repo_url != repo_url {
-                return Err(Release4Error::Conflict(
+                return Err(ProjectsServiceError::Conflict(
                     "project picker changed while creating the project".to_owned(),
                 ));
             }
@@ -458,7 +460,7 @@ impl Release4Service {
             *state = before;
             return Err(error);
         }
-        Ok(Release4Dispatch::result([
+        Ok(ProjectsDispatch::result([
             ("view", view),
             ("project", serde_json::to_value(project)?),
         ]))
@@ -467,7 +469,7 @@ impl Release4Service {
     pub(super) async fn project_load_more(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let session_id = required_string(params, "sessionId")?.to_owned();
         let picker_id = required_string(params, "pickerId")?.to_owned();
         let requested_cursor = {
@@ -477,7 +479,7 @@ impl Release4Service {
         let Some(requested_cursor) = requested_cursor else {
             let state = self.lock_projects()?;
             let picker = picker(&state, &picker_id, &session_id)?;
-            return Ok(Release4Dispatch::result([
+            return Ok(ProjectsDispatch::result([
                 ("view", project_view(picker)),
                 ("focusOptionId", Value::Null),
             ]));
@@ -492,7 +494,7 @@ impl Release4Service {
         let mut seen = BTreeSet::new();
         while let Some(page_cursor) = cursor.take() {
             if pages.len() >= MAX_HEADLESS_PROJECT_PAGES || !seen.insert(page_cursor.clone()) {
-                return Err(Release4Error::Conflict(
+                return Err(ProjectsServiceError::Conflict(
                     "Vibe Code project pagination did not terminate safely".to_owned(),
                 ));
             }
@@ -511,7 +513,7 @@ impl Release4Service {
         let mut state = self.lock_projects()?;
         let picker = picker_mut(&mut state, &picker_id, &session_id)?;
         if picker.next_cursor.as_deref() != Some(&requested_cursor) {
-            return Err(Release4Error::Conflict(
+            return Err(ProjectsServiceError::Conflict(
                 "project picker changed while loading the next page".to_owned(),
             ));
         }
@@ -521,7 +523,7 @@ impl Release4Service {
             }
             picker.next_cursor = page.next_cursor;
         }
-        Ok(Release4Dispatch::result([
+        Ok(ProjectsDispatch::result([
             ("view", project_view(picker)),
             (
                 "focusOptionId",
@@ -533,7 +535,7 @@ impl Release4Service {
     pub(super) fn project_recover(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let session_id = required_string(params, "sessionId")?;
         let picker_id = required_string(params, "pickerId")?;
         let mut state = self.lock_projects()?;
@@ -577,7 +579,7 @@ impl Release4Service {
         picker.saved_link = saved_link;
         picker.saved_project_link_cleared = cleared;
         picker.project_repo_remote_changed = remote_changed;
-        Ok(Release4Dispatch::result([
+        Ok(ProjectsDispatch::result([
             ("recovered", json!(selected.is_some())),
             ("view", project_view(picker)),
         ]))
@@ -586,7 +588,7 @@ impl Release4Service {
     pub(super) fn project_select(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let session_id = required_string(params, "sessionId")?;
         let picker_id = required_string(params, "pickerId")?;
         let project_id = required_string(params, "projectId")?;
@@ -595,17 +597,17 @@ impl Release4Service {
         let (project, repo_root, link, view) = {
             let picker = picker_mut(&mut state, picker_id, session_id)?;
             let project = picker.projects.get(project_id).cloned().ok_or_else(|| {
-                Release4Error::NotFound(format!(
+                ProjectsServiceError::NotFound(format!(
                     "project `{project_id}` is not available in picker `{picker_id}`"
                 ))
             })?;
             if project.is_read_only {
-                return Err(Release4Error::InvalidParams(format!(
+                return Err(ProjectsServiceError::InvalidParams(format!(
                     "project `{project_id}` is read-only and cannot be selected"
                 )));
             }
             if !is_project_linked_to_repo(&project, &picker.repo_url) {
-                return Err(Release4Error::InvalidParams(format!(
+                return Err(ProjectsServiceError::InvalidParams(format!(
                     "project `{project_id}` is not linked to the current Git repository"
                 )));
             }
@@ -630,7 +632,7 @@ impl Release4Service {
             *state = before;
             return Err(error);
         }
-        Ok(Release4Dispatch::result([
+        Ok(ProjectsDispatch::result([
             ("view", view),
             ("project", serde_json::to_value(project)?),
         ]))
@@ -639,7 +641,7 @@ impl Release4Service {
     pub(super) fn project_unlink(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let session_id = required_string(params, "sessionId")?;
         let picker_id = required_string(params, "pickerId")?;
         let mut state = self.lock_projects()?;
@@ -657,33 +659,33 @@ impl Release4Service {
             *state = before;
             return Err(error);
         }
-        Ok(Release4Dispatch::result([("view", view)]))
+        Ok(ProjectsDispatch::result([("view", view)]))
     }
 
     pub(super) fn project_cancel(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let session_id = required_string(params, "sessionId")?;
         let picker_id = required_string(params, "pickerId")?;
         let mut state = self.lock_projects()?;
         let current = state.pickers.get(picker_id).ok_or_else(|| {
-            Release4Error::NotFound(format!("picker `{picker_id}` was not found"))
+            ProjectsServiceError::NotFound(format!("picker `{picker_id}` was not found"))
         })?;
         if current.session_id != session_id {
-            return Err(Release4Error::NotFound(format!(
+            return Err(ProjectsServiceError::NotFound(format!(
                 "picker `{picker_id}` is not owned by session `{session_id}`"
             )));
         }
         state.pickers.remove(picker_id);
-        Ok(Release4Dispatch::result([] as [(&str, Value); 0]))
+        Ok(ProjectsDispatch::result([] as [(&str, Value); 0]))
     }
 
     pub(super) fn lock_projects(
         &self,
-    ) -> Result<std::sync::MutexGuard<'_, ProjectState>, Release4Error> {
+    ) -> Result<std::sync::MutexGuard<'_, ProjectState>, ProjectsServiceError> {
         self.projects
             .lock()
-            .map_err(|_| Release4Error::StatePoisoned)
+            .map_err(|_| ProjectsServiceError::StatePoisoned)
     }
 }

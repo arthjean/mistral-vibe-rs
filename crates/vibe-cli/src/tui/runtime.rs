@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use vibe_app_server::client::{HeadlessService, LiveTurnDriver, PublicDispatch};
-use vibe_app_server::release3::Release3Service;
+use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::telemetry::TelemetryRecord;
 use vibe_core::telemetry::records::{ProjectPicker, TeleportTracker};
 
@@ -44,7 +44,7 @@ pub(super) struct InteractiveRuntime {
     /// layers, targets and unregistered keys the settings screen renders, so the
     /// screen reads the effective document from the same store the server writes
     /// through rather than from a wire shape that does not carry it.
-    pub(super) release3: Release3Service,
+    pub(super) workspace: WorkspaceService,
     pub(super) session_id: String,
     pub(super) model: String,
     pub(super) image_models: ImageModels,
@@ -354,7 +354,7 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
     InteractiveRuntime {
         experiments: None,
         service,
-        release3: Release3Service::default(),
+        workspace: WorkspaceService::default(),
         session_id,
         model: "test-model".to_owned(),
         image_models: {

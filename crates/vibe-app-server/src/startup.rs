@@ -8,9 +8,9 @@ use thiserror::Error;
 use vibe_core::events::ModelMessage;
 use vibe_core::storage::{SessionStore, StorageError};
 
-use crate::release3::{Release3Error, Release3Paths, Release3Service};
-use crate::release4::{Release4Error, Release4Service};
+use crate::projects::{ProjectsService, ProjectsServiceError};
 use crate::session_lifecycle::{DeleteSessionError, delete_session_transactionally};
+use crate::workspace::{WorkspacePaths, WorkspaceService, WorkspaceServiceError};
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -47,12 +47,12 @@ pub struct SavedSessionSummary {
 
 #[derive(Clone)]
 pub struct StartupHost {
-    paths: Release3Paths,
+    paths: WorkspacePaths,
 }
 
 impl StartupHost {
     #[must_use]
-    pub const fn new(paths: Release3Paths) -> Self {
+    pub const fn new(paths: WorkspacePaths) -> Self {
         Self { paths }
     }
 
@@ -120,9 +120,9 @@ impl StartupHost {
 
     pub fn delete_session(&self, session_id: &str) -> Result<(), StartupHostError> {
         let store = SessionStore::new(&self.paths.session_root);
-        let release4 = Release4Service::default()
+        let projects = ProjectsService::default()
             .with_loop_store(self.paths.vibe_home.join("scheduled-loops.json"))?;
-        match delete_session_transactionally(&release4, session_id, || {
+        match delete_session_transactionally(&projects, session_id, || {
             match store.delete(session_id) {
                 Ok(()) | Err(StorageError::SessionNotFound(_)) => Ok(()),
                 Err(error) => Err(error),
@@ -143,13 +143,16 @@ impl StartupHost {
     /// This is the startup step the reference runs before its orchestrator
     /// composes anything. A migration that cannot write is not fatal: its
     /// warning rides on every later configuration snapshot.
-    pub fn into_release3(self, project_trusted: bool) -> Result<Release3Service, StartupHostError> {
-        let service = Release3Service::new(self.paths, project_trusted)
-            .map(Release3Service::with_runtime_session_persistence)
-            .map_err(StartupHostError::Release3)?;
+    pub fn into_workspace(
+        self,
+        project_trusted: bool,
+    ) -> Result<WorkspaceService, StartupHostError> {
+        let service = WorkspaceService::new(self.paths, project_trusted)
+            .map(WorkspaceService::with_runtime_session_persistence)
+            .map_err(StartupHostError::Workspace)?;
         service
             .migrate_configuration()
-            .map_err(StartupHostError::Release3)?;
+            .map_err(StartupHostError::Workspace)?;
         Ok(service)
     }
 }
@@ -169,13 +172,13 @@ pub enum StartupHostError {
     #[error(transparent)]
     Storage(#[from] StorageError),
     #[error(transparent)]
-    Release3(Release3Error),
+    Workspace(WorkspaceServiceError),
     #[error(transparent)]
-    Release4(#[from] Release4Error),
+    Projects(#[from] ProjectsServiceError),
     #[error("session deletion failed ({delete}); scheduled-loop rollback failed ({rollback})")]
     DeleteRollback {
         delete: StorageError,
-        rollback: Release4Error,
+        rollback: ProjectsServiceError,
     },
 }
 
@@ -388,8 +391,8 @@ mod tests {
 
     use super::*;
 
-    fn paths(root: &Path) -> Release3Paths {
-        Release3Paths {
+    fn paths(root: &Path) -> WorkspacePaths {
+        WorkspacePaths {
             vibe_home: root.join("vibe-home"),
             working_directory: root.to_path_buf(),
             session_root: root.join("vibe-home/sessions"),
@@ -542,10 +545,10 @@ mod tests {
             .create("delete", &root.path().to_string_lossy(), None, 1)
             .expect("session");
         let loop_path = paths.vibe_home.join("scheduled-loops.json");
-        let release4 = Release4Service::default()
+        let projects = ProjectsService::default()
             .with_loop_store(loop_path.clone())
             .expect("loop store");
-        release4
+        projects
             .dispatch(
                 "loops/create",
                 &serde_json::from_value(serde_json::json!({
@@ -566,10 +569,10 @@ mod tests {
             store.load(&metadata.id),
             Err(StorageError::SessionNotFound(_))
         ));
-        let release4 = Release4Service::default()
+        let projects = ProjectsService::default()
             .with_loop_store(loop_path)
             .expect("reload loop store");
-        let listed = release4
+        let listed = projects
             .dispatch(
                 "loops/list",
                 &serde_json::from_value(serde_json::json!({

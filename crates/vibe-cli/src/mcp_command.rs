@@ -8,7 +8,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use vibe_app_server::release3::Release3Service;
+use vibe_app_server::workspace::WorkspaceService;
 
 const USAGE: &str = "Usage: vibe mcp remove <name>";
 
@@ -57,8 +57,8 @@ pub fn run(arguments: &[String], output: &mut dyn Write) -> Result<(), String> {
 fn store(working_directory: &Path) -> vibe_core::config::LayeredConfig {
     // The same roots an interactive launch resolves, so a one-shot removal
     // writes through the file the session would have written through.
-    let paths = crate::tui::startup::release3_paths_for(None, working_directory);
-    Release3Service::for_runtime_session_root(paths.session_root, working_directory)
+    let paths = crate::tui::startup::workspace_paths_for(None, working_directory);
+    WorkspaceService::for_runtime_session_root(paths.session_root, working_directory)
         .layered_config()
 }
 
@@ -95,7 +95,7 @@ mod tests {
             "[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\n",
         )
         .expect("user configuration");
-        let store = Release3Service::for_runtime_session_root(
+        let store = WorkspaceService::for_runtime_session_root(
             home.join("sessions"),
             temporary.path().join("project"),
         )

@@ -17,7 +17,7 @@ use crate::session::{ActivePhase, SessionSettings, Thinking};
 
 #[test]
 fn persisted_thinking_boolean_and_effort_round_trip_without_losing_off() {
-    let disabled = SessionSettings::from_release3_result(&BTreeMap::from([(
+    let disabled = SessionSettings::from_workspace_result(&BTreeMap::from([(
         "metadata".to_owned(),
         json!({"config": {"mode": "plan", "thinking": false, "reasoningEffort": "high"}}),
     )]));
@@ -28,7 +28,7 @@ fn persisted_thinking_boolean_and_effort_round_trip_without_losing_off() {
         json!({"mode": "plan", "thinking": false})
     );
 
-    let enabled = SessionSettings::from_release3_result(&BTreeMap::from([(
+    let enabled = SessionSettings::from_workspace_result(&BTreeMap::from([(
         "metadata".to_owned(),
         json!({"config": {"thinking": true, "reasoningEffort": "high"}}),
     )]));

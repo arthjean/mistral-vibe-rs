@@ -1,5 +1,5 @@
 //! The production authentication environment: the effective configuration
-//! through the release-3 service, the OS keyring, the global dotenv, and the
+//! through the workspace service, the OS keyring, the global dotenv, and the
 //! HTTP sign-in gateway under the system runtime.
 
 use std::collections::BTreeMap;
@@ -9,7 +9,7 @@ use std::sync::{Mutex, PoisonError};
 
 use serde_json::Value;
 use toml::Table;
-use vibe_app_server::release3::{Release3Paths, Release3Service};
+use vibe_app_server::workspace::{WorkspacePaths, WorkspaceService};
 use vibe_core::auth::{
     AuthState, HttpSignInGateway, KeyringStore, PersistOutcome, RemoveError, SignInAttempt,
     SignInError, SignInErrorCode, SignInService, SystemSignInRuntime, resolve_active_provider,
@@ -18,7 +18,7 @@ use vibe_core::auth::{
 use crate::auth::{AcpAuthEnvironment, AuthAttemptFuture, AuthKeyFuture};
 
 /// The production environment: the effective configuration through the
-/// release-3 service, the OS keyring, the global dotenv, and the HTTP sign-in
+/// workspace service, the OS keyring, the global dotenv, and the HTTP sign-in
 /// gateway under the system runtime.
 pub struct ProductionAuthEnvironment {
     vibe_home: PathBuf,
@@ -56,9 +56,11 @@ impl ProductionAuthEnvironment {
         }
     }
 
-    fn release3(&self) -> Result<Release3Service, vibe_app_server::release3::Release3Error> {
-        Release3Service::new(
-            Release3Paths {
+    fn workspace(
+        &self,
+    ) -> Result<WorkspaceService, vibe_app_server::workspace::WorkspaceServiceError> {
+        WorkspaceService::new(
+            WorkspacePaths {
                 vibe_home: self.vibe_home.clone(),
                 working_directory: self.working_directory.clone(),
                 session_root: self.vibe_home.join("sessions"),
@@ -101,7 +103,7 @@ impl AcpAuthEnvironment for ProductionAuthEnvironment {
         // redacts `api_key_env_var` as a sensitive key, and a redacted name
         // cannot address a credential.
         let document = self
-            .release3()
+            .workspace()
             .ok()
             .and_then(|service| service.layered_config().load().ok())
             .and_then(|snapshot| serde_json::to_value(snapshot.effective).ok());
@@ -151,7 +153,7 @@ impl AcpAuthEnvironment for ProductionAuthEnvironment {
     }
 
     fn persist_provider(&self, provider: &Table) -> bool {
-        self.release3()
+        self.workspace()
             .and_then(|service| service.persist_provider(provider))
             .is_ok()
     }

@@ -5,7 +5,7 @@
 //! operation is staged so a push the user has to confirm can be answered
 //! without losing what was already inspected.
 
-use super::projects::picker;
+use super::selection::picker;
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -50,7 +50,7 @@ pub(super) fn teleport_start_request(operation: &TeleportOperation) -> TeleportS
     }
 }
 
-pub(super) fn teleport_notification(operation: &TeleportOperation) -> Release4Notification {
+pub(super) fn teleport_notification(operation: &TeleportOperation) -> ProjectsNotification {
     let event = match operation.state {
         TeleportState::SummarizingContext => {
             json!({"kind": "summarizing_context", "operationId": operation.id})
@@ -95,7 +95,7 @@ pub(super) fn teleport_notification(operation: &TeleportOperation) -> Release4No
     notification("vibeCode/teleport/event", [("event", event)])
 }
 
-impl Release4Service {
+impl ProjectsService {
     pub(super) async fn teleport_start_cloud(
         &self,
         request: TeleportStartRequest,
@@ -138,7 +138,7 @@ impl Release4Service {
     pub(super) async fn teleport_start(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let session_id = required_string(params, "sessionId")?.to_owned();
         let operation_id = required_string(params, "operationId")?.to_owned();
         let picker_id = required_string(params, "pickerId")?;
@@ -147,12 +147,12 @@ impl Release4Service {
             let state = self.lock_projects()?;
             let picker = picker(&state, picker_id, &session_id)?;
             if !picker.projects.contains_key(&project_id) {
-                return Err(Release4Error::NotFound(format!(
+                return Err(ProjectsServiceError::NotFound(format!(
                     "project `{project_id}` is not available in picker `{picker_id}`"
                 )));
             }
             if picker.selected.as_deref() != Some(&project_id) {
-                return Err(Release4Error::Conflict(format!(
+                return Err(ProjectsServiceError::Conflict(format!(
                     "project `{project_id}` is not selected in picker `{picker_id}`"
                 )));
             }
@@ -161,7 +161,7 @@ impl Release4Service {
             .filter(|prompt| !prompt.trim().is_empty())
             .unwrap_or("Continue this session in Vibe Code")
             .to_owned();
-        validate_cloud_text(&summary, "Teleport message").map_err(Release4Error::Cloud)?;
+        validate_cloud_text(&summary, "Teleport message").map_err(ProjectsServiceError::Cloud)?;
         let working_directory =
             PathBuf::from(optional_string(params, "workingDirectory")?.unwrap_or("."));
         let mut operation = TeleportOperation {
@@ -190,7 +190,7 @@ impl Release4Service {
         {
             let mut teleports = self.lock_teleports()?;
             if teleports.contains_key(&operation_id) {
-                return Err(Release4Error::Conflict(format!(
+                return Err(ProjectsServiceError::Conflict(format!(
                     "Teleport operation `{operation_id}` already exists"
                 )));
             }
@@ -201,12 +201,12 @@ impl Release4Service {
         let cloud_request = {
             let mut teleports = self.lock_teleports()?;
             let operation = teleports.get_mut(&operation_id).ok_or_else(|| {
-                Release4Error::NotFound(format!(
+                ProjectsServiceError::NotFound(format!(
                     "Teleport operation `{operation_id}` was not found"
                 ))
             })?;
             if operation.state == TeleportState::Cancelled {
-                return Ok(Release4Dispatch::with_notifications(
+                return Ok(ProjectsDispatch::with_notifications(
                     [("operationId", json!(operation_id))],
                     notifications,
                 ));
@@ -217,7 +217,7 @@ impl Release4Service {
                     operation.state = TeleportState::Failed;
                     operation.error = Some(error.to_string());
                     notifications.push(teleport_notification(operation));
-                    return Ok(Release4Dispatch::with_notifications(
+                    return Ok(ProjectsDispatch::with_notifications(
                         [("operationId", json!(operation_id))],
                         notifications,
                     ));
@@ -229,7 +229,7 @@ impl Release4Service {
                 operation.unpushed_count = push_status.unpushed_count;
                 operation.branch_not_pushed = push_status.branch_not_pushed;
                 notifications.push(teleport_notification(operation));
-                return Ok(Release4Dispatch::with_notifications(
+                return Ok(ProjectsDispatch::with_notifications(
                     [("operationId", json!(operation_id))],
                     notifications,
                 ));
@@ -240,10 +240,12 @@ impl Release4Service {
         let result = self.teleport_start_cloud(cloud_request).await;
         let mut teleports = self.lock_teleports()?;
         let operation = teleports.get_mut(&operation_id).ok_or_else(|| {
-            Release4Error::NotFound(format!("Teleport operation `{operation_id}` was not found"))
+            ProjectsServiceError::NotFound(format!(
+                "Teleport operation `{operation_id}` was not found"
+            ))
         })?;
         if operation.state == TeleportState::Cancelled {
-            return Ok(Release4Dispatch::with_notifications(
+            return Ok(ProjectsDispatch::with_notifications(
                 [("operationId", json!(operation_id))],
                 notifications,
             ));
@@ -263,7 +265,7 @@ impl Release4Service {
                 notifications.push(teleport_notification(operation));
             }
         }
-        Ok(Release4Dispatch::with_notifications(
+        Ok(ProjectsDispatch::with_notifications(
             [("operationId", json!(operation_id))],
             notifications,
         ))
@@ -272,7 +274,7 @@ impl Release4Service {
     pub(super) async fn teleport_push_respond(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let session_id = required_string(params, "sessionId")?.to_owned();
         let operation_id = required_string(params, "operationId")?.to_owned();
         let accepted = required_bool(params, "approved")?;
@@ -280,25 +282,25 @@ impl Release4Service {
         let working_directory = {
             let mut teleports = self.lock_teleports()?;
             let operation = teleports.get_mut(&operation_id).ok_or_else(|| {
-                Release4Error::NotFound(format!(
+                ProjectsServiceError::NotFound(format!(
                     "Teleport operation `{operation_id}` was not found"
                 ))
             })?;
             if operation.session_id != session_id {
-                return Err(Release4Error::NotFound(format!(
+                return Err(ProjectsServiceError::NotFound(format!(
                     "Teleport operation `{operation_id}` is not owned by session `{session_id}`"
                 )));
             }
             if let Some(previous) = operation.push_response {
                 if previous == accepted {
-                    return Ok(Release4Dispatch::result([] as [(&str, Value); 0]));
+                    return Ok(ProjectsDispatch::result([] as [(&str, Value); 0]));
                 }
-                return Err(Release4Error::Conflict(
+                return Err(ProjectsServiceError::Conflict(
                     "Teleport push response conflicts with the recorded answer".to_owned(),
                 ));
             }
             if operation.state != TeleportState::PushRequired {
-                return Err(Release4Error::Conflict(
+                return Err(ProjectsServiceError::Conflict(
                     "Teleport operation is not waiting for a push response".to_owned(),
                 ));
             }
@@ -310,7 +312,7 @@ impl Release4Service {
                         .to_owned(),
                 );
                 notifications.push(teleport_notification(operation));
-                return Ok(Release4Dispatch::with_notifications(
+                return Ok(ProjectsDispatch::with_notifications(
                     [] as [(&str, Value); 0],
                     notifications,
                 ));
@@ -322,7 +324,7 @@ impl Release4Service {
         if let Err(error) = self.push_git(working_directory).await {
             let mut teleports = self.lock_teleports()?;
             let operation = teleports.get_mut(&operation_id).ok_or_else(|| {
-                Release4Error::NotFound(format!(
+                ProjectsServiceError::NotFound(format!(
                     "Teleport operation `{operation_id}` was not found"
                 ))
             })?;
@@ -331,7 +333,7 @@ impl Release4Service {
                 operation.error = Some(error.to_string());
                 notifications.push(teleport_notification(operation));
             }
-            return Ok(Release4Dispatch::with_notifications(
+            return Ok(ProjectsDispatch::with_notifications(
                 [] as [(&str, Value); 0],
                 notifications,
             ));
@@ -339,12 +341,12 @@ impl Release4Service {
         let cloud_request = {
             let mut teleports = self.lock_teleports()?;
             let operation = teleports.get_mut(&operation_id).ok_or_else(|| {
-                Release4Error::NotFound(format!(
+                ProjectsServiceError::NotFound(format!(
                     "Teleport operation `{operation_id}` was not found"
                 ))
             })?;
             if operation.state == TeleportState::Cancelled {
-                return Ok(Release4Dispatch::with_notifications(
+                return Ok(ProjectsDispatch::with_notifications(
                     [] as [(&str, Value); 0],
                     notifications,
                 ));
@@ -355,7 +357,9 @@ impl Release4Service {
         let result = self.teleport_start_cloud(cloud_request).await;
         let mut teleports = self.lock_teleports()?;
         let operation = teleports.get_mut(&operation_id).ok_or_else(|| {
-            Release4Error::NotFound(format!("Teleport operation `{operation_id}` was not found"))
+            ProjectsServiceError::NotFound(format!(
+                "Teleport operation `{operation_id}` was not found"
+            ))
         })?;
         if operation.state != TeleportState::Cancelled {
             match result {
@@ -374,7 +378,7 @@ impl Release4Service {
                 }
             }
         }
-        Ok(Release4Dispatch::with_notifications(
+        Ok(ProjectsDispatch::with_notifications(
             [] as [(&str, Value); 0],
             notifications,
         ))
@@ -383,26 +387,28 @@ impl Release4Service {
     pub(super) fn teleport_cancel(
         &self,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         let session_id = required_string(params, "sessionId")?;
         let operation_id = required_string(params, "operationId")?;
         let mut teleports = self.lock_teleports()?;
         let operation = teleports.get_mut(operation_id).ok_or_else(|| {
-            Release4Error::NotFound(format!("Teleport operation `{operation_id}` was not found"))
+            ProjectsServiceError::NotFound(format!(
+                "Teleport operation `{operation_id}` was not found"
+            ))
         })?;
         if operation.session_id != session_id {
-            return Err(Release4Error::NotFound(format!(
+            return Err(ProjectsServiceError::NotFound(format!(
                 "Teleport operation `{operation_id}` is not owned by session `{session_id}`"
             )));
         }
         match operation.state {
             TeleportState::Complete | TeleportState::Failed => {
-                return Err(Release4Error::Conflict(
+                return Err(ProjectsServiceError::Conflict(
                     "Teleport operation is already terminal".to_owned(),
                 ));
             }
             TeleportState::Pushing | TeleportState::StartingWorkflow => {
-                return Err(Release4Error::Conflict(
+                return Err(ProjectsServiceError::Conflict(
                     "Teleport operation is already performing irreversible work".to_owned(),
                 ));
             }
@@ -411,7 +417,7 @@ impl Release4Service {
                 operation.state = TeleportState::Cancelled;
             }
         }
-        Ok(Release4Dispatch::with_notifications(
+        Ok(ProjectsDispatch::with_notifications(
             [("cancelled", json!(true))],
             Vec::new(),
         ))
@@ -419,9 +425,10 @@ impl Release4Service {
 
     pub(super) fn lock_teleports(
         &self,
-    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, TeleportOperation>>, Release4Error> {
+    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, TeleportOperation>>, ProjectsServiceError>
+    {
         self.teleports
             .lock()
-            .map_err(|_| Release4Error::StatePoisoned)
+            .map_err(|_| ProjectsServiceError::StatePoisoned)
     }
 }

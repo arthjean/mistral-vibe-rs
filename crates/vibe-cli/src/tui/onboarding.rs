@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use toml::{Table, Value};
-use vibe_app_server::release3::Release3Service;
+use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::auth::PersistOutcome;
 use vibe_core::telemetry::TelemetryRecord;
 
@@ -102,7 +102,7 @@ pub fn exit_plan(outcome: &OnboardingOutcome, global_env_file: &Path) -> ExitPla
 /// configuration service for the provider entry.
 struct ProductionPorts<'a> {
     store: &'a PersistedCredentialStore,
-    release3: &'a Release3Service,
+    workspace: &'a WorkspaceService,
     /// Where the onboarding event goes. Absent when the transport could not be
     /// built, which leaves onboarding working and silent.
     telemetry: Option<Arc<CliTelemetryObserver>>,
@@ -137,7 +137,7 @@ impl OnboardingPorts for ProductionPorts<'_> {
     }
 
     fn persist_provider(&mut self, provider: &Table) -> bool {
-        self.release3.persist_provider(provider).is_ok()
+        self.workspace.persist_provider(provider).is_ok()
     }
 }
 
@@ -151,21 +151,21 @@ pub async fn run_onboarding(
     vibe_home: &Path,
     credential_store: &PersistedCredentialStore,
 ) -> Result<OnboardingConclusion, CliError> {
-    let release3 = startup::startup_host(arguments, working_directory)
-        .into_release3(arguments.trust)
+    let workspace = startup::startup_host(arguments, working_directory)
+        .into_workspace(arguments.trust)
         .map_err(startup::StartupError::from)?;
     // Reference `OnboardingContext.load` falls back to the shipped defaults
     // rather than failing when the configuration cannot be read.
-    let document = release3.config_document().ok();
+    let document = workspace.config_document().ok();
     let context = OnboardingContext::from_effective_config(
         document
             .as_ref()
             .and_then(|document| document.get("config")),
     );
-    let telemetry = crate::telemetry_observer(arguments, &release3).ok();
+    let telemetry = crate::telemetry_observer(arguments, &workspace).ok();
     let mut ports = ProductionPorts {
         store: credential_store,
-        release3: &release3,
+        workspace: &workspace,
         telemetry: telemetry.clone(),
     };
     let run = driver::run_flow(context, &mut ports).await?;
@@ -174,7 +174,7 @@ pub async fn run_onboarding(
     }
     let plan = exit_plan(&run.outcome, &global_env_file(vibe_home));
     if plan.persist_theme {
-        persist_theme(&release3, run.selected_theme);
+        persist_theme(&workspace, run.selected_theme);
     }
     println!("\n{}\n", plan.message);
     Ok(match plan.exit_code {
@@ -190,7 +190,7 @@ fn global_env_file(vibe_home: &Path) -> PathBuf {
 /// Writes the chosen theme once, after the screens have closed. Reference
 /// `run_onboarding` sets `/theme` through the orchestrator with the
 /// onboarding reason; a write that fails is reported, not fatal.
-fn persist_theme(release3: &Release3Service, theme: &str) {
+fn persist_theme(workspace: &WorkspaceService, theme: &str) {
     let params = std::collections::BTreeMap::from([(
         "writes".to_owned(),
         serde_json::json!([{
@@ -198,7 +198,7 @@ fn persist_theme(release3: &Release3Service, theme: &str) {
             "mutations": [{"path": ["theme"], "value": theme}],
         }]),
     )]);
-    if let Err(error) = release3.dispatch("config/batchWrite", &params) {
+    if let Err(error) = workspace.dispatch("config/batchWrite", &params) {
         eprintln!("Warning: the chosen theme could not be saved: {error}");
     }
 }

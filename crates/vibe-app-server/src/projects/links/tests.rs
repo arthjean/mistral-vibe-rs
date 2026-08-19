@@ -2,7 +2,7 @@
 //!
 //! Every case here dispatches a JSON-RPC frame at the server rather than
 //! calling a handler, because the surface exists to be reached without a
-//! session and that is the only path that proves it: `release4_request` reads
+//! session and that is the only path that proves it: `projects_request` reads
 //! no `sessionId`, defers the eight root-resolving methods and answers
 //! `projectLinks/list` inline.
 
@@ -17,9 +17,9 @@ use tempfile::{TempDir, tempdir};
 use vibe_protocol::{Envelope, TransportKind, decode_frame};
 
 use crate::app_server_surface_parity_tests::census_issues;
-use crate::release4::{
+use crate::projects::{
     CloudError, CommandGitProbe, Project, ProjectCloud, ProjectPage, ProjectRepository,
-    Release4Service, SavedProjectLink, TeleportCloud, TeleportStartFailure, TeleportStartRequest,
+    ProjectsService, SavedProjectLink, TeleportCloud, TeleportStartFailure, TeleportStartRequest,
 };
 use crate::server::{AppServer, DeferredWork, ServerConnection};
 
@@ -171,8 +171,8 @@ fn github_repository() -> TempDir {
 /// The remote URL `github_repository` publishes, once sanitized.
 const REPO_URL: &str = "https://github.com/owner/Repo.git";
 
-fn service(cloud: Arc<dyn ProjectCloud>, store: &Path) -> Release4Service {
-    Release4Service::with_backends(
+fn service(cloud: Arc<dyn ProjectCloud>, store: &Path) -> ProjectsService {
+    ProjectsService::with_backends(
         cloud,
         Arc::new(UnusedTeleport),
         Arc::new(CommandGitProbe::default()),
@@ -181,8 +181,8 @@ fn service(cloud: Arc<dyn ProjectCloud>, store: &Path) -> Release4Service {
     .expect("the project-link store loads")
 }
 
-fn connected(service: Release4Service) -> (AppServer, ServerConnection) {
-    let server = AppServer::default().using_release4_service(service);
+fn connected(service: ProjectsService) -> (AppServer, ServerConnection) {
+    let server = AppServer::default().using_projects_service(service);
     let mut connection = server.connect(TransportKind::InProcess);
     connection.dispatch(&frame(
         1,
@@ -269,7 +269,7 @@ fn error_code(envelope: Envelope) -> String {
 
 /// Puts a link in memory without writing it, so a test can pair a loaded link
 /// with a store that will not accept the write that drops it.
-fn seed_link(service: Release4Service, repo_root: &str, repo_url: &str) -> Release4Service {
+fn seed_link(service: ProjectsService, repo_root: &str, repo_url: &str) -> ProjectsService {
     service
         .projects
         .lock()
@@ -616,9 +616,9 @@ fn an_absent_credential_is_unauthorized_and_a_reachable_failure_is_internal() {
     // No Vibe Code backend attached, but a usable Git probe, so the root
     // resolves and the credential is what is missing. The reference classifies
     // that as an authorization failure.
-    let unconfigured = Release4Service {
+    let unconfigured = ProjectsService {
         git: Arc::new(CommandGitProbe::default()),
-        ..Release4Service::default()
+        ..ProjectsService::default()
     }
     .with_project_link_store(home.path().join("unconfigured.json"))
     .expect("the project-link store loads");

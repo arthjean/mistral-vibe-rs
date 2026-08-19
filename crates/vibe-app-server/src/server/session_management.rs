@@ -1,10 +1,10 @@
 use super::*;
-use crate::release3::Release3Dispatch;
 use crate::session_lifecycle::{DeleteSessionError, delete_session_transactionally};
+use crate::workspace::WorkspaceDispatch;
 use std::path::PathBuf;
 use vibe_core::workspace::{RestoreTransaction, WorkspaceError};
 
-/// What the session layer does around a release-3 method.
+/// What the session layer does around a workspace method.
 ///
 /// The dispatcher used to test the method name at six points spread over three
 /// phases, and twice for the same method. Every rule is stated once here, so the
@@ -17,7 +17,7 @@ struct MethodPlan {
     after: &'static [After],
 }
 
-/// Which entry point of the release-3 service answers the method.
+/// Which entry point of the workspace service answers the method.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Dispatch {
     /// The service answers from the process configuration alone.
@@ -30,7 +30,7 @@ enum Dispatch {
     Rewind,
 }
 
-/// One step the server applies to a release-3 answer.
+/// One step the server applies to a workspace answer.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum After {
     /// The two fields only the session's checkpoint log can answer.
@@ -102,7 +102,7 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
             Ok(rewind) => rewind,
             Err(batch) => return batch,
         };
-    let dispatched = dispatch_release3(connection, &request, plan, target_session_id.as_deref());
+    let dispatched = dispatch_workspace(connection, &request, plan, target_session_id.as_deref());
     let mut dispatch = match dispatched {
         Ok(dispatch) => dispatch,
         Err(error) => {
@@ -114,7 +114,7 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
                     )),
                 );
             }
-            return release3_error_batch(request.id, error);
+            return workspace_error_batch(request.id, error);
         }
     };
     let result_session_id = dispatch
@@ -169,18 +169,18 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
 }
 
 /// Runs the method through the entry point its plan names.
-fn dispatch_release3(
+fn dispatch_workspace(
     connection: &ServerConnection,
     request: &ServerRequest,
     plan: MethodPlan,
     target_session_id: Option<&str>,
-) -> Result<Release3Dispatch, Release3Error> {
-    let release3 = &connection.server.release3;
+) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
+    let workspace = &connection.server.workspace;
     match plan.dispatch {
-        Dispatch::Rewind => release3.rewind_after_workspace_restore(&request.params),
-        Dispatch::Plain => release3.dispatch(&request.method, &request.params),
+        Dispatch::Rewind => workspace.rewind_after_workspace_restore(&request.params),
+        Dispatch::Plain => workspace.dispatch(&request.method, &request.params),
         Dispatch::SessionScoped => match session_scope(connection, target_session_id) {
-            Some((working_directory, project_trusted)) => release3.dispatch_scoped(
+            Some((working_directory, project_trusted)) => workspace.dispatch_scoped(
                 &request.method,
                 &request.params,
                 working_directory,
@@ -188,7 +188,7 @@ fn dispatch_release3(
             ),
             // A connection with no session attached has no project layer to
             // read, so the process configuration answers on its own.
-            None => release3.dispatch(&request.method, &request.params),
+            None => workspace.dispatch(&request.method, &request.params),
         },
     }
 }
@@ -211,7 +211,7 @@ fn session_scope(
 /// connection had not seen it before.
 fn attach_runtime(
     connection: &mut ServerConnection,
-    dispatch: &Release3Dispatch,
+    dispatch: &WorkspaceDispatch,
     review: Option<Arc<ReviewManager>>,
 ) -> Result<Option<String>, ServerError> {
     let Some(attachment) = &dispatch.attachment else {
@@ -220,12 +220,12 @@ fn attach_runtime(
     if connection.attached_sessions.contains(&attachment.id) {
         connection
             .server
-            .refresh_release3_runtime(attachment, review)?;
+            .refresh_workspace_runtime(attachment, review)?;
         return Ok(None);
     }
     connection
         .server
-        .attach_release3_runtime(attachment, review)?;
+        .attach_workspace_runtime(attachment, review)?;
     connection.attached_sessions.insert(attachment.id.clone());
     Ok(Some(attachment.id.clone()))
 }
@@ -236,7 +236,7 @@ fn apply_after(
     step: After,
     session_id: &str,
     request: &ServerRequest,
-    dispatch: &mut Release3Dispatch,
+    dispatch: &mut WorkspaceDispatch,
 ) -> Result<(), ServerError> {
     match step {
         After::RewindRead => enrich_rewind_read(connection, session_id, request, dispatch),
@@ -328,18 +328,18 @@ fn delete_session(
             "An attached session cannot be deleted",
         );
     }
-    match delete_session_transactionally(&connection.server.release4, session_id, || {
+    match delete_session_transactionally(&connection.server.projects, session_id, || {
         connection
             .server
-            .release3
+            .workspace
             .dispatch(&request.method, &request.params)
     }) {
         Ok(dispatch) => success_batch(request.id, dispatch.result),
-        Err(DeleteSessionError::Prepare(error)) => release4_error_batch(request.id, error),
-        Err(DeleteSessionError::Delete(error)) => release3_error_batch(request.id, error),
+        Err(DeleteSessionError::Prepare(error)) => projects_error_batch(request.id, error),
+        Err(DeleteSessionError::Delete(error)) => workspace_error_batch(request.id, error),
         Err(DeleteSessionError::Rollback { delete, rollback }) => internal_error_batch(
             request.id,
-            &ServerError::Release4(format!(
+            &ServerError::Projects(format!(
                 "session delete failed ({delete}); rollback failed ({rollback})"
             )),
         ),
@@ -354,7 +354,7 @@ fn delete_session(
 fn enrich_active_agent(
     connection: &ServerConnection,
     session_id: &str,
-    dispatch: &mut Release3Dispatch,
+    dispatch: &mut WorkspaceDispatch,
 ) {
     let summary = connection.server.lock_sessions().ok().and_then(|sessions| {
         sessions
@@ -376,7 +376,7 @@ fn enrich_config_response(
     connection: &ServerConnection,
     session_id: &str,
     method: &str,
-    dispatch: &mut Release3Dispatch,
+    dispatch: &mut WorkspaceDispatch,
 ) {
     // A read reports the configuration as it stands; a write also reports the
     // runtime the write produced.
@@ -399,7 +399,7 @@ fn enrich_rewind_read(
     connection: &ServerConnection,
     session_id: &str,
     request: &ServerRequest,
-    dispatch: &mut Release3Dispatch,
+    dispatch: &mut WorkspaceDispatch,
 ) -> Result<(), ServerError> {
     let sessions = connection.server.lock_sessions()?;
     let review = {
@@ -416,7 +416,7 @@ fn enrich_rewind_read(
     };
     let index = connection
         .server
-        .release3
+        .workspace
         .rewind_entry_index(session_id, entry_id)
         .map_err(|error| ServerError::Resource(error.to_string()))?;
     let paths = review
@@ -459,7 +459,7 @@ pub(super) fn reset_checkpoint_log(
 fn enrich_rewind_response(
     connection: &ServerConnection,
     session_id: &str,
-    dispatch: &mut Release3Dispatch,
+    dispatch: &mut WorkspaceDispatch,
 ) -> Result<(), ServerError> {
     let state = {
         let sessions = connection.server.lock_sessions()?;
@@ -485,11 +485,11 @@ fn update_runtime_agent(connection: &ServerConnection, request: &ServerRequest) 
     };
     let summary = connection
         .server
-        .release3
+        .workspace
         .agent_profile(agent)
         .ok()
         .as_ref()
-        .map(crate::release3::agent_summary);
+        .map(crate::workspace::agent_summary);
     if let Ok(mut sessions) = connection.server.lock_sessions()
         && let Some(session) = sessions.get_mut(session_id)
     {
@@ -529,15 +529,15 @@ impl RewindTransaction {
         let message_index = entry_id.and_then(|entry_id| {
             connection
                 .server
-                .release3
+                .workspace
                 .rewind_entry_index(session_id, entry_id)
                 .ok()
         });
         let source = connection
             .server
-            .release3
+            .workspace
             .snapshot_session(session_id)
-            .map_err(|error| release3_error_batch(request.id.clone(), error))?;
+            .map_err(|error| workspace_error_batch(request.id.clone(), error))?;
         let sessions = connection
             .server
             .lock_sessions()
@@ -638,7 +638,7 @@ impl RewindTransaction {
         if let (Some(source), Some(result_session_id)) = (self.source.take(), result_session_id)
             && let Err(error) = connection
                 .server
-                .release3
+                .workspace
                 .rollback_rewind(source, result_session_id)
         {
             failures.push(format!("session rollback failed ({error})"));

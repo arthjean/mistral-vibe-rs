@@ -200,48 +200,56 @@ impl From<ResourceError> for ProtocolFault {
     }
 }
 
-impl From<Release3Error> for ProtocolFault {
-    fn from(error: Release3Error) -> Self {
+impl From<WorkspaceServiceError> for ProtocolFault {
+    fn from(error: WorkspaceServiceError) -> Self {
         match error {
-            Release3Error::MethodNotFound(message) => {
+            WorkspaceServiceError::MethodNotFound(message) => {
                 Self::new(ProtocolErrorCode::MethodNotFound, message)
             }
-            Release3Error::InvalidParams(message) => Self::invalid_params(message),
-            Release3Error::NotFound(message) => Self::new(ProtocolErrorCode::NotFound, message),
-            Release3Error::Config(message)
-            | Release3Error::Storage(message)
-            | Release3Error::Extension(message)
-            | Release3Error::Prompt(message) => Self::new(ProtocolErrorCode::Conflict, message),
-            Release3Error::StatePoisoned | Release3Error::Json(_) => {
+            WorkspaceServiceError::InvalidParams(message) => Self::invalid_params(message),
+            WorkspaceServiceError::NotFound(message) => {
+                Self::new(ProtocolErrorCode::NotFound, message)
+            }
+            WorkspaceServiceError::Config(message)
+            | WorkspaceServiceError::Storage(message)
+            | WorkspaceServiceError::Extension(message)
+            | WorkspaceServiceError::Prompt(message) => {
+                Self::new(ProtocolErrorCode::Conflict, message)
+            }
+            WorkspaceServiceError::StatePoisoned | WorkspaceServiceError::Json(_) => {
                 Self::internal(error.to_string())
             }
         }
     }
 }
 
-impl From<Release4Error> for ProtocolFault {
-    fn from(error: Release4Error) -> Self {
+impl From<ProjectsServiceError> for ProtocolFault {
+    fn from(error: ProjectsServiceError) -> Self {
         match error {
-            Release4Error::MethodNotFound(message) => {
+            ProjectsServiceError::MethodNotFound(message) => {
                 Self::new(ProtocolErrorCode::MethodNotFound, message)
             }
-            Release4Error::InvalidParams(message) => Self::invalid_params(message),
-            Release4Error::NotFound(message) => Self::new(ProtocolErrorCode::NotFound, message),
-            Release4Error::Conflict(message) => Self::new(ProtocolErrorCode::Conflict, message),
-            Release4Error::Cloud(crate::release4::CloudError::Unauthorized(message)) => {
+            ProjectsServiceError::InvalidParams(message) => Self::invalid_params(message),
+            ProjectsServiceError::NotFound(message) => {
+                Self::new(ProtocolErrorCode::NotFound, message)
+            }
+            ProjectsServiceError::Conflict(message) => {
+                Self::new(ProtocolErrorCode::Conflict, message)
+            }
+            ProjectsServiceError::Cloud(crate::projects::CloudError::Unauthorized(message)) => {
                 Self::new(ProtocolErrorCode::Unauthorized, message)
             }
-            Release4Error::Cloud(error) => {
+            ProjectsServiceError::Cloud(error) => {
                 Self::new(ProtocolErrorCode::Conflict, error.to_string())
             }
-            Release4Error::VibeCode(_)
-            | Release4Error::Persistence(_)
-            | Release4Error::PersistenceState(_)
-            | Release4Error::ProjectLinkPersistence(_)
-            | Release4Error::ProjectLinkPersistenceState(_)
-            | Release4Error::BackgroundTask
-            | Release4Error::StatePoisoned
-            | Release4Error::Json(_) => Self::internal(error.to_string()),
+            ProjectsServiceError::VibeCode(_)
+            | ProjectsServiceError::Persistence(_)
+            | ProjectsServiceError::PersistenceState(_)
+            | ProjectsServiceError::ProjectLinkPersistence(_)
+            | ProjectsServiceError::ProjectLinkPersistenceState(_)
+            | ProjectsServiceError::BackgroundTask
+            | ProjectsServiceError::StatePoisoned
+            | ProjectsServiceError::Json(_) => Self::internal(error.to_string()),
         }
     }
 }
@@ -275,15 +283,15 @@ pub(super) fn resource_error_batch(id: RequestId, error: ResourceError) -> Dispa
     ProtocolFault::from(error).into_batch(id)
 }
 
-pub(super) fn release3_error_batch(id: RequestId, error: Release3Error) -> DispatchBatch {
+pub(super) fn workspace_error_batch(id: RequestId, error: WorkspaceServiceError) -> DispatchBatch {
     ProtocolFault::from(error).into_batch(id)
 }
 
-pub(super) fn release4_error_batch(id: RequestId, error: Release4Error) -> DispatchBatch {
+pub(super) fn projects_error_batch(id: RequestId, error: ProjectsServiceError) -> DispatchBatch {
     ProtocolFault::from(error).into_batch(id)
 }
 
-pub(super) fn release4_dispatch_batch(id: RequestId, dispatch: Release4Dispatch) -> DispatchBatch {
+pub(super) fn projects_dispatch_batch(id: RequestId, dispatch: ProjectsDispatch) -> DispatchBatch {
     let mut outbound = vec![success_bytes(id, dispatch.result)];
     for notification in dispatch.notifications {
         outbound.push(encode_notification(

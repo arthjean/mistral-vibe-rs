@@ -258,10 +258,10 @@ fn manual_compaction_reserves_exclusive_session_work_and_failure_releases_it() {
 fn due_loop_reserves_the_normal_turn_path_and_emits_a_sequenced_notice() {
     let temporary = tempfile::tempdir().expect("loop store");
     let loop_path = temporary.path().join("loops.json");
-    let release4 = Release4Service::default()
+    let projects = ProjectsService::default()
         .with_loop_store(loop_path)
         .expect("persistent loop service");
-    let created = release4
+    let created = projects
         .dispatch(
             "loops/create",
             &BTreeMap::from([
@@ -283,7 +283,7 @@ fn due_loop_reserves_the_normal_turn_path_and_emits_a_sequenced_notice() {
             .all(|character| character.is_ascii_hexdigit())
     );
 
-    let server = AppServer::with_release4_service(release4);
+    let server = AppServer::with_projects_service(projects);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
     start_session(&mut connection);
@@ -351,12 +351,12 @@ fn deleting_a_saved_session_removes_its_loops_from_durable_restart_state() {
             1,
         )
         .expect("saved session");
-    let release3 =
-        Release3Service::for_runtime_session_root(session_root, working_directory.clone());
-    let release4 = Release4Service::default()
+    let workspace =
+        WorkspaceService::for_runtime_session_root(session_root, working_directory.clone());
+    let projects = ProjectsService::default()
         .with_loop_store(loop_path.clone())
         .expect("loop store");
-    release4
+    projects
         .dispatch(
             "loops/create",
             &BTreeMap::from([
@@ -367,7 +367,7 @@ fn deleting_a_saved_session_removes_its_loops_from_durable_restart_state() {
             ]),
         )
         .expect("owned loop");
-    let server = AppServer::with_release3_service(release3).using_release4_service(release4);
+    let server = AppServer::with_workspace_service(workspace).using_projects_service(projects);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
     let deleted = connection.dispatch(&request(
@@ -381,7 +381,7 @@ fn deleting_a_saved_session_removes_its_loops_from_durable_restart_state() {
             if result.get("deleted").and_then(Value::as_bool) == Some(true)
     ));
 
-    let restarted = Release4Service::default()
+    let restarted = ProjectsService::default()
         .with_loop_store(loop_path)
         .expect("reloaded loop store");
     let listed = restarted
@@ -418,9 +418,9 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
             )
             .expect("user message");
     }
-    let release3 =
-        Release3Service::for_runtime_session_root(session_root.clone(), working_directory.clone());
-    let server = AppServer::with_release3_service(release3);
+    let workspace =
+        WorkspaceService::for_runtime_session_root(session_root.clone(), working_directory.clone());
+    let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
     let started = connection.dispatch(&request(
@@ -675,9 +675,9 @@ fn rewind_refuses_an_unknown_entry_and_honors_inplace_and_untouched_files() {
             )
             .expect("user message");
     }
-    let release3 =
-        Release3Service::for_runtime_session_root(session_root.clone(), working_directory.clone());
-    let server = AppServer::with_release3_service(release3);
+    let workspace =
+        WorkspaceService::for_runtime_session_root(session_root.clone(), working_directory.clone());
+    let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
     connection.dispatch(&request(
@@ -812,9 +812,9 @@ fn failed_rewind_attachment_rolls_back_session_and_workspace() {
             2,
         )
         .expect("user message");
-    let release3 =
-        Release3Service::for_runtime_session_root(session_root.clone(), working_directory.clone());
-    let server = AppServer::with_release3_service(release3)
+    let workspace =
+        WorkspaceService::for_runtime_session_root(session_root.clone(), working_directory.clone());
+    let server = AppServer::with_workspace_service(workspace)
         .using_session_tool_factory(Arc::new(RejectForkTools));
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
@@ -898,9 +898,9 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
             1,
         )
         .expect("source session");
-    let release3 =
-        Release3Service::for_runtime_session_root(session_root, working_directory.clone());
-    let server = AppServer::with_release3_service(release3);
+    let workspace =
+        WorkspaceService::for_runtime_session_root(session_root, working_directory.clone());
+    let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
     connection.dispatch(&request(
@@ -1120,12 +1120,12 @@ fn failed_durable_session_delete_keeps_the_saved_session() {
             1,
         )
         .expect("saved session");
-    let release3 =
-        Release3Service::for_runtime_session_root(session_root, working_directory.clone());
-    let release4 = Release4Service::default()
+    let workspace =
+        WorkspaceService::for_runtime_session_root(session_root, working_directory.clone());
+    let projects = ProjectsService::default()
         .with_loop_store(loop_path.clone())
         .expect("loop store");
-    release4
+    projects
         .dispatch(
             "loops/create",
             &BTreeMap::from([
@@ -1138,7 +1138,7 @@ fn failed_durable_session_delete_keeps_the_saved_session() {
         .expect("owned loop");
     fs::remove_file(&loop_path).expect("remove loop file");
     fs::create_dir(&loop_path).expect("block loop persistence");
-    let server = AppServer::with_release3_service(release3).using_release4_service(release4);
+    let server = AppServer::with_workspace_service(workspace).using_projects_service(projects);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
 

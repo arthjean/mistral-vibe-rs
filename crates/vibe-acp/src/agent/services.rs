@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use vibe_app_server::client::{HeadlessService, TurnDriver};
 use vibe_app_server::experiments::SessionExperiments;
-use vibe_app_server::release3::Release3Service;
-use vibe_app_server::release4::{Release4Service, VibeCodeCloudConfig};
+use vibe_app_server::projects::{ProjectsService, VibeCodeCloudConfig};
 use vibe_app_server::server::AppServer;
+use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::config::DotenvValues;
 use vibe_protocol::{
     CallbackKind, ClientCapabilities, ClientEntrypoint, ClientInfo, TerminalEmulator,
@@ -27,7 +27,7 @@ where
     fn session_experiments(&self, service: &HeadlessService<D>) -> Option<Arc<SessionExperiments>> {
         let experiments = self.experiments.as_ref()?;
         Some(Arc::new(SessionExperiments::new(
-            &service.release3_service(),
+            &service.workspace_service(),
             Arc::clone(&experiments.credentials),
             Some(experiments.launch.clone()),
             experiments.exposures.clone(),
@@ -61,11 +61,11 @@ where
                 timeout: self.client_tool_timeout,
             }))
             .using_client_telemetry(Arc::clone(&self.telemetry));
-        if let Some(release4) = self.production_release4()? {
-            server = server.using_release4_service(release4);
+        if let Some(projects) = self.production_projects()? {
+            server = server.using_projects_service(projects);
         }
         if let Some(session_root) = &self.session_root {
-            let release3 = Release3Service::for_runtime_session_root(
+            let workspace = WorkspaceService::for_runtime_session_root(
                 session_root,
                 Path::new(working_directory),
             )
@@ -73,10 +73,10 @@ where
             // The editor session starts here, so an older configuration file is
             // brought forward before the first read. A failure to write is
             // carried by the configuration snapshot, not raised.
-            release3
+            workspace
                 .migrate_configuration()
                 .map_err(|error| AcpError::Configuration(error.to_string()))?;
-            server = server.using_release3_service(release3);
+            server = server.using_workspace_service(workspace);
         }
         Ok(
             HeadlessService::new_interactive_shared_with_server_and_client(
@@ -130,11 +130,11 @@ where
 
     /// Cloud services are resolved lazily so sessions start without a
     /// provider credential.
-    fn production_release4(&self) -> Result<Option<Release4Service>, AcpError> {
+    fn production_projects(&self) -> Result<Option<ProjectsService>, AcpError> {
         if !self.production_cloud {
             return Ok(None);
         }
-        let mut cached = self.release4.lock().map_err(|_| AcpError::StatePoisoned)?;
+        let mut cached = self.projects.lock().map_err(|_| AcpError::StatePoisoned)?;
         if let Some(service) = cached.as_ref() {
             return Ok(Some(service.clone()));
         }
@@ -154,7 +154,7 @@ where
         };
         let config = VibeCodeCloudConfig::from_credential(api_key)
             .map_err(|error| AcpError::Configuration(error.to_string()))?;
-        let service = Release4Service::production(config)
+        let service = ProjectsService::production(config)
             .map_err(|error| AcpError::Configuration(error.to_string()))?;
         *cached = Some(service.clone());
         Ok(Some(service))

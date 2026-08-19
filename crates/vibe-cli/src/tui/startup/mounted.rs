@@ -200,9 +200,9 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
-    use vibe_app_server::release4::{
+    use vibe_app_server::projects::{
         CloudError, GitProbe, GitSnapshot, Project, ProjectCloud, ProjectGitSnapshot, ProjectPage,
-        ProjectRepository, Release4Service, TeleportCloud, TeleportStartFailure,
+        ProjectRepository, ProjectsService, TeleportCloud, TeleportStartFailure,
         TeleportStartRequest,
     };
     use vibe_app_server::server::AppServer;
@@ -333,14 +333,14 @@ mod tests {
     async fn mounted_startup_teleport_executes_once_without_an_agent_turn() {
         for prompt in [None, Some("deployment context".to_owned())] {
             let requests = Arc::new(Mutex::new(Vec::new()));
-            let release4 = Release4Service::with_backends(
+            let projects = ProjectsService::with_backends(
                 Arc::new(StartupProjects),
                 Arc::new(CapturingStartupTeleport {
                     requests: requests.clone(),
                 }),
                 Arc::new(StartupGit),
             );
-            let server = AppServer::with_release4_service(release4);
+            let server = AppServer::with_projects_service(projects);
             let mut runtime = Some(interactive_test_runtime_with_server(
                 "startup-teleport",
                 server,

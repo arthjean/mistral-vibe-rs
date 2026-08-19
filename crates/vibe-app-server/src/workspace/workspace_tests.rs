@@ -5,12 +5,12 @@ use vibe_protocol::{Envelope, TransportKind, decode_frame};
 use super::*;
 use crate::server::AppServer;
 
-fn service() -> (tempfile::TempDir, Release3Service) {
+fn service() -> (tempfile::TempDir, WorkspaceService) {
     let temporary = tempdir().expect("tempdir");
     let workspace = temporary.path().join("workspace");
     std::fs::create_dir(&workspace).expect("workspace");
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: temporary.path().join("home"),
             working_directory: workspace,
             session_root: temporary.path().join("sessions"),
@@ -49,7 +49,7 @@ fn a_malformed_optional_parameter_is_refused_rather_than_defaulted() {
             .dispatch(method, &params)
             .expect_err("a malformed parameter is refused");
         assert!(
-            matches!(error, Release3Error::InvalidParams(ref message) if message.contains("must be a string")),
+            matches!(error, WorkspaceServiceError::InvalidParams(ref message) if message.contains("must be a string")),
             "{method}: {error}"
         );
     }
@@ -68,7 +68,7 @@ fn a_page_outside_the_store_bounds_is_refused_as_a_parameter() {
             .dispatch(method, &params)
             .expect_err("an out-of-range page is refused");
         assert!(
-            matches!(error, Release3Error::InvalidParams(ref message) if message.contains("limit")),
+            matches!(error, WorkspaceServiceError::InvalidParams(ref message) if message.contains("limit")),
             "{method}: {error}"
         );
     }
@@ -293,7 +293,7 @@ fn proxy_environment_rejects_unknown_keys_without_mutation() {
             &BTreeMap::from([("changes".to_owned(), json!({"BAD_PROXY": "value"}))]),
         )
         .expect_err("unknown key rejected");
-    assert!(matches!(error, Release3Error::InvalidParams(_)));
+    assert!(matches!(error, WorkspaceServiceError::InvalidParams(_)));
     assert_eq!(
         fs::read_to_string(temporary.path().join("home/.env")).expect("unchanged"),
         "HTTP_PROXY='old'\n"
@@ -337,8 +337,8 @@ fn discovered_user_agent_remains_selectable_after_service_restart() {
     )
     .expect("custom agent");
 
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             session_root: temporary.path().join("sessions"),
             vibe_home,
             working_directory: workspace,
@@ -563,8 +563,8 @@ fn a_patch_aimed_at_an_untrusted_project_changes_nothing() {
     let temporary = tempdir().expect("tempdir");
     let workspace = temporary.path().join("workspace");
     fs::create_dir_all(workspace.join(".vibe")).expect("project directory");
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: temporary.path().join("home"),
             working_directory: workspace.clone(),
             session_root: temporary.path().join("sessions"),
@@ -584,7 +584,7 @@ fn a_patch_aimed_at_an_untrusted_project_changes_nothing() {
         .expect_err("an untrusted project is refused");
 
     assert!(
-        matches!(&error, Release3Error::Config(message) if message.contains("trust")),
+        matches!(&error, WorkspaceServiceError::Config(message) if message.contains("trust")),
         "{error}"
     );
     assert!(
@@ -609,12 +609,15 @@ fn config_patch_rejects_a_malformed_operation_before_it_reaches_the_store() {
         let error = service
             .dispatch("config/patch", &patch(ops.clone()))
             .expect_err("the operation is refused");
-        assert!(matches!(error, Release3Error::InvalidParams(_)), "{ops}");
+        assert!(
+            matches!(error, WorkspaceServiceError::InvalidParams(_)),
+            "{ops}"
+        );
     }
     assert!(
         service
             .dispatch("config/patch", &BTreeMap::new())
-            .is_err_and(|error| matches!(error, Release3Error::InvalidParams(_)))
+            .is_err_and(|error| matches!(error, WorkspaceServiceError::InvalidParams(_)))
     );
 }
 
@@ -952,7 +955,7 @@ fn rewind_resolves_an_entry_identity_and_forks_before_the_selected_message() {
                     ("entryId".to_owned(), json!("history:1:user")),
                 ]),
             ),
-            Err(Release3Error::NotFound(_))
+            Err(WorkspaceServiceError::NotFound(_))
         ),
         "an assistant message is not a rewindable entry"
     );
@@ -998,7 +1001,10 @@ fn caller_paths_cannot_expand_server_authorized_roots() {
         "agents/install",
         &BTreeMap::from([("path".to_owned(), json!(outside.join("agent.toml")))]),
     );
-    assert!(matches!(install, Err(Release3Error::InvalidParams(_))));
+    assert!(matches!(
+        install,
+        Err(WorkspaceServiceError::InvalidParams(_))
+    ));
     let prompt = service.dispatch(
         "workspace/prompt/prepare",
         &BTreeMap::from([
@@ -1006,7 +1012,10 @@ fn caller_paths_cannot_expand_server_authorized_roots() {
             ("addDirectories".to_owned(), json!([outside])),
         ]),
     );
-    assert!(matches!(prompt, Err(Release3Error::InvalidParams(_))));
+    assert!(matches!(
+        prompt,
+        Err(WorkspaceServiceError::InvalidParams(_))
+    ));
 }
 
 #[test]
@@ -1054,7 +1063,7 @@ tool_timeout_sec = 2
             false,
             &[runtime]
         ),
-        Err(Release3Error::InvalidParams(message))
+        Err(WorkspaceServiceError::InvalidParams(message))
             if message.contains("trusted workspace")
     ));
 }
@@ -1117,8 +1126,8 @@ fn the_global_dotenv_file_feeds_the_environment_layer() {
     )
     .expect("dotenv fixture");
 
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: vibe_home.clone(),
             working_directory: workspace,
             session_root: temporary.path().join("sessions"),
@@ -1149,8 +1158,8 @@ fn the_startup_migration_rewrites_the_user_file() {
     let user_path = vibe_home.join("config.toml");
     std::fs::write(&user_path, "disabled_tools = [\"search_replace\"]\n").expect("user fixture");
 
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home,
             working_directory: workspace,
             session_root: temporary.path().join("sessions"),
@@ -1209,8 +1218,8 @@ fn an_added_directory_contributes_its_own_extension_root() {
     )
     .expect("user hook fixture");
 
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home,
             working_directory: workspace.clone(),
             session_root: temporary.path().join("sessions"),
@@ -1246,7 +1255,7 @@ fn an_added_directory_contributes_its_own_extension_root() {
 
 /// The names `skills/list` publishes, which is the wire surface every
 /// discovery criterion is finally measured on.
-fn listed_skills(service: &Release3Service) -> Vec<String> {
+fn listed_skills(service: &WorkspaceService) -> Vec<String> {
     service
         .dispatch("skills/list", &BTreeMap::new())
         .expect("skills/list answers")
@@ -1291,8 +1300,8 @@ fn skill_paths_is_read_from_the_merged_document() {
     write_skill(&user_skills, "from-user");
     write_skill(&project_skills, "from-project");
 
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: vibe_home.clone(),
             working_directory: workspace.clone(),
             session_root: temporary.path().join("sessions"),
@@ -1339,8 +1348,8 @@ fn the_skill_filters_narrow_what_the_wire_publishes() {
     for name in ["alpha", "beta"] {
         write_skill(&workspace.join(".vibe/skills"), name);
     }
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: vibe_home.clone(),
             working_directory: workspace,
             session_root: temporary.path().join("sessions"),
@@ -1376,8 +1385,8 @@ fn the_registry_experiment_key_gates_a_dormant_subtree() {
     let temporary = tempdir().expect("tempdir");
     let vibe_home = temporary.path().join("home");
     std::fs::create_dir_all(&vibe_home).expect("vibe home");
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: vibe_home.clone(),
             working_directory: temporary.path().join("workspace"),
             session_root: temporary.path().join("sessions"),
@@ -1409,8 +1418,8 @@ fn the_registry_experiment_key_gates_a_dormant_subtree() {
 #[test]
 fn the_builtins_are_published_on_the_wire() {
     let temporary = tempdir().expect("tempdir");
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: temporary.path().join("home"),
             working_directory: temporary.path().join("workspace"),
             session_root: temporary.path().join("sessions"),
@@ -1453,8 +1462,8 @@ fn an_unloadable_skill_is_published_as_an_issue() {
     let broken = workspace.join(".vibe/skills/broken");
     std::fs::create_dir_all(&broken).expect("skill directory");
     std::fs::write(broken.join("SKILL.md"), "no frontmatter here\n").expect("skill fixture");
-    let service = Release3Service::new(
-        Release3Paths {
+    let service = WorkspaceService::new(
+        WorkspacePaths {
             vibe_home: temporary.path().join("home"),
             working_directory: workspace,
             session_root: temporary.path().join("sessions"),
@@ -1476,13 +1485,13 @@ fn an_unloadable_skill_is_published_as_an_issue() {
 }
 
 #[test]
-fn app_server_advertises_and_dispatches_release3_resources() {
+fn app_server_advertises_and_dispatches_workspace_resources() {
     let (_temporary, service) = service();
     service
         .store
         .create("saved", "/workspace", None, 1)
         .expect("saved session");
-    let server = AppServer::with_release3_service(service);
+    let server = AppServer::with_workspace_service(service);
     let mut connection = server.connect(TransportKind::InProcess);
     let initialized = connection.dispatch(
             br#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{"callbackKinds":[]}}}"#,

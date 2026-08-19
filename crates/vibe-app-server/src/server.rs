@@ -35,14 +35,16 @@ use registry::SessionRegistry;
 use crate::client::{TurnReservation, public_turn_failure};
 use crate::client_tools::ClientToolBridge;
 use crate::host::{now_millis, vibe_home};
-use crate::release3::{RELEASE3_METHODS, Release3Error, Release3Service, RuntimeAttachment};
-use crate::release4::{
-    LoopFire, RELEASE4_METHODS, Release4Dispatch, Release4Error, Release4Service,
+use crate::projects::{
+    LoopFire, PROJECTS_METHODS, ProjectsDispatch, ProjectsService, ProjectsServiceError,
 };
 use crate::resources::{
     BACKEND_RESOURCE_METHODS, CoreResourceBackend, RESOURCE_METHODS, ResourceBackend,
     ResourceBackendCommand, ResourceBackendRequest, ResourceDispatch, ResourceError,
     ResourceService, ResourceSession, ResourceSignals,
+};
+use crate::workspace::{
+    RuntimeAttachment, WORKSPACE_METHODS, WorkspaceService, WorkspaceServiceError,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -135,8 +137,8 @@ pub(crate) enum HandoffNotice {
 pub(crate) fn routed_methods() -> BTreeSet<&'static str> {
     IMPLEMENTED_METHODS
         .iter()
-        .chain(RELEASE3_METHODS)
-        .chain(RELEASE4_METHODS)
+        .chain(WORKSPACE_METHODS)
+        .chain(PROJECTS_METHODS)
         .chain(RESOURCE_METHODS)
         .copied()
         .collect()
@@ -396,8 +398,8 @@ pub struct AppServer {
     sessions: Arc<Mutex<SessionRegistry>>,
     resources: Arc<Mutex<ResourceService>>,
     resource_backend: Option<Arc<dyn ResourceBackend>>,
-    release3: Arc<Release3Service>,
-    release4: Arc<Release4Service>,
+    workspace: Arc<WorkspaceService>,
+    projects: Arc<ProjectsService>,
     approval_factory: Arc<dyn ApprovalAgentFactory>,
     session_tool_factory: Arc<dyn SessionToolFactory>,
     builtin_tools: Arc<BuiltinTools>,
@@ -430,8 +432,8 @@ impl Default for AppServer {
                 FileLog::in_home(&home, LogSettings::from_environment().unwrap_or_default()),
             ))),
             resource_backend: Some(Arc::new(CoreResourceBackend::default())),
-            release3: Arc::new(Release3Service::default()),
-            release4: Arc::new(Release4Service::default()),
+            workspace: Arc::new(WorkspaceService::default()),
+            projects: Arc::new(ProjectsService::default()),
             approval_factory: Arc::new(DefaultApprovalFactory),
             session_tool_factory: Arc::new(NoAdditionalTools),
             // The reference resolves the web-search key from the environment or
@@ -469,20 +471,20 @@ impl AppServer {
     }
 
     #[must_use]
-    pub fn with_release3_service(service: Release3Service) -> Self {
-        Self::default().using_release3_service(service)
+    pub fn with_workspace_service(service: WorkspaceService) -> Self {
+        Self::default().using_workspace_service(service)
     }
 
     #[must_use]
-    pub fn with_release4_service(service: Release4Service) -> Self {
+    pub fn with_projects_service(service: ProjectsService) -> Self {
         Self {
-            release4: Arc::new(service),
+            projects: Arc::new(service),
             ..Self::default()
         }
     }
 
     #[must_use]
-    pub fn using_release3_service(self, service: Release3Service) -> Self {
+    pub fn using_workspace_service(self, service: WorkspaceService) -> Self {
         // The log file follows the home the service reads under, so a server
         // built for another home neither writes to nor answers from the
         // operator's.
@@ -491,7 +493,7 @@ impl AppServer {
             LogSettings::from_environment().unwrap_or_default(),
         );
         let mut server = self.logging_to(log);
-        server.release3 = Arc::new(service);
+        server.workspace = Arc::new(service);
         server
     }
 
@@ -508,8 +510,8 @@ impl AppServer {
     }
 
     #[must_use]
-    pub fn using_release4_service(mut self, service: Release4Service) -> Self {
-        self.release4 = Arc::new(service);
+    pub fn using_projects_service(mut self, service: ProjectsService) -> Self {
+        self.projects = Arc::new(service);
         self
     }
 
@@ -572,8 +574,8 @@ impl AppServer {
     /// write the *same* configuration the server's own sessions read, which is
     /// what a resolved rollout depends on: a second service would compose a
     /// second document.
-    pub fn release3_service(&self) -> Release3Service {
-        self.release3.as_ref().clone()
+    pub fn workspace_service(&self) -> WorkspaceService {
+        self.workspace.as_ref().clone()
     }
 
     pub fn connect(&self, transport: TransportKind) -> ServerConnection {
@@ -616,8 +618,8 @@ pub enum ServerError {
     SessionNotFound(String),
     #[error("session `{0}` already exists")]
     SessionConflict(String),
-    #[error("release-4 workflow failed: {0}")]
-    Release4(String),
+    #[error("projects workflow failed: {0}")]
+    Projects(String),
     #[error("turn `{0}` is stale")]
     StaleTurn(String),
     #[error("deferred work reserved no turn")]

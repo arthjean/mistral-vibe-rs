@@ -11,7 +11,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vibe_app_server::client::{HeadlessService, LiveTurnDriver};
 use vibe_app_server::experiments::SessionExperiments;
-use vibe_app_server::release3::Release3Service;
+use vibe_app_server::workspace::WorkspaceService;
 
 use super::clipboard_images::ImageModels;
 use super::cloud_workflow::CloudWorkflowState;
@@ -25,32 +25,32 @@ use super::{
 pub(super) fn start_runtime(
     arguments: &Arguments,
     working_directory: &Path,
-    release3: Release3Service,
+    workspace: WorkspaceService,
     credential: String,
     ui_operation_sender: tokio::sync::mpsc::UnboundedSender<UiOperationCompletion>,
 ) -> Result<InteractiveRuntime, CliError> {
     let voice_credential = credential.clone();
-    let banner = banner_metrics_from_release3(&release3, arguments, working_directory);
-    let skills = runtime_skills(&release3);
-    let preferences = startup_preferences(arguments, &release3)?;
-    let telemetry = telemetry_observer(arguments, &release3)?;
+    let banner = banner_metrics_from_workspace(&workspace, arguments, working_directory);
+    let skills = runtime_skills(&workspace);
+    let preferences = startup_preferences(arguments, &workspace)?;
+    let telemetry = telemetry_observer(arguments, &workspace)?;
     let mut driver = LiveTurnDriver::from_credential(
         bootstrap::live_driver_config(
             arguments,
             &preferences.model,
-            release3.compaction_prompts(),
+            workspace.compaction_prompts(),
         )?,
         credential.clone(),
     )?;
     driver = driver.with_event_observer(telemetry.clone());
-    let configuration = release3.clone();
+    let configuration = workspace.clone();
     let server = bootstrap::resource_server(
         arguments,
-        release3,
+        workspace,
         credential.clone(),
         Some(driver.sampling_handler(&preferences.model)),
     )?
-    .using_release4_service(bootstrap::cloud_service(credential)?)
+    .using_projects_service(bootstrap::cloud_service(credential)?)
     .using_client_telemetry(telemetry.clone());
     let mut service =
         HeadlessService::new_interactive_shared_with_server(Arc::new(driver), server)?;
@@ -106,7 +106,7 @@ pub(super) fn start_runtime(
     Ok(InteractiveRuntime {
         service,
         experiments: Some(experiments),
-        release3: configuration,
+        workspace: configuration,
         session_id,
         model: session.intent.model.unwrap_or(preferences.model),
         image_models: preferences.image_models,
@@ -157,11 +157,11 @@ struct StartupPreferences {
 
 fn startup_preferences(
     arguments: &Arguments,
-    release3: &Release3Service,
+    workspace: &WorkspaceService,
 ) -> Result<StartupPreferences, CliError> {
     // One load answers both: the document the rest of this reads, and the alias
     // the sentinel resolves to, which is never the raw `active_model` value.
-    let snapshot = release3
+    let snapshot = workspace
         .layered_config()
         .load()
         .map_err(|error| CliError::Terminal(error.to_string()))?;
@@ -226,8 +226,8 @@ fn startup_preferences(
 
 /// Reference `action_suspend_with_message`: restore the terminal, print the
 /// resume hint, stop, and repaint on return. Unsupported platforms do nothing.
-pub(super) fn runtime_skills(release3: &Release3Service) -> BTreeMap<String, RuntimeSkill> {
-    release3
+pub(super) fn runtime_skills(workspace: &WorkspaceService) -> BTreeMap<String, RuntimeSkill> {
+    workspace
         .dispatch("skills/list", &BTreeMap::new())
         .ok()
         .and_then(|dispatch| dispatch.result.get("skills").cloned())
@@ -263,13 +263,13 @@ pub(super) fn parse_runtime_skills(skills: Option<&Value>) -> BTreeMap<String, R
         .collect()
 }
 
-pub(super) fn banner_metrics_from_release3(
-    release3: &Release3Service,
+pub(super) fn banner_metrics_from_workspace(
+    workspace: &WorkspaceService,
     arguments: &Arguments,
     working_directory: &Path,
 ) -> BannerMetrics {
     let mut banner = BannerMetrics::default();
-    if let Ok(dispatch) = release3.dispatch("skills/list", &BTreeMap::new()) {
+    if let Ok(dispatch) = workspace.dispatch("skills/list", &BTreeMap::new()) {
         // The banner reports the skills the operator added, so the two seeded
         // builtins are excluded the way the reference's `custom_skills_count`
         // excludes them.
@@ -284,7 +284,8 @@ pub(super) fn banner_metrics_from_release3(
                     .count()
             });
     }
-    if let Ok(servers) = release3.mcp_servers_for_session(working_directory, arguments.trust, &[]) {
+    if let Ok(servers) = workspace.mcp_servers_for_session(working_directory, arguments.trust, &[])
+    {
         banner.mcp_servers_total = servers.len();
         banner.mcp_servers_enabled = servers.iter().filter(|server| server.enabled).count();
     }
@@ -359,15 +360,15 @@ mod tests {
     #[test]
     fn startup_preferences_read_the_shipped_default_configuration() {
         let temporary = tempfile::tempdir().expect("temporary home");
-        let release3 = Release3Service::for_runtime_session_root(
+        let workspace_service = WorkspaceService::for_runtime_session_root(
             temporary.path().join(".vibe/sessions"),
             temporary.path().join("workspace"),
         );
         let arguments = <Arguments as clap::Parser>::try_parse_from(["vibe"])
             .expect("interactive arguments parse");
 
-        let preferences =
-            startup_preferences(&arguments, &release3).expect("preferences read from defaults");
+        let preferences = startup_preferences(&arguments, &workspace_service)
+            .expect("preferences read from defaults");
 
         assert_eq!(preferences.model, DEFAULT_MODEL);
         assert!(preferences.image_models.get(DEFAULT_MODEL).supports_images);
@@ -392,12 +393,12 @@ mod tests {
     #[test]
     fn a_model_only_builtin_is_not_invocable_from_the_composer() {
         let temporary = tempfile::tempdir().expect("temporary home");
-        let release3 = Release3Service::for_runtime_session_root(
+        let workspace_service = WorkspaceService::for_runtime_session_root(
             temporary.path().join(".vibe/sessions"),
             temporary.path().join("workspace"),
         );
 
-        let skills = runtime_skills(&release3);
+        let skills = runtime_skills(&workspace_service);
 
         assert!(
             !skills.contains_key("vibe"),
@@ -410,7 +411,7 @@ mod tests {
     }
 
     /// US-171: the banner counts the skills the operator added, read through
-    /// the same `banner_metrics_from_release3` the startup path calls. The two
+    /// the same `banner_metrics_from_workspace` the startup path calls. The two
     /// seeded builtins never count, the user's own skills do, and one withheld
     /// by `disabled_skills` drops out because the count reads the filtered
     /// catalog rather than the walked one.
@@ -420,14 +421,15 @@ mod tests {
         let workspace = temporary.path().join("workspace");
         let vibe_home = temporary.path().join(".vibe");
         std::fs::create_dir_all(&vibe_home).expect("vibe home");
-        let release3 = Release3Service::for_runtime_session_root(
+        let workspace_service = WorkspaceService::for_runtime_session_root(
             vibe_home.join("sessions"),
             workspace.clone(),
         );
         let arguments = <Arguments as clap::Parser>::try_parse_from(["vibe"])
             .expect("interactive arguments parse");
-        let counted =
-            || banner_metrics_from_release3(&release3, &arguments, &workspace).skills_count;
+        let counted = || {
+            banner_metrics_from_workspace(&workspace_service, &arguments, &workspace).skills_count
+        };
 
         assert_eq!(
             counted(),

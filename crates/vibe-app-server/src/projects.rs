@@ -1,16 +1,17 @@
-//! The methods the parity plan groups as release 4: Vibe Code projects,
-//! teleport and scheduled loops.
+//! The Vibe Code project a session runs against, and everything that binds one
+//! to a local repository.
 //!
-//! The name is a delivery scope from `docs/parity.md`, not a domain. The parts
-//! name the domains: [`cloud`] is the backend contract and the HTTP client that
-//! satisfies it, [`git`] the working tree a link and a teleport are decided
-//! from, [`projects`] the project a session runs against, [`teleport`] handing a
-//! session to the cloud, [`project_links`] the saved association between a
-//! repository root and a project, and [`loops`] a prompt a session re-runs on an
-//! interval. [`Release4Service`] holds the state they share and routes to them.
+//! [`cloud`] is the backend contract and the HTTP client that satisfies it,
+//! [`git`] the working tree a link and a teleport are decided from,
+//! [`selection`] the project a session runs against, [`teleport`] handing a
+//! session to the cloud, and [`links`] the saved association between a
+//! repository root and a project. [`ProjectsService`] holds the state they
+//! share and routes to them.
 //!
-//! Loops have nothing to do with the rest: they share this module because they
-//! shipped in the same scope, which is the one thing the name records.
+//! [`loops`] is the exception, and stays here for one reason: the wire routes
+//! `loops/*` to this same service, which owns their store and their schedule.
+//! A scheduled loop touches a session only through the identifier a fire is
+//! attributed to, and knows nothing about a project.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -30,12 +31,12 @@ use thiserror::Error;
 mod cloud;
 mod git;
 mod loops;
-mod projects;
+mod selection;
 mod teleport;
 
-use projects::{MAX_HEADLESS_PROJECT_PAGES, ProjectPicker, ProjectState};
+use selection::{MAX_HEADLESS_PROJECT_PAGES, ProjectPicker, ProjectState};
 use teleport::TeleportOperation;
-mod project_links;
+mod links;
 
 pub use cloud::{
     AsyncProjectCloud, AsyncTeleportCloud, CloudConfigError, CloudError, CloudFuture,
@@ -59,7 +60,7 @@ use git::{
     suggested_project_name,
 };
 
-pub const RELEASE4_METHODS: &[&str] = &[
+pub const PROJECTS_METHODS: &[&str] = &[
     "loops/clear",
     "loops/create",
     "loops/delete",
@@ -87,7 +88,7 @@ pub const RELEASE4_METHODS: &[&str] = &[
 
 /// Methods that reach Vibe Code over the network. They are always dispatched on
 /// the asynchronous path so a slow cloud call never blocks the caller's loop.
-const DEFERRED_RELEASE4_METHODS: &[&str] = &[
+const DEFERRED_PROJECTS_METHODS: &[&str] = &[
     "projectLinks/create",
     "projectLinks/inspectRoot",
     "projectLinks/link",
@@ -105,18 +106,18 @@ const DEFERRED_RELEASE4_METHODS: &[&str] = &[
 static NEXT_LINK_TEMP_FILE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Release4Notification {
+pub struct ProjectsNotification {
     pub method: String,
     pub params: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Release4Dispatch {
+pub struct ProjectsDispatch {
     pub result: BTreeMap<String, Value>,
-    pub notifications: Vec<Release4Notification>,
+    pub notifications: Vec<ProjectsNotification>,
 }
 
-impl Release4Dispatch {
+impl ProjectsDispatch {
     fn result(entries: impl IntoIterator<Item = (impl Into<String>, Value)>) -> Self {
         Self {
             result: entries
@@ -129,7 +130,7 @@ impl Release4Dispatch {
 
     fn with_notifications(
         entries: impl IntoIterator<Item = (impl Into<String>, Value)>,
-        notifications: Vec<Release4Notification>,
+        notifications: Vec<ProjectsNotification>,
     ) -> Self {
         Self {
             result: entries
@@ -149,14 +150,14 @@ struct SavedProjectLink {
     project_name: String,
 }
 
-pub struct Release4SessionRemoval {
+pub struct ProjectsSessionRemoval {
     session_id: String,
     pickers: BTreeMap<String, ProjectPicker>,
     teleports: BTreeMap<String, TeleportOperation>,
     loops: BTreeMap<String, ScheduledLoop>,
 }
 
-impl Release4SessionRemoval {
+impl ProjectsSessionRemoval {
     #[must_use]
     pub fn session_id(&self) -> &str {
         &self.session_id
@@ -169,7 +170,7 @@ impl Release4SessionRemoval {
 }
 
 #[derive(Clone)]
-pub struct Release4Service {
+pub struct ProjectsService {
     projects: Arc<Mutex<ProjectState>>,
     teleports: Arc<Mutex<BTreeMap<String, TeleportOperation>>>,
     loops: Arc<Mutex<BTreeMap<String, ScheduledLoop>>>,
@@ -190,7 +191,7 @@ pub struct Release4Service {
     next_loop: Arc<AtomicU64>,
 }
 
-impl Default for Release4Service {
+impl Default for ProjectsService {
     fn default() -> Self {
         let loop_store = default_loop_store();
         let (loops, loop_store_error) = match load_loops(&loop_store) {
@@ -223,8 +224,8 @@ impl Default for Release4Service {
     }
 }
 
-impl Release4Service {
-    pub fn production(config: VibeCodeCloudConfig) -> Result<Self, Release4BuildError> {
+impl ProjectsService {
+    pub fn production(config: VibeCodeCloudConfig) -> Result<Self, ProjectsBuildError> {
         let cloud = Arc::new(VibeCodeHttpCloud::new(config)?);
         let service = Self {
             project_cloud: ProjectCloudBackend::Async(cloud.clone()),
@@ -235,10 +236,10 @@ impl Release4Service {
         };
         service
             .with_project_link_store(default_project_link_store())
-            .map_err(Release4BuildError::Release4)
+            .map_err(ProjectsBuildError::Service)
     }
 
-    pub fn close_transient_session(&self, session_id: &str) -> Result<(), Release4Error> {
+    pub fn close_transient_session(&self, session_id: &str) -> Result<(), ProjectsServiceError> {
         self.lock_projects()?
             .pickers
             .retain(|_, picker| picker.session_id != session_id);
@@ -247,7 +248,7 @@ impl Release4Service {
         Ok(())
     }
 
-    pub fn remove_session(&self, session_id: &str) -> Result<usize, Release4Error> {
+    pub fn remove_session(&self, session_id: &str) -> Result<usize, ProjectsServiceError> {
         let removal = self.remove_session_transactional(session_id)?;
         Ok(removal.removed_loop_count())
     }
@@ -255,7 +256,7 @@ impl Release4Service {
     pub fn remove_session_transactional(
         &self,
         session_id: &str,
-    ) -> Result<Release4SessionRemoval, Release4Error> {
+    ) -> Result<ProjectsSessionRemoval, ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         let mut projects = self.lock_projects()?;
         let mut teleports = self.lock_teleports()?;
@@ -298,7 +299,7 @@ impl Release4Service {
             *loops = loops_before;
             return Err(error);
         }
-        Ok(Release4SessionRemoval {
+        Ok(ProjectsSessionRemoval {
             session_id: session_id.to_owned(),
             pickers: removed_pickers,
             teleports: removed_teleports,
@@ -306,7 +307,10 @@ impl Release4Service {
         })
     }
 
-    pub fn restore_session(&self, removal: &Release4SessionRemoval) -> Result<(), Release4Error> {
+    pub fn restore_session(
+        &self,
+        removal: &ProjectsSessionRemoval,
+    ) -> Result<(), ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         let mut projects = self.lock_projects()?;
         let mut teleports = self.lock_teleports()?;
@@ -324,8 +328,8 @@ impl Release4Service {
                 .keys()
                 .any(|loop_id| loops.contains_key(loop_id))
         {
-            return Err(Release4Error::Conflict(
-                "release-4 session rollback collides with newer session state".to_owned(),
+            return Err(ProjectsServiceError::Conflict(
+                "projects session rollback collides with newer session state".to_owned(),
             ));
         }
         let projects_before = projects.clone();
@@ -348,7 +352,7 @@ impl Release4Service {
         &self,
         old_session_id: &str,
         new_session_id: &str,
-    ) -> Result<(), Release4Error> {
+    ) -> Result<(), ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         if old_session_id == new_session_id {
             return Ok(());
@@ -399,7 +403,7 @@ impl Release4Service {
         }
     }
 
-    pub fn with_project_link_store(mut self, path: PathBuf) -> Result<Self, Release4Error> {
+    pub fn with_project_link_store(mut self, path: PathBuf) -> Result<Self, ProjectsServiceError> {
         let linked_projects = load_project_links(&path)?;
         self.projects = Arc::new(Mutex::new(ProjectState {
             pickers: BTreeMap::new(),
@@ -418,9 +422,9 @@ impl Release4Service {
         &self,
         method: &str,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
-        if DEFERRED_RELEASE4_METHODS.contains(&method) {
-            return Err(Release4Error::Conflict(format!(
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
+        if DEFERRED_PROJECTS_METHODS.contains(&method) {
+            return Err(ProjectsServiceError::Conflict(format!(
                 "`{method}` reaches Vibe Code and must be dispatched asynchronously"
             )));
         }
@@ -435,20 +439,20 @@ impl Release4Service {
             "loops/list" => self.loop_list(params),
             "loops/clear" => self.loop_clear(params),
             "loops/delete" => self.loop_delete(params),
-            _ => Err(Release4Error::MethodNotFound(method.to_owned())),
+            _ => Err(ProjectsServiceError::MethodNotFound(method.to_owned())),
         }
     }
 
     #[must_use]
     pub fn requires_deferred_dispatch(&self, method: &str) -> bool {
-        DEFERRED_RELEASE4_METHODS.contains(&method)
+        DEFERRED_PROJECTS_METHODS.contains(&method)
     }
 
     pub async fn dispatch_deferred(
         &self,
         method: &str,
         params: &BTreeMap<String, Value>,
-    ) -> Result<Release4Dispatch, Release4Error> {
+    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         match method {
             method if method.starts_with("projectLinks/") => {
                 self.project_links_deferred(method, params).await
@@ -472,20 +476,22 @@ impl Release4Service {
     fn persist_project_links(
         &self,
         links: &BTreeMap<String, SavedProjectLink>,
-    ) -> Result<(), Release4Error> {
+    ) -> Result<(), ProjectsServiceError> {
         let Some(path) = &self.project_link_store else {
             return Ok(());
         };
         if let Some(error) = &self.project_link_store_error {
-            return Err(Release4Error::ProjectLinkPersistenceState(error.clone()));
+            return Err(ProjectsServiceError::ProjectLinkPersistenceState(
+                error.clone(),
+            ));
         }
         persist_json_atomically(path, links, &NEXT_LINK_TEMP_FILE)
-            .map_err(Release4Error::ProjectLinkPersistence)
+            .map_err(ProjectsServiceError::ProjectLinkPersistence)
     }
 }
 
-fn notification<const N: usize>(method: &str, entries: [(&str, Value); N]) -> Release4Notification {
-    Release4Notification {
+fn notification<const N: usize>(method: &str, entries: [(&str, Value); N]) -> ProjectsNotification {
+    ProjectsNotification {
         method: method.to_owned(),
         params: entries
             .into_iter()
@@ -494,11 +500,13 @@ fn notification<const N: usize>(method: &str, entries: [(&str, Value); N]) -> Re
     }
 }
 
-fn load_project_links(path: &Path) -> Result<BTreeMap<String, SavedProjectLink>, Release4Error> {
+fn load_project_links(
+    path: &Path,
+) -> Result<BTreeMap<String, SavedProjectLink>, ProjectsServiceError> {
     match fs::read(path) {
         Ok(contents) => {
             let stored = serde_json::from_slice::<BTreeMap<String, StoredProjectLink>>(&contents)
-                .map_err(Release4Error::Json)?;
+                .map_err(ProjectsServiceError::Json)?;
             Ok(stored
                 .into_iter()
                 .map(|(root, link)| {
@@ -515,7 +523,7 @@ fn load_project_links(path: &Path) -> Result<BTreeMap<String, SavedProjectLink>,
                 .collect())
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
-        Err(error) => Err(Release4Error::ProjectLinkPersistence(error)),
+        Err(error) => Err(ProjectsServiceError::ProjectLinkPersistence(error)),
     }
 }
 
@@ -583,15 +591,15 @@ fn replace_file(source: &Path, destination: &Path) -> std::io::Result<()> {
     fs::rename(source, destination)
 }
 
-impl From<params::ParamError> for Release4Error {
+impl From<params::ParamError> for ProjectsServiceError {
     fn from(error: params::ParamError) -> Self {
         Self::InvalidParams(error.message())
     }
 }
 
 #[derive(Debug, Error)]
-pub enum Release4Error {
-    #[error("unknown release-4 method `{0}`")]
+pub enum ProjectsServiceError {
+    #[error("unknown projects method `{0}`")]
     MethodNotFound(String),
     #[error("invalid parameters: {0}")]
     InvalidParams(String),
@@ -616,21 +624,21 @@ pub enum Release4Error {
     ProjectLinkPersistence(std::io::Error),
     #[error("Vibe Code project-link persistence is unavailable: {0}")]
     ProjectLinkPersistenceState(String),
-    #[error("release-4 background task stopped unexpectedly")]
+    #[error("projects background task stopped unexpectedly")]
     BackgroundTask,
-    #[error("release-4 state lock is poisoned")]
+    #[error("projects state lock is poisoned")]
     StatePoisoned,
     #[error("JSON conversion failed: {0}")]
     Json(#[from] serde_json::Error),
 }
 
 #[derive(Debug, Error)]
-pub enum Release4BuildError {
+pub enum ProjectsBuildError {
     #[error(transparent)]
     Cloud(#[from] CloudConfigError),
     #[error(transparent)]
-    Release4(Release4Error),
+    Service(ProjectsServiceError),
 }
 
 #[cfg(test)]
-mod release4_tests;
+mod projects_tests;

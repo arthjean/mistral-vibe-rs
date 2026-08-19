@@ -41,7 +41,7 @@ async fn a_configuration_change_between_turns_reaches_the_published_tools() {
     );
 
     // No re-registration: the same published surface, a moved budget.
-    let config = server.release3.tool_config();
+    let config = server.workspace.tool_config();
     config.update(
         "[read_file]\nmax_read_bytes = 2\n"
             .parse::<toml::Table>()

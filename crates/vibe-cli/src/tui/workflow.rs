@@ -395,7 +395,7 @@ fn show_config(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
     // The effective document with every layer it was composed from, which the
     // published `ConfigView` does not carry and this process already holds.
     let Some(mut snapshot) = runtime
-        .release3
+        .workspace
         .config_document()
         .map_err(|error| state.push_diagnostic(error.to_string()))
         .ok()
@@ -680,7 +680,7 @@ fn show_log_path(
 ) {
     // The same roots the session itself was opened under, so the directory
     // named here is the one the session is actually writing to.
-    let path = super::startup::release3_paths(arguments, working_directory)
+    let path = super::startup::workspace_paths(arguments, working_directory)
         .session_root
         .join(&runtime.session_id);
     if path.is_dir() {
