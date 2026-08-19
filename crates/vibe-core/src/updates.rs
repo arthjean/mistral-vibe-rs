@@ -21,6 +21,8 @@ use crate::child::{ChildGroup, Rung};
 pub const UPDATE_CACHE_TTL_SECONDS: i64 = 24 * 60 * 60;
 
 const CACHE_SECTION: &str = "update_cache";
+/// Reference `FileSystemUpdateCacheRepository._legacy_json`.
+const LEGACY_CACHE_FILE: &str = "update_cache.json";
 const GATEWAY_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_CACHE_BYTES: u64 = 1024 * 1024;
 
@@ -299,9 +301,12 @@ pub fn mark_version_as_seen(cache: Option<&UpdateCache>, version: &str, now: i64
 
 /// Reference `FileSystemUpdateCacheRepository`: a `[update_cache]` section of the
 /// shared `cache.toml`, where any unreadable or malformed state reads as absent.
+/// A sibling `update_cache.json` written by the pre-TOML layout is read once and
+/// migrated into the section.
 #[derive(Debug, Clone)]
 pub struct UpdateCacheStore {
     path: PathBuf,
+    legacy_path: PathBuf,
 }
 
 impl UpdateCacheStore {
@@ -309,6 +314,7 @@ impl UpdateCacheStore {
     pub fn new(vibe_home: &Path) -> Self {
         Self {
             path: vibe_home.join("cache.toml"),
+            legacy_path: vibe_home.join(LEGACY_CACHE_FILE),
         }
     }
 
@@ -317,15 +323,108 @@ impl UpdateCacheStore {
         &self.path
     }
 
+    /// The pre-TOML file [`Self::load`] migrates from, named by the reference's
+    /// `_legacy_json`.
+    #[must_use]
+    pub fn legacy_path(&self) -> &Path {
+        &self.legacy_path
+    }
+
+    /// Reference `_read_section` followed by `_parse`.
+    ///
+    /// The reference tests the section for truthiness, so a missing section, an
+    /// empty one, and a section that is not a table all fall through to the
+    /// legacy file, while a populated section answers on its own even when its
+    /// contents do not parse.
     #[must_use]
     pub fn load(&self) -> Option<UpdateCache> {
-        let table = self.read_document()?;
-        let section = table.get(CACHE_SECTION)?.as_table()?;
-        let latest_version = section.get("latest_version")?.as_str()?.to_owned();
-        let stored_at_timestamp = section.get("stored_at_timestamp")?.as_integer()?;
+        let section = self.read_document().and_then(|document| {
+            document
+                .get(CACHE_SECTION)
+                .and_then(toml::Value::as_table)
+                .cloned()
+        });
+        match section {
+            Some(section) if !section.is_empty() => Self::parse_section(&section),
+            _ => self.migrate_legacy(),
+        }
+    }
+
+    /// Reference `set`: the cache becomes the payload the section merge applies,
+    /// with an unset optional key omitted rather than written as empty.
+    pub fn store(&self, cache: &UpdateCache) -> Result<(), UpdateError> {
+        let mut payload = toml::map::Map::new();
+        payload.insert(
+            "latest_version".to_owned(),
+            toml::Value::String(cache.latest_version.clone()),
+        );
+        payload.insert(
+            "stored_at_timestamp".to_owned(),
+            toml::Value::Integer(cache.stored_at_timestamp),
+        );
+        if let Some(seen) = &cache.seen_whats_new_version {
+            payload.insert(
+                "seen_whats_new_version".to_owned(),
+                toml::Value::String(seen.clone()),
+            );
+        }
+        if let Some(dismissed) = &cache.dismissed_version {
+            payload.insert(
+                "dismissed_version".to_owned(),
+                toml::Value::String(dismissed.clone()),
+            );
+        }
+        self.write_section(payload)
+    }
+
+    /// Reference `FileSystemCacheStore.write_section`, which updates the section
+    /// in place: a key this port does not model survives the write, an optional
+    /// key the payload omits keeps whatever the file held, and only a section
+    /// that is not a table is replaced outright.
+    fn write_section(
+        &self,
+        payload: toml::map::Map<String, toml::Value>,
+    ) -> Result<(), UpdateError> {
+        let mut document = self.read_document().unwrap_or_default();
+        let mut section = match document.remove(CACHE_SECTION) {
+            Some(toml::Value::Table(section)) => section,
+            _ => toml::map::Map::new(),
+        };
+        section.extend(payload);
+        document.insert(CACHE_SECTION.to_owned(), toml::Value::Table(section));
+        let encoded = toml::to_string_pretty(&toml::Value::Table(document))
+            .map_err(|_| UpdateError::CacheWrite)?;
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent).map_err(|_| UpdateError::CacheWrite)?;
+        }
+        write_atomically(&self.path, "cache.toml", encoded.as_bytes())
+            .map_err(|_| UpdateError::CacheWrite)
+    }
+
+    /// Reference `_read_section`'s fallback: the pre-TOML JSON is read once, its
+    /// non-null keys are merged into the section, and the values reach the
+    /// caller whether or not that write succeeded, because the reference's
+    /// `write_section` logs and swallows its own failure.
+    fn migrate_legacy(&self) -> Option<UpdateCache> {
+        let text = read_bounded(&self.legacy_path)?;
+        let legacy: serde_json::Value = serde_json::from_str(&text).ok()?;
+        // The reference hands whatever the file held to `_parse` and raises an
+        // attribute error on anything but an object. This port reads a non-object
+        // as no cache, which is the absence every caller already handles.
+        let legacy = legacy.as_object()?;
+        let payload = legacy
+            .iter()
+            .filter_map(|(key, value)| Some((key.clone(), legacy_value(value)?)))
+            .collect();
+        let _ = self.write_section(payload);
+        Self::parse_legacy(legacy)
+    }
+
+    /// Reference `_parse` over the TOML section.
+    fn parse_section(section: &toml::Table) -> Option<UpdateCache> {
         Some(UpdateCache {
-            latest_version,
-            stored_at_timestamp,
+            latest_version: section.get("latest_version")?.as_str()?.to_owned(),
+            stored_at_timestamp: section.get("stored_at_timestamp")?.as_integer()?,
             seen_whats_new_version: section
                 .get("seen_whats_new_version")
                 .and_then(toml::Value::as_str)
@@ -337,46 +436,62 @@ impl UpdateCacheStore {
         })
     }
 
-    pub fn store(&self, cache: &UpdateCache) -> Result<(), UpdateError> {
-        let mut document = self.read_document().unwrap_or_default();
-        let mut section = toml::map::Map::new();
-        section.insert(
-            "latest_version".to_owned(),
-            toml::Value::String(cache.latest_version.clone()),
-        );
-        section.insert(
-            "stored_at_timestamp".to_owned(),
-            toml::Value::Integer(cache.stored_at_timestamp),
-        );
-        if let Some(seen) = &cache.seen_whats_new_version {
-            section.insert(
-                "seen_whats_new_version".to_owned(),
-                toml::Value::String(seen.clone()),
-            );
-        }
-        if let Some(dismissed) = &cache.dismissed_version {
-            section.insert(
-                "dismissed_version".to_owned(),
-                toml::Value::String(dismissed.clone()),
-            );
-        }
-        document.insert(CACHE_SECTION.to_owned(), toml::Value::Table(section));
-        let encoded = toml::to_string_pretty(&toml::Value::Table(document))
-            .map_err(|_| UpdateError::CacheWrite)?;
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent).map_err(|_| UpdateError::CacheWrite)?;
-        }
-        write_atomically(&self.path, "cache.toml", encoded.as_bytes())
-            .map_err(|_| UpdateError::CacheWrite)
+    /// Reference `_parse` over the legacy JSON object, whose type guards are the
+    /// same two required keys and the same two optional ones.
+    fn parse_legacy(legacy: &serde_json::Map<String, serde_json::Value>) -> Option<UpdateCache> {
+        Some(UpdateCache {
+            latest_version: legacy.get("latest_version")?.as_str()?.to_owned(),
+            stored_at_timestamp: legacy.get("stored_at_timestamp")?.as_i64()?,
+            seen_whats_new_version: legacy
+                .get("seen_whats_new_version")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
+            dismissed_version: legacy
+                .get("dismissed_version")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
+        })
     }
 
     fn read_document(&self) -> Option<toml::Table> {
-        let metadata = fs::metadata(&self.path).ok()?;
-        if metadata.len() > MAX_CACHE_BYTES {
-            return None;
-        }
-        let text = fs::read_to_string(&self.path).ok()?;
-        toml::from_str(&text).ok()
+        toml::from_str(&read_bounded(&self.path)?).ok()
+    }
+}
+
+/// Reads one cache file, treating anything unreadable as absent.
+///
+/// The reference reads both files with no ceiling. This port refuses one past
+/// [`MAX_CACHE_BYTES`] so a file something else appended to cannot be parsed
+/// into memory, which reads as absent exactly like a corrupt one.
+fn read_bounded(path: &Path) -> Option<String> {
+    let metadata = fs::metadata(path).ok()?;
+    if metadata.len() > MAX_CACHE_BYTES {
+        return None;
+    }
+    fs::read_to_string(path).ok()
+}
+
+/// One legacy JSON value as the reference's TOML writer records it. A null is
+/// dropped upstream by the migration's own filter, and a value TOML cannot hold
+/// is dropped here rather than failing the migration the reference completes.
+fn legacy_value(value: &serde_json::Value) -> Option<toml::Value> {
+    match value {
+        serde_json::Value::Null => None,
+        serde_json::Value::Bool(value) => Some(toml::Value::Boolean(*value)),
+        serde_json::Value::Number(number) => number
+            .as_i64()
+            .map(toml::Value::Integer)
+            .or_else(|| number.as_f64().map(toml::Value::Float)),
+        serde_json::Value::String(value) => Some(toml::Value::String(value.clone())),
+        serde_json::Value::Array(values) => Some(toml::Value::Array(
+            values.iter().filter_map(legacy_value).collect(),
+        )),
+        serde_json::Value::Object(entries) => Some(toml::Value::Table(
+            entries
+                .iter()
+                .filter_map(|(key, value)| Some((key.clone(), legacy_value(value)?)))
+                .collect(),
+        )),
     }
 }
 
@@ -1495,5 +1610,245 @@ mod tests {
         )
         .await;
         assert_eq!(outcome, UpgradeOutcome::Cancelled);
+    }
+
+    /// Reference `_read_section`'s migration, whose null filter is what keeps an
+    /// unset optional key out of the file it writes.
+    #[test]
+    fn a_legacy_json_cache_migrates_into_the_section_without_its_null_keys() {
+        let directory = tempfile::tempdir().expect("temporary vibe home");
+        let store = UpdateCacheStore::new(directory.path());
+        fs::write(
+            store.legacy_path(),
+            r#"{"latest_version": "2.24.0", "stored_at_timestamp": 42,
+                "seen_whats_new_version": null, "dismissed_version": "2.24.0"}"#,
+        )
+        .expect("legacy cache");
+        assert_eq!(
+            store.load(),
+            Some(UpdateCache {
+                latest_version: "2.24.0".to_owned(),
+                stored_at_timestamp: 42,
+                seen_whats_new_version: None,
+                dismissed_version: Some("2.24.0".to_owned()),
+            })
+        );
+        let migrated = fs::read_to_string(store.path()).expect("migrated cache");
+        assert!(migrated.contains("dismissed_version"));
+        assert!(
+            !migrated.contains("seen_whats_new_version"),
+            "a null legacy key is never written into the section"
+        );
+        // The section now answers on its own, which is what makes the migration
+        // one-directional.
+        fs::remove_file(store.legacy_path()).expect("drop the legacy file");
+        assert_eq!(
+            store.load().map(|cache| cache.latest_version),
+            Some("2.24.0".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_populated_section_answers_before_the_legacy_file_is_read() {
+        let directory = tempfile::tempdir().expect("temporary vibe home");
+        let store = UpdateCacheStore::new(directory.path());
+        fs::write(
+            store.path(),
+            "[update_cache]\nlatest_version = \"1.0.0\"\nstored_at_timestamp = 1\n",
+        )
+        .expect("existing section");
+        fs::write(
+            store.legacy_path(),
+            r#"{"latest_version": "2.24.0", "stored_at_timestamp": 42}"#,
+        )
+        .expect("legacy cache");
+        assert_eq!(store.load(), Some(UpdateCache::new("1.0.0", 1)));
+        assert!(
+            !fs::read_to_string(store.path())
+                .expect("cache text")
+                .contains("2.24.0"),
+            "the legacy file is never read once the section is populated"
+        );
+    }
+
+    /// The reference reaches `_parse` with whatever the legacy file held and
+    /// raises on anything but an object. This port answers absent instead, which
+    /// is the one place its cache store is deliberately more defensive.
+    #[test]
+    fn a_legacy_file_that_is_not_an_object_reads_as_absent_and_writes_nothing() {
+        let directory = tempfile::tempdir().expect("temporary vibe home");
+        let store = UpdateCacheStore::new(directory.path());
+        for legacy in ["[]", "\"2.24.0\"", "7", "{not json", "null"] {
+            fs::write(store.legacy_path(), legacy).expect("legacy cache");
+            assert_eq!(store.load(), None, "legacy payload {legacy}");
+            assert!(
+                !store.path().exists(),
+                "legacy payload {legacy} must write nothing"
+            );
+        }
+    }
+
+    /// Reference `_read_section` returns the legacy payload it just tried to
+    /// write, and `write_section` swallows its own failure, so a home nothing
+    /// can be written into still answers with the state it holds.
+    #[test]
+    fn a_migration_whose_write_fails_still_returns_the_legacy_values() {
+        let directory = tempfile::tempdir().expect("temporary vibe home");
+        let store = UpdateCacheStore::new(directory.path());
+        // A directory where the cache file belongs fails every write on every
+        // platform, without depending on file permissions.
+        fs::create_dir(store.path()).expect("block the cache file");
+        fs::write(
+            store.legacy_path(),
+            r#"{"latest_version": "2.24.0", "stored_at_timestamp": 42}"#,
+        )
+        .expect("legacy cache");
+        assert_eq!(store.load(), Some(UpdateCache::new("2.24.0", 42)));
+        assert!(store.path().is_dir(), "the failed write staged nothing");
+    }
+
+    /// Reference `write_section`, which updates the section in place instead of
+    /// rebuilding it, so nothing the payload omits is dropped.
+    #[test]
+    fn a_write_merges_into_the_section_and_keeps_every_key_it_does_not_carry() {
+        let directory = tempfile::tempdir().expect("temporary vibe home");
+        let store = UpdateCacheStore::new(directory.path());
+        fs::write(
+            store.path(),
+            "[other]\nkept = true\n\n[update_cache]\ncustom = \"unmodeled\"\n\
+             latest_version = \"1.0.0\"\nstored_at_timestamp = 1\n\
+             dismissed_version = \"1.0.0\"\n",
+        )
+        .expect("existing cache");
+        store
+            .store(&UpdateCache::new("2.24.0", 42))
+            .expect("cache write");
+        let text = fs::read_to_string(store.path()).expect("cache text");
+        assert!(text.contains("kept = true"), "a sibling table survives");
+        assert!(
+            text.contains("custom = \"unmodeled\""),
+            "a key this port does not model survives"
+        );
+        assert_eq!(
+            store.load(),
+            Some(UpdateCache {
+                latest_version: "2.24.0".to_owned(),
+                stored_at_timestamp: 42,
+                seen_whats_new_version: None,
+                // The merge never removes a key, so a dismissal the payload
+                // omits outlives the write.
+                dismissed_version: Some("1.0.0".to_owned()),
+            })
+        );
+    }
+
+    /// Reference `write_section`'s `isinstance` guard: a section that is not a
+    /// table is replaced rather than merged into.
+    #[test]
+    fn a_section_that_is_not_a_table_is_replaced_by_the_written_keys() {
+        let directory = tempfile::tempdir().expect("temporary vibe home");
+        let store = UpdateCacheStore::new(directory.path());
+        fs::write(store.path(), "update_cache = 5\n\n[other]\nkept = true\n")
+            .expect("existing cache");
+        let cache = UpdateCache::new("2.24.0", 42);
+        store.store(&cache).expect("cache write");
+        assert_eq!(store.load(), Some(cache));
+        assert!(
+            fs::read_to_string(store.path())
+                .expect("cache text")
+                .contains("kept = true")
+        );
+    }
+
+    /// The ceiling is this port's own: the reference reads the file whatever its
+    /// size, so an oversized document is the one load the two answer differently.
+    #[test]
+    fn an_oversized_cache_reads_as_absent_and_the_next_write_produces_a_valid_file() {
+        let directory = tempfile::tempdir().expect("temporary vibe home");
+        let store = UpdateCacheStore::new(directory.path());
+        let padding = "#".repeat(usize::try_from(MAX_CACHE_BYTES).expect("ceiling fits a usize"));
+        fs::write(store.path(), format!("[other]\nkept = true\n{padding}\n"))
+            .expect("oversized cache");
+        assert_eq!(store.load(), None);
+        let cache = UpdateCache::new("2.24.0", 42);
+        store.store(&cache).expect("cache write");
+        assert_eq!(store.load(), Some(cache), "the rewritten file is readable");
+        assert!(
+            !fs::read_to_string(store.path())
+                .expect("cache text")
+                .contains("kept = true"),
+            "an unreadable document is replaced rather than appended to"
+        );
+    }
+
+    /// The reference logs and swallows a failed cache write. This port reports
+    /// it, which is what routes the failure into the update flow's own
+    /// cache-write outcome instead of losing it.
+    #[cfg(unix)]
+    #[test]
+    fn a_failed_write_reports_the_error_and_leaves_the_previous_file_intact() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let directory = tempfile::tempdir().expect("temporary vibe home");
+        let store = UpdateCacheStore::new(directory.path());
+        let previous = UpdateCache::new("2.24.0", 42);
+        store.store(&previous).expect("first cache write");
+
+        let seal = |mode| {
+            let mut permissions = fs::metadata(directory.path())
+                .expect("vibe home metadata")
+                .permissions();
+            permissions.set_mode(mode);
+            fs::set_permissions(directory.path(), permissions).expect("vibe home permissions");
+        };
+        seal(0o500);
+        let ignores_permissions = fs::write(directory.path().join("probe"), b"").is_ok();
+        let outcome = store.store(&UpdateCache::new("2.25.0", 43));
+        // Restored before any assertion, so a failure still leaves a removable
+        // temporary directory behind.
+        seal(0o700);
+
+        if ignores_permissions {
+            // A process the mode bits do not bind cannot fail this write, so
+            // only the sealed run proves anything.
+            return;
+        }
+        assert_eq!(outcome, Err(UpdateError::CacheWrite));
+        assert_eq!(
+            store.load(),
+            Some(previous),
+            "a staged write that never renamed leaves the previous cache in place"
+        );
+    }
+
+    /// The migration is reached from the same entry point the startup check and
+    /// `--check-upgrade` both call, and its values answer before the gateway is
+    /// contacted.
+    #[tokio::test]
+    async fn discovery_answers_from_a_migrated_legacy_cache_without_reaching_the_gateway() {
+        let directory = tempfile::tempdir().expect("temporary vibe home");
+        let store = UpdateCacheStore::new(directory.path());
+        fs::write(
+            store.legacy_path(),
+            r#"{"latest_version": "2.24.0", "stored_at_timestamp": 100}"#,
+        )
+        .expect("legacy cache");
+        let offline = StubGateway(Err(UpdateGatewayError::new(UpdateGatewayCause::Unknown)));
+        let availability = get_update_if_available(&offline, &store, "2.23.1", 101, false)
+            .await
+            .expect("discovery");
+        assert_eq!(
+            availability,
+            Some(UpdateAvailability {
+                latest_version: "2.24.0".to_owned(),
+                should_notify: false,
+            })
+        );
+        assert!(
+            fs::read_to_string(store.path())
+                .expect("migrated cache")
+                .contains("2.24.0"),
+            "the migration wrote the section the next run reads"
+        );
     }
 }
