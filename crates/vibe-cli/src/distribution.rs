@@ -339,4 +339,6 @@ mod tests {
 }
 
 #[cfg(test)]
+mod completion_parity_tests;
+#[cfg(test)]
 mod release_parity_tests;
