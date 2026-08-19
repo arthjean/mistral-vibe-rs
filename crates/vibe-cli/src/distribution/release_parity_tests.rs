@@ -28,9 +28,11 @@ const VERSION_CARRIERS: [&str; 5] = [
 
 /// Release machinery that resolves the version at run time. A literal appearing
 /// here is a sixth copy the bump would not reach.
-const VERSION_FREE_SOURCES: [&str; 2] = [
+const VERSION_FREE_SOURCES: [&str; 4] = [
     ".github/workflows/release.yml",
     "scripts/ci/package-release.sh",
+    CI_WORKFLOW,
+    INSTALLER_VERIFICATION,
 ];
 
 /// The two scripts a user runs to install, both of which resolve a release
@@ -39,6 +41,20 @@ const INSTALLERS: [&str; 2] = ["scripts/install.sh", "scripts/install.ps1"];
 
 /// The workflow that publishes what the installers fetch.
 const RELEASE_WORKFLOW: &str = ".github/workflows/release.yml";
+
+/// The workflow every push and pull request runs.
+const CI_WORKFLOW: &str = ".github/workflows/ci.yml";
+
+/// The job inside it that exercises the PowerShell installer, which is the only
+/// delivery path a Linux runner cannot execute.
+const WINDOWS_INSTALLER_JOB: &str = "windows-installer";
+
+/// The script that job runs. It drives `scripts/install.ps1` through the four
+/// paths a Windows installation takes.
+const INSTALLER_VERIFICATION: &str = "scripts/ci/verify-install-ps1.ps1";
+
+/// The longest the Windows job may be allowed to run.
+const WINDOWS_INSTALLER_BUDGET_MINUTES: u32 = 20;
 
 /// Every target the release matrix builds. The installers resolve their archive
 /// name from `uname` and from the PowerShell architecture check, so a target
@@ -394,4 +410,144 @@ fn packaged_output_is_not_tracked() {
         ignored.lines().any(|line| line.trim() == "dist/"),
         "a local `package-release.sh` run writes dist/, which must not appear as untracked work"
     );
+}
+
+/// The body of one job in `workflow`, without its header line.
+///
+/// A job body is indented four spaces; the next job's header and the comments
+/// introducing it sit at two, which is where the block ends.
+fn workflow_job(workflow: &str, name: &str) -> String {
+    let header = format!("  {name}:");
+    let mut body = Vec::new();
+    let mut found = false;
+    for line in workflow.lines() {
+        if line.trim_end() == header {
+            found = true;
+            continue;
+        }
+        if found {
+            if !line.trim().is_empty() && !line.starts_with("    ") {
+                break;
+            }
+            body.push(line);
+        }
+    }
+    assert!(found, "{CI_WORKFLOW} declares no job named {name}");
+    body.join("\n")
+}
+
+#[test]
+fn the_powershell_installer_is_exercised_on_a_windows_runner() {
+    // Every other gate runs on Linux, where `install.ps1` is unreachable. This
+    // job is the only thing that executes it, so its shape is asserted here
+    // rather than trusted to whoever last edited the workflow.
+    let job = workflow_job(&read(CI_WORKFLOW), WINDOWS_INSTALLER_JOB);
+    let required = [
+        (
+            "runs-on: windows-",
+            "the installer must be exercised on a Windows runner",
+        ),
+        (
+            "scripts/ci/package-release.sh windows-x86_64",
+            "the job must package the archive the installer fetches",
+        ),
+        (
+            "VIBE_SKIP_BUILD",
+            "the job must package the binaries it already built rather than rebuilding them",
+        ),
+        (
+            INSTALLER_VERIFICATION,
+            "the job must run the script that drives the installer",
+        ),
+        ("shell: pwsh", "the verification must run under PowerShell"),
+    ];
+    for (needle, why) in required {
+        assert!(
+            job.contains(needle),
+            "{CI_WORKFLOW} job {WINDOWS_INSTALLER_JOB} is missing `{needle}`: {why}"
+        );
+    }
+
+    let budget: u32 = job
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("timeout-minutes:"))
+        .map(|value| {
+            value
+                .trim()
+                .parse()
+                .unwrap_or_else(|error| panic!("the job's timeout is a number: {error}"))
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "{CI_WORKFLOW} job {WINDOWS_INSTALLER_JOB} declares no timeout, so a stalled \
+                 runner would hold it for the six-hour default"
+            )
+        });
+    assert!(
+        budget <= WINDOWS_INSTALLER_BUDGET_MINUTES,
+        "{CI_WORKFLOW} job {WINDOWS_INSTALLER_JOB} allows itself {budget} minutes, more than the \
+         {WINDOWS_INSTALLER_BUDGET_MINUTES} it is budgeted"
+    );
+
+    assert!(
+        repo_root().join(INSTALLER_VERIFICATION).is_file(),
+        "{CI_WORKFLOW} runs {INSTALLER_VERIFICATION}, which this repository does not publish"
+    );
+}
+
+#[test]
+fn the_installer_verification_refuses_on_the_words_the_installer_throws() {
+    // The verification asserts a refusal by matching the message. A reworded
+    // `throw` would leave the pattern matching nothing, and the run would report
+    // a failure only on a Windows runner. This binds the two locally.
+    let verification = read(INSTALLER_VERIFICATION);
+    let installer = read("scripts/install.ps1");
+
+    let mut patterns = Vec::new();
+    let mut rest = verification.as_str();
+    const PREFIX: &str = "-Pattern \"";
+    while let Some(position) = rest.find(PREFIX) {
+        rest = &rest[position + PREFIX.len()..];
+        let (pattern, tail) = rest
+            .split_once('"')
+            .unwrap_or_else(|| panic!("{INSTALLER_VERIFICATION} closes every -Pattern literal"));
+        patterns.push(pattern.to_owned());
+        rest = tail;
+    }
+    assert!(
+        patterns.len() >= 2,
+        "{INSTALLER_VERIFICATION} asserts {} refusals; the story names two, the interrupted \
+         upgrade and the mismatched digest",
+        patterns.len()
+    );
+    for pattern in &patterns {
+        assert!(
+            installer
+                .lines()
+                .any(|line| line.contains("throw") && line.contains(pattern.as_str())),
+            "{INSTALLER_VERIFICATION} expects a refusal matching `{pattern}`, which no \
+             scripts/install.ps1 throw emits"
+        );
+    }
+
+    let required = [
+        (
+            "file://",
+            "the verification must install from the local release the job just packaged",
+        ),
+        (
+            "-Uninstall",
+            "the verification must exercise removal as well as installation",
+        ),
+        (
+            "--version",
+            "the verification must run the installed binary",
+        ),
+    ];
+    for (needle, why) in required {
+        assert!(
+            verification.contains(needle),
+            "{INSTALLER_VERIFICATION} is missing `{needle}`: {why}"
+        );
+    }
 }
