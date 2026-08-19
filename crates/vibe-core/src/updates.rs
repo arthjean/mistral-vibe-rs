@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::atomic_file::write_atomically;
+use crate::child::{ChildGroup, Rung};
 
 /// Reference `UPDATE_CACHE_TTL_SECONDS`.
 pub const UPDATE_CACHE_TTL_SECONDS: i64 = 24 * 60 * 60;
@@ -516,6 +517,245 @@ fn artifact_version(filename: &str) -> Option<Version> {
     Version::parse(version)
 }
 
+/// Reference `GitHubUpdateGateway`: the releases of one repository, newest
+/// published first.
+pub struct GitHubUpdateGateway {
+    owner: String,
+    repository: String,
+    base_url: String,
+    token: Option<String>,
+    client: reqwest::Client,
+}
+
+/// The `User-Agent` the reference sends under its own name. GitHub answers an
+/// unidentified client with a 403, so this port names itself instead.
+const GITHUB_USER_AGENT: &str = concat!(
+    "mistral-vibe-rs-update-notifier/",
+    env!("CARGO_PKG_VERSION")
+);
+
+/// The header GitHub spends down on every answer, error responses included.
+const RATE_LIMIT_REMAINING_HEADER: &str = "X-RateLimit-Remaining";
+
+impl GitHubUpdateGateway {
+    /// The host the reference reads, and this port's default.
+    pub const DEFAULT_BASE_URL: &'static str = "https://api.github.com";
+
+    /// The sentence this port publishes for `NotFound`. `NOTICE` forbids
+    /// shipping the reference's own prose, so this states the same cause and
+    /// the same next action in this port's words, and
+    /// `the_not_found_sentence_is_this_port_s_own` holds the two unequal.
+    const NOT_FOUND_MESSAGE: &'static str = "The releases of this repository could not be read. Export a GITHUB_TOKEN that can read \
+         them, then check again.";
+
+    pub fn with_base_url(
+        owner: impl Into<String>,
+        repository: impl Into<String>,
+        base_url: impl Into<String>,
+    ) -> Result<Self, UpdateGatewayError> {
+        Self::with_timeout(owner, repository, base_url, GATEWAY_TIMEOUT)
+    }
+
+    fn with_timeout(
+        owner: impl Into<String>,
+        repository: impl Into<String>,
+        base_url: impl Into<String>,
+        timeout: Duration,
+    ) -> Result<Self, UpdateGatewayError> {
+        let client = reqwest::Client::builder()
+            .timeout(timeout)
+            .build()
+            .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::RequestFailed))?;
+        Ok(Self {
+            owner: owner.into(),
+            repository: repository.into(),
+            base_url: base_url.into().trim_end_matches('/').to_owned(),
+            token: None,
+            client,
+        })
+    }
+
+    /// Reference `GitHubUpdateGateway.__init__`: the token is optional, and the
+    /// reference's falsy check makes an empty one no token at all.
+    #[must_use]
+    pub fn with_token(mut self, token: Option<String>) -> Self {
+        self.token = token.filter(|value| !value.trim().is_empty());
+        self
+    }
+
+    #[must_use]
+    pub fn releases_url(&self) -> String {
+        format!(
+            "{}/repos/{}/{}/releases",
+            self.base_url, self.owner, self.repository
+        )
+    }
+}
+
+impl UpdateGateway for GitHubUpdateGateway {
+    fn fetch_update(&self) -> UpdateFetch<'_> {
+        Box::pin(async move {
+            let mut request = self
+                .client
+                .get(self.releases_url())
+                .header("Accept", "application/vnd.github+json")
+                .header("User-Agent", GITHUB_USER_AGENT);
+            if let Some(token) = &self.token {
+                request = request.header("Authorization", format!("Bearer {token}"));
+            }
+            let response = request
+                .send()
+                .await
+                .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::RequestFailed))?;
+            let status = response.status().as_u16();
+            let remaining = response
+                .headers()
+                .get(RATE_LIMIT_REMAINING_HEADER)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned);
+            if let Some(cause) = github_status_cause(status, remaining.as_deref()) {
+                return Err(UpdateGatewayError {
+                    cause,
+                    message: match cause {
+                        UpdateGatewayCause::NotFound => Some(Self::NOT_FOUND_MESSAGE.to_owned()),
+                        _ => None,
+                    },
+                });
+            }
+            let body = response
+                .text()
+                .await
+                .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::InvalidResponse))?;
+            let payload: serde_json::Value = serde_json::from_str(&body)
+                .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::InvalidResponse))?;
+            Ok(select_latest_release(&payload))
+        })
+    }
+}
+
+/// Reference `GitHubUpdateGateway.fetch_update` response branches, in the order
+/// it takes them: the rate limit is read from the header on any status, so an
+/// exhausted budget reports the limit rather than the status it arrived with.
+#[must_use]
+fn github_status_cause(
+    status: u16,
+    rate_limit_remaining: Option<&str>,
+) -> Option<UpdateGatewayCause> {
+    if status == 429 || rate_limit_remaining.is_some_and(|value| value == "0") {
+        return Some(UpdateGatewayCause::TooManyRequests);
+    }
+    match status {
+        403 => Some(UpdateGatewayCause::Forbidden),
+        404 => Some(UpdateGatewayCause::NotFound),
+        status if (400..600).contains(&status) => Some(UpdateGatewayCause::ErrorResponse),
+        _ => None,
+    }
+}
+
+/// Reference `GitHubUpdateGateway.fetch_update` selection: the most recently
+/// published release that is neither a draft nor a prerelease.
+///
+/// A payload that is not a list of releases reads as no update rather than as
+/// an error, which is where this port stops short of the reference: the
+/// reference reaches an unhandled attribute error there.
+#[must_use]
+fn select_latest_release(payload: &serde_json::Value) -> Option<String> {
+    let mut releases = payload
+        .as_array()?
+        .iter()
+        .filter(|release| !flag(release, "prerelease") && !flag(release, "draft"))
+        .map(|release| {
+            (
+                release
+                    .get("published_at")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default(),
+                release,
+            )
+        })
+        .collect::<Vec<_>>();
+    // Python's `sorted` is stable, so releases published at the same instant
+    // keep the order the API returned them in.
+    releases.sort_by(|left, right| right.0.cmp(left.0));
+    releases.into_iter().find_map(|(_, release)| {
+        release
+            .get("tag_name")
+            .and_then(serde_json::Value::as_str)
+            .and_then(extract_release_version)
+    })
+}
+
+fn flag(release: &serde_json::Value, key: &str) -> bool {
+    release.get(key).and_then(serde_json::Value::as_bool) == Some(true)
+}
+
+/// Reference `GitHubUpdateGateway._extract_version`: one optional `v` prefix
+/// around a trimmed tag, and an empty tag is no version.
+#[must_use]
+fn extract_release_version(tag_name: &str) -> Option<String> {
+    let tag = tag_name.trim();
+    let version = tag.strip_prefix(['v', 'V']).unwrap_or(tag);
+    (!version.is_empty()).then(|| version.to_owned())
+}
+
+/// Reference `_terminate`: a cancelled command has two seconds to answer the
+/// termination signal before it is killed.
+const UPGRADE_TERMINATE_GRACE: Duration = Duration::from_secs(2);
+
+/// Reference `do_update` once every command has run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpgradeOutcome {
+    /// At least one command exited zero.
+    Succeeded,
+    /// Every command failed, or the list named none.
+    Failed,
+    /// The operator cancelled, so the remaining commands never ran.
+    Cancelled,
+}
+
+/// The shell the reference's `create_subprocess_shell` uses on each platform.
+#[cfg(windows)]
+const UPGRADE_SHELL: (&str, &str) = ("cmd", "/C");
+#[cfg(not(windows))]
+const UPGRADE_SHELL: (&str, &str) = ("sh", "-c");
+
+/// Reference `do_update`: every command runs through the platform shell, and
+/// one command exiting zero is enough for the upgrade to have succeeded.
+///
+/// `cancelled` stands for the reference's `CancelledError`: the running command
+/// is terminated, killed [`UPGRADE_TERMINATE_GRACE`] later if it is still
+/// alive, and the commands after it never start. Output is captured and never
+/// rendered, as the reference captures it.
+pub async fn run_upgrade_commands<C>(commands: &[String], cancelled: C) -> UpgradeOutcome
+where
+    C: Future<Output = ()>,
+{
+    let mut any_succeeded = false;
+    let mut cancelled = std::pin::pin!(cancelled);
+    for command in commands {
+        let mut builder = tokio::process::Command::new(UPGRADE_SHELL.0);
+        builder.arg(UPGRADE_SHELL.1).arg(command);
+        let Ok((mut child, _pipes)) = ChildGroup::spawn(&mut builder) else {
+            // A command the shell cannot start is a command that did not exit
+            // zero, which is the reference's `returncode != 0`.
+            continue;
+        };
+        let exit = tokio::select! {
+            exit = child.wait() => exit,
+            () = &mut cancelled => {
+                let _ = child.shut_down(UPGRADE_TERMINATE_GRACE, Rung::Terminate).await;
+                return UpgradeOutcome::Cancelled;
+            }
+        };
+        any_succeeded |= exit.is_ok_and(|exit| exit.success);
+    }
+    if any_succeeded {
+        UpgradeOutcome::Succeeded
+    } else {
+        UpgradeOutcome::Failed
+    }
+}
+
 /// The PEP 440 subset the reference version comparison needs: release segments
 /// with optional dev, pre-release, post-release, and local parts.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -897,5 +1137,363 @@ mod tests {
             error,
             UpdateError::Gateway("Unable to determine whether an update is available.".to_owned())
         );
+    }
+
+    /// A one-shot HTTP server on loopback. Update discovery must never leave
+    /// the machine during tests, and the returned string is the request the
+    /// gateway actually sent.
+    fn serve(response: String) -> (String, std::thread::JoinHandle<String>) {
+        use std::io::Write as _;
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("fixture listener");
+        let address = listener.local_addr().expect("listener address").to_string();
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("the fixture accepts");
+            let request = read_request(&mut stream);
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+            request
+        });
+        (format!("http://{address}"), handle)
+    }
+
+    fn read_request(stream: &mut std::net::TcpStream) -> String {
+        use std::io::Read as _;
+
+        let mut request = Vec::new();
+        let mut byte = [0_u8; 1];
+        while !request.ends_with(b"\r\n\r\n") {
+            match stream.read(&mut byte) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => request.push(byte[0]),
+            }
+        }
+        String::from_utf8_lossy(&request).to_lowercase()
+    }
+
+    fn http_response(status: &str, headers: &str, body: &str) -> String {
+        format!(
+            "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\
+             {headers}\r\n{body}",
+            body.len()
+        )
+    }
+
+    fn github_gateway(base_url: &str) -> GitHubUpdateGateway {
+        GitHubUpdateGateway::with_base_url("arthjean", "mistral-vibe-rs", base_url)
+            .expect("gateway")
+    }
+
+    #[test]
+    fn github_selection_takes_the_newest_published_release() {
+        let payload = serde_json::json!([
+            {"tag_name": "V2.24.0", "published_at": "2026-02-01T00:00:00Z"},
+            {"tag_name": "v2.27.0", "published_at": "2026-05-01T00:00:00Z", "prerelease": true},
+            {"tag_name": "v2.26.0", "published_at": "2026-04-01T00:00:00Z", "draft": true},
+            {"tag_name": "v2.25.0", "published_at": "2026-03-01T00:00:00Z"},
+        ]);
+        assert_eq!(
+            select_latest_release(&payload).as_deref(),
+            Some("2.25.0"),
+            "a draft and a prerelease are skipped even when published later"
+        );
+        // The newest release carrying no usable tag falls through to the next.
+        let tagless = serde_json::json!([
+            {"tag_name": "  ", "published_at": "2026-05-01T00:00:00Z"},
+            {"tag_name": "v", "published_at": "2026-04-01T00:00:00Z"},
+            {"tag_name": "2.24.0", "published_at": "2026-02-01T00:00:00Z"},
+        ]);
+        assert_eq!(select_latest_release(&tagless).as_deref(), Some("2.24.0"));
+        // A release with no publication date sorts last, not first.
+        let undated = serde_json::json!([
+            {"tag_name": "v9.9.9"},
+            {"tag_name": "v2.24.0", "published_at": "2026-02-01T00:00:00Z"},
+        ]);
+        assert_eq!(select_latest_release(&undated).as_deref(), Some("2.24.0"));
+        // An empty list is no update rather than an error.
+        assert_eq!(select_latest_release(&serde_json::json!([])), None);
+        assert_eq!(
+            select_latest_release(&serde_json::json!([
+                {"tag_name": "v3.0.0", "draft": true}
+            ])),
+            None
+        );
+        assert_eq!(select_latest_release(&serde_json::json!({})), None);
+
+        assert_eq!(
+            extract_release_version(" v2.24.0 ").as_deref(),
+            Some("2.24.0")
+        );
+        assert_eq!(
+            extract_release_version("V2.24.0").as_deref(),
+            Some("2.24.0")
+        );
+        assert_eq!(extract_release_version("2.24.0").as_deref(), Some("2.24.0"));
+        assert_eq!(extract_release_version("v"), None);
+        assert_eq!(extract_release_version("   "), None);
+    }
+
+    #[test]
+    fn github_causes_follow_the_reference_branch_order() {
+        assert_eq!(
+            github_status_cause(429, None),
+            Some(UpdateGatewayCause::TooManyRequests)
+        );
+        assert_eq!(
+            github_status_cause(200, Some("0")),
+            Some(UpdateGatewayCause::TooManyRequests),
+            "the reference reads the budget header before the status, on any status"
+        );
+        assert_eq!(
+            github_status_cause(403, Some("0")),
+            Some(UpdateGatewayCause::TooManyRequests),
+            "an exhausted budget reports the limit rather than the 403 it arrives as"
+        );
+        assert_eq!(
+            github_status_cause(403, Some("57")),
+            Some(UpdateGatewayCause::Forbidden)
+        );
+        assert_eq!(
+            github_status_cause(404, None),
+            Some(UpdateGatewayCause::NotFound)
+        );
+        assert_eq!(
+            github_status_cause(500, None),
+            Some(UpdateGatewayCause::ErrorResponse)
+        );
+        assert_eq!(
+            github_status_cause(422, Some("57")),
+            Some(UpdateGatewayCause::ErrorResponse)
+        );
+        assert_eq!(github_status_cause(200, Some("57")), None);
+        assert_eq!(github_status_cause(304, None), None);
+    }
+
+    #[test]
+    fn the_not_found_sentence_is_this_port_s_own() {
+        use sha2::{Digest, Sha256};
+
+        // `NOTICE`: the reference sentence is never committed as text. It is
+        // recorded as a length plus a SHA-256 measured from
+        // `vibe/cli/update_notifier/adapters/github_update_gateway.py` at
+        // `crate::parity::REFERENCE_COMMIT`, so this port's own sentence can be
+        // held permanently unequal to it.
+        const REFERENCE_LENGTH: usize = 88;
+        const REFERENCE_DIGEST: &str =
+            "db0a0fb435e9d4b4c3100840ef7749c9810fc581102d3e67de0f9ab084e9f630";
+
+        let sentence = GitHubUpdateGateway::NOT_FOUND_MESSAGE;
+        assert!(
+            !sentence.is_empty(),
+            "the not-found cause must still name a next action"
+        );
+        let digest: String = Sha256::digest(sentence.as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        assert!(
+            sentence.len() != REFERENCE_LENGTH || digest != REFERENCE_DIGEST,
+            "the not-found sentence became the reference's own; write an original one"
+        );
+        assert_ne!(digest, REFERENCE_DIGEST);
+    }
+
+    #[tokio::test]
+    async fn the_github_gateway_asks_for_the_repository_releases_and_selects_one() {
+        let body = serde_json::json!([
+            {"tag_name": "v2.24.0", "published_at": "2026-02-01T00:00:00Z"},
+            {"tag_name": "v2.25.0", "published_at": "2026-03-01T00:00:00Z"},
+        ])
+        .to_string();
+        let (base_url, served) = serve(http_response("200 OK", "", &body));
+        let gateway = github_gateway(&base_url).with_token(Some("token-value".to_owned()));
+        assert_eq!(
+            gateway.releases_url(),
+            format!("{base_url}/repos/arthjean/mistral-vibe-rs/releases")
+        );
+        assert_eq!(
+            gateway.fetch_update().await.expect("fetch"),
+            Some("2.25.0".to_owned())
+        );
+        let request = served.join().expect("fixture thread");
+        assert!(
+            request.starts_with("get /repos/arthjean/mistral-vibe-rs/releases "),
+            "the gateway asked for {request}"
+        );
+        assert!(request.contains("accept: application/vnd.github+json"));
+        assert!(request.contains("user-agent: mistral-vibe-rs-update-notifier/"));
+        assert!(request.contains("authorization: bearer token-value"));
+
+        // An empty token is no token, which is what keeps an unauthenticated
+        // check anonymous rather than sending `Bearer `.
+        let (base_url, served) = serve(http_response("200 OK", "", "[]"));
+        let anonymous = github_gateway(&base_url).with_token(Some(String::new()));
+        assert_eq!(anonymous.fetch_update().await.expect("fetch"), None);
+        assert!(
+            !served
+                .join()
+                .expect("fixture thread")
+                .contains("authorization:")
+        );
+    }
+
+    #[tokio::test]
+    async fn the_github_gateway_maps_every_failure_the_reference_maps() {
+        let cases = [
+            ("404 Not Found", "", "{}", UpdateGatewayCause::NotFound),
+            ("403 Forbidden", "", "{}", UpdateGatewayCause::Forbidden),
+            (
+                "429 Too Many Requests",
+                "",
+                "{}",
+                UpdateGatewayCause::TooManyRequests,
+            ),
+            (
+                "200 OK",
+                "x-ratelimit-remaining: 0\r\n",
+                "[]",
+                UpdateGatewayCause::TooManyRequests,
+            ),
+            (
+                "500 Internal Server Error",
+                "",
+                "{}",
+                UpdateGatewayCause::ErrorResponse,
+            ),
+            (
+                "200 OK",
+                "",
+                "not json at all",
+                UpdateGatewayCause::InvalidResponse,
+            ),
+        ];
+        for (status, headers, body, expected) in cases {
+            let (base_url, served) = serve(http_response(status, headers, body));
+            let error = github_gateway(&base_url)
+                .fetch_update()
+                .await
+                .expect_err("the gateway reports a cause");
+            assert_eq!(error.cause, expected, "status {status} mapped wrongly");
+            if expected == UpdateGatewayCause::NotFound {
+                assert_eq!(error.user_message(), GitHubUpdateGateway::NOT_FOUND_MESSAGE);
+            } else {
+                assert_eq!(error.user_message(), expected.default_message());
+            }
+            let _ = served.join();
+        }
+
+        // A refused connection is a transport failure, not a status.
+        let refused =
+            GitHubUpdateGateway::with_base_url("arthjean", "mistral-vibe-rs", "http://127.0.0.1:9")
+                .expect("gateway");
+        assert_eq!(
+            refused.fetch_update().await.expect_err("no listener").cause,
+            UpdateGatewayCause::RequestFailed
+        );
+    }
+
+    #[tokio::test]
+    async fn a_silent_server_fails_the_check_within_the_gateway_timeout() {
+        assert_eq!(
+            GATEWAY_TIMEOUT,
+            Duration::from_secs(5),
+            "the reference gives the gateway five seconds"
+        );
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("fixture listener");
+        let address = listener.local_addr().expect("listener address").to_string();
+        let silent = std::thread::spawn(move || {
+            let accepted = listener.accept();
+            std::thread::sleep(Duration::from_millis(500));
+            drop(accepted);
+        });
+        let gateway = GitHubUpdateGateway::with_timeout(
+            "arthjean",
+            "mistral-vibe-rs",
+            format!("http://{address}"),
+            Duration::from_millis(100),
+        )
+        .expect("gateway");
+        let started = std::time::Instant::now();
+        let error = gateway
+            .fetch_update()
+            .await
+            .expect_err("a server that never answers");
+        assert_eq!(error.cause, UpdateGatewayCause::RequestFailed);
+        assert!(
+            started.elapsed() < Duration::from_millis(400),
+            "the check returned the timeout rather than waiting for the server"
+        );
+        let _ = silent.join();
+    }
+
+    fn commands(raw: &[&str]) -> Vec<String> {
+        raw.iter().map(|command| (*command).to_owned()).collect()
+    }
+
+    #[tokio::test]
+    async fn one_upgrade_command_exiting_zero_carries_the_whole_upgrade() {
+        assert_eq!(
+            run_upgrade_commands(&commands(&["exit 1", "exit 0"]), std::future::pending()).await,
+            UpgradeOutcome::Succeeded,
+            "the reference's any-succeeded rule ignores the commands that failed"
+        );
+        assert_eq!(
+            run_upgrade_commands(&commands(&["exit 1", "exit 3"]), std::future::pending()).await,
+            UpgradeOutcome::Failed
+        );
+        assert_eq!(
+            run_upgrade_commands(
+                &commands(&["definitely-not-an-installed-command"]),
+                std::future::pending()
+            )
+            .await,
+            UpgradeOutcome::Failed,
+            "a command the shell cannot run is a command that did not exit zero"
+        );
+        assert_eq!(
+            run_upgrade_commands(&[], std::future::pending()).await,
+            UpgradeOutcome::Failed
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelling_an_upgrade_terminates_the_running_command() {
+        let (sender, receiver) = tokio::sync::oneshot::channel::<()>();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let _ = sender.send(());
+        });
+        let sleeper = if cfg!(windows) {
+            "ping -n 60 127.0.0.1 > NUL"
+        } else {
+            "sleep 60"
+        };
+        let started = std::time::Instant::now();
+        let outcome = run_upgrade_commands(&commands(&[sleeper, "exit 0"]), async {
+            let _ = receiver.await;
+        })
+        .await;
+        assert_eq!(
+            outcome,
+            UpgradeOutcome::Cancelled,
+            "cancellation stops the upgrade instead of running the commands after it"
+        );
+        assert!(
+            started.elapsed() < UPGRADE_TERMINATE_GRACE,
+            "a command that answers termination never reaches the kill rung"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(start_paused = true)]
+    async fn a_command_that_ignores_termination_is_killed_after_the_grace() {
+        // Time is paused, so the two-second grace elapses as soon as nothing
+        // else can run: what this measures is the escalation, not the wait.
+        let outcome = run_upgrade_commands(
+            &commands(&["trap '' TERM; sleep 60"]),
+            std::future::ready(()),
+        )
+        .await;
+        assert_eq!(outcome, UpgradeOutcome::Cancelled);
     }
 }
