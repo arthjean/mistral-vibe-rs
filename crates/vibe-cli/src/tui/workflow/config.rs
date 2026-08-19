@@ -572,8 +572,26 @@ mod tests {
     #[test]
     fn the_narrator_gate_follows_the_preference_and_the_resolved_speech_client() {
         use crate::tui::runtime::interactive_test_runtime;
+        use crate::tui::voice::SpeechManager;
 
         let mut runtime = interactive_test_runtime("narrator-gate");
+        // The shipped speech provider names `MISTRAL_API_KEY`, so a rebuilt
+        // client reads its credential off the machine. The manager is pointed at
+        // a dotenv that declares one, and starts with no client at all, so what
+        // this observes is the preferences pass rebuilding it from the published
+        // configuration rather than an exported key or a keyring entry.
+        let vibe_home = tempfile::tempdir().expect("a writable vibe home");
+        std::fs::write(
+            vibe_home.path().join(".env"),
+            "MISTRAL_API_KEY=narrator-gate-credential\n",
+        )
+        .expect("the credential file is written");
+        runtime.speech = SpeechManager::production(&json!({}), "", vibe_home.path());
+        assert!(
+            !runtime.speech.available(),
+            "no client is resolved before the preferences pass runs"
+        );
+
         let mut state = TuiState::new("narrator-gate");
         apply_render_preferences(&mut runtime, &mut state);
 
