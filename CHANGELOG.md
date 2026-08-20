@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Echo a submitted slash command into the transcript before it runs, under the
+  `/` prompt the reference paints it with and with no separator under it. The
+  line keeps its arguments and its case and loses one leading slash, and a bare
+  alias is echoed as the registry key it resolved to, so `:q` reads as `exit`.
+  A command the runtime refuses echoes nothing.
+
+- Report the registry key a command answers under, once, and only when the
+  command actually runs. `/connectors` now reports `mcp`, `/new` reports
+  `clear`, and a command refused because a job is running or the queue is paused
+  reports nothing. `/exit` no longer bypasses dispatch, so it is echoed and
+  reported like every other command.
+
+- Give the two refusals their two reasons: a running job asks the operator to
+  let it finish, a paused queue asks them to clear it or remove the input. A
+  teleport line carries the same two reasons, and either refusal returns the
+  submitted text to the composer and queues nothing.
+
 - Answer `/help` with a Markdown message in the transcript instead of a modal
   overlay, the way the reference mounts it. The document carries the reference's
   three sections in its order: the key bindings, the input prefixes, and every

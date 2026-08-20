@@ -25,10 +25,10 @@
     {
       "id": "EP-071",
       "title": "What a submitted command line does",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3
     },
     {
       "id": "EP-072",
@@ -106,43 +106,43 @@
       "id": "US-233",
       "title": "Echo the submitted command line into the transcript",
       "epic": "EP-071",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-230"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
     },
     {
       "id": "US-234",
       "title": "Report the registry key, once, only when the command runs",
       "epic": "EP-071",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-230"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
     },
     {
       "id": "US-235",
       "title": "Give the two refusals their two reasons",
       "epic": "EP-071",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "XS",
       "blocked_by": [
         "US-233"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
     },
     {
       "id": "US-236",
