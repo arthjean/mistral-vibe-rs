@@ -10,6 +10,19 @@
         "length": 248
       },
       "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:e5100fc2e3d4b8e8ac8b9c9dc083fedf",
+          "length": 103
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 5,
+        "requested_limit": 2000,
+        "requested_offset": null,
+        "start_line": 1,
+        "total_lines": 5,
+        "was_truncated": false
+      },
       "tool": "read_file",
       "typedResult": {
         "content": {
@@ -36,6 +49,19 @@
         "length": 205
       },
       "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:394b57eb52a2bedf21950b20bc84e7ce",
+          "length": 63
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 3,
+        "requested_limit": 2000,
+        "requested_offset": 3,
+        "start_line": 3,
+        "total_lines": 5,
+        "was_truncated": false
+      },
       "tool": "read_file",
       "typedResult": {
         "content": {
@@ -62,6 +88,19 @@
         "length": 183
       },
       "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:8d757b24a86e26bae529768fc4560470",
+          "length": 39
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 2,
+        "requested_limit": 2,
+        "requested_offset": null,
+        "start_line": 1,
+        "total_lines": null,
+        "was_truncated": true
+      },
       "tool": "read_file",
       "typedResult": {
         "content": {
@@ -89,6 +128,19 @@
         "length": 182
       },
       "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:d23544d955396649c2c2349e69492fe5",
+          "length": 41
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 2,
+        "requested_limit": 2,
+        "requested_offset": 2,
+        "start_line": 2,
+        "total_lines": null,
+        "was_truncated": true
+      },
       "tool": "read_file",
       "typedResult": {
         "content": {
@@ -115,6 +167,19 @@
         "length": 265
       },
       "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:85e1f10bdb85c4b1e4db7b7efc81717d",
+          "length": 121
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 0,
+        "requested_limit": 2000,
+        "requested_offset": 99,
+        "start_line": 99,
+        "total_lines": 5,
+        "was_truncated": false
+      },
       "tool": "read_file",
       "typedResult": {
         "content": {
@@ -141,6 +206,19 @@
         "length": 262
       },
       "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:65e0a83754990e9cf965ce83d4d076d7",
+          "length": 120
+        },
+        "file_path": "{tree}/alpha.txt",
+        "num_lines": 0,
+        "requested_limit": 2000,
+        "requested_offset": 6,
+        "start_line": 6,
+        "total_lines": 5,
+        "was_truncated": false
+      },
       "tool": "read_file",
       "typedResult": {
         "content": {
@@ -166,6 +244,19 @@
         "length": 226
       },
       "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:9b11021204c2e2064e6f078fdac918b8",
+          "length": 81
+        },
+        "file_path": "{tree}/empty.txt",
+        "num_lines": 0,
+        "requested_limit": 2000,
+        "requested_offset": null,
+        "start_line": 1,
+        "total_lines": 0,
+        "was_truncated": false
+      },
       "tool": "read_file",
       "typedResult": {
         "content": {
@@ -191,6 +282,19 @@
         "length": 186
       },
       "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:cf4c025f1878f294d1f5b0067441a51f",
+          "length": 42
+        },
+        "file_path": "{tree}/crlf.txt",
+        "num_lines": 2,
+        "requested_limit": 2000,
+        "requested_offset": null,
+        "start_line": 1,
+        "total_lines": 2,
+        "was_truncated": false
+      },
       "tool": "read_file",
       "typedResult": {
         "content": {
@@ -216,6 +320,19 @@
         "length": 529
       },
       "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:bec70998bd1f8cd4c751bdd2b5c154f4",
+          "length": 377
+        },
+        "file_path": "{tree}/nested/beta.py",
+        "num_lines": 12,
+        "requested_limit": 2000,
+        "requested_offset": null,
+        "start_line": 1,
+        "total_lines": 12,
+        "was_truncated": false
+      },
       "tool": "read_file",
       "typedResult": {
         "content": {
@@ -238,6 +355,7 @@
       "case": "missing-file",
       "error": {
         "message": {
+          "digest": "sha256:ff21a964581451db0ca5c692626eb249",
           "present": true
         },
         "type": "ToolError"
@@ -252,6 +370,7 @@
       "case": "a-directory",
       "error": {
         "message": {
+          "digest": "sha256:f0a134c8566dccaab6effecde48b1c64",
           "present": true
         },
         "type": "ToolError"
@@ -266,6 +385,7 @@
       "case": "empty-path",
       "error": {
         "message": {
+          "digest": "sha256:a5e9cee27d893685d110216dbf72a1fa",
           "present": true
         },
         "type": "ToolError"
@@ -283,6 +403,32 @@
         "length": 300
       },
       "outcome": "returned",
+      "projectedResult": {
+        "match_count": 4,
+        "matches": {
+          "digest": "sha256:4343e2b22973e3648b3a5313b3966a86",
+          "length": 239
+        },
+        "parsed_matches": [
+          {
+            "line": 1,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 12,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 3,
+            "path": "{tree}/nested/gamma.md"
+          },
+          {
+            "line": 4,
+            "path": "{tree}/nested/gamma.md"
+          }
+        ],
+        "was_truncated": false
+      },
       "tool": "grep",
       "typedResult": {
         "match_count": 4,
@@ -304,6 +450,20 @@
         "length": 131
       },
       "outcome": "returned",
+      "projectedResult": {
+        "match_count": 1,
+        "matches": {
+          "digest": "sha256:7ce215c430cd53ba2c9f8c26bbeb1c16",
+          "length": 70
+        },
+        "parsed_matches": [
+          {
+            "line": 4,
+            "path": "{tree}/nested/gamma.md"
+          }
+        ],
+        "was_truncated": false
+      },
       "tool": "grep",
       "typedResult": {
         "match_count": 1,
@@ -325,6 +485,15 @@
         "length": 69
       },
       "outcome": "returned",
+      "projectedResult": {
+        "match_count": 0,
+        "matches": {
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb924",
+          "length": 0
+        },
+        "parsed_matches": [],
+        "was_truncated": false
+      },
       "tool": "grep",
       "typedResult": {
         "match_count": 0,
@@ -347,6 +516,32 @@
         "length": 320
       },
       "outcome": "returned",
+      "projectedResult": {
+        "match_count": 4,
+        "matches": {
+          "digest": "sha256:343873d68ea60ef8485c06f71cef744c",
+          "length": 259
+        },
+        "parsed_matches": [
+          {
+            "line": 1,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 12,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 3,
+            "path": "{tree}/nested/gamma.md"
+          },
+          {
+            "line": 4,
+            "path": "{tree}/nested/gamma.md"
+          }
+        ],
+        "was_truncated": false
+      },
       "tool": "grep",
       "typedResult": {
         "match_count": 4,
@@ -369,6 +564,44 @@
         "length": 434
       },
       "outcome": "returned",
+      "projectedResult": {
+        "match_count": 7,
+        "matches": {
+          "digest": "sha256:6a8c27bd63d1c2df5cdfd8718566f887",
+          "length": 374
+        },
+        "parsed_matches": [
+          {
+            "line": 1,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 2,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 4,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 5,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 7,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 11,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 12,
+            "path": "{tree}/nested/beta.py"
+          }
+        ],
+        "was_truncated": false
+      },
       "tool": "grep",
       "typedResult": {
         "match_count": 7,
@@ -391,6 +624,24 @@
         "length": 160
       },
       "outcome": "returned",
+      "projectedResult": {
+        "match_count": 2,
+        "matches": {
+          "digest": "sha256:22a1fef14934a62b851fe45558a9012b",
+          "length": 101
+        },
+        "parsed_matches": [
+          {
+            "line": 1,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 2,
+            "path": "{tree}/nested/beta.py"
+          }
+        ],
+        "was_truncated": true
+      },
       "tool": "grep",
       "typedResult": {
         "match_count": 2,
@@ -413,6 +664,32 @@
         "length": 300
       },
       "outcome": "returned",
+      "projectedResult": {
+        "match_count": 4,
+        "matches": {
+          "digest": "sha256:4343e2b22973e3648b3a5313b3966a86",
+          "length": 239
+        },
+        "parsed_matches": [
+          {
+            "line": 1,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 12,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 3,
+            "path": "{tree}/nested/gamma.md"
+          },
+          {
+            "line": 4,
+            "path": "{tree}/nested/gamma.md"
+          }
+        ],
+        "was_truncated": false
+      },
       "tool": "grep",
       "typedResult": {
         "match_count": 4,
@@ -435,6 +712,32 @@
         "length": 300
       },
       "outcome": "returned",
+      "projectedResult": {
+        "match_count": 4,
+        "matches": {
+          "digest": "sha256:4343e2b22973e3648b3a5313b3966a86",
+          "length": 239
+        },
+        "parsed_matches": [
+          {
+            "line": 1,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 12,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 3,
+            "path": "{tree}/nested/gamma.md"
+          },
+          {
+            "line": 4,
+            "path": "{tree}/nested/gamma.md"
+          }
+        ],
+        "was_truncated": false
+      },
       "tool": "grep",
       "typedResult": {
         "match_count": 4,
@@ -453,6 +756,7 @@
       "case": "invalid-regex",
       "error": {
         "message": {
+          "digest": "sha256:c2b8c145638e8b8a7595a2a53dfa5810",
           "present": true
         },
         "type": "ToolError"
@@ -468,6 +772,7 @@
       "case": "missing-path",
       "error": {
         "message": {
+          "digest": "sha256:f16f9ec7e98770052916904c3c253a04",
           "present": true
         },
         "type": "ToolError"
@@ -485,6 +790,36 @@
         "length": 349
       },
       "outcome": "returned",
+      "projectedResult": {
+        "match_count": 5,
+        "matches": {
+          "digest": "sha256:6bb21d523feff206db3cfa500a2cbbd5",
+          "length": 280
+        },
+        "parsed_matches": [
+          {
+            "line": 1,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 11,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 12,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 3,
+            "path": "{tree}/nested/gamma.md"
+          },
+          {
+            "line": 4,
+            "path": "{tree}/nested/gamma.md"
+          }
+        ],
+        "was_truncated": false
+      },
       "tool": "grep",
       "typedResult": {
         "match_count": 5,
@@ -506,6 +841,24 @@
         "length": 139
       },
       "outcome": "returned",
+      "projectedResult": {
+        "match_count": 2,
+        "matches": {
+          "digest": "sha256:1bf28b17e6b51f44e6cd750c49efdee3",
+          "length": 79
+        },
+        "parsed_matches": [
+          {
+            "line": 1,
+            "path": "{tree}/nested/beta.py"
+          },
+          {
+            "line": 11,
+            "path": "{tree}/nested/beta.py"
+          }
+        ],
+        "was_truncated": false
+      },
       "tool": "grep",
       "typedResult": {
         "match_count": 2,
@@ -528,6 +881,11 @@
         "length": 70
       },
       "outcome": "returned",
+      "projectedResult": {
+        "bytes_written": 13,
+        "content": "written body\n",
+        "file_path": "{tree}/written.txt"
+      },
       "tool": "write_file",
       "typedResult": {
         "bytes_written": 13,
@@ -543,6 +901,7 @@
       "case": "existing-file-is-refused",
       "error": {
         "message": {
+          "digest": "sha256:1a70e021952a875f64fd755daa5cfbd0",
           "present": true
         },
         "type": "ToolError"
@@ -561,6 +920,11 @@
         "length": 72
       },
       "outcome": "returned",
+      "projectedResult": {
+        "bytes_written": 10,
+        "content": "deep body\n",
+        "file_path": "{tree}/made/up/deep.txt"
+      },
       "tool": "write_file",
       "typedResult": {
         "bytes_written": 10,
@@ -579,6 +943,11 @@
         "length": 54
       },
       "outcome": "returned",
+      "projectedResult": {
+        "bytes_written": 0,
+        "content": "",
+        "file_path": "{tree}/blank.txt"
+      },
       "tool": "write_file",
       "typedResult": {
         "bytes_written": 0,
@@ -598,6 +967,18 @@
         "length": 114
       },
       "outcome": "returned",
+      "projectedResult": {
+        "file": "{tree}/alpha.txt",
+        "new_string": "alpha II",
+        "occurrences": [
+          {
+            "new_text": "alpha II",
+            "old_text": "alpha two",
+            "start_line": 2
+          }
+        ],
+        "old_string": "alpha two"
+      },
       "tool": "edit",
       "typedResult": {
         "file": "{tree}/alpha.txt",
@@ -622,6 +1003,68 @@
         "length": 137
       },
       "outcome": "returned",
+      "projectedResult": {
+        "file": "{tree}/alpha.txt",
+        "new_string": "ALPHA",
+        "occurrences": [
+          {
+            "new_text": {
+              "digest": "sha256:e5683032968de441b436eef114a04439",
+              "length": 9
+            },
+            "old_text": {
+              "digest": "sha256:447ddb49ae0e88206741f4e0d10b1371",
+              "length": 9
+            },
+            "start_line": 1
+          },
+          {
+            "new_text": {
+              "digest": "sha256:db1479dca2bcd387cc6f00ee91ba2b42",
+              "length": 9
+            },
+            "old_text": {
+              "digest": "sha256:e90238cc4792b4a50535366444380dc3",
+              "length": 9
+            },
+            "start_line": 2
+          },
+          {
+            "new_text": {
+              "digest": "sha256:c86c3e1732000946653f92f331d544c3",
+              "length": 11
+            },
+            "old_text": {
+              "digest": "sha256:902572fc46381c38f2428ab52dd6bd8f",
+              "length": 11
+            },
+            "start_line": 3
+          },
+          {
+            "new_text": {
+              "digest": "sha256:538b468ae62060b9761a84aefb01df15",
+              "length": 10
+            },
+            "old_text": {
+              "digest": "sha256:ae5b7200cd547e0c12e6b7c1136fe959",
+              "length": 10
+            },
+            "start_line": 4
+          },
+          {
+            "new_text": {
+              "digest": "sha256:43a5779f6ef866bba5ed5997f590d7df",
+              "length": 10
+            },
+            "old_text": {
+              "digest": "sha256:bd312e292751fa09492c4811a2fa83fa",
+              "length": 10
+            },
+            "start_line": 5
+          }
+        ],
+        "old_string": "alpha"
+      },
       "tool": "edit",
       "typedResult": {
         "file": "{tree}/alpha.txt",
@@ -642,6 +1085,7 @@
       "case": "ambiguous-without-replace-all",
       "error": {
         "message": {
+          "digest": "sha256:b6c47ae9d32aa37307a4decba03da0fc",
           "present": true
         },
         "type": "ToolError"
@@ -658,6 +1102,7 @@
       "case": "absent-old-string",
       "error": {
         "message": {
+          "digest": "sha256:85911b6c917cd95e780baa9b6ca8ab0d",
           "present": true
         },
         "type": "ToolError"
@@ -674,6 +1119,7 @@
       "case": "identical-strings",
       "error": {
         "message": {
+          "digest": "sha256:6cca3808b1ee612c2a9c4c61d6956ace",
           "present": true
         },
         "type": "ToolError"
@@ -690,6 +1136,7 @@
       "case": "empty-old-string",
       "error": {
         "message": {
+          "digest": "sha256:5cd611e27cd37cabbc49af8f11794991",
           "present": true
         },
         "type": "ToolError"
@@ -709,6 +1156,18 @@
         "length": 119
       },
       "outcome": "returned",
+      "projectedResult": {
+        "file": "{tree}/crlf.txt",
+        "new_string": "changed line",
+        "occurrences": [
+          {
+            "new_text": "changed line",
+            "old_text": "second line",
+            "start_line": 2
+          }
+        ],
+        "old_string": "second line"
+      },
       "tool": "edit",
       "typedResult": {
         "file": "{tree}/crlf.txt",
@@ -729,6 +1188,7 @@
       "case": "missing-file",
       "error": {
         "message": {
+          "digest": "sha256:6920efb93a02d252d07b931ab7236b3f",
           "present": true
         },
         "type": "ToolError"
@@ -758,6 +1218,28 @@
         "length": 232
       },
       "outcome": "returned",
+      "projectedResult": {
+        "message": {
+          "digest": "sha256:7354f259410b340343481b95f1937604",
+          "length": 15
+        },
+        "todos": [
+          {
+            "content": "first task",
+            "id": "one",
+            "priority": "medium",
+            "status": "pending"
+          },
+          {
+            "content": "second task",
+            "id": "two",
+            "priority": "medium",
+            "status": "in_progress"
+          }
+        ],
+        "total_count": 2,
+        "verb": "Updated"
+      },
       "tool": "todo",
       "typedResult": {
         "message": {
@@ -792,6 +1274,15 @@
         "length": 67
       },
       "outcome": "returned",
+      "projectedResult": {
+        "message": {
+          "digest": "sha256:da223f9c5a063eadcf8b18ab662857a3",
+          "length": 17
+        },
+        "todos": [],
+        "total_count": 0,
+        "verb": "Retrieved"
+      },
       "tool": "todo",
       "typedResult": {
         "message": {
@@ -822,6 +1313,7 @@
       "case": "duplicate-identifiers",
       "error": {
         "message": {
+          "digest": "sha256:75c6aa42fc577841e6a1eb17f798bc85",
           "present": true
         },
         "type": "ToolError"
@@ -840,6 +1332,15 @@
         "length": 63
       },
       "outcome": "returned",
+      "projectedResult": {
+        "message": {
+          "digest": "sha256:e8ac5771528dbd5608ae00541435ca5a",
+          "length": 15
+        },
+        "todos": [],
+        "total_count": 0,
+        "verb": "Updated"
+      },
       "tool": "todo",
       "typedResult": {
         "message": {
@@ -858,16 +1359,2904 @@
       "case": "unknown-action",
       "error": {
         "message": {
+          "digest": "sha256:40225dc4ef62c878c41f529bcef9b8bf",
           "present": true
         },
         "type": "ToolError"
       },
       "outcome": "raised",
       "tool": "todo"
+    },
+    {
+      "arguments": {
+        "name": "small"
+      },
+      "case": "fewer-files-than-the-cap",
+      "modelText": {
+        "digest": "sha256:b4b771661cec3be6ef91840c5e7c782c",
+        "length": 358
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:0bcd4970cbd90fb571d668809cc60666",
+          "length": 306
+        },
+        "name": "small",
+        "skill_dir": "{tree}/skills/small"
+      },
+      "script": {
+        "skills": [
+          {
+            "description": "A fixture skill carrying one extra file.",
+            "directory": "skills/small",
+            "name": "small"
+          },
+          {
+            "description": "A fixture skill carrying more files than the listing cap.",
+            "directory": "skills/large",
+            "name": "large"
+          }
+        ]
+      },
+      "tool": "skill",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:0bcd4970cbd90fb571d668809cc60666",
+          "length": 306
+        },
+        "name": "small",
+        "skill_dir": "{tree}/skills/small"
+      }
+    },
+    {
+      "arguments": {
+        "name": "large"
+      },
+      "case": "more-files-than-the-cap",
+      "modelText": {
+        "digest": "sha256:14a8bb90caeb5f2dd0ac5c1d6f448aa9",
+        "length": 587
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:3a162f615c5a77bc0c27b2c414b51bf5",
+          "length": 535
+        },
+        "name": "large",
+        "skill_dir": "{tree}/skills/large"
+      },
+      "script": {
+        "skills": [
+          {
+            "description": "A fixture skill carrying one extra file.",
+            "directory": "skills/small",
+            "name": "small"
+          },
+          {
+            "description": "A fixture skill carrying more files than the listing cap.",
+            "directory": "skills/large",
+            "name": "large"
+          }
+        ]
+      },
+      "tool": "skill",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:3a162f615c5a77bc0c27b2c414b51bf5",
+          "length": 535
+        },
+        "name": "large",
+        "skill_dir": "{tree}/skills/large"
+      }
+    },
+    {
+      "arguments": {
+        "name": "small"
+      },
+      "case": "already-loaded-earlier",
+      "modelText": {
+        "digest": "sha256:95334028720b7a0faaa1f666a6cf287a",
+        "length": 139
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:98eece52edef414ef2b8251a9ea55388",
+          "length": 87
+        },
+        "name": "small",
+        "skill_dir": "{tree}/skills/small"
+      },
+      "script": {
+        "loaded": [
+          "small"
+        ],
+        "skills": [
+          {
+            "description": "A fixture skill carrying one extra file.",
+            "directory": "skills/small",
+            "name": "small"
+          },
+          {
+            "description": "A fixture skill carrying more files than the listing cap.",
+            "directory": "skills/large",
+            "name": "large"
+          }
+        ]
+      },
+      "tool": "skill",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:98eece52edef414ef2b8251a9ea55388",
+          "length": 87
+        },
+        "name": "small",
+        "skill_dir": "{tree}/skills/small"
+      }
+    },
+    {
+      "arguments": {
+        "name": "detached"
+      },
+      "case": "no-directory-on-disk",
+      "modelText": {
+        "digest": "sha256:cc38646962edc744b1515bae977df969",
+        "length": 212
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:5f42beefeabc7b927de84ef5c0e60952",
+          "length": 172
+        },
+        "name": "detached",
+        "skill_dir": null
+      },
+      "script": {
+        "skills": [
+          {
+            "description": "A fixture skill with no directory on disk.",
+            "name": "detached",
+            "prompt": "Fixture instructions with no base directory."
+          }
+        ]
+      },
+      "tool": "skill",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:5f42beefeabc7b927de84ef5c0e60952",
+          "length": 172
+        },
+        "name": "detached",
+        "skill_dir": null
+      }
+    },
+    {
+      "arguments": {
+        "name": "absent"
+      },
+      "case": "unknown-name",
+      "error": {
+        "message": {
+          "digest": "sha256:90f61e410bf15b93b9e4f092726e3d68",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {
+        "skills": [
+          {
+            "description": "A fixture skill carrying one extra file.",
+            "directory": "skills/small",
+            "name": "small"
+          },
+          {
+            "description": "A fixture skill carrying more files than the listing cap.",
+            "directory": "skills/large",
+            "name": "large"
+          }
+        ]
+      },
+      "tool": "skill"
+    },
+    {
+      "arguments": {
+        "name": "absent"
+      },
+      "case": "unknown-name-with-none-available",
+      "error": {
+        "message": {
+          "digest": "sha256:9994ba2dd35c50f462b209b0f6f3e5b8",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {
+        "skills": []
+      },
+      "tool": "skill"
+    },
+    {
+      "arguments": {
+        "name": "small"
+      },
+      "case": "no-skill-manager",
+      "error": {
+        "message": {
+          "digest": "sha256:4a64a741239eee0d51aefba0bca068e9",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {},
+      "tool": "skill"
+    },
+    {
+      "arguments": {
+        "questions": [
+          {
+            "header": "Branch",
+            "options": [
+              {
+                "label": "First"
+              },
+              {
+                "label": "Second"
+              }
+            ],
+            "question": "Which fixture branch?"
+          }
+        ]
+      },
+      "case": "single-select",
+      "modelText": {
+        "digest": "sha256:714825cee113938ab97cdd25cdb003ce",
+        "length": 103
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answers": [
+          {
+            "answer": "First",
+            "is_other": false,
+            "question": "Which fixture branch?"
+          }
+        ],
+        "cancelled": false
+      },
+      "script": {
+        "answers": [
+          {
+            "option": 0
+          }
+        ]
+      },
+      "tool": "ask_user_question",
+      "typedResult": {
+        "answers": [
+          {
+            "answer": "First",
+            "is_other": false,
+            "question": "Which fixture branch?"
+          }
+        ],
+        "cancelled": false
+      }
+    },
+    {
+      "arguments": {
+        "questions": [
+          {
+            "header": "Parts",
+            "multiSelect": true,
+            "options": [
+              {
+                "label": "First"
+              },
+              {
+                "label": "Second"
+              },
+              {
+                "label": "Third"
+              }
+            ],
+            "question": "Which fixture parts?"
+          }
+        ]
+      },
+      "case": "multi-select",
+      "modelText": {
+        "digest": "sha256:155bf19d58c4678bd43f0f90b8fb6c1b",
+        "length": 109
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answers": [
+          {
+            "answer": {
+              "digest": "sha256:357e64b5d14b00f57e9177154c0f7873",
+              "length": 12
+            },
+            "is_other": false,
+            "question": "Which fixture parts?"
+          }
+        ],
+        "cancelled": false
+      },
+      "script": {
+        "answers": [
+          {
+            "options": [
+              0,
+              2
+            ]
+          }
+        ]
+      },
+      "tool": "ask_user_question",
+      "typedResult": {
+        "answers": [
+          {
+            "answer": {
+              "digest": "sha256:357e64b5d14b00f57e9177154c0f7873",
+              "length": 12
+            },
+            "is_other": false,
+            "question": "Which fixture parts?"
+          }
+        ],
+        "cancelled": false
+      }
+    },
+    {
+      "arguments": {
+        "questions": [
+          {
+            "header": "Branch",
+            "options": [
+              {
+                "label": "First"
+              },
+              {
+                "label": "Second"
+              }
+            ],
+            "question": "Which fixture branch?"
+          }
+        ]
+      },
+      "case": "other-free-text",
+      "modelText": {
+        "digest": "sha256:bd902717e896b9b3125a28ca1cce97d7",
+        "length": 120
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answers": [
+          {
+            "answer": "A typed fixture answer.",
+            "is_other": true,
+            "question": "Which fixture branch?"
+          }
+        ],
+        "cancelled": false
+      },
+      "script": {
+        "answers": [
+          {
+            "other": "A typed fixture answer."
+          }
+        ]
+      },
+      "tool": "ask_user_question",
+      "typedResult": {
+        "answers": [
+          {
+            "answer": "A typed fixture answer.",
+            "is_other": true,
+            "question": "Which fixture branch?"
+          }
+        ],
+        "cancelled": false
+      }
+    },
+    {
+      "arguments": {
+        "questions": [
+          {
+            "header": "Branch",
+            "options": [
+              {
+                "label": "First"
+              },
+              {
+                "label": "Second"
+              }
+            ],
+            "question": "Which fixture branch?"
+          }
+        ]
+      },
+      "case": "cancelled",
+      "modelText": {
+        "digest": "sha256:b4b6fbca715e616ff6b09cc039d0b83c",
+        "length": 27
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answers": [],
+        "cancelled": true
+      },
+      "script": {
+        "cancelled": true
+      },
+      "tool": "ask_user_question",
+      "typedResult": {
+        "answers": [],
+        "cancelled": true
+      }
+    },
+    {
+      "arguments": {
+        "footerNote": "A fixture footer.",
+        "questions": [
+          {
+            "header": "Branch",
+            "options": [
+              {
+                "label": "First"
+              },
+              {
+                "label": "Second"
+              }
+            ],
+            "question": "Which fixture branch?"
+          },
+          {
+            "header": "Depth",
+            "options": [
+              {
+                "label": "Shallow"
+              },
+              {
+                "label": "Deep"
+              }
+            ],
+            "question": "Which fixture depth?"
+          }
+        ]
+      },
+      "case": "two-questions",
+      "modelText": {
+        "digest": "sha256:e426e289ebf058eda0feb40ff293f25f",
+        "length": 182
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answers": [
+          {
+            "answer": "Second",
+            "is_other": false,
+            "question": "Which fixture branch?"
+          },
+          {
+            "answer": "Shallow",
+            "is_other": false,
+            "question": "Which fixture depth?"
+          }
+        ],
+        "cancelled": false
+      },
+      "script": {
+        "answers": [
+          {
+            "option": 1
+          },
+          {
+            "option": 0
+          }
+        ]
+      },
+      "tool": "ask_user_question",
+      "typedResult": {
+        "answers": [
+          {
+            "answer": "Second",
+            "is_other": false,
+            "question": "Which fixture branch?"
+          },
+          {
+            "answer": "Shallow",
+            "is_other": false,
+            "question": "Which fixture depth?"
+          }
+        ],
+        "cancelled": false
+      }
+    },
+    {
+      "arguments": {
+        "questions": [
+          {
+            "header": "Branch",
+            "hideOther": true,
+            "options": [
+              {
+                "label": "First"
+              },
+              {
+                "label": "Second"
+              }
+            ],
+            "question": "Which fixture branch?"
+          }
+        ]
+      },
+      "case": "other-hidden",
+      "modelText": {
+        "digest": "sha256:0ba8a914a12562b08ec865515c4a464c",
+        "length": 104
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answers": [
+          {
+            "answer": "Second",
+            "is_other": false,
+            "question": "Which fixture branch?"
+          }
+        ],
+        "cancelled": false
+      },
+      "script": {
+        "answers": [
+          {
+            "option": 1
+          }
+        ]
+      },
+      "tool": "ask_user_question",
+      "typedResult": {
+        "answers": [
+          {
+            "answer": "Second",
+            "is_other": false,
+            "question": "Which fixture branch?"
+          }
+        ],
+        "cancelled": false
+      }
+    },
+    {
+      "arguments": {
+        "questions": [
+          {
+            "header": "Branch",
+            "options": [
+              {
+                "description": "The first fixture branch.",
+                "label": "First"
+              },
+              {
+                "description": "The second fixture branch.",
+                "label": "Second"
+              }
+            ],
+            "question": "Which fixture branch?"
+          }
+        ]
+      },
+      "case": "options-with-descriptions",
+      "modelText": {
+        "digest": "sha256:714825cee113938ab97cdd25cdb003ce",
+        "length": 103
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answers": [
+          {
+            "answer": "First",
+            "is_other": false,
+            "question": "Which fixture branch?"
+          }
+        ],
+        "cancelled": false
+      },
+      "script": {
+        "answers": [
+          {
+            "option": 0
+          }
+        ]
+      },
+      "tool": "ask_user_question",
+      "typedResult": {
+        "answers": [
+          {
+            "answer": "First",
+            "is_other": false,
+            "question": "Which fixture branch?"
+          }
+        ],
+        "cancelled": false
+      }
+    },
+    {
+      "arguments": {
+        "questions": [
+          {
+            "header": "Branch",
+            "options": [
+              {
+                "label": "First"
+              },
+              {
+                "label": "Second"
+              }
+            ],
+            "question": "Which fixture branch?"
+          }
+        ]
+      },
+      "case": "no-interaction-source",
+      "error": {
+        "message": {
+          "digest": "sha256:53cc435df518801a8cf578cfc3cbe20f",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {},
+      "tool": "ask_user_question"
+    },
+    {
+      "arguments": {},
+      "case": "clear-context-and-auto-approve",
+      "modelText": {
+        "digest": "sha256:c6fb5a39afa296119d798a6c13ccaeb5",
+        "length": 136
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "message": {
+          "digest": "sha256:c6f2d0438106e28c2a5a3d581de8e56f",
+          "length": 112
+        },
+        "switched": true
+      },
+      "script": {
+        "agent": "plan",
+        "answers": [
+          {
+            "option": 0
+          }
+        ],
+        "clearContext": true,
+        "planFile": "plan.md"
+      },
+      "tool": "exit_plan_mode",
+      "typedResult": {
+        "message": {
+          "digest": "sha256:c6f2d0438106e28c2a5a3d581de8e56f",
+          "length": 112
+        },
+        "switched": true
+      }
+    },
+    {
+      "arguments": {},
+      "case": "clear-context-without-a-callback",
+      "modelText": {
+        "digest": "sha256:c6fb5a39afa296119d798a6c13ccaeb5",
+        "length": 136
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "message": {
+          "digest": "sha256:c6f2d0438106e28c2a5a3d581de8e56f",
+          "length": 112
+        },
+        "switched": true
+      },
+      "script": {
+        "agent": "plan",
+        "answers": [
+          {
+            "option": 0
+          }
+        ],
+        "planFile": "plan.md"
+      },
+      "tool": "exit_plan_mode",
+      "typedResult": {
+        "message": {
+          "digest": "sha256:c6f2d0438106e28c2a5a3d581de8e56f",
+          "length": 112
+        },
+        "switched": true
+      }
+    },
+    {
+      "arguments": {},
+      "case": "auto-approve",
+      "modelText": {
+        "digest": "sha256:9cc2cdec5fd768f948e604e2e836146d",
+        "length": 95
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "message": {
+          "digest": "sha256:16733c6ee282c05c40f1263e0af25142",
+          "length": 71
+        },
+        "switched": true
+      },
+      "script": {
+        "agent": "plan",
+        "answers": [
+          {
+            "option": 1
+          }
+        ],
+        "planFile": "plan.md"
+      },
+      "tool": "exit_plan_mode",
+      "typedResult": {
+        "message": {
+          "digest": "sha256:16733c6ee282c05c40f1263e0af25142",
+          "length": 71
+        },
+        "switched": true
+      }
+    },
+    {
+      "arguments": {},
+      "case": "manual-approval",
+      "modelText": {
+        "digest": "sha256:bb5f0bc241fb6c1fee2d6b8e8b03df89",
+        "length": 89
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "message": {
+          "digest": "sha256:aec0c92bf7f1bb1bf4cea4aba407870d",
+          "length": 65
+        },
+        "switched": true
+      },
+      "script": {
+        "agent": "plan",
+        "answers": [
+          {
+            "option": 2
+          }
+        ],
+        "planFile": "plan.md"
+      },
+      "tool": "exit_plan_mode",
+      "typedResult": {
+        "message": {
+          "digest": "sha256:aec0c92bf7f1bb1bf4cea4aba407870d",
+          "length": 65
+        },
+        "switched": true
+      }
+    },
+    {
+      "arguments": {},
+      "case": "declined",
+      "modelText": {
+        "digest": "sha256:e85f9b36d9f350acc8b664eb59e0ef2b",
+        "length": 74
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "message": {
+          "digest": "sha256:6d2be2c7f637ad643799864c4f3f4bd2",
+          "length": 49
+        },
+        "switched": false
+      },
+      "script": {
+        "agent": "plan",
+        "answers": [
+          {
+            "option": 3
+          }
+        ],
+        "planFile": "plan.md"
+      },
+      "tool": "exit_plan_mode",
+      "typedResult": {
+        "message": {
+          "digest": "sha256:6d2be2c7f637ad643799864c4f3f4bd2",
+          "length": 49
+        },
+        "switched": false
+      }
+    },
+    {
+      "arguments": {},
+      "case": "other-feedback",
+      "modelText": {
+        "digest": "sha256:a636580cf06d7b17b7d83395e06a99b3",
+        "length": 88
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "message": {
+          "digest": "sha256:87be3416e7ceeabd4702ce78a41c7a88",
+          "length": 63
+        },
+        "switched": false
+      },
+      "script": {
+        "agent": "plan",
+        "answers": [
+          {
+            "other": "A typed fixture objection."
+          }
+        ],
+        "planFile": "plan.md"
+      },
+      "tool": "exit_plan_mode",
+      "typedResult": {
+        "message": {
+          "digest": "sha256:87be3416e7ceeabd4702ce78a41c7a88",
+          "length": 63
+        },
+        "switched": false
+      }
+    },
+    {
+      "arguments": {},
+      "case": "cancelled",
+      "modelText": {
+        "digest": "sha256:a06a6c7de55991472e16f1e3071f284f",
+        "length": 62
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "message": {
+          "digest": "sha256:16d96262a043a40680bae4fcc206bed7",
+          "length": 37
+        },
+        "switched": false
+      },
+      "script": {
+        "agent": "plan",
+        "cancelled": true,
+        "planFile": "plan.md"
+      },
+      "tool": "exit_plan_mode",
+      "typedResult": {
+        "message": {
+          "digest": "sha256:16d96262a043a40680bae4fcc206bed7",
+          "length": 37
+        },
+        "switched": false
+      }
+    },
+    {
+      "arguments": {},
+      "case": "no-plan-file",
+      "modelText": {
+        "digest": "sha256:9cc2cdec5fd768f948e604e2e836146d",
+        "length": 95
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "message": {
+          "digest": "sha256:16733c6ee282c05c40f1263e0af25142",
+          "length": 71
+        },
+        "switched": true
+      },
+      "script": {
+        "agent": "plan",
+        "answers": [
+          {
+            "option": 1
+          }
+        ]
+      },
+      "tool": "exit_plan_mode",
+      "typedResult": {
+        "message": {
+          "digest": "sha256:16733c6ee282c05c40f1263e0af25142",
+          "length": 71
+        },
+        "switched": true
+      }
+    },
+    {
+      "arguments": {},
+      "case": "not-in-plan-mode",
+      "error": {
+        "message": {
+          "digest": "sha256:bafa1e39bb9379f0919707800a9daab5",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {
+        "agent": "default",
+        "answers": [
+          {
+            "option": 0
+          }
+        ]
+      },
+      "tool": "exit_plan_mode"
+    },
+    {
+      "arguments": {},
+      "case": "no-interaction-source",
+      "error": {
+        "message": {
+          "digest": "sha256:87eb4b91abade3c8ca1421e5a0f97bbf",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {
+        "agent": "plan"
+      },
+      "tool": "exit_plan_mode"
+    },
+    {
+      "arguments": {},
+      "case": "no-agent-manager",
+      "error": {
+        "message": {
+          "digest": "sha256:8872ff679fb57cbab462ef28a12a829d",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {},
+      "tool": "exit_plan_mode"
+    },
+    {
+      "arguments": {
+        "agent": "explore",
+        "task": "Inspect the fixture tree."
+      },
+      "case": "completed-in-one-turn",
+      "modelText": {
+        "digest": "sha256:0019e86970cb2b6c8852fa0417f5357a",
+        "length": 58
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "completed": true,
+        "response": "A fixture finding.",
+        "turns_used": 1
+      },
+      "script": {
+        "agent": "default",
+        "runner": {
+          "completed": true,
+          "response": "A fixture finding.",
+          "turns": 1
+        }
+      },
+      "tool": "task",
+      "typedResult": {
+        "completed": true,
+        "response": "A fixture finding.",
+        "turns_used": 1
+      }
+    },
+    {
+      "arguments": {
+        "agent": "explore",
+        "task": "Inspect the fixture tree."
+      },
+      "case": "completed-in-several-turns",
+      "modelText": {
+        "digest": "sha256:ecd9c77c7583a51ced33b69916c43322",
+        "length": 58
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "completed": true,
+        "response": "A fixture finding.",
+        "turns_used": 3
+      },
+      "script": {
+        "agent": "default",
+        "runner": {
+          "completed": true,
+          "response": "A fixture finding.",
+          "turns": 3
+        }
+      },
+      "tool": "task",
+      "typedResult": {
+        "completed": true,
+        "response": "A fixture finding.",
+        "turns_used": 3
+      }
+    },
+    {
+      "arguments": {
+        "agent": "explore",
+        "task": "Inspect the fixture tree."
+      },
+      "case": "ended-incomplete",
+      "modelText": {
+        "digest": "sha256:89447d6e18620aa3970946fd46c1b8ad",
+        "length": 59
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "completed": false,
+        "response": "A partial finding.",
+        "turns_used": 2
+      },
+      "script": {
+        "agent": "default",
+        "runner": {
+          "completed": false,
+          "response": "A partial finding.",
+          "turns": 2
+        }
+      },
+      "tool": "task",
+      "typedResult": {
+        "completed": false,
+        "response": "A partial finding.",
+        "turns_used": 2
+      }
+    },
+    {
+      "arguments": {
+        "agent": "explore",
+        "task": "Inspect the fixture tree."
+      },
+      "case": "empty-response",
+      "modelText": {
+        "digest": "sha256:30cee72ea74782cf0ee97a99bf6a2b98",
+        "length": 40
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "completed": true,
+        "response": "",
+        "turns_used": 1
+      },
+      "script": {
+        "agent": "default",
+        "runner": {
+          "completed": true,
+          "response": "",
+          "turns": 1
+        }
+      },
+      "tool": "task",
+      "typedResult": {
+        "completed": true,
+        "response": "",
+        "turns_used": 1
+      }
+    },
+    {
+      "arguments": {
+        "agent": "explore",
+        "task": "Inspect the fixture tree."
+      },
+      "case": "streamed-progress",
+      "modelText": {
+        "digest": "sha256:e847d64c64b640313c801f85372a1d0f",
+        "length": 58
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "completed": true,
+        "response": "A fixture finding.",
+        "turns_used": 2
+      },
+      "script": {
+        "agent": "default",
+        "runner": {
+          "completed": true,
+          "response": "A fixture finding.",
+          "stream": [
+            "read_file: a fixture progress line"
+          ],
+          "turns": 2
+        }
+      },
+      "tool": "task",
+      "typedResult": {
+        "completed": true,
+        "response": "A fixture finding.",
+        "turns_used": 2
+      }
+    },
+    {
+      "arguments": {
+        "task": "Inspect the fixture tree."
+      },
+      "case": "default-agent-name",
+      "modelText": {
+        "digest": "sha256:0019e86970cb2b6c8852fa0417f5357a",
+        "length": 58
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "completed": true,
+        "response": "A fixture finding.",
+        "turns_used": 1
+      },
+      "script": {
+        "agent": "default",
+        "runner": {
+          "completed": true,
+          "response": "A fixture finding.",
+          "turns": 1
+        }
+      },
+      "tool": "task",
+      "typedResult": {
+        "completed": true,
+        "response": "A fixture finding.",
+        "turns_used": 1
+      }
+    },
+    {
+      "arguments": {
+        "agent": "absent",
+        "task": "Inspect the fixture tree."
+      },
+      "case": "unknown-agent",
+      "error": {
+        "message": {
+          "digest": "sha256:6cb2fb74d9cda12f67f32bcde5bee64c",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {
+        "agent": "default",
+        "runner": {
+          "completed": true,
+          "response": "A fixture finding.",
+          "turns": 1
+        }
+      },
+      "tool": "task"
+    },
+    {
+      "arguments": {
+        "agent": "plan",
+        "task": "Inspect the fixture tree."
+      },
+      "case": "not-a-subagent",
+      "error": {
+        "message": {
+          "digest": "sha256:019d7e1ff01e76f091386c86778726ca",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {
+        "agent": "default",
+        "runner": {
+          "completed": true,
+          "response": "A fixture finding.",
+          "turns": 1
+        }
+      },
+      "tool": "task"
+    },
+    {
+      "arguments": {
+        "agent": "explore",
+        "task": "Inspect the fixture tree."
+      },
+      "case": "no-subagent-runner",
+      "error": {
+        "message": {
+          "digest": "sha256:c585d620a2cf129e87630d0be0ad2c69",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {
+        "agent": "default"
+      },
+      "tool": "task"
+    },
+    {
+      "arguments": {
+        "agent": "explore",
+        "task": "Inspect the fixture tree."
+      },
+      "case": "already-inside-a-subagent",
+      "error": {
+        "message": {
+          "digest": "sha256:44c0a649d42d6671ff3411d51c4b7dc5",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {
+        "agent": "explore",
+        "runner": {
+          "completed": true,
+          "response": "A fixture finding.",
+          "turns": 1
+        }
+      },
+      "tool": "task"
+    },
+    {
+      "arguments": {
+        "task": "Inspect."
+      },
+      "case": "no-agent-manager",
+      "error": {
+        "message": {
+          "digest": "sha256:a88770dae893acfd4c73cfcb0f9e841c",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {},
+      "tool": "task"
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/page.html"
+      },
+      "case": "an-html-page",
+      "modelText": {
+        "digest": "sha256:3f1631012738fd935b0f9268a74f5ba3",
+        "length": 131
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:4173358e23a7206e68d19bf5a5786f06",
+          "length": 31
+        },
+        "content_type": "text/html; charset=utf-8",
+        "url": "http://{server}/page.html",
+        "was_truncated": false
+      },
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/page.html"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "body": "<html><body><h1>Fixture</h1><p>A fixture paragraph.</p></body></html>",
+            "headers": {
+              "Content-Type": "text/html; charset=utf-8"
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_fetch",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:4173358e23a7206e68d19bf5a5786f06",
+          "length": 31
+        },
+        "content_type": "text/html; charset=utf-8",
+        "url": "http://{server}/page.html",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/page.txt"
+      },
+      "case": "a-plain-text-page",
+      "modelText": {
+        "digest": "sha256:ab931729dcf02f417140554f06e1ea29",
+        "length": 120
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": "A fixture paragraph.",
+        "content_type": "text/plain; charset=utf-8",
+        "url": "http://{server}/page.txt",
+        "was_truncated": false
+      },
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/page.txt"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "body": "A fixture paragraph.",
+            "headers": {
+              "Content-Type": "text/plain; charset=utf-8"
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_fetch",
+      "typedResult": {
+        "content": "A fixture paragraph.",
+        "content_type": "text/plain; charset=utf-8",
+        "url": "http://{server}/page.txt",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/page.json"
+      },
+      "case": "a-json-body",
+      "modelText": {
+        "digest": "sha256:e23fe9044a4b1313eeff8c17e94d625c",
+        "length": 121
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:9fee7b7c3fcffc19bba6ef4b5e93c0e4",
+          "length": 29
+        },
+        "content_type": "application/json",
+        "url": "http://{server}/page.json",
+        "was_truncated": false
+      },
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/page.json"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "count": 2,
+              "fixture": true
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_fetch",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:9fee7b7c3fcffc19bba6ef4b5e93c0e4",
+          "length": 29
+        },
+        "content_type": "application/json",
+        "url": "http://{server}/page.json",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/large.txt"
+      },
+      "case": "larger-than-max-content-bytes",
+      "modelText": {
+        "digest": "sha256:5618a6deeeac00b9eddc686216745f1a",
+        "length": 120139
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": {
+          "digest": "sha256:c546f71d5a827acfb50967626ef909e6",
+          "length": 120039
+        },
+        "content_type": "text/plain; charset=utf-8",
+        "url": "http://{server}/large.txt",
+        "was_truncated": true
+      },
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/large.txt"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "bodyRepeat": {
+              "count": 3200,
+              "unit": "A fixture line of exactly forty bytes.\n\n"
+            },
+            "headers": {
+              "Content-Type": "text/plain; charset=utf-8"
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_fetch",
+      "typedResult": {
+        "content": {
+          "digest": "sha256:c546f71d5a827acfb50967626ef909e6",
+          "length": 120039
+        },
+        "content_type": "text/plain; charset=utf-8",
+        "url": "http://{server}/large.txt",
+        "was_truncated": true
+      }
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/first"
+      },
+      "case": "a-redirect-chain",
+      "modelText": {
+        "digest": "sha256:fccb7d4b5b4fe6c2526058d3c42aad9b",
+        "length": 121
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": "The fixture destination.",
+        "content_type": "text/plain; charset=utf-8",
+        "url": "http://{server}/first",
+        "was_truncated": false
+      },
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/first"
+        },
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/second"
+        },
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/third"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "headers": {
+              "Location": "/second"
+            },
+            "reason": "Found",
+            "status": 302
+          },
+          {
+            "headers": {
+              "Location": "/third"
+            },
+            "reason": "Found",
+            "status": 302
+          },
+          {
+            "body": "The fixture destination.",
+            "headers": {
+              "Content-Type": "text/plain; charset=utf-8"
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_fetch",
+      "typedResult": {
+        "content": "The fixture destination.",
+        "content_type": "text/plain; charset=utf-8",
+        "url": "http://{server}/first",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/absent"
+      },
+      "case": "not-found",
+      "error": {
+        "message": {
+          "digest": "sha256:89531824383ac6878e89fa25d06a7f60",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/absent"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "body": "absent",
+            "headers": {
+              "Content-Type": "text/plain"
+            },
+            "reason": "Not Found",
+            "status": 404
+          }
+        ]
+      },
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/guarded"
+      },
+      "case": "a-challenge-then-success",
+      "modelText": {
+        "digest": "sha256:1db9bf29cb7a0b7d8ceb6f34a4c68df3",
+        "length": 132
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": "The fixture behind the challenge.",
+        "content_type": "text/plain; charset=utf-8",
+        "url": "http://{server}/guarded",
+        "was_truncated": false
+      },
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/guarded"
+        },
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": "vibe-cli"
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/guarded"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "body": "",
+            "headers": {
+              "cf-mitigated": "challenge"
+            },
+            "reason": "Forbidden",
+            "status": 403
+          },
+          {
+            "body": "The fixture behind the challenge.",
+            "headers": {
+              "Content-Type": "text/plain; charset=utf-8"
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_fetch",
+      "typedResult": {
+        "content": "The fixture behind the challenge.",
+        "content_type": "text/plain; charset=utf-8",
+        "url": "http://{server}/guarded",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/guarded"
+      },
+      "case": "a-challenge-that-persists",
+      "error": {
+        "message": {
+          "digest": "sha256:8ae13367dde08a61d93fff99b7abef3f",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/guarded"
+        },
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": "vibe-cli"
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/guarded"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "body": "",
+            "headers": {
+              "cf-mitigated": "challenge"
+            },
+            "reason": "Forbidden",
+            "status": 403
+          }
+        ]
+      },
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/guarded"
+      },
+      "case": "forbidden-without-the-challenge-header",
+      "error": {
+        "message": {
+          "digest": "sha256:8ae13367dde08a61d93fff99b7abef3f",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/guarded"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "body": "",
+            "reason": "Forbidden",
+            "status": 403
+          }
+        ]
+      },
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/broken"
+      },
+      "case": "a-server-error",
+      "error": {
+        "message": {
+          "digest": "sha256:922757eb8d1e40955d9a393bec25a1cd",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/broken"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "body": "",
+            "reason": "Internal Server Error",
+            "status": 500
+          }
+        ]
+      },
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/empty.txt"
+      },
+      "case": "an-empty-body",
+      "modelText": {
+        "digest": "sha256:c2a03a68a82c8ef0e9ef95ccf18b317d",
+        "length": 101
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": "",
+        "content_type": "text/plain; charset=utf-8",
+        "url": "http://{server}/empty.txt",
+        "was_truncated": false
+      },
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/empty.txt"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "body": "",
+            "headers": {
+              "Content-Type": "text/plain; charset=utf-8"
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_fetch",
+      "typedResult": {
+        "content": "",
+        "content_type": "text/plain; charset=utf-8",
+        "url": "http://{server}/empty.txt",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "url": "http://{server}/bare"
+      },
+      "case": "no-content-type",
+      "modelText": {
+        "digest": "sha256:57a7b93202c99babba892378934de7a2",
+        "length": 101
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "content": "A bare fixture body.",
+        "content_type": {
+          "digest": "sha256:dc23933049d8b06808e15916d9cc735b",
+          "length": 10
+        },
+        "url": "http://{server}/bare",
+        "was_truncated": false
+      },
+      "requests": [
+        {
+          "headers": [
+            {
+              "name": "Host",
+              "value": "{server}"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": {
+                "digest": "sha256:a9b7696a586458334570519553984267",
+                "length": 19
+              }
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "User-Agent",
+              "value": {
+                "digest": "sha256:9b0e7be93f57ef230c24d75d30c84376",
+                "length": 111
+              }
+            },
+            {
+              "name": "Accept",
+              "value": {
+                "digest": "sha256:810a65738d8b35ca5db55daaa4a64e20",
+                "length": 96
+              }
+            },
+            {
+              "name": "Accept-Language",
+              "value": {
+                "digest": "sha256:6b133d39c5c555d1042c8b62ed6d0beb",
+                "length": 14
+              }
+            }
+          ],
+          "method": "GET",
+          "target": "/bare"
+        }
+      ],
+      "script": {
+        "responses": [
+          {
+            "body": "A bare fixture body.",
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_fetch",
+      "typedResult": {
+        "content": "A bare fixture body.",
+        "content_type": {
+          "digest": "sha256:dc23933049d8b06808e15916d9cc735b",
+          "length": 10
+        },
+        "url": "http://{server}/bare",
+        "was_truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "url": "{server}/page.txt"
+      },
+      "case": "a-url-with-no-scheme",
+      "error": {
+        "message": {
+          "digest": "sha256:30bdc4467f96185dcb72f61c992438c2",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "requests": [],
+      "script": {
+        "responses": [
+          {
+            "body": "A fixture paragraph.",
+            "headers": {
+              "Content-Type": "text/plain; charset=utf-8"
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "url": ""
+      },
+      "case": "an-empty-url",
+      "error": {
+        "message": {
+          "digest": "sha256:d0cc5efbe5e026aa50a38f5a59af3566",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {},
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "url": "ftp://fixture.invalid/page.txt"
+      },
+      "case": "an-unsupported-scheme",
+      "error": {
+        "message": {
+          "digest": "sha256:de6f23983e32862305d02013874b399a",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {},
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "timeout": 300,
+        "url": "http://{server}/page.txt"
+      },
+      "case": "a-timeout-above-the-cap",
+      "error": {
+        "message": {
+          "digest": "sha256:12229d6c1207683858d4c0e06b0533ac",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {},
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "timeout": 0,
+        "url": "http://{server}/page.txt"
+      },
+      "case": "a-non-positive-timeout",
+      "error": {
+        "message": {
+          "digest": "sha256:7f837ac161cc2166fdbb5ec90de184c6",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {},
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "query": "the fixture question"
+      },
+      "case": "a-string-content-answer",
+      "modelText": {
+        "digest": "sha256:9850ee6f6adde3f98545bcc3989ed527",
+        "length": 65
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answer": "A fixture answer.",
+        "query": "the fixture question",
+        "sources": []
+      },
+      "script": {
+        "responses": [
+          {
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "conversation_id": "conversation-1",
+              "object": "conversation.response",
+              "outputs": [
+                {
+                  "content": "A fixture answer.",
+                  "object": "entry",
+                  "role": "assistant",
+                  "type": "message.output"
+                }
+              ],
+              "usage": {
+                "completion_tokens": 1,
+                "prompt_tokens": 1,
+                "total_tokens": 2
+              }
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_search",
+      "typedResult": {
+        "answer": "A fixture answer.",
+        "query": "the fixture question",
+        "sources": []
+      }
+    },
+    {
+      "arguments": {
+        "query": "the fixture question"
+      },
+      "case": "chunked-content-with-citations",
+      "modelText": {
+        "digest": "sha256:382d6780999a78fee8261b7647ada032",
+        "length": 202
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answer": "A fixture answer.",
+        "query": "the fixture question",
+        "sources": [
+          {
+            "title": "The first source",
+            "url": "https://fixture.invalid/one"
+          },
+          {
+            "title": "The second source",
+            "url": "https://fixture.invalid/two"
+          }
+        ]
+      },
+      "script": {
+        "responses": [
+          {
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "conversation_id": "conversation-1",
+              "object": "conversation.response",
+              "outputs": [
+                {
+                  "content": [
+                    {
+                      "text": "A fixture answer.",
+                      "type": "text"
+                    },
+                    {
+                      "title": "The first source",
+                      "tool": "web_search",
+                      "type": "tool_reference",
+                      "url": "https://fixture.invalid/one"
+                    },
+                    {
+                      "title": "The second source",
+                      "tool": "web_search",
+                      "type": "tool_reference",
+                      "url": "https://fixture.invalid/two"
+                    }
+                  ],
+                  "object": "entry",
+                  "role": "assistant",
+                  "type": "message.output"
+                }
+              ],
+              "usage": {
+                "completion_tokens": 1,
+                "prompt_tokens": 1,
+                "total_tokens": 2
+              }
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_search",
+      "typedResult": {
+        "answer": "A fixture answer.",
+        "query": "the fixture question",
+        "sources": [
+          {
+            "title": "The first source",
+            "url": "https://fixture.invalid/one"
+          },
+          {
+            "title": "The second source",
+            "url": "https://fixture.invalid/two"
+          }
+        ]
+      }
+    },
+    {
+      "arguments": {
+        "query": "the fixture question"
+      },
+      "case": "duplicate-citation-urls",
+      "modelText": {
+        "digest": "sha256:12804eb3913c8d658587fe3b5dfc1465",
+        "length": 132
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answer": "A fixture answer.",
+        "query": "the fixture question",
+        "sources": [
+          {
+            "title": "The first source",
+            "url": "https://fixture.invalid/one"
+          }
+        ]
+      },
+      "script": {
+        "responses": [
+          {
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "conversation_id": "conversation-1",
+              "object": "conversation.response",
+              "outputs": [
+                {
+                  "content": [
+                    {
+                      "text": "A fixture answer.",
+                      "type": "text"
+                    },
+                    {
+                      "title": "The first source",
+                      "tool": "web_search",
+                      "type": "tool_reference",
+                      "url": "https://fixture.invalid/one"
+                    },
+                    {
+                      "title": "The same source again",
+                      "tool": "web_search",
+                      "type": "tool_reference",
+                      "url": "https://fixture.invalid/one"
+                    }
+                  ],
+                  "object": "entry",
+                  "role": "assistant",
+                  "type": "message.output"
+                }
+              ],
+              "usage": {
+                "completion_tokens": 1,
+                "prompt_tokens": 1,
+                "total_tokens": 2
+              }
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_search",
+      "typedResult": {
+        "answer": "A fixture answer.",
+        "query": "the fixture question",
+        "sources": [
+          {
+            "title": "The first source",
+            "url": "https://fixture.invalid/one"
+          }
+        ]
+      }
+    },
+    {
+      "arguments": {
+        "query": "the fixture question"
+      },
+      "case": "a-citation-with-no-url",
+      "modelText": {
+        "digest": "sha256:9850ee6f6adde3f98545bcc3989ed527",
+        "length": 65
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answer": "A fixture answer.",
+        "query": "the fixture question",
+        "sources": []
+      },
+      "script": {
+        "responses": [
+          {
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "conversation_id": "conversation-1",
+              "object": "conversation.response",
+              "outputs": [
+                {
+                  "content": [
+                    {
+                      "text": "A fixture answer.",
+                      "type": "text"
+                    },
+                    {
+                      "title": "The unlinked source",
+                      "tool": "web_search",
+                      "type": "tool_reference"
+                    }
+                  ],
+                  "object": "entry",
+                  "role": "assistant",
+                  "type": "message.output"
+                }
+              ],
+              "usage": {
+                "completion_tokens": 1,
+                "prompt_tokens": 1,
+                "total_tokens": 2
+              }
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_search",
+      "typedResult": {
+        "answer": "A fixture answer.",
+        "query": "the fixture question",
+        "sources": []
+      }
+    },
+    {
+      "arguments": {
+        "query": "the fixture question"
+      },
+      "case": "several-message-outputs",
+      "modelText": {
+        "digest": "sha256:479a5e509c90766c30d0e076faf4ecbe",
+        "length": 82
+      },
+      "outcome": "returned",
+      "projectedResult": {
+        "answer": {
+          "digest": "sha256:e60249c7cdcb68afab9edbc487658495",
+          "length": 34
+        },
+        "query": "the fixture question",
+        "sources": []
+      },
+      "script": {
+        "responses": [
+          {
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "conversation_id": "conversation-1",
+              "object": "conversation.response",
+              "outputs": [
+                {
+                  "content": "A fixture answer.",
+                  "object": "entry",
+                  "role": "assistant",
+                  "type": "message.output"
+                },
+                {
+                  "content": "A fixture answer.",
+                  "object": "entry",
+                  "role": "assistant",
+                  "type": "message.output"
+                }
+              ],
+              "usage": {
+                "completion_tokens": 1,
+                "prompt_tokens": 1,
+                "total_tokens": 2
+              }
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_search",
+      "typedResult": {
+        "answer": {
+          "digest": "sha256:e60249c7cdcb68afab9edbc487658495",
+          "length": 34
+        },
+        "query": "the fixture question",
+        "sources": []
+      }
+    },
+    {
+      "arguments": {
+        "query": "the fixture question"
+      },
+      "case": "no-text-in-the-response",
+      "error": {
+        "message": {
+          "digest": "sha256:3e3616a89a5c47fb365904d31a465c61",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {
+        "responses": [
+          {
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "conversation_id": "conversation-1",
+              "object": "conversation.response",
+              "outputs": [
+                {
+                  "content": [],
+                  "object": "entry",
+                  "role": "assistant",
+                  "type": "message.output"
+                }
+              ],
+              "usage": {
+                "completion_tokens": 1,
+                "prompt_tokens": 1,
+                "total_tokens": 2
+              }
+            },
+            "status": 200
+          }
+        ]
+      },
+      "tool": "web_search"
+    },
+    {
+      "arguments": {
+        "query": "the fixture question"
+      },
+      "case": "a-non-2xx-status",
+      "error": {
+        "message": {
+          "digest": "sha256:e3a5ec29371d2680acf32bca525371f1",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {
+        "responses": [
+          {
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "message": "a fixture failure"
+            },
+            "reason": "Internal Server Error",
+            "status": 500
+          }
+        ]
+      },
+      "tool": "web_search"
+    },
+    {
+      "arguments": {
+        "query": "the fixture question"
+      },
+      "case": "no-api-key",
+      "error": {
+        "message": {
+          "digest": "sha256:0f5755420e3655bf2a2291b5a4f4eb39",
+          "present": true
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "script": {
+        "apiKeyVariable": "VIBE_PARITY_ABSENT_KEY",
+        "responses": []
+      },
+      "tool": "web_search"
     }
   ],
   "note": "Tool execution corpus: what the pinned reference's tools return for each case over the checked-in fixture tree. A captured string is committed as it stands only when it is a value these arguments supplied, a normalized path, or an identifier-shaped token; everything else, including every error message, is committed as a SHA-256 digest and its length, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/tool_execution.py --corpus when the pinned reference moves.",
   "platform": "linux",
   "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
-  "schemaVersion": 1
+  "schemaVersion": 2
 }
