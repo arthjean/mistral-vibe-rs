@@ -18,10 +18,11 @@
     {
       "id": "EP-075",
       "title": "The result the model actually reads",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3,
+      "started_at": "2026-08-20"
     },
     {
       "id": "EP-076",
@@ -114,34 +115,43 @@
       "id": "US-243",
       "title": "Render web_fetch and web_search field per line",
       "epic": "EP-075",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-242"
-      ]
+      ],
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
     },
     {
       "id": "US-244",
       "title": "Render task from the reference result model",
       "epic": "EP-075",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-242"
-      ]
+      ],
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
     },
     {
       "id": "US-245",
       "title": "Render ask_user_question and exit_plan_mode field per line",
       "epic": "EP-075",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-242"
-      ]
+      ],
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
     },
     {
       "id": "US-246",

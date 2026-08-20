@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Return the reference's own result fields from the last five built-in tools
+  instead of the bare answer. `web_fetch` now renders `url`, `content`,
+  `content_type` and `was_truncated`, `web_search` renders `query`, `answer`
+  and `sources` with an empty search rendering `[]`, `task` renders `response`,
+  `turns_used` and `completed`, `ask_user_question` renders its answers and
+  `cancelled`, and `exit_plan_mode` renders `switched` and `message`. The model
+  reads one labeled line per field the way the reference writes it, and
+  `web_fetch` publishes `content_type` and `was_truncated` where it used to
+  publish `contentType` and `wasTruncated`.
+
 - Answer the edges of a slash line the way the reference answers them. Exactly
   one leading marker is stripped, so `//` and `///` now show nothing instead of
   the whole command list, and the caret bounds both the query and the range a
