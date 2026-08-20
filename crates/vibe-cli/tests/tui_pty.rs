@@ -8,6 +8,7 @@
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Write};
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::mpsc;
@@ -112,6 +113,20 @@ fn visible_text(transcript: &[u8]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Whether the composer carries this word alone on one of its lines.
+///
+/// The prompt marker owns the first two cells and a continuation line leaves
+/// them blank, while a frame repaints either the whole line or only the cells it
+/// changed, so both spellings describe the same screen. What the two forms have
+/// in common is the column, which is what separates the composer from anything
+/// else on screen that happens to contain the word.
+fn composer_carries(screen: &str, word: &str) -> bool {
+    screen
+        .lines()
+        .map(str::trim_end)
+        .any(|line| line == format!("> {word}") || line == format!("  {word}"))
 }
 
 #[test]
@@ -416,13 +431,27 @@ impl PtyProcess {
             .spawn()
             .expect("TUI starts");
         let (sender, receiver) = mpsc::channel();
+        // A real terminal answers the cursor-position report crossterm asks for
+        // when it re-enters raw mode, which is what happens on the way back from
+        // an external editor. Nothing else here plays terminal, so without this
+        // reply the client waits out its own timeout and paints a failed UI
+        // instead of the edited prompt.
+        let mut responder = master.try_clone().expect("PTY responder clones");
         let reader = std::thread::spawn(move || {
+            const CURSOR_REPORT_REQUEST: &[u8] = b"\x1b[6n";
             let mut transcript = Vec::new();
             let mut buffer = [0_u8; 4096];
             loop {
                 match reader.read(&mut buffer) {
                     Ok(0) | Err(_) => break,
                     Ok(count) => {
+                        if buffer[..count]
+                            .windows(CURSOR_REPORT_REQUEST.len())
+                            .any(|window| window == CURSOR_REPORT_REQUEST)
+                        {
+                            let _ = responder.write_all(b"\x1b[1;1R");
+                            let _ = responder.flush();
+                        }
                         transcript.extend_from_slice(&buffer[..count]);
                         let _ = sender.send(buffer[..count].to_vec());
                     }
@@ -582,6 +611,145 @@ fn seed_session(vibe_home: &Path, workspace: &Path, id: &str, marker: &str, time
             timestamp + 2,
         )
         .expect("saved assistant message");
+}
+
+/// Every line of the help's shortcut section, performed in the running client.
+///
+/// `help_tests::every_advertised_key_routes_to_the_chord_its_line_names` proves
+/// each advertised key resolves to the chord its line names. This proves the
+/// other half: that the chord does what the line claims, in the binary an
+/// operator runs rather than in a context a test assembles. A shortcut line is a
+/// statement about this program only while both halves hold.
+///
+/// One session serves all eight, since a spawn costs more than a keystroke and
+/// every step asserts on something the screen did not already carry. Assertions
+/// read what appeared, never what left: a frame carries only the cells it
+/// changed, so a phrase that scrolled away is still on the replayed screen.
+/// `Shift+Enter` is the one advertised key no assertion below presses, because a
+/// terminal reports it as a plain `Enter` unless it speaks the Kitty protocol,
+/// which leaves `Ctrl+J` to stand for that line here.
+///
+/// The escape line names two actions and gets two assertions, one for each: the
+/// overlay it dismisses, and the running operation it stops. The operation is a
+/// manual shell command rather than a model turn, since no model answers in a
+/// hermetic harness, and it is the same `escape` branch either way: the client
+/// itself offers the key for both while something is running.
+#[test]
+fn every_advertised_shortcut_performs_its_action_in_the_running_tui() {
+    let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
+    // The rewind line needs a message to rewind to.
+    seed_session(&home, &workspace, "shortcut-session", "seeded prompt", 10);
+    // The external-editor line needs an editor that answers.
+    let editor = temporary.path().join("editor.sh");
+    std::fs::write(
+        &editor,
+        "#!/bin/sh\nprintf 'edited by the external editor' > \"$1\"\n",
+    )
+    .expect("editor script");
+    std::fs::set_permissions(&editor, std::fs::Permissions::from_mode(0o755))
+        .expect("editor is executable");
+    // The stop half of the escape line needs an operation that keeps running
+    // until it is stopped. `tail` is on the allowlist the manual shell reads, so
+    // the command runs unattended, and `-f` is what makes it wait.
+    std::fs::write(workspace.join("log.txt"), "a logged line\n").expect("log file");
+    let mut process = PtyProcess::spawn_with_environment(
+        &workspace,
+        &home,
+        &[
+            "--trust",
+            "--resume",
+            "shortcut-session",
+            "--api-base",
+            "http://127.0.0.1:9",
+        ],
+        &[("EDITOR", editor.to_string_lossy().into_owned())],
+    );
+    process.wait_for_visible("seeded prompt", STEP);
+
+    // `Enter` sends the prompt: a picker opens only because the line submitted.
+    process.write(b"/theme\r");
+    process.wait_for_visible("Select Theme", STEP);
+
+    // `Escape` dismisses the overlay, and the composer taking text again is the
+    // proof. The pause is not politeness: an escape byte immediately followed by
+    // a letter is how a terminal reports `Alt`, so the two have to arrive as
+    // separate reads to stay two presses. The column is what tells the composer
+    // apart from the picker's own filter, which would have shown the same word
+    // further right had the overlay stayed up.
+    process.write(b"\x1b");
+    std::thread::sleep(Duration::from_millis(150));
+    process.write(b"zeta");
+    let dismissed = visible_text(&process.wait_for_visible("zeta", STEP));
+    assert!(
+        composer_carries(&dismissed, "zeta"),
+        "Escape left the overlay holding the keyboard: {dismissed}"
+    );
+
+    // `Ctrl+C` clears a non-empty prompt first and only offers to quit once the
+    // prompt is empty, so the confirmation arriving on the second press is what
+    // proves the first press cleared the composer.
+    process.write(b"\x03");
+    process.write(b"\x03");
+    process.wait_for_visible("Press Ctrl+C again to quit", STEP);
+
+    // `Ctrl+J` starts a new line rather than submitting. The column is the
+    // assertion: the composer indents a continuation to the third cell, where a
+    // key that had done nothing would leave `beta` appended to `alpha` instead.
+    process.write(b"alpha");
+    process.write(b"\x0a");
+    process.write(b"beta");
+    let composed = visible_text(&process.wait_for_visible("beta", STEP));
+    assert!(
+        composer_carries(&composed, "beta"),
+        "Ctrl+J did not open a second composer line: {composed}"
+    );
+    process.write(b"\x03");
+
+    // `Ctrl+O` folds and unfolds tool output, and the client names the state it
+    // moved to. A session starts folded, so the first press unfolds.
+    process.write(b"\x0f");
+    process.wait_for_visible("Tool output expanded", STEP);
+    process.write(b"\x0f");
+    // Only the word changes on the flip back, so only the word is repainted.
+    process.wait_for_visible("collapsed", STEP);
+
+    // `Shift+Tab` switches to the next agent, which a terminal sends as
+    // `BackTab`.
+    process.write(b"\x1b[Z");
+    process.wait_for_visible("Switched to agent", STEP);
+
+    // `Esc Esc` on an empty prompt rewinds. The two presses travel separately
+    // because a terminal sending them in one packet is reporting one
+    // escape-prefixed key, not two presses.
+    process.write(b"\x1b");
+    std::thread::sleep(Duration::from_millis(150));
+    process.write(b"\x1b");
+    process.wait_for_visible("Edit an earlier message", STEP);
+    process.write(b"q");
+
+    // `Ctrl+G` hands the prompt to the external editor and keeps what came back.
+    process.write(b"\x07");
+    process.wait_for_visible("edited by the external editor", STEP);
+
+    // `Escape` also stops what is running, which is the other half of its line.
+    // The command prints its file and then waits, so its own output is what says
+    // the operation is under way; the key is pressed only once it is.
+    process.write(b"\x03");
+    process.write(b"!tail -f log.txt\r");
+    process.wait_for_visible("a logged line", STEP);
+    process.write(b"\x1b");
+    process.wait_for_visible("Command was interrupted", STEP);
+
+    // `Ctrl+D` quits, once the prompt the editor filled is out of its way.
+    process.write(b"\x04");
+    process.wait_for_visible("Press Ctrl+D again to quit", STEP);
+    process.write(b"\x04");
+    let (status, _) = process.wait(STEP);
+    assert!(status.success(), "Ctrl+D did not quit cleanly: {status}");
 }
 
 #[test]
