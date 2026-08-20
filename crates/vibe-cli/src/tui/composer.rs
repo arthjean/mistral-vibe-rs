@@ -186,4 +186,68 @@ mod tests {
         assert_eq!(external.mode(), chat_input::InputMode::Prompt);
         assert!(external.completion().view().is_some());
     }
+
+    /// The two completer edges the reference answers differently, driven
+    /// through the adapter the interactive loop drives: a doubled marker keeps
+    /// its second slash inside the query and matches no alias, and accepting a
+    /// candidate mid-token replaces up to the caret rather than up to the
+    /// space, with the separator `ChatInputContainer._format_insertion` adds
+    /// before a surviving tail. Reference: `CommandCompleter._fuzzy_filter` and
+    /// `get_replacement_range` in `vibe/cli/autocompletion/completers.py`.
+    #[test]
+    fn a_doubled_marker_shows_nothing_and_a_mid_token_accept_stops_at_the_caret() {
+        let temporary = tempfile::tempdir().expect("workspace");
+        let mut state = TuiState::new("session");
+
+        let mut doubled = ChatInputState::new();
+        for character in "//".chars() {
+            let event =
+                normalized_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE))
+                    .expect("character is normalized");
+            apply_event(&mut doubled, event, temporary.path(), &mut state);
+        }
+        assert_eq!(doubled.editor().text(), "//");
+        assert!(
+            doubled.completion().view().is_none(),
+            "`//` searches for `/`, which is a subsequence of no alias"
+        );
+        let event = normalized_key_event(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE))
+            .expect("character is normalized");
+        apply_event(&mut doubled, event, temporary.path(), &mut state);
+        assert!(
+            doubled.completion().view().is_none(),
+            "and neither does `///`"
+        );
+
+        let mut line = ChatInputState::new();
+        for character in "/mp add x".chars() {
+            let event =
+                normalized_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE))
+                    .expect("character is normalized");
+            apply_event(&mut line, event, temporary.path(), &mut state);
+        }
+        for _ in 0..7 {
+            let event = normalized_key_event(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))
+                .expect("left is normalized");
+            apply_event(&mut line, event, temporary.path(), &mut state);
+        }
+        let event = normalized_key_event(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE))
+            .expect("character is normalized");
+        apply_event(&mut line, event, temporary.path(), &mut state);
+        assert_eq!(line.editor().text(), "/mcp add x");
+        assert_eq!(line.editor().cursor(), 3);
+        let view = line
+            .completion()
+            .view()
+            .expect("a mid-token caret still opens the popup");
+        let selected = view.candidates[view.selected].label.clone();
+        let event = normalized_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))
+            .expect("tab is normalized");
+        apply_event(&mut line, event, temporary.path(), &mut state);
+        assert_eq!(
+            line.editor().text(),
+            format!("{selected} p add x"),
+            "the accepted range ends at the caret, so the token's tail survives"
+        );
+    }
 }

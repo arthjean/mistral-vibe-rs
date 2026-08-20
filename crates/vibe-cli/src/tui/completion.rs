@@ -9,7 +9,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use serde::{Deserialize, Serialize};
 
 use super::commands::{CommandContext, command_aliases_in, command_description};
-use super::input::{InputError, PromptEditor, grapheme_count};
+use super::input::{InputError, PromptEditor, grapheme_byte, grapheme_count};
 
 mod fuzzy;
 mod path;
@@ -571,10 +571,14 @@ impl CompletionEngine {
             .get(active.selected)
             .ok_or(InputError::MissingCompletion)?
             .clone();
+        let separator = insertion_separator(
+            &candidate.insertion,
+            &editor.text()[grapheme_byte(editor.text(), active.token_range.end)..],
+        );
         editor.select(active.token_range);
         editor.insert(&candidate.insertion);
-        if candidate.kind == CompletionKind::Mention && !candidate.insertion.ends_with('/') {
-            editor.insert(" ");
+        if !separator.is_empty() {
+            editor.insert(separator);
         }
         self.generation = self.generation.saturating_add(1);
         Ok(
@@ -633,6 +637,25 @@ impl CompletionEngine {
     }
 }
 
+/// The spacing the reference appends to an accepted candidate, from
+/// `ChatInputContainer._format_insertion`: a directory mention closes on its own
+/// slash, any other mention takes a space unless the tail already opens with
+/// whitespace, and every other candidate takes one only when a tail follows it.
+fn insertion_separator(insertion: &str, suffix: &str) -> &'static str {
+    let tail_opens_with_space = suffix.starts_with(char::is_whitespace);
+    if insertion.starts_with('@') {
+        if insertion.ends_with('/') {
+            return "";
+        }
+        return if tail_opens_with_space { "" } else { " " };
+    }
+    if suffix.is_empty() || tail_opens_with_space {
+        ""
+    } else {
+        " "
+    }
+}
+
 fn ranked_completion(
     generation: u64,
     query: &str,
@@ -653,7 +676,9 @@ fn ranked_slash_candidates(
     query: &str,
     candidates: impl IntoIterator<Item = CompletionCandidate>,
 ) -> Vec<CompletionCandidate> {
-    let query = query.trim_start_matches('/').to_lowercase();
+    // `_fuzzy_filter` reads `search_str[1:]`: exactly one marker is removed, so
+    // `//` searches for `/`, which is a subsequence of no alias.
+    let query = query.strip_prefix('/').unwrap_or(query).to_lowercase();
     let mut candidates = candidates.into_iter().collect::<Vec<_>>();
     // Python sorts the `(alias, description)` entries before building its
     // lookup. A duplicate keeps its first position but its last description.
@@ -699,16 +724,36 @@ fn slash_completion_score(candidate: &CompletionCandidate, query: &str) -> Optio
     fuzzy_match_score(query, label).map(|score| score.saturating_add(boost))
 }
 
+/// The slash head word under `cursor_byte` and the range accepting a candidate
+/// replaces, or [`None`] when the line is not a command line or the caret sits
+/// outside it.
+///
+/// Split out of [`active_token`] because the reference guards the caret in
+/// `SlashCommandController.on_text_changed` rather than in the completer, and
+/// this port's editor cannot produce an offset past its own text: a guard no
+/// caller can reach is a guard no test can prove.
+fn slash_token(text: &str, cursor_byte: usize) -> Option<(Range<usize>, String)> {
+    if !text.starts_with('/') || cursor_byte > text.len() || !text.is_char_boundary(cursor_byte) {
+        return None;
+    }
+    let end_byte = text.find(' ').unwrap_or(text.len());
+    let query_end = cursor_byte.min(end_byte);
+    // `CommandCompleter._head_word` reads `head[1:...]`, so the marker is
+    // dropped once and re-attached once by `get_completions`. A caret before it
+    // yields the empty head word the reference answers with the full list, and
+    // a second slash stays inside the query, where it matches no alias.
+    let head_word = &text[1..query_end.max(1)];
+    Some((
+        0..grapheme_count(&text[..query_end]),
+        format!("/{head_word}"),
+    ))
+}
+
 pub(crate) fn active_token(editor: &PromptEditor) -> Option<(Range<usize>, String)> {
     let text = editor.text();
     let cursor_byte = editor.cursor_byte();
     if text.starts_with('/') {
-        let end_byte = text.find(' ').unwrap_or(text.len());
-        let query_end = cursor_byte.min(end_byte);
-        return Some((
-            0..grapheme_count(&text[..query_end]),
-            text[..query_end].to_owned(),
-        ));
+        return slash_token(text, cursor_byte);
     }
     if !editor.has_mention_syntax() {
         return None;
@@ -1026,6 +1071,101 @@ mod tests {
             engine.path_index.rebuilds(),
             1,
             "one root, one walk, whichever path answered"
+        );
+    }
+
+    /// The head word the popup searches for, measured at the boundary the
+    /// reference measures it at: `CommandCompleter._head_word` reads
+    /// `head[1:min(cursor, len(head))]` and `_fuzzy_filter` reads
+    /// `search_str[1:]`, so a command line loses exactly one marker no matter
+    /// how many it carries, and a caret before the marker searches for nothing.
+    #[test]
+    fn one_marker_is_stripped_and_the_caret_bounds_the_head_word() {
+        assert_eq!(
+            slash_token("//", 2),
+            Some((0..2, "//".to_owned())),
+            "the second marker stays inside the query"
+        );
+        assert_eq!(slash_token("///", 3), Some((0..3, "///".to_owned())));
+        assert_eq!(
+            slash_token("/help", 0),
+            Some((0..0, "/".to_owned())),
+            "a caret before the marker searches for the empty head word"
+        );
+        assert_eq!(
+            slash_token("/mcp add x", 3),
+            Some((0..3, "/mc".to_owned())),
+            "the head word and its range both end at the caret, not at the space"
+        );
+        assert_eq!(slash_token("/", 1), Some((0..1, "/".to_owned())));
+        assert_eq!(
+            slash_token("/help", 6),
+            None,
+            "`SlashCommandController.on_text_changed` drops a caret past the text"
+        );
+        assert_eq!(slash_token("help", 4), None, "a bare line is not a command");
+    }
+
+    /// `ChatInputContainer._format_insertion`, branch by branch.
+    #[test]
+    fn an_accepted_candidate_takes_a_separator_only_when_a_tail_follows_it() {
+        assert_eq!(insertion_separator("/mcp", ""), "");
+        assert_eq!(insertion_separator("/mcp", "p add x"), " ");
+        assert_eq!(insertion_separator("/mcp", " add x"), "");
+        assert_eq!(insertion_separator("@src/", ""), "");
+        assert_eq!(insertion_separator("@src/", "tail"), "");
+        assert_eq!(
+            insertion_separator("@src/main.rs", ""),
+            " ",
+            "a file mention closes with a space even at the end of the line"
+        );
+        assert_eq!(insertion_separator("@src/main.rs", " tail"), "");
+    }
+
+    /// What those head words rank to, read from the engine the composer drives.
+    #[test]
+    fn the_slash_popup_answers_the_reference_edges_of_a_command_line() {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        let mut engine = CompletionEngine::default();
+        let available = command_aliases_in(engine.command_context()).count();
+        assert!(available > 1, "the default context publishes commands");
+        let mut editor = PromptEditor::default();
+
+        for typo in ["//", "///"] {
+            editor.set_text(typo);
+            engine
+                .refresh(&editor, temporary.path())
+                .expect("a doubled marker is answered");
+            assert!(
+                engine.view().is_none(),
+                "{typo} matches no alias, so the reference shows no popup"
+            );
+        }
+
+        editor.set_text("/");
+        engine
+            .refresh(&editor, temporary.path())
+            .expect("a bare marker is answered");
+        assert_eq!(
+            engine
+                .view()
+                .expect("a bare marker opens the popup")
+                .candidates
+                .len(),
+            available,
+            "a bare marker lists every available command"
+        );
+
+        editor.set_text("/help");
+        editor.select(0..0);
+        engine
+            .refresh(&editor, temporary.path())
+            .expect("a caret before the marker is answered");
+        let view = engine.view().expect("offset zero still opens the popup");
+        assert_eq!(view.candidates.len(), available);
+        assert_eq!(
+            view.candidates[view.selected].label, "/help",
+            "the empty head word keeps the reference's promotion order"
         );
     }
 }
