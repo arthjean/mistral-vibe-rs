@@ -21,12 +21,13 @@ use vibe_core::engine::{
     CancellationToken, CompactionResult, Compactor, CompletionProvider, CompositeEventObserver,
     ConversationEngine, EngineLimits, EventObserver, NoopEventObserver, SessionStats,
     SessionTranscriptSink, ToolExecutor, ToolFuture, ToolStreamSink, TurnControl,
-    TurnControlHandle, TurnOutcome,
+    TurnControlHandle, TurnOutcome, TurnStopReason,
 };
 use vibe_core::events::ModelMessage;
 use vibe_core::extensions::{
     AgentKind, AgentProfile, ChildContext, ChildLoggingPolicy, DelegationRequest, DiscoveryRoots,
-    ExtensionSource, SubagentFuture, SubagentManager, SubagentRunner, discover_extensions,
+    ExtensionSource, SubagentFuture, SubagentManager, SubagentRun, SubagentRunner,
+    discover_extensions,
 };
 use vibe_core::matching::NameFilter;
 use vibe_core::mcp::{
@@ -42,7 +43,7 @@ use vibe_core::session_id::rotate_session_id;
 use vibe_core::storage::SessionStore;
 use vibe_core::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolHandler,
-    ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
+    ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec, reference_text,
 };
 
 pub(crate) mod delegation;

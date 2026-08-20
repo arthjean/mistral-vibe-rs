@@ -23,7 +23,7 @@ pub use agents::{AgentApproval, AgentKind, AgentProfile, AgentRegistry, AgentRun
 pub use hooks::{HookChainResult, HookInvocation, HookManager, HookNotice};
 pub use subagents::{
     ChildActivity, ChildContext, ChildLoggingPolicy, DelegationEffect, DelegationRequest,
-    DelegationStatus, SubagentFuture, SubagentManager, SubagentRunner,
+    DelegationStatus, SubagentFuture, SubagentManager, SubagentRun, SubagentRunner,
 };
 
 const MAX_EXTENSION_FILE_BYTES: u64 = 2 * 1024 * 1024;
@@ -721,7 +721,7 @@ mod tests {
     use super::hooks::{HookInvocation, HookManager};
     use super::subagents::{
         ChildContext, ChildLoggingPolicy, DelegationRequest, DelegationStatus, SubagentFuture,
-        SubagentManager, SubagentRunner,
+        SubagentManager, SubagentRun, SubagentRunner,
     };
     use crate::engine::CancellationToken;
     use crate::policy::{PermissionMode, PermissionScope};
@@ -1240,7 +1240,13 @@ mod tests {
             context: ChildContext,
             _cancellation: CancellationToken,
         ) -> SubagentFuture<'a> {
-            Box::pin(async move { Ok(format!("{}:{}", context.agent.name, context.prompt)) })
+            Box::pin(async move {
+                Ok(SubagentRun {
+                    response: format!("{}:{}", context.agent.name, context.prompt),
+                    turns_used: 1,
+                    completed: true,
+                })
+            })
         }
     }
 
@@ -1263,7 +1269,11 @@ mod tests {
                     async { Ok(()) },
                 )
                 .await;
-                outcome.map(|()| "delegated".to_owned())
+                outcome.map(|()| SubagentRun {
+                    response: "delegated".to_owned(),
+                    turns_used: 1,
+                    completed: true,
+                })
             })
         }
     }

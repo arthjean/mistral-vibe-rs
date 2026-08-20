@@ -283,7 +283,13 @@ impl CompletionProvider for SubagentSelectingProvider {
                         call_id,
                         content,
                         is_error: false,
-                    } if call_id == "delegate-1" && content == "child answer"
+                    // Reference `TaskResult` reaches the parent as one field
+                    // per line, so the delegation's answer is a line of the
+                    // tool message rather than the whole of it. The child
+                    // spends two assistant turns here, one calling tools and
+                    // one answering, and the reference counts exactly those.
+                    } if call_id == "delegate-1"
+                        && content == "response: child answer\nturns_used: 2\ncompleted: True"
                 )
             }) {
                 Ok(AssistantMessage {

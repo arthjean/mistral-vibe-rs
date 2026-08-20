@@ -204,11 +204,25 @@ pub(crate) fn task_handler(
                     )
                     .await
                     .map_err(|error| vibe_core::tools::ToolError::Execution(error.to_string()))?;
-                let typed_result = serde_json::to_value(&effect).map_err(|error| {
-                    vibe_core::tools::ToolError::InvalidResult(error.to_string())
-                })?;
+                // Reference `TaskResult` (`vibe/core/subagents.py:26`) declares
+                // `response`, `turns_used` and `completed` and nothing else, so
+                // the delegation effect stays in the display payload the client
+                // reads and only those three reach the model.
+                let typed_result = json!({
+                    "response": effect.result,
+                    "turns_used": effect.turns_used,
+                    "completed": effect.completed,
+                });
+                let model_text = reference_text::joined(&[
+                    ("response", effect.result.clone()),
+                    ("turns_used", effect.turns_used.to_string()),
+                    (
+                        "completed",
+                        reference_text::boolean(effect.completed).to_owned(),
+                    ),
+                ]);
                 Ok(ToolExecutionOutput {
-                    model_text: effect.result.clone(),
+                    model_text,
                     typed_result,
                     display: json!({"kind": "subagent", "effect": effect}),
                     chunks: Vec::new(),
@@ -321,17 +335,30 @@ impl SubagentRunner for ProviderSubagentRunner {
                 )
                 .await
                 .map_err(|error| error.to_string())?;
-            Ok(outcome
+            // Reference `_sessions.py:322` counts one turn per assistant message
+            // in the child transcript and calls the run complete only when the
+            // child turn reached its own end, which is what the stop reason
+            // reports here.
+            let turns_used = outcome
                 .messages
                 .iter()
-                .rev()
-                .find_map(|message| match message {
-                    ModelMessage::Assistant { content, .. } if !content.is_empty() => {
-                        Some(content.clone())
-                    }
-                    _ => None,
-                })
-                .unwrap_or_else(|| "Subagent completed without a text response".to_owned()))
+                .filter(|message| matches!(message, ModelMessage::Assistant { .. }))
+                .count();
+            Ok(SubagentRun {
+                response: outcome
+                    .messages
+                    .iter()
+                    .rev()
+                    .find_map(|message| match message {
+                        ModelMessage::Assistant { content, .. } if !content.is_empty() => {
+                            Some(content.clone())
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| "Subagent completed without a text response".to_owned()),
+                turns_used: u32::try_from(turns_used).unwrap_or(u32::MAX),
+                completed: outcome.stop_reason == TurnStopReason::Complete,
+            })
         })
     }
 }

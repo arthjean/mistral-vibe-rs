@@ -280,7 +280,7 @@ pub(super) fn reduce_event(
                 // with, which is the earliest this projection learns it: the
                 // engine raises no event when the child opens.
                 if detail.kind == ToolEffectKind::Subagent {
-                    detail.child_session_id = subagent_child_session(typed_result);
+                    detail.child_session_id = subagent_child_session(display);
                 }
                 metadata.updated_at = emitted_at;
                 metadata.generation_status = PublicEntryGenerationStatus::Completed;
@@ -594,10 +594,17 @@ fn effect_entry<'a>(
         })
 }
 
-fn subagent_child_session(typed_result: &Value) -> Option<String> {
+/// The child session a delegation opened, read off the display payload.
+///
+/// The typed result the `task` tool publishes carries the reference's three
+/// `TaskResult` fields and nothing else, so the delegation effect and the two
+/// session identifiers on it travel in the display payload instead. That is
+/// the only place this projection can learn the child's name from.
+fn subagent_child_session(display: &Value) -> Option<String> {
+    let effect = display.get("effect")?;
     ["publicSessionId", "childSessionId"]
         .iter()
-        .find_map(|key| typed_result.get(*key).and_then(Value::as_str))
+        .find_map(|key| effect.get(*key).and_then(Value::as_str))
         .filter(|session_id| !session_id.is_empty())
         .map(str::to_owned)
 }

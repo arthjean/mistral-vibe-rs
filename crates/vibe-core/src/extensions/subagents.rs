@@ -29,7 +29,34 @@ static CHILD_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 use crate::storage::{SessionStore, StorageError};
 use crate::text::bounded_utf8;
 
-pub type SubagentFuture<'a> = Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>>;
+/// What a delegated run produced.
+///
+/// Reference `TaskResult` (`vibe/core/subagents.py:26`) declares `response`,
+/// `turns_used` and `completed`, and the runner is the only place that can
+/// count a turn or tell a natural end from a stopped one, so the outcome
+/// carries all three rather than the response alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubagentRun {
+    pub response: String,
+    pub turns_used: u32,
+    pub completed: bool,
+}
+
+impl SubagentRun {
+    /// A run that ended without producing any of the counters, which is what a
+    /// cancellation, a timeout and a runner failure all report.
+    #[must_use]
+    pub fn unfinished(response: String) -> Self {
+        Self {
+            response,
+            turns_used: 0,
+            completed: false,
+        }
+    }
+}
+
+pub type SubagentFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<SubagentRun, String>> + Send + 'a>>;
 
 pub trait SubagentRunner: Send + Sync {
     fn run<'a>(
@@ -83,6 +110,10 @@ pub struct DelegationEffect {
     pub public_session_id: String,
     pub status: DelegationStatus,
     pub result: String,
+    /// How many turns the child spent, carried through from the runner so the
+    /// `task` tool can publish the reference's own result fields.
+    pub turns_used: u32,
+    pub completed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -189,27 +220,44 @@ impl SubagentManager {
             logging: request.logging,
             working_directory: parent.metadata.working_directory,
         };
-        let (status, result) = tokio::select! {
+        let (status, run) = tokio::select! {
             biased;
             () = cancellation.cancelled() => {
-                (DelegationStatus::Cancelled, "Subagent cancelled".to_owned())
+                (
+                    DelegationStatus::Cancelled,
+                    SubagentRun::unfinished("Subagent cancelled".to_owned()),
+                )
             }
             outcome = timeout(
                 MAX_DELEGATION_DURATION,
                 self.runner.run(context, cancellation.clone()),
             ) => {
                 match outcome {
-                    Ok(Ok(result)) => (
+                    Ok(Ok(run)) => (
                         DelegationStatus::Completed,
-                        bounded_utf8(&result, MAX_DELEGATION_RESULT_BYTES, "…[truncated]"),
+                        SubagentRun {
+                            response: bounded_utf8(
+                                &run.response,
+                                MAX_DELEGATION_RESULT_BYTES,
+                                "…[truncated]",
+                            ),
+                            ..run
+                        },
                     ),
                     Ok(Err(error)) => (
                         DelegationStatus::Failed,
-                        bounded_utf8(&error, MAX_DELEGATION_RESULT_BYTES, "…[truncated]"),
+                        SubagentRun::unfinished(bounded_utf8(
+                            &error,
+                            MAX_DELEGATION_RESULT_BYTES,
+                            "…[truncated]",
+                        )),
                     ),
                     Err(_) => {
                         cancellation.cancel();
-                        (DelegationStatus::Failed, "Subagent timed out".to_owned())
+                        (
+                            DelegationStatus::Failed,
+                            SubagentRun::unfinished("Subagent timed out".to_owned()),
+                        )
                     }
                 }
             }
@@ -217,8 +265,11 @@ impl SubagentManager {
         // Closing the child session is cleanup: its failure is reported with the
         // outcome rather than discarding work the subagent already completed.
         let result = match finalizer.finish().await {
-            Ok(()) => result,
-            Err(error) => format!("{result}\n\n[child session cleanup failed: {error}]"),
+            Ok(()) => run.response,
+            Err(error) => format!(
+                "{}\n\n[child session cleanup failed: {error}]",
+                run.response
+            ),
         };
         Ok(DelegationEffect {
             parent_session_id: request.parent_session_id,
@@ -226,6 +277,8 @@ impl SubagentManager {
             public_session_id: child_session_id,
             status,
             result,
+            turns_used: run.turns_used,
+            completed: run.completed,
         })
     }
 

@@ -1145,69 +1145,84 @@ fn a_surplus_or_missing_alias_is_reported_with_its_pointer() {
 // The projection unions
 // --------------------------------------------------------------------------
 
-/// One tool per `ToolEffectKind`, with arguments and a typed result shaped the
-/// way the tool actually answers. The replay drives the projection with them,
-/// so the entry it validates is the one a client receives.
-const EFFECT_PROBES: &[(&str, &str, &str)] = &[
+/// One tool per `ToolEffectKind`, with arguments, a typed result and a display
+/// payload shaped the way the tool actually answers. The replay drives the
+/// projection with them, so the entry it validates is the one a client
+/// receives. Only `task` carries a display payload: the delegation effect the
+/// projection reads the child session off travels there rather than in the
+/// typed result, which is the reference's three `TaskResult` fields alone.
+const EFFECT_PROBES: &[(&str, &str, &str, &str)] = &[
     (
         "mcp_fixture_echo",
         r#"{"text":"hello"}"#,
         r#"{"echo":"hello"}"#,
+        "null",
     ),
     (
         "bash",
         r#"{"command":"cargo test"}"#,
         r#"{"stdout":"ok","stderr":""}"#,
+        "null",
     ),
     (
         "edit",
         r#"{"file_path":"/w/a.rs","old_string":"a","new_string":"b"}"#,
         r#"{"file":"/w/a.rs","old_string":"a","new_string":"b","occurrences":[]}"#,
+        "null",
     ),
     (
         "grep",
         r#"{"pattern":"fn","path":"src"}"#,
         r#"{"matches":"src/a.rs:1","match_count":1,"was_truncated":false}"#,
+        "null",
     ),
     (
         "read_file",
         r#"{"file_path":"/w/a.rs","offset":1,"limit":10}"#,
         r#"{"file_path":"/w/a.rs","content":"x","num_lines":1,"start_line":1}"#,
+        "null",
     ),
     (
         "todo",
         r#"{"action":"write","todos":[{"id":"a","content":"ship","status":"in_progress","priority":"high","surplus":true}]}"#,
         r#"{"todos":[]}"#,
+        "null",
     ),
     (
         "write_file",
         r#"{"file_path":"/w/a.rs","content":"x"}"#,
         r#"{"file_path":"/w/a.rs","content":"x"}"#,
+        "null",
     ),
     (
         "ask_user_question",
         r#"{"questions":[{"question":"Ship?","header":"Release","options":[{"label":"Yes"}],"multiSelect":false,"hideOther":false}]}"#,
         r#"{"answers":[{"question":"Ship?","answer":"Yes"}],"cancelled":false}"#,
+        "null",
     ),
     (
         "web_search",
         r#"{"query":"rust"}"#,
         r#"{"query":"rust","answer":"a","sources":[]}"#,
+        "null",
     ),
     (
         "web_fetch",
         r#"{"url":"https://example.com/a"}"#,
         r#"{"url":"https://example.com/a","content":"x","content_type":"text/html"}"#,
+        "null",
     ),
     (
         "skill",
         r#"{"name":"probe"}"#,
         r#"{"name":"probe","content":"x"}"#,
+        "null",
     ),
     (
         "task",
         r#"{"task":"audit","agent":"explore"}"#,
-        r#"{"parentSessionId":"session-1","childSessionId":"session-child","publicSessionId":"session-child","status":"completed","result":"done"}"#,
+        r#"{"response":"done","turns_used":1,"completed":true}"#,
+        r#"{"kind":"subagent","effect":{"parentSessionId":"session-1","childSessionId":"session-child","publicSessionId":"session-child","status":"completed","result":"done","turnsUsed":1,"completed":true}}"#,
     ),
 ];
 
@@ -1340,7 +1355,7 @@ fn every_effect_kind_publishes_an_entry_that_validates_against_the_census() {
     let census = Census::new(&corpus);
     let mut published = BTreeSet::new();
     let mut issues = Vec::new();
-    for (tool, arguments, typed_result) in EFFECT_PROBES {
+    for (tool, arguments, typed_result, display) in EFFECT_PROBES {
         let history = projected_history(&[
             EngineEvent::UserMessage {
                 content: "go".to_owned(),
@@ -1354,7 +1369,7 @@ fn every_effect_kind_publishes_an_entry_that_validates_against_the_census() {
                 call_id: "call-1".to_owned(),
                 content: "done".to_owned(),
                 typed_result: serde_json::from_str(typed_result).unwrap_or(Value::Null),
-                display: Value::Null,
+                display: serde_json::from_str(display).unwrap_or(Value::Null),
                 duration_ms: 1,
                 is_error: false,
                 cancelled: false,
@@ -1376,7 +1391,8 @@ fn every_effect_kind_publishes_an_entry_that_validates_against_the_census() {
             entry["detail"]
         );
         // The subagent variant is the only one declaring a child session, and
-        // the delegation result is where the projection reads it.
+        // the delegation effect in the display payload is where the projection
+        // reads it.
         if kind == ToolEffectKind::Subagent.label() {
             assert_eq!(
                 entry["detail"]["childSessionId"], "session-child",

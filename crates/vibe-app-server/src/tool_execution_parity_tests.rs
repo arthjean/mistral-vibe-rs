@@ -44,7 +44,9 @@ use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 use vibe_core::engine::CancellationToken;
-use vibe_core::extensions::{ChildContext, SubagentFuture, SubagentManager, SubagentRunner};
+use vibe_core::extensions::{
+    ChildContext, SubagentFuture, SubagentManager, SubagentRun, SubagentRunner,
+};
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore, ToolGuard,
@@ -142,8 +144,6 @@ const FETCH_CHALLENGE: &str = "the reference retries a challenge response once u
      user agent; this port reports the status and stops";
 const FETCH_ERROR_KIND: &str = "the reference raises its own tool error for an argument it \
      rejects; this port raises a schema violation, which the oracle names `ValidationError`";
-const TASK_SHAPE: &str = "the reference publishes and renders `response`, `turns_used` and \
-     `completed`; this port publishes the delegation effect and renders the response alone";
 const TASK_DEPTH: &str = "the reference refuses to delegate from inside a subagent at call time; \
      this port lets the call through and enforces its limit deeper down";
 
@@ -719,132 +719,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/outcome",
         closed_by: "US-249",
         why: TASK_DEPTH,
-    },
-    Divergence {
-        tool: "task",
-        case: "completed-in-one-turn",
-        pointer: "/modelText",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "completed-in-one-turn",
-        pointer: "/projectedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "completed-in-one-turn",
-        pointer: "/typedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "completed-in-several-turns",
-        pointer: "/modelText",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "completed-in-several-turns",
-        pointer: "/projectedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "completed-in-several-turns",
-        pointer: "/typedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "default-agent-name",
-        pointer: "/modelText",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "default-agent-name",
-        pointer: "/projectedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "default-agent-name",
-        pointer: "/typedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "empty-response",
-        pointer: "/modelText",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "empty-response",
-        pointer: "/projectedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "empty-response",
-        pointer: "/typedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "ended-incomplete",
-        pointer: "/modelText",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "ended-incomplete",
-        pointer: "/projectedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "ended-incomplete",
-        pointer: "/typedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "streamed-progress",
-        pointer: "/modelText",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "streamed-progress",
-        pointer: "/projectedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
-    },
-    Divergence {
-        tool: "task",
-        case: "streamed-progress",
-        pointer: "/typedResult",
-        closed_by: "US-244",
-        why: TASK_SHAPE,
     },
     Divergence {
         tool: "web_fetch",
@@ -1618,6 +1492,11 @@ fn scripted_user_input(detail: &Value, script: &Value) -> Value {
 }
 
 /// A [`SubagentRunner`] that returns a declared run and reaches no provider.
+///
+/// The script declares the turn count and the completion flag beside the
+/// response because neither can be derived from the text: the reference counts
+/// assistant messages in the child transcript and reads completion from the
+/// child turn's own terminal status.
 struct ScriptedRunner {
     plan: Value,
 }
@@ -1628,13 +1507,26 @@ impl SubagentRunner for ScriptedRunner {
         _context: ChildContext,
         _cancellation: CancellationToken,
     ) -> SubagentFuture<'a> {
-        let response = self
-            .plan
-            .get("response")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_owned();
-        Box::pin(async move { Ok(response) })
+        let run = SubagentRun {
+            response: self
+                .plan
+                .get("response")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+            turns_used: self
+                .plan
+                .get("turns")
+                .and_then(Value::as_u64)
+                .and_then(|turns| u32::try_from(turns).ok())
+                .unwrap_or_default(),
+            completed: self
+                .plan
+                .get("completed")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+        };
+        Box::pin(async move { Ok(run) })
     }
 }
 
