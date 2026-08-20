@@ -402,6 +402,37 @@ fn edit_handler(
                     old_string: old_text,
                     new_string: new_text,
                 };
+                // The projection drops the sentence the model reads and adds
+                // the replacements a client renders, each widened to the lines
+                // it sat on. An anchor made of newlines alone matches the file
+                // without sitting on a line of its own, and the reference
+                // still publishes one occurrence for it: the bare replacement,
+                // anchored nowhere.
+                let occurrences = if mutation.occurrences.is_empty() {
+                    vec![json!({
+                        "start_line": Value::Null,
+                        "old_text": result.old_string,
+                        "new_text": result.new_string,
+                    })]
+                } else {
+                    mutation
+                        .occurrences
+                        .iter()
+                        .map(|occurrence| {
+                            json!({
+                                "start_line": occurrence.start_line,
+                                "old_text": occurrence.old_text,
+                                "new_text": occurrence.new_text,
+                            })
+                        })
+                        .collect()
+                };
+                let projected = json!({
+                    "file": result.file,
+                    "old_string": result.old_string,
+                    "new_string": result.new_string,
+                    "occurrences": occurrences,
+                });
                 Ok(ToolExecutionOutput::new(result.model_text())
                     .displayed_as(json!({
                         "kind": "diff",
@@ -411,7 +442,8 @@ fn edit_handler(
                     .typed(
                         serde_json::to_value(&result)
                             .map_err(|error| ToolError::InvalidResult(error.to_string()))?,
-                    ))
+                    )
+                    .projected(projected))
             })
         },
     )
@@ -664,6 +696,7 @@ async fn delegated_write(
         bytes_written: content.len(),
         files_changed: 1,
         diff: unified_diff("", content),
+        occurrences: Vec::new(),
     }))
 }
 
@@ -689,8 +722,9 @@ async fn delegated_edit(
         .read_text_file(&absolute, None, None)
         .await
         .map_err(|error| ToolError::Execution(error.to_string()))?;
-    let updated = review::apply_edit_operations(Path::new(&display), &original, operations)
+    let edited = review::apply_edit_operations(Path::new(&display), &original, operations)
         .map_err(|error| ToolError::Execution(error.to_string()))?;
+    let updated = edited.text;
     if updated != original {
         client
             .write_text_file(&absolute, &updated)
@@ -702,6 +736,7 @@ async fn delegated_edit(
         bytes_written: updated.len(),
         files_changed: 1,
         diff: unified_diff(&original, &updated),
+        occurrences: edited.occurrences,
     }))
 }
 

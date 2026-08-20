@@ -113,8 +113,6 @@ const LICENSING: &str = "NOTICE";
 /// dozens.
 const READ_FILE_NOTICE: &str = "this port writes its own guidance for an empty read and for an \
      offset past the last line; reaching the reference digest would mean copying its sentence";
-const EDIT_PROJECTION: &str = "the reference projects the occurrences it rewrote and drops the \
-     message; this port publishes no second projection at all";
 const EDIT_MESSAGE: &str = "this port writes its own applied-edit sentence; reaching the reference \
      digest would mean copying its wording";
 const SKILL_PROSE: &str = "this port writes its own guidance lines around the skill body and its \
@@ -225,13 +223,6 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "edit",
         case: "crlf-is-preserved",
-        pointer: "/projectedResult",
-        closed_by: "US-247",
-        why: EDIT_PROJECTION,
-    },
-    Divergence {
-        tool: "edit",
-        case: "crlf-is-preserved",
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: EDIT_MESSAGE,
@@ -246,13 +237,6 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "edit",
         case: "replace-all",
-        pointer: "/projectedResult",
-        closed_by: "US-247",
-        why: EDIT_PROJECTION,
-    },
-    Divergence {
-        tool: "edit",
-        case: "replace-all",
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: EDIT_MESSAGE,
@@ -263,13 +247,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: EDIT_MESSAGE,
-    },
-    Divergence {
-        tool: "edit",
-        case: "single-replacement",
-        pointer: "/projectedResult",
-        closed_by: "US-247",
-        why: EDIT_PROJECTION,
     },
     Divergence {
         tool: "edit",

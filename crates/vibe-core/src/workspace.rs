@@ -260,6 +260,26 @@ pub struct MutationResult {
     pub bytes_written: usize,
     pub files_changed: usize,
     pub diff: String,
+    /// The replacements one edit performed, in the order they appear in the
+    /// file as it stood before the edit. A mutation that replaced nothing,
+    /// like a fresh write, carries none.
+    #[serde(default)]
+    pub occurrences: Vec<EditOccurrence>,
+}
+
+/// One replacement an edit performed, expanded to the whole lines it sat on.
+///
+/// Reference `EditResult._ui_occurrences`: a client renders the replaced text
+/// in its own line context rather than the bare anchor, which is what makes a
+/// one-word change readable.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditOccurrence {
+    /// The one-based line the replacement starts on, counted in the file as it
+    /// stood before the edit.
+    pub start_line: usize,
+    pub old_text: String,
+    pub new_text: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -706,6 +726,7 @@ impl Workspace {
             bytes_written: content.len(),
             files_changed: 1,
             diff: unified_diff("", &text),
+            occurrences: Vec::new(),
         })
     }
 
@@ -1772,6 +1793,52 @@ needle: a colon inside the text
             .await
             .expect("the empty search answers");
         assert_eq!(empty.projected_result["parsed_matches"], json!([]));
+    }
+
+    /// US-247: `edit` publishes one occurrence per replacement, each carrying
+    /// the line it started on in the file as it stood before the edit and the
+    /// whole lines the replacement covered, and drops the `message` the typed
+    /// result carries.
+    #[tokio::test]
+    async fn edit_projects_one_occurrence_per_replacement() {
+        let root = tempdir().expect("workspace");
+        std::fs::write(
+            root.path().join("main.rs"),
+            "let old = 1;
+keep
+let old = 2;
+",
+        )
+        .expect("file");
+        let registry = registered_workspace_tools(root.path()).await;
+
+        let edited = registry
+            .invoke(
+                "edit",
+                ToolInvocation {
+                    call_id: "edit-1".to_owned(),
+                    arguments: json!({
+                        "file_path": "main.rs",
+                        "old_string": "old",
+                        "new_string": "new",
+                        "replace_all": true,
+                    }),
+                },
+            )
+            .await
+            .expect("the edit applies");
+        assert_eq!(
+            edited.projected_result["occurrences"],
+            json!([
+                {"start_line": 1, "old_text": "let old = 1;", "new_text": "let new = 1;"},
+                {"start_line": 3, "old_text": "let old = 2;", "new_text": "let new = 2;"},
+            ]),
+        );
+        assert!(
+            edited.projected_result.get("message").is_none(),
+            "the projection drops the message the typed result carries: {edited:?}"
+        );
+        assert!(edited.typed_result["message"].is_string());
     }
 
     /// US-108: a registered file tool passes the guard for the session

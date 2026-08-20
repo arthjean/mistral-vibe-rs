@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use super::{
-    Checkpoint, EditOperation, MutationResult, ReviewHunk, ReviewView, Workspace, WorkspaceError,
-    path_display, text_file, unified_diff,
+    Checkpoint, EditOccurrence, EditOperation, MutationResult, ReviewHunk, ReviewView, Workspace,
+    WorkspaceError, path_display, text_file, unified_diff,
 };
 use crate::checkpoints::{
     CheckpointError, CheckpointFiles, CheckpointRecorder, Checkpointer, Decision, FileAccessError,
@@ -22,8 +22,9 @@ pub(crate) fn apply_edit_operations(
     path: &Path,
     original: &str,
     operations: &[EditOperation],
-) -> Result<String, WorkspaceError> {
+) -> Result<Edited, WorkspaceError> {
     let mut updated = original.to_owned();
+    let mut occurrences = Vec::new();
     for operation in operations {
         let matches = updated.matches(&operation.old_text).count();
         if matches == 0 {
@@ -38,13 +39,73 @@ pub(crate) fn apply_edit_operations(
                 matches,
             });
         }
+        // The contexts are read off the text as it stands before this
+        // operation, so a start line names the file the operator was looking
+        // at rather than the one the replacement produced.
+        let contexts = line_contexts(&updated, &operation.old_text);
+        let kept = if operation.replace_all {
+            contexts.as_slice()
+        } else {
+            &contexts[..contexts.len().min(1)]
+        };
+        occurrences.extend(
+            kept.iter()
+                .map(|(start_line, prefix, suffix)| EditOccurrence {
+                    start_line: *start_line,
+                    old_text: format!("{prefix}{}{suffix}", operation.old_text),
+                    new_text: format!("{prefix}{}{suffix}", operation.new_text),
+                }),
+        );
         updated = if operation.replace_all {
             updated.replace(&operation.old_text, &operation.new_text)
         } else {
             updated.replacen(&operation.old_text, &operation.new_text, 1)
         };
     }
-    Ok(updated)
+    Ok(Edited {
+        text: updated,
+        occurrences,
+    })
+}
+
+/// The text one edit produced and the replacements it performed.
+pub(crate) struct Edited {
+    pub(crate) text: String,
+    pub(crate) occurrences: Vec<EditOccurrence>,
+}
+
+/// Every occurrence of `snippet` in `content`, as the whole lines it sits on.
+///
+/// Reference `line_contexts`: each hit is reported as its one-based start line
+/// and the two halves of the lines around it, so a caller can widen the anchor
+/// to whole lines without searching the file again. A snippet made of newlines
+/// alone anchors nothing and reports nothing.
+fn line_contexts(content: &str, snippet: &str) -> Vec<(usize, String, String)> {
+    if snippet.trim_matches('\n').is_empty() {
+        return Vec::new();
+    }
+    let mut contexts = Vec::new();
+    let mut from = 0;
+    while let Some(offset) = content[from..].find(snippet) {
+        let start = from + offset;
+        let end = start + snippet.len();
+        let line_start = content[..start].rfind('\n').map_or(0, |index| index + 1);
+        let suffix = if content[..end].ends_with('\n') {
+            ""
+        } else {
+            let line_end = content[end..]
+                .find('\n')
+                .map_or(content.len(), |index| end + index);
+            &content[end..line_end]
+        };
+        contexts.push((
+            content[..start].matches('\n').count() + 1,
+            content[line_start..start].to_owned(),
+            suffix.to_owned(),
+        ));
+        from = end;
+    }
+    contexts
 }
 
 const MAX_REWIND_SNAPSHOT_BYTES: usize = 64 * 1_048_576;
@@ -423,7 +484,8 @@ impl ReviewManager {
             return Err(WorkspaceError::Binary(relative.clone()));
         }
         let decoded = text_file::decode(&original);
-        let updated = apply_edit_operations(&relative, &decoded.text, operations)?;
+        let edited = apply_edit_operations(&relative, &decoded.text, operations)?;
+        let updated = edited.text;
         let bytes = text_file::encode(&updated, decoded.encoding, decoded.newline);
         if bytes != original {
             self.workspace.atomic_replace(&relative, &bytes)?;
@@ -433,6 +495,7 @@ impl ReviewManager {
             bytes_written: bytes.len(),
             files_changed: 1,
             diff: unified_diff(&decoded.text, &updated),
+            occurrences: edited.occurrences,
         })
     }
 
