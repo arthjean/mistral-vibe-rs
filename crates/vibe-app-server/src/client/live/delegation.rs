@@ -225,6 +225,7 @@ pub(crate) fn task_handler(
                     model_text,
                     typed_result,
                     display: json!({"kind": "subagent", "effect": effect}),
+                    projected_result: serde_json::Value::Null,
                     chunks: Vec::new(),
                 })
             })

@@ -1600,11 +1600,17 @@ async fn observe(
         Ok(output) => {
             document.insert("outcome".to_owned(), Value::String("returned".to_owned()));
             document.insert("typedResult".to_owned(), output.typed_result.clone());
-            // This port publishes no second projection: no tool overrides the
-            // typed result on its way to the UI, so the honest observation is
-            // that the two are the same document. US-246 and US-247 are what
-            // make `grep` and `edit` disagree with that here.
-            document.insert("projectedResult".to_owned(), output.typed_result);
+            // A tool that publishes no projection publishes one document for
+            // both readers, which is what the reference's default
+            // `project_result` returning `None` means: the app-server falls
+            // back to the typed result. `grep` and `edit` are the two that
+            // override it.
+            let projected = if output.projected_result.is_null() {
+                output.typed_result
+            } else {
+                output.projected_result
+            };
+            document.insert("projectedResult".to_owned(), projected);
             document.insert("modelText".to_owned(), Value::String(output.model_text));
         }
         Err(error) => {

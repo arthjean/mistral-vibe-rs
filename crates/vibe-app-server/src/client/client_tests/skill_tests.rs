@@ -51,12 +51,14 @@ impl vibe_core::skills::InvokedSkillResolver for ProbeSkillResolver {
                 ),
                 typed_result: json!({"name": "probe"}),
                 display: json!({"kind": "skill", "name": "probe"}),
+                projected_result: serde_json::Value::Null,
                 chunks: Vec::new(),
             },
             already_loaded: ToolExecutionOutput {
                 model_text: "name: probe\ncontent: already loaded\nskill_dir: None".to_owned(),
                 typed_result: json!({"name": "probe"}),
                 display: json!({"kind": "skill", "name": "probe"}),
+                projected_result: serde_json::Value::Null,
                 chunks: Vec::new(),
             },
         })

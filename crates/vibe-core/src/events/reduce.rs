@@ -222,6 +222,7 @@ pub(super) fn reduce_event(
             call_id,
             content,
             typed_result,
+            projected_result,
             display,
             duration_ms,
             is_error,
@@ -236,10 +237,20 @@ pub(super) fn reduce_event(
                 ..
             } = entry
             {
-                let output = if typed_result.is_null() {
+                // Two documents, two readers. The header a client renders is
+                // derived from what the tool answered, and the payload it
+                // renders under that header is the projection the tool
+                // published for the UI, which is the typed result again
+                // whenever no projection was published.
+                let answered = if typed_result.is_null() {
                     json!(content)
                 } else {
                     typed_result.clone()
+                };
+                let output = if projected_result.is_null() {
+                    answered.clone()
+                } else {
+                    projected_result.clone()
                 };
                 *current_state = if *cancelled {
                     PublicEffectState::Cancelled {
@@ -270,7 +281,7 @@ pub(super) fn reduce_event(
                         display: EffectResultDisplay::completed(
                             detail.kind,
                             &detail.display,
-                            &output,
+                            &answered,
                             display,
                         ),
                         output,

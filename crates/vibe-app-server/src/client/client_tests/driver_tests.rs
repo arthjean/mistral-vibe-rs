@@ -604,6 +604,7 @@ async fn live_driver_exposes_and_executes_the_session_tool_registry() {
                             typed_result: json!({"echo": "rust"}),
                             model_text: "hello rust".to_owned(),
                             display: Value::Null,
+                            projected_result: serde_json::Value::Null,
                             chunks: Vec::new(),
                         })
                     })

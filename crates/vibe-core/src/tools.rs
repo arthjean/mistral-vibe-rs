@@ -166,6 +166,15 @@ pub struct ToolInvocation {
 #[serde(rename_all = "camelCase")]
 pub struct ToolExecutionOutput {
     pub typed_result: Value,
+    /// What a client renders instead of the typed result, or null when the
+    /// tool publishes no second document.
+    ///
+    /// Reference `ToolUIData.project_result` returns `None` for every tool but
+    /// `grep` and `edit`, and the app-server falls back to the typed result
+    /// when it does, so null here means the same thing: the two documents are
+    /// one.
+    #[serde(default)]
+    pub projected_result: Value,
     pub model_text: String,
     #[serde(default)]
     pub display: Value,
@@ -183,6 +192,7 @@ impl ToolExecutionOutput {
         let text = text.into();
         Self {
             typed_result: Value::String(text.clone()),
+            projected_result: Value::Null,
             model_text: text,
             display: Value::Null,
             chunks: Vec::new(),
@@ -199,6 +209,7 @@ impl ToolExecutionOutput {
     pub fn new(model_text: impl Into<String>) -> Self {
         Self {
             typed_result: Value::Null,
+            projected_result: Value::Null,
             model_text: model_text.into(),
             display: Value::Null,
             chunks: Vec::new(),
@@ -216,6 +227,17 @@ impl ToolExecutionOutput {
     #[must_use]
     pub fn typed(mut self, typed_result: Value) -> Self {
         self.typed_result = typed_result;
+        self
+    }
+
+    /// The same result, with the document a client reads instead of the typed
+    /// one.
+    ///
+    /// A tool that never calls this publishes one document for both readers,
+    /// which is what the reference's default projection means.
+    #[must_use]
+    pub fn projected(mut self, projected_result: Value) -> Self {
+        self.projected_result = projected_result;
         self
     }
 }
@@ -858,6 +880,7 @@ mod tests {
                         typed_result: json!({"content": content}),
                         model_text: content.to_owned(),
                         display: json!({"kind": "read"}),
+                        projected_result: serde_json::Value::Null,
                         chunks: vec![content.to_owned()],
                     })
                 })

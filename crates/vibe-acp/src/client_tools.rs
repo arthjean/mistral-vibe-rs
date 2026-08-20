@@ -271,6 +271,7 @@ fn client_tool_handler(
                     typed_result: result,
                     model_text,
                     display: json!({"kind": "client_tool", "method": method}),
+                    projected_result: serde_json::Value::Null,
                     chunks: Vec::new(),
                 })
             })

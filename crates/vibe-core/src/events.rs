@@ -63,6 +63,10 @@ pub enum EngineEvent {
         content: String,
         #[serde(default)]
         typed_result: Value,
+        /// The document a client renders, or null when the tool published no
+        /// second projection and the typed result is what reaches the UI.
+        #[serde(default)]
+        projected_result: Value,
         #[serde(default)]
         display: Value,
         #[serde(default)]
@@ -847,6 +851,7 @@ mod tests {
                 call_id: "call-unknown".to_owned(),
                 content: "orphan result".to_owned(),
                 typed_result: Value::Null,
+                projected_result: Value::Null,
                 display: Value::Null,
                 duration_ms: 1,
                 is_error: false,
@@ -1293,6 +1298,7 @@ mod tests {
                         "turns_used": 1,
                         "completed": true,
                     }),
+                    projected_result: Value::Null,
                     display: json!({
                         "kind": "subagent",
                         "effect": {

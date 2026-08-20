@@ -437,6 +437,7 @@ pub(super) fn question_tool_output(
             typed_result: json!({"answers": [], "cancelled": true}),
             model_text: answer_model_text(&[], true),
             display: json!({"kind": "user_question"}),
+            projected_result: serde_json::Value::Null,
             chunks: Vec::new(),
         });
     }
@@ -481,6 +482,7 @@ pub(super) fn question_tool_output(
         }),
         model_text: answer_model_text(&published, false),
         display: json!({"kind": "user_question"}),
+        projected_result: serde_json::Value::Null,
         chunks: Vec::new(),
     })
 }
@@ -675,6 +677,7 @@ pub(super) async fn run_interactive_plan_review(
         typed_result: json!({"switched": switched, "message": message}),
         model_text,
         display: json!({"kind": "plan_review", "switched": switched}),
+        projected_result: serde_json::Value::Null,
         chunks: Vec::new(),
     })
 }

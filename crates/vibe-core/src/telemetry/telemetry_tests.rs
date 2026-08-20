@@ -505,6 +505,7 @@ fn tool_events(content: &str, is_error: bool) -> [EventEnvelope; 2] {
                 call_id: "call-1".to_owned(),
                 content: content.to_owned(),
                 typed_result: json!({}),
+                projected_result: json!({}),
                 display: json!({}),
                 duration_ms: 9,
                 is_error,
