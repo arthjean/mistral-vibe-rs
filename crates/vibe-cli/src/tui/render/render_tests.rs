@@ -211,7 +211,14 @@ fn every_semantic_region_renders_at_the_reference_widths() {
                 "detail": EffectDetail::for_call("edit", &json!({"file_path": "src/lib.rs"})),
                 "state": {
                     "status": "completed",
-                    "output": {"file": "src/lib.rs", "old_string": "old", "new_string": "new"},
+                    "output": {
+                        "file": "src/lib.rs",
+                        "old_string": "old",
+                        "new_string": "new",
+                        "occurrences": [
+                            {"start_line": 3, "old_text": "old", "new_text": "new"},
+                        ],
+                    },
                     "display": {"success": true, "verb": "Edited", "message": "lib.rs"},
                 },
             }),

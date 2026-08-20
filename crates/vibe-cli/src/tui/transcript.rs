@@ -662,7 +662,12 @@ fn web_search_lines(output: &Value) -> Vec<BodyLine> {
 }
 
 /// Reference `EditResultWidget`: one diff per replaced occurrence, anchored on
-/// the replaced text, falling back to the whole-call replacement.
+/// the replaced text.
+///
+/// The `edit` projection always publishes an occurrence, down to the bare
+/// replacement for an anchor that sits on no line of its own, so an empty list
+/// here means the effect published no edit at all rather than one this
+/// renderer has to reconstruct from the anchor strings.
 fn occurrence_diff_lines(output: &Value) -> Vec<BodyLine> {
     let replacement = |old: &str, new: &str, lines: &mut Vec<BodyLine>| {
         for line in old.trim_end_matches('\n').split('\n') {
@@ -685,15 +690,6 @@ fn occurrence_diff_lines(output: &Value) -> Vec<BodyLine> {
             &mut lines,
         );
     }
-    if !lines.is_empty() {
-        return lines;
-    }
-    let old = string_argument(output, &["old_string", "oldString"]);
-    let new = string_argument(output, &["new_string", "newString"]);
-    if old.is_empty() && new.is_empty() {
-        return lines;
-    }
-    replacement(&old, &new, &mut lines);
     lines
 }
 
@@ -1040,6 +1036,8 @@ mod tests {
             ]
         );
 
+        // US-247: the body is read off the occurrences the `edit` projection
+        // publishes, each already widened to the line it sat on.
         let occurrence_edit = effect_of(&effect(
             "edit",
             json!({"file_path": "src/lib.rs"}),
@@ -1049,7 +1047,10 @@ mod tests {
                     "file": "src/lib.rs",
                     "old_string": "old",
                     "new_string": "new",
-                    "occurrences": [],
+                    "occurrences": [
+                        {"start_line": 3, "old_text": "let old = 1;", "new_text": "let new = 1;"},
+                        {"start_line": 7, "old_text": "drop(old)", "new_text": "drop(new)"},
+                    ],
                 },
             }),
         ));
@@ -1059,7 +1060,39 @@ mod tests {
                 .iter()
                 .map(|line| line.text.as_str())
                 .collect::<Vec<_>>(),
-            vec!["- old", "+ new"]
+            vec![
+                "- let old = 1;",
+                "+ let new = 1;",
+                "- drop(old)",
+                "+ drop(new)",
+            ]
+        );
+
+        // An edit that published no occurrence renders what it answered rather
+        // than diffing the anchor strings against each other: the projection
+        // always carries an occurrence when a replacement happened, so an empty
+        // list is an empty case and not a payload to reconstruct.
+        let empty_edit = effect_of(&effect(
+            "edit",
+            json!({"file_path": "src/lib.rs"}),
+            json!({
+                "status": "completed",
+                "outputText": "nothing to replace",
+                "output": {
+                    "file": "src/lib.rs",
+                    "old_string": "old",
+                    "new_string": "new",
+                    "occurrences": [],
+                },
+            }),
+        ));
+        assert_eq!(
+            empty_edit
+                .body
+                .iter()
+                .map(|line| line.text.as_str())
+                .collect::<Vec<_>>(),
+            vec!["nothing to replace"]
         );
 
         let search = effect_of(&effect(

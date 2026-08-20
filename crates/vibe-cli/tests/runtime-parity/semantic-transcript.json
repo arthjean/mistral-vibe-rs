@@ -108,6 +108,13 @@
               "file": "crates/vibe-cli/src/lib.rs",
               "message": "edited",
               "new_string": "new",
+              "occurrences": [
+                {
+                  "new_text": "new",
+                  "old_text": "old",
+                  "start_line": null
+                }
+              ],
               "old_string": "old"
             },
             "status": "completed"
