@@ -82,16 +82,7 @@ impl LiveTurnDriver {
         store: SessionStore,
         parent_session_id: String,
     ) -> Result<(), DriverError> {
-        let built_in = AgentProfile {
-            name: "explore".to_owned(),
-            display_name: "Explore".to_owned(),
-            description: "Inspect a bounded task in an independent child session".to_owned(),
-            kind: AgentKind::Subagent,
-            safety: "read_only".to_owned(),
-            overrides: toml::Table::new(),
-            source: ExtensionSource::Builtin,
-            path: None,
-        };
+        let built_in = built_in_subagent();
         let vibe_home = crate::host::vibe_home();
         let catalog = discover_extensions(
             &DiscoveryRoots {
@@ -112,7 +103,6 @@ impl LiveTurnDriver {
             .into_iter()
             .filter(|(_, profile)| profile.kind == AgentKind::Subagent)
             .collect::<BTreeMap<_, _>>();
-        let subagent_names = Arc::new(subagents.keys().cloned().collect::<Vec<_>>());
         let runner = Arc::new(ProviderSubagentRunner {
             provider: self.provider.clone(),
             system_prompt: self.system_prompt.clone(),
@@ -123,74 +113,109 @@ impl LiveTurnDriver {
             parent_intent: reservation.intent.clone(),
         });
         let manager = Arc::new(SubagentManager::new(store, runner));
-        let handler: Arc<dyn ToolHandler> = Arc::new(
-            move |invocation: &vibe_core::tools::ToolInvocation,
-                  _output: vibe_core::tools::ToolOutputSink|
-                  -> OwnedToolHandlerFuture {
-                let manager = manager.clone();
-                let subagents = subagents.clone();
-                let subagent_names = subagent_names.clone();
-                let parent_session_id = parent_session_id.clone();
-                let arguments = invocation.arguments.clone();
-                Box::pin(async move {
-                    // `agent` carries the reference default, applied before the
-                    // handler runs, so an absent key still names `explore`.
-                    let agent_name = arguments
-                        .get("agent")
-                        .and_then(Value::as_str)
-                        .unwrap_or(DEFAULT_SUBAGENT);
-                    let task = arguments
-                        .get("task")
-                        .and_then(Value::as_str)
-                        .filter(|task| !task.is_empty())
-                        .ok_or_else(|| vibe_core::tools::ToolError::SchemaViolation {
-                            path: "/task".to_owned(),
-                            message: "must be a non-empty string".to_owned(),
-                        })?;
-                    let agent = subagents.get(agent_name).cloned().ok_or_else(|| {
-                        // A model that guessed the name corrects itself from
-                        // the list rather than from a bare refusal.
-                        vibe_core::tools::ToolError::Unavailable(format!(
-                            "subagent `{agent_name}` is unavailable; available agents: {}",
-                            if subagent_names.is_empty() {
-                                "none".to_owned()
-                            } else {
-                                subagent_names.join(", ")
-                            }
-                        ))
-                    })?;
-                    let effect = manager
-                        .delegate(
-                            DelegationRequest {
-                                parent_session_id,
-                                agent,
-                                prompt: task.to_owned(),
-                                logging: ChildLoggingPolicy::SummaryOnly,
-                            },
-                            crate::host::now_millis(),
-                        )
-                        .await
-                        .map_err(|error| {
-                            vibe_core::tools::ToolError::Execution(error.to_string())
-                        })?;
-                    let typed_result = serde_json::to_value(&effect).map_err(|error| {
-                        vibe_core::tools::ToolError::InvalidResult(error.to_string())
-                    })?;
-                    Ok(ToolExecutionOutput {
-                        model_text: effect.result.clone(),
-                        typed_result,
-                        display: json!({"kind": "subagent", "effect": effect}),
-                        chunks: Vec::new(),
-                    })
-                })
-            },
-        );
         reservation
             .tools
-            .register(task_spec(), handler)
+            .register(
+                task_spec(),
+                task_handler(manager, subagents, parent_session_id),
+            )
             .map(drop)
             .map_err(|error| DriverError::Tool(error.to_string()))
     }
+}
+
+/// The subagent every session publishes before any extension is discovered.
+///
+/// The delegation oracle seeds its own catalog from this, so the name the
+/// `agent` argument resolves to there is the one production offers rather than
+/// a second spelling of it.
+pub(crate) fn built_in_subagent() -> AgentProfile {
+    AgentProfile {
+        name: DEFAULT_SUBAGENT.to_owned(),
+        display_name: "Explore".to_owned(),
+        description: "Inspect a bounded task in an independent child session".to_owned(),
+        kind: AgentKind::Subagent,
+        safety: "read_only".to_owned(),
+        overrides: toml::Table::new(),
+        source: ExtensionSource::Builtin,
+        path: None,
+    }
+}
+
+/// The `task` handler, over the delegation manager and the subagent catalog the
+/// `agent` argument is resolved against.
+///
+/// It is a free function rather than a closure built inside the registration
+/// because the delegation oracle
+/// (`crates/vibe-app-server/src/tool_execution_parity_tests.rs`) drives this
+/// exact handler with a scripted runner: a handler reachable only through a
+/// live provider could not be measured against the reference.
+pub(crate) fn task_handler(
+    manager: Arc<SubagentManager>,
+    subagents: BTreeMap<String, AgentProfile>,
+    parent_session_id: String,
+) -> Arc<dyn ToolHandler> {
+    let subagent_names = Arc::new(subagents.keys().cloned().collect::<Vec<_>>());
+    Arc::new(
+        move |invocation: &vibe_core::tools::ToolInvocation,
+              _output: vibe_core::tools::ToolOutputSink|
+              -> OwnedToolHandlerFuture {
+            let manager = manager.clone();
+            let subagents = subagents.clone();
+            let subagent_names = subagent_names.clone();
+            let parent_session_id = parent_session_id.clone();
+            let arguments = invocation.arguments.clone();
+            Box::pin(async move {
+                // `agent` carries the reference default, applied before the
+                // handler runs, so an absent key still names `explore`.
+                let agent_name = arguments
+                    .get("agent")
+                    .and_then(Value::as_str)
+                    .unwrap_or(DEFAULT_SUBAGENT);
+                let task = arguments
+                    .get("task")
+                    .and_then(Value::as_str)
+                    .filter(|task| !task.is_empty())
+                    .ok_or_else(|| vibe_core::tools::ToolError::SchemaViolation {
+                        path: "/task".to_owned(),
+                        message: "must be a non-empty string".to_owned(),
+                    })?;
+                let agent = subagents.get(agent_name).cloned().ok_or_else(|| {
+                    // A model that guessed the name corrects itself from
+                    // the list rather than from a bare refusal.
+                    vibe_core::tools::ToolError::Unavailable(format!(
+                        "subagent `{agent_name}` is unavailable; available agents: {}",
+                        if subagent_names.is_empty() {
+                            "none".to_owned()
+                        } else {
+                            subagent_names.join(", ")
+                        }
+                    ))
+                })?;
+                let effect = manager
+                    .delegate(
+                        DelegationRequest {
+                            parent_session_id,
+                            agent,
+                            prompt: task.to_owned(),
+                            logging: ChildLoggingPolicy::SummaryOnly,
+                        },
+                        crate::host::now_millis(),
+                    )
+                    .await
+                    .map_err(|error| vibe_core::tools::ToolError::Execution(error.to_string()))?;
+                let typed_result = serde_json::to_value(&effect).map_err(|error| {
+                    vibe_core::tools::ToolError::InvalidResult(error.to_string())
+                })?;
+                Ok(ToolExecutionOutput {
+                    model_text: effect.result.clone(),
+                    typed_result,
+                    display: json!({"kind": "subagent", "effect": effect}),
+                    chunks: Vec::new(),
+                })
+            })
+        },
+    )
 }
 
 impl SubagentRunner for ProviderSubagentRunner {
