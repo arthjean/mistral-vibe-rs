@@ -33,10 +33,10 @@
     {
       "id": "EP-072",
       "title": "The completer's edges",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 2,
-      "stories_done": 0
+      "stories_done": 2
     },
     {
       "id": "EP-073",
@@ -148,29 +148,29 @@
       "id": "US-236",
       "title": "Strip one slash, and complete from any cursor offset",
       "epic": "EP-072",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-230"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
     },
     {
       "id": "US-237",
       "title": "Cover the slash edges in the chat-input corpus",
       "epic": "EP-072",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-236"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
     },
     {
       "id": "US-238",

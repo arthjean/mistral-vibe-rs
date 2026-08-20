@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Answer the edges of a slash line the way the reference answers them. Exactly
+  one leading marker is stripped, so `//` and `///` now show nothing instead of
+  the whole command list, and the caret bounds both the query and the range a
+  candidate replaces: with the caret inside `mcp` on `/mcp add x`, the popup
+  ranks `mc` and accepting replaces only up to the caret, leaving the rest of
+  the line in place behind a separating space.
+
 - Echo a submitted slash command into the transcript before it runs, under the
   `/` prompt the reference paints it with and with no separator under it. The
   line keeps its arguments and its case and loses one leading slash, and a bare
