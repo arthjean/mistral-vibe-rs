@@ -353,6 +353,34 @@ pub fn parse_command_in<'a>(input: &'a str, context: &CommandContext) -> Option<
         })
 }
 
+/// The registry key a parsed command answers under.
+///
+/// Reference `parse_command` answers with the key rather than with the alias
+/// typed, which is what `_handle_command` reports to telemetry and what it
+/// displays for a bare alias: `/connectors` is `mcp`, `/new` is `clear` and
+/// `:q` is `exit`. `command_ids_and_definitions_agree` keeps every identifier
+/// in [`COMMANDS`], so the fallback is unreachable rather than a silent name.
+#[must_use]
+pub fn command_name(id: CommandId) -> &'static str {
+    COMMANDS
+        .iter()
+        .find(|command| command.id == id)
+        .map_or("", |command| command.name)
+}
+
+/// What reference `_handle_command` shows above a command's own output.
+///
+/// A slash line keeps its arguments and its case and loses exactly one leading
+/// slash, so `/HELP` reads as `HELP`; a bare alias is replaced by the key it
+/// resolved to, so `:q` reads as `exit`.
+#[must_use]
+pub fn command_echo(input: &str, id: CommandId) -> String {
+    let trimmed = input.trim();
+    trimmed
+        .strip_prefix('/')
+        .map_or_else(|| command_name(id).to_owned(), str::to_owned)
+}
+
 pub fn command_aliases() -> impl Iterator<Item = &'static str> {
     command_aliases_in(&CommandContext::default())
 }

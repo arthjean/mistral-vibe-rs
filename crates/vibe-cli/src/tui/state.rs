@@ -84,6 +84,10 @@ pub enum TranscriptKind {
     /// A Markdown document this client wrote itself, which `/help` mounts the
     /// way reference `_show_help` mounts a `UserCommandMessage`.
     Document,
+    /// The submitted command line itself, mounted above the handler's own
+    /// output the way reference `_handle_command` mounts a
+    /// `SlashCommandMessage`.
+    Command,
 }
 
 /// Where a transcript entry came from.

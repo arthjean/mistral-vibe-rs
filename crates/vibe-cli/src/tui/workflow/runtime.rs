@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 
 use super::super::chat_input::ChatInputState;
 use super::super::cloud_workflow::{format_cancelled_loop, format_created_loop, format_loop_list};
+use super::super::commands::{CommandId, command_name};
 use super::super::controls::ControlState;
 use super::super::remote_project_workflow::{handle_project_command, handle_teleport_command};
 use super::super::setup::ResolvedTheme;
@@ -14,7 +15,7 @@ use super::super::state::{EntryStatus, TuiState};
 use super::super::switching::{self, SwitchRequest};
 use super::super::{
     InteractiveRuntime, adopt_hydrated_session, call_runtime, metadata_session_id,
-    push_local_notice, unix_seconds, update_theme,
+    push_command_echo, push_local_notice, unix_seconds, update_theme,
 };
 use super::RuntimeCommand;
 use super::config::apply_thinking;
@@ -53,6 +54,11 @@ pub(in crate::tui) async fn handle_runtime_command(
             {
                 let session_id = runtime.session_id.clone();
                 if adopt_hydrated_session(runtime, state, controls, session_id) {
+                    // Reference `_clear_history` re-mounts the command line
+                    // after resetting the widgets, under the registry key
+                    // rather than under the alias submitted, because the reset
+                    // took the first echo with it.
+                    push_command_echo(state, command_name(CommandId::Clear).to_owned());
                     push_local_notice(
                         state,
                         "Conversation history cleared",

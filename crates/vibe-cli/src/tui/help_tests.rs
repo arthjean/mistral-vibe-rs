@@ -11,7 +11,7 @@ use crate::tui::completion::active_token;
 use crate::tui::input::PromptEditor;
 use crate::tui::shortcuts::{Chord, chord_of};
 use crate::tui::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
-use crate::tui::submission::{Submission, classify};
+use crate::tui::submission::{Availability, Submission, classify};
 use crate::tui::workflow::{CommandAction, dispatch_command};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::collections::BTreeSet;
@@ -310,7 +310,7 @@ async fn submitting_help_writes_the_document_into_the_transcript_without_an_over
         &mut runtime,
         &mut state,
         &mut composer,
-        false,
+        Availability::Idle,
     )
     .await;
 
@@ -319,8 +319,14 @@ async fn submitting_help_writes_the_document_into_the_transcript_without_an_over
         state.overlay.is_none(),
         "the reference mounts a message, not a modal"
     );
-    assert_eq!(state.entries.len(), 1);
-    let entry = &state.entries[0];
+    assert_eq!(
+        state.entries.len(),
+        2,
+        "the submitted line is echoed above the document"
+    );
+    assert_eq!(state.entries[0].kind, TranscriptKind::Command);
+    assert_eq!(state.entries[0].text, "help");
+    let entry = &state.entries[1];
     assert_eq!(entry.kind, TranscriptKind::Document);
     assert_eq!(entry.text, document(&full_context()));
 }
@@ -340,7 +346,7 @@ async fn the_help_document_survives_a_canonical_resync() {
         &mut runtime,
         &mut state,
         &mut composer,
-        false,
+        Availability::Idle,
     )
     .await;
 

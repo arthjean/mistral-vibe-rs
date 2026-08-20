@@ -30,7 +30,7 @@ use super::remote_project_workflow::{handle_project_action, handle_teleport_push
 use super::setup::ResolvedTheme;
 use super::shell::interrupt_shell;
 use super::state::TuiState;
-use super::submission::restore_draft;
+use super::submission::{Availability, restore_draft};
 use super::terminal::{CrosstermOps, TerminalGuard};
 use super::workflow::{
     CommandAction, OverlayEffect, OverlayKeyResult, SystemUrlOpener, cycle_agent, dispatch_command,
@@ -38,9 +38,9 @@ use super::workflow::{
 };
 use super::{
     ActiveTurn, Arguments, CliError, InteractiveRuntime, callback, copy_transcript_selection,
-    emit_attention, exit, feedback, help, interaction, is_exit_command, page_older_debug_logs,
-    page_older_history, render, request_active_turn_interrupt, settle_transcript_pointer,
-    stop_narration, submission, suspend_session, teleport_available, unix_millis,
+    emit_attention, exit, feedback, help, interaction, page_older_debug_logs, page_older_history,
+    render, request_active_turn_interrupt, settle_transcript_pointer, stop_narration, submission,
+    suspend_session, teleport_available, unix_millis,
 };
 
 /// The global chords the help document advertises.
@@ -577,12 +577,17 @@ async fn submit(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, Cli
     let Some(submitted) = take_submission(key, context) else {
         return Ok(false);
     };
-    let runtime_busy = context.active.is_some()
-        || context.shell_running()
-        || context.state.prompt_queue.is_paused();
-    if !runtime_busy && is_exit_command(&submitted) {
-        return Ok(true);
-    }
+    // Reference `on_chat_input_container_submitted` asks about the paused queue
+    // before it asks about a running job, because the two refusals tell the
+    // operator to do different things. `/exit` takes this path like every other
+    // command, so it is echoed and reported before the loop ends.
+    let availability = if context.state.prompt_queue.is_paused() {
+        Availability::QueuePaused
+    } else if context.active.is_some() || context.shell_running() {
+        Availability::Busy
+    } else {
+        Availability::Idle
+    };
     let command_action = dispatch_command(
         &submitted,
         context.arguments,
@@ -590,14 +595,14 @@ async fn submit(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, Cli
         context.runtime,
         context.state,
         context.input,
-        runtime_busy,
+        availability,
     )
     .await;
     context.refresh_composer();
     match command_action {
         CommandAction::Exit => return Ok(true),
         CommandAction::ClipboardImageRequested => context.clipboard_images.schedule(true),
-        CommandAction::RejectedBusy => restore_draft(
+        CommandAction::Rejected => restore_draft(
             context.input,
             submitted,
             context.working_directory,
@@ -624,7 +629,7 @@ async fn submit(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, Cli
             let input = &mut *context.input;
             submission::execute(
                 prompt,
-                runtime_busy,
+                availability,
                 PromptContext::new(
                     context.working_directory,
                     context.runtime,
@@ -641,7 +646,7 @@ async fn submit(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, Cli
             let input = &mut *context.input;
             submission::execute(
                 submitted,
-                runtime_busy,
+                availability,
                 PromptContext::new(
                     context.working_directory,
                     context.runtime,

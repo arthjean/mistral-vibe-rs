@@ -17,7 +17,7 @@ mod audio_surface_tests;
 
 use super::chat_input::ChatInputState;
 use super::clipboard::copy_and_report;
-use super::commands::{CommandId, parse_command_in};
+use super::commands::{CommandId, command_echo, command_name, parse_command_in};
 use super::controls::ControlState;
 use super::debug_console::{DebugConsole, PAGE_SIZE as DEBUG_PAGE_SIZE};
 use super::interaction::{Overlay, OverlayKind, RemoteProjectAction, TeleportPushAction};
@@ -29,11 +29,12 @@ use super::pickers::{
 use super::rewind::{RewindEffect, RewindState, reduce_key as reduce_rewind_key};
 use super::session_picker::SessionDeleteState;
 use super::state::{EntryStatus, TranscriptKind, TuiState};
+use super::submission::Availability;
 use super::switching::{self, SwitchRequest};
 use super::{
     Arguments, InteractiveRuntime, adopt_hydrated_session, call_runtime, help, metadata_session_id,
-    parse_runtime_skills, push_local_document, push_local_notice, refresh_server_banner_metrics,
-    sync_runtime_intent, unix_millis,
+    parse_runtime_skills, push_command_echo, push_local_document, push_local_notice,
+    refresh_server_banner_metrics, sync_runtime_intent, unix_millis,
 };
 pub(in crate::tui) use config::apply_render_preferences;
 use config::{
@@ -68,7 +69,9 @@ Manage your data settings [here](https://chat.mistral.ai/work?profile_dialog=pri
 pub(super) enum CommandAction {
     Unhandled,
     Handled,
-    RejectedBusy,
+    /// The runtime refused the command, having already stated why. The caller
+    /// restores the submitted text to the composer and queues nothing.
+    Rejected,
     ClipboardImageRequested,
     Exit,
     Runtime(RuntimeCommand),
@@ -122,23 +125,37 @@ pub(super) async fn dispatch_command(
     runtime: &mut Option<InteractiveRuntime>,
     state: &mut TuiState,
     composer: &mut ChatInputState,
-    runtime_busy: bool,
+    availability: Availability,
 ) -> CommandAction {
     let command_context = composer.command_context().clone();
     let Some(parsed) = parse_command_in(command_line, &command_context) else {
         return CommandAction::Unhandled;
     };
-    // Reference `_handle_command`: the event is recorded where the command is
-    // resolved, before it runs, and reports the name the operator typed.
-    if let Some(runtime) = runtime.as_ref() {
-        super::report_slash_command(runtime, command_line, TelemetryCommandKind::Builtin);
-    }
     let command_id = parsed.id;
     let command_arguments = parsed.arguments.to_owned();
-    if runtime_busy {
-        state.push_diagnostic("Slash commands cannot be queued while the runtime is busy");
-        return CommandAction::RejectedBusy;
+    // Reference `on_chat_input_container_submitted` refuses before it reaches
+    // `_handle_command`, so a refused command neither reports an event nor
+    // echoes its line.
+    if availability.is_busy() {
+        state.push_diagnostic(format!(
+            "Slash commands cannot be queued: {}",
+            availability.reject_hint()
+        ));
+        return CommandAction::Rejected;
     }
+    // Reference `_handle_command`: the event is recorded once, where the command
+    // is resolved and before it runs, and reports the registry key rather than
+    // the alias typed.
+    if let Some(runtime) = runtime.as_ref() {
+        super::report_slash_command(
+            runtime,
+            command_name(command_id),
+            TelemetryCommandKind::Builtin,
+        );
+    }
+    // Reference `_handle_command` mounts the submitted line above whatever the
+    // command itself writes.
+    push_command_echo(state, command_echo(command_line, command_id));
     match command_id {
         CommandId::Exit => return CommandAction::Exit,
         // Reference `_show_help`: the help is a Markdown message in the

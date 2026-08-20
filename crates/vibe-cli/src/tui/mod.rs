@@ -352,10 +352,6 @@ fn compact_json(value: &Value) -> String {
     serde_json::to_string(value).unwrap_or_else(|_| "null".to_owned())
 }
 
-fn is_exit_command(command: &str) -> bool {
-    command.trim() == "/exit"
-}
-
 /// Releasing the pointer over the transcript either activates the link under a
 /// plain click or settles a drag selection, auto-copying it when the reference
 /// preference is on. Every external effect is scoped: a failure is reported and
@@ -474,6 +470,21 @@ fn push_local_document(state: &mut TuiState, message: String) -> String {
     })
 }
 
+/// Appends the command line a submission ran, the way reference
+/// `_handle_command` mounts a `SlashCommandMessage` above the handler's own
+/// output. It runs only once the command is known to run: a refused command
+/// echoes nothing.
+fn push_command_echo(state: &mut TuiState, message: String) -> String {
+    state.append_local(TranscriptEntry {
+        id: String::new(),
+        revision: 1,
+        kind: TranscriptKind::Command,
+        text: message,
+        status: EntryStatus::Completed,
+        source: EntrySource::Restored,
+    })
+}
+
 /// Appends a notice this client wrote itself and answers the transcript id it
 /// was filed under, which is what a later settlement addresses it by.
 fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) -> String {
@@ -530,13 +541,5 @@ mod tests {
         push_local_notice(&mut state, "done", EntryStatus::Completed);
         assert_eq!(state.watermark, 0);
         assert_eq!(state.entries.len(), 2);
-    }
-
-    #[test]
-    fn only_the_reference_slash_exit_alias_bypasses_dispatch() {
-        assert!(is_exit_command("/exit"));
-        assert!(!is_exit_command("/close"));
-        assert!(!is_exit_command("/quit"));
-        assert!(!is_exit_command("/close now"));
     }
 }

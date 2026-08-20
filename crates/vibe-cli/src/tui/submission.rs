@@ -14,6 +14,41 @@ use super::shell::start_shell;
 use super::state::TuiState;
 use super::{CliError, InteractiveRuntime, teleport_available};
 
+/// Whether a submitted line can run now, and why it cannot when it cannot.
+///
+/// Reference `on_chat_input_container_submitted` asks the two questions in this
+/// order: a paused queue answers first with `_REJECT_HINT_PAUSED`, a running job
+/// second with `_REJECT_HINT_BUSY`. The two hints are what tells an operator to
+/// wait from what tells them to clear, so the refusal carries the reason rather
+/// than collapsing both into one sentence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Availability {
+    Idle,
+    Busy,
+    QueuePaused,
+}
+
+impl Availability {
+    /// Reference `_is_busy()` crossed with `_input_queue.paused`: both refuse a
+    /// slash command and both queue a prompt, so the paths that only branch on
+    /// "not now" read this rather than the reason.
+    pub(super) const fn is_busy(self) -> bool {
+        !matches!(self, Self::Idle)
+    }
+
+    /// What the refusal tells the operator to do about it. Reference
+    /// `_REJECT_HINT_BUSY` and `_REJECT_HINT_PAUSED`, written in this port's own
+    /// words: `NOTICE` forbids shipping the reference's.
+    pub(super) const fn reject_hint(self) -> &'static str {
+        match self {
+            Self::QueuePaused => "clear the paused queue or remove this input first",
+            // A line that reached a refusal was not idle, so the busy hint is
+            // what an idle availability would answer with too.
+            Self::Idle | Self::Busy => "let the running job finish first",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Submission {
     /// `/name` naming a skill the runtime exposes.
@@ -58,11 +93,12 @@ pub(super) fn restore_draft(
 
 pub(super) async fn execute(
     submitted: String,
-    busy: bool,
+    availability: Availability,
     mut context: PromptContext<'_>,
     input: &mut ChatInputState,
 ) -> Result<(), CliError> {
     let working_directory = context.working_directory;
+    let busy = availability.is_busy();
     match (classify(&submitted, context.runtime.as_ref()), busy) {
         (Submission::EmptyShell, busy) => {
             context
@@ -72,11 +108,15 @@ pub(super) async fn execute(
                 context.state.prompt_queue.resume();
             }
         }
+        // Reference `_handle_queue_submit`: a teleport refuses through the same
+        // path a slash command refuses through, so it carries the same two
+        // reasons rather than a busy-only sentence.
         (Submission::Teleport, true) => {
             restore_draft(input, submitted, working_directory, context.state);
-            context
-                .state
-                .push_diagnostic("Teleport cannot be queued while the runtime is busy");
+            context.state.push_diagnostic(format!(
+                "Teleport cannot be queued: {}",
+                availability.reject_hint()
+            ));
         }
         (Submission::Teleport, false) => {
             if let Some(runtime) = context.runtime.as_mut() {

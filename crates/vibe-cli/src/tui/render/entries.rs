@@ -77,6 +77,9 @@ pub(super) fn semantic_lines(
             prefixed_lines(&message, "  ▏ ", width, theme.secondary(), theme, entry)
         }
         transcript::Region::Document { message } => document_lines(&message, width, theme),
+        transcript::Region::SlashCommand { message } => {
+            prompt_message_lines(entry, width, theme, '/', &message)
+        }
         transcript::Region::Notice { level, .. } => {
             notice_message_lines(entry, width, theme, level)
         }
@@ -233,6 +236,20 @@ fn user_message_lines(
         Some('/') => ('/', &entry.text[1..]),
         _ => ('>', entry.text.as_str()),
     };
+    prompt_message_lines(entry, width, theme, prompt, content)
+}
+
+/// One prompted message: the operator's own line under `>`, or the command line
+/// a submission ran under `/`, which is the prompt character reference
+/// `SlashCommandMessage` overrides `UserMessage` with. The slash form draws no
+/// separator, matching that widget's `SHOW_SEPARATOR = False`.
+fn prompt_message_lines(
+    entry: &TranscriptEntry,
+    width: u16,
+    theme: ResolvedTheme,
+    prompt: char,
+    content: &str,
+) -> Vec<Line<'static>> {
     let pending = entry.status == EntryStatus::Streaming;
     let prompt_style = theme
         .orange()

@@ -171,6 +171,11 @@ pub enum Region {
     Document {
         message: String,
     },
+    /// The command line a submission ran, which reference `SlashCommandMessage`
+    /// paints as a user message under the `/` prompt character.
+    SlashCommand {
+        message: String,
+    },
     Notice {
         level: NoticeLevel,
         message: String,
@@ -204,6 +209,9 @@ pub fn region(entry: &TranscriptEntry) -> Region {
         }
         TranscriptKind::Notice => notice_region(entry),
         TranscriptKind::Document => Region::Document {
+            message: entry.text.clone(),
+        },
+        TranscriptKind::Command => Region::SlashCommand {
             message: entry.text.clone(),
         },
     }
