@@ -17,10 +17,10 @@
     {
       "id": "EP-070",
       "title": "The help surface the reference publishes",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 2,
-      "stories_done": 0
+      "stories_done": 2
     },
     {
       "id": "EP-071",
@@ -78,29 +78,29 @@
       "id": "US-231",
       "title": "Answer /help with a Markdown transcript message",
       "epic": "EP-070",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-230"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
     },
     {
       "id": "US-232",
       "title": "Retire the help overlay and reconcile the shortcut inventory",
       "epic": "EP-070",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-231"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
     },
     {
       "id": "US-233",
