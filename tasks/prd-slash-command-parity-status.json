@@ -3,7 +3,7 @@
     "file": "tasks/prd-slash-command-parity.md",
     "title": "Slash Commands at Full Parity",
     "created_at": "2026-08-20",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -41,10 +41,10 @@
     {
       "id": "EP-073",
       "title": "Restate row 2 from what now measures it",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 1,
-      "stories_done": 0
+      "stories_done": 1
     }
   ],
   "stories": [
@@ -176,7 +176,7 @@
       "id": "US-238",
       "title": "Remeasure and restate parity row 2",
       "epic": "EP-073",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
@@ -186,9 +186,9 @@
         "US-235",
         "US-237"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-20",
+      "completed_at": "2026-08-20",
+      "reviewed_at": "2026-08-20"
     }
   ]
 }
