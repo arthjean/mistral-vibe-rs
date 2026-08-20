@@ -27,10 +27,11 @@
     {
       "id": "EP-076",
       "title": "The projection the UI reads",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 2,
-      "stories_done": 0
+      "stories_done": 2,
+      "started_at": "2026-08-21"
     },
     {
       "id": "EP-077",
@@ -157,23 +158,29 @@
       "id": "US-246",
       "title": "Publish the grep projection",
       "epic": "EP-076",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-242"
-      ]
+      ],
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     },
     {
       "id": "US-247",
       "title": "Publish the edit projection and drop the renderer fallback",
       "epic": "EP-076",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-242"
-      ]
+      ],
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     },
     {
       "id": "US-248",

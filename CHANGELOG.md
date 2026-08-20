@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Publish the second document the UI reads. `grep` now sends the client one
+  parsed entry per match, each carrying the matched file's path anchored on the
+  searched root and the line number it was found at, and `edit` now sends one
+  entry per replacement with the line it started on and the whole lines it
+  replaced. The transcript draws an applied edit from those occurrences instead
+  of diffing the two raw strings, so a `replace_all` shows one hunk per
+  replacement at its own line.
+
 - Return the reference's own result fields from the last five built-in tools
   instead of the bare answer. `web_fetch` now renders `url`, `content`,
   `content_type` and `was_truncated`, `web_search` renders `query`, `answer`
