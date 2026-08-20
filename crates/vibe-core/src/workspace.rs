@@ -1721,6 +1721,59 @@ mod tests {
         registered_with_settings(root, "").await.0
     }
 
+    /// US-246: `grep` publishes a second document for the UI, one parsed entry
+    /// per printed match. The separator rule is the reference's: the printed
+    /// line splits on its first two colons only, so a colon inside the matched
+    /// text stays in the text and never shifts the line number.
+    #[tokio::test]
+    async fn grep_projects_one_parsed_entry_per_match() {
+        let root = tempdir().expect("workspace");
+        std::fs::write(
+            root.path().join("notes.md"),
+            "intro
+needle: a colon inside the text
+",
+        )
+        .expect("file");
+        let registry = registered_workspace_tools(root.path()).await;
+
+        let found = registry
+            .invoke(
+                "grep",
+                ToolInvocation {
+                    call_id: "grep-1".to_owned(),
+                    arguments: json!({"pattern": "needle", "path": "."}),
+                },
+            )
+            .await
+            .expect("the search answers");
+        // The reference resolves a printed match against the search root, so
+        // the entry carries the absolute path the corpus normalizes away.
+        assert_eq!(
+            found.projected_result["parsed_matches"],
+            json!([{
+                "path": root.path().join("notes.md").display().to_string(),
+                "line": 2,
+            }]),
+        );
+        assert!(
+            found.projected_result.get("pattern").is_none(),
+            "the projection drops the pattern the typed result keeps: {found:?}"
+        );
+
+        let empty = registry
+            .invoke(
+                "grep",
+                ToolInvocation {
+                    call_id: "grep-2".to_owned(),
+                    arguments: json!({"pattern": "haystack", "path": "."}),
+                },
+            )
+            .await
+            .expect("the empty search answers");
+        assert_eq!(empty.projected_result["parsed_matches"], json!([]));
+    }
+
     /// US-108: a registered file tool passes the guard for the session
     /// scratchpad without an approval, even for a name its own
     /// `sensitive_patterns` would otherwise stop, and the same name inside the

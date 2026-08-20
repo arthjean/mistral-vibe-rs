@@ -245,10 +245,21 @@ fn grep_handler(workspace: Arc<Workspace>, config: ToolConfigResolver) -> Arc<dy
                     .search(&pattern, &path, &options)
                     .map_err(|error| ToolError::Execution(error.to_string()))?;
                 let result = json!({
-                    "matches": outcome.matches,
+                    "matches": outcome.matches.clone(),
                     "match_count": outcome.match_count,
                     "pattern": pattern,
                     "was_truncated": outcome.was_truncated,
+                });
+                // The projection drops the pattern the model reads and adds
+                // the match list a client renders. The search root is what the
+                // relative paths `rg` prints resolve against, which is why the
+                // projection is built here rather than derived downstream: the
+                // typed result never carries it.
+                let projected = json!({
+                    "matches": outcome.matches,
+                    "match_count": outcome.match_count,
+                    "was_truncated": outcome.was_truncated,
+                    "parsed_matches": parsed_matches(&outcome.matches, workspace.root()),
                 });
                 let model_text = reference_text::joined(&[
                     ("matches", outcome.matches.clone()),
@@ -261,10 +272,69 @@ fn grep_handler(workspace: Arc<Workspace>, config: ToolConfigResolver) -> Arc<dy
                 ]);
                 Ok(ToolExecutionOutput::new(model_text)
                     .displayed_as(json!({"kind": "search", "matches": outcome.match_count}))
-                    .typed(result))
+                    .typed(result)
+                    .projected(projected))
             })
         },
     )
+}
+
+/// The match list the `grep` projection carries, one entry per printed line.
+///
+/// Reference `GrepResult.parsed_matches`: a line that carries no separator at
+/// all names no match and is dropped rather than published half-parsed.
+fn parsed_matches(matches: &str, base: &Path) -> Vec<Value> {
+    matches
+        .lines()
+        .filter_map(|line| parsed_match(line, base))
+        .collect()
+}
+
+/// One `path:line:text` line, split on its first two separators only.
+///
+/// Reference `GrepMatch.from_output_line`. A single-letter first segment
+/// followed by two more is a Windows drive letter rather than a path of its
+/// own, and the line number is dropped rather than guessed when it does not
+/// read as one. The path is anchored on the search root, so a client resolves
+/// it without knowing where the agent was launched from.
+fn parsed_match(raw: &str, base: &Path) -> Option<Value> {
+    let mut parts = raw.splitn(4, ':');
+    let first = parts.next()?;
+    let second = parts.next()?;
+    let third = parts.next();
+    let drive_letter =
+        first.chars().count() == 1 && first.chars().all(char::is_alphabetic) && third.is_some();
+    let (path, line) = if drive_letter {
+        (format!("{first}:{second}"), third.unwrap_or_default())
+    } else {
+        (first.to_owned(), second)
+    };
+    let line = if line.is_empty() {
+        None
+    } else {
+        line.parse::<i64>().ok()
+    };
+    Some(json!({ "path": anchored_match_path(base, &path), "line": line }))
+}
+
+/// One printed match path, anchored on the search root and normalized the way
+/// `Path.resolve` normalizes: an absolute path stands on its own, and the
+/// no-op components a relative one carries are dropped.
+fn anchored_match_path(base: &Path, printed: &str) -> String {
+    use std::path::Component;
+
+    let joined = base.join(printed);
+    let mut resolved = PathBuf::new();
+    for component in joined.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                resolved.pop();
+            }
+            other => resolved.push(other),
+        }
+    }
+    resolved.to_string_lossy().replace('\\', "/")
 }
 
 /// `edit`: one anchored replacement, refused before it opens anything when the

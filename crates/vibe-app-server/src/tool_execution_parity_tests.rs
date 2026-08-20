@@ -113,8 +113,6 @@ const LICENSING: &str = "NOTICE";
 /// dozens.
 const READ_FILE_NOTICE: &str = "this port writes its own guidance for an empty read and for an \
      offset past the last line; reaching the reference digest would mean copying its sentence";
-const GREP_PROJECTION: &str = "the reference projects a parsed match list for the UI and drops the \
-     pattern; this port publishes no second projection at all";
 const EDIT_PROJECTION: &str = "the reference projects the occurrences it rewrote and drops the \
      message; this port publishes no second projection at all";
 const EDIT_MESSAGE: &str = "this port writes its own applied-edit sentence; reaching the reference \
@@ -216,76 +214,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: READ_FILE_NOTICE,
-    },
-    Divergence {
-        tool: "grep",
-        case: "anchored",
-        pointer: "/projectedResult",
-        closed_by: "US-246",
-        why: GREP_PROJECTION,
-    },
-    Divergence {
-        tool: "grep",
-        case: "ignore-disabled",
-        pointer: "/projectedResult",
-        closed_by: "US-246",
-        why: GREP_PROJECTION,
-    },
-    Divergence {
-        tool: "grep",
-        case: "ignore-honored",
-        pointer: "/projectedResult",
-        closed_by: "US-246",
-        why: GREP_PROJECTION,
-    },
-    Divergence {
-        tool: "grep",
-        case: "lowercase-is-case-insensitive",
-        pointer: "/projectedResult",
-        closed_by: "US-246",
-        why: GREP_PROJECTION,
-    },
-    Divergence {
-        tool: "grep",
-        case: "max-matches",
-        pointer: "/projectedResult",
-        closed_by: "US-246",
-        why: GREP_PROJECTION,
-    },
-    Divergence {
-        tool: "grep",
-        case: "no-match",
-        pointer: "/projectedResult",
-        closed_by: "US-246",
-        why: GREP_PROJECTION,
-    },
-    Divergence {
-        tool: "grep",
-        case: "regex-alternation",
-        pointer: "/projectedResult",
-        closed_by: "US-246",
-        why: GREP_PROJECTION,
-    },
-    Divergence {
-        tool: "grep",
-        case: "scoped-to-a-subdirectory",
-        pointer: "/projectedResult",
-        closed_by: "US-246",
-        why: GREP_PROJECTION,
-    },
-    Divergence {
-        tool: "grep",
-        case: "scoped-to-one-file",
-        pointer: "/projectedResult",
-        closed_by: "US-246",
-        why: GREP_PROJECTION,
-    },
-    Divergence {
-        tool: "grep",
-        case: "uppercase-is-case-sensitive",
-        pointer: "/projectedResult",
-        closed_by: "US-246",
-        why: GREP_PROJECTION,
     },
     Divergence {
         tool: "edit",
