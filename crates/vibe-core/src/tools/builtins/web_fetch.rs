@@ -17,7 +17,7 @@ use crate::schema::{ObjectSchema, Property};
 use crate::tools::config::{ToolConfigResolver, WebFetchConfig};
 use crate::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler,
-    ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolSource, ToolSpec,
+    ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolSource, ToolSpec, reference_text,
 };
 
 /// Directive coverage for `web_fetch`.
@@ -181,13 +181,26 @@ pub(super) async fn run_web_fetch(
     } else {
         text
     };
-    Ok(ToolExecutionOutput::new(content.clone())
+    // `WebFetchResult` declares `url`, `content`, `content_type` and
+    // `was_truncated` in that order, and the agent loop renders one field per
+    // line from it, so both the typed result and the text the model reads
+    // follow the declaration rather than the body alone.
+    let model_text = reference_text::joined(&[
+        ("url", url.as_str().to_owned()),
+        ("content", content.clone()),
+        ("content_type", content_type.clone()),
+        (
+            "was_truncated",
+            reference_text::boolean(truncated).to_owned(),
+        ),
+    ]);
+    Ok(ToolExecutionOutput::new(model_text)
         .displayed_as(json!({"kind": "webFetch", "url": url.as_str()}))
         .typed(json!({
             "url": url.as_str(),
             "content": content,
-            "contentType": content_type,
-            "wasTruncated": truncated,
+            "content_type": content_type,
+            "was_truncated": truncated,
         })))
 }
 

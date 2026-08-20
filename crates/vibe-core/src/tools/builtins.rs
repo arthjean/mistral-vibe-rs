@@ -1179,14 +1179,19 @@ mod tests {
             )
             .await
             .expect("fetch");
-        assert_eq!(fetched.typed_result["wasTruncated"], json!(true));
+        assert_eq!(fetched.typed_result["was_truncated"], json!(true));
         assert!(
-            fetched.model_text.len() < settings.max_content_bytes + 128,
+            fetched.typed_result["content"].as_str().map_or(0, str::len)
+                < settings.max_content_bytes + 128,
             "the page must stay inside the limit"
         );
         assert!(
             fetched.model_text.contains("content truncated at"),
             "the truncation is reported to the model"
+        );
+        assert!(
+            fetched.model_text.ends_with("\nwas_truncated: True"),
+            "the flag reaches the model on its own line"
         );
     }
 
@@ -1297,7 +1302,13 @@ mod tests {
             )
             .await
             .expect("search");
-        assert_eq!(answered.model_text, "42");
+        // `WebSearchResult` declares `query`, `answer` and `sources`, and the
+        // agent loop renders one field per line from it, with the source list
+        // as Python's repr of a list of dictionaries.
+        assert_eq!(
+            answered.model_text,
+            "query: the answer\nanswer: 42\nsources: [{'title': 'A', 'url': 'https://a.example'}]"
+        );
         assert_eq!(
             answered.typed_result["sources"],
             json!([{"title": "A", "url": "https://a.example"}])

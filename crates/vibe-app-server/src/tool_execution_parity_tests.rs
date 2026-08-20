@@ -131,21 +131,17 @@ const PLAN_MESSAGE: &str = "this port writes its own message for each plan-revie
      reaching the reference digest would mean copying its wording";
 const PLAN_TEXT: &str = "the reference renders `switched` and `message` one field per line; this \
      port renders the message alone";
-const FETCH_KEYS: &str = "the reference publishes `content_type` and `was_truncated`; this port \
-     spells them `contentType` and `wasTruncated`";
-const FETCH_TEXT: &str = "the reference renders `url`, `content`, `content_type` and \
-     `was_truncated` one field per line; this port renders the body alone";
+const FETCH_MARKDOWN: &str = "the reference converts an HTML page with `markdownify`, which keeps \
+     the heading marker and the blank line between blocks; this port strips the markup to prose \
+     instead. No story in this PRD closes the gap, so it is recorded by name instead";
 const FETCH_TRUNCATION: &str = "this port cuts the body at the smaller of the configured cap and \
-     the remaining buffer, so it keeps two bytes fewer than the declared bound, and it spells the \
-     two metadata keys in camel case";
+     the remaining buffer, so it keeps two bytes fewer than the declared bound";
 const FETCH_REQUEST: &str = "the reference sends `Accept` and `Accept-Language` alongside the user \
      agent; this port sends only what its HTTP client defaults to";
 const FETCH_CHALLENGE: &str = "the reference retries a challenge response once under a different \
      user agent; this port reports the status and stops";
 const FETCH_ERROR_KIND: &str = "the reference raises its own tool error for an argument it \
      rejects; this port raises a schema violation, which the oracle names `ValidationError`";
-const SEARCH_TEXT: &str = "the reference renders `query`, `answer` and `sources` one field per \
-     line; this port renders the answer alone";
 const TASK_SHAPE: &str = "the reference publishes and renders `response`, `turns_used` and \
      `completed`; this port publishes the delegation effect and renders the response alone";
 const TASK_DEPTH: &str = "the reference refuses to delegate from inside a subagent at call time; \
@@ -867,30 +863,9 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "web_fetch",
         case: "a-json-body",
-        pointer: "/modelText",
-        closed_by: "US-243",
-        why: FETCH_TEXT,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-json-body",
-        pointer: "/projectedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-json-body",
         pointer: "/requests",
         closed_by: "US-251",
         why: FETCH_REQUEST,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-json-body",
-        pointer: "/typedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
     },
     Divergence {
         tool: "web_fetch",
@@ -902,48 +877,6 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "web_fetch",
         case: "a-plain-text-page",
-        pointer: "/modelText",
-        closed_by: "US-243",
-        why: FETCH_TEXT,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-plain-text-page",
-        pointer: "/projectedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-plain-text-page",
-        pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-plain-text-page",
-        pointer: "/typedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-redirect-chain",
-        pointer: "/modelText",
-        closed_by: "US-243",
-        why: FETCH_TEXT,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-redirect-chain",
-        pointer: "/projectedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-redirect-chain",
         pointer: "/requests",
         closed_by: "US-251",
         why: FETCH_REQUEST,
@@ -951,9 +884,9 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "web_fetch",
         case: "a-redirect-chain",
-        pointer: "/typedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
+        pointer: "/requests",
+        closed_by: "US-251",
+        why: FETCH_REQUEST,
     },
     Divergence {
         tool: "web_fetch",
@@ -965,30 +898,9 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "web_fetch",
         case: "an-empty-body",
-        pointer: "/modelText",
-        closed_by: "US-243",
-        why: FETCH_TEXT,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "an-empty-body",
-        pointer: "/projectedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "an-empty-body",
         pointer: "/requests",
         closed_by: "US-251",
         why: FETCH_REQUEST,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "an-empty-body",
-        pointer: "/typedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
     },
     Divergence {
         tool: "web_fetch",
@@ -1001,15 +913,15 @@ const LEDGER: &[Divergence] = &[
         tool: "web_fetch",
         case: "an-html-page",
         pointer: "/modelText",
-        closed_by: "US-243",
-        why: FETCH_TEXT,
+        closed_by: "US-252",
+        why: FETCH_MARKDOWN,
     },
     Divergence {
         tool: "web_fetch",
         case: "an-html-page",
-        pointer: "/projectedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
+        pointer: "/projectedResult/content",
+        closed_by: "US-252",
+        why: FETCH_MARKDOWN,
     },
     Divergence {
         tool: "web_fetch",
@@ -1021,9 +933,9 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "web_fetch",
         case: "an-html-page",
-        pointer: "/typedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
+        pointer: "/typedResult/content",
+        closed_by: "US-252",
+        why: FETCH_MARKDOWN,
     },
     Divergence {
         tool: "web_fetch",
@@ -1063,30 +975,9 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "web_fetch",
         case: "no-content-type",
-        pointer: "/modelText",
-        closed_by: "US-243",
-        why: FETCH_TEXT,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "no-content-type",
-        pointer: "/projectedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "no-content-type",
         pointer: "/requests",
         closed_by: "US-251",
         why: FETCH_REQUEST,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "no-content-type",
-        pointer: "/typedResult",
-        closed_by: "US-243",
-        why: FETCH_KEYS,
     },
     Divergence {
         tool: "web_fetch",
@@ -1094,41 +985,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/requests",
         closed_by: "US-251",
         why: FETCH_REQUEST,
-    },
-    Divergence {
-        tool: "web_search",
-        case: "a-citation-with-no-url",
-        pointer: "/modelText",
-        closed_by: "US-243",
-        why: SEARCH_TEXT,
-    },
-    Divergence {
-        tool: "web_search",
-        case: "a-string-content-answer",
-        pointer: "/modelText",
-        closed_by: "US-243",
-        why: SEARCH_TEXT,
-    },
-    Divergence {
-        tool: "web_search",
-        case: "chunked-content-with-citations",
-        pointer: "/modelText",
-        closed_by: "US-243",
-        why: SEARCH_TEXT,
-    },
-    Divergence {
-        tool: "web_search",
-        case: "duplicate-citation-urls",
-        pointer: "/modelText",
-        closed_by: "US-243",
-        why: SEARCH_TEXT,
-    },
-    Divergence {
-        tool: "web_search",
-        case: "several-message-outputs",
-        pointer: "/modelText",
-        closed_by: "US-243",
-        why: SEARCH_TEXT,
     },
 ];
 
