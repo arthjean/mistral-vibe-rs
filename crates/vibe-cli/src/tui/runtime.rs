@@ -86,6 +86,13 @@ pub(super) struct InteractiveRuntime {
     /// The read-aloud transport, resolved from the same published view the
     /// transcription session is.
     pub(super) speech: SpeechManager,
+    /// What [`InteractiveRuntime::report`] was handed, kept only under test.
+    ///
+    /// The production observer needs a transport and answers nothing, so a test
+    /// that has to prove which event a path raises reads this instead of the
+    /// wire.
+    #[cfg(test)]
+    pub(super) recorded: std::sync::Mutex<Vec<TelemetryRecord>>,
 }
 
 #[derive(Debug, Clone)]
@@ -223,12 +230,28 @@ pub(super) fn apply_ui_operation_completion(
 }
 
 impl InteractiveRuntime {
+    /// The events this runtime was handed since the last call, oldest first.
+    ///
+    /// Draining is what lets one fixture walk a whole command registry and
+    /// assert each dispatch on its own.
+    #[cfg(test)]
+    pub(in crate::tui) fn take_reported(&self) -> Vec<TelemetryRecord> {
+        self.recorded
+            .lock()
+            .map(|mut recorded| std::mem::take(&mut *recorded))
+            .unwrap_or_default()
+    }
+
     /// Sends one telemetry record under this session.
     ///
     /// Telemetry is best effort on both sides, so a session that enabled none
     /// and a delivery that failed are the same thing here: nothing is reported
     /// to the operator, because a census failure is not news about their turn.
     pub(super) fn report(&self, record: &TelemetryRecord) {
+        #[cfg(test)]
+        if let Ok(mut recorded) = self.recorded.lock() {
+            recorded.push(record.clone());
+        }
         if let Some(telemetry) = self.telemetry.as_ref() {
             let _ = telemetry.enqueue(record, Some(self.session_id.as_str()));
         }
@@ -417,6 +440,7 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
             "test-credential",
             std::path::Path::new("/nonexistent-vibe-home"),
         ),
+        recorded: std::sync::Mutex::default(),
     }
 }
 

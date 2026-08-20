@@ -15,6 +15,10 @@ mod runtime;
 #[path = "workflow/audio_surface_tests.rs"]
 mod audio_surface_tests;
 
+#[cfg(test)]
+#[path = "workflow/command_line_tests.rs"]
+mod command_line_tests;
+
 use super::chat_input::ChatInputState;
 use super::clipboard::copy_and_report;
 use super::commands::{CommandId, command_echo, command_name, parse_command_in};

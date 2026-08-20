@@ -141,6 +141,8 @@ pub(super) fn start_runtime(
         session_init_duration_ms: Some(session_init_duration_ms),
         voice,
         speech,
+        #[cfg(test)]
+        recorded: std::sync::Mutex::default(),
     })
 }
 

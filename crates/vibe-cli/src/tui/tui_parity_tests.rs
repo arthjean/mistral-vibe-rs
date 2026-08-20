@@ -351,6 +351,73 @@ fn rendered_transcript(state: &mut TuiState, height: u16) -> String {
         .collect()
 }
 
+/// The rows of an 80-column frame, which is how a reader tells one entry's
+/// prompt character from another's.
+fn transcript_rows(state: &mut TuiState, height: u16) -> Vec<String> {
+    rendered_transcript(state, height)
+        .chars()
+        .collect::<Vec<_>>()
+        .chunks(80)
+        .map(|row| row.iter().collect::<String>().trim_end().to_owned())
+        .collect()
+}
+
+/// US-233: the echoed line is its own kind of entry, so a frame tells it from
+/// the operator's own message. Reference `SlashCommandMessage` overrides
+/// `UserMessage` with `PROMPT_CHAR = "/"` and `SHOW_SEPARATOR = False`, which is
+/// what these rows show.
+#[tokio::test]
+async fn a_submitted_command_renders_under_the_slash_prompt_and_writes_no_user_message() {
+    let arguments =
+        <crate::Arguments as clap::Parser>::try_parse_from(["vibe"]).expect("arguments");
+    let mut state = TuiState::new("session");
+    let mut composer = crate::tui::chat_input::ChatInputState::new();
+    composer.set_command_context(CommandContext::new(true).with_clipboard_image_supported(true));
+    let mut runtime = None;
+    crate::tui::workflow::dispatch_command(
+        "/exit",
+        &arguments,
+        Path::new("/workspace"),
+        &mut runtime,
+        &mut state,
+        &mut composer,
+        crate::tui::submission::Availability::Idle,
+    )
+    .await;
+
+    let rows = transcript_rows(&mut state, 16);
+    let echoes = rows
+        .iter()
+        .filter(|row| row.starts_with("/ "))
+        .collect::<Vec<_>>();
+    assert_eq!(echoes, vec![&"/ exit".to_owned()], "{rows:?}");
+    assert_eq!(
+        rows.iter().filter(|row| row.starts_with("> ")).count(),
+        0,
+        "the echo is not an operator message: {rows:?}"
+    );
+
+    // The operator's own line still renders under `>`, with the separator the
+    // slash form suppresses.
+    state.entries.push(TranscriptEntry {
+        id: "typed".to_owned(),
+        revision: 1,
+        kind: TranscriptKind::UserMessage,
+        text: "ship it".to_owned(),
+        status: EntryStatus::Completed,
+        source: EntrySource::Restored,
+    });
+    let rows = transcript_rows(&mut state, 16);
+    assert_eq!(rows.iter().filter(|row| row.starts_with("/ ")).count(), 1);
+    assert_eq!(
+        rows.iter()
+            .filter(|row| row.starts_with("> "))
+            .collect::<Vec<_>>(),
+        vec![&"> ship it".to_owned()],
+        "{rows:?}"
+    );
+}
+
 #[test]
 fn assistant_markdown_is_rendered_semantically_instead_of_literally() {
     let mut state = TuiState::new("session");

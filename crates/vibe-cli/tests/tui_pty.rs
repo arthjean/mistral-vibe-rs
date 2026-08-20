@@ -752,6 +752,48 @@ fn every_advertised_shortcut_performs_its_action_in_the_running_tui() {
     assert!(status.success(), "Ctrl+D did not quit cleanly: {status}");
 }
 
+/// US-233: a submitted command line is echoed into the running transcript,
+/// under the `/` prompt reference `SlashCommandMessage` paints it with, before
+/// the command's own output. `/copy` is the cheapest command that both echoes
+/// and answers without a session behind it.
+#[test]
+fn a_submitted_command_line_is_echoed_in_the_running_tui() {
+    let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
+    let mut process = PtyProcess::spawn(
+        &workspace,
+        &home,
+        &["--trust", "--api-base", "http://127.0.0.1:9"],
+    );
+    process.wait_for_visible("Type /help for more information", STEP);
+
+    process.write(b"/copy\r");
+    let screen = visible_text(&process.wait_for_visible("/ copy", STEP));
+    assert!(
+        screen
+            .lines()
+            .map(str::trim_end)
+            .any(|line| line == "/ copy"),
+        "the echo did not land on its own transcript row: {screen}"
+    );
+    assert!(
+        !screen
+            .lines()
+            .map(str::trim_end)
+            .any(|line| line == "> /copy"),
+        "the echo was mounted as an operator message: {screen}"
+    );
+
+    process.write(b"\x04");
+    process.wait_for_visible("Press Ctrl+D again to quit", STEP);
+    process.write(b"\x04");
+    let (status, _) = process.wait(STEP);
+    assert!(status.success(), "the TUI did not quit cleanly: {status}");
+}
+
 #[test]
 fn sigint_after_mount_restores_terminal() {
     let temporary = tempfile::tempdir().expect("temporary TUI home");
