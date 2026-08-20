@@ -76,6 +76,7 @@ pub(super) fn semantic_lines(
         transcript::Region::Command { message } => {
             prefixed_lines(&message, "  ▏ ", width, theme.secondary(), theme, entry)
         }
+        transcript::Region::Document { message } => document_lines(&message, width, theme),
         transcript::Region::Notice { level, .. } => {
             notice_message_lines(entry, width, theme, level)
         }
@@ -273,6 +274,21 @@ fn user_message_lines(
         lines.push(Line::styled("─".repeat(usize::from(width)), theme.muted()));
     }
     lines
+}
+
+/// A command's own Markdown, rendered the way an assistant message is and
+/// carried by the left border reference `UserCommandMessage` draws around it,
+/// so a scrolled-back transcript still says the document came from a command.
+fn document_lines(message: &str, width: u16, theme: ResolvedTheme) -> Vec<Line<'static>> {
+    markdown_lines(message, usize::from(width.saturating_sub(1)), theme)
+        .into_iter()
+        .take(MAX_RENDER_LINES)
+        .map(|line| {
+            let mut spans = vec![Span::styled("\u{258f}", theme.secondary())];
+            spans.extend(line.spans);
+            Line::from(spans)
+        })
+        .collect()
 }
 
 fn assistant_message_lines(

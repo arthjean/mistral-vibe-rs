@@ -34,6 +34,7 @@ use sha2::{Digest, Sha256};
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
 use super::commands::{COMMANDS, CommandContext, command_available_in, parse_command_in};
+use super::help;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/commands/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/commands.py";
@@ -97,34 +98,116 @@ const FAMILIES: &[Family] = &[
 /// Cases where this build answers something other than the reference, each with
 /// the reason and the story that closes it.
 ///
-/// EP-069 builds the instrument. The four `help*` families measure a document
-/// this port does not publish yet: `/help` opens a modal picker here, so there
-/// is no line to compare, no section to position and no prose of this port's own
-/// to hold unequal. EP-070 writes that document, and the staleness check is what
-/// forces each row out when it does.
+/// Only `helpProse` is left, and permanently. `NOTICE` forbids reproducing the
+/// reference's authored lines, so the three headings, the eight shortcut lines
+/// and the two prefix lines are this port's own prose and differ from the
+/// reference's in both byte length and digest. The twenty-eight command lines
+/// are not prose and are not listed here: they conform exactly, which is what
+/// makes the split measurable rather than a blanket exemption.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
-        "helpDocument/*",
-        "OPEN: US-231 replaces the modal help with a Markdown transcript message; until it lands \
-         this port publishes no help document to count lines in",
+        "helpProse/length/line-00",
+        "ACCEPTED: the first heading is authored prose, so this port writes its own",
     ),
     (
-        "helpSections/*",
-        "OPEN: US-231 gives the document its three sections and US-232 reconciles the shortcut \
-         section against the chords this binary actually binds",
+        "helpProse/digest/line-00",
+        "ACCEPTED: the first heading is authored prose, so this port writes its own",
     ),
     (
-        "helpCommands/*",
-        "OPEN: US-231 sorts the command section by registry key and lists every alias of each \
-         command, canonical `/name` first",
+        "helpProse/length/line-02",
+        "ACCEPTED: the send-prompt shortcut line is authored prose, so this port writes its own",
     ),
     (
-        "helpProse/*",
-        "OPEN: US-231 writes this port's own lines. The reference's are measured as a length and \
-         a SHA-256 because `NOTICE` forbids reproducing them, so this port answers nothing until \
-         it has prose of its own; \
-         `this_ports_help_prose_never_matches_a_reference_digest` is what keeps the two apart \
-         afterward, and the split is a permanent row in the scorecard's divergence table",
+        "helpProse/digest/line-02",
+        "ACCEPTED: the send-prompt shortcut line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/length/line-03",
+        "ACCEPTED: the new-line shortcut line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/digest/line-03",
+        "ACCEPTED: the new-line shortcut line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/length/line-04",
+        "ACCEPTED: the stop-agent shortcut line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/digest/line-04",
+        "ACCEPTED: the stop-agent shortcut line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/length/line-05",
+        "ACCEPTED: the quit shortcut line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/digest/line-05",
+        "ACCEPTED: the quit shortcut line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/length/line-06",
+        "ACCEPTED: the external-editor line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/digest/line-06",
+        "ACCEPTED: the external-editor line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/length/line-07",
+        "ACCEPTED: the fold-tools line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/digest/line-07",
+        "ACCEPTED: the fold-tools line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/length/line-08",
+        "ACCEPTED: the switch-agent shortcut line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/digest/line-08",
+        "ACCEPTED: the switch-agent shortcut line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/length/line-09",
+        "ACCEPTED: the rewind shortcut line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/digest/line-09",
+        "ACCEPTED: the rewind shortcut line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/length/line-11",
+        "ACCEPTED: the second heading is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/digest/line-11",
+        "ACCEPTED: the second heading is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/length/line-13",
+        "ACCEPTED: the shell-prefix line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/digest/line-13",
+        "ACCEPTED: the shell-prefix line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/length/line-14",
+        "ACCEPTED: the path-completion line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/digest/line-14",
+        "ACCEPTED: the path-completion line is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/length/line-16",
+        "ACCEPTED: the third heading is authored prose, so this port writes its own",
+    ),
+    (
+        "helpProse/digest/line-16",
+        "ACCEPTED: the third heading is authored prose, so this port writes its own",
     ),
 ];
 
@@ -273,8 +356,7 @@ fn settle(report: &Report, family: &str) -> usize {
 /// The help lines this port *authors*: the section headings, the shortcut lines
 /// and the feature lines.
 ///
-/// Empty until US-231 writes the transcript document. Whatever lands here is
-/// held permanently unequal to every reference digest by
+/// They are held permanently unequal to every reference digest by
 /// [`this_ports_help_prose_never_matches_a_reference_digest`], which is how the
 /// licensing boundary stays measurable without a reference line entering this
 /// repository.
@@ -290,7 +372,7 @@ fn settle(report: &Report, family: &str) -> usize {
 /// own criteria require. `helpCommands` is what compares them, on their order
 /// and their alias list, which is the part a port can get wrong.
 fn port_help_lines() -> Vec<String> {
-    Vec::new()
+    help::authored_lines()
 }
 
 /// The availability contexts the corpus declares, rebuilt as this port's own
@@ -354,8 +436,76 @@ fn count(value: usize) -> Value {
     Value::Number(value.into())
 }
 
-/// What this build answers for one case of `family`, or [`None`] where the
-/// surface the case measures does not exist here yet.
+/// The context the capture recorded the help families under: every command
+/// available and nothing excluded.
+fn port_help_context() -> CommandContext {
+    CommandContext::new(true).with_clipboard_image_supported(true)
+}
+
+/// The document `/help` writes, split into lines.
+fn port_help_document() -> Vec<String> {
+    help::document(&port_help_context())
+        .lines()
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Each heading's offset, its level, and how many non-blank lines follow it.
+/// Derived from the document rather than restated, so a section that moves is
+/// measured where it landed.
+fn port_help_sections(lines: &[String]) -> Vec<(usize, usize, usize)> {
+    let mut sections: Vec<(usize, usize, usize)> = Vec::new();
+    for (offset, line) in lines.iter().enumerate() {
+        let level = line
+            .chars()
+            .take_while(|character| *character == '#')
+            .count();
+        if level > 0 {
+            sections.push((offset, level, 0));
+        } else if !line.is_empty()
+            && let Some(section) = sections.last_mut()
+        {
+            section.2 = section.2.saturating_add(1);
+        }
+    }
+    sections
+}
+
+/// Every command line: the registry key it publishes, the document offset it
+/// sits at, and the aliases it lists, read back off the published line rather
+/// than rebuilt, so the answer measures what an operator sees.
+fn port_help_command_lines(lines: &[String]) -> Vec<(&'static str, usize, Vec<String>)> {
+    let context = port_help_context();
+    let mut commands = COMMANDS
+        .iter()
+        .filter(|command| command_available_in(command, &context))
+        .collect::<Vec<_>>();
+    commands.sort_unstable_by_key(|command| command.name);
+    let start = lines.len().saturating_sub(commands.len());
+    commands
+        .into_iter()
+        .enumerate()
+        .map(|(index, command)| {
+            let offset = start.saturating_add(index);
+            let aliases = lines
+                .get(offset)
+                .and_then(|line| line.strip_prefix("- "))
+                .and_then(|rest| rest.split_once(": "))
+                .map(|(spans, _)| {
+                    spans
+                        .split(", ")
+                        .map(|span| span.trim_matches('`').to_owned())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            (command.name, offset, aliases)
+        })
+        .collect()
+}
+
+/// What this build answers for one case of `family`, or [`None`] when the case
+/// names something this build has no answer for, which the replay records as a
+/// divergence rather than a skip.
 fn port_answer(
     contexts: &BTreeMap<String, CommandContext>,
     family: &str,
@@ -423,9 +573,55 @@ fn port_answer(
                 _ => None,
             }
         }
-        // The help document is EP-070's surface; this port opens a modal picker
-        // instead, so every help family is answered by the ledger until US-231
-        // lands.
+        "helpDocument" => {
+            let lines = port_help_document();
+            let value = match id {
+                "lineCount" => lines.len(),
+                "blankLineCount" => lines.iter().filter(|line| line.is_empty()).count(),
+                "sectionCount" => port_help_sections(&lines).len(),
+                "commandLineCount" => port_help_command_lines(&lines).len(),
+                _ => return None,
+            };
+            Some(count(value))
+        }
+        "helpSections" => {
+            let lines = port_help_document();
+            let index = match id {
+                "keyboardShortcuts" => 0,
+                "specialFeatures" => 1,
+                "commands" => 2,
+                _ => return None,
+            };
+            let (heading_line, level, line_count) = *port_help_sections(&lines).get(index)?;
+            match field {
+                "index" => Some(count(index)),
+                "headingLine" => Some(count(heading_line)),
+                "level" => Some(count(level)),
+                "lineCount" => Some(count(line_count)),
+                _ => None,
+            }
+        }
+        "helpCommands" => {
+            let lines = port_help_document();
+            let commands = port_help_command_lines(&lines);
+            let index = commands.iter().position(|(name, _, _)| *name == id)?;
+            let (_, line, aliases) = commands.get(index)?;
+            match field {
+                "index" => Some(count(index)),
+                "line" => Some(count(*line)),
+                "aliases" => Some(strings(aliases.clone())),
+                _ => None,
+            }
+        }
+        "helpProse" => {
+            let offset = id.strip_prefix("line-")?.parse::<usize>().ok()?;
+            let line = port_help_document().get(offset)?.clone();
+            match field {
+                "length" => Some(count(line.len())),
+                "digest" => Some(Value::String(hex_digest(&line))),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }

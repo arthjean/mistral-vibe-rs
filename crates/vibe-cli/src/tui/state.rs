@@ -81,6 +81,9 @@ pub enum TranscriptKind {
     Checkpoint,
     Notice,
     Plan,
+    /// A Markdown document this client wrote itself, which `/help` mounts the
+    /// way reference `_show_help` mounts a `UserCommandMessage`.
+    Document,
 }
 
 /// Where a transcript entry came from.

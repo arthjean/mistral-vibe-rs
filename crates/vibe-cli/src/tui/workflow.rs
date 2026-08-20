@@ -22,18 +22,18 @@ use super::controls::ControlState;
 use super::debug_console::{DebugConsole, PAGE_SIZE as DEBUG_PAGE_SIZE};
 use super::interaction::{Overlay, OverlayKind, RemoteProjectAction, TeleportPushAction};
 use super::pickers::{
-    VOICE_MODEL_FIELDS, audio_model_aliases, config_overlay, help_overlay, model_overlay,
-    proxy_overlay, rewind_targets, sessions_overlay, status_overlay, theme_overlay,
-    thinking_overlay, voice_model_overlay, voice_overlay,
+    VOICE_MODEL_FIELDS, audio_model_aliases, config_overlay, model_overlay, proxy_overlay,
+    rewind_targets, sessions_overlay, status_overlay, theme_overlay, thinking_overlay,
+    voice_model_overlay, voice_overlay,
 };
 use super::rewind::{RewindEffect, RewindState, reduce_key as reduce_rewind_key};
 use super::session_picker::SessionDeleteState;
 use super::state::{EntryStatus, TranscriptKind, TuiState};
 use super::switching::{self, SwitchRequest};
 use super::{
-    Arguments, InteractiveRuntime, adopt_hydrated_session, call_runtime, metadata_session_id,
-    parse_runtime_skills, push_local_notice, refresh_server_banner_metrics, sync_runtime_intent,
-    unix_millis,
+    Arguments, InteractiveRuntime, adopt_hydrated_session, call_runtime, help, metadata_session_id,
+    parse_runtime_skills, push_local_document, push_local_notice, refresh_server_banner_metrics,
+    sync_runtime_intent, unix_millis,
 };
 pub(in crate::tui) use config::apply_render_preferences;
 use config::{
@@ -141,8 +141,10 @@ pub(super) async fn dispatch_command(
     }
     match command_id {
         CommandId::Exit => return CommandAction::Exit,
+        // Reference `_show_help`: the help is a Markdown message in the
+        // transcript, not a modal.
         CommandId::Help => {
-            state.overlay = Some(help_overlay(&command_context));
+            push_local_document(state, help::document(&command_context));
             return CommandAction::Handled;
         }
         CommandId::Copy => {

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Answer `/help` with a Markdown message in the transcript instead of a modal
+  overlay, the way the reference mounts it. The document carries the reference's
+  three sections in its order: the key bindings, the input prefixes, and every
+  available command sorted by registry key with all of its aliases as code
+  spans, canonical name first. It scrolls, selects and copies like any other
+  entry, and it survives a session reload. The modal help overlay is gone, and
+  the shortcut section is now the key handler's own binding table, so a line can
+  never advertise a chord this binary ignores: it names the `Ctrl+D` quit this
+  port binds and the empty-prompt condition its double-escape rewind applies.
+
 - Measure the slash-command registry against the pinned reference instead of
   against a hand-diffed list of names. `scripts/parity/commands.py` drives the
   reference's own `CommandRegistry` and records its key and alias inventory, the

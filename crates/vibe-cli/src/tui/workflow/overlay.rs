@@ -273,10 +273,7 @@ pub(super) async fn select_overlay_item(
             };
             return Some(OverlayEffect::TeleportPush(action));
         }
-        OverlayKind::Help
-        | OverlayKind::Debug
-        | OverlayKind::Status
-        | OverlayKind::DataRetention => {}
+        OverlayKind::Debug | OverlayKind::Status | OverlayKind::DataRetention => {}
     }
     None
 }

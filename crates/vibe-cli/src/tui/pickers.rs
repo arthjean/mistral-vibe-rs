@@ -10,7 +10,6 @@ pub use remote_projects::{
     remote_project_create_overlay, remote_projects_overlay, teleport_push_overlay,
 };
 
-use super::commands::{COMMANDS, CommandContext, command_available_in};
 use super::interaction::{ConfigLayerTarget, Overlay, OverlayAction, OverlayItem, OverlayKind};
 use super::rewind::RewindTarget;
 
@@ -31,38 +30,6 @@ const POPULAR_CONFIG_FIELDS: &[&str] = &[
     "voice_mode_enabled",
     "narrator_enabled",
 ];
-
-#[must_use]
-pub fn help_overlay(context: &CommandContext) -> Overlay {
-    let mut items = vec![
-        OverlayItem::new("enter", "Enter", "Submit message", true),
-        OverlayItem::new("newline", "Ctrl+J / Shift+Enter", "Insert newline", true),
-        OverlayItem::new("escape", "Escape", "Interrupt or close dialog", true),
-        OverlayItem::new("quit", "Ctrl+C / Ctrl+D", "Confirm quit", true),
-        OverlayItem::new("tools", "Ctrl+O", "Collapse or expand tool output", true),
-        OverlayItem::new("agent", "Shift+Tab", "Cycle agent profile", true),
-        OverlayItem::new("editor", "Ctrl+G", "Open external editor", true),
-    ];
-    items.extend(
-        COMMANDS
-            .iter()
-            .filter(|command| command_available_in(command, context))
-            .filter_map(|command| {
-                let alias = command
-                    .aliases
-                    .iter()
-                    .copied()
-                    .find(|alias| alias.starts_with('/'))?;
-                Some(OverlayItem::new(
-                    format!("command:{alias}"),
-                    alias,
-                    command.description,
-                    true,
-                ))
-            }),
-    );
-    Overlay::new(OverlayKind::Help, "Help", items)
-}
 
 #[must_use]
 pub fn config_overlay(snapshot: &Value, schema: &Value) -> Overlay {

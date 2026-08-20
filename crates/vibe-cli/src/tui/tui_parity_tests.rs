@@ -297,25 +297,17 @@ fn system_clipboard_reports_image_support_by_platform() {
     assert_eq!(clipboard.supports_images(), cfg!(target_os = "macos"));
 }
 
-#[test]
-fn assistant_markdown_is_rendered_semantically_instead_of_literally() {
-    let mut state = TuiState::new("session");
-    state.entries.push(TranscriptEntry {
-        id: "assistant".to_owned(),
-        revision: 1,
-        kind: TranscriptKind::AssistantMessage,
-        text: "# Result\n\n- first\n- second\n\n`cargo test`".to_owned(),
-        status: EntryStatus::Completed,
-        source: EntrySource::Restored,
-    });
-    let backend = TestBackend::new(80, 24);
+/// The transcript as it lands in an 80-column buffer of the requested height,
+/// which is what a reader sees rather than what the entry carries.
+fn rendered_transcript(state: &mut TuiState, height: u16) -> String {
+    let backend = TestBackend::new(80, height);
     let mut terminal = Terminal::new(backend).expect("terminal");
 
     terminal
         .draw(|frame| {
             draw(
                 frame,
-                &mut state,
+                state,
                 &PromptEditor::default(),
                 &CompletionEngine::default(),
                 InputMode::Prompt,
@@ -350,19 +342,69 @@ fn assistant_markdown_is_rendered_semantically_instead_of_literally() {
             );
         })
         .expect("draw");
-    let text = terminal
+    terminal
         .backend()
         .buffer()
         .content()
         .iter()
         .map(|cell| cell.symbol())
-        .collect::<String>();
+        .collect()
+}
+
+#[test]
+fn assistant_markdown_is_rendered_semantically_instead_of_literally() {
+    let mut state = TuiState::new("session");
+    state.entries.push(TranscriptEntry {
+        id: "assistant".to_owned(),
+        revision: 1,
+        kind: TranscriptKind::AssistantMessage,
+        text: "# Result\n\n- first\n- second\n\n`cargo test`".to_owned(),
+        status: EntryStatus::Completed,
+        source: EntrySource::Restored,
+    });
+    let text = rendered_transcript(&mut state, 24);
 
     assert!(text.contains("Result"));
     assert!(!text.contains("# Result"));
     assert!(text.contains("• first"));
     assert!(text.contains("cargo test"));
     assert!(!text.contains("`cargo test`"));
+}
+
+/// Reference `_show_help` mounts the help as a Markdown message, so the
+/// transcript has to render it as Markdown rather than as literal text:
+/// headings lose their hashes, the bullets become bullets, and the code spans
+/// naming keys and commands lose their backticks.
+#[test]
+fn the_help_document_renders_as_markdown_in_the_transcript() {
+    let context = CommandContext::new(true).with_clipboard_image_supported(true);
+    let mut state = TuiState::new("session");
+    state.entries.push(TranscriptEntry {
+        id: "help".to_owned(),
+        revision: 1,
+        kind: TranscriptKind::Document,
+        text: crate::tui::help::document(&context),
+        status: EntryStatus::Completed,
+        source: EntrySource::Restored,
+    });
+    // The document is 46 lines: a viewport that only shows its tail cannot say
+    // whether the headings render.
+    let text = rendered_transcript(&mut state, 60);
+
+    assert!(text.contains("Key Bindings"));
+    assert!(!text.contains("### Key Bindings"));
+    assert!(
+        text.contains("\u{2022} Enter"),
+        "a shortcut line renders as a bullet"
+    );
+    assert!(
+        !text.contains("`Enter`"),
+        "the key names lose their backticks"
+    );
+    assert!(
+        text.contains("logout <alias>"),
+        "a command line longer than the width wraps rather than truncating"
+    );
 }
 
 #[test]

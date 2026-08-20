@@ -149,12 +149,32 @@ pub enum Region {
     AssistantMessage,
     Reasoning,
     Effect(Box<EffectRegion>),
-    Callback { title: String, detail: String },
-    Compaction { message: String },
-    Checkpoint { message: String },
-    Hook { icon: &'static str, line: String },
-    Command { message: String },
-    Notice { level: NoticeLevel, message: String },
+    Callback {
+        title: String,
+        detail: String,
+    },
+    Compaction {
+        message: String,
+    },
+    Checkpoint {
+        message: String,
+    },
+    Hook {
+        icon: &'static str,
+        line: String,
+    },
+    Command {
+        message: String,
+    },
+    /// Markdown a command wrote into the transcript, rendered as Markdown
+    /// rather than as wrapped text.
+    Document {
+        message: String,
+    },
+    Notice {
+        level: NoticeLevel,
+        message: String,
+    },
     Plan,
 }
 
@@ -183,6 +203,9 @@ pub fn region(entry: &TranscriptEntry) -> Region {
             }
         }
         TranscriptKind::Notice => notice_region(entry),
+        TranscriptKind::Document => Region::Document {
+            message: entry.text.clone(),
+        },
     }
 }
 

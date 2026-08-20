@@ -186,18 +186,22 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
     }
     master.write_all(b"/help\r").expect("help command writes");
     master.flush().expect("edited prompt flushes");
+    // The help is a Markdown message in the transcript, not a modal, so the
+    // proof is a line of the document itself being painted. The command section
+    // is last and this line sits four commands from its end, so a 30-row
+    // terminal shows it. The match runs on the replayed screen for the reason
+    // `TuiSession::wait_for_visible` documents: a phrase ratatui paints is
+    // routinely split by cursor moves in the raw byte stream.
+    const HELP_MARKER: &str = "Uninstall the Lean 4 agent";
     let help_deadline = Instant::now() + STEP;
     let mut help_output = Vec::new();
-    while !help_output
-        .windows(b"Help".len())
-        .any(|window| window == b"Help")
-    {
+    while !visible_text(&help_output).contains(HELP_MARKER) {
         let remaining = help_deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             child.kill().expect("timed-out help TUI stops");
             let _ = child.wait();
             return Err(format!(
-                "help overlay did not render: {}",
+                "help document did not render: {}",
                 String::from_utf8_lossy(&help_output)
             ));
         }
@@ -207,15 +211,13 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
                 child.kill().expect("timed-out help TUI stops");
                 let _ = child.wait();
                 return Err(format!(
-                    "help overlay transcript stopped ({error}): {}",
+                    "help document transcript stopped ({error}): {}",
                     String::from_utf8_lossy(&help_output)
                 ));
             }
         };
         help_output.extend_from_slice(&chunk);
     }
-    master.write_all(b"\x1b").expect("help escape writes");
-    master.flush().expect("help escape flushes");
     std::thread::sleep(Duration::from_millis(150));
     master.write_all(b"!pwd\r").expect("shell command writes");
     master.flush().expect("shell command flushes");

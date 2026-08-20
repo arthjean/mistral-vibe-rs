@@ -82,10 +82,7 @@ const fn policy(kind: OverlayKind) -> OverlayPolicy {
     };
     match kind {
         // Read-only panels: they scroll and close, and have nothing to activate.
-        OverlayKind::Help
-        | OverlayKind::Debug
-        | OverlayKind::Status
-        | OverlayKind::DataRetention => OverlayPolicy {
+        OverlayKind::Debug | OverlayKind::Status | OverlayKind::DataRetention => OverlayPolicy {
             activates: false,
             ..LIST
         },
@@ -467,7 +464,6 @@ mod tests {
     #[tokio::test]
     async fn a_read_only_panel_activates_nothing() {
         for kind in [
-            OverlayKind::Help,
             OverlayKind::Debug,
             OverlayKind::Status,
             OverlayKind::DataRetention,
@@ -504,7 +500,6 @@ mod tests {
     #[test]
     fn the_theme_catalog_is_the_only_previewing_overlay() {
         for kind in [
-            OverlayKind::Help,
             OverlayKind::Config,
             OverlayKind::Model,
             OverlayKind::Mcp,
@@ -521,7 +516,7 @@ mod tests {
     async fn an_open_overlay_swallows_the_keys_it_does_not_claim() {
         assert_eq!(
             press(
-                OverlayKind::Help,
+                OverlayKind::Debug,
                 vec![OverlayItem::new("a", "a", "", false)],
                 KeyCode::F(5),
             )

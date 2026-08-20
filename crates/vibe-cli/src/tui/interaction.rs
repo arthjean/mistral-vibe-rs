@@ -10,7 +10,6 @@ pub const QUIT_CONFIRMATION_WINDOW_MS: u64 = 1_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayKind {
-    Help,
     Config,
     ConfigChoice,
     ConfigTarget,

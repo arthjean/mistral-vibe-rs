@@ -19,6 +19,7 @@ pub mod diagnostics;
 pub mod exit;
 mod external_action;
 mod feedback;
+mod help;
 pub mod history;
 mod hydration;
 pub mod input;
@@ -459,6 +460,20 @@ fn stop_narration(runtime: &mut Option<InteractiveRuntime>, state: &mut TuiState
 
 /// Reference `_track_narrator_event`: the narrator follows the canonical stream,
 /// and a streamed assistant entry contributes only its new text.
+/// Appends a Markdown document a command produced and answers the transcript id
+/// it was filed under. It is a local entry like any other, so a canonical resync
+/// reinserts it at its anchor rather than dropping or duplicating it.
+fn push_local_document(state: &mut TuiState, message: String) -> String {
+    state.append_local(TranscriptEntry {
+        id: String::new(),
+        revision: 1,
+        kind: TranscriptKind::Document,
+        text: message,
+        status: EntryStatus::Completed,
+        source: EntrySource::Restored,
+    })
+}
+
 /// Appends a notice this client wrote itself and answers the transcript id it
 /// was filed under, which is what a later settlement addresses it by.
 fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) -> String {

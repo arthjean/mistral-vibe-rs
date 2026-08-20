@@ -38,10 +38,38 @@ use super::workflow::{
 };
 use super::{
     ActiveTurn, Arguments, CliError, InteractiveRuntime, callback, copy_transcript_selection,
-    emit_attention, exit, feedback, interaction, is_exit_command, page_older_debug_logs,
+    emit_attention, exit, feedback, help, interaction, is_exit_command, page_older_debug_logs,
     page_older_history, render, request_active_turn_interrupt, settle_transcript_pointer,
     stop_narration, submission, suspend_session, teleport_available, unix_millis,
 };
+
+/// The global chords the help document advertises.
+///
+/// Every one of them is routed by [`chord_of`] rather than by an inline key
+/// test, so `crates/vibe-cli/src/tui/help.rs` can declare the key events each of
+/// its eight lines names and a test can hold the two together: a help line
+/// naming a key this function does not resolve fails the suite.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Chord {
+    Submit,
+    Newline,
+    Escape,
+    Quit,
+    ExternalEditor,
+    ToggleTools,
+    CycleAgent,
+}
+
+/// Which global chord a key names, if any.
+///
+/// [`handle_key`], [`control_chord`] and [`navigate`] route by this, and the
+/// answer comes out of [`help::SHORTCUTS`], the table the help document is
+/// printed from. Binding and documentation are therefore the same declaration:
+/// a line advertising a key resolves that key, and a key no line declares is
+/// left to the composer.
+pub(super) fn chord_of(key: KeyEvent) -> Option<Chord> {
+    help::chord_for(key)
+}
 
 /// Everything a terminal event may read or mutate.
 pub(super) struct KeyContext<'a> {
@@ -218,9 +246,7 @@ pub(super) async fn handle_key(
         context.clipboard_images.schedule_effects(&effects);
         return Ok(false);
     }
-    if key.code == KeyCode::BackTab
-        || (key.code == KeyCode::Tab && key.modifiers.contains(KeyModifiers::SHIFT))
-    {
+    if chord_of(key) == Some(Chord::CycleAgent) {
         context.compose_key(key);
         cycle_agent(context.runtime, context.state, context.input);
         return Ok(false);
@@ -306,14 +332,17 @@ async fn control_chord(
     key: KeyEvent,
     context: &mut KeyContext<'_>,
 ) -> Result<Option<bool>, CliError> {
-    match key.code {
-        // Reference `action_copy_selection`: the transcript selection wins when
-        // one exists, otherwise the composer keeps the shortcut.
-        KeyCode::Char('c' | 'C') if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            copy_selection(context);
+    // Reference `action_copy_selection`: the transcript selection wins when one
+    // exists, otherwise the composer keeps the shortcut.
+    if matches!(key.code, KeyCode::Char('c' | 'C')) && key.modifiers.contains(KeyModifiers::SHIFT) {
+        copy_selection(context);
+        return Ok(Some(false));
+    }
+    match chord_of(key) {
+        Some(Chord::Quit) if key.code == KeyCode::Char('c') => {
+            return interrupt_or_quit(key, context).await.map(Some);
         }
-        KeyCode::Char('c') => return interrupt_or_quit(key, context).await.map(Some),
-        KeyCode::Char('d') => {
+        Some(Chord::Quit) => {
             if !context.input.editor().text().is_empty() {
                 context.compose_key(key);
                 return Ok(Some(false));
@@ -325,11 +354,7 @@ async fn control_chord(
                 unix_millis(),
             )));
         }
-        // Reference `action_suspend_with_message`.
-        KeyCode::Char('z') => {
-            suspend_session(context.terminal_guard, context.terminal, context.state)?;
-        }
-        KeyCode::Char('o') => {
+        Some(Chord::ToggleTools) => {
             context.state.tools_collapsed = !context.state.tools_collapsed;
             let message = if context.state.tools_collapsed {
                 "Tool output collapsed"
@@ -338,9 +363,17 @@ async fn control_chord(
             };
             context.state.push_diagnostic(message);
         }
-        KeyCode::Char('y' | 'Y') => copy_selection(context),
-        KeyCode::Char('g') => open_external_editor(key, context)?,
-        _ => return Ok(None),
+        Some(Chord::ExternalEditor) => open_external_editor(key, context)?,
+        // `Ctrl+J` is the newline chord, and the composer is what inserts it.
+        Some(Chord::Newline) => return Ok(None),
+        Some(Chord::Submit | Chord::Escape | Chord::CycleAgent) | None => match key.code {
+            // Reference `action_suspend_with_message`.
+            KeyCode::Char('z') => {
+                suspend_session(context.terminal_guard, context.terminal, context.state)?;
+            }
+            KeyCode::Char('y' | 'Y') => copy_selection(context),
+            _ => return Ok(None),
+        },
     }
     Ok(Some(false))
 }
@@ -434,12 +467,19 @@ fn open_external_editor(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<(
 
 /// The unmodified keys: submission, scrolling, selection, and plain editing.
 async fn navigate(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, CliError> {
-    match key.code {
-        KeyCode::Esc => escape(key, context).await,
-        KeyCode::Enter if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            context.compose_key(key);
+    match chord_of(key) {
+        Some(Chord::Escape) => {
+            escape(key, context).await;
+            return Ok(false);
         }
-        KeyCode::Enter => return submit(key, context).await,
+        Some(Chord::Newline) => {
+            context.compose_key(key);
+            return Ok(false);
+        }
+        Some(Chord::Submit) => return submit(key, context).await,
+        _ => {}
+    }
+    match key.code {
         // Transcript selection stays reachable without a pointer, so copying
         // history never requires mouse reporting.
         KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
