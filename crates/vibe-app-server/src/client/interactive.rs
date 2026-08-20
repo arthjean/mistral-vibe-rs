@@ -21,6 +21,7 @@ use vibe_core::schema::{ObjectSchema, Property};
 use vibe_core::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler,
     ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
+    reference_text,
 };
 
 use super::{
@@ -434,7 +435,7 @@ pub(super) fn question_tool_output(
         }
         return Ok(ToolExecutionOutput {
             typed_result: json!({"answers": [], "cancelled": true}),
-            model_text: "The user cancelled the question.".to_owned(),
+            model_text: answer_model_text(&[], true),
             display: json!({"kind": "user_question"}),
             chunks: Vec::new(),
         });
@@ -446,7 +447,7 @@ pub(super) fn question_tool_output(
             answers.len()
         )));
     }
-    let mut model_lines = Vec::with_capacity(answers.len());
+    let mut published = Vec::with_capacity(answers.len());
     for (answer, question) in answers.iter().zip(questions) {
         let returned_question = required_output_string(answer, "question")?;
         let answer_text = required_output_string(answer, "answer")?;
@@ -460,17 +461,62 @@ pub(super) fn question_tool_output(
             ));
         }
         validate_interactive_answer(question, answer_text, is_other)?;
-        model_lines.push(format!("{}: {answer_text}", question.question));
+        published.push(PublishedAnswer {
+            question: returned_question.to_owned(),
+            answer: answer_text.to_owned(),
+            is_other,
+        });
     }
     Ok(ToolExecutionOutput {
-        typed_result: output
-            .get("result")
-            .cloned()
-            .ok_or_else(|| ToolError::Execution("question output omitted result".to_owned()))?,
-        model_text: model_lines.join("\n"),
+        typed_result: json!({
+            "answers": published
+                .iter()
+                .map(|answer| json!({
+                    "question": answer.question,
+                    "answer": answer.answer,
+                    "is_other": answer.is_other,
+                }))
+                .collect::<Vec<_>>(),
+            "cancelled": false,
+        }),
+        model_text: answer_model_text(&published, false),
         display: json!({"kind": "user_question"}),
         chunks: Vec::new(),
     })
+}
+
+/// One answer as reference `UserAnswer` (`vibe/questions.py:58`) declares it.
+///
+/// The client answers over the wire in the camel case the request model
+/// aliases, and the result the model reads is the field names themselves, so
+/// the two spellings are separated here rather than passed through.
+struct PublishedAnswer {
+    question: String,
+    answer: String,
+    is_other: bool,
+}
+
+/// Reference `UserQuestionResult` (`vibe/questions.py:66`) declares `answers`
+/// and `cancelled`, and the agent loop renders one field per line, with the
+/// answer list as Python's repr of a list of dictionaries.
+fn answer_model_text(answers: &[PublishedAnswer], cancelled: bool) -> String {
+    let rendered = answers
+        .iter()
+        .map(|answer| {
+            vec![
+                ("question", reference_text::string_repr(&answer.question)),
+                ("answer", reference_text::string_repr(&answer.answer)),
+                (
+                    "is_other",
+                    reference_text::boolean(answer.is_other).to_owned(),
+                ),
+            ]
+        })
+        .collect::<Vec<_>>();
+    reference_text::joined(&[
+        ("answers", reference_text::dictionary_list(&rendered)),
+        ("cancelled", reference_text::boolean(cancelled).to_owned()),
+    ])
 }
 
 pub(super) fn validate_interactive_answer(
@@ -617,9 +663,17 @@ pub(super) async fn run_interactive_plan_review(
         )
         .await?;
     }
+    // Reference `ExitPlanModeResult`
+    // (`vibe/core/tools/builtins/exit_plan_mode.py:34`) declares `switched` then
+    // `message`, and the agent loop renders one field per line, so the decision
+    // reaches the model beside the sentence rather than only inside it.
+    let model_text = reference_text::joined(&[
+        ("switched", reference_text::boolean(switched).to_owned()),
+        ("message", message.clone()),
+    ]);
     Ok(ToolExecutionOutput {
         typed_result: json!({"switched": switched, "message": message}),
-        model_text: message,
+        model_text,
         display: json!({"kind": "plan_review", "switched": switched}),
         chunks: Vec::new(),
     })

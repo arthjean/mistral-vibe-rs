@@ -125,14 +125,8 @@ const SKILL_DETACHED: &str = "the reference serves a skill registered with a pro
      directory; this port discovers skills from disk, so that skill does not exist here and the \
      call reports it missing. No story in this PRD closes the gap, so it is recorded by name \
      instead";
-const ANSWER_KEYS: &str = "the reference publishes each answer as `{question, answer, is_other}`; \
-     this port passes the client's `isOther` spelling straight through";
-const ANSWER_TEXT: &str = "the reference renders `answers` and `cancelled` one field per line; \
-     this port renders a sentence";
 const PLAN_MESSAGE: &str = "this port writes its own message for each plan-review outcome; \
      reaching the reference digest would mean copying its wording";
-const PLAN_TEXT: &str = "the reference renders `switched` and `message` one field per line; this \
-     port renders the message alone";
 const FETCH_MARKDOWN: &str = "the reference converts an HTML page with `markdownify`, which keeps \
      the heading marker and the blank line between blocks; this port strips the markup to prose \
      instead. No story in this PRD closes the gap, so it is recorded by name instead";
@@ -427,144 +421,11 @@ const LEDGER: &[Divergence] = &[
         why: SKILL_DETACHED,
     },
     Divergence {
-        tool: "ask_user_question",
-        case: "cancelled",
-        pointer: "/modelText",
-        closed_by: "US-245",
-        why: ANSWER_TEXT,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "multi-select",
-        pointer: "/modelText",
-        closed_by: "US-245",
-        why: ANSWER_TEXT,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "multi-select",
-        pointer: "/projectedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "multi-select",
-        pointer: "/typedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "options-with-descriptions",
-        pointer: "/modelText",
-        closed_by: "US-245",
-        why: ANSWER_TEXT,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "options-with-descriptions",
-        pointer: "/projectedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "options-with-descriptions",
-        pointer: "/typedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "other-free-text",
-        pointer: "/modelText",
-        closed_by: "US-245",
-        why: ANSWER_TEXT,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "other-free-text",
-        pointer: "/projectedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "other-free-text",
-        pointer: "/typedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "other-hidden",
-        pointer: "/modelText",
-        closed_by: "US-245",
-        why: ANSWER_TEXT,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "other-hidden",
-        pointer: "/projectedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "other-hidden",
-        pointer: "/typedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "single-select",
-        pointer: "/modelText",
-        closed_by: "US-245",
-        why: ANSWER_TEXT,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "single-select",
-        pointer: "/projectedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "single-select",
-        pointer: "/typedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "two-questions",
-        pointer: "/modelText",
-        closed_by: "US-245",
-        why: ANSWER_TEXT,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "two-questions",
-        pointer: "/projectedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
-        tool: "ask_user_question",
-        case: "two-questions",
-        pointer: "/typedResult",
-        closed_by: "US-245",
-        why: ANSWER_KEYS,
-    },
-    Divergence {
         tool: "exit_plan_mode",
         case: "auto-approve",
         pointer: "/modelText",
-        closed_by: "US-245",
-        why: PLAN_TEXT,
+        closed_by: LICENSING,
+        why: PLAN_MESSAGE,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -579,20 +440,13 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
-    },
-    Divergence {
-        tool: "exit_plan_mode",
-        case: "cancelled",
-        pointer: "/modelText",
-        closed_by: "US-245",
-        why: PLAN_TEXT,
     },
     Divergence {
         tool: "exit_plan_mode",
         case: "clear-context-and-auto-approve",
         pointer: "/modelText",
-        closed_by: "US-245",
-        why: PLAN_TEXT,
+        closed_by: LICENSING,
+        why: PLAN_MESSAGE,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -612,8 +466,8 @@ const LEDGER: &[Divergence] = &[
         tool: "exit_plan_mode",
         case: "clear-context-without-a-callback",
         pointer: "/modelText",
-        closed_by: "US-245",
-        why: PLAN_TEXT,
+        closed_by: LICENSING,
+        why: PLAN_MESSAGE,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -633,8 +487,8 @@ const LEDGER: &[Divergence] = &[
         tool: "exit_plan_mode",
         case: "declined",
         pointer: "/modelText",
-        closed_by: "US-245",
-        why: PLAN_TEXT,
+        closed_by: LICENSING,
+        why: PLAN_MESSAGE,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -654,8 +508,8 @@ const LEDGER: &[Divergence] = &[
         tool: "exit_plan_mode",
         case: "manual-approval",
         pointer: "/modelText",
-        closed_by: "US-245",
-        why: PLAN_TEXT,
+        closed_by: LICENSING,
+        why: PLAN_MESSAGE,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -675,8 +529,8 @@ const LEDGER: &[Divergence] = &[
         tool: "exit_plan_mode",
         case: "no-plan-file",
         pointer: "/modelText",
-        closed_by: "US-245",
-        why: PLAN_TEXT,
+        closed_by: LICENSING,
+        why: PLAN_MESSAGE,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -696,8 +550,8 @@ const LEDGER: &[Divergence] = &[
         tool: "exit_plan_mode",
         case: "other-feedback",
         pointer: "/modelText",
-        closed_by: "US-245",
-        why: PLAN_TEXT,
+        closed_by: LICENSING,
+        why: PLAN_MESSAGE,
     },
     Divergence {
         tool: "exit_plan_mode",
