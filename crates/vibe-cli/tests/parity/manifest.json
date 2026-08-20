@@ -750,6 +750,15 @@
       ]
     },
     {
+      "id": "slash-double-marker",
+      "gap": "GAP-09",
+      "story": "US-009",
+      "file": "traces/slash-double-marker.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
       "id": "slash-no-match",
       "gap": "GAP-09",
       "story": "US-009",
@@ -768,6 +777,15 @@
       ]
     },
     {
+      "id": "slash-popup-caret-at-line-start",
+      "gap": "GAP-10",
+      "story": "US-009",
+      "file": "traces/slash-popup-caret-at-line-start.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
       "id": "slash-popup-enter-submits",
       "gap": "GAP-10",
       "story": "US-009",
@@ -781,6 +799,15 @@
       "gap": "GAP-10",
       "story": "US-009",
       "file": "traces/slash-popup-escape.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-popup-mid-token-cursor",
+      "gap": "GAP-10",
+      "story": "US-009",
+      "file": "traces/slash-popup-mid-token-cursor.json",
       "capabilities": [
         "core"
       ]
@@ -844,6 +871,15 @@
       "gap": "GAP-09",
       "story": "US-009",
       "file": "traces/slash-skill-entries.json",
+      "capabilities": [
+        "core"
+      ]
+    },
+    {
+      "id": "slash-uppercase-alias",
+      "gap": "GAP-09",
+      "story": "US-009",
+      "file": "traces/slash-uppercase-alias.json",
       "capabilities": [
         "core"
       ]
@@ -1016,6 +1052,17 @@
       "id": "clipboard-explicit-ctrl-v",
       "gap": "GAP-18",
       "story": "US-014",
+      "capabilities": [
+        "macos-clipboard"
+      ],
+      "missingCapabilities": [
+        "macos-clipboard"
+      ]
+    },
+    {
+      "id": "commands-clipboard-image-supported",
+      "gap": "GAP-08",
+      "story": "US-008",
       "capabilities": [
         "macos-clipboard"
       ],

@@ -29,6 +29,9 @@
       "render": "parity",
       "state": "parity"
     },
+    "commands-clipboard-image-supported": {
+      "state": "unavailable"
+    },
     "commands-excluded": {
       "effects": "parity",
       "render": "parity",
@@ -359,6 +362,11 @@
       "render": "parity",
       "state": "parity"
     },
+    "slash-double-marker": {
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
+    },
     "slash-no-match": {
       "effects": "parity",
       "render": "parity",
@@ -369,12 +377,22 @@
       "render": "parity",
       "state": "parity"
     },
+    "slash-popup-caret-at-line-start": {
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
+    },
     "slash-popup-enter-submits": {
       "effects": "parity",
       "render": "parity",
       "state": "parity"
     },
     "slash-popup-escape": {
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
+    },
+    "slash-popup-mid-token-cursor": {
       "effects": "parity",
       "render": "parity",
       "state": "parity"
@@ -410,6 +428,11 @@
       "state": "parity"
     },
     "slash-skill-entries": {
+      "effects": "parity",
+      "render": "parity",
+      "state": "parity"
+    },
+    "slash-uppercase-alias": {
       "effects": "parity",
       "render": "parity",
       "state": "parity"

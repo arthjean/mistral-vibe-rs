@@ -1,0 +1,1369 @@
+{
+  "capabilities": [
+    "core"
+  ],
+  "events": [
+    {
+      "char": "/",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "m",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "p",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "a",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "d",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "d",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": " ",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "x",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "left",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "left",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "left",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "left",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "left",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "left",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "left",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": "c",
+      "key": "char",
+      "mods": [],
+      "type": "key"
+    },
+    {
+      "char": null,
+      "key": "tab",
+      "mods": [],
+      "type": "key"
+    }
+  ],
+  "gap": "GAP-10",
+  "id": "slash-popup-mid-token-cursor",
+  "initial": {
+    "effects": [],
+    "render": {
+      "borderClasses": [],
+      "borderTitle": "",
+      "cursorCell": [
+        0,
+        0
+      ],
+      "popupRows": [],
+      "popupVisible": false,
+      "prompt": ">",
+      "visualLines": [
+        ""
+      ],
+      "wrapWidth": 71
+    },
+    "state": {
+      "completion": {
+        "items": [],
+        "kind": null,
+        "open": false,
+        "selected": 0
+      },
+      "cursor": 0,
+      "feedbackActive": false,
+      "history": {
+        "cursorMovedSinceLoad": false,
+        "loadedEntry": false,
+        "navigating": false
+      },
+      "mode": ">",
+      "selection": null,
+      "switching": false,
+      "text": ""
+    }
+  },
+  "observations": [
+    {
+      "effects": [
+        {
+          "mode": "/",
+          "type": "modeChanged"
+        }
+      ],
+      "event": {
+        "char": "/",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 0,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          0
+        ],
+        "popupRows": [
+          "/help",
+          "/config",
+          "/clear",
+          "/compact",
+          "/connectors",
+          "/continue",
+          "/copy",
+          "/data-retention",
+          "/debug",
+          "/exit",
+          "/leanstall",
+          "/log",
+          "/loop",
+          "/mcp",
+          "/model",
+          "/new",
+          "/proxy-setup",
+          "/reload",
+          "/rename",
+          "/resume",
+          "/retry",
+          "/rewind",
+          "/status",
+          "/theme",
+          "/thinking",
+          "/unleanstall",
+          "/voice",
+          "/whoami"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          ""
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Show help message",
+              "label": "/help"
+            },
+            {
+              "description": "Edit config settings",
+              "label": "/config"
+            },
+            {
+              "description": "Clear conversation history",
+              "label": "/clear"
+            },
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/connectors"
+            },
+            {
+              "description": "Browse, resume, or delete saved sessions",
+              "label": "/continue"
+            },
+            {
+              "description": "Copy the last agent message to the clipboard",
+              "label": "/copy"
+            },
+            {
+              "description": "Show data retention information",
+              "label": "/data-retention"
+            },
+            {
+              "description": "Toggle debug console",
+              "label": "/debug"
+            },
+            {
+              "description": "Exit the application",
+              "label": "/exit"
+            },
+            {
+              "description": "Install the Lean 4 agent (leanstral)",
+              "label": "/leanstall"
+            },
+            {
+              "description": "Show path to current interaction log file",
+              "label": "/log"
+            },
+            {
+              "description": "Schedule a recurring prompt. Use `/loop <interval> <prompt>`, `/loop list`, or `/loop cancel <id|all>`",
+              "label": "/loop"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            },
+            {
+              "description": "Select active model",
+              "label": "/model"
+            },
+            {
+              "description": "Clear conversation history",
+              "label": "/new"
+            },
+            {
+              "description": "Configure proxy and SSL certificate settings",
+              "label": "/proxy-setup"
+            },
+            {
+              "description": "Reload configuration, agent instructions, and skills from disk",
+              "label": "/reload"
+            },
+            {
+              "description": "Rename the current session",
+              "label": "/rename"
+            },
+            {
+              "description": "Browse, resume, or delete saved sessions",
+              "label": "/resume"
+            },
+            {
+              "description": "Continue an interrupted model response; optionally pass additional instructions",
+              "label": "/retry"
+            },
+            {
+              "description": "Rewind to a previous message (or press Esc twice)",
+              "label": "/rewind"
+            },
+            {
+              "description": "Display agent statistics",
+              "label": "/status"
+            },
+            {
+              "description": "Select theme",
+              "label": "/theme"
+            },
+            {
+              "description": "Select thinking level",
+              "label": "/thinking"
+            },
+            {
+              "description": "Uninstall the Lean 4 agent",
+              "label": "/unleanstall"
+            },
+            {
+              "description": "Configure voice settings",
+              "label": "/voice"
+            },
+            {
+              "description": "Display the Mistral signed-in user, workspace, and plan",
+              "label": "/whoami"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 1,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "m",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 1,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          1
+        ],
+        "popupRows": [
+          "/mcp",
+          "/model",
+          "/compact",
+          "/theme",
+          "/rename",
+          "/resume",
+          "/whoami"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "m"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            },
+            {
+              "description": "Select active model",
+              "label": "/model"
+            },
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Select theme",
+              "label": "/theme"
+            },
+            {
+              "description": "Rename the current session",
+              "label": "/rename"
+            },
+            {
+              "description": "Browse, resume, or delete saved sessions",
+              "label": "/resume"
+            },
+            {
+              "description": "Display the Mistral signed-in user, workspace, and plan",
+              "label": "/whoami"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 2,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/m"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "p",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 2,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          2
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 3,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 3,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          3
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp "
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 4,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "a",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 4,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          4
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp a"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 5,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp a"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "d",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 5,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          5
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp ad"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 6,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp ad"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "d",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 6,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          6
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp add"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 7,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp add"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": " ",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 7,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          7
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp add "
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 8,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp add "
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "x",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 8,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          8
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp add x"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 9,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp add x"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "left",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 9,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          7
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp add x"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 8,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp add x"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "left",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 10,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          6
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp add x"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 7,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp add x"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "left",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 11,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          5
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp add x"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 6,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp add x"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "left",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 12,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          4
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp add x"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 5,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp add x"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "left",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 13,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          3
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp add x"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 4,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp add x"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "left",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 14,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          2
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp add x"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 3,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp add x"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "left",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 15,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          1
+        ],
+        "popupRows": [
+          "/compact",
+          "/mcp"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mp add x"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            },
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 2,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mp add x"
+      }
+    },
+    {
+      "effects": [
+        {
+          "type": "historyReset"
+        }
+      ],
+      "event": {
+        "char": "c",
+        "key": "char",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 16,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          2
+        ],
+        "popupRows": [
+          "/mcp",
+          "/compact"
+        ],
+        "popupVisible": true,
+        "prompt": "/",
+        "visualLines": [
+          "mcp add x"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [
+            {
+              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "label": "/mcp"
+            },
+            {
+              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "label": "/compact"
+            }
+          ],
+          "kind": "slash",
+          "open": true,
+          "selected": 0
+        },
+        "cursor": 3,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mcp add x"
+      }
+    },
+    {
+      "effects": [],
+      "event": {
+        "char": null,
+        "key": "tab",
+        "mods": [],
+        "type": "key"
+      },
+      "index": 17,
+      "render": {
+        "borderClasses": [],
+        "borderTitle": "",
+        "cursorCell": [
+          0,
+          4
+        ],
+        "popupRows": [],
+        "popupVisible": false,
+        "prompt": "/",
+        "visualLines": [
+          "mcp p add x"
+        ],
+        "wrapWidth": 71
+      },
+      "state": {
+        "completion": {
+          "items": [],
+          "kind": null,
+          "open": false,
+          "selected": 0
+        },
+        "cursor": 5,
+        "feedbackActive": false,
+        "history": {
+          "cursorMovedSinceLoad": false,
+          "loadedEntry": false,
+          "navigating": false
+        },
+        "mode": "/",
+        "selection": null,
+        "switching": false,
+        "text": "/mcp p add x"
+      }
+    }
+  ],
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "version": "2.24.0"
+  },
+  "schemaVersion": 1,
+  "setup": {
+    "agentName": "",
+    "commands": {},
+    "history": null,
+    "initial": {},
+    "safety": "neutral",
+    "skills": [],
+    "viewport": {
+      "height": 24,
+      "width": 80
+    },
+    "voice": null,
+    "workspace": "empty"
+  },
+  "story": "US-009",
+  "title": "A mid-token caret bounds the query and the replacement"
+}

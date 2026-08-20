@@ -440,6 +440,14 @@ SCENARIOS: list[dict[str, Any]] = [
         "title": "A Rust-only alias has no reference suggestion",
         "events": [char("/"), text("fork")],
     },
+    {
+        "id": "commands-clipboard-image-supported",
+        "gap": "GAP-08",
+        "story": "US-008",
+        "title": "Clipboard image support publishes the paste-image alias",
+        "capabilities": ["macos-clipboard"],
+        "events": [char("/"), text("pas")],
+    },
     # -- GAP-09: slash ranking ---------------------------------------------
     {
         "id": "slash-ranking-c",
@@ -476,6 +484,20 @@ SCENARIOS: list[dict[str, Any]] = [
         "story": "US-009",
         "title": "A query with no match closes the popup",
         "events": [char("/"), text("zzzz")],
+    },
+    {
+        "id": "slash-double-marker",
+        "gap": "GAP-09",
+        "story": "US-009",
+        "title": "A doubled marker keeps its second slash inside the query",
+        "events": [char("/"), char("/")],
+    },
+    {
+        "id": "slash-uppercase-alias",
+        "gap": "GAP-09",
+        "story": "US-009",
+        "title": "An alias typed in uppercase still ranks",
+        "events": [char("/"), text("CL")],
     },
     # -- GAP-10: popup control ---------------------------------------------
     {
@@ -519,6 +541,31 @@ SCENARIOS: list[dict[str, Any]] = [
         "story": "US-009",
         "title": "Up from the first item wraps to the last",
         "events": [char("/"), text("c"), key("up")],
+    },
+    {
+        "id": "slash-popup-caret-at-line-start",
+        "gap": "GAP-10",
+        "story": "US-009",
+        "title": "Home stops at the mode marker and leaves the popup ranked",
+        "events": [char("/"), text("cl"), key("home")],
+    },
+    {
+        "id": "slash-popup-mid-token-cursor",
+        "gap": "GAP-10",
+        "story": "US-009",
+        "title": "A mid-token caret bounds the query and the replacement",
+        "events": [
+            text("/mp add x"),
+            key("left"),
+            key("left"),
+            key("left"),
+            key("left"),
+            key("left"),
+            key("left"),
+            key("left"),
+            char("c"),
+            key("tab"),
+        ],
     },
     # -- GAP-11: path triggers ---------------------------------------------
     {
