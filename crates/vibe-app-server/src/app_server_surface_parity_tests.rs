@@ -1151,6 +1151,11 @@ fn a_surplus_or_missing_alias_is_reported_with_its_pointer() {
 /// receives. Only `task` carries a display payload: the delegation effect the
 /// projection reads the child session off travels there rather than in the
 /// typed result, which is the reference's three `TaskResult` fields alone.
+///
+/// `edit` and `grep` are absent: they are the two tools that publish a second
+/// document for the UI, so hand-writing their payload here would validate this
+/// file's idea of the projection rather than the one the tool builds.
+/// [`workspace_effect_probes`] runs them instead.
 const EFFECT_PROBES: &[(&str, &str, &str, &str)] = &[
     (
         "mcp_fixture_echo",
@@ -1162,18 +1167,6 @@ const EFFECT_PROBES: &[(&str, &str, &str, &str)] = &[
         "bash",
         r#"{"command":"cargo test"}"#,
         r#"{"stdout":"ok","stderr":""}"#,
-        "null",
-    ),
-    (
-        "edit",
-        r#"{"file_path":"/w/a.rs","old_string":"a","new_string":"b"}"#,
-        r#"{"file":"/w/a.rs","old_string":"a","new_string":"b","occurrences":[]}"#,
-        "null",
-    ),
-    (
-        "grep",
-        r#"{"pattern":"fn","path":"src"}"#,
-        r#"{"matches":"src/a.rs:1","match_count":1,"was_truncated":false}"#,
         "null",
     ),
     (
@@ -1225,6 +1218,117 @@ const EFFECT_PROBES: &[(&str, &str, &str, &str)] = &[
         r#"{"kind":"subagent","effect":{"parentSessionId":"session-1","childSessionId":"session-child","publicSessionId":"session-child","status":"completed","result":"done","turnsUsed":1,"completed":true}}"#,
     ),
 ];
+
+/// One probe: what a call carried, what the tool answered, what it published
+/// for the UI, and the display payload it emitted.
+struct EffectProbe {
+    tool: String,
+    arguments: String,
+    typed_result: Value,
+    projected_result: Value,
+    display: Value,
+}
+
+/// Grants every approval, so a probe measures the tool body rather than the
+/// policy in front of it.
+struct GrantApproval;
+
+impl vibe_core::policy::ApprovalAgent for GrantApproval {
+    fn request<'a>(
+        &'a self,
+        _request: vibe_core::policy::ApprovalRequest,
+    ) -> vibe_core::policy::ApprovalFuture<'a> {
+        Box::pin(async { Ok(vibe_core::policy::ApprovalDecision::ApproveOnce) })
+    }
+}
+
+/// Every probe the census replay drives: the eleven declared here, and the two
+/// the workspace tools produce themselves.
+async fn effect_probes() -> Vec<EffectProbe> {
+    let mut probes: Vec<EffectProbe> = EFFECT_PROBES
+        .iter()
+        .map(|(tool, arguments, typed_result, display)| EffectProbe {
+            tool: (*tool).to_owned(),
+            arguments: (*arguments).to_owned(),
+            typed_result: serde_json::from_str(typed_result).unwrap_or(Value::Null),
+            projected_result: Value::Null,
+            display: serde_json::from_str(display).unwrap_or(Value::Null),
+        })
+        .collect();
+    probes.extend(workspace_effect_probes().await);
+    probes
+}
+
+/// The `edit` and `grep` probes, answered by the tools rather than written out
+/// here.
+///
+/// Those two are the only ones that publish a projection, and the projection is
+/// the document the effect entry carries. Driving the real tools is what makes
+/// this replay validate the payload a client receives: a hand-written one would
+/// pass the census while the tool published something else.
+async fn workspace_effect_probes() -> Vec<EffectProbe> {
+    use std::sync::Arc;
+
+    use vibe_core::policy::{PermissionStore, ToolGuard, TrustDecision, TrustRootKind};
+    use vibe_core::tools::{ToolInvocation, ToolRegistry};
+    use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
+
+    let root = tempfile::tempdir().expect("a probe workspace");
+    let file = root.path().join("probe.rs");
+    fs::write(&file, "fn probe() {}\nfn other() {}\n").expect("the probe file is written");
+
+    let workspace = Arc::new(Workspace::open(root.path()).expect("the probe workspace opens"));
+    let review = Arc::new(ReviewManager::new(workspace.clone()));
+    // A mutating tool snapshots what it is about to change, which this port
+    // only allows inside a turn.
+    review.begin_turn("turn-1").expect("a turn opens");
+    let policy = PermissionStore::default();
+    policy
+        .set_trust(
+            root.path(),
+            TrustDecision::Trusted,
+            TrustRootKind::Workspace,
+        )
+        .await
+        .expect("the probe workspace is trusted");
+    let registry = ToolRegistry::default();
+    WorkspaceTools::new(workspace, review)
+        .register(&registry, &ToolGuard::new(policy, Arc::new(GrantApproval)))
+        .expect("the workspace tools register");
+
+    let calls = [
+        (
+            "edit",
+            json!({
+                "file_path": file.display().to_string(),
+                "old_string": "probe",
+                "new_string": "probed",
+            }),
+        ),
+        ("grep", json!({ "pattern": "fn", "path": "." })),
+    ];
+    let mut probes = Vec::new();
+    for (tool, arguments) in calls {
+        let output = registry
+            .invoke(
+                tool,
+                ToolInvocation {
+                    call_id: "call-1".to_owned(),
+                    arguments: arguments.clone(),
+                },
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("{tool} answers the probe: {error}"));
+        probes.push(EffectProbe {
+            tool: tool.to_owned(),
+            arguments: arguments.to_string(),
+            typed_result: output.typed_result,
+            projected_result: output.projected_result,
+            display: output.display,
+        });
+    }
+    probes
+}
 
 /// The history entries one turn's worth of engine events projects.
 fn projected_history(events: &[vibe_core::events::EngineEvent]) -> Vec<Value> {
@@ -1347,30 +1451,37 @@ fn a_compaction_publishes_one_entry_whose_details_validate_against_the_census() 
 
 /// Every `ToolEffectKind` is published with a detail that validates, which is
 /// what proves the union is served rather than merely declared.
-#[test]
-fn every_effect_kind_publishes_an_entry_that_validates_against_the_census() {
+#[tokio::test]
+async fn every_effect_kind_publishes_an_entry_that_validates_against_the_census() {
     use vibe_core::events::{EngineEvent, ToolEffectKind};
 
     let corpus = corpus();
     let census = Census::new(&corpus);
     let mut published = BTreeSet::new();
     let mut issues = Vec::new();
-    for (tool, arguments, typed_result, display) in EFFECT_PROBES {
+    for probe in effect_probes().await {
+        let EffectProbe {
+            tool,
+            arguments,
+            typed_result,
+            projected_result,
+            display,
+        } = probe;
         let history = projected_history(&[
             EngineEvent::UserMessage {
                 content: "go".to_owned(),
             },
             EngineEvent::ToolCall {
                 call_id: "call-1".to_owned(),
-                name: (*tool).to_owned(),
-                arguments: (*arguments).to_owned(),
+                name: tool.clone(),
+                arguments,
             },
             EngineEvent::ToolResult {
                 call_id: "call-1".to_owned(),
                 content: "done".to_owned(),
-                typed_result: serde_json::from_str(typed_result).unwrap_or(Value::Null),
-                projected_result: Value::Null,
-                display: serde_json::from_str(display).unwrap_or(Value::Null),
+                typed_result,
+                projected_result,
+                display,
                 duration_ms: 1,
                 is_error: false,
                 cancelled: false,
