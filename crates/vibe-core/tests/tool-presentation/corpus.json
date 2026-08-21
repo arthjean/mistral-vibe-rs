@@ -1,0 +1,2453 @@
+{
+  "cases": [
+    {
+      "arguments": {
+        "footerNote": "pick one",
+        "questions": [
+          {
+            "header": "Target",
+            "multiSelect": false,
+            "options": [
+              {
+                "description": "the first target",
+                "label": "alpha"
+              },
+              {
+                "description": "the second target",
+                "label": "beta"
+              }
+            ],
+            "question": "Which target?"
+          }
+        ]
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "Which target?",
+          "settledMessage": "Which target?",
+          "settledVerb": "Asked",
+          "statusText": {
+            "described": "sha256:84be031cb720203a988226b48abb8e35",
+            "length": 22
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:cf902369161fe36d1584df82399de0be",
+            "length": 21
+          },
+          "verb": "Asking"
+        },
+        "kind": "user_question"
+      },
+      "source": "builtin",
+      "tool": "ask_user_question"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "ask_user_question",
+          "settledMessage": "ask_user_question",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:84be031cb720203a988226b48abb8e35",
+            "length": 22
+          },
+          "suffix": "",
+          "summary": "ask_user_question",
+          "verb": "Running"
+        },
+        "kind": "user_question"
+      },
+      "source": "builtin",
+      "tool": "ask_user_question"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledMessage": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:84be031cb720203a988226b48abb8e35",
+            "length": 22
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "verb": "Running"
+        },
+        "kind": "user_question"
+      },
+      "source": "builtin",
+      "tool": "ask_user_question"
+    },
+    {
+      "arguments": {
+        "footerNote": "pick one",
+        "questions": [
+          {
+            "header": "Target",
+            "multiSelect": false,
+            "options": [
+              {
+                "description": "the first target",
+                "label": "alpha"
+              },
+              {
+                "description": "the second target",
+                "label": "beta"
+              }
+            ],
+            "question": "Which target?"
+          }
+        ]
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "answers": [
+          {
+            "answer": "alpha",
+            "isOther": false,
+            "question": "Which target?"
+          }
+        ],
+        "cancelled": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": {
+            "described": "sha256:758c3a5f64c3ab8e4f033d8d47213cb8",
+            "length": 23
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Answered",
+          "warnings": []
+        },
+        "kind": "user_question",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "ask_user_question"
+    },
+    {
+      "arguments": {
+        "footerNote": "pick one",
+        "questions": [
+          {
+            "header": "Target",
+            "multiSelect": false,
+            "options": [
+              {
+                "description": "the first target",
+                "label": "alpha"
+              },
+              {
+                "description": "the second target",
+                "label": "beta"
+              }
+            ],
+            "question": "Which target?"
+          }
+        ]
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "user_question",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "ask_user_question"
+    },
+    {
+      "arguments": {
+        "footerNote": "pick one",
+        "questions": [
+          {
+            "header": "Target",
+            "multiSelect": false,
+            "options": [
+              {
+                "description": "the first target",
+                "label": "alpha"
+              },
+              {
+                "description": "the second target",
+                "label": "beta"
+              }
+            ],
+            "question": "Which target?"
+          }
+        ]
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "user_question",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "ask_user_question"
+    },
+    {
+      "arguments": {
+        "command": "echo alpha",
+        "timeout": 30
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "echo alpha",
+          "settledMessage": "echo alpha",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:2afb17673ff906622e0363d648d6a7ef",
+            "length": 15
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:f2b24f7308f7ea38e116c35c88fe2bc0",
+            "length": 16
+          },
+          "verb": "Running"
+        },
+        "kind": "shell"
+      },
+      "source": "builtin",
+      "tool": "bash"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "bash",
+          "settledMessage": "bash",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:2afb17673ff906622e0363d648d6a7ef",
+            "length": 15
+          },
+          "suffix": "",
+          "summary": "bash",
+          "verb": "Running"
+        },
+        "kind": "shell"
+      },
+      "source": "builtin",
+      "tool": "bash"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledMessage": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:2afb17673ff906622e0363d648d6a7ef",
+            "length": 15
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "verb": "Running"
+        },
+        "kind": "shell"
+      },
+      "source": "builtin",
+      "tool": "bash"
+    },
+    {
+      "arguments": {
+        "command": "echo alpha",
+        "timeout": 30
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "command": "echo alpha",
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "alpha"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "echo alpha",
+          "success": true,
+          "suffix": "",
+          "verb": "Ran",
+          "warnings": []
+        },
+        "kind": "shell",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "bash"
+    },
+    {
+      "arguments": {
+        "command": "echo alpha",
+        "timeout": 30
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "shell",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "bash"
+    },
+    {
+      "arguments": {
+        "command": "echo alpha",
+        "timeout": 30
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "shell",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "bash"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": {
+            "described": "sha256:66cf59e53ad7f6469c83480d19897616",
+            "length": 35
+          },
+          "message": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "settledMessage": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "settledVerb": "Edited",
+          "statusText": {
+            "described": "sha256:d868fdd01755f295f90b7740277dbc99",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:21f7f10553d70ffbf84e54e1e4b0877c",
+            "length": 17
+          },
+          "verb": "Editing"
+        },
+        "kind": "file_edit"
+      },
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "edit",
+          "settledMessage": "edit",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:d868fdd01755f295f90b7740277dbc99",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": "edit",
+          "verb": "Running"
+        },
+        "kind": "file_edit"
+      },
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledMessage": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:d868fdd01755f295f90b7740277dbc99",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "verb": "Running"
+        },
+        "kind": "file_edit"
+      },
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "file": "/workspace/alpha.txt",
+        "message": "replaced one occurrence",
+        "new_string": "two",
+        "old_string": "one"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Edited",
+          "warnings": []
+        },
+        "kind": "file_edit",
+        "projectedOutput": {
+          "file": "/workspace/alpha.txt",
+          "new_string": "two",
+          "occurrences": [
+            {
+              "new_text": "two",
+              "old_text": "one",
+              "start_line": null
+            }
+          ],
+          "old_string": "one"
+        }
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "file_edit",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "file_edit",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {},
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:b34c448eb6a1951827b785945933417d",
+            "length": 19
+          },
+          "settledMessage": {
+            "described": "sha256:b34c448eb6a1951827b785945933417d",
+            "length": 19
+          },
+          "settledVerb": "Requested",
+          "statusText": {
+            "described": "sha256:8ba41586982f4dc9d860f5b7db74a02b",
+            "length": 29
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:ca433b9a1adc8f571ecf62a2c36a254d",
+            "length": 23
+          },
+          "verb": "Requesting"
+        },
+        "kind": "tool"
+      },
+      "source": "builtin",
+      "tool": "exit_plan_mode"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "exit_plan_mode",
+          "settledMessage": "exit_plan_mode",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:8ba41586982f4dc9d860f5b7db74a02b",
+            "length": 29
+          },
+          "suffix": "",
+          "summary": "exit_plan_mode",
+          "verb": "Running"
+        },
+        "kind": "tool"
+      },
+      "source": "builtin",
+      "tool": "exit_plan_mode"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledMessage": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:8ba41586982f4dc9d860f5b7db74a02b",
+            "length": 29
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "verb": "Running"
+        },
+        "kind": "tool"
+      },
+      "source": "builtin",
+      "tool": "exit_plan_mode"
+    },
+    {
+      "arguments": {},
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "message": "the plan was accepted",
+        "switched": true
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the plan was accepted",
+          "success": true,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "tool",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "exit_plan_mode"
+    },
+    {
+      "arguments": {},
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "tool",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "exit_plan_mode"
+    },
+    {
+      "arguments": {},
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "tool",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "exit_plan_mode"
+    },
+    {
+      "arguments": {
+        "max_matches": 20,
+        "path": "/workspace",
+        "pattern": "alpha"
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:b2f4ad7bd1f75f7f479ffe57c7a50e1c",
+            "length": 38
+          },
+          "settledMessage": {
+            "described": "sha256:b2f4ad7bd1f75f7f479ffe57c7a50e1c",
+            "length": 38
+          },
+          "settledVerb": "Searched",
+          "statusText": {
+            "described": "sha256:bc9797766c2d1d79ff30fbdbb9c7941b",
+            "length": 15
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:776ef2bc7a40e89878711aa2a2ac5258",
+            "length": 47
+          },
+          "verb": "Searching"
+        },
+        "kind": "file_search"
+      },
+      "source": "builtin",
+      "tool": "grep"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "grep",
+          "settledMessage": "grep",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:bc9797766c2d1d79ff30fbdbb9c7941b",
+            "length": 15
+          },
+          "suffix": "",
+          "summary": "grep",
+          "verb": "Running"
+        },
+        "kind": "file_search"
+      },
+      "source": "builtin",
+      "tool": "grep"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledMessage": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:bc9797766c2d1d79ff30fbdbb9c7941b",
+            "length": 15
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "verb": "Running"
+        },
+        "kind": "file_search"
+      },
+      "source": "builtin",
+      "tool": "grep"
+    },
+    {
+      "arguments": {
+        "max_matches": 20,
+        "path": "/workspace",
+        "pattern": "alpha"
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "cwd": "/workspace",
+        "match_count": 1,
+        "matches": "/workspace/alpha.txt:1:alpha",
+        "pattern": "alpha",
+        "was_truncated": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": {
+            "described": "sha256:0af6e5eac1681dd31a0bb1aef8378dcf",
+            "length": 15
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Searched",
+          "warnings": []
+        },
+        "kind": "file_search",
+        "projectedOutput": {
+          "match_count": 1,
+          "matches": "/workspace/alpha.txt:1:alpha",
+          "parsed_matches": [
+            {
+              "line": 1,
+              "path": "/workspace/alpha.txt"
+            }
+          ],
+          "was_truncated": false
+        }
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "grep"
+    },
+    {
+      "arguments": {
+        "max_matches": 20,
+        "path": "/workspace",
+        "pattern": "alpha"
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "file_search",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "grep"
+    },
+    {
+      "arguments": {
+        "max_matches": 20,
+        "path": "/workspace",
+        "pattern": "alpha"
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "file_search",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "grep"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/alpha.txt",
+        "limit": 20,
+        "offset": 3
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:8f88b37094ed60c6bb7f5a2435d9a062",
+            "length": 50
+          },
+          "settledMessage": {
+            "described": "sha256:8f88b37094ed60c6bb7f5a2435d9a062",
+            "length": 50
+          },
+          "settledVerb": "Read",
+          "statusText": {
+            "described": "sha256:33e97951020dc75b1cd9cd3edb4d6f53",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:031597bc78dbc32510214e383de6f8b5",
+            "length": 58
+          },
+          "verb": "Reading"
+        },
+        "kind": "file_read"
+      },
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "read_file",
+          "settledMessage": "read_file",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:33e97951020dc75b1cd9cd3edb4d6f53",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": "read_file",
+          "verb": "Running"
+        },
+        "kind": "file_read"
+      },
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledMessage": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:33e97951020dc75b1cd9cd3edb4d6f53",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "verb": "Running"
+        },
+        "kind": "file_read"
+      },
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/alpha.txt",
+        "limit": 20,
+        "offset": 3
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "content": "alpha",
+        "file_path": "/workspace/alpha.txt",
+        "num_lines": 1,
+        "requested_limit": 20,
+        "requested_offset": 3,
+        "start_line": 3,
+        "total_lines": 4,
+        "was_truncated": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": {
+            "described": "sha256:1704d0b87311a48ba880599d3c26e676",
+            "length": 21
+          },
+          "success": true,
+          "suffix": {
+            "described": "sha256:05382ab6760cc8832a2c9d3104dc33b9",
+            "length": 11
+          },
+          "verb": "Read",
+          "warnings": []
+        },
+        "kind": "file_read",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/alpha.txt",
+        "limit": 20,
+        "offset": 3
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "file_read",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/alpha.txt",
+        "limit": 20,
+        "offset": 3
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "file_read",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "name": "reviewer"
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:4c53154976a88ae7367b2a303c5680ab",
+            "length": 15
+          },
+          "settledMessage": {
+            "described": "sha256:4c53154976a88ae7367b2a303c5680ab",
+            "length": 15
+          },
+          "settledVerb": "Loaded",
+          "statusText": {
+            "described": "sha256:ec7f55490a0e00daa863a8f357a1624f",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:3f7cfb910c4ba562ee906694f0926d39",
+            "length": 23
+          },
+          "verb": "Loading"
+        },
+        "kind": "skill"
+      },
+      "source": "builtin",
+      "tool": "skill"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "skill",
+          "settledMessage": "skill",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:ec7f55490a0e00daa863a8f357a1624f",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": "skill",
+          "verb": "Running"
+        },
+        "kind": "skill"
+      },
+      "source": "builtin",
+      "tool": "skill"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledMessage": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:ec7f55490a0e00daa863a8f357a1624f",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "verb": "Running"
+        },
+        "kind": "skill"
+      },
+      "source": "builtin",
+      "tool": "skill"
+    },
+    {
+      "arguments": {
+        "name": "reviewer"
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "content": "the skill body",
+        "name": "reviewer",
+        "skill_dir": "/workspace/skills/reviewer"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": {
+            "described": "sha256:4c53154976a88ae7367b2a303c5680ab",
+            "length": 15
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Loaded",
+          "warnings": []
+        },
+        "kind": "skill",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "skill"
+    },
+    {
+      "arguments": {
+        "name": "reviewer"
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "skill",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "skill"
+    },
+    {
+      "arguments": {
+        "name": "reviewer"
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "skill",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "skill"
+    },
+    {
+      "arguments": {
+        "agent": "explorer",
+        "task": "summarize the corpus"
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:1024d932e0ad8136bf21ce98d423c00a",
+            "length": 36
+          },
+          "settledMessage": {
+            "described": "sha256:1024d932e0ad8136bf21ce98d423c00a",
+            "length": 36
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:f5783911e3c7a8651c954e4f16f27f27",
+            "length": 16
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:1afa64d77789355138a2f6fca2344443",
+            "length": 44
+          },
+          "verb": "Running"
+        },
+        "kind": "subagent"
+      },
+      "source": "builtin",
+      "tool": "task"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "subagent",
+          "settledMessage": "subagent",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:f5783911e3c7a8651c954e4f16f27f27",
+            "length": 16
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:f5783911e3c7a8651c954e4f16f27f27",
+            "length": 16
+          },
+          "verb": "Running"
+        },
+        "kind": "subagent"
+      },
+      "source": "builtin",
+      "tool": "task"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "subagent",
+          "settledMessage": "subagent",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:f5783911e3c7a8651c954e4f16f27f27",
+            "length": 16
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:f5783911e3c7a8651c954e4f16f27f27",
+            "length": 16
+          },
+          "verb": "Running"
+        },
+        "kind": "subagent"
+      },
+      "source": "builtin",
+      "tool": "task"
+    },
+    {
+      "arguments": {
+        "agent": "explorer",
+        "task": "summarize the corpus"
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "completed": true,
+        "response": "the subagent answer",
+        "turns_used": 2
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": {
+            "described": "sha256:f04bc9d4993ba324a0c9ee8c141c78bf",
+            "length": 10
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Completed",
+          "warnings": []
+        },
+        "kind": "subagent",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "task"
+    },
+    {
+      "arguments": {
+        "agent": "explorer",
+        "task": "summarize the corpus"
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "subagent",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "task"
+    },
+    {
+      "arguments": {
+        "agent": "explorer",
+        "task": "summarize the corpus"
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "subagent",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "task"
+    },
+    {
+      "arguments": {
+        "action": "write",
+        "todos": [
+          {
+            "content": "capture the presentation",
+            "id": "t1",
+            "priority": "high",
+            "status": "in_progress"
+          }
+        ]
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:551e5c6d3f08db920998f88d0e8f6ef5",
+            "length": 7
+          },
+          "settledMessage": {
+            "described": "sha256:551e5c6d3f08db920998f88d0e8f6ef5",
+            "length": 7
+          },
+          "settledVerb": "Updated",
+          "statusText": {
+            "described": "sha256:38544c3bf598585fa9c99cc072439c48",
+            "length": 14
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:fbcd666171b65c6fcbd7a4ddb99df53d",
+            "length": 15
+          },
+          "verb": "Updating"
+        },
+        "kind": "todo"
+      },
+      "source": "builtin",
+      "tool": "todo"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "todo",
+          "settledMessage": "todo",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:38544c3bf598585fa9c99cc072439c48",
+            "length": 14
+          },
+          "suffix": "",
+          "summary": "todo",
+          "verb": "Running"
+        },
+        "kind": "todo"
+      },
+      "source": "builtin",
+      "tool": "todo"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledMessage": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:38544c3bf598585fa9c99cc072439c48",
+            "length": 14
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "verb": "Running"
+        },
+        "kind": "todo"
+      },
+      "source": "builtin",
+      "tool": "todo"
+    },
+    {
+      "arguments": {
+        "action": "write",
+        "todos": [
+          {
+            "content": "capture the presentation",
+            "id": "t1",
+            "priority": "high",
+            "status": "in_progress"
+          }
+        ]
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "todos": [
+          {
+            "content": "capture the presentation",
+            "id": "t1",
+            "priority": "high",
+            "status": "in_progress"
+          }
+        ],
+        "total_count": 1,
+        "verb": "Updated"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": {
+            "described": "sha256:551e5c6d3f08db920998f88d0e8f6ef5",
+            "length": 7
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Updated",
+          "warnings": []
+        },
+        "kind": "todo",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "todo"
+    },
+    {
+      "arguments": {
+        "action": "write",
+        "todos": [
+          {
+            "content": "capture the presentation",
+            "id": "t1",
+            "priority": "high",
+            "status": "in_progress"
+          }
+        ]
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "todo",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "todo"
+    },
+    {
+      "arguments": {
+        "action": "write",
+        "todos": [
+          {
+            "content": "capture the presentation",
+            "id": "t1",
+            "priority": "high",
+            "status": "in_progress"
+          }
+        ]
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "todo",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "todo"
+    },
+    {
+      "arguments": {
+        "timeout": 15,
+        "url": "https://example.invalid/doc"
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:f04ac7f452277f5760892efdf291c610",
+            "length": 29
+          },
+          "settledMessage": {
+            "described": "sha256:f04ac7f452277f5760892efdf291c610",
+            "length": 29
+          },
+          "settledVerb": "Fetched",
+          "statusText": {
+            "described": "sha256:2c19be99cb6f2b4f5deedf3c835eaf13",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:139f41aa30f7b1ed24d5da24b4a5932f",
+            "length": 39
+          },
+          "verb": "Fetching"
+        },
+        "kind": "web_fetch"
+      },
+      "source": "builtin",
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "web_fetch",
+          "settledMessage": "web_fetch",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:2c19be99cb6f2b4f5deedf3c835eaf13",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": "web_fetch",
+          "verb": "Running"
+        },
+        "kind": "web_fetch"
+      },
+      "source": "builtin",
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "web_fetch",
+          "settledMessage": "web_fetch",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:2c19be99cb6f2b4f5deedf3c835eaf13",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": "web_fetch",
+          "verb": "Running"
+        },
+        "kind": "web_fetch"
+      },
+      "source": "builtin",
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "timeout": 15,
+        "url": "https://example.invalid/doc"
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "content": "the fetched body",
+        "content_type": "text/html; charset=utf-8",
+        "url": "https://example.invalid/doc",
+        "was_truncated": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": {
+            "described": "sha256:6a1e22595ce7397b185c2338fd7092f6",
+            "length": 49
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Fetched",
+          "warnings": []
+        },
+        "kind": "web_fetch",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "timeout": 15,
+        "url": "https://example.invalid/doc"
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "web_fetch",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "timeout": 15,
+        "url": "https://example.invalid/doc"
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "web_fetch",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "web_fetch"
+    },
+    {
+      "arguments": {
+        "query": "rust parity oracle"
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:4185afaf8108f443988e074ac993e80c",
+            "length": 29
+          },
+          "settledMessage": {
+            "described": "sha256:4185afaf8108f443988e074ac993e80c",
+            "length": 29
+          },
+          "settledVerb": "Searched",
+          "statusText": {
+            "described": "sha256:87d2f3386f90d631ee150e6fea67a32e",
+            "length": 17
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:a7f3bce7ec9f7c210713808134276f23",
+            "length": 39
+          },
+          "verb": "Searching"
+        },
+        "kind": "web_search"
+      },
+      "source": "builtin",
+      "tool": "web_search"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "web_search",
+          "settledMessage": "web_search",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:87d2f3386f90d631ee150e6fea67a32e",
+            "length": 17
+          },
+          "suffix": "",
+          "summary": "web_search",
+          "verb": "Running"
+        },
+        "kind": "web_search"
+      },
+      "source": "builtin",
+      "tool": "web_search"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "web_search",
+          "settledMessage": "web_search",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:87d2f3386f90d631ee150e6fea67a32e",
+            "length": 17
+          },
+          "suffix": "",
+          "summary": "web_search",
+          "verb": "Running"
+        },
+        "kind": "web_search"
+      },
+      "source": "builtin",
+      "tool": "web_search"
+    },
+    {
+      "arguments": {
+        "query": "rust parity oracle"
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "answer": "the search answer",
+        "query": "rust parity oracle",
+        "sources": [
+          {
+            "title": "a source",
+            "url": "https://example.invalid/doc"
+          }
+        ]
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": {
+            "described": "sha256:b140619018bf422527a7b6aba1cd31c6",
+            "length": 31
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Searched",
+          "warnings": []
+        },
+        "kind": "web_search",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "web_search"
+    },
+    {
+      "arguments": {
+        "query": "rust parity oracle"
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "web_search",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "web_search"
+    },
+    {
+      "arguments": {
+        "query": "rust parity oracle"
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "web_search",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "web_search"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace/alpha.txt"
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": "alpha",
+          "message": "/workspace/alpha.txt",
+          "settledMessage": "/workspace/alpha.txt",
+          "settledVerb": "Created",
+          "statusText": {
+            "described": "sha256:91713a5d3c5bf8ae4e680c52bed0ded7",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:1899b85947bd1299a85aaba06c0a72c5",
+            "length": 28
+          },
+          "verb": "Creating"
+        },
+        "kind": "file_write"
+      },
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "write_file",
+          "settledMessage": "write_file",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:91713a5d3c5bf8ae4e680c52bed0ded7",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": "write_file",
+          "verb": "Running"
+        },
+        "kind": "file_write"
+      },
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledMessage": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:91713a5d3c5bf8ae4e680c52bed0ded7",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "verb": "Running"
+        },
+        "kind": "file_write"
+      },
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace/alpha.txt"
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "bytes_written": 5,
+        "content": "alpha",
+        "file_path": "/workspace/alpha.txt"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Created",
+          "warnings": []
+        },
+        "kind": "file_write",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace/alpha.txt"
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "file_write",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace/alpha.txt"
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "file_write",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "owner": "acme",
+        "repo": "api"
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "acme_create_issue",
+          "settledMessage": "acme_create_issue",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:eb964a153347407e3411a757f3b06334",
+            "length": 29
+          },
+          "suffix": "",
+          "summary": "acme_create_issue",
+          "verb": "Running"
+        },
+        "kind": "tool"
+      },
+      "source": "mcp",
+      "tool": "acme_create_issue"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "acme_create_issue",
+          "settledMessage": "acme_create_issue",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:eb964a153347407e3411a757f3b06334",
+            "length": 29
+          },
+          "suffix": "",
+          "summary": "acme_create_issue",
+          "verb": "Running"
+        },
+        "kind": "tool"
+      },
+      "source": "mcp",
+      "tool": "acme_create_issue"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledMessage": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:eb964a153347407e3411a757f3b06334",
+            "length": 29
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "verb": "Running"
+        },
+        "kind": "tool"
+      },
+      "source": "mcp",
+      "tool": "acme_create_issue"
+    },
+    {
+      "arguments": {
+        "owner": "acme",
+        "repo": "api"
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "ok": true,
+        "server": "acme",
+        "structured": null,
+        "text": "the stub answer",
+        "tool": "create_issue"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "create_issue",
+          "success": true,
+          "suffix": "",
+          "verb": "Ran",
+          "warnings": []
+        },
+        "kind": "tool",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "mcp",
+      "tool": "acme_create_issue"
+    },
+    {
+      "arguments": {
+        "owner": "acme",
+        "repo": "api"
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "tool",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "mcp",
+      "tool": "acme_create_issue"
+    },
+    {
+      "arguments": {
+        "owner": "acme",
+        "repo": "api"
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "tool",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "mcp",
+      "tool": "acme_create_issue"
+    },
+    {
+      "arguments": {
+        "owner": "acme",
+        "repo": "api"
+      },
+      "case": "valid-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "connector_acme_create_issue",
+          "settledMessage": "connector_acme_create_issue",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:63d41029b0f7223bcb628643f46641e9",
+            "length": 35
+          },
+          "suffix": "",
+          "summary": "connector_acme_create_issue",
+          "verb": "Running"
+        },
+        "kind": "tool"
+      },
+      "source": "connector",
+      "tool": "connector_acme_create_issue"
+    },
+    {
+      "arguments": null,
+      "case": "absent-arguments",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "connector_acme_create_issue",
+          "settledMessage": "connector_acme_create_issue",
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:63d41029b0f7223bcb628643f46641e9",
+            "length": 35
+          },
+          "suffix": "",
+          "summary": "connector_acme_create_issue",
+          "verb": "Running"
+        },
+        "kind": "tool"
+      },
+      "source": "connector",
+      "tool": "connector_acme_create_issue"
+    },
+    {
+      "arguments": null,
+      "case": "wrong-argument-type",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledMessage": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "settledVerb": "Ran",
+          "statusText": {
+            "described": "sha256:63d41029b0f7223bcb628643f46641e9",
+            "length": 35
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:6b88e0cd92a91261dfac57077839fd9c",
+            "length": 17
+          },
+          "verb": "Running"
+        },
+        "kind": "tool"
+      },
+      "source": "connector",
+      "tool": "connector_acme_create_issue"
+    },
+    {
+      "arguments": {
+        "owner": "acme",
+        "repo": "api"
+      },
+      "case": "successful-result",
+      "error": null,
+      "output": {
+        "ok": true,
+        "server": "acme",
+        "structured": null,
+        "text": "the stub answer",
+        "tool": "create_issue"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": {
+            "described": "sha256:f168610d5ed4053c4987cf85d70f7427",
+            "length": 22
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Ran",
+          "warnings": []
+        },
+        "kind": "tool",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "connector",
+      "tool": "connector_acme_create_issue"
+    },
+    {
+      "arguments": {
+        "owner": "acme",
+        "repo": "api"
+      },
+      "case": "error-result",
+      "error": "the capture authored this failure",
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "the capture authored this failure",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "tool",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "connector",
+      "tool": "connector_acme_create_issue"
+    },
+    {
+      "arguments": {
+        "owner": "acme",
+        "repo": "api"
+      },
+      "case": "skipped-result",
+      "error": null,
+      "output": null,
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "message": "Skipped",
+          "success": false,
+          "suffix": "",
+          "verb": "",
+          "warnings": []
+        },
+        "kind": "tool",
+        "projectedOutput": null
+      },
+      "skipped": true,
+      "source": "connector",
+      "tool": "connector_acme_create_issue"
+    }
+  ],
+  "note": "Tool presentation corpus: what the pinned reference's ToolUIDataAdapter publishes for each tool and case, from get_call_presentation and get_result_presentation. A presentation string is committed as it stands only when it is a value this capture supplied, a path or an identifier-shaped token; everything else is committed as a {described, length} marker carrying a SHA-256 digest, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/tool_presentation.py --corpus when the pinned reference moves.",
+  "platform": "linux",
+  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "schemaVersion": 1
+}
