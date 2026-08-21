@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Answer `web_fetch`'s contract edges the way the reference answers them. A
+  `timeout` above `max_timeout` is now refused by name instead of being lowered
+  to the cap, so a call that cannot run as asked is reported rather than quietly
+  running as something else, and a non-positive `timeout` and an empty `url` are
+  refused as tool errors rather than schema violations. A page past
+  `max_content_bytes` is cut at that bound alone, no longer at whichever is
+  smaller between the bound and what the turn's output buffer has left, and a
+  body landing exactly on the bound is no longer flagged as truncated.
+
+- Fetch pages the way the reference fetches them. The request now carries the
+  `Accept` and `Accept-Language` values the reference sets, so a host that
+  varies its answer on them serves this port the same document; a 403 carrying
+  `cf-mitigated: challenge` is retried exactly once under a user agent that
+  names itself, and any other 403 is reported on the first answer. The redirect
+  budget rises to the reference's own, so a long chain the reference follows is
+  no longer refused, and a `Content-Type` of `text/html` with a charset is now
+  read as HTML while a type that merely contains the word is not.
+
 - Publish `task` behind the permission policy, like every other built-in tool.
   `tools.task.denylist` refuses a subagent outright and `tools.task.allowlist`
   grants one without a prompt, both matching the name as a glob rather than by

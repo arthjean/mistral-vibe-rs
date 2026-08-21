@@ -45,10 +45,11 @@
     {
       "id": "EP-078",
       "title": "web_fetch's contract edges",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 2,
-      "stories_done": 0
+      "stories_done": 2,
+      "started_at": "2026-08-21"
     },
     {
       "id": "EP-079",
@@ -215,23 +216,29 @@
       "id": "US-250",
       "title": "Refuse an over-cap timeout and truncate at the declared bound",
       "epic": "EP-078",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-242"
-      ]
+      ],
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     },
     {
       "id": "US-251",
       "title": "Send the reference request and retry the challenge",
       "epic": "EP-078",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-240"
-      ]
+      ],
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     },
     {
       "id": "US-252",
