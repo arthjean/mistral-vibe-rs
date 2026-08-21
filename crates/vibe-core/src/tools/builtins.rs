@@ -1159,10 +1159,11 @@ mod tests {
         assert!(!error.to_string().contains("super-secret-key"), "{error}");
     }
 
-    /// A page past the limit comes back truncated rather than overflowing the
-    /// turn's output budget.
+    /// US-250: a page past the limit is cut at `max_content_bytes` itself, not
+    /// at a bound that also depends on what the turn's output budget has left,
+    /// and the marker that says so is this port's own wording.
     #[tokio::test]
-    async fn a_long_page_is_truncated_inside_the_output_budget() {
+    async fn a_long_page_is_cut_at_the_declared_bound() {
         let directory = tempdir().expect("tempdir");
         let registry = registered_with(directory.path(), None, Arc::new(AllowApproval)).await;
         let settings: WebFetchConfig = ToolConfigResolver::new().view("web_fetch");
@@ -1180,19 +1181,47 @@ mod tests {
             .await
             .expect("fetch");
         assert_eq!(fetched.typed_result["was_truncated"], json!(true));
-        assert!(
-            fetched.typed_result["content"].as_str().map_or(0, str::len)
-                < settings.max_content_bytes + 128,
-            "the page must stay inside the limit"
+        let content = fetched.typed_result["content"]
+            .as_str()
+            .expect("content is text");
+        let marker = format!(
+            "\n\n[content truncated at {} bytes]",
+            settings.max_content_bytes
         );
-        assert!(
-            fetched.model_text.contains("content truncated at"),
-            "the truncation is reported to the model"
+        assert_eq!(
+            content.len(),
+            settings.max_content_bytes + marker.len(),
+            "the body is cut at the declared bound and nowhere else"
         );
+        assert!(content.ends_with(&marker), "the marker states the bound");
         assert!(
             fetched.model_text.ends_with("\nwas_truncated: True"),
             "the flag reaches the model on its own line"
         );
+    }
+
+    /// US-250: the bound is a ceiling, not a trigger. A body that lands exactly
+    /// on it is whole, so nothing is appended and nothing is flagged.
+    #[tokio::test]
+    async fn a_page_exactly_at_the_bound_is_not_truncated() {
+        let directory = tempdir().expect("tempdir");
+        let registry = registered_with(directory.path(), None, Arc::new(AllowApproval)).await;
+        let settings: WebFetchConfig = ToolConfigResolver::new().view("web_fetch");
+        let body = "z".repeat(settings.max_content_bytes);
+        let endpoint = serve_once(vec![http_response(&body)]);
+
+        let fetched = registry
+            .invoke(
+                "web_fetch",
+                ToolInvocation {
+                    call_id: "fetch-1".to_owned(),
+                    arguments: json!({"url": endpoint}),
+                },
+            )
+            .await
+            .expect("fetch");
+        assert_eq!(fetched.typed_result["was_truncated"], json!(false));
+        assert_eq!(fetched.typed_result["content"], json!(body));
     }
 
     /// A redirect loop stops at the hop budget, and the failure names the host
@@ -1427,18 +1456,27 @@ mod tests {
         assert_eq!(relative.as_str(), "https://example.com/page");
     }
 
+    /// A timeout outside the range is refused rather than reduced, so a call
+    /// that cannot run as asked is reported instead of quietly running as
+    /// something else, and the refusal names the ceiling it broke.
     #[test]
-    fn the_fetch_timeout_defaults_and_is_capped() {
+    fn a_timeout_out_of_range_is_refused_and_the_refusal_names_the_cap() {
         let settings: WebFetchConfig = ToolConfigResolver::new().view("web_fetch");
         assert_eq!(
             fetch_timeout(&json!({"timeout": Value::Null}), &settings).expect("default"),
             Duration::from_secs(settings.default_timeout)
         );
         assert_eq!(
-            fetch_timeout(&json!({"timeout": 9_000}), &settings).expect("capped"),
-            Duration::from_secs(settings.max_timeout)
+            fetch_timeout(&json!({"timeout": 45}), &settings).expect("in range"),
+            Duration::from_secs(45)
+        );
+        let over = fetch_timeout(&json!({"timeout": 9_000}), &settings).expect_err("over the cap");
+        assert!(
+            over.to_string().contains(&settings.max_timeout.to_string()),
+            "the refusal names the cap: {over}"
         );
         assert!(fetch_timeout(&json!({"timeout": 0}), &settings).is_err());
+        assert!(fetch_timeout(&json!({"timeout": -1}), &settings).is_err());
 
         // The ceiling and the default are the operator's to move.
         let resolver = ToolConfigResolver::new();
@@ -1452,9 +1490,11 @@ mod tests {
             fetch_timeout(&json!({"timeout": Value::Null}), &configured).expect("default"),
             Duration::from_secs(5)
         );
-        assert_eq!(
-            fetch_timeout(&json!({"timeout": 9_000}), &configured).expect("capped"),
-            Duration::from_secs(7)
+        let lowered = fetch_timeout(&json!({"timeout": 9_000}), &configured)
+            .expect_err("over the lowered cap");
+        assert!(
+            lowered.to_string().contains('7'),
+            "the refusal names the configured cap: {lowered}"
         );
     }
 

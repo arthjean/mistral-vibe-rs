@@ -126,14 +126,12 @@ const PLAN_MESSAGE: &str = "this port writes its own message for each plan-revie
 const FETCH_MARKDOWN: &str = "the reference converts an HTML page with `markdownify`, which keeps \
      the heading marker and the blank line between blocks; this port strips the markup to prose \
      instead. No story in this PRD closes the gap, so it is recorded by name instead";
-const FETCH_TRUNCATION: &str = "this port cuts the body at the smaller of the configured cap and \
-     the remaining buffer, so it keeps two bytes fewer than the declared bound";
+const FETCH_TRUNCATION_MARKER: &str = "the body is cut at the same bound and only the sentence \
+     that reports the cut differs; reaching the reference digest would mean copying its wording";
 const FETCH_REQUEST: &str = "the reference sends `Accept` and `Accept-Language` alongside the user \
      agent; this port sends only what its HTTP client defaults to";
 const FETCH_CHALLENGE: &str = "the reference retries a challenge response once under a different \
      user agent; this port reports the status and stops";
-const FETCH_ERROR_KIND: &str = "the reference raises its own tool error for an argument it \
-     rejects; this port raises a schema violation, which the oracle names `ValidationError`";
 
 /// The divergences this port still carries, each with what closes it.
 ///
@@ -493,13 +491,6 @@ const LEDGER: &[Divergence] = &[
     },
     Divergence {
         tool: "web_fetch",
-        case: "a-non-positive-timeout",
-        pointer: "/error",
-        closed_by: "US-250",
-        why: FETCH_ERROR_KIND,
-    },
-    Divergence {
-        tool: "web_fetch",
         case: "a-plain-text-page",
         pointer: "/requests",
         closed_by: "US-251",
@@ -525,13 +516,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/requests",
         closed_by: "US-251",
         why: FETCH_REQUEST,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "an-empty-url",
-        pointer: "/error",
-        closed_by: "US-250",
-        why: FETCH_ERROR_KIND,
     },
     Divergence {
         tool: "web_fetch",
@@ -572,15 +556,15 @@ const LEDGER: &[Divergence] = &[
         tool: "web_fetch",
         case: "larger-than-max-content-bytes",
         pointer: "/modelText",
-        closed_by: "US-250",
-        why: FETCH_TRUNCATION,
+        closed_by: LICENSING,
+        why: FETCH_TRUNCATION_MARKER,
     },
     Divergence {
         tool: "web_fetch",
         case: "larger-than-max-content-bytes",
-        pointer: "/projectedResult",
-        closed_by: "US-250",
-        why: FETCH_TRUNCATION,
+        pointer: "/projectedResult/content",
+        closed_by: LICENSING,
+        why: FETCH_TRUNCATION_MARKER,
     },
     Divergence {
         tool: "web_fetch",
@@ -592,9 +576,9 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "web_fetch",
         case: "larger-than-max-content-bytes",
-        pointer: "/typedResult",
-        closed_by: "US-250",
-        why: FETCH_TRUNCATION,
+        pointer: "/typedResult/content",
+        closed_by: LICENSING,
+        why: FETCH_TRUNCATION_MARKER,
     },
     Divergence {
         tool: "web_fetch",

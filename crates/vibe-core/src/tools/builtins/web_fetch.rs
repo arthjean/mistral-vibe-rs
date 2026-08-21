@@ -63,10 +63,9 @@ pub(super) fn web_fetch_spec() -> ToolSpec {
 pub(super) fn fetch_url(arguments: &Value) -> Result<Url, ToolError> {
     let raw = arguments["url"].as_str().unwrap_or_default().trim();
     if raw.is_empty() {
-        return Err(ToolError::SchemaViolation {
-            path: "/url".to_owned(),
-            message: "must not be empty".to_owned(),
-        });
+        // Reference `_validate_args`: every argument the tool refuses is a
+        // `ToolError`, so the model reads one kind of refusal rather than two.
+        return Err(ToolError::Execution("the URL must not be empty".to_owned()));
     }
     // A URL that already carries a scheme is judged on it. Anything else is a
     // protocol-relative or bare host, which the reference normalizes to https
@@ -84,8 +83,13 @@ pub(super) fn fetch_url(arguments: &Value) -> Result<Url, ToolError> {
         .map_err(|error| ToolError::Execution(format!("`{raw}` is not a URL: {error}")))
 }
 
-/// How long one call may wait: what it asked for, bounded by the configured
-/// ceiling, or the configured default when it asked for nothing.
+/// How long one call may wait: what it asked for, or the configured default
+/// when it asked for nothing.
+///
+/// Reference `_validate_args`: a value outside the range is refused rather than
+/// reduced, so an argument that cannot run is reported instead of quietly
+/// becoming another one. Only what survives that check reaches
+/// `_resolve_timeout`, which is why the ceiling appears here once.
 pub(super) fn fetch_timeout(
     arguments: &Value,
     settings: &WebFetchConfig,
@@ -94,21 +98,26 @@ pub(super) fn fetch_timeout(
         return Ok(Duration::from_secs(settings.default_timeout));
     };
     if requested <= 0 {
-        return Err(ToolError::SchemaViolation {
-            path: "/timeout".to_owned(),
-            message: "must be a positive number of seconds".to_owned(),
-        });
+        return Err(ToolError::Execution(
+            "the timeout must be a positive number of seconds".to_owned(),
+        ));
     }
-    let seconds = u64::try_from(requested).unwrap_or(settings.max_timeout);
-    Ok(Duration::from_secs(seconds.min(settings.max_timeout)))
+    let seconds = u64::try_from(requested).unwrap_or(u64::MAX);
+    if seconds > settings.max_timeout {
+        return Err(ToolError::Execution(format!(
+            "the timeout cannot exceed {} seconds",
+            settings.max_timeout
+        )));
+    }
+    Ok(Duration::from_secs(seconds))
 }
 
 pub(super) fn web_fetch_handler(config: ToolConfigResolver) -> Arc<dyn ToolHandler> {
     Arc::new(
-        move |invocation: &ToolInvocation, output: ToolOutputSink| -> OwnedToolHandlerFuture {
+        move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
             let arguments = invocation.arguments.clone();
             let settings: WebFetchConfig = config.view("web_fetch");
-            Box::pin(async move { run_web_fetch(&arguments, &settings, &output).await })
+            Box::pin(async move { run_web_fetch(&arguments, &settings).await })
         },
     )
 }
@@ -116,7 +125,6 @@ pub(super) fn web_fetch_handler(config: ToolConfigResolver) -> Arc<dyn ToolHandl
 pub(super) async fn run_web_fetch(
     arguments: &Value,
     settings: &WebFetchConfig,
-    output: &ToolOutputSink,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let url = fetch_url(arguments)?;
     let timeout = fetch_timeout(arguments, settings)?;
@@ -165,9 +173,10 @@ pub(super) async fn run_web_fetch(
     } else {
         body
     };
-    // The sink owns the turn's output budget, so the page is bounded by the
-    // smaller of its own limit and what the sink still has room for.
-    let limit = settings.max_content_bytes.min(output.remaining_bytes());
+    // The declared cap is the whole bound: a page cut anywhere else would be
+    // cut at a length the configuration never states, and a body exactly at the
+    // cap is not truncated.
+    let limit = settings.max_content_bytes;
     let truncated = text.len() > limit;
     let content = if truncated {
         let mut boundary = limit;
