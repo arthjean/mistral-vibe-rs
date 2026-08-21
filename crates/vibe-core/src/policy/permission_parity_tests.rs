@@ -2,11 +2,13 @@
 //!
 //! The Python reference is the authority on which scopes exist, which fields a
 //! requirement carries, what the arity table holds, and what
-//! `build_session_pattern` and `wildcard_match` answer.
-//! `scripts/parity/permission_surface.py` asks it all five questions and
+//! `build_session_pattern` and `wildcard_match` answer, and which matcher
+//! reads a sensitive pattern.
+//! `scripts/parity/permission_surface.py` asks it all six questions and
 //! records the answers; this module replays them against
 //! [`PermissionScope`], [`PermissionRequirement`], [`arity::ARITY`],
-//! [`arity::build_session_pattern`] and [`wildcard_match`].
+//! [`arity::build_session_pattern`], [`wildcard_match`] and the two path
+//! matchers [`resolve_file_tool_permission`] reads its lists with.
 //!
 //! The corpus is committed: it carries enum values, field names, command names,
 //! integers and the answers to cases this repository authored, all of which are
@@ -29,7 +31,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/permission_surface.py";
 const CORPUS_RELATIVE: &str = "tests/permission-surface/vocabulary.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 1;
+const CORPUS_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -44,6 +46,8 @@ struct Corpus {
     arity: BTreeMap<String, usize>,
     session_patterns: Vec<SessionPatternCase>,
     wildcard_matches: Vec<WildcardCase>,
+    sensitive_matches: Vec<SensitiveCase>,
+    sensitive_chain: Vec<SensitiveChainCase>,
     file_tool_chain: FileToolChain,
 }
 
@@ -60,6 +64,8 @@ struct Counts {
     arity_entries: usize,
     session_pattern_cases: usize,
     wildcard_cases: usize,
+    sensitive_cases: usize,
+    sensitive_chain_cases: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,6 +97,30 @@ struct WildcardCase {
     text: String,
     pattern: String,
     matches: bool,
+}
+
+/// What each matcher answers for one pattern and one path.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SensitiveCase {
+    pattern: String,
+    path: String,
+    /// `None` when the reference refused to read the pattern at all.
+    sensitive_matches: Option<bool>,
+    #[serde(default)]
+    #[expect(dead_code, reason = "the refusal is named by the null verdict")]
+    sensitive_raises: Option<String>,
+    list_matches: bool,
+}
+
+/// What the whole file-tool chain answers for one sensitive pattern.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SensitiveChainCase {
+    pattern: String,
+    path: String,
+    permission: Option<String>,
+    scopes: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -342,6 +372,193 @@ fn the_file_tool_chain_produces_the_reference_requirements() {
         chain.outside_session_pattern.replace("<glob>", &glob)
     );
     assert_eq!(outside.label, chain.outside_label.replace("<glob>", &glob));
+}
+
+/// The settings a sensitive-pattern case is measured under: one pattern, no
+/// list beside it, and the permission the capture ran with.
+fn sensitive_settings(pattern: &str) -> SharedToolConfig {
+    SharedToolConfig {
+        permission: PermissionMode::Always,
+        allowlist: Vec::new(),
+        denylist: Vec::new(),
+        sensitive_patterns: vec![pattern.to_owned()],
+    }
+}
+
+/// US-263: a sensitive pattern is read the way the reference reads it, which is
+/// component by component and anchored on the right.
+#[test]
+fn every_sensitive_pattern_verdict_matches_the_reference() {
+    let corpus = corpus();
+    assert_eq!(
+        corpus.sensitive_matches.len(),
+        corpus.counts.sensitive_cases
+    );
+    let mut refused = 0_usize;
+    for case in &corpus.sensitive_matches {
+        // A pattern the reference refuses to read raises there and names
+        // nothing here, so both sides end up naming no path through it.
+        let expected = case.sensitive_matches.unwrap_or(false);
+        refused = refused.saturating_add(usize::from(case.sensitive_matches.is_none()));
+        assert_eq!(
+            path_pattern_matches(&case.pattern, &case.path),
+            expected,
+            "`{}` against `{}` is decided differently here",
+            case.pattern,
+            case.path
+        );
+    }
+    eprintln!(
+        "permission surface: sensitive patterns {}/{}, {refused} the reference refused to read",
+        corpus.sensitive_matches.len(),
+        corpus.counts.sensitive_cases
+    );
+}
+
+/// US-263: the allowlist and the denylist keep the unanchored matcher, so the
+/// two answer differently and the corpus proves the difference is measured.
+#[test]
+fn the_two_path_matchers_stay_distinct() {
+    let corpus = corpus();
+    let mut separating = Vec::new();
+    for case in &corpus.sensitive_matches {
+        assert_eq!(
+            pattern_matches(&case.pattern, &case.path),
+            case.list_matches,
+            "`{}` against `{}` is decided differently by the list matcher here",
+            case.pattern,
+            case.path
+        );
+        if case.sensitive_matches != Some(case.list_matches) {
+            separating.push(format!("{} -> {}", case.pattern, case.path));
+        }
+    }
+    assert!(
+        separating.len() >= 6,
+        "the corpus has to keep separating the two matchers: {separating:?}"
+    );
+    eprintln!(
+        "permission surface: {} of {} pattern pairs separate the two matchers",
+        separating.len(),
+        corpus.sensitive_matches.len()
+    );
+}
+
+/// US-263: the whole chain, not just the matcher, raises what the reference
+/// raises for a sensitive pattern.
+#[test]
+fn the_sensitive_chain_answers_like_the_reference() {
+    let corpus = corpus();
+    assert_eq!(
+        corpus.sensitive_chain.len(),
+        corpus.counts.sensitive_chain_cases
+    );
+    let workspace = tempfile::tempdir().expect("workspace");
+    for case in &corpus.sensitive_chain {
+        let file = workspace.path().join(&case.path);
+        if let Some(parent) = file.parent() {
+            fs::create_dir_all(parent).expect("parent directories");
+        }
+        fs::write(&file, "SECRET=1").expect("write");
+        let context = resolve_file_tool_permission(
+            &file,
+            "read_file",
+            &sensitive_settings(&case.pattern),
+            None,
+        );
+        assert_eq!(
+            context.permission.map(permission_label),
+            case.permission.as_deref(),
+            "`{}` against `{}` settles differently here",
+            case.pattern,
+            case.path
+        );
+        let raised = context
+            .requirements
+            .iter()
+            .map(|requirement| wire_scope(requirement.scope))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            raised, case.scopes,
+            "`{}` against `{}` raises other requirements here",
+            case.pattern, case.path
+        );
+    }
+    eprintln!(
+        "permission surface: sensitive chain {}/{}",
+        corpus.sensitive_chain.len(),
+        corpus.counts.sensitive_chain_cases
+    );
+}
+
+/// US-263: the shipped defaults keep naming a dotenv file at any depth, the
+/// root included, which is the reach the new matcher had to preserve.
+#[test]
+fn the_shipped_sensitive_defaults_still_name_a_dotenv_file() {
+    let settings = ToolConfigResolver::new().view::<SharedToolConfig>("read_file");
+    assert_eq!(settings.sensitive_patterns, ["**/.env", "**/.env.*"]);
+    for path in [
+        "/.env",
+        "/srv/.env",
+        "/srv/app/.env",
+        "/srv/app/.env.local",
+        "/srv/app/nested/deep/.env.production",
+    ] {
+        assert!(
+            matched_path_pattern(&settings.sensitive_patterns, path).is_some(),
+            "`{path}` stopped being sensitive"
+        );
+    }
+    for path in ["/srv/app/env", "/srv/app/.environment", "/srv/.env/keep"] {
+        assert!(
+            matched_path_pattern(&settings.sensitive_patterns, path).is_none(),
+            "`{path}` became sensitive"
+        );
+    }
+}
+
+/// US-263: a pattern nothing can read raises nothing and never panics, and the
+/// scan still stops on the first pattern that does name the path.
+#[test]
+fn an_unreadable_sensitive_pattern_raises_nothing_and_stops_nothing() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let file = workspace.path().join(".env");
+    fs::write(&file, "SECRET=1").expect("write");
+
+    for pattern in ["", ".", "/", "[", "**/["] {
+        let context =
+            resolve_file_tool_permission(&file, "read_file", &sensitive_settings(pattern), None);
+        assert!(
+            context.requirements.is_empty(),
+            "`{pattern}` raised a requirement"
+        );
+        assert_eq!(context.permission, None, "`{pattern}` settled the call");
+    }
+
+    // Two patterns naming the same file raise one requirement, not two: the
+    // reference breaks out of the scan on the first match.
+    let settings = SharedToolConfig {
+        permission: PermissionMode::Always,
+        allowlist: Vec::new(),
+        denylist: Vec::new(),
+        sensitive_patterns: vec![
+            String::new(),
+            "**/.env".to_owned(),
+            ".env".to_owned(),
+            "*".to_owned(),
+        ],
+    };
+    let context = resolve_file_tool_permission(&file, "read_file", &settings, None);
+    assert_eq!(context.requirements.len(), 1);
+    assert_eq!(context.permission, Some(PermissionMode::Ask));
+    assert!(
+        context
+            .reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("`**/.env`")),
+        "the first matching pattern is the one named: {:?}",
+        context.reason
+    );
 }
 
 /// The live probe: recaptures from the pinned checkout and compares, so a

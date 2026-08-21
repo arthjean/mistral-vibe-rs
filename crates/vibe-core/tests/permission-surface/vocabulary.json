@@ -142,6 +142,8 @@
   "counts": {
     "arityEntries": 138,
     "scopes": 4,
+    "sensitiveCases": 20,
+    "sensitiveChainCases": 6,
     "sessionPatternCases": 20,
     "wildcardCases": 19
   },
@@ -185,12 +187,181 @@
     ],
     "forbidsExtra": true
   },
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "scopes": [
     "command_pattern",
     "outside_directory",
     "file_pattern",
     "url_pattern"
+  ],
+  "sensitiveChain": [
+    {
+      "path": ".env",
+      "pattern": "**/.env",
+      "permission": "ask",
+      "scopes": [
+        "file_pattern"
+      ]
+    },
+    {
+      "path": "app/.env",
+      "pattern": ".env",
+      "permission": "ask",
+      "scopes": [
+        "file_pattern"
+      ]
+    },
+    {
+      "path": "app/secrets/token.json",
+      "pattern": "secrets/*",
+      "permission": "ask",
+      "scopes": [
+        "file_pattern"
+      ]
+    },
+    {
+      "path": "app/secrets/nested/token.json",
+      "pattern": "secrets/*",
+      "permission": null,
+      "scopes": []
+    },
+    {
+      "path": "app/certs/server.pem",
+      "pattern": "*.pem",
+      "permission": "ask",
+      "scopes": [
+        "file_pattern"
+      ]
+    },
+    {
+      "path": "app/.env",
+      "pattern": "/etc/*",
+      "permission": null,
+      "scopes": []
+    }
+  ],
+  "sensitiveMatches": [
+    {
+      "listMatches": true,
+      "path": "/srv/app/.env",
+      "pattern": "**/.env",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": true,
+      "path": "/srv/app/.env.local",
+      "pattern": "**/.env.*",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": false,
+      "path": "/srv/app/.env",
+      "pattern": ".env",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": false,
+      "path": "/srv/app/.env.local",
+      "pattern": ".env",
+      "sensitiveMatches": false
+    },
+    {
+      "listMatches": false,
+      "path": "/srv/app/secrets/token.json",
+      "pattern": "secrets/*",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": false,
+      "path": "/srv/app/secrets",
+      "pattern": "secrets",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": true,
+      "path": "/etc/passwd",
+      "pattern": "/etc/*",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": true,
+      "path": "/etc/ssl/private/key.pem",
+      "pattern": "/etc/*",
+      "sensitiveMatches": false
+    },
+    {
+      "listMatches": true,
+      "path": "/srv/app/.env",
+      "pattern": "/srv/*/.env",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": true,
+      "path": "/srv/a/b/.env",
+      "pattern": "/srv/*/.env",
+      "sensitiveMatches": false
+    },
+    {
+      "listMatches": false,
+      "path": "/srv/app/config/.env",
+      "pattern": "app/*/.env",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": true,
+      "path": "/srv/app/certs/server.pem",
+      "pattern": "*.pem",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": true,
+      "path": "/srv/app/.env",
+      "pattern": "*",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": true,
+      "path": "/srv/app/config/db.json",
+      "pattern": "**/config/*.json",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": true,
+      "path": "/.env",
+      "pattern": "**/.env",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": true,
+      "path": "/.env",
+      "pattern": "*/.env",
+      "sensitiveMatches": false
+    },
+    {
+      "listMatches": false,
+      "path": "/srv/a/x/b",
+      "pattern": "a/**/b",
+      "sensitiveMatches": true
+    },
+    {
+      "listMatches": false,
+      "path": "/srv/a/x/y/b",
+      "pattern": "a/**/b",
+      "sensitiveMatches": false
+    },
+    {
+      "listMatches": false,
+      "path": "/srv/app/.env",
+      "pattern": "",
+      "sensitiveMatches": null,
+      "sensitiveRaises": "ValueError"
+    },
+    {
+      "listMatches": false,
+      "path": "/srv/app/.env",
+      "pattern": "[",
+      "sensitiveMatches": false
+    }
   ],
   "sessionPatterns": [
     {

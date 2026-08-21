@@ -1076,7 +1076,7 @@ pub fn resolve_file_tool_permission(
         ));
     }
     let mut context = PermissionContext::deferred().over_paths(vec![path.to_path_buf()]);
-    if let Some(pattern) = matched_pattern(&settings.sensitive_patterns, &subject) {
+    if let Some(pattern) = matched_path_pattern(&settings.sensitive_patterns, &subject) {
         let file_name = resolved.file_name().map_or_else(
             || subject.clone(),
             |name| name.to_string_lossy().into_owned(),
@@ -1120,6 +1120,85 @@ fn matched_pattern<'a>(patterns: &'a [String], subject: &str) -> Option<&'a Stri
     patterns
         .iter()
         .find(|pattern| pattern_matches(pattern, subject))
+}
+
+/// The first entry of `patterns` naming `subject` as a path, in the order the
+/// operator wrote them.
+fn matched_path_pattern<'a>(patterns: &'a [String], subject: &str) -> Option<&'a String> {
+    patterns
+        .iter()
+        .find(|pattern| path_pattern_matches(pattern, subject))
+}
+
+/// Whether `pattern` names `subject` the way a sensitive pattern names a file.
+///
+/// Reference `resolve_file_tool_permission` runs `sensitive_patterns` through
+/// `PurePath.match` while the allowlist and the denylist beside it stay on
+/// `fnmatch`, so the two matchers answer differently and both are kept. This
+/// one compares component by component and anchors on the right: `.env` names a
+/// file called `.env` at any depth, `/etc/*` names only a direct child of
+/// `/etc`, and a `*` never crosses a separator the way `fnmatch` lets it.
+///
+/// A pattern naming no component matches nothing. Upstream raises `ValueError`
+/// there; failing to read a pattern is a reason to raise no requirement from
+/// it, never a reason to drop the ones the other patterns raise.
+fn path_pattern_matches(pattern: &str, subject: &str) -> bool {
+    let expected = path_components(pattern);
+    let Some(width) = (!expected.is_empty()).then_some(expected.len()) else {
+        return false;
+    };
+    let found = path_components(subject);
+    if pattern.starts_with('/') {
+        // An anchored pattern compares against the whole path, root included.
+        return found.len() == width && components_match(&expected, &found);
+    }
+    let Some(tail) = found
+        .len()
+        .checked_sub(width)
+        .and_then(|start| found.get(start..))
+    else {
+        return false;
+    };
+    components_match(&expected, tail)
+}
+
+/// The components `PurePath` compares by, keeping the root as an empty leading
+/// component so an absolute path and an absolute pattern line up.
+///
+/// Only `/` separates: the reference dispatches on the host flavor, and the
+/// oracle measures the POSIX one.
+fn path_components(value: &str) -> Vec<&str> {
+    let mut components = Vec::new();
+    if value.starts_with('/') {
+        components.push("");
+    }
+    components.extend(
+        value
+            .split('/')
+            .filter(|component| !component.is_empty() && *component != "."),
+    );
+    components
+}
+
+/// Whether every pattern component names the component facing it.
+fn components_match(expected: &[&str], found: &[&str]) -> bool {
+    expected
+        .iter()
+        .zip(found)
+        .all(|(pattern, component)| component_matches(pattern, component))
+}
+
+/// Whether one pattern component names one path component.
+fn component_matches(pattern: &str, component: &str) -> bool {
+    match pattern {
+        // `**` stands for any single component, the root included, which is
+        // what lets the shipped `**/.env` name a file sitting at the root.
+        "**" => true,
+        // A lone `*` needs something to name, so it never stands in for the
+        // root the way `**` does.
+        "*" => !component.is_empty(),
+        _ => pattern_matches(pattern, component),
+    }
 }
 
 /// The glob an outside path is named by: the parent for a file, the directory
