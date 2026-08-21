@@ -20,6 +20,10 @@ use super::{CONFIG_FILE, ConfigPaths, ConfigTarget, PROJECT_DIRECTORY};
 /// prompt overrides.
 const PROMPTS_DIRECTORY: &str = "prompts";
 
+/// The directory under a project root, and under the vibe home, that holds
+/// tool directories: `{root}/.vibe/tools` and `{vibe_home}/tools`.
+const TOOLS_DIRECTORY: &str = "tools";
+
 /// A configuration file family the process is allowed to read and write.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConfigSource {
@@ -144,6 +148,40 @@ impl HarnessFiles {
             }
         }
         directories
+    }
+
+    /// The project tool directories a description override is read from.
+    ///
+    /// Reference `project_tools_dirs` folds `find_local_config_dirs` over the
+    /// open roots, and that walk keeps `{root}/.vibe/tools` only when it is a
+    /// directory and never recurses below the root. An untrusted workspace
+    /// contributes no root, so it contributes no directory either.
+    #[must_use]
+    pub fn project_tools_dirs(&self) -> Vec<PathBuf> {
+        self.project_roots()
+            .into_iter()
+            .map(|root| root.join(PROJECT_DIRECTORY).join(TOOLS_DIRECTORY))
+            .filter(|directory| directory.is_dir())
+            .collect()
+    }
+
+    /// The user tool directory, which is `{vibe_home}/tools` once the user
+    /// source is enabled and the directory exists.
+    ///
+    /// Reference `user_tools_dirs` returns an empty list when `"user"` is not
+    /// among the sources, which is what makes a `--no-user-config` session read
+    /// no override the operator wrote for every project.
+    #[must_use]
+    pub fn user_tools_dirs(&self) -> Vec<PathBuf> {
+        if !self.sources.contains(&ConfigSource::User) {
+            return Vec::new();
+        }
+        let directory = self.paths.vibe_home.join(TOOLS_DIRECTORY);
+        if directory.is_dir() {
+            vec![directory]
+        } else {
+            Vec::new()
+        }
     }
 
     /// Whether a write may reach the user file. Reference `persist_allowed`.

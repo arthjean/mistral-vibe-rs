@@ -314,3 +314,47 @@ fn an_untrusted_workspace_contributes_no_project_root_and_no_project_hooks() {
         Some(ConfigTarget::User)
     );
 }
+
+/// US-260: reference `project_tools_dirs` folds `find_local_config_dirs` over
+/// the open roots, which keeps `{root}/.vibe/tools` only when it is a directory
+/// and never looks below the root, and reference `user_tools_dirs` answers
+/// nothing at all once the user source is disabled.
+#[test]
+fn tool_directories_follow_the_open_roots_and_the_enabled_sources() {
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let root = temporary.path();
+    let repository = root.join("work");
+    let sibling = root.join("sibling");
+    fs::create_dir_all(repository.join(".vibe/tools")).expect("project tools directory");
+    fs::create_dir_all(&sibling).expect("additional directory without one");
+    fs::create_dir_all(vibe_home(root).join("tools")).expect("user tools directory");
+
+    let paths = ConfigPaths {
+        vibe_home: vibe_home(root),
+        working_directory: repository.clone(),
+    };
+    let harness = HarnessFiles::new(paths.clone(), ConfigSource::all(), vec![sibling], true);
+    assert_eq!(
+        harness.project_tools_dirs(),
+        vec![repository.join(".vibe/tools")],
+        "a root holding no tools directory contributes none"
+    );
+    assert_eq!(
+        harness.user_tools_dirs(),
+        vec![vibe_home(root).join("tools")]
+    );
+
+    let untrusted = HarnessFiles::new(paths.clone(), ConfigSource::all(), Vec::new(), false);
+    assert!(untrusted.project_tools_dirs().is_empty());
+
+    let project_only = HarnessFiles::new(
+        paths,
+        BTreeSet::from([ConfigSource::Project]),
+        Vec::new(),
+        true,
+    );
+    assert!(
+        project_only.user_tools_dirs().is_empty(),
+        "a disabled user source contributes no user tools directory"
+    );
+}

@@ -291,6 +291,19 @@ impl ConfigSnapshot {
         self.string_array("disabled_tools")
     }
 
+    /// The extra tool directories the configuration names.
+    ///
+    /// Reference `VibeConfigSchema.tool_paths`: entries are concatenated across
+    /// layers and expanded by `_expand_paths`, and `_compute_search_paths`
+    /// walks them right after the builtin directory. They stay strings here
+    /// because expansion needs the home and the working directory, which
+    /// [`crate::tools::descriptions::search_paths`] is the one place that
+    /// knows.
+    #[must_use]
+    pub fn tool_paths(&self) -> Vec<String> {
+        self.string_array("tool_paths")
+    }
+
     /// The extra skill directories the configuration names.
     ///
     /// Reference `VibeConfigSchema.skill_paths`: entries are concatenated
