@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Say that git is missing when git is missing. A launch that asks for
+  `--worktree` on a machine without git on `PATH` now fails with a sentence
+  naming git and the search path, where it used to surface the raw spawn error
+  under a worktree heading, reading as though the named worktree itself had
+  failed.
+
 - Publish a connector only where the configuration names it. A connector the
   service offers is now withheld whole until a `[[connectors]]` entry opts it in,
   matching how the reference treats an unnamed connector exactly like a disabled

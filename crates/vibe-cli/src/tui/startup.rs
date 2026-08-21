@@ -47,6 +47,8 @@ pub enum StartupError {
     InvalidWorktreeName,
     #[error("--worktree requires a git repository")]
     WorktreeRepositoryRequired,
+    #[error("git worktree operations require git on PATH: {0}")]
+    WorktreeGitUnavailable(String),
     #[error("worktree `{name}` failed: {message}")]
     Worktree { name: String, message: String },
     #[error("terminal startup interaction failed: {0}")]

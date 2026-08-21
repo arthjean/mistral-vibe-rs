@@ -23,10 +23,7 @@ impl From<WorktreeError> for StartupError {
         match error {
             WorktreeError::InvalidName => Self::InvalidWorktreeName,
             WorktreeError::RepositoryRequired => Self::WorktreeRepositoryRequired,
-            WorktreeError::GitUnavailable(message) => Self::Worktree {
-                name: "git".to_owned(),
-                message,
-            },
+            WorktreeError::GitUnavailable(message) => Self::WorktreeGitUnavailable(message),
             WorktreeError::Failed { name, message } => Self::Worktree { name, message },
             WorktreeError::Io { path, source } => Self::Io { path, source },
         }
