@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Publish `task` behind the permission policy, like every other built-in tool.
+  `tools.task.denylist` refuses a subagent outright and `tools.task.allowlist`
+  grants one without a prompt, both matching the name as a glob rather than by
+  equality, and the denylist is read first, so a name in both lists is refused.
+  A subagent in neither list now asks, and declining starts no child and hands
+  the model the refusal. The allowlist still defaults to `explore`, so the
+  built-in subagent delegates without a prompt.
+
+- Delegation stops one level deep, at the call rather than by hiding the tool.
+  A subagent that may act now sees `task` in its own tool list and reads an
+  error when it delegates again, instead of finding the tool missing; a
+  top-level call is unaffected.
+
 - Publish the second document the UI reads. `grep` now sends the client one
   parsed entry per match, each carrying the matched file's path anchored on the
   searched root and the line number it was found at, and `edit` now sends one
