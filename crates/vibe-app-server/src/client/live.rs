@@ -218,6 +218,11 @@ pub(super) struct SessionToolExecutor {
     enabled: NameFilter,
     disabled: NameFilter,
     allowed: Option<BTreeSet<String>>,
+    /// Tools this executor publishes but refuses to run, with the reason the
+    /// model reads. A withheld tool and a refused one are different answers:
+    /// the reference keeps `task` in a subagent's surface and refuses the call,
+    /// so a refusal has to be expressible without dropping the definition.
+    refused: BTreeMap<String, String>,
 }
 
 impl SessionToolExecutor {
@@ -227,12 +232,25 @@ impl SessionToolExecutor {
             enabled: NameFilter::new(&intent.enabled_tools),
             disabled: NameFilter::new(&intent.disabled_tools),
             allowed: None,
+            refused: BTreeMap::new(),
         }
     }
 
     pub(super) fn with_allowed_tools(mut self, allowed: BTreeSet<String>) -> Self {
         self.allowed = Some(allowed);
         self
+    }
+
+    /// The same executor, publishing `name` and answering `reason` when it is
+    /// called.
+    pub(super) fn refusing(mut self, name: &str, reason: String) -> Self {
+        self.refused.insert(name.to_owned(), reason);
+        self
+    }
+
+    /// Why `name` is refused before it runs, or [`None`] when it may run.
+    fn refusal(&self, name: &str) -> Option<String> {
+        self.refused.get(name).cloned()
     }
 
     fn permits(&self, name: &str) -> bool {
@@ -269,6 +287,9 @@ impl ToolExecutor for SessionToolExecutor {
                 async move { Err(format!("tool `{name}` is disabled for this session")) },
             );
         }
+        if let Some(reason) = self.refusal(name) {
+            return Box::pin(async move { Err(reason) });
+        }
         self.tools.execute(name, arguments)
     }
 
@@ -282,6 +303,9 @@ impl ToolExecutor for SessionToolExecutor {
             return Box::pin(
                 async move { Err(format!("tool `{name}` is disabled for this session")) },
             );
+        }
+        if let Some(reason) = self.refusal(name) {
+            return Box::pin(async move { Err(reason) });
         }
         self.tools.execute_stream(name, arguments, output)
     }

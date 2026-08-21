@@ -134,8 +134,6 @@ const FETCH_CHALLENGE: &str = "the reference retries a challenge response once u
      user agent; this port reports the status and stops";
 const FETCH_ERROR_KIND: &str = "the reference raises its own tool error for an argument it \
      rejects; this port raises a schema violation, which the oracle names `ValidationError`";
-const TASK_DEPTH: &str = "the reference refuses to delegate from inside a subagent at call time; \
-     this port lets the call through and enforces its limit deeper down";
 
 /// The divergences this port still carries, each with what closes it.
 ///
@@ -471,13 +469,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
-    },
-    Divergence {
-        tool: "task",
-        case: "already-inside-a-subagent",
-        pointer: "/outcome",
-        closed_by: "US-249",
-        why: TASK_DEPTH,
     },
     Divergence {
         tool: "web_fetch",

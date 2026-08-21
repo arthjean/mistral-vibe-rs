@@ -94,6 +94,27 @@ pub struct ChildContext {
     pub working_directory: String,
 }
 
+impl ChildContext {
+    /// Why this child may not delegate any further, or [`None`] when it still
+    /// may.
+    ///
+    /// Reference `TaskTool.run` refuses outright when the agent asking is
+    /// itself a subagent, so a child never forks a grandchild. Here the ceiling
+    /// [`SubagentManager::delegate`] applies reads the depth of the session the
+    /// call names, and a child calls the `task` its parent published, which
+    /// names the parent. So the child's own surface is where the same ceiling
+    /// has to be read, and this is what it reads.
+    #[must_use]
+    pub fn delegation_refusal(&self) -> Option<String> {
+        (self.depth >= MAX_DELEGATION_DEPTH).then(|| {
+            ExtensionError::DelegationDepth {
+                maximum: MAX_DELEGATION_DEPTH,
+            }
+            .to_string()
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DelegationStatus {

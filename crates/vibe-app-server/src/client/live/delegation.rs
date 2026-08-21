@@ -295,8 +295,10 @@ impl SubagentRunner for ProviderSubagentRunner {
                 .map_err(|error| error.to_string())?
                 .into_iter()
                 .filter(|spec| {
+                    // `task` stays in the child's surface, matching the
+                    // reference, whose depth ceiling is enforced when the call
+                    // runs rather than by withholding the tool.
                     parent_executor.permits(&spec.name)
-                        && spec.name != "task"
                         && !disabled_by_agent.matches(&spec.name)
                         && !policy_restricted_tools.contains(&spec.name)
                         && enabled_by_agent
@@ -310,7 +312,15 @@ impl SubagentRunner for ProviderSubagentRunner {
                 })
                 .map(|spec| spec.name)
                 .collect();
-            let executor = parent_executor.with_allowed_tools(allowed);
+            let mut executor = parent_executor.with_allowed_tools(allowed);
+            // The `task` this child sees is the one its parent registered, so
+            // the delegation it would ask for names the parent's session and
+            // passes the ceiling the parent already passed. The child reads the
+            // ceiling off its own depth instead, and reads it here rather than
+            // by losing the tool.
+            if let Some(refusal) = context.delegation_refusal() {
+                executor = executor.refusing("task", refusal);
+            }
             let definitions = executor.definitions().map_err(|error| error.to_string())?;
             let mut messages = vec![ModelMessage::System {
                 content: self.system_prompt.clone(),

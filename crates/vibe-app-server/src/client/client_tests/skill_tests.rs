@@ -187,8 +187,11 @@ struct TaskProbeProvider {
     agent: String,
     root_calls: AtomicUsize,
     child_turns: AtomicUsize,
+    child_delegated: AtomicBool,
     published: std::sync::Mutex<Vec<String>>,
+    child_published: std::sync::Mutex<Vec<String>>,
     delegation_error: std::sync::Mutex<Option<String>>,
+    child_delegation_error: std::sync::Mutex<Option<String>>,
 }
 
 impl TaskProbeProvider {
@@ -205,6 +208,15 @@ impl TaskProbeProvider {
 
     fn refusal(&self) -> Option<String> {
         self.delegation_error.lock().expect("observed").clone()
+    }
+
+    /// What the child read back from its own `task` call, which is where the
+    /// delegation ceiling has to speak.
+    fn child_refusal(&self) -> Option<String> {
+        self.child_delegation_error
+            .lock()
+            .expect("observed")
+            .clone()
     }
 }
 
@@ -224,6 +236,39 @@ impl CompletionProvider for TaskProbeProvider {
             };
             if input.metadata.contains_key("parent_session_id") {
                 self.child_turns.fetch_add(1, Ordering::AcqRel);
+                if let Ok(mut published) = self.child_published.lock() {
+                    *published = input.tools.iter().map(|tool| tool.name.clone()).collect();
+                }
+                // A child that sees `task` calls it exactly once, whatever the
+                // answer, so a ceiling that failed to refuse cannot turn this
+                // probe into an unbounded fork.
+                if input.tools.iter().any(|tool| tool.name == "task")
+                    && !self.child_delegated.swap(true, Ordering::AcqRel)
+                {
+                    return Ok(AssistantMessage {
+                        text: String::new(),
+                        tool_calls: vec![ModelToolCall {
+                            id: "delegate-2".to_owned(),
+                            name: "task".to_owned(),
+                            arguments: json!({"task": "inspect deeper", "agent": self.agent})
+                                .to_string(),
+                        }],
+                        stop_reason: "tool_calls".to_owned(),
+                        ..finished
+                    });
+                }
+                if let Ok(mut observed) = self.child_delegation_error.lock()
+                    && observed.is_none()
+                {
+                    *observed = input.messages.iter().find_map(|message| match message {
+                        ModelMessage::Tool {
+                            call_id,
+                            content,
+                            is_error: true,
+                        } if call_id == "delegate-2" => Some(content.clone()),
+                        _ => None,
+                    });
+                }
                 return Ok(finished);
             }
             let call = self.root_calls.fetch_add(1, Ordering::AcqRel);
@@ -285,8 +330,11 @@ async fn run_task_probe(
         agent: agent.to_owned(),
         root_calls: AtomicUsize::new(0),
         child_turns: AtomicUsize::new(0),
+        child_delegated: AtomicBool::new(false),
         published: std::sync::Mutex::new(Vec::new()),
+        child_published: std::sync::Mutex::new(Vec::new()),
         delegation_error: std::sync::Mutex::new(None),
+        child_delegation_error: std::sync::Mutex::new(None),
     });
     let driver = LiveTurnDriver::from_provider_for_tests(provider.clone(), "system")
         .with_session_root_for_tests(sessions.map(Path::to_path_buf));
@@ -504,6 +552,62 @@ async fn an_unlisted_subagent_the_operator_approves_still_delegates() {
     );
 }
 
+/// US-249: a subagent that is not read-only publishes `task` itself, matching
+/// the reference, where the depth ceiling is what refuses a second level rather
+/// than the tool being withheld from the child.
+#[tokio::test]
+async fn a_subagent_publishes_task_and_is_refused_a_second_level_at_call_time() {
+    let temporary = tempfile::tempdir().expect("temporary sessions");
+    std::fs::create_dir_all(temporary.path().join(".vibe/agents")).expect("agent directory");
+    std::fs::write(
+        temporary.path().join(".vibe/agents/deputy.toml"),
+        "description = \"a subagent that may act\"\nagent_type = \"subagent\"\nsafety = \"neutral\"\n",
+    )
+    .expect("project subagent");
+    let probe = run_task_probe(
+        Some(temporary.path()),
+        "deputy",
+        "[task]\nallowlist = [\"*\"]\n",
+        ApprovalDecision::Deny,
+    )
+    .await;
+    assert!(
+        probe.provider.delegated(),
+        "the top-level call still delegates"
+    );
+    assert!(
+        probe
+            .provider
+            .child_published
+            .lock()
+            .expect("child tools")
+            .contains(&"task".to_owned()),
+        "the child sees `task`: {:?}",
+        probe.provider.child_published.lock().expect("child tools")
+    );
+    let refused = probe
+        .provider
+        .child_refusal()
+        .expect("the child's own delegation failed back to it");
+    assert!(
+        refused.contains("depth"),
+        "the child reads the delegation ceiling: {refused}"
+    );
+    // A child forks nothing, so the only child directory under the durable
+    // parent is the one the top-level call started.
+    assert_eq!(
+        SessionStore::new(temporary.path())
+            .list(None, 0, 10)
+            .expect("the sessions list")
+            .sessions
+            .iter()
+            .filter(|session| session.parent_session_id.as_deref() == Some("persisted-root"))
+            .count(),
+        1,
+        "a refused second level starts no child"
+    );
+}
+
 #[tokio::test]
 async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
     let temporary = tempfile::tempdir().expect("temporary sessions");
@@ -612,6 +716,11 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
             "additionalProperties": false,
         })
     );
+    // `task` is no longer withheld from a child by name, but `explore` is
+    // read-only and `task` is not a read tool, so this child still does not see
+    // it. A subagent that may act does, which
+    // `a_subagent_publishes_task_and_is_refused_a_second_level_at_call_time`
+    // covers.
     assert!(provider.child_hid_task_definition.load(Ordering::Acquire));
     assert!(
         provider

@@ -29,7 +29,15 @@ pub use subagents::{
 const MAX_EXTENSION_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_HOOK_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_DELEGATION_RESULT_BYTES: usize = 64 * 1024;
-const MAX_DELEGATION_DEPTH: u8 = 3;
+/// One level of delegation.
+///
+/// Reference `TaskTool.run` (`vibe/core/tools/builtins/task.py`) refuses the
+/// call outright when the agent asking is itself a subagent, so a child never
+/// forks a grandchild. This port states the same rule as a ceiling on the depth
+/// a child session records, which [`SubagentManager::delegate`] reads before it
+/// creates anything: a top-level turn delegates, and a subagent asking again is
+/// refused with no child started.
+const MAX_DELEGATION_DEPTH: u8 = 1;
 const MAX_DELEGATION_DURATION: Duration = Duration::from_secs(60);
 const MAX_CHILD_ID_ATTEMPTS: usize = 1024;
 
