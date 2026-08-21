@@ -1,0 +1,1183 @@
+{
+  "cases": [
+    {
+      "case": "plain",
+      "family": "name",
+      "input": {
+        "name": "review"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": true
+      }
+    },
+    {
+      "case": "hyphenated",
+      "family": "name",
+      "input": {
+        "name": "feature-1"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": true
+      }
+    },
+    {
+      "case": "underscored",
+      "family": "name",
+      "input": {
+        "name": "under_score"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": true
+      }
+    },
+    {
+      "case": "accented",
+      "family": "name",
+      "input": {
+        "name": "très"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": true
+      }
+    },
+    {
+      "case": "emoji",
+      "family": "name",
+      "input": {
+        "name": "🌱"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": true
+      }
+    },
+    {
+      "case": "digit-suffixed-device",
+      "family": "name",
+      "input": {
+        "name": "com0"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": true
+      }
+    },
+    {
+      "case": "beyond-device-range",
+      "family": "name",
+      "input": {
+        "name": "lpt10"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": true
+      }
+    },
+    {
+      "case": "dot-prefixed",
+      "family": "name",
+      "input": {
+        "name": ".hidden"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": true
+      }
+    },
+    {
+      "case": "inner-space",
+      "family": "name",
+      "input": {
+        "name": "a b"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": true
+      }
+    },
+    {
+      "case": "option-shaped",
+      "family": "name",
+      "input": {
+        "name": "-x"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": true
+      }
+    },
+    {
+      "case": "double-dot",
+      "family": "name",
+      "input": {
+        "name": "foo..bar"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": true
+      }
+    },
+    {
+      "case": "lock-suffixed",
+      "family": "name",
+      "input": {
+        "name": "foo.lock"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": true
+      }
+    },
+    {
+      "case": "head",
+      "family": "name",
+      "input": {
+        "name": "HEAD"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": true
+      }
+    },
+    {
+      "case": "device-aux",
+      "family": "name",
+      "input": {
+        "name": "aux"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "device-aux-upper",
+      "family": "name",
+      "input": {
+        "name": "AUX"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "device-aux-extension",
+      "family": "name",
+      "input": {
+        "name": "aux.txt"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "device-con",
+      "family": "name",
+      "input": {
+        "name": "con"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "device-nul",
+      "family": "name",
+      "input": {
+        "name": "nul"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "device-nul-extension",
+      "family": "name",
+      "input": {
+        "name": "nul.txt"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "device-com1",
+      "family": "name",
+      "input": {
+        "name": "com1"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "device-lpt9",
+      "family": "name",
+      "input": {
+        "name": "lpt9"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "device-conin",
+      "family": "name",
+      "input": {
+        "name": "conin$"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "device-clock",
+      "family": "name",
+      "input": {
+        "name": "clock$"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "trailing-dot",
+      "family": "name",
+      "input": {
+        "name": "foo."
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": false
+      }
+    },
+    {
+      "case": "trailing-space",
+      "family": "name",
+      "input": {
+        "name": "foo "
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": false
+      }
+    },
+    {
+      "case": "angle-bracket",
+      "family": "name",
+      "input": {
+        "name": "a<b"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "pipe",
+      "family": "name",
+      "input": {
+        "name": "a|b"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "quote",
+      "family": "name",
+      "input": {
+        "name": "a\"b"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "question-mark",
+      "family": "name",
+      "input": {
+        "name": "a?b"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": false
+      }
+    },
+    {
+      "case": "star",
+      "family": "name",
+      "input": {
+        "name": "a*b"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": false
+      }
+    },
+    {
+      "case": "colon",
+      "family": "name",
+      "input": {
+        "name": "a:b"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": false
+      }
+    },
+    {
+      "case": "tab",
+      "family": "name",
+      "input": {
+        "name": "a\tb"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": false
+      }
+    },
+    {
+      "case": "empty",
+      "family": "name",
+      "input": {
+        "name": ""
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": false
+      }
+    },
+    {
+      "case": "dot",
+      "family": "name",
+      "input": {
+        "name": "."
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": false
+      }
+    },
+    {
+      "case": "double-dot-alone",
+      "family": "name",
+      "input": {
+        "name": ".."
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": false
+      }
+    },
+    {
+      "case": "posix-separator",
+      "family": "name",
+      "input": {
+        "name": "a/b"
+      },
+      "observed": {
+        "branchValid": true,
+        "portable": false
+      }
+    },
+    {
+      "case": "windows-separator",
+      "family": "name",
+      "input": {
+        "name": "a\\b"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": false
+      }
+    },
+    {
+      "case": "drive-prefixed",
+      "family": "name",
+      "input": {
+        "name": "C:name"
+      },
+      "observed": {
+        "branchValid": false,
+        "portable": false
+      }
+    },
+    {
+      "case": "posix",
+      "family": "managedRoot",
+      "input": {
+        "commonGitDir": "/synthetic/repo/.git",
+        "repoRoot": "/synthetic/repo"
+      },
+      "observed": {
+        "directory": "repo-48615fc593d4",
+        "repoRootName": "repo"
+      }
+    },
+    {
+      "case": "sibling",
+      "family": "managedRoot",
+      "input": {
+        "commonGitDir": "/synthetic/other/.git",
+        "repoRoot": "/synthetic/other"
+      },
+      "observed": {
+        "directory": "other-36c59b5b16e7",
+        "repoRootName": "other"
+      }
+    },
+    {
+      "case": "separate-git-dir",
+      "family": "managedRoot",
+      "input": {
+        "commonGitDir": "/synthetic/state/repo.git",
+        "repoRoot": "/synthetic/repo"
+      },
+      "observed": {
+        "directory": "repo-822f210a2a6c",
+        "repoRootName": "repo"
+      }
+    },
+    {
+      "case": "windows-shaped",
+      "family": "managedRoot",
+      "input": {
+        "commonGitDir": "C:\\dev\\repo\\.git",
+        "repoRoot": "/synthetic/repo"
+      },
+      "observed": {
+        "directory": "repo-af6e23fde322",
+        "repoRootName": "repo"
+      }
+    },
+    {
+      "case": "accented",
+      "family": "managedRoot",
+      "input": {
+        "commonGitDir": "/synthetic/dépôt/.git",
+        "repoRoot": "/synthetic/dépôt"
+      },
+      "observed": {
+        "directory": "dépôt-2672f68d7648",
+        "repoRootName": "dépôt"
+      }
+    },
+    {
+      "case": "nested",
+      "family": "managedRoot",
+      "input": {
+        "commonGitDir": "/synthetic/a/b/c/repo/.git",
+        "repoRoot": "/synthetic/a/b/c/repo"
+      },
+      "observed": {
+        "directory": "repo-7f65606a21e3",
+        "repoRootName": "repo"
+      }
+    },
+    {
+      "case": "fresh-branch",
+      "family": "prepare",
+      "input": {
+        "base": "repo",
+        "branch": null,
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "outcome": "prepared",
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "review",
+          "branchCreated": true,
+          "created": true,
+          "name": "review",
+          "path": "home/worktrees/{repoDir}/review",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/review"
+        },
+        "residue": {
+          "branch": true,
+          "target": true
+        }
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "reuse",
+      "family": "prepare",
+      "input": {
+        "base": "repo",
+        "branch": null,
+        "name": "review",
+        "twice": true
+      },
+      "observed": {
+        "outcome": "prepared",
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "review",
+          "branchCreated": false,
+          "created": false,
+          "name": "review",
+          "path": "home/worktrees/{repoDir}/review",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/review"
+        },
+        "residue": {
+          "branch": true,
+          "target": true
+        }
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "attached-branch",
+      "family": "prepare",
+      "input": {
+        "base": "repo",
+        "branch": null,
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "outcome": "prepared",
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "review",
+          "branchCreated": false,
+          "created": true,
+          "name": "review",
+          "path": "home/worktrees/{repoDir}/review",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/review"
+        },
+        "residue": {
+          "branch": true,
+          "target": true
+        }
+      },
+      "setup": "attached-branch"
+    },
+    {
+      "case": "distinct-branch",
+      "family": "prepare",
+      "input": {
+        "base": "repo",
+        "branch": "feature/x",
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "outcome": "prepared",
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "feature/x",
+          "branchCreated": true,
+          "created": true,
+          "name": "review",
+          "path": "home/worktrees/{repoDir}/review",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/review"
+        },
+        "residue": {
+          "branch": true,
+          "target": true
+        }
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "subdirectory-base",
+      "family": "prepare",
+      "input": {
+        "base": "repo/docs",
+        "branch": null,
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "outcome": "prepared",
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "review",
+          "branchCreated": true,
+          "created": true,
+          "name": "review",
+          "path": "home/worktrees/{repoDir}/review/docs",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/review"
+        },
+        "residue": {
+          "branch": true,
+          "target": true
+        }
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "missing-base",
+      "family": "prepare",
+      "input": {
+        "base": "repo/scratch",
+        "branch": null,
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:28f7e41a62972e403791b87a4d3528dd",
+          "length": 91
+        },
+        "outcome": "error",
+        "residue": {
+          "branch": false,
+          "target": false
+        }
+      },
+      "setup": "untracked-subdirectory"
+    },
+    {
+      "case": "outside-repository",
+      "family": "prepare",
+      "input": {
+        "base": ".",
+        "branch": null,
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "errorClass": "WorktreeNotFoundError",
+        "message": {
+          "described": "sha256:5b250b4a30e89b18ff2e1e9cdade1cd8",
+          "length": 36
+        },
+        "outcome": "error",
+        "residue": {
+          "branch": false,
+          "target": false
+        }
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "unportable-name",
+      "family": "prepare",
+      "input": {
+        "base": "repo",
+        "branch": null,
+        "name": "aux",
+        "twice": false
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:89165357f51c82f8d5a63e2b7deb19c1",
+          "length": 71
+        },
+        "outcome": "error",
+        "residue": {
+          "branch": false,
+          "target": false
+        }
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "invalid-branch",
+      "family": "prepare",
+      "input": {
+        "base": "repo",
+        "branch": "foo.lock",
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:0c8ca9990f6b9717a7142c4414d02413",
+          "length": 35
+        },
+        "outcome": "error",
+        "residue": {
+          "branch": false,
+          "target": false
+        }
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "occupied-target",
+      "family": "prepare",
+      "input": {
+        "base": "repo",
+        "branch": null,
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:2e4bcb0687ec765c71adaecf3071a409",
+          "length": 85
+        },
+        "outcome": "error",
+        "residue": {
+          "branch": false,
+          "target": true
+        }
+      },
+      "setup": "occupied-target"
+    },
+    {
+      "case": "detached-target",
+      "family": "prepare",
+      "input": {
+        "base": "repo",
+        "branch": null,
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:cee90a3b17870aba0f1fb9fd9afab9a2",
+          "length": 97
+        },
+        "outcome": "error",
+        "residue": {
+          "branch": true,
+          "target": true
+        }
+      },
+      "setup": "detached-target"
+    },
+    {
+      "case": "foreign-target",
+      "family": "prepare",
+      "input": {
+        "base": "repo",
+        "branch": null,
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:2e4bcb0687ec765c71adaecf3071a409",
+          "length": 85
+        },
+        "outcome": "error",
+        "residue": {
+          "branch": false,
+          "target": true
+        }
+      },
+      "setup": "foreign-target"
+    },
+    {
+      "case": "clean",
+      "family": "cleanup",
+      "input": {
+        "mutations": [],
+        "name": "review"
+      },
+      "observed": {
+        "hasUncommittedChanges": false,
+        "hasUntrackedFiles": false,
+        "isClean": true,
+        "newCommitCount": 0,
+        "outcome": "inspected",
+        "reasons": []
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "uncommitted",
+      "family": "cleanup",
+      "input": {
+        "mutations": [
+          "modify"
+        ],
+        "name": "review"
+      },
+      "observed": {
+        "hasUncommittedChanges": true,
+        "hasUntrackedFiles": false,
+        "isClean": false,
+        "newCommitCount": 0,
+        "outcome": "inspected",
+        "reasons": [
+          {
+            "described": "sha256:31e3e828864d2c00e54f15dcdd17be78",
+            "length": 19
+          }
+        ]
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "untracked",
+      "family": "cleanup",
+      "input": {
+        "mutations": [
+          "add"
+        ],
+        "name": "review"
+      },
+      "observed": {
+        "hasUncommittedChanges": false,
+        "hasUntrackedFiles": true,
+        "isClean": false,
+        "newCommitCount": 0,
+        "outcome": "inspected",
+        "reasons": [
+          {
+            "described": "sha256:58f592fe9ad4e9071b207336c06ba70c",
+            "length": 15
+          }
+        ]
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "uncommitted-and-untracked",
+      "family": "cleanup",
+      "input": {
+        "mutations": [
+          "modify",
+          "add"
+        ],
+        "name": "review"
+      },
+      "observed": {
+        "hasUncommittedChanges": true,
+        "hasUntrackedFiles": true,
+        "isClean": false,
+        "newCommitCount": 0,
+        "outcome": "inspected",
+        "reasons": [
+          {
+            "described": "sha256:31e3e828864d2c00e54f15dcdd17be78",
+            "length": 19
+          },
+          {
+            "described": "sha256:58f592fe9ad4e9071b207336c06ba70c",
+            "length": 15
+          }
+        ]
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "one-commit",
+      "family": "cleanup",
+      "input": {
+        "mutations": [
+          "modify",
+          "commit"
+        ],
+        "name": "review"
+      },
+      "observed": {
+        "hasUncommittedChanges": false,
+        "hasUntrackedFiles": false,
+        "isClean": false,
+        "newCommitCount": 1,
+        "outcome": "inspected",
+        "reasons": [
+          {
+            "described": "sha256:b94cb46caf0e4ef7ba4a341fa9178ca8",
+            "length": 34
+          }
+        ]
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "two-commits",
+      "family": "cleanup",
+      "input": {
+        "mutations": [
+          "modify",
+          "commit",
+          "modify",
+          "commit"
+        ],
+        "name": "review"
+      },
+      "observed": {
+        "hasUncommittedChanges": false,
+        "hasUntrackedFiles": false,
+        "isClean": false,
+        "newCommitCount": 2,
+        "outcome": "inspected",
+        "reasons": [
+          {
+            "described": "sha256:24569d70014400fb4fcdc623c80698fe",
+            "length": 35
+          }
+        ]
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "detached-commit",
+      "family": "cleanup",
+      "input": {
+        "mutations": [
+          "detach",
+          "modify",
+          "commit"
+        ],
+        "name": "review"
+      },
+      "observed": {
+        "hasUncommittedChanges": false,
+        "hasUntrackedFiles": false,
+        "isClean": false,
+        "newCommitCount": 1,
+        "outcome": "inspected",
+        "reasons": [
+          {
+            "described": "sha256:b94cb46caf0e4ef7ba4a341fa9178ca8",
+            "length": 34
+          }
+        ]
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "none",
+      "family": "list",
+      "input": {
+        "base": "repo"
+      },
+      "observed": {
+        "outcome": "listed",
+        "worktrees": []
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "several",
+      "family": "list",
+      "input": {
+        "base": "repo"
+      },
+      "observed": {
+        "outcome": "listed",
+        "worktrees": [
+          {
+            "branch": "alpha",
+            "name": "alpha",
+            "path": "linked/alpha",
+            "repoRoot": "repo",
+            "root": "linked/alpha"
+          },
+          {
+            "branch": "beta",
+            "name": "beta",
+            "path": "linked/beta",
+            "repoRoot": "repo",
+            "root": "linked/beta"
+          }
+        ]
+      },
+      "setup": "linked-worktrees"
+    },
+    {
+      "case": "subdirectory-base",
+      "family": "list",
+      "input": {
+        "base": "repo/docs"
+      },
+      "observed": {
+        "outcome": "listed",
+        "worktrees": [
+          {
+            "branch": "alpha",
+            "name": "alpha",
+            "path": "linked/alpha/docs",
+            "repoRoot": "repo",
+            "root": "linked/alpha"
+          },
+          {
+            "branch": "beta",
+            "name": "beta",
+            "path": "linked/beta/docs",
+            "repoRoot": "repo",
+            "root": "linked/beta"
+          }
+        ]
+      },
+      "setup": "linked-worktrees"
+    },
+    {
+      "case": "not-a-repository",
+      "family": "list",
+      "input": {
+        "base": "."
+      },
+      "observed": {
+        "errorClass": "WorktreeNotFoundError",
+        "message": {
+          "described": "sha256:5b250b4a30e89b18ff2e1e9cdade1cd8",
+          "length": 36
+        },
+        "outcome": "error"
+      },
+      "setup": "target-tree"
+    },
+    {
+      "case": "root",
+      "family": "targetCwd",
+      "input": {
+        "relativeBase": ".",
+        "root": "tree"
+      },
+      "observed": {
+        "outcome": "resolved",
+        "path": "tree"
+      },
+      "setup": "target-tree"
+    },
+    {
+      "case": "subdirectory",
+      "family": "targetCwd",
+      "input": {
+        "relativeBase": "sub",
+        "root": "tree"
+      },
+      "observed": {
+        "outcome": "resolved",
+        "path": "tree/sub"
+      },
+      "setup": "target-tree"
+    },
+    {
+      "case": "nested-subdirectory",
+      "family": "targetCwd",
+      "input": {
+        "relativeBase": "deep/inner",
+        "root": "tree"
+      },
+      "observed": {
+        "outcome": "resolved",
+        "path": "tree/deep/inner"
+      },
+      "setup": "target-tree"
+    },
+    {
+      "case": "missing",
+      "family": "targetCwd",
+      "input": {
+        "relativeBase": "missing",
+        "root": "tree"
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:10ca1099f8cb9bcd6700479cf079f5b6",
+          "length": 64
+        },
+        "outcome": "error"
+      },
+      "setup": "target-tree"
+    },
+    {
+      "case": "regular-file",
+      "family": "targetCwd",
+      "input": {
+        "relativeBase": "file.txt",
+        "root": "tree"
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:0b509f80e437216ac1a6dbb5cffdc4ac",
+          "length": 54
+        },
+        "outcome": "error"
+      },
+      "setup": "target-tree"
+    },
+    {
+      "case": "escaping-symlink",
+      "family": "targetCwd",
+      "input": {
+        "relativeBase": "escape",
+        "root": "tree"
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:3aa76e1055141ae6492ca2c11683b343",
+          "length": 71
+        },
+        "outcome": "error"
+      },
+      "setup": "target-tree"
+    },
+    {
+      "case": "aliased-component",
+      "family": "targetCwd",
+      "input": {
+        "relativeBase": "aliased",
+        "root": "tree"
+      },
+      "observed": {
+        "outcome": "resolved",
+        "path": "tree/sub"
+      },
+      "setup": "target-tree"
+    },
+    {
+      "case": "nested-git",
+      "family": "targetCwd",
+      "input": {
+        "relativeBase": "nested",
+        "root": "tree"
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:ab0476e37fd272a4450936fdbff2764d",
+          "length": 71
+        },
+        "outcome": "error"
+      },
+      "setup": "target-tree"
+    }
+  ],
+  "note": "Worktree corpus: what the pinned reference's own worktree functions answer over repositories this capture scripts under a hermetic git environment. Paths are relative to the case root, the managed directory's hashed segment is {repoDir} and the scripted head commit is {headCommit}, so the corpus is machine-independent. A reference sentence is committed as a {described, length} marker carrying a SHA-256 digest, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/worktree.py --corpus when the pinned reference moves.",
+  "platform": "linux",
+  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "schemaVersion": 1,
+  "setups": [
+    "plain",
+    "untracked-subdirectory",
+    "attached-branch",
+    "occupied-target",
+    "detached-target",
+    "foreign-target",
+    "linked-worktrees",
+    "target-tree"
+  ]
+}
