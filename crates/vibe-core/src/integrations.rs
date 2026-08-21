@@ -279,6 +279,15 @@ impl ConnectorRegistry {
             state.auth_gates = auth_gates;
             state.cache_key = Some(cache_key);
             state.cached_at = now;
+            // The registry stops describing these views here: every tool the
+            // previous discovery registered has just been marked unavailable,
+            // and the names this one carries reach the registry for the first
+            // time in the `register_tools` that follows. Detaching it keeps
+            // that window view-only, which is what lets a caller reconcile a
+            // fresh view against its configuration entry before any of its
+            // tools is published: reconciling through the registry instead
+            // would fail on a name the registry has never seen.
+            state.tools = None;
         }
         for gate in old_gates {
             *gate.write().await = ConnectorAuthState::Disconnected;
