@@ -8,8 +8,11 @@ use vibe_app_server::client::{LiveTurnDriver, TurnDriver, TurnReservation};
 use vibe_app_server::resources::{CoreResourceBackend, ResourceBackend, ResourceSession};
 use vibe_app_server::server::SessionIntent;
 use vibe_app_server::workspace::{WorkspacePaths, WorkspaceService};
-use vibe_core::engine::{CompletionProvider, ProviderFuture};
-use vibe_core::events::{ModelMessage, ModelToolCall, PublicContentBlock};
+use vibe_core::engine::{CompletionProvider, EventObserver, ProviderFuture};
+use vibe_core::events::{
+    EngineEvent, EventEnvelope, ModelMessage, ModelToolCall, ProjectionReducer, PublicContentBlock,
+    PublicHistoryEntry, RemoteToolOrigin,
+};
 use vibe_core::middleware::CompactionSettings;
 use vibe_core::policy::{PermissionMode, PermissionStore, TrustDecision, TrustRootKind};
 use vibe_core::provider::{AssistantMessage, ProviderInput, ToolDefinition, Usage};
@@ -77,6 +80,23 @@ impl CompletionProvider for ModelSelectsMcp {
             *calls = calls.saturating_add(1);
             Ok(response)
         })
+    }
+}
+
+/// Keeps every event the turn emitted, so the call the engine published for a
+/// real remote tool can be read rather than assumed.
+#[derive(Default)]
+struct RecordsEvents {
+    envelopes: Mutex<Vec<EventEnvelope>>,
+}
+
+impl EventObserver for RecordsEvents {
+    fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
+        self.envelopes
+            .lock()
+            .map_err(|_| "lock".to_owned())?
+            .push(event.clone());
+        Ok(())
     }
 }
 
@@ -191,8 +211,18 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
         2,
         "all paginated tools are registered"
     );
+    // Discovery is what teaches the registry where a tool comes from, and the
+    // published name no longer says it: `fixture_echo` joins the alias to a
+    // sanitized tool name, so only the registration knows the server published
+    // `echo`.
+    assert_eq!(
+        tools.remote_origin("fixture_echo"),
+        Some(RemoteToolOrigin::mcp("echo"))
+    );
     let provider = Arc::new(ModelSelectsMcp::default());
-    let driver = LiveTurnDriver::from_provider_for_tests(provider.clone(), "system");
+    let observed = Arc::new(RecordsEvents::default());
+    let driver = LiveTurnDriver::from_provider_for_tests(provider.clone(), "system")
+        .with_event_observer(observed.clone());
     let outcome = driver
         .run(&TurnReservation {
             session_id: "session-1".to_owned(),
@@ -221,6 +251,63 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
         let seen = provider.definitions.lock().expect("definitions");
         assert!(seen[0].iter().any(|tool| tool.name == "fixture_echo"));
     }
+
+    // A registration that carries the origin proves linkage, not reachability:
+    // the call the engine emitted for this turn is what the projection reads,
+    // so it is read here as the turn actually published it.
+    let call = {
+        let envelopes = observed.envelopes.lock().expect("observed events");
+        envelopes
+            .iter()
+            .find(|envelope| {
+                matches!(&envelope.event, EngineEvent::ToolCall { name, .. } if name == "fixture_echo")
+            })
+            .map(|envelope| envelope.event.clone())
+            .expect("the turn published the proxied call")
+    };
+    let EngineEvent::ToolCall {
+        remote: Some(origin),
+        ..
+    } = &call
+    else {
+        unreachable!("a tool a stdio server published carries its origin")
+    };
+    assert_eq!(*origin, RemoteToolOrigin::mcp("echo"));
+    let mut reducer = ProjectionReducer::new("session-1");
+    reducer
+        .apply(&EventEnvelope {
+            session_id: "session-1".to_owned(),
+            turn_id: Some("turn-1".to_owned()),
+            emitted_at: 1,
+            event_id: 1,
+            event: EngineEvent::UserMessage {
+                content: "use the fixture".to_owned(),
+            },
+        })
+        .expect("the turn starts");
+    reducer
+        .apply(&EventEnvelope {
+            session_id: "session-1".to_owned(),
+            turn_id: Some("turn-1".to_owned()),
+            emitted_at: 2,
+            event_id: 2,
+            event: call.clone(),
+        })
+        .expect("the proxied call projects");
+    let PublicHistoryEntry::Effect { detail, .. } = reducer
+        .state()
+        .history
+        .last()
+        .expect("the effect entry")
+        .clone()
+    else {
+        unreachable!("the last entry is the call just projected")
+    };
+    assert_eq!(detail.display.status_text, "Calling MCP tool echo");
+    assert!(
+        detail.display.settled_message.is_some(),
+        "a published call display settles under a message"
+    );
 
     backend
         .close_session("session-1", 1)
