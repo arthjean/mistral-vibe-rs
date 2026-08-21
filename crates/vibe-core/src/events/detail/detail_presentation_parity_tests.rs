@@ -67,6 +67,37 @@ const REMOTE_ALIAS: &str = "acme";
 /// What a divergence names when no story can close it, because closing it would
 /// mean shipping reference prose.
 const LICENSING: &str = "NOTICE";
+/// What a divergence names when this port answers differently on purpose and
+/// the decision is written down instead of being left open: the scorecard's
+/// accepted-divergence table holds the row, and [`Divergence::row`] names which.
+const RECORDED: &str = "docs/parity.md";
+
+/// The scorecard the recorded decisions live in, read by
+/// [`every_recorded_divergence_names_a_scorecard_row`].
+const SCORECARD_RELATIVE: &str = "docs/parity.md";
+/// The section of that file the decided divergences live in.
+const ACCEPTED_HEADING: &str = "## Accepted divergences";
+/// What an accepted-divergence row writes in its evidence cell when this ledger
+/// is what holds it. A row carrying it must be named by a ledger entry, which
+/// is what makes a closed divergence take its row down with it.
+const LEDGER_EVIDENCE: &str =
+    "`ledger` in `crates/vibe-core/src/events/detail/detail_presentation_parity_tests.rs`";
+/// This module's own path, read by the test that proves the replay answers from
+/// the corpus and not from the reference checkout.
+const MODULE_RELATIVE: &str =
+    "crates/vibe-core/src/events/detail/detail_presentation_parity_tests.rs";
+/// The one test in this module that reads the reference checkout.
+const RECAPTURE_PROBE: &str = "fn the_committed_corpus_still_matches_the_pinned_reference";
+
+/// The accepted-divergence rows this ledger's entries are recorded under, each
+/// spelled exactly as the row's first cell spells it.
+const KIND_HEADER_ROW: &str =
+    "A call header comes from the effect kind, not from a per-tool UI class";
+const KIND_SETTLEMENT_ROW: &str =
+    "A settled call repeats its subject instead of reading the result";
+const CALL_CONTENT_ROW: &str = "No call display carries a content preview";
+const INVALID_LABEL_ROW: &str = "The label an argument of the wrong class is answered with";
+const AUTHORED_CALL_TEXT_ROW: &str = "Authored call-display text in the plan and fetch tools";
 
 /// The story range `tasks/prd-tool-infrastructure-parity.md` numbers its work
 /// in, US-254 through US-268. A closer is checked against it rather than
@@ -87,15 +118,21 @@ fn names_a_story(closed_by: &str) -> bool {
 /// Each is stated once so a story landing removes one sentence rather than
 /// dozens.
 const NO_ARGUMENTS: &str = "the reference answers a call whose arguments never arrived with \
-     `get_no_args_display`, whose summary is the tool's display name alone; this port renders the \
-     kind's header over empty arguments";
+     `get_no_args_display`, which publishes the tool's display name alone and the running verbs; \
+     this port renders the effect kind's header and the kind's own verbs over empty arguments";
 const INVALID_ARGUMENTS: &str = "the reference answers arguments of the wrong class with \
      `get_invalid_args_display`, whose summary is a label the reference authored; this port has \
      no argument model at this boundary, and reaching that digest would mean shipping the \
      reference's label";
+const INVALID_ARGUMENTS_NAME: &str = "the reference answers arguments of the wrong class with the \
+     tool's display name in the clear, which `task` spells `subagent`; this port renders the \
+     effect kind's header there too";
 const PLAN_DISPLAY: &str = "the reference's `exit_plan_mode` publishes a call display it authored \
      the sentences of; this port renders its own, and reaching those digests would mean copying \
      them";
+const PLAN_VERBS: &str = "the reference's `exit_plan_mode` publishes the running verbs, which the \
+     corpus records in the clear; this port publishes the plan kind's own, so what stands here is \
+     the vocabulary decision and not the prose one";
 const PLAN_STATUS: &str = "the reference names the plan-mode wait with a sentence it authored; \
      this port publishes its own label";
 const FETCH_SUMMARY: &str = "the reference renders the fetch target and its timeout in a form it \
@@ -106,7 +143,8 @@ const CALL_CONTENT: &str = "the reference's edit and write displays publish a `c
      of what the call would change; this port publishes null on every tool";
 const RESULT_SETTLEMENT: &str = "the reference settles the call from the tool's own result \
      display, which reads the returned payload; this port settles from the generic kind and \
-     repeats the call subject";
+     repeats the call subject, and where the reference's settled sentence is authored text \
+     `NOTICE` bars its wording as well";
 const ERROR_FORWARDING: &str = "the reference's adapter reports the error as the result message; \
      this port keeps the call subject and leaves the error to the entry that carries it";
 const ERROR_VERB: &str = "the reference's adapter publishes no verb on an errored result; this \
@@ -147,6 +185,13 @@ const SELF_NAMED_VERB_TOOLS: [&str; 8] = [
     "write_file",
 ];
 
+/// The builtins whose invalid-argument display is the tool's own name in the
+/// clear rather than the reference's authored label. The split is measured by
+/// the capture and not assumed: `task` names itself `subagent` there, and the
+/// summary field keeps the label for `task` while its message fields do not.
+const NAME_ON_INVALID_SUMMARY: [&str; 2] = ["web_fetch", "web_search"];
+const NAME_ON_INVALID_MESSAGE: [&str; 3] = ["task", "web_fetch", "web_search"];
+
 /// The two builtins whose displays publish a `content` preview upstream.
 const CONTENT_TOOLS: [&str; 2] = ["edit", "write_file"];
 
@@ -165,121 +210,135 @@ const TASK_TOOL: &str = "task";
 /// spans fourteen tools is expanded over those fourteen names below rather than
 /// hidden behind a wildcard.
 ///
-/// Two kinds of entry live here. One names the story that closes it, and the
-/// staleness check below deletes it as soon as the story lands. The other names
-/// [`LICENSING`], which is the boundary `NOTICE` draws: reaching those digests
-/// would mean writing the reference's own sentences into this repository.
+/// Two kinds of entry live here, and both name the accepted-divergence row that
+/// holds them. One names [`LICENSING`], which is the boundary `NOTICE` draws:
+/// reaching those digests would mean writing the reference's own sentences into
+/// this repository. The other names [`RECORDED`], which is a decision this
+/// repository took on purpose: this port keys its presentation on the effect
+/// kind where the reference keys it on the tool class, which the PRD keeps as a
+/// non-goal, so the difference is written down in the scorecard rather than left
+/// open. A story identifier is accepted too, and the staleness check below
+/// deletes any entry as soon as its divergence stops reproducing.
 fn ledger() -> Vec<Divergence> {
     let mut entries = Vec::new();
     let mut add = |tool: &'static str,
                    case: &'static str,
                    pointer: &'static str,
                    closed_by: &'static str,
-                   why: &'static str| {
+                   why: &'static str,
+                   row: &'static str| {
         entries.push(Divergence {
             tool,
             case,
             pointer,
             closed_by,
             why,
+            row,
         });
     };
+    // What the reference publishes for arguments of the wrong class, which the
+    // capture measured rather than assumed: an authored label for most tools,
+    // and the tool's own display name for the three named above.
+    let invalid = |names_the_tool: bool| {
+        if names_the_tool {
+            (RECORDED, INVALID_ARGUMENTS_NAME, KIND_HEADER_ROW)
+        } else {
+            (LICENSING, INVALID_ARGUMENTS, INVALID_LABEL_ROW)
+        }
+    };
+
     for tool in BUILTIN_TOOLS {
-        add(
-            tool,
-            "absent-arguments",
+        for pointer in [
             "/display/summary",
-            "US-268",
-            NO_ARGUMENTS,
-        );
-        add(
-            tool,
-            "absent-arguments",
             "/display/message",
-            "US-268",
-            NO_ARGUMENTS,
-        );
-        add(
-            tool,
-            "absent-arguments",
             "/display/settledMessage",
-            "US-268",
-            NO_ARGUMENTS,
-        );
+        ] {
+            add(
+                tool,
+                "absent-arguments",
+                pointer,
+                RECORDED,
+                NO_ARGUMENTS,
+                KIND_HEADER_ROW,
+            );
+        }
+        let (closed_by, why, row) = invalid(NAME_ON_INVALID_SUMMARY.contains(&tool));
         add(
             tool,
             "wrong-argument-type",
             "/display/summary",
-            LICENSING,
-            INVALID_ARGUMENTS,
+            closed_by,
+            why,
+            row,
         );
+        let (closed_by, why, row) = invalid(NAME_ON_INVALID_MESSAGE.contains(&tool));
         add(
             tool,
             "wrong-argument-type",
             "/display/message",
-            LICENSING,
-            INVALID_ARGUMENTS,
+            closed_by,
+            why,
+            row,
         );
         add(
             tool,
             "wrong-argument-type",
             "/display/settledMessage",
-            LICENSING,
-            INVALID_ARGUMENTS,
+            closed_by,
+            why,
+            row,
         );
         add(
             tool,
             "error-result",
             "/display/message",
-            "US-268",
+            RECORDED,
             ERROR_FORWARDING,
+            KIND_SETTLEMENT_ROW,
         );
-        add(tool, "error-result", "/display/verb", "US-268", ERROR_VERB);
+        add(
+            tool,
+            "error-result",
+            "/display/verb",
+            RECORDED,
+            ERROR_VERB,
+            KIND_SETTLEMENT_ROW,
+        );
         add(
             tool,
             "skipped-result",
             "/display/message",
-            "US-268",
+            RECORDED,
             SKIP_LABEL,
+            KIND_SETTLEMENT_ROW,
         );
     }
     for tool in SELF_NAMED_VERB_TOOLS {
-        add(
-            tool,
-            "absent-arguments",
-            "/display/verb",
-            "US-268",
-            NO_ARGUMENTS,
-        );
-        add(
-            tool,
-            "absent-arguments",
-            "/display/settledVerb",
-            "US-268",
-            NO_ARGUMENTS,
-        );
-        add(
-            tool,
-            "wrong-argument-type",
-            "/display/verb",
-            "US-268",
-            INVALID_ARGUMENTS,
-        );
-        add(
-            tool,
-            "wrong-argument-type",
-            "/display/settledVerb",
-            "US-268",
-            INVALID_ARGUMENTS,
-        );
+        for case in ["absent-arguments", "wrong-argument-type"] {
+            let why = if case == "absent-arguments" {
+                NO_ARGUMENTS
+            } else {
+                INVALID_ARGUMENTS_NAME
+            };
+            add(tool, case, "/display/verb", RECORDED, why, KIND_HEADER_ROW);
+            add(
+                tool,
+                case,
+                "/display/settledVerb",
+                RECORDED,
+                why,
+                KIND_HEADER_ROW,
+            );
+        }
     }
     for tool in CONTENT_TOOLS {
         add(
             tool,
             "valid-arguments",
             "/display/content",
-            "US-268",
+            RECORDED,
             CALL_CONTENT,
+            CALL_CONTENT_ROW,
         );
     }
     for case in CALL_CASES {
@@ -289,6 +348,7 @@ fn ledger() -> Vec<Divergence> {
             "/display/statusText",
             LICENSING,
             PLAN_STATUS,
+            AUTHORED_CALL_TEXT_ROW,
         );
         add(
             FETCH_TOOL,
@@ -296,108 +356,94 @@ fn ledger() -> Vec<Divergence> {
             "/display/statusText",
             LICENSING,
             FETCH_STATUS,
+            AUTHORED_CALL_TEXT_ROW,
+        );
+    }
+    for pointer in [
+        "/display/summary",
+        "/display/message",
+        "/display/settledMessage",
+    ] {
+        add(
+            PLAN_TOOL,
+            "valid-arguments",
+            pointer,
+            LICENSING,
+            PLAN_DISPLAY,
+            AUTHORED_CALL_TEXT_ROW,
+        );
+        add(
+            FETCH_TOOL,
+            "valid-arguments",
+            pointer,
+            LICENSING,
+            FETCH_SUMMARY,
+            AUTHORED_CALL_TEXT_ROW,
         );
     }
     add(
         PLAN_TOOL,
         "valid-arguments",
-        "/display/summary",
-        LICENSING,
-        PLAN_DISPLAY,
-    );
-    add(
-        PLAN_TOOL,
-        "valid-arguments",
-        "/display/message",
-        LICENSING,
-        PLAN_DISPLAY,
-    );
-    add(
-        PLAN_TOOL,
-        "valid-arguments",
         "/display/verb",
-        LICENSING,
-        PLAN_DISPLAY,
+        RECORDED,
+        PLAN_VERBS,
+        KIND_HEADER_ROW,
     );
     add(
         PLAN_TOOL,
         "valid-arguments",
         "/display/settledVerb",
-        LICENSING,
-        PLAN_DISPLAY,
-    );
-    add(
-        FETCH_TOOL,
-        "valid-arguments",
-        "/display/summary",
-        LICENSING,
-        FETCH_SUMMARY,
-    );
-    add(
-        FETCH_TOOL,
-        "valid-arguments",
-        "/display/message",
-        LICENSING,
-        FETCH_SUMMARY,
-    );
-    add(
-        PLAN_TOOL,
-        "valid-arguments",
-        "/display/settledMessage",
-        LICENSING,
-        PLAN_DISPLAY,
-    );
-    add(
-        FETCH_TOOL,
-        "valid-arguments",
-        "/display/settledMessage",
-        LICENSING,
-        FETCH_SUMMARY,
+        RECORDED,
+        PLAN_VERBS,
+        KIND_HEADER_ROW,
     );
     add(
         PLAN_TOOL,
         "successful-result",
         "/display/message",
-        "US-268",
+        RECORDED,
         RESULT_SETTLEMENT,
+        KIND_SETTLEMENT_ROW,
     );
     add(
         PLAN_TOOL,
         "successful-result",
         "/display/verb",
-        "US-268",
+        RECORDED,
         RESULT_SETTLEMENT,
+        KIND_SETTLEMENT_ROW,
     );
     add(
         TASK_TOOL,
         "successful-result",
         "/display/message",
-        "US-268",
+        RECORDED,
         RESULT_SETTLEMENT,
+        KIND_SETTLEMENT_ROW,
     );
     for tool in REMOTE_TOOLS {
-        add(
-            tool,
-            "wrong-argument-type",
+        for pointer in [
             "/display/summary",
-            LICENSING,
-            INVALID_ARGUMENTS,
-        );
-        add(
-            tool,
-            "wrong-argument-type",
             "/display/message",
-            LICENSING,
-            INVALID_ARGUMENTS,
-        );
+            "/display/settledMessage",
+        ] {
+            add(
+                tool,
+                "wrong-argument-type",
+                pointer,
+                LICENSING,
+                INVALID_ARGUMENTS,
+                INVALID_LABEL_ROW,
+            );
+        }
         add(
             tool,
-            "wrong-argument-type",
-            "/display/settledMessage",
-            LICENSING,
-            INVALID_ARGUMENTS,
+            "error-result",
+            "/display/verb",
+            RECORDED,
+            ERROR_VERB,
+            KIND_SETTLEMENT_ROW,
         );
-        add(tool, "error-result", "/display/verb", "US-268", ERROR_VERB);
     }
     entries
 }
@@ -421,6 +467,9 @@ struct Divergence {
     /// Why the gap stands, asserted non-empty so an entry cannot be added
     /// without a stated reason.
     why: &'static str,
+    /// The accepted-divergence row of `docs/parity.md` this entry is recorded
+    /// under, spelled as that row's first cell spells it.
+    row: &'static str,
 }
 
 impl Divergence {
@@ -842,13 +891,23 @@ fn the_committed_corpus_replays_against_this_port() {
     }
 
     let tools: BTreeSet<&str> = corpus.cases.iter().map(|case| case.tool.as_str()).collect();
+    let recorded = tolerated
+        .iter()
+        .filter(|(_, closed_by)| *closed_by == RECORDED)
+        .count();
+    let licensed = tolerated
+        .iter()
+        .filter(|(_, closed_by)| *closed_by == LICENSING)
+        .count();
     println!(
         "tool presentation: {conforming}/{} cases match the reference at {} over {} tools, {} \
-         ledger entries exercised",
+         tolerated fields over {} ledger entries, {recorded} recorded as decisions and {licensed} \
+         held by the licensing boundary",
         corpus.cases.len(),
         &corpus.reference_commit[..12],
         tools.len(),
-        tolerated.len()
+        tolerated.len(),
+        ledger.len()
     );
     for (entry, closed_by) in &tolerated {
         println!("  tolerated {entry} until {closed_by}");
@@ -908,12 +967,22 @@ fn every_ledger_entry_names_what_closes_it() {
     let mut seen: BTreeSet<(&str, &str, &str)> = BTreeSet::new();
     for entry in &ledger {
         assert!(
-            names_a_story(entry.closed_by) || entry.closed_by == LICENSING,
-            "a tolerated divergence names a story of this PRD (US-{}..=US-{}) or the licensing \
-             boundary that keeps it open, not {}",
+            names_a_story(entry.closed_by)
+                || entry.closed_by == LICENSING
+                || entry.closed_by == RECORDED,
+            "a tolerated divergence names a story of this PRD (US-{}..=US-{}), the licensing \
+             boundary that keeps it open, or the scorecard that records the decision, not {}",
             PRD_STORIES.start(),
             PRD_STORIES.end(),
             entry.closed_by
+        );
+        assert!(
+            !entry.row.is_empty(),
+            "{}/{} at {} names no accepted-divergence row, so nothing outside this file says why \
+             the difference stands",
+            entry.tool,
+            entry.case,
+            entry.pointer
         );
         assert!(entry.pointer.starts_with('/'), "{}", entry.pointer);
         assert_ne!(
@@ -943,6 +1012,101 @@ fn every_ledger_entry_names_what_closes_it() {
             entry.tool,
             entry.case,
             entry.pointer
+        );
+    }
+}
+
+/// Every divergence this ledger holds has a row in the scorecard, and every
+/// scorecard row that names this ledger is still reached by an entry.
+///
+/// The staleness check above deletes an entry as soon as its divergence closes;
+/// without this test the scorecard would keep claiming a difference nothing
+/// measures any more. Reading the table here rather than restating it keeps one
+/// copy of the decision.
+#[test]
+fn every_recorded_divergence_names_a_scorecard_row() {
+    let scorecard = fs::read_to_string(repo_root().join(SCORECARD_RELATIVE))
+        .expect("the scorecard is committed");
+    let section = scorecard.split_once(ACCEPTED_HEADING).map(|(_, rest)| rest);
+    assert!(
+        section.is_some(),
+        "{SCORECARD_RELATIVE} carries no `{ACCEPTED_HEADING}` section"
+    );
+    let table = section.unwrap_or_default();
+
+    // Every accepted-divergence row, as its first cell and its whole line. A
+    // row is a table line with at least the three cells the table declares.
+    let rows: Vec<(&str, &str)> = table
+        .lines()
+        .filter(|line| line.starts_with("| ") && line.matches(" | ").count() >= 2)
+        .filter(|line| !line.starts_with("| Part |"))
+        .map(|line| {
+            (
+                line.trim_start_matches("| ")
+                    .split(" | ")
+                    .next()
+                    .unwrap_or(""),
+                line,
+            )
+        })
+        .collect();
+
+    let ledger = ledger();
+    let named: BTreeSet<&str> = ledger.iter().map(|entry| entry.row).collect();
+    for row in &named {
+        let matching = rows.iter().filter(|(part, _)| part == row).count();
+        assert_eq!(
+            matching, 1,
+            "the ledger records a divergence under the scorecard row {row:?}, which appears \
+             {matching} times in `{SCORECARD_RELATIVE}` under `{ACCEPTED_HEADING}`"
+        );
+    }
+
+    let orphaned: Vec<&str> = rows
+        .iter()
+        .filter(|(part, line)| line.contains(LEDGER_EVIDENCE) && !named.contains(part))
+        .map(|(part, _)| *part)
+        .collect();
+    assert!(
+        orphaned.is_empty(),
+        "these accepted-divergence rows name this ledger as their evidence and no entry reaches \
+         them any more, so the divergence closed and the row must go with it: {orphaned:?}"
+    );
+}
+
+/// The replay answers from the committed corpus, not from the reference
+/// checkout.
+///
+/// US-268 asks for the assertion by name: a workstation or a runner without the
+/// reference still measures this port against the pin, because every expectation
+/// the comparison reads comes out of the corpus file. The proof is structural.
+/// The corpus parses and carries its cases here, and every mention of the
+/// checkout in this module sits inside the one recapture probe, which skips
+/// when the checkout is absent or off-pin.
+#[test]
+fn the_replay_reads_the_corpus_and_not_the_reference_checkout() {
+    let corpus = corpus();
+    assert_corpus_floor(&corpus);
+
+    let source = fs::read_to_string(repo_root().join(MODULE_RELATIVE))
+        .expect("this module is committed at the path it names");
+    let probe = source
+        .find(RECAPTURE_PROBE)
+        .expect("the recapture probe is declared under the name this module names");
+    // The import that carries the checkout helpers into scope is not a use of
+    // them, so it is cut before the search.
+    let before = source[..probe]
+        .split_once("use crate::parity::{")
+        .map(|(head, rest)| {
+            let (_import, tail) = rest.split_once("};").unwrap_or(("", rest));
+            format!("{head}{tail}")
+        })
+        .unwrap_or_else(|| source[..probe].to_owned());
+    for reader in ["reference_root(", "off_pin_reason(", "RESTORE_COMMAND"] {
+        assert!(
+            !before.contains(reader),
+            "{reader} is read before `{RECAPTURE_PROBE}`, so the replay would depend on the \
+             reference checkout instead of on {CORPUS_RELATIVE}"
         );
     }
 }
