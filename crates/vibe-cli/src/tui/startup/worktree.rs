@@ -1,63 +1,39 @@
+//! The `Arguments`-facing half of the worktree contract.
+//!
+//! Preparation, inspection and removal live in `vibe_core::worktree`, one layer
+//! below, so the app-server can reach them too. What is left here is what only
+//! a terminal launch knows: which directory the invocation meant, where the
+//! vibe home is, how `--add-dir` resolves once the effective directory moved,
+//! and whether a human at a terminal agreed to discard their work.
+
 use std::fs;
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
 
-use sha2::{Digest, Sha256};
+use vibe_core::worktree::{
+    self, PreparedWorktree, WorktreeError, inspect_worktree_for_cleanup, remove_worktree,
+};
 
 use crate::Arguments;
 
 use super::{StartupError, startup_io, vibe_home_directory};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PreparedWorktree {
-    pub name: String,
-    pub branch: String,
-    pub root: PathBuf,
-    pub path: PathBuf,
-    pub repo_root: PathBuf,
-    pub base_commit: String,
-    pub created: bool,
-    pub branch_created: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorktreeCleanupState {
-    pub has_uncommitted_changes: bool,
-    pub has_untracked_files: bool,
-    pub new_commit_count: u64,
-}
-
-impl WorktreeCleanupState {
-    #[must_use]
-    pub const fn is_clean(&self) -> bool {
-        !self.has_uncommitted_changes && !self.has_untracked_files && self.new_commit_count == 0
-    }
-
-    #[must_use]
-    pub fn reasons(&self) -> Vec<String> {
-        let mut reasons = Vec::new();
-        if self.has_uncommitted_changes {
-            reasons.push("uncommitted changes".to_owned());
+impl From<WorktreeError> for StartupError {
+    fn from(error: WorktreeError) -> Self {
+        match error {
+            WorktreeError::InvalidName => Self::InvalidWorktreeName,
+            WorktreeError::RepositoryRequired => Self::WorktreeRepositoryRequired,
+            WorktreeError::GitUnavailable(message) => Self::Worktree {
+                name: "git".to_owned(),
+                message,
+            },
+            WorktreeError::Failed { name, message } => Self::Worktree { name, message },
+            WorktreeError::Io { path, source } => Self::Io { path, source },
         }
-        if self.has_untracked_files {
-            reasons.push("untracked files".to_owned());
-        }
-        if self.new_commit_count > 0 {
-            let noun = if self.new_commit_count == 1 {
-                "commit"
-            } else {
-                "commits"
-            };
-            reasons.push(format!(
-                "{} {noun} added to the branch during this session",
-                self.new_commit_count
-            ));
-        }
-        reasons
     }
 }
 
+/// Where a launch actually runs, and the worktree it prepared to get there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchWorkspace {
     pub effective_directory: PathBuf,
@@ -85,7 +61,8 @@ impl LaunchWorkspace {
         }
 
         let name = arguments.worktree.as_deref().unwrap_or_default();
-        let worktree = prepare_worktree(name, &base_directory, arguments)?;
+        let vibe_home = vibe_home_directory(arguments, &base_directory);
+        let worktree = worktree::prepare_worktree(name, &base_directory, &vibe_home)?;
         resolve_additional_directories(arguments, &worktree.path)?;
         arguments.workdir = Some(worktree.path.clone());
         arguments.trust = true;
@@ -136,353 +113,88 @@ pub enum CleanupOutcome {
     Removed,
 }
 
-impl PreparedWorktree {
-    pub fn cleanup_terminal(self) -> Result<CleanupOutcome, StartupError> {
-        let mut output = std::io::stderr().lock();
-        if std::io::stdin().is_terminal() {
-            return self.cleanup(&mut std::io::stdin().lock(), &mut output);
-        }
-        #[cfg(unix)]
-        {
-            let terminal = fs::File::open("/dev/tty")
-                .map_err(|source| startup_io(Path::new("/dev/tty"), source))?;
-            self.cleanup(&mut std::io::BufReader::new(terminal), &mut output)
-        }
-        #[cfg(not(unix))]
-        self.cleanup(&mut std::io::stdin().lock(), &mut output)
+/// Offers cleanup on the terminal, reading `/dev/tty` when stdin is a pipe.
+pub fn cleanup_worktree_terminal(
+    worktree: PreparedWorktree,
+) -> Result<CleanupOutcome, StartupError> {
+    let mut output = std::io::stderr().lock();
+    if std::io::stdin().is_terminal() {
+        return cleanup_worktree(worktree, &mut std::io::stdin().lock(), &mut output);
     }
-
-    pub fn cleanup(
-        self,
-        input: &mut impl BufRead,
-        output: &mut impl Write,
-    ) -> Result<CleanupOutcome, StartupError> {
-        if !self.created {
-            return Ok(CleanupOutcome::NotOwned);
-        }
-        let state = inspect_worktree_for_cleanup(&self)?;
-        if !state.is_clean() {
-            writeln!(
-                output,
-                "Worktree {:?} has {}.",
-                self.name,
-                state.reasons().join(", ")
-            )
-            .map_err(|source| startup_io(&self.root, source))?;
-            writeln!(
-                output,
-                "Remove it and delete its branch? This discards worktree changes, untracked files, and commits."
-            )
-            .map_err(|source| startup_io(&self.root, source))?;
-            if !confirm(
-                input,
-                output,
-                "Remove worktree? [y/N] ",
-                &["y", "yes", "remove"],
-            )? {
-                writeln!(output, "Keeping worktree: {}", self.root.display())
-                    .map_err(|source| startup_io(&self.root, source))?;
-                return Ok(CleanupOutcome::Kept);
-            }
-        }
-
-        let delete_branch = if self.branch_created {
-            true
-        } else {
-            writeln!(
-                output,
-                "Branch {:?} existed before this session and was attached, not created by Vibe.",
-                self.branch
-            )
-            .map_err(|source| startup_io(&self.root, source))?;
-            confirm(
-                input,
-                output,
-                &format!("Also delete branch {:?}? [y/N] ", self.branch),
-                &["y", "yes", "delete"],
-            )?
-        };
-
-        git_checked(
-            &self.repo_root,
-            ["worktree", "remove", "--force", path_text(&self.root)?],
-            &self.name,
-        )?;
-        if delete_branch {
-            git_checked(
-                &self.repo_root,
-                ["branch", "-D", self.branch.as_str()],
-                &self.name,
-            )?;
-        }
-        writeln!(output, "Removed worktree: {}", self.root.display())
-            .map_err(|source| startup_io(&self.root, source))?;
-        if !delete_branch {
-            writeln!(output, "Kept branch: {}", self.branch)
-                .map_err(|source| startup_io(&self.root, source))?;
-        }
-        Ok(CleanupOutcome::Removed)
+    #[cfg(unix)]
+    {
+        let terminal = fs::File::open("/dev/tty")
+            .map_err(|source| startup_io(Path::new("/dev/tty"), source))?;
+        cleanup_worktree(
+            worktree,
+            &mut std::io::BufReader::new(terminal),
+            &mut output,
+        )
     }
+    #[cfg(not(unix))]
+    cleanup_worktree(worktree, &mut std::io::stdin().lock(), &mut output)
 }
 
-fn prepare_worktree(
-    name: &str,
-    base: &Path,
-    arguments: &Arguments,
-) -> Result<PreparedWorktree, StartupError> {
-    validate_worktree_name(name)?;
-    let checkout_root = git_stdout(base, ["rev-parse", "--show-toplevel"], name)
-        .map(PathBuf::from)
-        .map_err(|_| StartupError::WorktreeRepositoryRequired)?;
-    let checkout_root = canonical_directory(&checkout_root)?;
-    let common_git_dir = resolve_git_path(
-        &checkout_root,
-        &git_stdout(base, ["rev-parse", "--git-common-dir"], name)?,
-    )?;
-    let repo_root = common_git_dir
-        .parent()
-        .ok_or_else(|| StartupError::Worktree {
-            name: name.to_owned(),
-            message: "git common directory has no repository parent".to_owned(),
-        })?
-        .to_path_buf();
-    let relative_base = base
-        .strip_prefix(&checkout_root)
-        .map_err(|_| StartupError::Worktree {
-            name: name.to_owned(),
-            message: "working directory is outside the Git checkout".to_owned(),
-        })?;
-    let digest = hex::encode(Sha256::digest(common_git_dir.to_string_lossy().as_bytes()));
-    let repository_name = repo_root
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("repository");
-    let target = vibe_home_directory(arguments, base)
-        .join("worktrees")
-        .join(format!("{repository_name}-{}", &digest[..12]))
-        .join(name);
-
-    if target.is_dir() {
-        validate_existing_worktree(&target, name, &common_git_dir)?;
-        return build_prepared_worktree(name, target, relative_base, repo_root, false, false);
+/// Asks whether to discard the worktree, then removes it through the core.
+pub fn cleanup_worktree(
+    worktree: PreparedWorktree,
+    input: &mut impl BufRead,
+    output: &mut impl Write,
+) -> Result<CleanupOutcome, StartupError> {
+    if !worktree.created {
+        return Ok(CleanupOutcome::NotOwned);
+    }
+    let state = inspect_worktree_for_cleanup(&worktree)?;
+    if !state.is_clean() {
+        writeln!(
+            output,
+            "Worktree {:?} has {}.",
+            worktree.name,
+            state.reasons().join(", ")
+        )
+        .map_err(|source| startup_io(&worktree.root, source))?;
+        writeln!(
+            output,
+            "Remove it and delete its branch? This discards worktree changes, untracked files, and commits."
+        )
+        .map_err(|source| startup_io(&worktree.root, source))?;
+        if !confirm(
+            input,
+            output,
+            "Remove worktree? [y/N] ",
+            &["y", "yes", "remove"],
+        )? {
+            writeln!(output, "Keeping worktree: {}", worktree.root.display())
+                .map_err(|source| startup_io(&worktree.root, source))?;
+            return Ok(CleanupOutcome::Kept);
+        }
     }
 
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).map_err(|source| startup_io(parent, source))?;
-    }
-    let branch_exists = git_status(
-        &checkout_root,
-        [
-            "show-ref",
-            "--verify",
-            "--quiet",
-            &format!("refs/heads/{name}"),
-        ],
-        name,
-    )?;
-    let target_text = path_text(&target)?;
-    if branch_exists {
-        git_checked(&checkout_root, ["worktree", "add", target_text, name], name)?;
+    let delete_branch = if worktree.branch_created {
+        true
     } else {
-        git_checked(
-            &checkout_root,
-            ["worktree", "add", "-b", name, target_text],
-            name,
-        )?;
-    }
-    build_prepared_worktree(name, target, relative_base, repo_root, true, !branch_exists)
-}
-
-fn build_prepared_worktree(
-    name: &str,
-    root: PathBuf,
-    relative_base: &Path,
-    repo_root: PathBuf,
-    created: bool,
-    branch_created: bool,
-) -> Result<PreparedWorktree, StartupError> {
-    let path = root.join(relative_base);
-    if !path.is_dir() {
-        return Err(StartupError::Worktree {
-            name: name.to_owned(),
-            message: format!(
-                "worktree path `{}` does not exist after checkout",
-                path.display()
-            ),
-        });
-    }
-    let base_commit = git_stdout(&root, ["rev-parse", "HEAD"], name)?;
-    Ok(PreparedWorktree {
-        name: name.to_owned(),
-        branch: name.to_owned(),
-        root,
-        path,
-        repo_root,
-        base_commit,
-        created,
-        branch_created,
-    })
-}
-
-fn validate_existing_worktree(
-    target: &Path,
-    expected_branch: &str,
-    expected_common_git_dir: &Path,
-) -> Result<(), StartupError> {
-    if !target.join(".git").is_file() {
-        return Err(StartupError::Worktree {
-            name: expected_branch.to_owned(),
-            message: format!(
-                "path `{}` already exists but is not a Git worktree",
-                target.display()
-            ),
-        });
-    }
-    let actual_common = resolve_git_path(
-        target,
-        &git_stdout(target, ["rev-parse", "--git-common-dir"], expected_branch)?,
-    )?;
-    if actual_common != expected_common_git_dir {
-        return Err(StartupError::Worktree {
-            name: expected_branch.to_owned(),
-            message: format!(
-                "path `{}` belongs to a different Git repository",
-                target.display()
-            ),
-        });
-    }
-    let actual_branch = git_stdout(target, ["branch", "--show-current"], expected_branch)?;
-    if actual_branch != expected_branch {
-        let actual = if actual_branch.is_empty() {
-            "detached HEAD"
-        } else {
-            actual_branch.as_str()
-        };
-        return Err(StartupError::Worktree {
-            name: expected_branch.to_owned(),
-            message: format!(
-                "path `{}` is checked out on `{actual}`, expected `{expected_branch}`",
-                target.display()
-            ),
-        });
-    }
-    Ok(())
-}
-
-fn inspect_worktree_for_cleanup(
-    worktree: &PreparedWorktree,
-) -> Result<WorktreeCleanupState, StartupError> {
-    let status = git_stdout(
-        &worktree.root,
-        ["status", "--porcelain", "--untracked-files=all"],
-        &worktree.name,
-    )?;
-    let new_commit_count = git_stdout(
-        &worktree.root,
-        [
-            "rev-list",
-            "--count",
-            &format!("{}..{}", worktree.base_commit, worktree.branch),
-        ],
-        &worktree.name,
-    )?
-    .parse::<u64>()
-    .map_err(|error| StartupError::Worktree {
-        name: worktree.name.clone(),
-        message: format!("invalid commit count: {error}"),
-    })?;
-    Ok(WorktreeCleanupState {
-        has_uncommitted_changes: status.lines().any(|line| !line.starts_with("??")),
-        has_untracked_files: status.lines().any(|line| line.starts_with("??")),
-        new_commit_count,
-    })
-}
-
-fn validate_worktree_name(name: &str) -> Result<(), StartupError> {
-    let is_single_segment = !name.is_empty()
-        && !matches!(name, "." | "..")
-        && Path::new(name).components().count() == 1
-        && !name.contains(['/', '\\'])
-        && !name
-            .as_bytes()
-            .get(1)
-            .is_some_and(|character| *character == b':');
-    if is_single_segment {
-        Ok(())
-    } else {
-        Err(StartupError::InvalidWorktreeName)
-    }
-}
-
-fn resolve_git_path(base: &Path, value: &str) -> Result<PathBuf, StartupError> {
-    let path = PathBuf::from(value);
-    let path = if path.is_absolute() {
-        path
-    } else {
-        base.join(path)
+        writeln!(
+            output,
+            "Branch {:?} existed before this session and was attached, not created by Vibe.",
+            worktree.branch
+        )
+        .map_err(|source| startup_io(&worktree.root, source))?;
+        confirm(
+            input,
+            output,
+            &format!("Also delete branch {:?}? [y/N] ", worktree.branch),
+            &["y", "yes", "delete"],
+        )?
     };
-    fs::canonicalize(&path).map_err(|source| startup_io(&path, source))
-}
 
-fn git_stdout<'a>(
-    directory: &Path,
-    arguments: impl IntoIterator<Item = &'a str>,
-    name: &str,
-) -> Result<String, StartupError> {
-    let output = git_output(directory, arguments, name)?;
-    if !output.status.success() {
-        return Err(git_failure(name, &output));
+    remove_worktree(&worktree, delete_branch)?;
+    writeln!(output, "Removed worktree: {}", worktree.root.display())
+        .map_err(|source| startup_io(&worktree.root, source))?;
+    if !delete_branch {
+        writeln!(output, "Kept branch: {}", worktree.branch)
+            .map_err(|source| startup_io(&worktree.root, source))?;
     }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
-}
-
-fn git_checked<'a>(
-    directory: &Path,
-    arguments: impl IntoIterator<Item = &'a str>,
-    name: &str,
-) -> Result<(), StartupError> {
-    let output = git_output(directory, arguments, name)?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(git_failure(name, &output))
-    }
-}
-
-fn git_status<'a>(
-    directory: &Path,
-    arguments: impl IntoIterator<Item = &'a str>,
-    name: &str,
-) -> Result<bool, StartupError> {
-    git_output(directory, arguments, name).map(|output| output.status.success())
-}
-
-fn git_output<'a>(
-    directory: &Path,
-    arguments: impl IntoIterator<Item = &'a str>,
-    name: &str,
-) -> Result<Output, StartupError> {
-    Command::new("git")
-        .arg("-C")
-        .arg(directory)
-        .args(arguments)
-        .output()
-        .map_err(|error| StartupError::Worktree {
-            name: name.to_owned(),
-            message: error.to_string(),
-        })
-}
-
-fn git_failure(name: &str, output: &Output) -> StartupError {
-    let message = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-    StartupError::Worktree {
-        name: name.to_owned(),
-        message: if message.is_empty() {
-            format!("git exited with {}", output.status)
-        } else {
-            message
-        },
-    }
+    Ok(CleanupOutcome::Removed)
 }
 
 fn confirm(
@@ -517,16 +229,10 @@ fn canonical_directory(path: &Path) -> Result<PathBuf, StartupError> {
     }
 }
 
-fn path_text(path: &Path) -> Result<&str, StartupError> {
-    path.to_str().ok_or_else(|| StartupError::Worktree {
-        name: "path".to_owned(),
-        message: format!("path `{}` is not valid UTF-8", path.display()),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
+    use std::process::Command;
 
     use super::*;
 
@@ -544,7 +250,33 @@ mod tests {
             .args(arguments)
             .status()
             .expect("git runs");
-        assert!(status.success(), "git {:?} failed", arguments);
+        assert!(status.success(), "git {arguments:?} failed");
+    }
+
+    fn git_stdout(directory: &Path, arguments: &[&str]) -> String {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(directory)
+            .args(arguments)
+            .output()
+            .expect("git runs");
+        assert!(output.status.success(), "git {arguments:?} failed");
+        String::from_utf8_lossy(&output.stdout).trim().to_owned()
+    }
+
+    fn git_succeeds(directory: &Path, arguments: &[&str]) -> bool {
+        Command::new("git")
+            .arg("-C")
+            .arg(directory)
+            .args(arguments)
+            .output()
+            .expect("git runs")
+            .status
+            .success()
+    }
+
+    fn path_text(path: &Path) -> &str {
+        path.to_str().expect("path is valid UTF-8")
     }
 
     fn repository() -> tempfile::TempDir {
@@ -581,12 +313,7 @@ mod tests {
 
         git(
             root.path(),
-            &[
-                "worktree",
-                "remove",
-                "--force",
-                path_text(&prepared.root).expect("path"),
-            ],
+            &["worktree", "remove", "--force", path_text(&prepared.root)],
         );
         git(root.path(), &["branch", "-D", "parity"]);
     }
@@ -594,7 +321,7 @@ mod tests {
     #[test]
     fn invalid_and_non_repository_worktrees_fail_before_checkout_changes() {
         let root = repository();
-        let original_head = git_stdout(root.path(), ["rev-parse", "HEAD"], "head").expect("head");
+        let original_head = git_stdout(root.path(), &["rev-parse", "HEAD"]);
         let mut invalid = test_arguments(root.path());
         invalid.worktree = Some("../escape".to_owned());
         assert!(matches!(
@@ -602,7 +329,7 @@ mod tests {
             Err(StartupError::InvalidWorktreeName)
         ));
         assert_eq!(
-            git_stdout(root.path(), ["rev-parse", "HEAD"], "head").expect("head"),
+            git_stdout(root.path(), &["rev-parse", "HEAD"]),
             original_head
         );
 
@@ -625,9 +352,12 @@ mod tests {
             .worktree
             .expect("prepared worktree");
         let target = prepared.root.clone();
-        prepared
-            .cleanup(&mut Cursor::new(Vec::<u8>::new()), &mut Vec::new())
-            .expect("initial worktree removed");
+        cleanup_worktree(
+            prepared,
+            &mut Cursor::new(Vec::<u8>::new()),
+            &mut Vec::new(),
+        )
+        .expect("initial worktree removed");
         fs::create_dir_all(&target).expect("conflicting directory");
         fs::write(target.join("owner.txt"), "preserve me\n").expect("conflicting content");
 
@@ -654,19 +384,14 @@ mod tests {
             .worktree
             .expect("prepared worktree");
         let worktree_root = prepared.root.clone();
-        let outcome = prepared
-            .cleanup(&mut Cursor::new(b"n\n"), &mut Vec::new())
+        let outcome = cleanup_worktree(prepared, &mut Cursor::new(b"n\n"), &mut Vec::new())
             .expect("cleanup choice");
         assert_eq!(outcome, CleanupOutcome::Removed);
         assert!(!worktree_root.exists());
-        assert!(
-            git_status(
-                root.path(),
-                ["show-ref", "--verify", "--quiet", "refs/heads/attached"],
-                "attached"
-            )
-            .expect("branch status")
-        );
+        assert!(git_succeeds(
+            root.path(),
+            &["show-ref", "--verify", "--quiet", "refs/heads/attached"]
+        ));
         git(root.path(), &["branch", "-D", "attached"]);
     }
 
@@ -688,9 +413,12 @@ mod tests {
             arguments.add_directories,
             vec![prepared.path.join("nested/context")]
         );
-        prepared
-            .cleanup(&mut Cursor::new(Vec::<u8>::new()), &mut Vec::new())
-            .expect("clean worktree removed");
+        cleanup_worktree(
+            prepared,
+            &mut Cursor::new(Vec::<u8>::new()),
+            &mut Vec::new(),
+        )
+        .expect("clean worktree removed");
     }
 
     #[test]
@@ -704,19 +432,13 @@ mod tests {
             .expect("prepared worktree");
         fs::write(prepared.path.join("dirty.txt"), "dirty\n").expect("dirty file");
         let worktree_root = prepared.root.clone();
-        let outcome = prepared
-            .cleanup(&mut Cursor::new(b"n\n"), &mut Vec::new())
+        let outcome = cleanup_worktree(prepared, &mut Cursor::new(b"n\n"), &mut Vec::new())
             .expect("cleanup decision");
         assert_eq!(outcome, CleanupOutcome::Kept);
         assert!(worktree_root.is_dir());
         git(
             root.path(),
-            &[
-                "worktree",
-                "remove",
-                "--force",
-                path_text(&worktree_root).expect("path"),
-            ],
+            &["worktree", "remove", "--force", path_text(&worktree_root)],
         );
         git(root.path(), &["branch", "-D", "dirty"]);
     }
@@ -731,9 +453,12 @@ mod tests {
             .worktree
             .expect("prepared worktree");
         let path = prepared.root.clone();
-        let outcome = prepared
-            .cleanup(&mut Cursor::new(Vec::<u8>::new()), &mut Vec::new())
-            .expect("clean worktree removed");
+        let outcome = cleanup_worktree(
+            prepared,
+            &mut Cursor::new(Vec::<u8>::new()),
+            &mut Vec::new(),
+        )
+        .expect("clean worktree removed");
         assert_eq!(outcome, CleanupOutcome::Removed);
         assert!(!path.exists());
     }

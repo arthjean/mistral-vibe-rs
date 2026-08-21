@@ -75,7 +75,8 @@ async fn main() -> ExitCode {
                     }
                     if session_started
                         && let Some(worktree) = worktree
-                        && let Err(error) = worktree.cleanup_terminal()
+                        && let Err(error) =
+                            vibe_cli::tui::startup::cleanup_worktree_terminal(worktree)
                     {
                         let _ = writeln!(
                             std::io::stderr().lock(),

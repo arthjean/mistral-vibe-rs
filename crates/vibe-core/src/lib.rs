@@ -53,3 +53,4 @@ pub mod tools;
 pub mod tracing;
 pub mod updates;
 pub mod workspace;
+pub mod worktree;

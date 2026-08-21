@@ -4271,6 +4271,7 @@ dependencies = [
  "getrandom 0.4.3",
  "grep-regex",
  "grep-searcher",
+ "hex",
  "ignore",
  "keyring",
  "nix 0.31.3",
