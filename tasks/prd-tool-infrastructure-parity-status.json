@@ -1,0 +1,278 @@
+{
+  "prd": {
+    "file": "tasks/prd-tool-infrastructure-parity.md",
+    "title": "Tool Infrastructure at Full Parity",
+    "created_at": "2026-08-21",
+    "status": "IN_PROGRESS"
+  },
+  "epics": [
+    {
+      "id": "EP-080",
+      "title": "An oracle over the presentation contract",
+      "status": "DONE",
+      "priority": "P0",
+      "stories_total": 2,
+      "stories_done": 2,
+      "started_at": "2026-08-21"
+    },
+    {
+      "id": "EP-081",
+      "title": "The presentation of a tool with no dedicated UI class",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 4,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-082",
+      "title": "The description override an operator can write",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 2,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-083",
+      "title": "The three contracts nothing measures",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-084",
+      "title": "The surface order and the connector gate",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 2,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-085",
+      "title": "Restate row 4 from its oracle",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 2,
+      "stories_done": 0
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-254",
+      "title": "Capture the presentation of every published tool",
+      "epic": "EP-080",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [],
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
+    },
+    {
+      "id": "US-255",
+      "title": "Replay the presentation corpus with a ledger and a floor",
+      "epic": "EP-080",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-254"
+      ],
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
+    },
+    {
+      "id": "US-256",
+      "title": "Route the call display by tool source",
+      "epic": "EP-081",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-255"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-257",
+      "title": "Publish the status text the source names",
+      "epic": "EP-081",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-256"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-258",
+      "title": "Fill the settled message at the source",
+      "epic": "EP-081",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-256"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-259",
+      "title": "Settle a remote call from its remote result",
+      "epic": "EP-081",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-256"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-260",
+      "title": "Resolve the tool search paths",
+      "epic": "EP-082",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-255"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-261",
+      "title": "Apply the description override to the published surface",
+      "epic": "EP-082",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-260"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-262",
+      "title": "Gate enabled_tools on the written list",
+      "epic": "EP-083",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-255"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-263",
+      "title": "Match sensitive patterns the way the reference matches them",
+      "epic": "EP-083",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-255"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-264",
+      "title": "Measure and hold the argument rejection message",
+      "epic": "EP-083",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-255"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-265",
+      "title": "Publish tools in discovery order",
+      "epic": "EP-084",
+      "status": "TODO",
+      "priority": "P2",
+      "size": "S",
+      "blocked_by": [
+        "US-255"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-266",
+      "title": "Decide connector publication from the configuration entry",
+      "epic": "EP-084",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-255"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-267",
+      "title": "Record the permanent divergences by name",
+      "epic": "EP-085",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-261",
+        "US-264",
+        "US-266"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-268",
+      "title": "Remeasure and restate row 4",
+      "epic": "EP-085",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-255",
+        "US-257",
+        "US-258",
+        "US-259",
+        "US-262",
+        "US-263",
+        "US-265",
+        "US-267"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    }
+  ]
+}
