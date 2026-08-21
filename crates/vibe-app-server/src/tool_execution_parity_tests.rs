@@ -106,6 +106,29 @@ const SERVER_PLACEHOLDER: &str = "{server}";
 /// What a divergence names when no story can close it, because closing it would
 /// mean shipping reference prose.
 const LICENSING: &str = "NOTICE";
+/// What a divergence names when this port answers differently on purpose and
+/// the decision is written down instead of being left open: the scorecard's
+/// accepted-divergence table holds the row, and [`Divergence::row`] names which.
+const RECORDED: &str = "docs/parity.md";
+
+/// The scorecard file the recorded decisions live in, read by
+/// [`every_recorded_divergence_names_a_scorecard_row`].
+const SCORECARD_RELATIVE: &str = "docs/parity.md";
+/// The section of that file the accepted decisions live in.
+const ACCEPTED_HEADING: &str = "## Accepted divergences";
+/// What an accepted-divergence row writes in its evidence cell when this ledger
+/// is what holds it. A row carrying it must be named by a ledger entry, which
+/// is what makes a closed divergence take its row down with it.
+const LEDGER_EVIDENCE: &str =
+    "`LEDGER` in `crates/vibe-app-server/src/tool_execution_parity_tests.rs`";
+
+/// The accepted-divergence rows this ledger's entries are recorded under, each
+/// spelled exactly as the row's first cell spells it.
+const AUTHORED_TEXT_ROW: &str = "Authored result and error text in six tools";
+const SKILL_DETACHED_ROW: &str =
+    "A directory-less skill has no scripted registration in the replay";
+const FETCH_MARKDOWN_ROW: &str = "A fetched HTML page is stripped to prose";
+const FETCH_HEADER_ROW: &str = "The HTTP client's own request envelope";
 
 /// Why a divergence stands, shared by every case that carries the same gap: the
 /// reason is a property of the gap, not of the case that happens to reveal it.
@@ -119,19 +142,21 @@ const SKILL_PROSE: &str = "this port writes its own guidance lines around the sk
      own reuse sentence; reaching the reference digests would mean copying them";
 const SKILL_DETACHED: &str = "the reference serves a skill registered with a prompt and no \
      directory; this port discovers skills from disk, so that skill does not exist here and the \
-     call reports it missing. No story in this PRD closes the gap, so it is recorded by name \
-     instead";
+     call reports it missing. No story in this PRD closes the gap, so the decision is recorded \
+     in the scorecard row this entry names";
 const PLAN_MESSAGE: &str = "this port writes its own message for each plan-review outcome; \
      reaching the reference digest would mean copying its wording";
 const FETCH_MARKDOWN: &str = "the reference converts an HTML page with `markdownify`, which keeps \
      the heading marker and the blank line between blocks; this port strips the markup to prose \
-     instead. No story in this PRD closes the gap, so it is recorded by name instead";
+     instead. No story in this PRD closes the gap, so the decision is recorded in the \
+     scorecard row this entry names";
 const FETCH_TRUNCATION_MARKER: &str = "the body is cut at the same bound and only the sentence \
      that reports the cut differs; reaching the reference digest would mean copying its wording";
 const FETCH_HEADER_ENVELOPE: &str = "every header this tool sets carries the reference value; what \
      still differs is the envelope the HTTP client writes around them: the names arrive lowercased, \
      `Host` arrives last, `Accept-Encoding` and `Connection` are the client's own, and a redirect \
-     hop adds `Referer`. No story in this PRD closes the gap, so it is recorded by name instead";
+     hop adds `Referer`. No story in this PRD closes the gap, so the decision is recorded in \
+     the scorecard row this entry names";
 
 /// The divergences this port still carries, each with what closes it.
 ///
@@ -152,6 +177,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: READ_FILE_NOTICE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "read_file",
@@ -159,6 +185,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: READ_FILE_NOTICE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "read_file",
@@ -166,6 +193,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: READ_FILE_NOTICE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "read_file",
@@ -173,6 +201,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: READ_FILE_NOTICE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "read_file",
@@ -180,6 +209,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: READ_FILE_NOTICE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "read_file",
@@ -187,6 +217,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: READ_FILE_NOTICE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "read_file",
@@ -194,6 +225,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: READ_FILE_NOTICE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "read_file",
@@ -201,6 +233,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: READ_FILE_NOTICE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "read_file",
@@ -208,6 +241,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: READ_FILE_NOTICE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "edit",
@@ -215,6 +249,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: EDIT_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "edit",
@@ -222,6 +257,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: EDIT_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "edit",
@@ -229,6 +265,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: EDIT_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "edit",
@@ -236,6 +273,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: EDIT_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "edit",
@@ -243,6 +281,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: EDIT_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "edit",
@@ -250,6 +289,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: EDIT_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "skill",
@@ -257,6 +297,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "skill",
@@ -264,6 +305,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "skill",
@@ -271,6 +313,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "skill",
@@ -278,6 +321,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "skill",
@@ -285,6 +329,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "skill",
@@ -292,6 +337,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "skill",
@@ -299,6 +345,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "skill",
@@ -306,6 +353,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "skill",
@@ -313,13 +361,15 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "skill",
         case: "no-directory-on-disk",
         pointer: "/outcome",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: SKILL_DETACHED,
+        row: SKILL_DETACHED_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -327,6 +377,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -334,6 +385,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -341,6 +393,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -348,6 +401,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -355,6 +409,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -362,6 +417,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -369,6 +425,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -376,6 +433,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -383,6 +441,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -390,6 +449,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -397,6 +457,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -404,6 +465,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -411,6 +473,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -418,6 +481,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -425,6 +489,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -432,6 +497,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -439,6 +505,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -446,6 +513,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -453,6 +521,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -460,6 +529,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -467,90 +537,103 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult",
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "a-challenge-that-persists",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "a-challenge-then-success",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "a-json-body",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "a-plain-text-page",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "a-redirect-chain",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "a-server-error",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "an-empty-body",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "an-html-page",
         pointer: "/modelText",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_MARKDOWN,
+        row: FETCH_MARKDOWN_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "an-html-page",
         pointer: "/projectedResult/content",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_MARKDOWN,
+        row: FETCH_MARKDOWN_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "an-html-page",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "an-html-page",
         pointer: "/typedResult/content",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_MARKDOWN,
+        row: FETCH_MARKDOWN_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "forbidden-without-the-challenge-header",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
@@ -558,6 +641,7 @@ const LEDGER: &[Divergence] = &[
         pointer: "/modelText",
         closed_by: LICENSING,
         why: FETCH_TRUNCATION_MARKER,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "web_fetch",
@@ -565,13 +649,15 @@ const LEDGER: &[Divergence] = &[
         pointer: "/projectedResult/content",
         closed_by: LICENSING,
         why: FETCH_TRUNCATION_MARKER,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "larger-than-max-content-bytes",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
@@ -579,20 +665,23 @@ const LEDGER: &[Divergence] = &[
         pointer: "/typedResult/content",
         closed_by: LICENSING,
         why: FETCH_TRUNCATION_MARKER,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "no-content-type",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
         case: "not-found",
         pointer: "/requests",
-        closed_by: "US-252",
+        closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
+        row: FETCH_HEADER_ROW,
     },
 ];
 
@@ -606,8 +695,16 @@ struct Divergence {
     case: &'static str,
     /// Matched by prefix against the reported JSON pointer.
     pointer: &'static str,
-    /// The story that closes this gap, or [`LICENSING`] when none can.
+    /// The story that closes this gap, [`LICENSING`] when none can, or
+    /// [`RECORDED`] when this port answers differently on purpose and the
+    /// decision is written down rather than scheduled.
     closed_by: &'static str,
+    /// The accepted-divergence row in `docs/parity.md` that records this gap,
+    /// spelled as that row's first cell spells it. The binding runs both ways:
+    /// an entry naming a row nobody wrote fails, and a row this ledger no
+    /// longer reaches fails too, so a divergence that closes takes its row down
+    /// with it instead of leaving a scorecard claim nothing holds.
+    row: &'static str,
     /// Why the gap stands, asserted non-empty so an entry cannot be added
     /// without a stated reason.
     why: &'static str,
@@ -1646,8 +1743,22 @@ async fn tool_execution_matches_the_reference_except_for_the_recorded_gap() {
     let mut conforming = 0;
     let mut tolerated: BTreeSet<(String, String)> = BTreeSet::new();
     let mut unlisted = Vec::new();
+    // What the scorecard's row 3 quotes, counted here so the row is read off a
+    // printed measurement rather than written by hand: how many tools the
+    // corpus drives, how many cases publish a projection, and how many of those
+    // projections say something the typed result does not.
+    let mut tools: BTreeSet<&str> = BTreeSet::new();
+    let mut projections = 0;
+    let mut overriding_projections = 0;
 
     for (index, case) in corpus.cases.iter().enumerate() {
+        tools.insert(case.tool.as_str());
+        if let Some(projected) = &case.projected_result {
+            projections += 1;
+            if Some(projected) != case.typed_result.as_ref() {
+                overriding_projections += 1;
+            }
+        }
         // A fresh tree per case, so a mutating tool cannot leak into the next
         // one. The capture script isolates the same way.
         let observed = observed_document(case, &source, scratch.path(), index).await;
@@ -1679,14 +1790,23 @@ async fn tool_execution_matches_the_reference_except_for_the_recorded_gap() {
     }
 
     println!(
-        "tool execution: {conforming}/{} cases match the reference at {}, {} ledger entries \
-         exercised",
+        "tool execution: {conforming}/{} cases match the reference at {} over {} tools, {} \
+         projections compared and {overriding_projections} of them published by a tool that \
+         overrides the hook, {} ledger entries exercised",
         corpus.cases.len(),
         &corpus.reference_commit[..12],
+        tools.len(),
+        projections,
         tolerated.len()
     );
     for (entry, closed_by) in &tolerated {
-        println!("  tolerated {entry} until {closed_by}");
+        // A recorded divergence has no story to wait for, so it is printed as
+        // held by the scorecard rather than as pending until a file.
+        if closed_by == RECORDED {
+            println!("  tolerated {entry}, recorded in {closed_by}");
+        } else {
+            println!("  tolerated {entry} until {closed_by}");
+        }
     }
 
     assert!(
@@ -1817,10 +1937,18 @@ fn the_projection_agrees_with_the_capture_script() {
 fn every_ledger_entry_names_what_closes_it() {
     for entry in LEDGER {
         assert!(
-            entry.closed_by.starts_with("US-") || entry.closed_by == LICENSING,
-            "a tolerated divergence names the story that closes it or the licensing boundary \
-             that keeps it open, not {}",
+            entry.closed_by.starts_with("US-")
+                || entry.closed_by == LICENSING
+                || entry.closed_by == RECORDED,
+            "a tolerated divergence names the story that closes it, the licensing boundary that \
+             keeps it open, or the scorecard row that records the decision, not {}",
             entry.closed_by
+        );
+        assert!(
+            !entry.row.is_empty(),
+            "{}/{} names no scorecard row",
+            entry.tool,
+            entry.case
         );
         assert!(entry.pointer.starts_with('/'), "{}", entry.pointer);
         assert_ne!(
@@ -1831,6 +1959,63 @@ fn every_ledger_entry_names_what_closes_it() {
         );
         assert!(!entry.why.is_empty(), "{}/{}", entry.tool, entry.case);
     }
+}
+
+/// Every recorded divergence has a row in the scorecard, and every scorecard
+/// row this ledger holds is still reached by an entry.
+///
+/// This is the sentinel US-252 asks for. The staleness check above deletes an
+/// entry as soon as its divergence closes; without this test the scorecard
+/// would keep claiming a difference nothing measures any more. Reading the
+/// table here rather than restating it keeps one copy of the decision.
+#[test]
+fn every_recorded_divergence_names_a_scorecard_row() {
+    let scorecard = fs::read_to_string(repo_root().join(SCORECARD_RELATIVE))
+        .expect("the scorecard is committed");
+    let section = scorecard.split_once(ACCEPTED_HEADING).map(|(_, rest)| rest);
+    assert!(
+        section.is_some(),
+        "{SCORECARD_RELATIVE} carries no `{ACCEPTED_HEADING}` section"
+    );
+    let table = section.unwrap_or_default();
+
+    // Every accepted-divergence row, as its first cell and its whole line. A
+    // row is a table line with at least the three cells the table declares.
+    let rows: Vec<(&str, &str)> = table
+        .lines()
+        .filter(|line| line.starts_with("| ") && line.matches(" | ").count() >= 2)
+        .filter(|line| !line.starts_with("| Part |"))
+        .map(|line| {
+            (
+                line.trim_start_matches("| ")
+                    .split(" | ")
+                    .next()
+                    .unwrap_or(""),
+                line,
+            )
+        })
+        .collect();
+
+    let named: BTreeSet<&str> = LEDGER.iter().map(|entry| entry.row).collect();
+    for row in &named {
+        let matching = rows.iter().filter(|(part, _)| part == row).count();
+        assert_eq!(
+            matching, 1,
+            "the ledger records a divergence under the scorecard row {row:?}, which appears \
+             {matching} times in `{SCORECARD_RELATIVE}` under `{ACCEPTED_HEADING}`"
+        );
+    }
+
+    let orphaned: Vec<&str> = rows
+        .iter()
+        .filter(|(part, line)| line.contains(LEDGER_EVIDENCE) && !named.contains(part))
+        .map(|(part, _)| *part)
+        .collect();
+    assert!(
+        orphaned.is_empty(),
+        "these accepted-divergence rows name this ledger as their evidence and no entry reaches \
+         them any more, so the divergence closed and the row must go with it: {orphaned:?}"
+    );
 }
 
 #[test]
