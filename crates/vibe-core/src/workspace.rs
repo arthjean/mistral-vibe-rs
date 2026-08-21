@@ -1485,7 +1485,8 @@ mod tests {
             .into_iter()
             .map(|spec| spec.name)
             .collect::<Vec<_>>();
-        assert_eq!(names, ["edit", "grep", "read_file", "write_file"]);
+        // Registration order, which is the order the surface carries.
+        assert_eq!(names, ["read_file", "grep", "edit", "write_file"]);
 
         let read = registry
             .invoke(

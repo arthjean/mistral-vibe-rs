@@ -45,13 +45,14 @@ async fn client_tool_factory_registers_capabilities_and_invokes_the_client_port(
         .collect::<Vec<_>>();
     assert_eq!(
         names,
+        // The surface carries the registration order, not the name order.
         vec![
             "acp_read_text_file",
             "acp_terminal_create",
-            "acp_terminal_kill",
             "acp_terminal_output",
-            "acp_terminal_release",
             "acp_terminal_wait_for_exit",
+            "acp_terminal_kill",
+            "acp_terminal_release",
         ]
     );
 

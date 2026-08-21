@@ -277,6 +277,17 @@ struct RegisteredTool {
     spec: ToolSpec,
     handler: Arc<dyn ToolHandler>,
     discovery_index: u64,
+    /// Where this name sits in the published order, which is the discovery
+    /// index of its *first* registration rather than of the variant that owns
+    /// it now.
+    ///
+    /// Reference `_all_tools` is a dict keyed by name: a second variant
+    /// reassigns the key and a dict keeps a reassigned key at its original
+    /// position, so the winning variant is published where the name was first
+    /// seen. Carrying the position separately from `discovery_index` is what
+    /// keeps the tie-break of [`Self::available`] and the published order
+    /// answering two different questions.
+    position: u64,
     /// Who published this name, so a second claim on it can name the first.
     origin: String,
     /// The prerequisite this tool is published under, when it has one.
@@ -495,12 +506,19 @@ impl ToolRegistry {
             } else {
                 RegistrationOutcome::Inserted
             };
+            // A replacement inherits the position of the name it takes over, so
+            // a late high-priority variant is published where the name first
+            // appeared rather than at the end of the surface.
+            let position = tools
+                .get(&spec.name)
+                .map_or(discovery_index, |existing| existing.position);
             tools.insert(
                 spec.name.clone(),
                 RegisteredTool {
                     spec,
                     handler,
                     discovery_index,
+                    position,
                     origin,
                     condition,
                     remote,
@@ -512,9 +530,25 @@ impl ToolRegistry {
         }
     }
 
+    /// Every registration in the order this session discovered it.
+    ///
+    /// The registry is keyed by name so that a lookup stays a lookup, but
+    /// reference `available_tool_specs` and `registered_tools` both walk an
+    /// insertion-ordered dict. Every view that leaves this module is therefore
+    /// resequenced here rather than published in the map's own alphabetical
+    /// order, which no reader upstream would ever see.
+    fn in_discovery_order(tools: &BTreeMap<String, RegisteredTool>) -> Vec<&RegisteredTool> {
+        let mut ordered = tools.values().collect::<Vec<_>>();
+        ordered.sort_by_key(|tool| tool.position);
+        ordered
+    }
+
     pub fn list(&self) -> Result<Vec<ToolSpec>, ToolError> {
         let tools = self.tools.read().map_err(|_| ToolError::RegistryPoisoned)?;
-        Ok(tools.values().map(|tool| tool.spec.clone()).collect())
+        Ok(Self::in_discovery_order(&tools)
+            .into_iter()
+            .map(|tool| tool.spec.clone())
+            .collect())
     }
 
     /// The surface a session publishes: every available tool the filters keep.
@@ -534,6 +568,10 @@ impl ToolRegistry {
     /// than the source, which is every MCP and connector tool, and it is re-read
     /// per publication rather than cached. The directories are read before the
     /// registry lock is taken, so a slow filesystem never holds it.
+    ///
+    /// The order is the discovery order both reference filters preserve, not
+    /// the name order this registry stores under: see
+    /// [`Self::in_discovery_order`].
     pub fn available(
         &self,
         enabled: Option<&NameFilter>,
@@ -544,8 +582,8 @@ impl ToolRegistry {
             .map(|source| source.overrides())
             .unwrap_or_default();
         let tools = self.tools.read().map_err(|_| ToolError::RegistryPoisoned)?;
-        Ok(tools
-            .values()
+        Ok(Self::in_discovery_order(&tools)
+            .into_iter()
             .filter(|tool| tool.available())
             .map(|tool| tool.spec.clone())
             .filter(|spec| enabled.is_none_or(|enabled| enabled.matches(&spec.name)))
@@ -1390,6 +1428,150 @@ mod tests {
             .await
             .expect("invoke");
         assert_eq!(result.typed_result["content"], "second");
+    }
+
+    fn named_spec(name: &str, source: ToolSource, priority: i32) -> ToolSpec {
+        ToolSpec {
+            name: name.to_owned(),
+            source,
+            ..spec(priority)
+        }
+    }
+
+    /// Registers the shape a session builds: builtins in their own order, then
+    /// the MCP tools integration adds, then the connector tools. Every name is
+    /// chosen so the alphabetical order and the discovery order differ.
+    fn discovery_ordered_registry() -> (ToolRegistry, Vec<String>) {
+        let registry = ToolRegistry::default();
+        let registrations = [
+            ("write", ToolSource::BuiltIn),
+            ("read", ToolSource::BuiltIn),
+            ("shell", ToolSource::BuiltIn),
+            ("serena_find_symbol", ToolSource::Mcp),
+            ("alpha_list", ToolSource::Mcp),
+            ("connector_Drive_search", ToolSource::Connector),
+        ];
+        for (name, source) in registrations {
+            registry
+                .register(named_spec(name, source, 10), handler("body"))
+                .expect("register");
+        }
+        let expected = registrations
+            .iter()
+            .map(|(name, _)| (*name).to_owned())
+            .collect::<Vec<_>>();
+        (registry, expected)
+    }
+
+    fn published_names(registry: &ToolRegistry) -> Vec<String> {
+        registry
+            .available(None, &NameFilter::default())
+            .expect("available")
+            .into_iter()
+            .map(|spec| spec.name)
+            .collect()
+    }
+
+    /// Reference `available_tool_specs` walks `_all_tools`, an insertion-ordered
+    /// dict, and both filters in `available_tools` preserve that order. The
+    /// builtins come first in the order they registered, the MCP tools follow in
+    /// the order they were integrated, and the connector tools follow those.
+    #[test]
+    fn the_published_surface_keeps_the_discovery_order() {
+        let (registry, expected) = discovery_ordered_registry();
+
+        assert_eq!(published_names(&registry), expected);
+        assert_eq!(
+            registry
+                .list()
+                .expect("list")
+                .into_iter()
+                .map(|spec| spec.name)
+                .collect::<Vec<_>>(),
+            expected,
+            "reference `registered_tools` walks the same dict"
+        );
+        let mut alphabetical = expected.clone();
+        alphabetical.sort();
+        assert_ne!(
+            expected, alphabetical,
+            "the fixture has to separate the two orders for the assertion to mean anything"
+        );
+    }
+
+    /// Two sessions built from the same configuration publish the same order,
+    /// which is what makes a diff of two model requests readable.
+    #[test]
+    fn the_same_registrations_publish_the_same_order_twice() {
+        let (first, _) = discovery_ordered_registry();
+        let (second, _) = discovery_ordered_registry();
+
+        assert_eq!(published_names(&first), published_names(&second));
+    }
+
+    /// A dict keeps a reassigned key at its original position, so the variant
+    /// that wins the name is published where the name was first seen rather
+    /// than at the end of the surface.
+    #[test]
+    fn a_replacing_variant_keeps_the_position_of_the_first_registration() {
+        let registry = ToolRegistry::default();
+        for (name, priority) in [("read", 10), ("write", 10), ("read", 50)] {
+            registry
+                .register(
+                    named_spec(name, ToolSource::BuiltIn, priority),
+                    handler("x"),
+                )
+                .expect("register");
+        }
+
+        let published = registry
+            .available(None, &NameFilter::default())
+            .expect("available");
+        assert_eq!(
+            published
+                .iter()
+                .map(|spec| spec.name.clone())
+                .collect::<Vec<_>>(),
+            ["read", "write"]
+        );
+        assert_eq!(
+            published[0].selection_priority, 50,
+            "the winning variant is the one published"
+        );
+    }
+
+    /// Withholding a tool removes it from the surface without resequencing what
+    /// is left, so a filtered surface is a subsequence of the unfiltered one.
+    #[test]
+    fn a_withheld_tool_leaves_the_remaining_order_unchanged() {
+        let (registry, expected) = discovery_ordered_registry();
+        registry
+            .register_conditional(
+                named_spec("never", ToolSource::BuiltIn, 10),
+                handler("x"),
+                Arc::new(|| false),
+            )
+            .expect("register");
+
+        assert_eq!(
+            published_names(&registry),
+            expected,
+            "an unmet condition removes the tool without resequencing the rest"
+        );
+        assert_eq!(
+            registry
+                .available(None, &NameFilter::new(&["shell"]))
+                .expect("available")
+                .into_iter()
+                .map(|spec| spec.name)
+                .collect::<Vec<_>>(),
+            expected
+                .iter()
+                .filter(|name| *name != "shell")
+                .cloned()
+                .collect::<Vec<_>>(),
+            "and neither does the denylist"
+        );
     }
 
     /// Reference `_select_available_variant` ranks the variants published under

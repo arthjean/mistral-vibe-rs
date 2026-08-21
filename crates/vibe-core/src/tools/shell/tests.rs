@@ -241,10 +241,10 @@ async fn the_managed_rollout_publishes_the_eight_property_bash_and_its_four_sess
         managed.names(),
         [
             "bash",
-            "bash_log_file",
             "bash_output",
+            "bash_stdin",
             "bash_sessions",
-            "bash_stdin"
+            "bash_log_file"
         ]
     );
     let schema = managed.schema("bash");
@@ -1215,10 +1215,14 @@ fn git_bash_host() -> HostShells {
     windows_host(Some("/bin/bash"), None)
 }
 
+/// The family in the order [`ShellTools::register`] publishes it, which is the
+/// order the surface carries: reference `available_tool_specs` walks an
+/// insertion-ordered dict, so the four session tools follow the family name in
+/// registration order rather than by name.
 fn family_names(family: ShellFamily) -> Vec<String> {
     let mut names = vec![family.name().to_owned()];
     names
-        .extend(["log_file", "output", "sessions", "stdin"].map(|suffix| family.tool_name(suffix)));
+        .extend(["output", "stdin", "sessions", "log_file"].map(|suffix| family.tool_name(suffix)));
     names
 }
 

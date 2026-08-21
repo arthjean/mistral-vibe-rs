@@ -524,19 +524,20 @@ mod tests {
     }
 
     /// The reference withholds `web_search` when no Mistral key resolves and
-    /// publishes the other three unconditionally.
+    /// publishes the other three unconditionally, in the order this session
+    /// registered them rather than by name.
     #[tokio::test]
     async fn web_search_is_published_only_when_a_credential_resolves() {
         let directory = tempdir().expect("tempdir");
         let without = registered(directory.path(), None).await;
-        assert_eq!(names(&without), ["skill", "todo", "web_fetch"]);
+        assert_eq!(names(&without), ["todo", "skill", "web_fetch"]);
 
         let with = registered(
             directory.path(),
             Some(probe_access(WebSearchAccess::DEFAULT_ENDPOINT.to_owned())),
         )
         .await;
-        assert_eq!(names(&with), ["skill", "todo", "web_fetch", "web_search"]);
+        assert_eq!(names(&with), ["todo", "skill", "web_fetch", "web_search"]);
     }
 
     /// A key kept in `{vibe_home}/.env` resolves like an exported one, which is
