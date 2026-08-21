@@ -41,13 +41,20 @@ use skill::{SkillInvocationResolver, run_skill, skill_spec};
 use skill::{render_skill, skill_files};
 use todo::{run_todo, todo_spec};
 #[cfg(test)]
-use web_fetch::{fetch_timeout, html_to_text};
+use web_fetch::{
+    FETCH_ACCEPT, FETCH_ACCEPT_LANGUAGE, HONEST_USER_AGENT, fetch_timeout, html_to_text,
+};
 use web_fetch::{fetch_url, web_fetch_handler, web_fetch_spec};
 #[cfg(test)]
 use web_search::parse_search_response;
 use web_search::{web_search_handler, web_search_spec};
 
-const MAX_FETCH_REDIRECTS: usize = 5;
+/// How many hops `web_fetch` follows before it refuses the chain.
+///
+/// The reference leaves its HTTP client at the default, so a smaller budget
+/// here would refuse a page the reference reads. The bound still exists: a
+/// redirect loop terminates rather than running until the timeout.
+const MAX_FETCH_REDIRECTS: usize = 20;
 /// How many skill names an unknown-skill error lists before it truncates.
 const MAX_LISTED_SKILLS: usize = 40;
 /// Reference `skill.py:_MAX_LISTED_FILES`.
@@ -464,20 +471,41 @@ mod tests {
     /// The same fixture, handing back what the client sent so a test can assert
     /// on the request rather than only on the answer.
     fn serve_once_recording(response: String) -> (String, std::sync::mpsc::Receiver<String>) {
+        serve_recording(vec![response])
+    }
+
+    /// One canned response per accepted connection, every request recorded in
+    /// the order it arrived, so a test can read a retry as well as a first try.
+    fn serve_recording(responses: Vec<String>) -> (String, std::sync::mpsc::Receiver<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("fixture listener");
         let address = listener.local_addr().expect("listener address").to_string();
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let Ok((mut stream, _)) = listener.accept() else {
-                return;
-            };
-            let mut buffer = [0_u8; 8192];
-            let read = stream.read(&mut buffer).unwrap_or(0);
-            let _ = sender.send(String::from_utf8_lossy(&buffer[..read]).into_owned());
-            let _ = stream.write_all(response.as_bytes());
-            let _ = stream.flush();
+            for response in responses {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    return;
+                };
+                let mut buffer = [0_u8; 8192];
+                let read = stream.read(&mut buffer).unwrap_or(0);
+                let _ = sender.send(String::from_utf8_lossy(&buffer[..read]).into_owned());
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
         });
         (format!("http://{address}"), receiver)
+    }
+
+    /// How long a test waits before concluding that no further request is
+    /// coming. The fixture thread stays parked on `accept` when a canned
+    /// response goes unused, so a plain `recv` would never return.
+    const SETTLE: Duration = Duration::from_millis(250);
+
+    /// A 403 that carries the challenge marker, which the reference answers by
+    /// retrying once under an agent that names itself.
+    fn challenge_response() -> String {
+        "HTTP/1.1 403 Forbidden\r\ncf-mitigated: challenge\r\nContent-Length: 0\r\nConnection: \
+         close\r\n\r\n"
+            .to_owned()
     }
 
     fn http_response(body: &str) -> String {
@@ -1222,6 +1250,175 @@ mod tests {
             .expect("fetch");
         assert_eq!(fetched.typed_result["was_truncated"], json!(false));
         assert_eq!(fetched.typed_result["content"], json!(body));
+    }
+
+    /// US-251: the request carries the two headers the reference sets beside
+    /// its user agent, so a host that varies its answer on them answers this
+    /// port the way it answers the reference.
+    #[tokio::test]
+    async fn the_request_carries_the_reference_headers() {
+        let directory = tempdir().expect("tempdir");
+        let registry = registered_with(directory.path(), None, Arc::new(AllowApproval)).await;
+        let settings: WebFetchConfig = ToolConfigResolver::new().view("web_fetch");
+        let (endpoint, requests) = serve_once_recording(http_response("page"));
+
+        registry
+            .invoke(
+                "web_fetch",
+                ToolInvocation {
+                    call_id: "fetch-1".to_owned(),
+                    arguments: json!({"url": endpoint}),
+                },
+            )
+            .await
+            .expect("fetch");
+
+        let request = requests.recv().expect("the fixture recorded the request");
+        assert!(
+            request.contains(&format!("accept: {FETCH_ACCEPT}\r\n")),
+            "{request}"
+        );
+        assert!(
+            request.contains(&format!("accept-language: {FETCH_ACCEPT_LANGUAGE}\r\n")),
+            "{request}"
+        );
+        assert!(
+            request.contains(&format!("user-agent: {}\r\n", settings.user_agent)),
+            "{request}"
+        );
+    }
+
+    /// US-251: a bot challenge is answered by one retry under an agent that
+    /// names itself, and the retry's page is what the model reads.
+    #[tokio::test]
+    async fn a_challenge_is_retried_once_under_an_agent_that_names_itself() {
+        let directory = tempdir().expect("tempdir");
+        let registry = registered_with(directory.path(), None, Arc::new(AllowApproval)).await;
+        let (endpoint, requests) =
+            serve_recording(vec![challenge_response(), http_response("the real page")]);
+
+        let fetched = registry
+            .invoke(
+                "web_fetch",
+                ToolInvocation {
+                    call_id: "fetch-1".to_owned(),
+                    arguments: json!({"url": endpoint}),
+                },
+            )
+            .await
+            .expect("the retry answers");
+        assert_eq!(fetched.typed_result["content"], json!("the real page"));
+
+        let first = requests.recv().expect("the first try was recorded");
+        let retry = requests.recv().expect("the retry was recorded");
+        assert!(
+            !first.contains(&format!("user-agent: {HONEST_USER_AGENT}\r\n")),
+            "the first try wears the browser agent: {first}"
+        );
+        assert!(
+            retry.contains(&format!("user-agent: {HONEST_USER_AGENT}\r\n")),
+            "the retry names itself: {retry}"
+        );
+        assert!(
+            requests.recv_timeout(SETTLE).is_err(),
+            "the retry is bounded to one attempt"
+        );
+    }
+
+    /// US-251: the retry is bounded. A host that challenges every agent is
+    /// reported rather than asked a third time.
+    #[tokio::test]
+    async fn a_challenge_that_persists_is_reported_after_one_retry() {
+        let directory = tempdir().expect("tempdir");
+        let registry = registered_with(directory.path(), None, Arc::new(AllowApproval)).await;
+        let (endpoint, requests) =
+            serve_recording(vec![challenge_response(), challenge_response()]);
+
+        let refused = registry
+            .invoke(
+                "web_fetch",
+                ToolInvocation {
+                    call_id: "fetch-1".to_owned(),
+                    arguments: json!({"url": endpoint}),
+                },
+            )
+            .await
+            .expect_err("a challenge the retry cannot pass is a failure");
+        assert!(refused.to_string().contains("403"), "{refused}");
+        assert!(requests.recv().is_ok(), "the first try was recorded");
+        assert!(requests.recv().is_ok(), "the retry was recorded");
+        assert!(
+            requests.recv_timeout(SETTLE).is_err(),
+            "no third attempt is made"
+        );
+    }
+
+    /// US-251: only the challenge marker earns a retry. An ordinary refusal is
+    /// reported on the first answer.
+    #[tokio::test]
+    async fn a_forbidden_without_the_marker_is_not_retried() {
+        let directory = tempdir().expect("tempdir");
+        let registry = registered_with(directory.path(), None, Arc::new(AllowApproval)).await;
+        let forbidden =
+            "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_owned();
+        let (endpoint, requests) = serve_recording(vec![forbidden, http_response("never read")]);
+
+        let refused = registry
+            .invoke(
+                "web_fetch",
+                ToolInvocation {
+                    call_id: "fetch-1".to_owned(),
+                    arguments: json!({"url": endpoint}),
+                },
+            )
+            .await
+            .expect_err("an ordinary refusal is a failure");
+        assert!(refused.to_string().contains("403"), "{refused}");
+        assert!(requests.recv().is_ok(), "the first try was recorded");
+        assert!(requests.recv_timeout(SETTLE).is_err(), "nothing is retried");
+    }
+
+    /// US-251: the HTML reader is reached by the test the reference applies. A
+    /// charset parameter still names HTML, and a type that merely contains the
+    /// word does not.
+    #[tokio::test]
+    async fn html_is_recognized_by_its_media_type_and_not_by_a_substring() {
+        let directory = tempdir().expect("tempdir");
+        let registry = registered_with(directory.path(), None, Arc::new(AllowApproval)).await;
+        let page = "<html><body><p>Read me</p></body></html>";
+        let typed = |content_type: &str| {
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: \
+                 close\r\n\r\n{page}",
+                page.len()
+            )
+        };
+
+        let charset = serve_once(vec![typed("text/html; charset=utf-8")]);
+        let fetched = registry
+            .invoke(
+                "web_fetch",
+                ToolInvocation {
+                    call_id: "fetch-1".to_owned(),
+                    arguments: json!({"url": charset}),
+                },
+            )
+            .await
+            .expect("fetch");
+        assert_eq!(fetched.typed_result["content"], json!("Read me"));
+
+        let adjacent = serve_once(vec![typed("application/vnd.html-ish+json")]);
+        let raw = registry
+            .invoke(
+                "web_fetch",
+                ToolInvocation {
+                    call_id: "fetch-2".to_owned(),
+                    arguments: json!({"url": adjacent}),
+                },
+            )
+            .await
+            .expect("fetch");
+        assert_eq!(raw.typed_result["content"], json!(page));
     }
 
     /// A redirect loop stops at the hop budget, and the failure names the host

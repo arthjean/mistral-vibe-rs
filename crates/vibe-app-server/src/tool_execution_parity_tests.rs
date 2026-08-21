@@ -128,10 +128,10 @@ const FETCH_MARKDOWN: &str = "the reference converts an HTML page with `markdown
      instead. No story in this PRD closes the gap, so it is recorded by name instead";
 const FETCH_TRUNCATION_MARKER: &str = "the body is cut at the same bound and only the sentence \
      that reports the cut differs; reaching the reference digest would mean copying its wording";
-const FETCH_REQUEST: &str = "the reference sends `Accept` and `Accept-Language` alongside the user \
-     agent; this port sends only what its HTTP client defaults to";
-const FETCH_CHALLENGE: &str = "the reference retries a challenge response once under a different \
-     user agent; this port reports the status and stops";
+const FETCH_HEADER_ENVELOPE: &str = "every header this tool sets carries the reference value; what \
+     still differs is the envelope the HTTP client writes around them: the names arrive lowercased, \
+     `Host` arrives last, `Accept-Encoding` and `Connection` are the client's own, and a redirect \
+     hop adds `Referer`. No story in this PRD closes the gap, so it is recorded by name instead";
 
 /// The divergences this port still carries, each with what closes it.
 ///
@@ -472,50 +472,50 @@ const LEDGER: &[Divergence] = &[
         tool: "web_fetch",
         case: "a-challenge-that-persists",
         pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
     Divergence {
         tool: "web_fetch",
         case: "a-challenge-then-success",
-        pointer: "/outcome",
-        closed_by: "US-251",
-        why: FETCH_CHALLENGE,
+        pointer: "/requests",
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
     Divergence {
         tool: "web_fetch",
         case: "a-json-body",
         pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
     Divergence {
         tool: "web_fetch",
         case: "a-plain-text-page",
         pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
     Divergence {
         tool: "web_fetch",
         case: "a-redirect-chain",
         pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
     Divergence {
         tool: "web_fetch",
         case: "a-server-error",
         pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
     Divergence {
         tool: "web_fetch",
         case: "an-empty-body",
         pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
     Divergence {
         tool: "web_fetch",
@@ -535,8 +535,8 @@ const LEDGER: &[Divergence] = &[
         tool: "web_fetch",
         case: "an-html-page",
         pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
     Divergence {
         tool: "web_fetch",
@@ -549,8 +549,8 @@ const LEDGER: &[Divergence] = &[
         tool: "web_fetch",
         case: "forbidden-without-the-challenge-header",
         pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
     Divergence {
         tool: "web_fetch",
@@ -570,8 +570,8 @@ const LEDGER: &[Divergence] = &[
         tool: "web_fetch",
         case: "larger-than-max-content-bytes",
         pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
     Divergence {
         tool: "web_fetch",
@@ -584,15 +584,15 @@ const LEDGER: &[Divergence] = &[
         tool: "web_fetch",
         case: "no-content-type",
         pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
     Divergence {
         tool: "web_fetch",
         case: "not-found",
         pointer: "/requests",
-        closed_by: "US-251",
-        why: FETCH_REQUEST,
+        closed_by: "US-252",
+        why: FETCH_HEADER_ENVELOPE,
     },
 ];
 

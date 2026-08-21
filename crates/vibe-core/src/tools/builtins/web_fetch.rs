@@ -122,6 +122,29 @@ pub(super) fn web_fetch_handler(config: ToolConfigResolver) -> Arc<dyn ToolHandl
     )
 }
 
+/// What a browser asks for, which is what the reference sends alongside its
+/// browser user agent: a page that varies its answer on the request reads these
+/// two headers, so omitting them fetches a different document than the
+/// reference fetched.
+pub(super) const FETCH_ACCEPT: &str = concat!(
+    "text/html,application/xhtml+xml,application/xml;q=0.9,",
+    "image/avif,image/webp,image/apng,*/*;q=0.8"
+);
+pub(super) const FETCH_ACCEPT_LANGUAGE: &str = "en-US,en;q=0.9";
+
+/// The agent the retry declares once a challenge answered the browser one.
+///
+/// Reference `_HONEST_USER_AGENT`: a host that fronts its pages behind a bot
+/// challenge often serves them to a client that names itself, so the one retry
+/// stops pretending rather than trying harder.
+pub(super) const HONEST_USER_AGENT: &str = "vibe-cli";
+
+/// The status a Cloudflare challenge answers with, paired with the header that
+/// distinguishes it from an ordinary refusal.
+const CHALLENGE_STATUS: u16 = 403;
+const CHALLENGE_HEADER: &str = "cf-mitigated";
+const CHALLENGE_VALUE: &str = "challenge";
+
 pub(super) async fn run_web_fetch(
     arguments: &Value,
     settings: &WebFetchConfig,
@@ -132,25 +155,42 @@ pub(super) async fn run_web_fetch(
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::limited(MAX_FETCH_REDIRECTS))
         .timeout(timeout)
-        .user_agent(settings.user_agent.clone())
         .build()
         .map_err(|error| ToolError::Execution(error.to_string()))?;
-    let response = client.get(url.clone()).send().await.map_err(|error| {
-        // A URL can carry credentials or a query string, so the failure names
-        // the host and nothing else.
-        if error.is_timeout() {
-            ToolError::Execution(format!(
-                "fetching from {host} timed out after {} seconds",
-                timeout.as_secs()
-            ))
-        } else if error.is_redirect() {
-            ToolError::Execution(format!(
-                "fetching from {host} exceeded {MAX_FETCH_REDIRECTS} redirects"
-            ))
-        } else {
-            ToolError::Execution(format!("fetching from {host} failed"))
+    let send = |agent: String| {
+        let request = client
+            .get(url.clone())
+            .header(reqwest::header::USER_AGENT, agent)
+            .header(reqwest::header::ACCEPT, FETCH_ACCEPT)
+            .header(reqwest::header::ACCEPT_LANGUAGE, FETCH_ACCEPT_LANGUAGE);
+        let host = host.clone();
+        async move {
+            request.send().await.map_err(|error| {
+                // A URL can carry credentials or a query string, so the failure
+                // names the host and nothing else.
+                if error.is_timeout() {
+                    ToolError::Execution(format!(
+                        "fetching from {host} timed out after {} seconds",
+                        timeout.as_secs()
+                    ))
+                } else if error.is_redirect() {
+                    ToolError::Execution(format!(
+                        "fetching from {host} exceeded {MAX_FETCH_REDIRECTS} redirects"
+                    ))
+                } else {
+                    ToolError::Execution(format!("fetching from {host} failed"))
+                }
+            })
         }
-    })?;
+    };
+    let response = send(settings.user_agent.clone()).await?;
+    // Reference `_do_fetch`: one retry and no more, so a host that answers
+    // every agent with a challenge fails instead of looping.
+    let response = if is_challenge(&response) {
+        send(HONEST_USER_AGENT.to_owned()).await?
+    } else {
+        response
+    };
     let status = response.status();
     if !status.is_success() {
         return Err(ToolError::Execution(format!(
@@ -168,7 +208,9 @@ pub(super) async fn run_web_fetch(
         .text()
         .await
         .map_err(|_| ToolError::Execution(format!("the body from {host} is not text")))?;
-    let text = if content_type.contains("html") {
+    // Reference `run`: the HTML reader is reached on `text/html` alone, so a
+    // body that merely names an HTML-adjacent type keeps its own bytes.
+    let text = if content_type.contains("text/html") {
         html_to_text(&body)
     } else {
         body
@@ -211,6 +253,16 @@ pub(super) async fn run_web_fetch(
             "content_type": content_type,
             "was_truncated": truncated,
         })))
+}
+
+/// Whether a response is the bot challenge the reference retries once.
+fn is_challenge(response: &reqwest::Response) -> bool {
+    response.status().as_u16() == CHALLENGE_STATUS
+        && response
+            .headers()
+            .get(CHALLENGE_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value == CHALLENGE_VALUE)
 }
 
 /// Strips markup so an HTML page reaches the model as prose.
