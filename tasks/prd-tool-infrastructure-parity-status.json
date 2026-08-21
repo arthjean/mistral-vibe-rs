@@ -18,10 +18,11 @@
     {
       "id": "EP-081",
       "title": "The presentation of a tool with no dedicated UI class",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 4,
+      "started_at": "2026-08-21"
     },
     {
       "id": "EP-082",
@@ -87,57 +88,57 @@
       "id": "US-256",
       "title": "Route the call display by tool source",
       "epic": "EP-081",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-255"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     },
     {
       "id": "US-257",
       "title": "Publish the status text the source names",
       "epic": "EP-081",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-256"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     },
     {
       "id": "US-258",
       "title": "Fill the settled message at the source",
       "epic": "EP-081",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-256"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     },
     {
       "id": "US-259",
       "title": "Settle a remote call from its remote result",
       "epic": "EP-081",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-256"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     },
     {
       "id": "US-260",

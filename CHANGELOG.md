@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Render a proxied tool call the way the reference renders it. A tool published
+  by an MCP server or by a connector no longer borrows the generic fallback that
+  spells its arguments into the header: the call now names the published tool
+  alone, the loading indicator names the remote tool the server knows, and the
+  settled header reports how the call itself settled rather than what a server
+  answered about its own subject, so a remote call that failed no longer renders
+  as a success and a successful one is no longer reported as a failure. Every
+  published call display now carries a `settledMessage`, filled from the
+  presentation that names its own subject or from the summary when none does,
+  and the generic fallback names its first three arguments in the order the call
+  carried them, spelling a boolean, a null, and a nested object the way the
+  reference interpreter prints them.
+
 - Say what the built-in tools answer differently, tool by tool. The parity
   scorecard's single line about warning wording is now five rows that name
   every tool whose authored result or error text is this port's own prose and
