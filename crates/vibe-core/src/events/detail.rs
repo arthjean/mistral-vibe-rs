@@ -1166,4 +1166,6 @@ fn grouped_thousands(value: usize) -> String {
 }
 
 #[cfg(test)]
+mod detail_presentation_parity_tests;
+#[cfg(test)]
 mod detail_tests;
